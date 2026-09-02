@@ -695,7 +695,7 @@ Le dépôt doit permettre de retracer non seulement le produit final, mais égal
 ## Équipe
 
 - Philippe Jordan Monfouayi Mba
-- Membre 2 : à compléter
+- Yoël Jimmy Razafindretsa
 
 ---
 
