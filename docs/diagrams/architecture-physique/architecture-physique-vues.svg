@@ -1,65 +1,42 @@
-<svg width="820" height="420" viewBox="0 0 820 420" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica, Arial, sans-serif">
-  <rect width="820" height="420" fill="#ffffff"/>
+<svg width="720" height="260" viewBox="0 0 720 260" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica, Arial, sans-serif">
+  <rect width="720" height="260" fill="#ffffff"/>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0L10,5L0,10z" fill="#333333"/>
+    </marker>
+  </defs>
 
-  <text x="140" y="32" text-anchor="middle" font-size="14" font-weight="bold" fill="#333333">AVANT</text>
-  <text x="385" y="32" text-anchor="middle" font-size="14" font-weight="bold" fill="#333333">PROFIL</text>
-  <text x="640" y="32" text-anchor="middle" font-size="14" font-weight="bold" fill="#333333">ARRIÈRE</text>
+  <text x="155" y="32" text-anchor="middle" font-size="14" font-weight="bold" fill="#333333">AVANT</text>
+  <text x="506" y="32" text-anchor="middle" font-size="14" font-weight="bold" fill="#333333">ARRIÈRE</text>
 
-  <!-- AVANT -->
-  <rect x="25" y="50" width="50" height="45" fill="#f5f5f5" stroke="#666666"/>
-  <text x="50" y="76" text-anchor="middle" font-size="11" fill="#333333">écran</text>
+  <rect x="40" y="70" width="100" height="120" fill="#d5e8d4" stroke="#82b366"/>
+  <rect x="40" y="70" width="40" height="120" fill="#E6F1FB" stroke="#185FA5"/>
+  <text x="60" y="133" text-anchor="middle" font-size="11" fill="#042C53">écran</text>
+  <text x="110" y="133" text-anchor="middle" font-size="12" fill="#333333">hub</text>
 
-  <rect x="40" y="90" width="200" height="80" rx="8" fill="#d5e8d4" stroke="#82b366"/>
-  <text x="140" y="120" text-anchor="middle" font-size="12" fill="#333333">hub</text>
-  <text x="140" y="138" text-anchor="middle" font-size="12" fill="#333333">écran + calcul + réseau</text>
-  <circle cx="217" cy="157" r="5" fill="#82b366"/>
-  <text x="195" y="174" text-anchor="middle" font-size="10" fill="#666666">voyant état</text>
+  <rect x="170" y="70" width="100" height="120" fill="#FAEEDA" stroke="#854F0B"/>
+  <text x="220" y="92" text-anchor="middle" font-size="12" fill="#412402">cellule</text>
+  <circle cx="255" cy="175" r="5" fill="#82b366"/>
+  <text x="170" y="212" font-size="9" fill="#666666">voyant disponibilité</text>
 
-  <rect x="40" y="200" width="95" height="90" rx="8" fill="#f5f5f5" stroke="#666666"/>
-  <text x="87" y="216" text-anchor="middle" font-size="12" fill="#333333">cellule 1</text>
-  <rect x="55" y="228" width="65" height="45" fill="#FAEEDA" stroke="#854F0B"/>
-  <text x="87" y="254" text-anchor="middle" font-size="10" fill="#412402">trappe</text>
-  <circle cx="128" cy="234" r="4" fill="#82b366"/>
+  <rect x="379" y="75" width="100" height="120" fill="#d5e8d4" stroke="#82b366"/>
+  <text x="429" y="90" text-anchor="middle" font-size="11" fill="#333333">hub — arrière</text>
+  <rect x="397" y="105" width="14" height="14" fill="#EEEEEE" stroke="#000000"/>
+  <rect x="437" y="105" width="14" height="14" fill="#EEEEEE" stroke="#000000"/>
+  <rect x="397" y="134" width="14" height="12" fill="#EEEEEE" stroke="#000000"/>
+  <rect x="437" y="133" width="14" height="12" fill="#EEEEEE" stroke="#000000"/>
+  <rect x="391" y="160" width="32" height="16" fill="#EEEEEE" stroke="#000000"/>
 
-  <rect x="145" y="200" width="95" height="90" rx="8" fill="#f5f5f5" stroke="#666666"/>
-  <text x="192" y="216" text-anchor="middle" font-size="12" fill="#333333">cellule 2</text>
-  <rect x="160" y="228" width="65" height="45" fill="#FAEEDA" stroke="#854F0B"/>
-  <text x="192" y="254" text-anchor="middle" font-size="10" fill="#412402">trappe</text>
-  <circle cx="233" cy="234" r="4" fill="#82b366"/>
+  <rect x="509" y="75" width="100" height="120" fill="#f5f5f5" stroke="#666666"/>
+  <text x="559" y="90" text-anchor="middle" font-size="11" fill="#333333">cellule — arrière</text>
+  <rect x="549" y="127" width="18" height="16" fill="#EEEEEE" stroke="#000000"/>
 
-  <!-- PROFIL -->
-  <rect x="335" y="70" width="60" height="14" fill="#5F5E5A"/>
-  <text x="365" y="80" text-anchor="middle" font-size="7" fill="#ffffff">rail (fixation murale)</text>
-  <rect x="330" y="90" width="55" height="180" fill="#f5f5f5" stroke="#666666"/>
-  <circle cx="327" cy="115" r="5" fill="none" stroke="#666666" stroke-dasharray="2,2"/>
-  <circle cx="327" cy="175" r="5" fill="none" stroke="#666666" stroke-dasharray="2,2"/>
-  <circle cx="327" cy="235" r="5" fill="none" stroke="#666666" stroke-dasharray="2,2"/>
-  <text x="234" y="163" font-size="9" fill="#666666">points de fixation</text>
-  <text x="234" y="175" font-size="9" fill="#666666">(bouchon amovible si inutilisés)</text>
+  <text x="485" y="59" text-anchor="middle" font-size="10" fill="#333333">connecteurs</text>
+  <line x1="444" y1="105" x2="480" y2="70" stroke="#333333" stroke-width="1" marker-end="url(#arrow)"/>
+  <line x1="558" y1="127" x2="496" y2="70" stroke="#333333" stroke-width="1" marker-end="url(#arrow)"/>
 
-  <circle cx="385" cy="180" r="4" fill="#854F0B"/>
-  <rect x="378" y="140" width="8" height="40" fill="#FAEEDA" stroke="#854F0B"/>
-  <rect x="385" y="176" width="70" height="10" fill="#FAEEDA" stroke="#854F0B" transform="rotate(-35 385 176)"/>
-  <text x="460" y="150" font-size="9" fill="#412402">trappe (ouverte,</text>
-  <text x="460" y="162" font-size="9" fill="#412402">charnière sur cadre)</text>
+  <text x="390" y="219" text-anchor="middle" font-size="10" fill="#333333">alimentation</text>
+  <line x1="390" y1="204" x2="391" y2="177" stroke="#333333" stroke-width="1" marker-end="url(#arrow)"/>
 
-  <!-- ARRIÈRE -->
-  <rect x="540" y="90" width="200" height="80" rx="8" fill="#d5e8d4" stroke="#82b366"/>
-  <text x="640" y="106" text-anchor="middle" font-size="12" fill="#333333">hub — arrière</text>
-  <rect x="540" y="90" width="200" height="8" fill="#5F5E5A"/>
-  <rect x="560" y="140" width="40" height="20" fill="#EEEEEE" stroke="#000000"/>
-  <text x="580" y="154" text-anchor="middle" font-size="10" fill="#333333">alim</text>
-  <rect x="615" y="140" width="30" height="20" fill="#EEEEEE" stroke="#000000"/>
-  <text x="630" y="154" text-anchor="middle" font-size="10" fill="#333333">J1</text>
-  <rect x="660" y="140" width="30" height="20" fill="#EEEEEE" stroke="#000000"/>
-  <text x="675" y="154" text-anchor="middle" font-size="10" fill="#333333">J2</text>
-
-  <rect x="540" y="200" width="130" height="80" rx="8" fill="#f5f5f5" stroke="#666666"/>
-  <text x="605" y="216" text-anchor="middle" font-size="12" fill="#333333">cellule — arrière</text>
-  <rect x="540" y="200" width="130" height="8" fill="#5F5E5A"/>
-  <rect x="590" y="248" width="30" height="20" fill="#EEEEEE" stroke="#000000"/>
-  <text x="605" y="262" text-anchor="middle" font-size="10" fill="#333333">J</text>
-
-  <text x="540" y="305" font-size="10" fill="#666666">passe-câble + délestage</text>
-  <text x="540" y="317" font-size="10" fill="#666666">sur chaque sortie</text>
+  <text x="423" y="222" font-size="9" fill="#666666">passe-câble + délestage sur chaque connecteur</text>
 </svg>
