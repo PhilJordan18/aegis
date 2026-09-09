@@ -1,6 +1,6 @@
 ---
 name: aegis-hardware-diagrams
-description: Produce consistent, clean, theme-aware diagrams for Aegis — hardware/wiring topology (hub/cellule, locker wiring) via draw.io XML, and system/actor/component architecture (technicien, administrateur, iOS, React, Spring, PostgreSQL, MQTT, ESP32) via Mermaid — using the draw.io MCP connector. Every diagram document matches the canonical `docs/diagrams/architecture-globale.md` shape — a short description, one diagram (theme-paired where the format allows it), never a multi-image doc or a long prose write-up.
+description: Produce consistent, clean, dark-mode-only diagrams for Aegis — hardware/wiring topology (hub/cellule, locker wiring) via draw.io XML, and system/actor/component architecture (technicien, administrateur, iOS, React, Spring, PostgreSQL, MQTT, ESP32) via Mermaid — using the draw.io MCP connector. Every diagram document matches the canonical `docs/diagrams/architecture-globale.md` shape — a short description, one diagram, one file, never a light/dark pair or a long prose write-up.
 ---
 
 # Aegis diagrams
@@ -18,10 +18,12 @@ Every diagram document (anything under `docs/diagrams/`, a diagram-carrying ADR,
 
 1. `# <Title>` — short and specific.
 2. **One description paragraph, 1–3 sentences.** What the diagram shows, plus provenance/canonical-status if relevant (e.g. "version canonique, identique au README"). Never a bullet essay.
-3. **Exactly one diagram artifact.** One ```mermaid block, or one embedded image — or, for an XML/SVG-based diagram, one **light/dark theme pair** embedded via GitHub's `#gh-light-mode-only`/`#gh-dark-mode-only` fragments (see "Default conceptual style" below); a theme pair still counts as one artifact, it's the same diagram shown twice for two viewers. If a concept genuinely needs several pictorial views (front/side/back, a mechanism cross-section, a topology), compose them into a single combined multi-panel SVG rather than stacking several unrelated `![...]()` images under sub-headings — the document embeds one visual (or one visual's light/dark pair), never four different ones.
+3. **Exactly one diagram artifact per section, one file, dark palette, no light variant.** One ```mermaid block, or one embedded image — never a `#gh-light-mode-only`/`#gh-dark-mode-only` pair by default (see "Default conceptual style" below for the rare exception). If a concept genuinely needs several pictorial views (front/side/back, a mechanism cross-section, a topology), compose them into a single combined multi-panel SVG rather than several unrelated images.
 4. **Legend, only if the diagram uses a category palette** — a short table, category → contents (see "Légende des catégories" in the reference).
 5. **Optional short rules/decisions recap — bullets only, ≤5 lines, one sentence each.** Design rationale and discussion history belong in an ADR or the conversation log, not in a diagram doc. Never reproduce a long "Décisions encodées"-style essay.
 6. **Optional one-line status** (e.g. "Prototype / exploratoire") only if the diagram is provisional.
+
+**Exception — a small set of closely related diagrams may share one doc** (e.g. several angles/aspects of the same physical object) instead of one file each: one `#` title, then one `##` section per diagram, each still following rules 2–5 exactly (short description, one image, optional legend, optional ≤5-bullet recap) — a shared `## Statut` at the end instead of repeating it per section. What's never allowed, shared doc or not, is a long prose write-up per diagram or a diagram missing its own short description.
 
 Skeleton:
 
@@ -46,7 +48,7 @@ Skeleton:
 - ...
 ````
 
-`docs/diagrams/architecture-physique/` is a second worked example — one short index doc plus one doc per diagram (`architecture-physique-vues.md`, `-mecanisme-verrouillage.md`, `-connectivite.md`), each with its own light/dark SVG pair. Do not go back to the old shape it replaced (one doc stacking every SVG under sub-headings plus a long "Décisions encodées" essay).
+`docs/diagrams/architecture-physique/architecture-physique.md` is a second worked example of the shared-doc exception above: one file, one `##` section per diagram (vues / mécanisme de verrouillage / connectivité), each with a short description, one fixed-dark SVG, a small legend, and a ≤2-bullet recap, plus one shared `## Statut`. What makes this different from the old shape it replaced isn't the file count — it's that every section stays short; do not let any section grow back into a "Décisions encodées"-style essay.
 
 ## Vocabulary
 
@@ -63,43 +65,40 @@ Match the project's current terms exactly — do not reintroduce `master`/`node`
 - Star topology = one dedicated port per cellule on the hub, one cable per cellule, no cable shared between cellules. Daisy-chain/loop = one hub port serving multiple cellules on a shared line. Never draw one as if it were the other.
 - Keep P0 diagrams (single hub + up to 2 cellules) and product-vision diagrams (multi-cellule scaling) visually distinct — don't imply P0 commits to more hardware than `docs/cahier-conception/scope.md` §11.6/§17.5 actually requires.
 
-## Default conceptual style (light/dark theme pair, mandatory)
+## Default conceptual style (dark palette, single file, mandatory)
 
-For explanatory/conceptual wiring diagrams (as opposed to the electrical-block-diagram style below), every diagram ships as **two complete, single-theme SVG files** — never one file trying to be both:
+For explanatory/conceptual wiring diagrams (as opposed to the electrical-block-diagram style below), every diagram is **one complete SVG file, dark palette, canvas included** — no light variant, no second file:
 
-- `<name>.svg` — light palette (light row below).
-- `<name>-dark.svg` — dark palette (dark row below).
+| Element | Shape | fill | stroke | fontSize |
+|---|---|---|---|---|
+| canvas / page background | full-page fill | `#1e1e1e` | — | — |
+| `alimentation` (PSU) | ellipse | `#3a3a3a` | `#b0b0b0` | 12 |
+| `hub` | rounded rect | `#3d5a41` | `#8fd382` | 13 |
+| `cellule N` | rounded rect | `#454545` | `#a3a3a3` | 13 |
+| door/trappe (if drawn) | rect | `#5a4420` | `#e0a94a` | — |
+| connector/plug pictogram | polygon/rect | `#4a4a4a` | `#d0d0d0` | — |
+| rail/bracket bar (+ its label) | rect (+ text) | `#7a7975` / `#ffffff` text | — | 7–9 |
+| status LED / port dot (one per cellule, matches hub stroke) | small ellipse | `#8fd382` | none | — |
+| cable edge (power + data) | orthogonal edge | — | `#6cb2ff` | 11, labeled `power + data` |
+| primary label text | — | `#e8e8e8` | — | as noted |
+| muted/caption text (legend, secondary notes) | — | `#b0b0b0` | — | 9–12 |
+| door/trappe label text | — | `#f5e0b8` | — | — |
+| thin leader/callout line | line | — | `#999999` | — |
 
-Embed both in the markdown doc with GitHub's native mode-fragment syntax so GitHub shows the right one per viewer:
+This is the same palette family already in use in `docs/diagrams/architecture-physique/` — reuse those exact values rather than inventing new ones, so every physical diagram in the set looks like one family. Use `edgeStyle=orthogonalEdgeStyle` with `libavoidRouting=1;jettySize=auto` (or pass `routing: "libavoid"`) so cables route cleanly instead of crossing boxes. Give each cellule its own port dot on the hub — never let multiple cable edges share one source point.
+
+For the electrical/engineering-accurate variant (BOM-traceable: reference designators, fuse symbols, ground symbol, connector pinouts) use `search_shapes` for `fuse`, `signal ground`, and plain labeled rectangles for board-level ICs — reserve that style for hardware-spec documents, not the cahier de conception. Same `#1e1e1e` page background and `#e8e8e8` label color; only the stencil colors returned by `search_shapes` are exempt from the table.
+
+### If a doc specifically needs to render correctly in both GitHub light and dark mode (rare, opt-in only)
+
+Default to dark-only, above. Only reach for this when a doc is genuinely customer/officially facing to an audience whose GitHub theme you don't control — it doubles the SVG count (light file + `<name>-dark.svg`), so it's an explicit exception, not the house style. Ship both as complete, static, single-theme files (light palette = the mirror of the table above with `#ffffff` canvas and the original light hex set from before this palette was made dark-only) and embed both with GitHub's native fragments:
 
 ```markdown
 ![<short alt text>](<name>.svg#gh-light-mode-only)
 ![<short alt text>](<name>-dark.svg#gh-dark-mode-only)
 ```
 
-**Do not** try to do this with one file and an embedded `<style>@media (prefers-color-scheme: dark){…}</style>` block instead — that technique is unreliable (documented to fail in Safari even when it works in Chrome/Firefox) and isn't GitHub's supported mechanism. The two-file `#gh-light-mode-only`/`#gh-dark-mode-only` pair is GitHub's own documented approach (see [github.blog](https://github.blog/developer-skills/github/how-to-make-your-images-in-markdown-on-github-adjust-for-dark-mode-and-light-mode/)) and works everywhere because GitHub does the switching itself via a `<picture>` element — the SVGs themselves stay simple, static, single-theme files. A theme pair counts as one diagram artifact for the "Document format" rule above, not two.
-
-Palette — same shapes/roles in both files, only the colors change:
-
-| Element | Shape | fill (light) | stroke (light) | fill (dark) | stroke (dark) | fontSize |
-|---|---|---|---|---|---|---|
-| canvas / page background | full-page fill | `#ffffff` | — | `#1e1e1e` | — | — |
-| `alimentation` (PSU) | ellipse | `#F5F5F5` | `#666666` | `#3a3a3a` | `#b0b0b0` | 12 |
-| `hub` | rounded rect | `#d5e8d4` | `#82b366` | `#3d5a41` | `#8fd382` | 13 |
-| `cellule N` | rounded rect | `#f5f5f5` | `#666666` | `#454545` | `#a3a3a3` | 13 |
-| door/trappe (if drawn) | rect | `#FAEEDA` | `#854F0B` | `#5a4420` | `#e0a94a` | — |
-| connector/plug pictogram | polygon/rect | `#EEEEEE` | `#000000` | `#4a4a4a` | `#d0d0d0` | — |
-| rail/bracket bar (+ its label) | rect (+ text) | `#5F5E5A` / `#ffffff` text | — | `#7a7975` / `#ffffff` text | — | 7–9 |
-| status LED / port dot (one per cellule, matches hub stroke) | small ellipse | `#82b366` | none | `#8fd382` | none | — |
-| cable edge (power + data) | orthogonal edge | — | `#1a73e8` | — | `#6cb2ff` | 11, labeled `power + data` |
-| primary label text | — | `#333333` | — | `#e8e8e8` | — | as noted |
-| muted/caption text (legend, secondary notes) | — | `#666666` | — | `#b0b0b0` | — | 9–12 |
-| door/trappe label text | — | `#412402` | — | `#f5e0b8` | — | — |
-| thin leader/callout line | line | — | `#666666` | — | `#999999` | — |
-
-This is the same palette family already in use in `docs/diagrams/architecture-physique/architecture-physique-vues.svg` — reuse those exact values rather than inventing new ones, so every physical diagram in the set looks like one family. Use `edgeStyle=orthogonalEdgeStyle` with `libavoidRouting=1;jettySize=auto` (or pass `routing: "libavoid"`) so cables route cleanly instead of crossing boxes. Give each cellule its own port dot on the hub — never let multiple cable edges share one source point.
-
-For the electrical/engineering-accurate variant (BOM-traceable: reference designators, fuse symbols, ground symbol, connector pinouts) use `search_shapes` for `fuse`, `signal ground`, and plain labeled rectangles for board-level ICs — reserve that style for hardware-spec documents, not the cahier de conception. It still ships as a light/dark pair with the same canvas/text colors above; only the stencil colors returned by `search_shapes` are exempt from the table.
+Do not use an embedded `<style>@media (prefers-color-scheme: dark){…}</style>` block in one file instead — documented to fail in Safari even where it works in Chrome/Firefox, and it isn't GitHub's supported mechanism. The two-file fragment pair is GitHub's own documented approach ([github.blog](https://github.blog/developer-skills/github/how-to-make-your-images-in-markdown-on-github-adjust-for-dark-mode-and-light-mode/)).
 
 ## System / actor architecture style (Mermaid)
 
@@ -154,6 +153,6 @@ What this encodes, apply it every time:
 **GitHub does not render `.drawio`/XML files as diagrams in the file browser** — it shows raw XML text. So for every diagram meant to actually be seen on github.com (README, ADR, cahier de conception), export and commit:
 
 - the `.drawio` source (editable, kept in sync) under `docs/diagrams/`, matching the filename to the concept (e.g. `hub-cellule-star-topology.drawio`);
-- **both** rendered exports — `<name>.svg` (light) and `<name>-dark.svg` (dark) — embedded as the light/dark pair described in "Default conceptual style" above, wherever the diagram needs to be visible.
+- the rendered `<name>.svg` export — dark palette, per "Default conceptual style" above — embedded wherever the diagram needs to be visible.
 
-Never link only the `.drawio` file and call it done — on GitHub that reads as unrendered XML to anyone without the desktop app or the drawio browser extension installed. Never link only one of the two theme exports either — a light-only SVG is exactly the bug this rule exists to prevent (a bright white card the instant it's viewed in GitHub dark mode), and a dark-only one is unreadable for anyone on GitHub light mode.
+Never link only the `.drawio` file and call it done — on GitHub that reads as unrendered XML to anyone without the desktop app or the drawio browser extension installed. Never export with a white/transparent background either — a dark-palette diagram on a light canvas is the bug the "Default conceptual style" table exists to prevent.
