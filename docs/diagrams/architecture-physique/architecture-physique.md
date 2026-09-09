@@ -6,10 +6,6 @@ Diagrammes conceptuels, niveau prototype — pas des plans côtés. Ils traduise
 
 ![Vues avant, profil et arrière du hub et des cellules](architecture-physique-vues.svg)
 
-### Fixation murale
-
-![Fixation par rail French cleat, accrochage individuel](architecture-physique-fixation-murale.svg)
-
 ### Mécanisme de verrouillage
 
 ![Pêne à ressort et solénoïde à impulsion, capteur de porte sur le cadre](architecture-physique-mecanisme-verrouillage.svg)
@@ -24,7 +20,6 @@ Diagrammes conceptuels, niveau prototype — pas des plans côtés. Ils traduise
 - **Capteur de porte et voyant : montés sur le cadre, jamais sur la trappe.** Évite tout câblage traversant la charnière — point de fatigue et de panne classique.
 - **Fusible réarmable (PTC), pas un fusible à usage unique.** Un solénoïde tire un courant d'appel bref (~0.5–1 A) à chaque impulsion; un fusible standard dimensionné trop juste déclencherait à chaque ouverture normale. Le PTC tolère l'appel et se réarme seul après un vrai défaut — pas de fusible à remplacer entre deux démonstrations.
 - **Points de fixation inter-cubes intégrés à chaque face, bouchon amovible si inutilisés.** La bride (L-bracket) livrée avec la cellule est optionnelle; une face non utilisée reste visuellement finie. Un seul modèle de panneau latéral, réutilisé sur les quatre faces verticales de chaque cube.
-- **Fixation murale par rail French cleat, accrochage individuel par gravité.** Chaque cube s'accroche seul, sans démonter les autres; des repères sur le rail donnent un espacement répétable pour une cellule ajoutée plus tard. La bride ne sert alors qu'à bloquer le jeu latéral, l'alignement venant déjà du rail.
 - **Connectivité : topologie étoile inchangée** (un port et un câble dédiés par cellule, aucun câble partagé) — voir [`aegis-hardware-diagrams`](../../../.claude/skills/aegis-hardware-diagrams/SKILL.md) pour le style de référence.
 
 ## Statut
