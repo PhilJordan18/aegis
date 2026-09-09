@@ -2,12 +2,29 @@
 
 Diagrammes conceptuels, niveau prototype — pas des plans côtés. Ils traduisent les décisions prises en discussion (voir journal / historique de conversation) sur le mécanisme de verrouillage, la fixation et la connectivité du hub/cellule.
 
-Fichiers (draw.io XML) :
+### Vues (avant / profil / arrière)
 
-- [`architecture-physique-vues.drawio`](architecture-physique-vues.drawio) — avant / profil / arrière du hub et des cellules.
-- [`architecture-physique-fixation-murale.drawio`](architecture-physique-fixation-murale.drawio) — rail French cleat, accrochage individuel.
-- [`architecture-physique-mecanisme-verrouillage.drawio`](architecture-physique-mecanisme-verrouillage.drawio) — pêne à ressort + solénoïde, capteur de porte.
-- [`architecture-physique-connectivite.drawio`](architecture-physique-connectivite.drawio) — topologie étoile avec fusible réarmable (PTC) par port.
+![Vues avant, profil et arrière du hub et des cellules](architecture-physique-vues.svg)
+
+Source éditable : [`architecture-physique-vues.drawio`](architecture-physique-vues.drawio)
+
+### Fixation murale
+
+![Fixation par rail French cleat, accrochage individuel](architecture-physique-fixation-murale.svg)
+
+Source éditable : [`architecture-physique-fixation-murale.drawio`](architecture-physique-fixation-murale.drawio)
+
+### Mécanisme de verrouillage
+
+![Pêne à ressort et solénoïde à impulsion, capteur de porte sur le cadre](architecture-physique-mecanisme-verrouillage.svg)
+
+Source éditable : [`architecture-physique-mecanisme-verrouillage.drawio`](architecture-physique-mecanisme-verrouillage.drawio)
+
+### Connectivité
+
+![Topologie étoile avec fusible réarmable PTC par port](architecture-physique-connectivite.svg)
+
+Source éditable : [`architecture-physique-connectivite.drawio`](architecture-physique-connectivite.drawio)
 
 ## Décisions encodées
 
@@ -20,4 +37,4 @@ Fichiers (draw.io XML) :
 
 ## Statut
 
-Prototype / exploratoire — ces fichiers ne sont volontairement **pas** accompagnés d'un export `.svg`/`.png`, contrairement à la règle habituelle du skill `aegis-hardware-diagrams` pour les diagrammes destinés à être vus tels quels sur GitHub. Le mécanisme physique n'est pas encore figé (voir [`scope.md` §17.5](../cahier-conception/scope.md)); un export sera ajouté une fois la conception stabilisée pour éviter de maintenir des images qui divergent vite du XML source.
+Prototype / exploratoire. Chaque diagramme est maintenant accompagné d'un `.svg` (affiché tel quel sur GitHub, conformément à la règle du skill [`aegis-hardware-diagrams`](../../.claude/skills/aegis-hardware-diagrams/SKILL.md)) en plus de sa source `.drawio` éditable. Le mécanisme physique n'est pas encore figé (voir [`scope.md` §17.5](../cahier-conception/scope.md)) : si la conception change, régénérer le `.svg` correspondant plutôt que de laisser les deux diverger.
