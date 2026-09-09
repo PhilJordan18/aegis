@@ -53,5 +53,3 @@ For the electrical/engineering-accurate variant (BOM-traceable: reference design
 - a rendered `.png` or `.svg` alongside it, embedded via a normal Markdown image (`![hub/cellule star topology](../diagrams/hub-cellule-star-topology.png)`) wherever the diagram needs to be visible.
 
 Never link only the `.drawio` file and call it done — on GitHub that reads as unrendered XML to anyone without the desktop app or the drawio browser extension installed.
-
-Reference example following this rule: [`docs/diagrams/hub-cellule-star-topology.drawio`](../../docs/diagrams/hub-cellule-star-topology.drawio) (editable source) and [`docs/diagrams/hub-cellule-star-topology.svg`](../../docs/diagrams/hub-cellule-star-topology.svg) (the picture GitHub actually renders — same layout and palette as the table above). Embed the `.svg` in Markdown with `![hub/cellule star topology](../diagrams/hub-cellule-star-topology.svg)`; keep the `.drawio` only as the thing you re-open to edit.
