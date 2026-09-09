@@ -59,6 +59,7 @@ Use:
 - `ios-engineer` for SwiftUI technician workflows.
 - `firmware-engineer` for ESP32, sensors, locks, and MQTT device behavior.
 - `qa-reliability-engineer` as the independent quality gate.
+- `diagram-engineer` for any architecture, wiring, sequence, state, or ER diagram.
 
 ## Agent Team protocol
 

@@ -1,16 +1,16 @@
 ---
 name: aegis-hardware-diagrams
-description: Produce consistent, clean draw.io diagrams for Aegis hardware and wiring topology (hub/cellule architecture, locker wiring, MQTT/network layout) using the draw.io MCP connector.
+description: Produce consistent, clean diagrams for Aegis — hardware/wiring topology (hub/cellule, locker wiring) via draw.io XML, and system/actor/component architecture (technicien, administrateur, iOS, React, Spring, PostgreSQL, MQTT, ESP32) via Mermaid — using the draw.io MCP connector.
 ---
 
-# Aegis hardware diagrams
+# Aegis diagrams
 
-Use the draw.io MCP connector (`create_diagram`, `search_shapes`) for any diagram documenting Aegis physical hardware, wiring, or network topology — not the inline SVG visualize tool, which is for conversational explainers only. Diagrams meant for `docs/diagrams/` or the cahier de conception should be draw.io so they stay editable and versionable.
+Use the draw.io MCP connector (`create_diagram`, `search_shapes`) for any diagram documenting Aegis physical hardware, wiring, network topology, or system/component architecture — not the inline SVG visualize tool, which is for conversational explainers only. Diagrams meant for `docs/diagrams/`, the README, or the cahier de conception should go through this connector so they stay editable, versionable, and visually consistent with every other Aegis diagram.
 
 ## Format choice
 
 - Wiring topology, network/deployment layout, connector pinouts, floor/enclosure layout → **XML**, with `search_shapes` for electrical/network stencils when a pictorial icon adds clarity (connector, PSU, antenna). Use `routing: "libavoid"` when hand-placed nodes need clean orthogonal wires.
-- Sequence of operations (checkout/return flow, MQTT command/ack/event flow), state machines (readiness, LockerOperation), or ER-style domain diagrams → **Mermaid** (`sequenceDiagram`, `stateDiagram-v2`, `erDiagram`). Add `postLayout: "elk"` once the diagram has real branching or ≥20 nodes.
+- Whole-system or component architecture (actors + software + infra + hardware, e.g. the README "Architecture du système" diagram), sequence of operations (checkout/return flow, MQTT command/ack/event flow), state machines (readiness, LockerOperation), or ER-style domain diagrams → **Mermaid** (`flowchart TD`, `sequenceDiagram`, `stateDiagram-v2`, `erDiagram`). Add `postLayout: "elk"` once the diagram has real branching or ≥20 nodes. See "System / actor architecture style" below for the exact template.
 
 ## Vocabulary
 
@@ -44,6 +44,54 @@ For explanatory/conceptual wiring diagrams (as opposed to the electrical-block-d
 Use `edgeStyle=orthogonalEdgeStyle` with `libavoidRouting=1;jettySize=auto` (or pass `routing: "libavoid"`) so cables route cleanly instead of crossing boxes. Give each cellule its own port dot on the hub — never let multiple cable edges share one source point.
 
 For the electrical/engineering-accurate variant (BOM-traceable: reference designators, fuse symbols, ground symbol, connector pinouts) use `search_shapes` for `fuse`, `signal ground`, and plain labeled rectangles for board-level ICs — reserve that style for hardware-spec documents, not the cahier de conception.
+
+## System / actor architecture style (Mermaid)
+
+For whole-system or component architecture diagrams — actors plus software, infra, and hardware blocks, like the README's "Architecture du système" — use Mermaid `flowchart TD` with `classDef` categories, not draw.io XML. This renders natively in GitHub Markdown, so unlike the XML styles above, **no separate `.svg`/`.png` export is needed** — paste the fenced ```mermaid block directly into the README/ADR/scope doc.
+
+Reference template — reproduce this exact style (labels, arrows, palette) every time:
+
+```mermaid
+flowchart TD
+    TECH["Technicien"]:::persona
+    ADMIN["Administrateur"]:::persona
+    IOS["Aegis Mobile<br/>SwiftUI"]:::software
+    WEB["Aegis Manager<br/>React"]:::software
+    API["Aegis Control<br/>Spring Boot"]:::software
+    DB[("PostgreSQL")]:::infra
+    BROKER["Broker MQTT"]:::infra
+    NODE["Aegis Locker Node<br/>ESP32"]:::hardware
+
+    TECH -->|utilise| IOS
+    ADMIN -->|utilise| WEB
+    IOS -->|HTTPS| API
+    WEB -->|HTTPS| API
+    API --> DB
+    API <-->|MQTT securise| BROKER
+    BROKER <-->|Commandes et evenements| NODE
+
+    classDef persona fill:#EEEDFE,stroke:#534AB7,color:#26215C
+    classDef software fill:#E6F1FB,stroke:#185FA5,color:#042C53
+    classDef infra fill:#F1EFE8,stroke:#5F5E5A,color:#2C2C2A
+    classDef hardware fill:#FAEEDA,stroke:#854F0B,color:#412402
+```
+
+What this encodes, apply it every time:
+
+- **Two-line node labels** via `<br/>`: product/role name on line 1, technology on line 2 (`"Aegis Mobile<br/>SwiftUI"`). Persona nodes (people) stay single-line.
+- **Every arrow carries a label** describing what actually crosses it (`-->|HTTPS|`, `<-->|MQTT securise|`, `-->|utilise|`) — never an unlabeled edge between two blocks, same rule as the wiring conventions above.
+- **A database is a cylinder** (`DB[("PostgreSQL")]`), not a rectangle. Reserve plain rectangles for software/service/hardware/persona nodes.
+- **Exactly 4 categories, one `classDef` each** — don't add a 5th color or cycle colors by position. Reuse these exact hex values every time rather than inventing new ones:
+
+| Category | fill | stroke | text |
+|---|---|---|---|
+| persona (people) | `#EEEDFE` | `#534AB7` | `#26215C` |
+| software (iOS/React/Spring) | `#E6F1FB` | `#185FA5` | `#042C53` |
+| infra (PostgreSQL/MQTT broker) | `#F1EFE8` | `#5F5E5A` | `#2C2C2A` |
+| hardware (ESP32/locker) | `#FAEEDA` | `#854F0B` | `#412402` |
+
+- **Match existing official names exactly** — `Aegis Mobile`, `Aegis Manager`, `Aegis Control`, `Aegis Locker Node`, `Technicien`, `Administrateur` are already defined in `README.md`; never rename them or invent alternates in a new diagram.
+- **Never bake a POC-gated architecture into this diagram as if committed.** `hub`/`cellule` is a documented product-vision idea still gated behind `docs/cahier-conception/scope.md` §17.5 (not decided; has a monolithic fallback) — keep `Aegis Locker Node` as the node label until that gate resolves one way or the other. Mixing a gated hypothesis into the "official" system diagram misrepresents P0 as committing to more hardware than it does.
 
 ## Where diagrams live and GitHub rendering
 

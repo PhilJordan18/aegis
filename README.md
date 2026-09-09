@@ -209,11 +209,27 @@ Prototype physique responsable de :
 
 ```mermaid
 flowchart TD
-    IOS["Aegis Mobile<br/>SwiftUI"] -->|HTTPS| API["Aegis Control<br/>Spring Boot"]
-    WEB["Aegis Manager<br/>React"] -->|HTTPS| API
-    API --> DB["PostgreSQL"]
-    API <-->|MQTT sécurisé| BROKER["Broker MQTT"]
-    BROKER <-->|Commandes et événements| NODE["Aegis Locker Node<br/>ESP32"]
+    TECH["Technicien"]:::persona
+    ADMIN["Administrateur"]:::persona
+    IOS["Aegis Mobile<br/>SwiftUI"]:::software
+    WEB["Aegis Manager<br/>React"]:::software
+    API["Aegis Control<br/>Spring Boot"]:::software
+    DB[("PostgreSQL")]:::infra
+    BROKER["Broker MQTT"]:::infra
+    NODE["Aegis Locker Node<br/>ESP32"]:::hardware
+
+    TECH -->|utilise| IOS
+    ADMIN -->|utilise| WEB
+    IOS -->|HTTPS| API
+    WEB -->|HTTPS| API
+    API --> DB
+    API <-->|MQTT sécurisé| BROKER
+    BROKER <-->|Commandes et événements| NODE
+
+    classDef persona fill:#EEEDFE,stroke:#534AB7,color:#26215C
+    classDef software fill:#E6F1FB,stroke:#185FA5,color:#042C53
+    classDef infra fill:#F1EFE8,stroke:#5F5E5A,color:#2C2C2A
+    classDef hardware fill:#FAEEDA,stroke:#854F0B,color:#412402
 ```
 
 ### Règles de confiance
