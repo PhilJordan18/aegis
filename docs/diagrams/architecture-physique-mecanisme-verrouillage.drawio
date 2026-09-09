@@ -1,0 +1,22 @@
+<mxGraphModel dx="900" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="700" pageHeight="360" math="0" shadow="0">
+  <root>
+    <mxCell id="0" />
+    <mxCell id="1" parent="0" />
+
+    <mxCell id="frame" value="cadre (fixe)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EEEEEE;strokeColor=#666666;fontSize=11;verticalAlign=top;spacingTop=6;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="30" height="240" as="geometry" /></mxCell>
+    <mxCell id="door" value="trappe" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FAEEDA;strokeColor=#854F0B;fontSize=12;verticalAlign=top;spacingTop=6;" vertex="1" parent="1"><mxGeometry x="90" y="60" width="150" height="180" as="geometry" /></mxCell>
+
+    <mxCell id="bolt" value="pêne&#10;(verrouillé)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#854F0B;strokeColor=none;fontColor=#FFFFFF;fontSize=9;" vertex="1" parent="1"><mxGeometry x="70" y="150" width="35" height="14" as="geometry" /></mxCell>
+    <mxCell id="springarrow" value="ressort (pousse le&#10;pêne vers l'extérieur)" style="endArrow=classic;startArrow=classic;html=1;strokeColor=#854F0B;fontSize=9;fontColor=#854F0B;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="40" y="157" as="sourcePoint"/><mxPoint x="68" y="157" as="targetPoint"/></mxGeometry></mxCell>
+
+    <mxCell id="solenoid" value="solénoïde" style="pointerEvents=1;shadow=0;dashed=0;html=1;shape=mxgraph.electrical.electro-mechanical.relay_coil;fontSize=10;" vertex="1" parent="1"><mxGeometry x="260" y="130" width="70" height="35" as="geometry" /></mxCell>
+    <mxCell id="pulsearrow" value="impulsion brève →&#10;rétracte le pêne" style="endArrow=block;dashed=1;html=1;strokeColor=#854F0B;fontSize=9;fontColor=#854F0B;" edge="1" parent="1" source="solenoid" target="bolt"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+    <mxCell id="reed" value="capteur porte (reed,&#10;monté sur le cadre)" style="pointerEvents=1;shadow=0;dashed=0;html=1;verticalAlign=top;shape=mxgraph.electrical.electro-mechanical.reedSwitch2;elSwitchState=off;fontSize=9;" vertex="1" parent="1"><mxGeometry x="60" y="70" width="75" height="20" as="geometry" /></mxCell>
+
+    <mxCell id="led" value="" style="ellipse;fillColor=#82b366;strokeColor=none;" vertex="1" parent="1"><mxGeometry x="48" y="105" width="10" height="10" as="geometry" /></mxCell>
+    <mxCell id="ledt" value="voyant (sur le cadre,&#10;jamais sur la trappe)" style="text;html=1;fontSize=9;fontColor=#666666;align=left;" vertex="1" parent="1"><mxGeometry x="-30" y="115" width="90" height="30" as="geometry" /></mxCell>
+
+    <mxCell id="capt" value="au repos : ressort maintient le pêne en position verrouillée (fail-secure).&#10;impulsion momentanée du solénoïde : rétracte le pêne le temps d'ouvrir; le biseau du pêne le reverrouille seul à la fermeture — aucun signal requis pour se reverrouiller." style="text;html=1;fontSize=10;fontColor=#333333;align=left;" vertex="1" parent="1"><mxGeometry x="40" y="290" width="600" height="50" as="geometry" /></mxCell>
+  </root>
+</mxGraphModel>

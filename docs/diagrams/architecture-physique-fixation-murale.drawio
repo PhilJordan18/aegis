@@ -1,0 +1,23 @@
+<mxGraphModel dx="900" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="700" pageHeight="360" math="0" shadow="0">
+  <root>
+    <mxCell id="0" />
+    <mxCell id="1" parent="0" />
+
+    <mxCell id="wall" value="mur" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EEEEEE;strokeColor=#666666;fontSize=12;verticalAlign=top;spacingTop=6;" vertex="1" parent="1"><mxGeometry x="40" y="30" width="30" height="290" as="geometry" /></mxCell>
+
+    <mxCell id="railwall" value="rail (mur)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#5F5E5A;strokeColor=none;fontColor=#FFFFFF;fontSize=9;rotation=25;" vertex="1" parent="1"><mxGeometry x="65" y="90" width="55" height="12" as="geometry" /></mxCell>
+    <mxCell id="railunit1" value="rail (unité)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#82b366;strokeColor=none;fontColor=#FFFFFF;fontSize=9;rotation=25;" vertex="1" parent="1"><mxGeometry x="120" y="90" width="55" height="12" as="geometry" /></mxCell>
+    <mxCell id="cube1" value="hub / cellule" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;verticalAlign=top;spacingTop=6;" vertex="1" parent="1"><mxGeometry x="130" y="110" width="160" height="150" as="geometry" /></mxCell>
+
+    <mxCell id="arrow1" value="glisser pour&#10;accrocher" style="endArrow=block;html=1;strokeColor=#666666;fontSize=10;fontColor=#666666;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><Array as="points" /><mxPoint x="230" y="60" as="sourcePoint"/><mxPoint x="200" y="100" as="targetPoint"/></mxGeometry></mxCell>
+
+    <mxCell id="stop1" value="" style="triangle;whiteSpace=wrap;html=1;fillColor=#5F5E5A;strokeColor=none;direction=north;" vertex="1" parent="1"><mxGeometry x="300" y="95" width="10" height="10" as="geometry" /></mxCell>
+    <mxCell id="stop2" value="" style="triangle;whiteSpace=wrap;html=1;fillColor=#5F5E5A;strokeColor=none;direction=north;" vertex="1" parent="1"><mxGeometry x="480" y="95" width="10" height="10" as="geometry" /></mxCell>
+    <mxCell id="stopt" value="repères de position&#10;(espacement répétable)" style="text;html=1;fontSize=9;fontColor=#666666;align=center;" vertex="1" parent="1"><mxGeometry x="290" y="60" width="200" height="30" as="geometry" /></mxCell>
+
+    <mxCell id="railunit2" value="rail (unité)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#82b366;strokeColor=none;fontColor=#FFFFFF;fontSize=9;rotation=25;dashed=1;" vertex="1" parent="1"><mxGeometry x="470" y="90" width="55" height="12" as="geometry" /></mxCell>
+    <mxCell id="cube2" value="cellule future&#10;(ajoutée plus tard,&#10;même rail)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#82b366;dashed=1;fontSize=11;fontColor=#5F5E5A;verticalAlign=top;spacingTop=6;" vertex="1" parent="1"><mxGeometry x="480" y="110" width="160" height="150" as="geometry" /></mxCell>
+
+    <mxCell id="note" value="chaque cube s'accroche individuellement, par gravité — aucun démontage requis pour en ajouter un; la bride optionnelle ne sert qu'à bloquer le jeu latéral une fois accroché." style="text;html=1;fontSize=10;fontColor=#666666;align=left;" vertex="1" parent="1"><mxGeometry x="40" y="300" width="600" height="40" as="geometry" /></mxCell>
+  </root>
+</mxGraphModel>
