@@ -1,0 +1,42 @@
+<svg width="700" height="360" viewBox="0 0 700 360" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica, Arial, sans-serif">
+  <rect width="700" height="360" fill="#1e1e1e"/>
+  <defs>
+    <marker id="arrow2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0L10,5L0,10z" fill="#e0a94a"/>
+    </marker>
+  </defs>
+
+  <rect x="40" y="40" width="30" height="240" fill="#454545" stroke="#a3a3a3"/>
+  <text x="55" y="56" text-anchor="middle" font-size="11" fill="#e8e8e8">cadre</text>
+  <text x="55" y="68" text-anchor="middle" font-size="11" fill="#e8e8e8">(fixe)</text>
+
+  <rect x="90" y="60" width="150" height="180" fill="#5a4420" stroke="#e0a94a"/>
+  <text x="165" y="76" text-anchor="middle" font-size="12" fill="#f5e0b8">trappe</text>
+
+  <rect x="70" y="150" width="35" height="14" fill="#e0a94a"/>
+  <text x="87" y="140" text-anchor="middle" font-size="9" fill="#f5e0b8">pêne (verrouillé)</text>
+
+  <line x1="40" y1="157" x2="66" y2="157" stroke="#e0a94a" stroke-width="1.5" marker-start="url(#arrow2)" marker-end="url(#arrow2)"/>
+  <text x="53" y="180" text-anchor="middle" font-size="9" fill="#e0a94a">ressort (pousse le</text>
+  <text x="53" y="191" text-anchor="middle" font-size="9" fill="#e0a94a">pêne vers l'extérieur)</text>
+
+  <rect x="260" y="130" width="70" height="35" fill="none" stroke="#e8e8e8"/>
+  <path d="M270,147 q7,-10 14,0 q7,-10 14,0 q7,-10 14,0 q7,-10 14,0" fill="none" stroke="#e8e8e8"/>
+  <text x="295" y="178" text-anchor="middle" font-size="10" fill="#e8e8e8">solénoïde</text>
+
+  <line x1="260" y1="150" x2="107" y2="156" stroke="#e0a94a" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow2)"/>
+  <text x="230" y="120" text-anchor="middle" font-size="9" fill="#e0a94a">impulsion brève →</text>
+  <text x="230" y="131" text-anchor="middle" font-size="9" fill="#e0a94a">rétracte le pêne</text>
+
+  <rect x="60" y="70" width="75" height="20" fill="none" stroke="#e8e8e8" stroke-dasharray="3,2"/>
+  <text x="220" y="74" font-size="9" fill="#e8e8e8">capteur porte (reed,</text>
+  <text x="220" y="85" font-size="9" fill="#e8e8e8">monté sur le cadre)</text>
+
+  <circle cx="53" cy="220" r="5" fill="#8fd382"/>
+  <text x="10" y="240" font-size="9" fill="#b0b0b0">voyant (sur le cadre,</text>
+  <text x="10" y="251" font-size="9" fill="#b0b0b0">jamais sur la trappe)</text>
+
+  <text x="40" y="300" font-size="10" fill="#e8e8e8">au repos : ressort maintient le pêne en position verrouillée (fail-secure).</text>
+  <text x="40" y="314" font-size="10" fill="#e8e8e8">impulsion momentanée du solénoïde : rétracte le pêne le temps d'ouvrir; le biseau du pêne le reverrouille</text>
+  <text x="40" y="328" font-size="10" fill="#e8e8e8">seul à la fermeture — aucun signal requis pour se reverrouiller.</text>
+</svg>
