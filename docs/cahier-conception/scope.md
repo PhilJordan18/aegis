@@ -3,8 +3,8 @@
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Session :** Automne 2026  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Date de révision :** 2 septembre 2026  
-**Version :** 0.2 — repositionnement « Critical Asset Readiness »  
+**Date de révision :** 9 septembre 2026  
+**Version :** 0.3 — architecture matérielle hub/cellule  
 **Statut :** Proposition à valider en équipe et avec l'enseignant  
 **Échéance :** Semaine 15, entre le 15 et le 23 décembre 2026
 
@@ -39,7 +39,7 @@ Il combine :
 - un backend central qui applique les règles métier;
 - une base PostgreSQL;
 - un broker MQTT;
-- un casier connecté contrôlé par ESP32;
+- un casier connecté modulaire, composé d'un cube « hub » (écran, calcul, réseau) et d'un ou plusieurs cubes « cellule » dépourvus d'écran, contrôlé par ESP32;
 - une méthode de confirmation physique du retrait et du retour.
 
 Aegis ne se limite pas à répondre à la question :
@@ -526,7 +526,7 @@ Le P0 ne nécessite pas un moteur de règles générique configurable. Une impl�
 
 ### 11.6 Locker et compartiments
 
-- représenter un locker unique;
+- représenter un locker unique, potentiellement réparti sur un cube hub et un cube cellule (voir 17.5);
 - représenter deux compartiments indépendants;
 - associer un actif à chaque compartiment;
 - connaître l'état en ligne ou hors ligne du locker;
@@ -535,6 +535,8 @@ Le P0 ne nécessite pas un moteur de règles générique configurable. Une impl�
 - empêcher une ouverture simultanée non prévue;
 - confirmer la réception ou l'échec d'une commande;
 - afficher les principaux états physiques dans l'administration Web.
+
+Si l'architecture hub/cellule est retenue (17.5), la cellule ne prend aucune décision d'autorisation : elle exécute les commandes reçues du hub et lui rapporte ses observations, conformément à 7.1.
 
 ### 11.7 Opérations physiques
 
@@ -549,7 +551,7 @@ Le P0 ne nécessite pas un moteur de règles générique configurable. Une impl�
 
 ### 11.8 Hardware et détection
 
-- connecter l'ESP32 au réseau;
+- connecter l'ESP32 au réseau (celui du hub si l'architecture 17.5 est retenue);
 - contrôler deux serrures électroniques;
 - lire un capteur de porte par compartiment;
 - fournir un indicateur visuel minimal par compartiment;
@@ -714,7 +716,7 @@ Sont explicitement exclus :
 |---|---|
 | Équipe | Deux étudiants |
 | Temps | Une session, présentation en semaine 15 |
-| Prototype | Une unité de deux compartiments |
+| Prototype | Une unité de deux compartiments (architecture hub/cellule en POC, voir 17.5) |
 | Budget matériel | Maximum de 500 $ CA, partagé 50/50 |
 | Mobile | Application iOS native avec SwiftUI |
 | Accès à Xcode | Principalement sur les Macs du Cégep |
@@ -818,6 +820,31 @@ capteur de présence ou de poids
 ```
 
 Le choix doit être consigné dans un ADR. Sélectionner une solution plus fiable après un POC documenté ne constitue pas un échec technique.
+
+### 17.5 Porte de décision pour l'architecture matérielle hub/cellule
+
+#### 17.5.1 Objectif du POC
+
+Le POC doit déterminer si une architecture composée d'un cube hub (écran, calcul, réseau) et d'un cube cellule (compartiment, serrure, capteurs, sans écran ni radio propre), reliés par un câble unique combinant alimentation et communication, est réalisable dans le budget matériel et le calendrier du P0.
+
+#### 17.5.2 Tests minimaux
+
+- alimenter et actionner une serrure de la cellule depuis le hub sur un seul câble;
+- adresser la cellule de façon univoque sur cette liaison;
+- mesurer la chute de tension sur la longueur de câble prévue pour le prototype;
+- détecter une déconnexion ou un débranchement de la cellule depuis le hub;
+- reprendre la communication après une déconnexion temporaire;
+- estimer le coût en composants (câble, connecteurs, transceiver) contre le budget de 500 $ CA.
+
+#### 17.5.3 Critère de conservation
+
+L'architecture hub/cellule est conservée pour le P0 si le POC démontre une liaison fiable et reproductible dans le budget et le calendrier disponibles, sans retarder le gel fonctionnel de la semaine 12.
+
+#### 17.5.4 Fallback
+
+Si le résultat n'est pas satisfaisant ou consomme trop de temps, le P0 adopte un locker monolithique : un seul ESP32 pilotant directement les deux serrures et leurs capteurs, sans liaison hub/cellule. L'architecture hub/cellule reste alors une orientation de produit documentée pour une évolution P1/P2 (voir 13), sans engagement pour la session.
+
+Le choix doit être consigné dans un ADR. Adopter le fallback monolithique après un POC documenté ne constitue pas un échec technique.
 
 ---
 
@@ -965,6 +992,7 @@ Les points suivants doivent encore être décidés ou validés :
 - capteur de présence ou de poids de fallback;
 - mécanisme mécanique et électrique des serrures;
 - source d'alimentation et stratégie de sécurité électrique;
+- protocole exact de la liaison hub–cellule (bus, adressage, détection de déconnexion/sabotage);
 - actifs physiques utilisés lors de la démonstration;
 - durée d'expiration d'une réservation;
 - durée d'expiration d'une `LockerOperation`;
