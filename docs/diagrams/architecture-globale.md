@@ -23,10 +23,10 @@ flowchart TD
     API <-->|MQTT sécurisé| BROKER
     BROKER <-->|Commandes et événements| NODE
 
-    classDef persona fill:#EEEDFE,stroke:#534AB7,color:#26215C
-    classDef software fill:#E6F1FB,stroke:#185FA5,color:#042C53
-    classDef infra fill:#F1EFE8,stroke:#5F5E5A,color:#2C2C2A
-    classDef hardware fill:#FAEEDA,stroke:#854F0B,color:#412402
+    classDef persona fill:#2B2440,stroke:#9F91F0,color:#EDE9FE
+    classDef software fill:#0F2C46,stroke:#58A6FF,color:#D6E8FB
+    classDef infra fill:#2A2A2E,stroke:#9CA3AF,color:#E6EDF3
+    classDef hardware fill:#3A2A0E,stroke:#D9A441,color:#FCEACD
 ```
 
 ## Légende des catégories
