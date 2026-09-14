@@ -48,7 +48,7 @@ Skeleton:
 - ...
 ````
 
-`docs/diagrams/architecture-physique/architecture-physique.md` is a second worked example of the shared-doc exception above: one file, one `##` section per diagram (vues / mécanisme de verrouillage / connectivité), each with a short description, one fixed-dark SVG, a small legend, and a ≤2-bullet recap, plus one shared `## Statut`. What makes this different from the old shape it replaced isn't the file count — it's that every section stays short; do not let any section grow back into a "Décisions encodées"-style essay.
+`docs/diagrams/architecture-physique/architecture-physique.md` is a second worked example of the shared-doc exception above: one file, one `##` section per diagram (vues / mécanisme de verrouillage / connectivité), each with a short description, one fixed-dark SVG, a small legend, and a short recap (a few bullets, well under the ≤5-line ceiling — a real sourcing citation, e.g. a chosen component's product link, earns its own bullet rather than being crammed into another one), plus one shared `## Statut`. What makes this different from the old shape it replaced isn't the file count — it's that every section stays short; do not let any section grow back into a "Décisions encodées"-style essay. The same discipline applies inside the SVG itself: keep diagram-internal captions to short component labels, and don't restate behavior the section's description or recap prose already covers (e.g. a fail-secure default-state explanation belongs in the doc text once, not also as an in-image paragraph).
 
 ## Vocabulary
 

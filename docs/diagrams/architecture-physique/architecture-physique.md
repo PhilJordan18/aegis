@@ -18,17 +18,18 @@ Vue avant (écran + hub + cellule avec voyant de disponibilité) et arrière (co
 
 ## Mécanisme de verrouillage
 
-Coupe conceptuelle du verrou : pêne à ressort biseauté maintenu fermé au repos, solénoïde à impulsion pour l'ouverture, capteur de porte et voyant montés sur le cadre fixe.
+Coupe conceptuelle du verrou : verrou rotatif à ressort armé à la fermeture, retenu par un cliquet que le solénoïde à impulsion libère — la porte s'ouvre alors seule sous l'action du ressort. Déverrouillage manuel disponible en secours; capteur de porte et voyant restent montés sur le cadre fixe.
 
-![Pêne à ressort et solénoïde à impulsion, capteur de porte sur le cadre](architecture-physique-mecanisme-verrouillage.svg)
+![Verrou rotatif à ressort, cliquet et solénoïde à impulsion, capteur de porte sur le cadre](architecture-physique-mecanisme-verrouillage.svg)
 
 | Catégorie | Contenu |
 |---|---|
-| Trappe (ambre) | Pêne, biseau |
+| Trappe (ambre) | Verrou rotatif, ressort, cliquet |
 | Cadre (gris) | Fixe — capteur de porte, voyant |
 
-- Solénoïde à impulsion, pêne à ressort biseauté (fail-secure) : au repos le ressort maintient le pêne verrouillé sans alimentation; une impulsion brève le rétracte le temps de l'ouverture, la fermeture le reverrouille seule via le biseau. Satisfait l'invariant firmware « état sûr par défaut » ([`aegis-esp32-mqtt`](../../../.claude/skills/aegis-esp32-mqtt/SKILL.md)) au niveau matériel.
+- Solénoïde à impulsion sur un cliquet à ressort (fail-secure) : la fermeture arme le ressort du verrou rotatif, le cliquet le retient verrouillé sans alimentation; une impulsion brève libère le cliquet, le verrou pivote et la porte s'ouvre seule (déverrouillage manuel disponible en secours). Satisfait l'invariant firmware « état sûr par défaut » ([`aegis-esp32-mqtt`](../../../.claude/skills/aegis-esp32-mqtt/SKILL.md)) au niveau matériel.
 - Capteur de porte et voyant montés sur le cadre, jamais sur la trappe — évite tout câblage traversant la charnière.
+- Composant retenu : verrou rotatif électrique Sutertech 12 V, 330 lbs de force de maintien, acier robuste, déverrouillage manuel — [fiche produit](https://www.amazon.com/Generic-Electric-Electromagnetic-Control-Solenoid/dp/B0CRDTS1PV).
 
 ## Connectivité
 
@@ -44,7 +45,7 @@ Topologie étoile : un port et un câble dédiés par cellule depuis le hub, un 
 | Câble (bleu) | `power + data`, un par cellule, aucun câble partagé |
 
 - Topologie étoile inchangée : un port et un câble dédiés par cellule, aucun câble partagé — voir [`aegis-hardware-diagrams`](../../../.claude/skills/aegis-hardware-diagrams/SKILL.md) pour le style de référence.
-- Fusible réarmable (PTC), pas un fusible à usage unique : le solénoïde tire un courant d'appel bref (~0.5–1 A) à chaque impulsion; le PTC tolère l'appel et se réarme seul après un vrai défaut.
+- Fusible réarmable (PTC), pas un fusible à usage unique : le solénoïde tire un courant d'appel bref à chaque impulsion (~0.5–1 A, estimation provisoire — fiche technique du composant retenu non disponible); le PTC tolère l'appel et se réarme seul après un vrai défaut.
 
 ## Statut
 
