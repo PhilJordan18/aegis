@@ -4,28 +4,22 @@ Diagrammes conceptuels, niveau prototype — pas des plans côtés. Ils traduise
 
 ## Vues du hub et des cellules
 
-Vue avant (écran + hub + cellule avec voyant de disponibilité) et arrière (connecteurs + alimentation) du prototype, niveau conceptuel — pas de plan coté.
+Vue d'ensemble du matériel, pour qui découvre le projet : le hub (écran, calcul, réseau) commande une ou plusieurs cellules — chaque cellule est un casier verrouillé indépendant, pas une sous-partie du hub.
 
-![Vues avant et arrière du hub et d'une cellule](architecture-physique-vues.svg)
-
-| Catégorie | Contenu |
-|---|---|
-| Hub (vert) | Écran (bleu, encart) + calcul + réseau |
-| Cellule (ambre) | Trappe + voyant de disponibilité |
-| Connecteur (gris) | Connecteurs et alimentation en face arrière |
+![Le hub (écran, calcul, réseau) et une cellule — chaque cellule est un casier verrouillé indépendant](architecture-physique-vues.svg)
 
 - Points de fixation inter-cubes intégrés à chaque face, bouchon amovible si inutilisés — un seul modèle de panneau latéral, réutilisé sur les quatre faces verticales de chaque cube.
 
 ## Mécanisme de verrouillage
 
-Coupe conceptuelle du verrou : verrou rotatif à ressort armé à la fermeture, retenu par un cliquet que le solénoïde à impulsion libère — la porte s'ouvre alors seule sous l'action du ressort. Déverrouillage manuel disponible en secours; capteur de porte et voyant restent montés sur le cadre fixe.
+Cycle simplifié, pour qui découvre le projet : au repos la porte est verrouillée sans alimentation; une brève impulsion électrique libère le verrou, la porte s'ouvre alors toute seule; la refermer la reverrouille automatiquement.
 
-![Verrou rotatif à ressort, cliquet et solénoïde à impulsion, capteur de porte sur le cadre](architecture-physique-mecanisme-verrouillage.svg)
-
-| Catégorie | Contenu |
-|---|---|
-| Trappe (ambre) | Verrou rotatif, ressort, cliquet |
-| Cadre (gris) | Fixe — capteur de porte, voyant |
+```mermaid
+flowchart LR
+    A["Porte fermée<br/>verrouillée sans alimentation"] -->|impulsion électrique brève| B["Verrou libéré"]
+    B --> C["Porte s'ouvre<br/>toute seule"]
+    C -.->|fermeture| A
+```
 
 - Solénoïde à impulsion sur un cliquet à ressort (fail-secure) : la fermeture arme le ressort du verrou rotatif, le cliquet le retient verrouillé sans alimentation; une impulsion brève libère le cliquet, le verrou pivote et la porte s'ouvre seule (déverrouillage manuel disponible en secours). Satisfait l'invariant firmware « état sûr par défaut » ([`aegis-esp32-mqtt`](../../../.claude/skills/aegis-esp32-mqtt/SKILL.md)) au niveau matériel.
 - Capteur de porte et voyant montés sur le cadre, jamais sur la trappe — évite tout câblage traversant la charnière.
