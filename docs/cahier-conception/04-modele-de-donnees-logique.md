@@ -3,8 +3,8 @@
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Session :** Automne 2026  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Date :** 16 septembre 2026  
-**Version :** 0.4 — représentation séquentielle  
+**Date de révision :** 16 septembre 2026
+**Version :** 1.3 — contrôle local QR, étoile et cohérence du retour
 
 ---
 
@@ -130,9 +130,12 @@ sequenceDiagram
 | Locker — LockerDevice | Un locker conserve 0..N devices historiques | Un device appartient à 1 locker | Un seul hub actif commande le locker P0 |
 | Compartment — AssetPlacement | Un compartiment possède 0..1 actif attendu courant | Un actif placé possède 1 compartiment attendu | L’affectation attendue n’est pas une preuve de présence |
 
-Le P0 cible un hub maître et deux cellules. Chaque cellule possède une serrure, un capteur de porte, un indicateur et un lecteur RFID UHF local. Les cellules communiquent avec le hub par RS-485 et un protocole Modbus RTU minimal; elles ne possèdent ni Wi-Fi, ni client MQTT, ni autorité métier.
+Le P0 cible un hub maître et deux cellules. Chaque cellule possède une serrure, un capteur de porte, un indicateur et un lecteur RFID UHF local. Les cellules rejoignent des ports indépendants du hub dans l’étoile validée. RS-485 point à point et Modbus RTU minimal sont la proposition de réalisation à confirmer au POC; elles ne possèdent ni Wi-Fi, ni client MQTT, ni autorité métier.
 
 ### 5.3 Commande d’une cellule précise
+
+La séquence suivante commence après validation du QR et autorisation backend; l’écran et le défi sont détaillés au §7.3.
+
 
 ```mermaid
 sequenceDiagram
@@ -220,7 +223,7 @@ sequenceDiagram
 | Niveau insuffisant | BLOCKED avec ACCESS_DENIED |
 | Toutes les conditions satisfaites | READY |
 
-La readiness n’est jamais une colonne administrable. Elle est recalculée à la lecture et immédiatement avant toute ouverture.
+La readiness n’est jamais une colonne administrable. Elle est recalculée à la lecture et avant l’autorisation d’un retrait, dans le contexte de la réservation du titulaire. Un retour est autorisé selon son prêt, le défi QR, l’horaire et les gardes physiques; il n’exige pas une readiness d’emprunt.
 
 ---
 
@@ -230,6 +233,8 @@ La readiness n’est jamais une colonne administrable. Elle est recalculée à l
 
 | Concept | Identité logique | Données principales | Responsabilité |
 |---|---|---|---|
+| LocalAccessChallenge | challengeId | empreinte du secret, hub, démarrage, expiration, consommation | Protéger l’autorisation d’une opération |
+| HubDisplayMessage | messageId | révision, cible, contenu chiffré, expiration | Acheminer le QR ou le résultat vers l’écran |
 | Loan | loanId | actif, détenteur, opérations de retrait et de retour, statut, retrait, échéance, demande de retour, retour | Représenter la chaîne de possession réelle après un retrait confirmé |
 | LockerOperation | operationId | type, statut, utilisateur, actif et identifiant attendus, compartiment, réservation ou prêt, expiration, jalons, échec | Corréler l’intention, la décision backend, la commande et les preuves physiques |
 
@@ -237,6 +242,9 @@ La readiness n’est jamais une colonne administrable. Elle est recalculée à l
 
 | Relation | Cardinalité | Règle |
 |---|---:|---|
+| LockerOperation — LocalAccessChallenge | 1 vers 0..1 défi | Chaque préparation acceptée crée son propre défi; aucune réutilisation |
+| LockerDevice — LocalAccessChallenge | 1 vers 0..N défis historiques | Le défi vise aussi le démarrage courant du hub |
+| LockerOperation — HubDisplayMessage | 1 vers 0..N instructions | Défi et résultat, indépendants de la commande de serrure |
 | Reservation — LockerOperation CHECKOUT | 1 vers 0..N tentatives | Chaque tentative de retrait référence exactement une réservation |
 | Reservation — Loan | 1 vers 0..1 prêt confirmé | Une réservation ne produit jamais deux prêts |
 | User — Loan | 1 vers 0..N prêts historiques | Chaque prêt possède exactement un détenteur |
@@ -252,34 +260,33 @@ La liaison entre Reservation et Loan est traçable par l’opération CHECKOUT :
 
 ```mermaid
 sequenceDiagram
-    participant M as Aegis Mobile
-    participant A as API Spring
+    participant M as Mobile
+    participant A as API
     participant D as PostgreSQL
-    participant B as Broker MQTT
-    participant L as Locker
-
-    M->>A: Demande d’accès
-    A->>D: Lire réservation et données de readiness
-    A->>A: Réévaluer les autorisations
-    A->>D: Créer LockerOperation CHECKOUT
-    Note over A,D: Expiration 120 s après autorisation
-    A->>B: Commande d’ouverture corrélée
-    B->>L: Ouvrir le compartiment attendu
-    L-->>B: Accusé de réception
-    B-->>A: COMMAND_ACKNOWLEDGED
-    L-->>B: Porte ouverte
-    L-->>B: Tag attendu devenu absent
-    L-->>B: Porte refermée
+    participant B as MQTT
+    participant H as Hub
+    M->>A: Préparer le retrait
+    A->>D: Opération en attente et défi
+    A-->>M: Scanner le QR du hub
+    A->>B: Afficher le défi
+    B->>H: QR temporaire
+    H-->>B: Affichage confirmé
+    B-->>A: Accusé d’affichage
+    H-->>M: Lecture optique du QR
+    M->>A: Valider le défi
+    A->>D: Consommer et autoriser atomiquement
+    A->>B: Commande de déverrouillage
+    B->>H: Ouvrir la cellule attendue
+    H-->>B: Accusé, porte ouverte puis refermée
+    H-->>B: Scan RFID stable après fermeture
     B-->>A: Événements corrélés
-    A->>D: Conserver messages et observations
-    alt Preuve physique cohérente
-        A->>D: CONFIRMED, FULFILLED et Loan ACTIVE
-        A-->>M: Retrait confirmé
-    else Preuve absente ou incohérente
-        A->>D: FAILED, EXPIRED ou ANOMALY
-        A-->>M: Échec explicite
-    end
+    A->>D: Confirmer le retrait et créer le prêt
+    A-->>M: État confirmé par lecture REST
+    A->>B: Afficher le résultat confirmé
+    B->>H: Message de confirmation
 ```
+
+Le défi ne crée aucun prêt. La réservation ne change en `FULFILLED` qu’avec la preuve physique complète. Le délai du défi et les 120 secondes de l’opération autorisée sont distincts.
 
 ### 7.4 Données créées lors du retrait confirmé
 
@@ -311,35 +318,33 @@ Ces mutations sont atomiques : elles réussissent ensemble ou sont annulées ens
 
 ```mermaid
 sequenceDiagram
-    participant M as Aegis Mobile
-    participant A as API Spring
+    participant M as Mobile
+    participant A as API
     participant D as PostgreSQL
-    participant B as Broker MQTT
-    participant L as Locker
-
-    M->>A: Demander le retour du prêt actif
-    A->>D: Lire prêt, actif et placement attendu
-    A->>D: Créer LockerOperation RETURN
-    A->>D: Passer Loan à RETURN_PENDING
-    A->>B: Commande d’ouverture corrélée
-    B->>L: Ouvrir le compartiment attendu
-    L-->>B: Accusé de réception
-    B-->>A: COMMAND_ACKNOWLEDGED
-    L-->>B: Porte ouverte
-    L-->>B: Tag attendu présent et stable
-    L-->>B: Porte refermée
-    B-->>A: Événements corrélés
-    A->>D: Conserver messages et observations
+    participant H as Hub via MQTT
+    M->>A: Préparer le retour
+    A->>D: Créer opération et défi
+    Note over A,D: Le prêt reste ACTIVE
+    A->>H: Afficher le QR
+    H-->>A: Affichage confirmé
+    H-->>M: Lecture optique du QR
+    M->>A: Valider le défi
+    A->>D: Consommer, autoriser, prêt RETURN_PENDING
+    A->>H: Déverrouiller la cellule attendue
+    H-->>A: Porte ouverte puis refermée
+    H-->>A: Tag attendu présent et stable
     alt Preuve physique cohérente
-        A->>D: CONFIRMED et Loan COMPLETED
-        A-->>M: Retour confirmé
-    else Mauvais actif ou preuve insuffisante
-        A->>D: Créer Anomaly
+        A->>D: Opération CONFIRMED et prêt COMPLETED
+        A-->>M: Retour confirmé par lecture REST
+        A->>H: Afficher le succès
+    else Preuve incohérente
+        A->>D: Conserver le prêt ouvert et créer anomalie
         A-->>M: Retour non confirmé
+        A->>H: Afficher le problème
     end
 ```
 
-Dépasser Loan.dueAt rend le prêt en retard, mais ne le termine jamais. Même si le tag réapparaît dans la cellule, l’actif reste BORROWED tant qu’une opération RETURN complète n’a pas été confirmée.
+Un prêt déjà `RETURN_PENDING` lors d’une récupération conserve cet état pendant le défi. Dépasser `dueAt`, scanner le QR ou retrouver le tag sans retour corrélé ne termine jamais le prêt.
 
 ---
 
@@ -399,11 +404,11 @@ Une lecture RFID isolée n’est pas suffisante.
 |---|---|
 | Commande reconnue | Commande reconnue |
 | Porte ouverte | Porte ouverte |
+| Porte refermée | Porte refermée |
 | Tag attendu absent de la bonne cellule | Tag attendu présent dans la bonne cellule |
 | Absence stable pendant la fenêtre du POC | Présence stable pendant la fenêtre du POC |
-| Porte refermée | Porte refermée |
 
-La valeur de départ du POC est une fenêtre de trois secondes et au moins trois lectures cohérentes. Une lecture ambiguë entre deux cellules produit UNKNOWN_PHYSICAL_STATE ou une anomalie. Le fallback demeure QR ou NFC pour l’identité, combiné au capteur de porte et à un capteur de présence ou de poids.
+La fenêtre de départ du POC dure trois secondes après fermeture. Pour le retour, elle comprend au moins trois lectures cohérentes du tag attendu. Pour le retrait, elle doit être complète et saine, sans ce tag; une absence de réponse du lecteur ne suffit pas. Une lecture ambiguë entre deux cellules produit UNKNOWN_PHYSICAL_STATE ou une anomalie. Le fallback demeure QR ou NFC pour l’identité, combiné au capteur de porte et à un capteur de présence ou de poids.
 
 Le hub publie un heartbeat toutes les 10 secondes. Le backend considère le locker OFFLINE après 30 secondes sans heartbeat valide.
 
@@ -476,7 +481,7 @@ Un administrateur peut reconnaître le problème et documenter son intervention.
 | Calibration dérivée | NOT_REQUIRED, VALID, EXPIRED, UNKNOWN |
 | Reservation | ACTIVE, FULFILLED, CANCELLED, EXPIRED |
 | Loan | ACTIVE, RETURN_PENDING, COMPLETED |
-| LockerOperation | REQUESTED, AUTHORIZED, COMMAND_SENT, COMMAND_ACKNOWLEDGED, DOOR_OPENED, OBSERVATION_RECEIVED, CONFIRMED, FAILED, EXPIRED, ANOMALY |
+| LockerOperation | REQUESTED, AWAITING_LOCAL_PROOF, AUTHORIZED, COMMAND_SENT, COMMAND_ACKNOWLEDGED, DOOR_OPENED, OBSERVATION_RECEIVED, CONFIRMED, FAILED, EXPIRED, ANOMALY |
 | Anomaly | OPEN, ACKNOWLEDGED, RESOLVED |
 
 ---
@@ -564,3 +569,9 @@ Ce document ne fixe pas encore :
 - les mécanismes de rafraîchissement Web et iOS.
 
 Ces choix d’implémentation devront respecter les relations, séquences et invariants définis dans ce modèle.
+
+### Précisions de la révision QR et étoile
+
+La validation du défi et toutes les gardes métier sont réévaluées dans une même transaction avant la création de l’unique commande de serrure. L’API ne renvoie jamais le contenu secret du QR. La possession du code n’est pas une preuve anti-relais.
+
+Chaque cellule possède un `hubPort` dédié. La proposition électrique conserve RS-485 sur des liaisons point à point indépendantes en étoile. Le câble Cat5e/Cat6 à connecteurs RJ45 transporte alimentation et signaux Aegis; ce n’est pas un réseau Ethernet. Le numéro de port n’est pas l’identité métier du compartiment.
