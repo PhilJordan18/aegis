@@ -1,6 +1,6 @@
 # Architecture physique du locker (prototype)
 
-Diagrammes conceptuels, niveau prototype — pas des plans côtés. Ils traduisent les décisions prises en discussion sur le hub/cellule : vues, mécanisme de verrouillage et connectivité.
+Diagrammes conceptuels, niveau prototype — pas des plans côtés. Ils traduisent les décisions prises en discussion sur le hub/cellule : vues, mécanisme de verrouillage, test du verrou et connectivité.
 
 ## Vues du hub et des cellules
 
@@ -25,21 +25,28 @@ flowchart LR
 - Capteur de porte et voyant montés sur le cadre, jamais sur la trappe — évite tout câblage traversant la charnière.
 - Composant retenu : verrou rotatif électrique Sutertech 12 V, 330 lbs de force de maintien, acier robuste, déverrouillage manuel — [fiche produit](https://www.amazon.com/Generic-Electric-Electromagnetic-Control-Solenoid/dp/B0CRDTS1PV).
 
+## Test du verrou (banc d'essai)
+
+Montage électrique minimal pour valider le verrou rotatif seul avant de l'intégrer au casier : confirme le fonctionnement en 12 V par impulsion brève, et mesure le courant réel — seules la tension et la force de maintien sont documentées pour ce composant, pas le courant d'appel.
+
+![Banc d'essai du verrou rotatif : alimentation, interrupteur, ampèremètre](architecture-physique-test-verrou.svg)
+
+- Alimentation 12 V, jamais maintenue : reproduire une impulsion brève (quelques centaines de ms), pas un maintien sous tension.
+- L'ampèremètre en série donne le courant d'appel réel, utile pour dimensionner le câblage une fois mesuré.
+
 ## Connectivité
 
-Topologie étoile : un port et un câble dédiés par cellule depuis le hub, un fusible réarmable (PTC) par port.
+Topologie étoile : un port et un câble dédiés par cellule depuis le hub.
 
-![Topologie étoile avec fusible réarmable PTC par port](architecture-physique-connectivite.svg)
+![Topologie étoile, un port et un câble dédiés par cellule](architecture-physique-connectivite.svg)
 
 | Catégorie | Contenu |
 |---|---|
 | Hub (vert) | Écran + calcul + réseau MQTT |
 | Cellule (gris) | Lock + sensor |
-| PTC (ambre) | Fusible réarmable, un par port |
 | Câble (bleu) | `power + data`, un par cellule, aucun câble partagé |
 
 - Topologie étoile inchangée : un port et un câble dédiés par cellule, aucun câble partagé — voir [`aegis-hardware-diagrams`](../../../.claude/skills/aegis-hardware-diagrams/SKILL.md) pour le style de référence.
-- Fusible réarmable (PTC), pas un fusible à usage unique : le solénoïde tire un courant d'appel bref à chaque impulsion (~0.5–1 A, estimation provisoire — fiche technique du composant retenu non disponible); le PTC tolère l'appel et se réarme seul après un vrai défaut.
 
 ## Statut
 
