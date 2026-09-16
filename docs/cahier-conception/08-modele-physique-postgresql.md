@@ -2,9 +2,8 @@
 
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Date :** 14 septembre 2026  
-**Version :** 1.0  
-**Statut :** Proposition de conception physique
+**Date :** 16 septembre 2026  
+**Version :** 1.1  
 
 ---
 
