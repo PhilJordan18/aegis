@@ -3,8 +3,8 @@
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Session :** Automne 2026  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Date de révision :** 9 septembre 2026  
-**Version :** 0.3 — architecture matérielle hub/cellule  
+**Date de révision :** 16 septembre 2026  
+**Version :** 0.4 — accès local par QR, horaires et architecture en étoile  
 **Échéance :** Semaine 15, le 23 décembre 2026
 
 ---
@@ -38,7 +38,9 @@ Il combine :
 - un backend central qui applique les règles métier;
 - une base PostgreSQL;
 - un broker MQTT;
-- un casier connecté modulaire, composé d'un cube « hub » (écran, calcul, réseau) et d'un ou plusieurs cubes « cellule » dépourvus d'écran, contrôlé par ESP32;
+- un casier connecté modulaire composé, pour le P0, d'un hub ESP32 avec écran et réseau et de deux cellules sans écran ni radio propre, chacune correspondant à un compartiment;
+- une liaison en étoile, avec un port et un câble dédiés du hub vers chaque cellule;
+- un contrôle d'accès local par QR affiché sur le hub avant chaque autorisation de retrait ou de retour;
 - une méthode de confirmation physique du retrait et du retour.
 
 Aegis ne se limite pas à répondre à la question :
@@ -174,7 +176,7 @@ Le MVP doit prouver qu'Aegis peut :
 2. déterminer si un actif est prêt pour un utilisateur donné;
 3. bloquer un actif présent mais non conforme;
 4. réserver un actif admissible;
-5. autoriser l'ouverture d'un seul compartiment;
+5. vérifier le défi QR scanné par l'initiateur avant d'autoriser l'ouverture d'un seul compartiment;
 6. corréler l'action mobile, la commande IoT et l'observation physique;
 7. créer automatiquement une chaîne de possession après un retrait confirmé;
 8. terminer automatiquement cette chaîne après un retour confirmé;
@@ -195,6 +197,8 @@ Le backend décide :
 - s'il possède le niveau d'accès requis;
 - si l'actif est prêt;
 - si la réservation est valide;
+- si les horaires permettent de commencer l'action;
+- si le défi QR est valide, lié au demandeur et à l'opération, et encore inutilisé;
 - si une ouverture peut être commandée;
 - si les observations reçues suffisent à confirmer un retrait ou un retour;
 - si une anomalie doit être créée.
@@ -226,6 +230,23 @@ Un parcours complet, sécurisé et répétable possède plus de valeur que plusi
 
 ---
 
+
+### 7.6 Réservation, contrôle local et preuve physique sont distincts
+
+Une réservation peut être créée à distance par un utilisateur autorisé; elle ne déverrouille jamais le locker. La préparation d'un retrait ou d'un retour crée une opération `AWAITING_LOCAL_PROOF` et un QR sur l'écran du hub, sans commande de serrure.
+
+Le technicien scanne ce QR dans l'application iOS. Le backend vérifie le compte, le contexte, l'échéance et toutes les gardes métier applicables, puis consomme le défi et crée l'unique commande de manière atomique. Le secret n'est jamais fourni au téléphone par une réponse REST ni exposé dans les logs ou l'administration.
+
+Le scan établit l'accès à un code récemment affiché. Une photo, une vidéo ou un complice peut le relayer : le P0 ne revendique pas une preuve absolue de présence, une protection anti-relais ou un second facteur d'identité indépendant.
+
+Le QR d'accès local ne remplace pas le RFID de l'actif, ni le fallback d'identification et de présence. Le prêt ne commence et ne se termine qu'après confirmation physique.
+
+### 7.7 Le retour possède ses propres conditions d'autorisation
+
+La readiness bloque une nouvelle réservation et un retrait non admissible. Pour retirer sa propre réservation, le titulaire est évalué dans ce contexte : sa réservation valide n'est pas traitée comme un conflit.
+
+Un actif emprunté est normalement `BORROWED` et non disponible pour un nouvel emprunt. Il peut néanmoins être retourné par son titulaire, même s'il est devenu endommagé ou non calibré. Le retour exige un prêt ouvert, le QR valide, les horaires et les gardes physiques de sécurité; il n'exige pas que l'actif soit `READY`. Une récupération après anomalie reste encadrée par les règles du domaine.
+
 ## 8. Acteurs du MVP
 
 ### 8.1 Technicien
@@ -236,7 +257,7 @@ Utilisateur de l'application iOS qui peut :
 - consulter les actifs correspondant à ses droits;
 - voir leur état de readiness;
 - réserver un actif prêt;
-- demander l'accès au compartiment attribué;
+- demander l'accès au compartiment attribué et scanner le QR affiché sur le hub;
 - retirer et retourner l'actif;
 - consulter sa réservation et son prêt actifs.
 
@@ -249,6 +270,7 @@ Utilisateur de l'application Web qui peut :
 - définir un niveau d'accès requis;
 - définir l'état opérationnel et la calibration;
 - associer un actif à un tag et à un compartiment;
+- configurer les heures d'exploitation du locker;
 - consulter les réservations et prêts;
 - surveiller le locker;
 - consulter les anomalies et événements d'audit.
@@ -270,7 +292,9 @@ Acteur machine contrôlé par ESP32 qui :
 
 - s'authentifie auprès du broker;
 - signale son état de santé;
-- reçoit une commande autorisée;
+- affiche le défi QR et accuse son affichage effectif;
+- reçoit une commande de serrure autorisée;
+- affiche les consignes et le résultat métier fourni par le backend;
 - déverrouille un compartiment précis;
 - observe les portes et les actifs;
 - publie des accusés de réception et des événements.
@@ -361,6 +385,11 @@ CANCELLED
 EXPIRED
 ```
 
+
+Une seule réservation `ACTIVE` est permise par technicien et par actif. Le P0 réserve pour un usage immédiat : `reservedFrom` correspond à la création; le technicien choisit `reservedUntil`, dans la plage d'exploitation courante.
+
+`reservedUntil` est l'heure de retour attendue, pas une durée fixe de 20 minutes. Avant retrait, elle borne la réservation. Après retrait confirmé, elle est copiée dans `Loan.dueAt`; son dépassement ne libère pas l'actif.
+
 ### 9.7 Prêt
 
 ```text
@@ -369,14 +398,19 @@ RETURN_PENDING
 COMPLETED
 ```
 
+
+Un prêt `ACTIVE` ou `RETURN_PENDING` maintient l'actif `BORROWED`. Le retard est dérivé de `dueAt`; il n'est pas un statut terminal. La préparation d'un retour laisse le prêt inchangé; le passage de `ACTIVE` à `RETURN_PENDING` intervient après validation du QR et autorisation backend.
+
 ### 9.8 LockerOperation
 
 Chaque interaction physique est représentée par une opération temporaire :
 
 ```text
 REQUESTED
+AWAITING_LOCAL_PROOF
 AUTHORIZED
 COMMAND_SENT
+COMMAND_ACKNOWLEDGED
 DOOR_OPENED
 OBSERVATION_RECEIVED
 CONFIRMED
@@ -394,10 +428,41 @@ Une opération contient au minimum :
 - le compartiment;
 - la réservation ou le prêt associé;
 - l'identifiant physique attendu;
-- une date d'expiration;
+- le défi local associé et son échéance;
+- les dates d'autorisation et de validation locale, nulles pendant l'attente du QR;
+- une date d'expiration physique, fixée à 120 secondes après l'autorisation;
 - son état courant.
 
 ---
+
+
+`COMMAND_ACKNOWLEDGED` signifie que le hub a accepté la commande de serrure. Ce n'est ni un accusé d'affichage du QR ni une preuve d'ouverture ou de mouvement d'actif.
+
+### 9.9 Défi local d'accès
+
+Le concept `LocalAccessChallenge` est lié à une seule opération, donc à un initiateur, une action, un actif et une cellule précis. Il cible aussi le hub actif et son démarrage courant. Ses états sont `PENDING`, `CONSUMED`, `EXPIRED` et `INVALIDATED`.
+
+La consommation du défi, l'autorisation, la création de commande, le changement éventuel du prêt et l'audit réussissent ensemble ou sont annulés ensemble. Une opération terminale ne peut pas être réactivée pour réutiliser son défi.
+
+### 9.10 Horaire d'exploitation
+
+L'administrateur définit un horaire hebdomadaire par locker, au maximum une plage continue par jour, avec son fuseau (`America/Toronto` pour la démonstration). Le P0 n'inclut ni plages de nuit traversant minuit, ni exceptions datées, ni réservations à démarrage futur.
+
+Une réservation, un retrait ou un retour est initié pendant une plage ouverte. La fin de réservation ne dépasse pas la fermeture. Un prêt non rendu à la fermeture reste ouvert et indisponible; aucune clôture automatique n'est admise.
+
+### 9.11 Repères temporels
+
+| Repère | Règle | Statut |
+|---|---|---|
+| Réservation | Fin personnalisée au plus tard à la fermeture de la plage courante | Décision intégrée |
+| Opération physique | 120 s après `authorizedAt` | Décision intégrée |
+| Défi QR | Au plus 60 s après création, sans dépasser fermeture ni `reservedUntil` pour un retrait | Proposition à tester |
+| Essais de secret | Au plus 5 essais erronés par défi; seul l'initiateur peut en consommer les essais | Proposition à tester |
+| Fréquence des préparations | 3 par utilisateur et locker sur 15 minutes; un rejeu idempotent ne recompte pas | Proposition à tester |
+| Heartbeat | Toutes les 10 s; `OFFLINE` après plus de 30 s sans heartbeat valide | Base P0 configurable |
+| Fenêtre RFID | Départ POC : 3 s après fermeture; retour avec au moins 3 lectures cohérentes, retrait sans le tag sur une fenêtre saine complète | À mesurer au POC |
+
+La durée maximale de l'impulsion électrique de serrure est distincte des 120 secondes métier; elle dépend du composant et des essais.
 
 ## 10. Démonstration de référence
 
@@ -414,32 +479,34 @@ Un compte technicien standard et un compte administrateur sont préparés.
 
 ### 10.2 Scénario nominal de retrait
 
-1. Le technicien se connecte à l'application iOS.
-2. Il recherche un multimètre.
-3. L'API évalue la readiness des deux actifs.
-4. `A2` apparaît bloqué avec la raison `CALIBRATION_EXPIRED`.
-5. Le technicien réserve `A1`.
-6. Il demande l'accès au locker.
-7. Le backend vérifie à nouveau la readiness et la réservation.
-8. Une `LockerOperation` de type `CHECKOUT` est créée.
-9. Une commande d'ouverture expirante est envoyée à `A1`.
-10. L'ESP32 déverrouille uniquement `A1`.
-11. La porte est ouverte, l'actif est retiré et la porte est refermée.
-12. Les observations physiques sont publiées avec l'identifiant d'opération.
-13. Le backend confirme le retrait et crée le prêt.
-14. Le mobile et le Web présentent le nouvel état.
+1. Le technicien se connecte à l'application iOS et recherche un multimètre.
+2. Le backend présente A1 `READY` et A2 `BLOCKED / CALIBRATION_EXPIRED`.
+3. Le technicien réserve A1 et choisit une fin comprise dans l'horaire actif. Aucune serrure n'est commandée.
+4. Il prépare le retrait depuis sa réservation.
+5. Le backend vérifie les préconditions, crée une opération `CHECKOUT / AWAITING_LOCAL_PROOF` et fait afficher son défi sur le hub.
+6. Le hub confirme l'affichage; le technicien scanne le QR avec Aegis Mobile.
+7. L'application transmet le défi à l'API authentifiée.
+8. Le backend vérifie le défi, les droits, les horaires, la réservation et la readiness dans le contexte du titulaire. Il consomme le défi et autorise l'opération atomiquement.
+9. La fenêtre physique de 120 secondes commence; une commande expirante cible uniquement A1.
+10. Le hub masque le QR, commande la cellule A1 et émet l'accusé de commande.
+11. Le technicien ouvre la porte, retire l'actif et referme la porte.
+12. La cellule produit une fenêtre RFID saine après fermeture; le tag attendu n'y est plus présent. Le hub transmet les événements corrélés.
+13. Le backend valide la séquence, confirme l'opération, passe la réservation à `FULFILLED` et crée le prêt `ACTIVE`.
+14. Le mobile et le Web présentent le nouvel état; l'écran affiche le résultat confirmé par le backend.
 
 ### 10.3 Scénario nominal de retour
 
-1. Le technicien ouvre son prêt actif.
-2. Il demande un retour.
-3. Le backend crée une `LockerOperation` de type `RETURN`.
-4. Le bon compartiment est déverrouillé.
-5. L'actif attendu est déposé et la porte est refermée.
-6. Les observations physiques sont corrélées à l'opération.
-7. Le backend confirme le retour.
-8. Le prêt passe à `COMPLETED`.
-9. La disponibilité et la readiness sont recalculées.
+1. Le technicien ouvre son prêt actif dans Aegis Mobile et prépare un retour pendant la plage d'exploitation.
+2. Le backend crée une opération `RETURN / AWAITING_LOCAL_PROOF` et fait afficher un nouveau QR. Le prêt conserve son état courant.
+3. Le hub accuse l'affichage; le titulaire scanne le QR et le soumet à l'API.
+4. Le backend revalide le défi et les conditions du retour, puis consomme, autorise et passe le prêt à `RETURN_PENDING` atomiquement.
+5. Le bon compartiment reçoit la commande; les 120 secondes commencent à l'autorisation.
+6. Le technicien dépose l'actif attendu et referme la porte.
+7. Les observations de porte et la lecture stable du bon tag après fermeture sont corrélées à l'opération.
+8. Le backend confirme le retour et passe le prêt à `COMPLETED`.
+9. La disponibilité et la readiness sont recalculées; le Web, le mobile et l'écran présentent le résultat.
+
+Un retour confirmé ne garantit pas `READY` : un actif revenu endommagé ou avec calibration expirée reste bloqué pour un nouvel emprunt.
 
 ### 10.4 Scénarios de refus ou d'anomalie
 
@@ -449,7 +516,11 @@ Au minimum, la démonstration doit également prouver :
 - le refus d'un accès avec un niveau insuffisant;
 - l'expiration d'une opération non complétée;
 - l'absence de double traitement d'un événement MQTT dupliqué;
-- la création d'une anomalie si l'actif attendu n'est pas observé.
+- la création d'une anomalie si l'actif attendu n'est pas observé;
+- l'absence d'ouverture après une simple réservation ou une préparation sans QR valide;
+- le refus d'un défi expiré, rejoué ou soumis par un autre compte;
+- une seule commande malgré deux validations concurrentes;
+- le maintien de l'actif indisponible tant que le prêt n'est pas physiquement terminé, même après son échéance.
 
 ---
 
@@ -492,8 +563,9 @@ Ne sont pas exigés : inscription publique, authentification sociale, récupéra
 - évaluer présence, disponibilité, état opérationnel, calibration et accès;
 - retourner `READY`, `BLOCKED` ou `UNKNOWN`;
 - retourner au moins une raison explicite en cas de blocage;
-- empêcher la réservation et l'ouverture d'un actif non prêt;
-- réévaluer les règles immédiatement avant l'ouverture;
+- empêcher la réservation et le retrait d'un actif non prêt, en tenant compte de la réservation du titulaire pour son propre retrait;
+- appliquer au retour ses gardes spécifiques, sans exiger une readiness d'emprunt;
+- réévaluer les règles applicables lors de la validation du QR, avant création de la commande;
 - exposer le résultat de façon cohérente au Web et au mobile;
 - couvrir les règles critiques par des tests automatisés.
 
@@ -501,14 +573,18 @@ Le P0 ne nécessite pas un moteur de règles générique configurable. Une impl�
 
 ### 11.4 Réservations
 
-- réserver un actif `READY`;
-- empêcher deux réservations actives sur le même actif;
-- empêcher un utilisateur de réserver un actif auquel il n'a pas accès;
-- consulter sa réservation active;
-- annuler une réservation inutilisée;
-- faire expirer une réservation après une durée définie;
-- refuser l'ouverture si la réservation n'est plus valide;
-- passer la réservation à `FULFILLED` lorsque le retrait est confirmé.
+- réserver un actif `READY` sans aucune ouverture automatique;
+- empêcher deux réservations actives sur le même actif et plus d'une réservation active par technicien;
+- vérifier les droits du demandeur;
+- commencer la réservation immédiatement et laisser choisir `reservedUntil` dans la plage ouverte;
+- refuser une demande hors horaire, une échéance passée ou une fin dépassant la fermeture;
+- consulter et annuler sa réservation inutilisée;
+- invalider atomiquement le défi et terminer l'attente QR lors d'une annulation avant autorisation;
+- faire expirer une réservation non utilisée à son échéance; l'attente QR ne prolonge pas cette réservation;
+- refuser une nouvelle autorisation de retrait si la réservation n'est plus valide;
+- passer la réservation à `FULFILLED` seulement au retrait confirmé.
+
+Une opération de retrait autorisée avant la fin de réservation conserve sa fenêtre physique. Si l'échéance survient pendant l'exécution ou si la réalité physique reste incertaine, la réservation ne libère pas l'actif avant classification de l'opération. Une confirmation physique tardive peut créer un prêt déjà en retard, jamais un actif disponible par défaut.
 
 ### 11.5 Prêts et chaîne de possession
 
@@ -521,27 +597,34 @@ Le P0 ne nécessite pas un moteur de règles générique configurable. Une impl�
 - conserver l'horodatage du retour;
 - empêcher deux prêts actifs pour le même actif;
 - conserver l'historique des prêts terminés;
-- permettre de reconstruire qui détenait quel actif et à quel moment.
+- permettre de reconstruire qui détenait quel actif et à quel moment;
+- copier l'échéance de réservation dans `Loan.dueAt` et présenter les prêts en retard sans les clôturer;
+- maintenir l'actif `BORROWED` tant qu'un prêt reste ouvert, même si son tag réapparaît sans retour corrélé;
+- permettre une nouvelle tentative après échec sûr ou une récupération encadrée après anomalie, sans réactiver une opération terminale.
 
 ### 11.6 Locker et compartiments
 
-- représenter un locker unique, potentiellement réparti sur un cube hub et un cube cellule (voir 17.5);
+- représenter un locker unique composé d'un hub et de deux cellules, chacune formant un compartiment (voir 17.5);
 - représenter deux compartiments indépendants;
 - associer un actif à chaque compartiment;
 - connaître l'état en ligne ou hors ligne du locker;
 - connaître l'état ouvert ou fermé de chaque porte;
 - commander l'ouverture d'un compartiment précis;
-- empêcher une ouverture simultanée non prévue;
+- limiter le locker à une seule opération non terminale, y compris pendant l'attente QR;
 - confirmer la réception ou l'échec d'une commande;
 - afficher les principaux états physiques dans l'administration Web.
 
-Si l'architecture hub/cellule est retenue (17.5), la cellule ne prend aucune décision d'autorisation : elle exécute les commandes reçues du hub et lui rapporte ses observations, conformément à 7.1.
+L'étoile est retenue : chaque cellule a son port et son câble dédiés vers le hub. Elle n'accorde aucune autorisation et ne possède aucun accès MQTT; elle exécute les commandes du hub et lui rapporte ses observations. Le POC valide la réalisation électrique et le protocole, pas le nombre de compartiments.
 
 ### 11.7 Opérations physiques
 
 - créer une `LockerOperation` pour chaque retrait ou retour;
 - corréler la demande, la commande et les événements par `operationId`;
-- imposer une durée de validité;
+- distinguer l'attente QR de l'opération autorisée; aucun déverrouillage pendant `AWAITING_LOCAL_PROOF`;
+- imposer une durée physique de 120 secondes après autorisation;
+- distinguer l'accusé d'affichage du QR de `COMMAND_ACKNOWLEDGED`;
+- classer l'expiration avant autorisation comme un échec sûr sans mutation du prêt;
+- créer une anomalie lorsque l'exécution physique est incertaine, sans supposer qu'une porte fermée exclut toute action antérieure;
 - enregistrer chaque transition d'état;
 - attendre la fermeture de la porte avant la confirmation finale;
 - confirmer uniquement l'actif attendu;
@@ -550,12 +633,13 @@ Si l'architecture hub/cellule est retenue (17.5), la cellule ne prend aucune dé
 
 ### 11.8 Hardware et détection
 
-- connecter l'ESP32 au réseau (celui du hub si l'architecture 17.5 est retenue);
+- connecter le hub ESP32 au réseau; les cellules utilisent leurs liaisons locales dédiées;
 - contrôler deux serrures électroniques;
 - lire un capteur de porte par compartiment;
-- fournir un indicateur visuel minimal par compartiment;
+- fournir un indicateur visuel minimal par compartiment et un écran de hub capable d'afficher un QR lisible;
 - appliquer une durée maximale de déverrouillage;
-- utiliser au moins une méthode fiable d'identification ou de confirmation physique;
+- utiliser le RFID UHF local par cellule comme option de départ, à qualifier au POC, ou le fallback documenté si nécessaire;
+- ne jamais assimiler une absence de réponse du lecteur à l'absence de l'actif;
 - détecter le retrait de l'actif attendu;
 - détecter le retour de l'actif attendu;
 - transmettre les événements au backend;
@@ -566,15 +650,17 @@ La fermeture mécanique industrielle, la résistance à l'effraction et la certi
 
 ### 11.9 Communication MQTT
 
-- utiliser des canaux distincts pour commandes, événements et statuts;
+- utiliser des canaux distincts pour commandes de serrure, événements, statuts et instructions d'écran;
 - authentifier le device;
 - limiter ses permissions aux topics nécessaires;
 - inclure `messageId`, `operationId`, `lockerId`, `type`, `timestamp` et `schemaVersion` lorsque pertinents;
-- envoyer un accusé de réception de commande;
+- envoyer un accusé de réception de commande et un accusé applicatif distinct lorsque le QR a réellement été affiché;
 - traiter les événements de façon idempotente;
 - ignorer ou refuser une commande expirée;
 - publier un heartbeat;
-- conserver les événements bruts nécessaires au diagnostic.
+- conserver les événements utiles au diagnostic en excluant les secrets;
+- publier commandes et affichages avec `retain=false` et dédupliquer les livraisons;
+- vérifier la session du hub et l'ordre des instructions d'écran pour ne pas réafficher un ancien QR.
 
 Topics initiaux :
 
@@ -582,6 +668,7 @@ Topics initiaux :
 aegis/v1/lockers/{lockerId}/commands
 aegis/v1/lockers/{lockerId}/events
 aegis/v1/lockers/{lockerId}/status
+aegis/v1/lockers/{lockerId}/display
 ```
 
 ### 11.10 Administration Web — Aegis Manager
@@ -589,6 +676,7 @@ aegis/v1/lockers/{lockerId}/status
 - connexion administrateur;
 - gestion minimale du catalogue et des actifs;
 - saisie de l'état opérationnel et de la calibration;
+- configuration des heures d'exploitation et du fuseau du locker;
 - association actif, identifiant physique et compartiment;
 - consultation de la readiness et des raisons de blocage;
 - consultation des réservations et des prêts;
@@ -608,6 +696,8 @@ Le Web ne reproduit pas l'ensemble du parcours technicien de l'application mobil
 - création et annulation d'une réservation;
 - consultation de la réservation active;
 - demande d'accès au locker;
+- scan du QR affiché sur le hub et envoi du défi à l'API authentifiée;
+- erreur explicite si le QR est invalide, illisible, expiré ou si l'accès à la caméra est refusé;
 - affichage de la progression de l'opération;
 - consultation du prêt actif;
 - lancement du retour;
@@ -617,26 +707,43 @@ Le Web ne reproduit pas l'ensemble du parcours technicien de l'application mobil
 
 - journaliser les connexions et refus pertinents;
 - journaliser les changements de readiness déterminants;
-- journaliser les réservations, commandes d'ouverture, retraits et retours;
+- journaliser les réservations, décisions de défi QR, commandes d'ouverture, retraits et retours, sans stocker le secret dans l'audit;
 - conserver les transitions des prêts et opérations;
 - conserver les événements IoT importants;
 - détecter l'absence de l'actif attendu;
 - empêcher un doublon de créer une seconde transition métier;
-- présenter une chronologie compréhensible à l'administrateur.
+- présenter une chronologie compréhensible à l'administrateur;
+- permettre à l'administrateur de reconnaître une anomalie et documenter la correction, sans la résoudre par simple changement de statut;
+- résoudre une anomalie uniquement après une preuve corrective cohérente validée par le backend.
 
 ### 11.13 Infrastructure et exploitation
 
 - exécuter PostgreSQL et le broker MQTT dans un environnement reproductible;
 - déployer le backend et le Web dans un environnement de démonstration accessible;
 - utiliser HTTPS pour les clients distants;
-- utiliser MQTT authentifié et chiffré lorsque le broker est distant;
+- utiliser MQTT authentifié et chiffré avec tout hub réel, même au laboratoire, afin de protéger le défi; seuls les tests avec simulateur isolé peuvent employer le réseau Docker privé non chiffré;
 - conserver PostgreSQL hors de l'accès public;
 - fournir les secrets par configuration externe;
 - versionner les migrations Flyway;
-- fournir un simulateur IoT pour développer sans le locker;
+- fournir un simulateur IoT pour développer sans le locker, couvrant aussi affichage du défi, accusé, expiration et redémarrage;
 - documenter les étapes de lancement et de démonstration.
 
 ---
+
+
+### 11.14 Contrôle local et écran du hub
+
+- générer un secret aléatoire fort pour chaque défi, valable une seule fois et lié à l'opération;
+- transmettre le secret uniquement au hub ciblé, par le canal MQTT privé; le mobile l'obtient par scan;
+- attendre l'accusé d'affichage avant autorisation;
+- vérifier le compte initiateur, le contexte, le délai, le démarrage du hub et les gardes applicables au scan;
+- consommer le défi et créer la commande de manière atomique et idempotente;
+- protéger le secret dans les données techniques et le purger lorsqu'il devient inutilisable;
+- effacer le QR après usage, expiration, invalidation ou redémarrage;
+- afficher action, cellule, consignes et résultat confirmé par le backend;
+- refuser explicitement l'ouverture si l'écran ou le contrôle local n'est pas disponible, sans voie de contournement.
+
+Le P0 ne nécessite pas d'inscription, de catalogue, de réservation ou d'authentification autonome sur l'écran. Le mobile suit l'opération par les lectures REST prévues; aucune notification push supplémentaire n'est exigée.
 
 ## 12. P1 — Fonctionnalités secondaires
 
@@ -650,10 +757,10 @@ Les fonctionnalités P1 peuvent commencer uniquement lorsque le retrait et le re
 - historique détaillé côté technicien;
 - gestion Web plus complète des utilisateurs;
 - statistiques simples d'utilisation;
-- écran central pour guider l'utilisateur;
+- enrichissement de l'interface du hub au-delà du QR, des consignes et du résultat déjà inclus au P0;
 - gestion d'une batterie ou d'un état de charge déclaré;
-- détection du mauvais actif;
-- QR ou NFC comme deuxième méthode d'identification;
+- identification détaillée et traitement enrichi d'un mauvais actif; le refus d'une preuve incompatible et l'anomalie minimale restent P0;
+- QR ou NFC comme seconde méthode d'identification d'actif, distincte du QR d'accès local déjà P0;
 - export CSV simple;
 - amélioration avancée des interfaces et animations.
 
@@ -702,6 +809,8 @@ Sont explicitement exclus :
 - communication directe du mobile ou du Web avec les serrures;
 - accès direct des clients à PostgreSQL;
 - fonctionnement hors ligne complet;
+- garantie anti-relais du QR ou décision d'accès fondée sur le pays ou l'adresse IP;
+- calendrier de réservations à démarrage futur, exceptions d'horaires et prolongations avancées dans le P0;
 - synchronisation complexe après plusieurs jours hors ligne;
 - support 24/7 ou garantie de disponibilité commerciale;
 - promesse chiffrée de réduction des coûts sans données réelles;
@@ -715,7 +824,7 @@ Sont explicitement exclus :
 |---|---|
 | Équipe | Deux étudiants |
 | Temps | Une session, présentation en semaine 15 |
-| Prototype | Une unité de deux compartiments (architecture hub/cellule en POC, voir 17.5) |
+| Prototype | Un hub avec écran et deux cellules/compartiments; étoile retenue, réalisation électrique en POC |
 | Budget matériel | Maximum de 500 $ CA, partagé 50/50 |
 | Mobile | Application iOS native avec SwiftUI |
 | Accès à Xcode | Principalement sur les Macs du Cégep |
@@ -724,7 +833,9 @@ Sont explicitement exclus :
 | Données | PostgreSQL |
 | Contrôleur | ESP32 |
 | Clients | HTTPS vers une API REST |
-| IoT | MQTT entre backend, broker et ESP32 |
+| IoT | MQTT entre backend, broker et hub ESP32; cellules sans accès IP/MQTT |
+| Liaison de cellule | Un port/câble dédié par cellule; RJ45 proposé, brochage propriétaire à valider; RS-485 point à point indépendant proposé |
+| Accès local | QR à usage unique affiché par le hub et validé par le backend |
 | Détection | Une méthode fiable obligatoire; RFID UHF soumis à POC |
 | IA | Non requise dans le produit |
 | Déploiement | Environnement de démonstration distant prévu |
@@ -741,7 +852,10 @@ Sont explicitement exclus :
 - toutes les entrées d'API sont validées;
 - les autorisations sont vérifiées côté serveur;
 - les communications distantes des clients utilisent HTTPS;
-- la communication MQTT distante est authentifiée et chiffrée;
+- la communication MQTT avec un hub réel est authentifiée et chiffrée;
+- aucune commande de serrure n'est créée avant validation et consommation du défi QR;
+- le QR est lié à l'initiateur, à l'opération et au démarrage du hub;
+- les essais et préparations sont limités; le secret n'est jamais fourni par une réponse REST ou un diagnostic;
 - les identifiants MQTT sont propres au device;
 - les secrets ne sont jamais committés;
 - les mots de passe ne sont jamais stockés en clair;
@@ -753,7 +867,8 @@ Sont explicitement exclus :
 
 - un événement dupliqué ne produit pas une deuxième opération métier;
 - une déconnexion du locker est visible;
-- une opération incomplète expire ou passe en erreur;
+- une opération incomplète expire ou passe en erreur; son délai QR et son délai physique sont distincts;
+- une panne d'écran, une reconnexion ou un rejeu ne déclenche aucune ouverture;
 - la fermeture de porte est observée avant la confirmation finale;
 - les erreurs réseau ne laissent pas silencieusement un état incohérent;
 - le logiciel peut être testé à l'aide d'un simulateur IoT;
@@ -766,12 +881,13 @@ Sont explicitement exclus :
 - contrats REST et MQTT documentés;
 - configuration séparée du code;
 - ADR pour les décisions structurantes;
-- tests automatisés des règles de readiness, réservation et transition;
+- tests automatisés des règles de readiness, horaires, réservation, validation du QR et transition;
 - noms d'états et d'événements cohérents entre les plateformes;
 - documentation mise à jour avec le comportement réel.
 
 ### 16.4 Performance de démonstration
 
+- distinguer dans les mesures le temps humain de scan, le temps de validation du défi et le délai entre autorisation et ouverture;
 - une commande d'ouverture produit rapidement un résultat ou une erreur explicite;
 - l'état logiciel se met à jour dans les quelques secondes suivant l'événement physique;
 - les interfaces restent utilisables sur le réseau de démonstration;
@@ -783,11 +899,11 @@ Le prototype ne subira pas de test de charge industriel. Les identifiants, contr
 
 ---
 
-## 17. Porte de décision pour la détection physique
+## 17. Validation de la détection et de la réalisation matérielle
 
 ### 17.1 Objectif du POC
 
-Le POC doit déterminer si le RFID UHF permet une observation suffisamment localisée, stable et répétable dans le prototype à deux compartiments.
+Le RFID UHF local par cellule est l'option de départ. Le POC doit mesurer sa localisation, sa stabilité et sa répétabilité dans les deux compartiments; une lecture locale n'élimine pas à elle seule les lectures parasites. Le choix n'est remplacé que si les résultats documentés justifient le fallback.
 
 ### 17.2 Tests minimaux
 
@@ -804,7 +920,7 @@ Le POC doit déterminer si le RFID UHF permet une observation suffisamment local
 
 ### 17.3 Critère de conservation
 
-Le RFID UHF est conservé si le POC permet d'identifier de manière répétable le changement attendu dans le bon compartiment, avec un niveau d'erreur compatible avec la démonstration.
+Le RFID UHF est conservé si le POC permet d'identifier de manière répétable le changement attendu dans le bon compartiment. Le rapport de POC fixe avant essais les seuils admissibles d'erreur et de délai, puis consigne les résultats. La fenêtre initiale de trois secondes n'est pas présentée comme une performance déjà prouvée.
 
 ### 17.4 Fallback
 
@@ -818,32 +934,41 @@ capteur de porte
 capteur de présence ou de poids
 ```
 
-Le choix doit être consigné dans un ADR. Sélectionner une solution plus fiable après un POC documenté ne constitue pas un échec technique.
+Le choix doit être consigné dans un ADR. Sélectionner une solution plus fiable après un POC documenté ne constitue pas un échec technique. Ce fallback concerne l'identité et la présence de l'actif; il ne remplace pas le QR d'autorisation affiché sur le hub.
 
-### 17.5 Porte de décision pour l'architecture matérielle hub/cellule
+### 17.5 Validation de l'architecture matérielle en étoile
 
-#### 17.5.1 Objectif du POC
+#### 17.5.1 Décision retenue et objet du POC
 
-Le POC doit déterminer si une architecture composée d'un cube hub (écran, calcul, réseau) et d'un cube cellule (compartiment, serrure, capteurs, sans écran ni radio propre), reliés par un câble unique combinant alimentation et communication, est réalisable dans le budget matériel et le calendrier du P0.
+L'équipe a retenu un hub maître avec écran et deux cellules indépendantes. Une cellule forme exactement un compartiment. L'empilage mécanique reste possible, avec un câble direct du hub vers chaque cellule; aucun câble de cellule ne sert de passage vers l'autre.
 
-#### 17.5.2 Tests minimaux
+Le POC valide l'alimentation, les interfaces, la connectique et le protocole dans le budget et le calendrier. Il ne remplace pas le prototype par une seule cellule.
 
-- alimenter et actionner une serrure de la cellule depuis le hub sur un seul câble;
-- adresser la cellule de façon univoque sur cette liaison;
-- mesurer la chute de tension sur la longueur de câble prévue pour le prototype;
-- détecter une déconnexion ou un débranchement de la cellule depuis le hub;
-- reprendre la communication après une déconnexion temporaire;
-- estimer le coût en composants (câble, connecteurs, transceiver) contre le budget de 500 $ CA.
+#### 17.5.2 Connectique et communication proposées
 
-#### 17.5.3 Critère de conservation
+Jimmy propose un câble à paires torsadées Cat5e/Cat6 terminé en connecteurs RJ45. Le câble transporte alimentation et signaux Aegis selon un brochage à définir; la prise n'est ni un port Ethernet ni du PoE standard et ne doit pas être raccordée à un équipement réseau.
 
-L'architecture hub/cellule est conservée pour le P0 si le POC démontre une liaison fiable et reproductible dans le budget et le calendrier disponibles, sans retarder le gel fonctionnel de la semaine 12.
+Pour conserver RS-485 dans l'étoile, la proposition est une liaison point à point indépendante par port du hub, avec ses interfaces propres. Les A/B des départs ne sont pas simplement raccordés en étoile passive sur un bus unique. Modbus RTU minimal reste une proposition de protocole applicatif à confirmer; le choix final et ses contraintes sont consignés dans l'ADR matériel.
 
-#### 17.5.4 Fallback
+Aucune tension admissible, section, intensité, terminaison ou affectation de broche non vérifiée n'est considérée comme validée. Ajouter une cellule exige un port, des interfaces et un budget de puissance correspondants.
 
-Si le résultat n'est pas satisfaisant ou consomme trop de temps, le P0 adopte un locker monolithique : un seul ESP32 pilotant directement les deux serrures et leurs capteurs, sans liaison hub/cellule. L'architecture hub/cellule reste alors une orientation de produit documentée pour une évolution P1/P2 (voir 13), sans engagement pour la session.
+#### 17.5.3 Tests minimaux
 
-Le choix doit être consigné dans un ADR. Adopter le fallback monolithique après un POC documenté ne constitue pas un échec technique.
+- adresser et commander séparément A1 et A2, sans action sur la mauvaise cellule;
+- alimenter et actionner chaque serrure par son propre câble;
+- mesurer le courant et la chute de tension sur chaque liaison à la longueur prévue;
+- vérifier brochage, contacts, protections et compatibilité des alimentations;
+- détecter le débranchement d'une cellule et vérifier le comportement de l'autre;
+- reprendre la communication sans réexécuter une ancienne commande;
+- tester redémarrages, délais et doublons;
+- vérifier la lisibilité du QR sur le téléphone réel et son effacement après usage;
+- inclure écran, deux lecteurs RFID, interfaces, câbles, connecteurs, alimentation et mécanique dans le budget de 500 $ CA.
+
+#### 17.5.4 Critère de conservation et fallback
+
+La réalisation modulaire est conservée si les deux liaisons sont fiables et répétables, sans dépasser le budget ni retarder le gel de semaine 12. La décision matérielle doit intervenir selon les jalons de POC de l'équipe.
+
+Si la réalisation échoue, le repli documenté est un ESP32 pilotant directement les deux compartiments. Un ADR explicite le changement; les identifiants A1/A2, l'écran QR, l'autorité du backend et les preuves physiques restent requis. La modularité plus avancée demeure une évolution ultérieure.
 
 ---
 
@@ -852,15 +977,15 @@ Le choix doit être consigné dans un ADR. Adopter le fallback monolithique apr�
 Aegis est considéré comme fonctionnel lorsque tous les critères suivants sont satisfaits :
 
 1. Un administrateur peut préparer au moins deux actifs associés aux deux compartiments.
-2. Un actif présent avec calibration valide peut être déclaré `READY`.
+2. Un actif présent, conforme, disponible et autorisé pour le demandeur est évalué `READY` par le backend.
 3. Un actif présent avec calibration expirée est déclaré `BLOCKED`.
 4. La raison du blocage est visible sur le Web et le mobile.
 5. Un technicien ne peut pas réserver un actif non prêt.
 6. Un technicien de niveau insuffisant ne peut pas réserver ou ouvrir un actif restreint.
 7. Un technicien autorisé peut réserver un actif prêt depuis iOS.
-8. Le backend réévalue les règles avant l'ouverture.
+8. Le backend réévalue les gardes applicables lors de la validation du QR, avant de créer une commande.
 9. Le backend commande le bon compartiment par MQTT.
-10. L'ESP32 exécute et confirme la commande.
+10. L'ESP32 accuse et exécute la commande; cet accusé seul ne confirme pas le retrait ou le retour.
 11. Le retrait physique de l'actif attendu est détecté.
 12. Le prêt est créé automatiquement après validation physique.
 13. Le retour de l'actif attendu est détecté.
@@ -871,10 +996,20 @@ Aegis est considéré comme fonctionnel lorsque tous les critères suivants sont
 18. Le locker signale son état en ligne ou hors ligne.
 19. La piste d'audit permet de reconstruire l'opération complète.
 20. Le système redémarre et retrouve un état de démonstration cohérent selon la procédure documentée.
+21. Une réservation distante et une préparation sans scan valide ne génèrent aucune commande de serrure.
+22. Le QR est affiché sur le hub; aucune réponse REST, trace ou vue administrative n'en expose le secret.
+23. Un défi expiré, rejoué, lié à une autre opération ou soumis par un autre compte est refusé; deux scans concurrents ne produisent qu'une commande.
+24. Les 120 secondes physiques commencent après autorisation; une expiration du défi laisse le prêt inchangé.
+25. Le titulaire choisit une échéance dans l'horaire; une seule réservation active est admise par technicien et par actif.
+26. Dépasser l'échéance d'un prêt ou observer le tag sans retour corrélé ne rend jamais l'actif réservable.
+27. Un actif emprunté peut suivre le retour autorisé sans être READY; après retour, une non-conformité continue de bloquer un nouvel emprunt.
+28. Une anomalie ne peut pas être résolue sans preuve corrective cohérente.
+29. Le hub et les deux cellules communiquent sur les départs dédiés; une commande pour A1 n'actionne jamais A2.
+30. Le QR est effacé après expiration, invalidation, usage ou redémarrage; sans contrôle local disponible, l'ouverture est refusée.
 
 ### Objectif de répétabilité
 
-Avant la présentation finale :
+Avant la présentation finale, chaque retrait et chaque retour réussi comprend la validation du QR et la confirmation physique :
 
 ```text
 10 retraits consécutifs réussis
@@ -893,7 +1028,8 @@ Avant la présentation finale :
 ### 19.1 Indicateurs démontrables pendant la session
 
 - taux de réussite des retraits et retours;
-- délai entre demande autorisée et ouverture;
+- délai entre demande autorisée et ouverture, séparé du temps de scan;
+- taux de lecture du QR et nombre de défis expirés ou refusés correctement;
 - délai entre observation physique et mise à jour applicative;
 - nombre de doublons correctement ignorés;
 - nombre de tentatives non conformes correctement bloquées;
@@ -916,20 +1052,27 @@ Ces bénéfices ne doivent pas être présentés comme déjà prouvés. Une futu
 
 ## 20. Jalons
 
-| Jalon | Résultat attendu |
-|---|---|
-| Semaines 2–3 | Scope repositionné, User Story Map, architecture initiale, modèle de domaine et matériel de POC |
-| Semaines 3–4 | Walking skeleton et décision préliminaire sur la détection |
-| Semaines 5–6 | Identité, catalogue, actifs et calcul de readiness |
-| Semaine 7 | Réservation et contrats IoT stables |
-| Semaines 8–9 | Retrait complet et création automatique du prêt |
-| Semaine 10 | Retour complet |
-| Semaine 11 | Refus, anomalies, idempotence et sécurité |
-| Semaine 12 | Gel fonctionnel du P0 |
-| Semaines 13–14 | Stabilisation, tests, documentation, mesure et répétitions |
-| Semaine 15 | Présentation finale |
+L'échéance de remise indiquée par l'équipe reste la semaine 15, le **23 décembre 2026**. Les numéros de semaines suivent le calendrier pédagogique; ils ne sont pas convertis ici en semaines civiles consécutives.
 
-Le développement du logiciel et les POC techniques peuvent progresser en parallèle. L'équipe ne doit pas attendre que toute la documentation soit parfaite avant de réduire les risques matériels et d'intégration.
+Le plan d'itérations du document 14 propose les cibles internes ci-dessous après la phase de conception. Elles servent au suivi d'équipe et ne modifient aucune date de remise imposée.
+
+| Jalon interne | Résultat attendu |
+|---|---|
+| Semaines 2–3 | Scope, modèle de domaine et architecture initiale comme base de conception |
+| Semaine 4 | Cohérence documentaire, backlog priorisé et début du walking skeleton |
+| Semaines 5–6 | Identité, catalogue, premiers tests écran/caméra, décision RFID et liaisons de cellules |
+| Semaine 7 | Présence, readiness et horaires démontrables |
+| Semaine 8 | Réservation robuste et bornée par l'horaire |
+| Semaine 9 | Défi QR, commande ciblée, ACK et contrats d'accès local intégrés |
+| Semaine 10 | Retrait complet et prêt créé automatiquement |
+| Semaine 11 | Retour complet et refus essentiels intégrés |
+| Semaine 12 | Anomalies, audit et sécurité vérifiés; gel fonctionnel du P0 |
+| Semaines 13–14 | Stabilisation, documentation, mesures et répétitions |
+| Semaine 15 | Présentation finale selon le calendrier confirmé du cours |
+
+Les contrôles de sécurité et d'idempotence sont développés avec chaque parcours; la semaine 12 est leur validation globale, pas leur première implémentation. Les POC et le logiciel progressent en parallèle. Aucun jalon intermédiaire n'est présenté comme déjà atteint par la seule existence de documents.
+
+La capacité planifiée reste celle du document 14 : 6 h communes à deux, plus 4 h hors cours engagées par Philippe, soit 16 h-personnes par semaine avant absences. Aucun engagement supplémentaire de Jimmy ni travail de fin de semaine n'est présumé.
 
 ---
 
@@ -961,6 +1104,13 @@ Si les réponses ne justifient pas son coût, l'idée reste P1, P2 ou hors scope
 
 ---
 
+
+### 21.1 Impact de la révision QR
+
+Le QR ajoute un travail réel sur iOS, le hub, l'API, les données et les tests. Les stories LOC-01/02 et les parcours concernés doivent être réestimés par l'équipe.
+
+La simplification compensatoire proposée limite l'écran P0 au QR, aux consignes et au résultat backend : aucun catalogue tactile, aucune réservation ou connexion autonome au hub et aucun push mobile supplémentaire. L'équipe ne considère pas cette limitation comme un gain d'heures déjà mesuré; elle vérifie que la charge tient dans le gel de semaine 12. Budget, nombre de compartiments et échéance finale ne sont pas augmentés par cette révision.
+
 ## 22. Definition of Done du MVP
 
 Le MVP est terminé lorsque :
@@ -969,7 +1119,10 @@ Le MVP est terminé lorsque :
 - le scénario de readiness est démontré;
 - les parcours de retrait et de retour fonctionnent de bout en bout;
 - les refus essentiels et au moins une anomalie sont démontrés;
-- les règles métier critiques sont couvertes par des tests;
+- les règles métier critiques, l'autorisation QR, les expirations et la consommation concurrente sont couvertes par des tests;
+- aucun parcours de compatibilité ne permet d'ouvrir sans contrôle local;
+- l'écran du hub et la caméra du téléphone utilisés à la démonstration ont été testés;
+- les horaires et le maintien de l'indisponibilité d'un prêt en retard sont démontrés;
 - les contrats REST et MQTT sont documentés;
 - les migrations de base de données sont versionnées;
 - aucun secret n'est présent dans le dépôt;
@@ -984,25 +1137,26 @@ Le MVP est terminé lorsque :
 
 ## 23. Questions ouvertes
 
-Les points suivants doivent encore être décidés ou validés :
+Les points suivants restent à décider ou à valider :
 
-- méthode de détection physique retenue après le POC;
-- matériel RFID UHF exact à tester;
-- capteur de présence ou de poids de fallback;
-- mécanisme mécanique et électrique des serrures;
-- source d'alimentation et stratégie de sécurité électrique;
-- protocole exact de la liaison hub–cellule (bus, adressage, détection de déconnexion/sabotage);
-- actifs physiques utilisés lors de la démonstration;
-- durée d'expiration d'une réservation;
-- durée d'expiration d'une `LockerOperation`;
-- méthode de rafraîchissement du Web et du mobile;
-- fournisseur et topologie du déploiement;
-- mécanisme d'authentification exact;
-- représentation précise du calcul de readiness dans le modèle de domaine;
-- méthode de mesure des délais et de la répétabilité;
-- niveau de polish attendu pour l'écran Web et l'application iOS.
+- références exactes des lecteurs RFID, antennes et tags, puis résultats de localisation et de stabilisation;
+- capteur de présence ou de poids si le fallback de détection devient nécessaire;
+- verrou retenu, mécanisme de porte, courant d'actionnement, durée d'impulsion et secours manuel;
+- alimentation et protections électriques des deux départs;
+- section, longueur, brochage et différenciation des connecteurs RJ45 propriétaires;
+- réalisation des segments RS-485 indépendants, nombre d'interfaces disponibles et protocole applicatif;
+- modèle d'écran, lisibilité du QR et comportement de l'application en cas de refus de caméra;
+- validation des propositions QR : 60 secondes, 5 essais et 3 préparations sur 15 minutes;
+- seuils mesurables des POC et méthode de mesure des délais et de la répétabilité;
+- actifs de démonstration exacts et configuration des heures d'exploitation;
+- fournisseur et topologie de déploiement;
+- ratification des choix proposés dans les contrats et ADR : mécanisme exact de jeton et cadence de rafraîchissement des clients;
+- estimation des stories de contrôle local et validation des jalons internes au regard du calendrier du cours;
+- niveau de finition visuelle compatible avec la capacité disponible.
 
-Chaque décision structurante doit être ajoutée au cahier de conception ou à un ADR avant son implémentation définitive.
+Ne restent pas ouverts : un hub avec deux cellules, une cellule par compartiment, l'étoile, une seule réservation active par technicien, une durée de réservation personnalisée bornée par l'horaire, les 120 secondes après autorisation et la nécessité d'une preuve corrective pour résoudre une anomalie.
+
+Chaque décision structurante et chaque résultat de POC sont consignés dans le cahier de conception ou un ADR. Aucune valeur proposée n'est présentée comme un résultat expérimental.
 
 ---
 
@@ -1022,4 +1176,3 @@ La présente version adopte une base plus précise :
 | IA mise en avant | IA exclue du cœur du MVP |
 | RFID comme différenciateur possible | Détection physique remplaçable après POC |
 
-Ce recentrage n'augmente pas le nombre de plateformes ni la taille du prototype. Il remplace une partie du périmètre générique par une règle métier forte et démontrable.
