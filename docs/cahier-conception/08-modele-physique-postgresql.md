@@ -2,8 +2,8 @@
 
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Date :** 16 septembre 2026  
-**Version :** 1.1  
+**Date de révision :** 16 septembre 2026
+**Version :** 1.2 — contrôle local QR et étoile
 
 ---
 
@@ -20,20 +20,32 @@ Les règles métier restent portées par le backend Spring Boot. PostgreSQL cons
 | Schéma | `aegis` | Isoler les données du produit et qualifier les objets dans les migrations. |
 | Identifiants | `uuid` | Identifiants stables, non séquentiels et partageables dans REST/MQTT. |
 | Instants | `timestamptz` | Stocker des instants UTC; l’affichage applique le fuseau du locker. |
-| Plages horaires | `time without time zone` + `smallint` | Une plage est locale au fuseau de son `operating_schedule`; le jour est ISO, de 0 lundi à 6 dimanche. |
+| Plages horaires | `time without time zone` + `smallint` | Une plage est locale au fuseau de son `operating_schedule`; le jour suit ISO-8601, de 1 lundi à 7 dimanche. |
 | États contrôlés | `text` + `CHECK` | Éviter les migrations d’énumération PostgreSQL pour chaque ajout d’état, tout en conservant un vocabulaire SQL strict. |
-| Payload MQTT | `bytea` brut + `jsonb` décodé | Préserver les octets reçus, y compris lorsqu’un payload est rejeté, tout en permettant l’inspection du JSON valide. |
+| Payload MQTT | `bytea` brut + `jsonb` décodé | Préserver les octets utiles au diagnostic et le JSON valide; expurger tout secret reçu illégitimement avant conservation et signaler cette expurgation. |
 | Readiness et disponibilité | Non persistées comme vérité courante | Elles sont dérivées des données de référence, des transactions et des observations. |
 | Historique des transitions | `audit_events` | Chaque transition déterminante est auditée; une seconde table d’historique ne duplique pas l’audit métier. |
 | Suppression | Archivage ou désactivation | Les FK restent protégées par défaut; le passé d’une chaîne de possession n’est pas supprimé. |
 
 ### 1.2 Portée du schéma
 
-Le modèle est multi-locker par construction, même si le P0 utilise un locker et deux compartiments. Il ne contient pas de table `readiness`, `availability` ou `overdue` : ces valeurs sont calculées au moment de la lecture ou de la décision. Les sessions JWT stateless ne nécessitent pas de table de jetons dans le P0.
+Le modèle est multi-locker par construction, même si le P0 utilise un locker et deux compartiments. Il ne contient pas de table `readiness`, `availability` ou `overdue` : ces valeurs sont calculées au moment de la lecture ou de la décision. Le mécanisme exact de jeton doit être fixé par le contrat REST et un ADR de sécurité. Le présent schéma ne persiste aucune session; si un refresh token révocable est retenu, une migration dédiée devra ajouter son stockage sous forme hachée.
 
 ---
 
 ## 2. ERD par domaine
+
+La révision conserve les vues relationnelles existantes; le contrôle local ajoute les relations suivantes, présentées séparément pour éviter un diagramme surchargé :
+
+| Parent | Relation ajoutée | Cardinalité |
+|---|---|---|
+| locker_operations | local_access_challenges | 1 vers 0..1 |
+| locker_devices | local_access_challenges | 1 vers 0..N historiques |
+| locker_operations | hub_display_outbox | 1 vers 0..N |
+| local_access_challenges | hub_display_outbox de type défi | 1 vers 1 pour une préparation acceptée |
+| hub_display_outbox | inbound_device_messages corrélés | 1 vers 0..N |
+
+
 
 Les ERD sont volontairement courts. Les attributs détaillés et les types exacts se trouvent au chapitre 4.
 
@@ -262,6 +274,7 @@ CREATE TABLE lockers (
     code          text NOT NULL,
     name          text NOT NULL,
     topology      text NOT NULL,
+    display_revision bigint NOT NULL DEFAULT 0 CHECK (display_revision >= 0),
     status        text NOT NULL DEFAULT 'UNKNOWN',
     last_seen_at  timestamptz NULL,
     created_at    timestamptz NOT NULL DEFAULT now(),
@@ -280,7 +293,7 @@ CREATE TABLE lockers (
 
 #### `compartments`
 
-`local_address` est l’adresse de cellule sur le bus RS-485. Une cellule physique correspond à un compartiment métier.
+`local_address` est l’adresse logique de cellule. `hub_port` identifie sa liaison point à point dans l’étoile RS-485 proposée; les deux cellules ont des ports distincts. Une cellule physique correspond à un compartiment métier.
 
 ```sql
 CREATE TABLE compartments (
@@ -288,6 +301,7 @@ CREATE TABLE compartments (
     locker_id            uuid NOT NULL,
     code                 text NOT NULL,
     local_address        smallint NOT NULL,
+    hub_port             smallint NOT NULL CHECK (hub_port > 0),
     enabled              boolean NOT NULL DEFAULT true,
     connection_status    text NOT NULL DEFAULT 'UNKNOWN',
     rfid_reader_status   text NOT NULL DEFAULT 'UNKNOWN',
@@ -306,11 +320,12 @@ CREATE TABLE compartments (
     CONSTRAINT ck_compartments_connection_status
         CHECK (connection_status IN ('CONNECTED', 'DISCONNECTED', 'UNKNOWN')),
     CONSTRAINT ck_compartments_reader_status
-        CHECK (rfid_reader_status IN ('HEALTHY', 'DEGRADED', 'FAILED', 'UNKNOWN')),
+        CHECK (rfid_reader_status IN ('HEALTHY', 'FAULTED', 'UNKNOWN')),
     CONSTRAINT ck_compartments_door_state
         CHECK (door_state IN ('OPEN', 'CLOSED', 'UNKNOWN')),
     CONSTRAINT ck_compartments_lock_state
         CHECK (lock_state IN ('LOCKED', 'UNLOCKED', 'UNKNOWN')),
+    CONSTRAINT uq_compartments_hub_port UNIQUE (locker_id, hub_port),
     CONSTRAINT uq_compartments_id_locker
         UNIQUE (id, locker_id)
 );
@@ -325,6 +340,7 @@ CREATE TABLE locker_devices (
     id                 uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
     locker_id          uuid NOT NULL,
     device_key         text NOT NULL,
+    device_session_id  uuid NULL,
     firmware_version   text NOT NULL,
     connection_status  text NOT NULL DEFAULT 'UNKNOWN',
     last_seen_at       timestamptz NULL,
@@ -332,6 +348,7 @@ CREATE TABLE locker_devices (
     disabled_at        timestamptz NULL,
     updated_at         timestamptz NOT NULL DEFAULT now(),
 
+    CONSTRAINT uq_locker_devices_id_locker UNIQUE (id, locker_id),
     CONSTRAINT fk_locker_devices_locker
         FOREIGN KEY (locker_id) REFERENCES lockers (id),
     CONSTRAINT ck_locker_devices_key_non_blank
@@ -390,29 +407,42 @@ CREATE TABLE operating_schedules (
     CONSTRAINT ck_operating_schedules_timezone
         CHECK (btrim(time_zone) <> ''),
     CONSTRAINT ck_operating_schedules_active_archive
-        CHECK (active = true OR archived_at IS NOT NULL)
+        CHECK (
+            (active = true AND archived_at IS NULL)
+            OR
+            (active = false AND archived_at IS NOT NULL)
+        )
 );
 ```
 
 #### `operating_windows`
 
-Le P0 exclut les plages traversant minuit : `opens_at` doit être strictement antérieur à `closes_at`. `day_of_week` suit ISO-8601, avec lundi à 0.
+Le P0 exclut les plages traversant minuit. Pour un jour activé, `opens_at` doit être strictement antérieur à `closes_at`; pour un jour fermé, les deux heures restent nulles. `day_of_week` suit ISO-8601, avec lundi à 1 et dimanche à 7.
 
 ```sql
 CREATE TABLE operating_windows (
     id                   uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
     operating_schedule_id uuid NOT NULL,
     day_of_week          smallint NOT NULL,
-    opens_at             time without time zone NOT NULL,
-    closes_at            time without time zone NOT NULL,
-    active               boolean NOT NULL DEFAULT true,
+    opens_at             time without time zone NULL,
+    closes_at            time without time zone NULL,
+    enabled              boolean NOT NULL DEFAULT true,
 
     CONSTRAINT fk_operating_windows_schedule
         FOREIGN KEY (operating_schedule_id) REFERENCES operating_schedules (id),
     CONSTRAINT ck_operating_windows_day
-        CHECK (day_of_week BETWEEN 0 AND 6),
+        CHECK (day_of_week BETWEEN 1 AND 7),
     CONSTRAINT ck_operating_windows_order
-        CHECK (opens_at < closes_at)
+        CHECK (
+            (enabled = true
+                AND opens_at IS NOT NULL
+                AND closes_at IS NOT NULL
+                AND opens_at < closes_at)
+            OR
+            (enabled = false
+                AND opens_at IS NULL
+                AND closes_at IS NULL)
+        )
 );
 ```
 
@@ -482,6 +512,7 @@ CREATE TABLE locker_operations (
     expected_asset_identifier_id uuid NOT NULL,
     created_at                   timestamptz NOT NULL DEFAULT now(),
     authorized_at                timestamptz NULL,
+    local_proof_validated_at      timestamptz NULL,
     expires_at                   timestamptz NULL,
     command_sent_at              timestamptz NULL,
     acknowledged_at              timestamptz NULL,
@@ -508,7 +539,7 @@ CREATE TABLE locker_operations (
         CHECK (type IN ('CHECKOUT', 'RETURN')),
     CONSTRAINT ck_locker_operations_status
         CHECK (status IN (
-            'REQUESTED', 'AUTHORIZED', 'COMMAND_SENT', 'COMMAND_ACKNOWLEDGED',
+            'REQUESTED', 'AWAITING_LOCAL_PROOF', 'AUTHORIZED', 'COMMAND_SENT', 'COMMAND_ACKNOWLEDGED',
             'DOOR_OPENED', 'OBSERVATION_RECEIVED', 'CONFIRMED',
             'FAILED', 'EXPIRED', 'ANOMALY'
         )),
@@ -518,6 +549,13 @@ CREATE TABLE locker_operations (
             OR
             (type = 'RETURN' AND reservation_id IS NULL AND loan_id IS NOT NULL)
         ),
+    CONSTRAINT ck_locker_operations_local_proof
+        CHECK (
+            (authorized_at IS NULL) = (local_proof_validated_at IS NULL)
+            AND (authorized_at IS NULL OR local_proof_validated_at = authorized_at)
+            AND (status NOT IN ('REQUESTED', 'AWAITING_LOCAL_PROOF') OR authorized_at IS NULL)
+        ),
+    CONSTRAINT uq_locker_operations_id_locker UNIQUE (id, locker_id),
     CONSTRAINT ck_locker_operations_authorization_pair
         CHECK ((authorized_at IS NULL) = (expires_at IS NULL)),
     CONSTRAINT ck_locker_operations_expiration
@@ -557,6 +595,8 @@ CREATE TABLE locker_operations (
 
 #### `loans`
 
+`due_at` reprend l’échéance de réservation, même si la confirmation physique arrive après cette échéance : un prêt peut donc commencer déjà en retard. Aucun CHECK ne doit exiger `due_at > checked_out_at`.
+
 `return_requested_at` est conservé même après un échec sûr ramenant le prêt à `ACTIVE`; `return_operation_id` n’est renseigné qu’après confirmation.
 
 ```sql
@@ -585,9 +625,7 @@ CREATE TABLE loans (
         CHECK (status IN ('ACTIVE', 'RETURN_PENDING', 'COMPLETED')),
     CONSTRAINT ck_loans_dates
         CHECK (
-            checked_out_at >= created_at
-            AND due_at > checked_out_at
-            AND (return_requested_at IS NULL OR return_requested_at >= checked_out_at)
+            (return_requested_at IS NULL OR return_requested_at >= checked_out_at)
             AND (returned_at IS NULL OR returned_at >= checked_out_at)
         ),
     CONSTRAINT ck_loans_status_effects
@@ -613,6 +651,111 @@ ALTER TABLE locker_operations
         FOREIGN KEY (loan_id, asset_id, user_id)
         REFERENCES loans (id, asset_id, holder_user_id);
 ```
+
+
+#### `local_access_challenges`
+
+Une préparation acceptée crée un défi pour une opération précise. Les liens utilisateur/actif/cellule/action sont immuables sur l’opération; les FK composites lient aussi le défi au bon locker et au bon hub. Le secret aléatoire de 256 bits n’est pas conservé en clair.
+
+```sql
+CREATE TABLE local_access_challenges (
+    id uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
+    operation_id uuid NOT NULL UNIQUE,
+    locker_id uuid NOT NULL,
+    locker_device_id uuid NOT NULL,
+    target_device_session_id uuid NOT NULL,
+    token_hash bytea NOT NULL UNIQUE CHECK (octet_length(token_hash) = 32),
+    status text NOT NULL DEFAULT 'PENDING',
+    created_at timestamptz NOT NULL,
+    expires_at timestamptz NOT NULL,
+    displayed_at timestamptz NULL,
+    consumed_at timestamptz NULL,
+    closed_at timestamptz NULL,
+    failed_attempts smallint NOT NULL DEFAULT 0 CHECK (failed_attempts BETWEEN 0 AND 5),
+    CONSTRAINT fk_local_challenge_operation
+        FOREIGN KEY (operation_id, locker_id) REFERENCES locker_operations (id, locker_id),
+    CONSTRAINT fk_local_challenge_device
+        FOREIGN KEY (locker_device_id, locker_id) REFERENCES locker_devices (id, locker_id),
+    CONSTRAINT uq_local_challenge_id_operation UNIQUE (id, operation_id),
+    CONSTRAINT ck_local_challenge_status
+        CHECK (status IN ('PENDING', 'CONSUMED', 'EXPIRED', 'INVALIDATED')),
+    CONSTRAINT ck_local_challenge_window
+        CHECK (expires_at > created_at AND expires_at <= created_at + interval '60 seconds'),
+    CONSTRAINT ck_local_challenge_closed
+        CHECK ((status = 'PENDING') = (closed_at IS NULL)),
+    CONSTRAINT ck_local_challenge_consumed
+        CHECK ((status = 'CONSUMED') = (consumed_at IS NOT NULL)),
+    CONSTRAINT ck_local_challenge_consumption_time
+        CHECK (
+            consumed_at IS NULL OR
+            (displayed_at IS NOT NULL AND consumed_at >= displayed_at
+             AND consumed_at >= created_at AND consumed_at < expires_at
+             AND closed_at = consumed_at)
+        ),
+    CONSTRAINT ck_local_challenge_dates
+        CHECK (
+            (displayed_at IS NULL OR (displayed_at >= created_at AND displayed_at < expires_at))
+            AND (closed_at IS NULL OR closed_at >= created_at)
+        ),
+    CONSTRAINT ck_local_challenge_attempts
+        CHECK (status <> 'PENDING' OR failed_attempts < 5)
+);
+```
+
+Les bornes de 60 secondes et 5 essais correspondent aux paramètres proposés de cette révision; leur modification exige une migration et une mise à jour cohérente des contrats.
+
+#### `hub_display_outbox`
+
+Cette outbox est distincte de `command_outbox`, dont l’unicité `operation_id` reste réservée au déverrouillage. Les payloads d’affichage sont chiffrés par l’application (chiffrement authentifié, clé externe à PostgreSQL). Le ciphertext, son nonce et son tag d’authentification forment une enveloppe dans `encrypted_payload`. Les identifiants de ligne/cible sont liés comme données authentifiées.
+
+```sql
+CREATE TABLE hub_display_outbox (
+    id uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
+    message_id uuid NOT NULL UNIQUE,
+    operation_id uuid NOT NULL,
+    locker_id uuid NOT NULL,
+    locker_device_id uuid NOT NULL,
+    target_device_session_id uuid NOT NULL,
+    challenge_id uuid NULL,
+    message_type text NOT NULL,
+    display_revision bigint NOT NULL CHECK (display_revision > 0),
+    topic text NOT NULL CHECK (btrim(topic) <> ''),
+    schema_version text NOT NULL DEFAULT '1.0',
+    encrypted_payload bytea NULL,
+    encryption_key_id text NOT NULL CHECK (btrim(encryption_key_id) <> ''),
+    issued_at timestamptz NOT NULL,
+    expires_at timestamptz NOT NULL,
+    status text NOT NULL DEFAULT 'PENDING',
+    attempt_count integer NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+    next_attempt_at timestamptz NOT NULL DEFAULT now(),
+    claim_until timestamptz NULL,
+    published_at timestamptz NULL,
+    acknowledged_at timestamptz NULL,
+    last_error text NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT fk_display_operation
+        FOREIGN KEY (operation_id, locker_id) REFERENCES locker_operations (id, locker_id),
+    CONSTRAINT fk_display_device
+        FOREIGN KEY (locker_device_id, locker_id) REFERENCES locker_devices (id, locker_id),
+    CONSTRAINT fk_display_challenge
+        FOREIGN KEY (challenge_id, operation_id) REFERENCES local_access_challenges (id, operation_id),
+    CONSTRAINT uq_display_revision UNIQUE (locker_id, display_revision),
+    CONSTRAINT ck_display_type
+        CHECK (message_type IN ('DISPLAY_ACCESS_CHALLENGE', 'DISPLAY_OPERATION_STATUS')),
+    CONSTRAINT ck_display_challenge
+        CHECK ((message_type = 'DISPLAY_ACCESS_CHALLENGE') = (challenge_id IS NOT NULL)),
+    CONSTRAINT ck_display_dates CHECK (expires_at > issued_at),
+    CONSTRAINT ck_display_status
+        CHECK (status IN ('PENDING', 'CLAIMED', 'DISPATCHED', 'ACKNOWLEDGED', 'REJECTED', 'CANCELLED')),
+    CONSTRAINT ck_display_claim
+        CHECK ((status = 'CLAIMED') = (claim_until IS NOT NULL)),
+    CONSTRAINT ck_display_sendable_payload
+        CHECK (status NOT IN ('PENDING', 'CLAIMED', 'DISPATCHED') OR encrypted_payload IS NOT NULL)
+);
+```
+
+Une seule instruction de défi par opération; les retries conservent le même `message_id` et la même révision. Le statut final peut produire une autre instruction, avec une révision supérieure. À consommation, expiration ou invalidation, arrêter la distribution du QR, libérer son éventuel claim et purger `encrypted_payload`; ne garder que les métadonnées. Un message déjà en vol reste inutilisable grâce aux contrôles du backend et aux contrôles de révision/session du hub.
+
 
 ### 4.7 Outbox de commande
 
@@ -659,7 +802,7 @@ CREATE TABLE command_outbox (
     CONSTRAINT ck_command_outbox_schema_non_blank
         CHECK (btrim(schema_version) <> ''),
     CONSTRAINT ck_command_outbox_dates
-        CHECK (expires_at > issued_at AND issued_at >= created_at),
+        CHECK (expires_at > issued_at),
     CONSTRAINT ck_command_outbox_status
         CHECK (status IN ('PENDING', 'CLAIMED', 'DISPATCHED', 'ACKNOWLEDGED', 'REJECTED', 'CANCELLED')),
     CONSTRAINT ck_command_outbox_attempts
@@ -694,6 +837,8 @@ CREATE TABLE inbound_device_messages (
     topic             text NOT NULL,
     message_type      text NOT NULL,
     operation_id      uuid NULL,
+    command_message_id uuid NULL,
+    display_message_id uuid NULL,
     schema_version    text NOT NULL,
     occurred_at       timestamptz NOT NULL,
     received_at       timestamptz NOT NULL DEFAULT now(),
@@ -706,23 +851,45 @@ CREATE TABLE inbound_device_messages (
         FOREIGN KEY (locker_device_id) REFERENCES locker_devices (id),
     CONSTRAINT fk_inbound_messages_operation
         FOREIGN KEY (operation_id) REFERENCES locker_operations (id),
+    CONSTRAINT fk_inbound_messages_command
+        FOREIGN KEY (command_message_id) REFERENCES command_outbox (message_id),
+    CONSTRAINT fk_inbound_messages_display
+        FOREIGN KEY (display_message_id) REFERENCES hub_display_outbox (message_id),
+    CONSTRAINT ck_inbound_messages_display_correlation
+        CHECK (
+            (message_type IN ('ACCESS_CHALLENGE_DISPLAYED', 'DISPLAY_REJECTED') AND display_message_id IS NOT NULL AND operation_id IS NOT NULL)
+            OR (message_type NOT IN ('ACCESS_CHALLENGE_DISPLAYED', 'DISPLAY_REJECTED') AND display_message_id IS NULL)
+        ),
     CONSTRAINT uq_inbound_messages_device_message
         UNIQUE (locker_device_id, message_id),
     CONSTRAINT ck_inbound_messages_topic_non_blank
         CHECK (btrim(topic) <> ''),
     CONSTRAINT ck_inbound_messages_type
         CHECK (message_type IN (
-            'HEARTBEAT', 'COMMAND_ACKNOWLEDGED', 'COMMAND_REJECTED',
+            'HEARTBEAT', 'DEVICE_AVAILABILITY',
+            'ACCESS_CHALLENGE_DISPLAYED', 'DISPLAY_REJECTED',
+            'COMMAND_ACKNOWLEDGED', 'COMMAND_REJECTED',
             'DOOR_OPENED', 'DOOR_CLOSED', 'LOCK_UNLOCKED', 'LOCK_LOCKED',
-            'ASSET_PRESENT', 'ASSET_ABSENT', 'ASSET_IDENTIFIER_DETECTED',
+            'RFID_SCAN_COMPLETED',
             'DEVICE_RESTARTED', 'DEVICE_ERROR'
         )),
     CONSTRAINT ck_inbound_messages_schema_non_blank
         CHECK (btrim(schema_version) <> ''),
     CONSTRAINT ck_inbound_messages_status
         CHECK (processing_status IN ('RECEIVED', 'PROCESSED', 'REJECTED')),
-    CONSTRAINT ck_inbound_messages_heartbeat
-        CHECK (message_type <> 'HEARTBEAT' OR operation_id IS NULL),
+    CONSTRAINT ck_inbound_messages_status_without_operation
+        CHECK (
+            message_type NOT IN ('HEARTBEAT', 'DEVICE_AVAILABILITY')
+            OR operation_id IS NULL
+        ),
+    CONSTRAINT ck_inbound_messages_command_correlation
+        CHECK (
+            (message_type IN ('COMMAND_ACKNOWLEDGED', 'COMMAND_REJECTED')
+                AND command_message_id IS NOT NULL)
+            OR
+            (message_type NOT IN ('COMMAND_ACKNOWLEDGED', 'COMMAND_REJECTED')
+                AND command_message_id IS NULL)
+        ),
     CONSTRAINT ck_inbound_messages_error
         CHECK (processing_status <> 'REJECTED' OR processing_error IS NOT NULL)
 );
@@ -795,6 +962,7 @@ CREATE TABLE anomalies (
     acknowledgement_note             text NULL,
     resolved_at                      timestamptz NULL,
     resolution_evidence_observation_id uuid NULL,
+    resolution_note                  text NULL,
     details                          jsonb NOT NULL DEFAULT '{}'::jsonb,
 
     CONSTRAINT fk_anomalies_operation
@@ -810,6 +978,7 @@ CREATE TABLE anomalies (
     CONSTRAINT ck_anomalies_type
         CHECK (type IN (
             'EXPECTED_ASSET_NOT_OBSERVED', 'UNEXPECTED_ASSET_OBSERVED',
+            'ASSET_PRESENT_WITH_ACTIVE_LOAN',
             'DOOR_NOT_CLOSED_BEFORE_EXPIRY', 'COMMAND_REJECTED',
             'DEVICE_OFFLINE_DURING_OPERATION', 'INCONSISTENT_PHYSICAL_STATE'
         )),
@@ -819,6 +988,8 @@ CREATE TABLE anomalies (
         CHECK (status IN ('OPEN', 'ACKNOWLEDGED', 'RESOLVED')),
     CONSTRAINT ck_anomalies_acknowledgement_note
         CHECK (acknowledgement_note IS NULL OR btrim(acknowledgement_note) <> ''),
+    CONSTRAINT ck_anomalies_resolution_note
+        CHECK (resolution_note IS NULL OR btrim(resolution_note) <> ''),
     CONSTRAINT ck_anomalies_lifecycle
         CHECK (
             (status = 'OPEN'
@@ -826,18 +997,23 @@ CREATE TABLE anomalies (
                 AND acknowledged_by_user_id IS NULL
                 AND acknowledgement_note IS NULL
                 AND resolved_at IS NULL
-                AND resolution_evidence_observation_id IS NULL)
+                AND resolution_evidence_observation_id IS NULL
+                AND resolution_note IS NULL)
             OR
             (status = 'ACKNOWLEDGED'
                 AND acknowledged_at IS NOT NULL
                 AND acknowledged_by_user_id IS NOT NULL
+                AND acknowledgement_note IS NOT NULL
                 AND btrim(acknowledgement_note) <> ''
                 AND resolved_at IS NULL
-                AND resolution_evidence_observation_id IS NULL)
+                AND resolution_evidence_observation_id IS NULL
+                AND resolution_note IS NULL)
             OR
             (status = 'RESOLVED'
                 AND resolved_at IS NOT NULL
                 AND resolution_evidence_observation_id IS NOT NULL
+                AND resolution_note IS NOT NULL
+                AND btrim(resolution_note) <> ''
                 AND (
                     num_nonnulls(acknowledged_at, acknowledged_by_user_id, acknowledgement_note) = 0
                     OR num_nonnulls(acknowledged_at, acknowledged_by_user_id, acknowledgement_note) = 3
@@ -889,6 +1065,9 @@ CREATE TABLE audit_events (
             'RESERVATION_CREATED', 'RESERVATION_CANCELLED',
             'RESERVATION_FULFILLED', 'RESERVATION_EXPIRED',
             'OPERATION_REQUESTED', 'OPERATION_AUTHORIZED',
+            'LOCAL_CHALLENGE_CREATED', 'LOCAL_CHALLENGE_DISPLAYED',
+            'LOCAL_CHALLENGE_CONSUMED', 'LOCAL_CHALLENGE_REJECTED',
+            'LOCAL_CHALLENGE_EXPIRED', 'LOCAL_CHALLENGE_INVALIDATED',
             'COMMAND_SENT', 'COMMAND_ACKNOWLEDGED', 'COMMAND_REJECTED',
             'DOOR_OPENED', 'OBSERVATION_RECEIVED',
             'OPERATION_CONFIRMED', 'OPERATION_FAILED', 'OPERATION_EXPIRED',
@@ -905,6 +1084,7 @@ CREATE TABLE audit_events (
             'LOCKER', 'COMPARTMENT', 'OPERATING_SCHEDULE',
             'OPERATING_WINDOW', 'RESERVATION', 'LOAN',
             'LOCKER_OPERATION', 'COMMAND_OUTBOX',
+            'LOCAL_ACCESS_CHALLENGE', 'HUB_DISPLAY_OUTBOX',
             'INBOUND_DEVICE_MESSAGE', 'PHYSICAL_OBSERVATION', 'ANOMALY'
         )),
     CONSTRAINT ck_audit_events_result
@@ -915,7 +1095,12 @@ CREATE TABLE audit_events (
     CONSTRAINT ck_audit_events_state_pair
         CHECK (
             (from_state IS NULL AND to_state IS NULL)
-            OR (btrim(from_state) <> '' AND btrim(to_state) <> '')
+            OR (
+                from_state IS NOT NULL
+                AND to_state IS NOT NULL
+                AND btrim(from_state) <> ''
+                AND btrim(to_state) <> ''
+            )
         )
 );
 ```
@@ -933,12 +1118,13 @@ CREATE TABLE rest_idempotency_keys (
     endpoint        text NOT NULL,
     idempotency_key text NOT NULL,
     request_hash    bytea NOT NULL,
-    response_status smallint NOT NULL,
-    response_body   jsonb NOT NULL,
+    status          text NOT NULL DEFAULT 'IN_PROGRESS',
+    response_status smallint NULL,
+    response_body   jsonb NULL,
     resource_type   text NULL,
     resource_id     uuid NULL,
     created_at      timestamptz NOT NULL DEFAULT now(),
-    completed_at    timestamptz NOT NULL DEFAULT now(),
+    completed_at    timestamptz NULL,
     expires_at      timestamptz NOT NULL,
 
     CONSTRAINT fk_rest_idempotency_actor
@@ -949,10 +1135,26 @@ CREATE TABLE rest_idempotency_keys (
         CHECK (char_length(idempotency_key) BETWEEN 1 AND 128),
     CONSTRAINT ck_rest_idempotency_hash
         CHECK (octet_length(request_hash) = 32),
+    CONSTRAINT ck_rest_idempotency_status
+        CHECK (status IN ('IN_PROGRESS', 'COMPLETED')),
     CONSTRAINT ck_rest_idempotency_response_status
-        CHECK (response_status BETWEEN 200 AND 599),
+        CHECK (response_status IS NULL OR response_status BETWEEN 200 AND 599),
     CONSTRAINT ck_rest_idempotency_dates
-        CHECK (completed_at >= created_at AND expires_at > created_at),
+        CHECK (
+            (completed_at IS NULL OR completed_at >= created_at)
+            AND expires_at > created_at
+        ),
+    CONSTRAINT ck_rest_idempotency_lifecycle
+        CHECK (
+            (status = 'IN_PROGRESS'
+                AND completed_at IS NULL
+                AND response_status IS NULL
+                AND response_body IS NULL)
+            OR
+            (status = 'COMPLETED'
+                AND completed_at IS NOT NULL
+                AND response_status IS NOT NULL)
+        ),
     CONSTRAINT ck_rest_idempotency_resource_pair
         CHECK ((resource_type IS NULL) = (resource_id IS NULL)),
     CONSTRAINT uq_rest_idempotency_scope
@@ -1013,14 +1215,13 @@ CREATE UNIQUE INDEX ux_asset_placements_one_current_per_compartment
     ON asset_placements (compartment_id)
     WHERE removed_at IS NULL;
 
--- Un seul horaire actif et une seule fenêtre active par jour
+-- Un seul horaire actif et une seule fenêtre configurée par jour
 CREATE UNIQUE INDEX ux_operating_schedules_one_active_per_locker
     ON operating_schedules (locker_id)
     WHERE active = true;
 
-CREATE UNIQUE INDEX ux_operating_windows_one_active_per_day
-    ON operating_windows (operating_schedule_id, day_of_week)
-    WHERE active = true;
+CREATE UNIQUE INDEX ux_operating_windows_one_per_day
+    ON operating_windows (operating_schedule_id, day_of_week);
 
 -- Une réservation active par actif et par technicien
 CREATE UNIQUE INDEX ux_reservations_one_active_per_asset
@@ -1040,7 +1241,7 @@ CREATE UNIQUE INDEX ux_loans_one_open_per_asset
 CREATE UNIQUE INDEX ux_locker_operations_one_open_per_locker
     ON locker_operations (locker_id)
     WHERE status IN (
-        'REQUESTED', 'AUTHORIZED', 'COMMAND_SENT',
+        'REQUESTED', 'AWAITING_LOCAL_PROOF', 'AUTHORIZED', 'COMMAND_SENT',
         'COMMAND_ACKNOWLEDGED', 'DOOR_OPENED', 'OBSERVATION_RECEIVED'
     );
 
@@ -1058,6 +1259,23 @@ Ces index partiels protègent notamment les invariants suivants même si deux tr
 3. un locker ne peut pas avoir deux devices maîtres, deux horaires actifs ou deux opérations physiques actives;
 4. un actif ne peut pas être réservé deux fois ni posséder deux prêts ouverts;
 5. une opération ne peut pas accumuler deux anomalies actives concurrentes.
+
+
+Les défis en attente occupent également l’unique opération ouverte du locker. Ajouter :
+
+```sql
+CREATE UNIQUE INDEX ux_display_one_challenge_per_operation
+    ON hub_display_outbox (operation_id)
+    WHERE message_type = 'DISPLAY_ACCESS_CHALLENGE';
+
+CREATE INDEX ix_local_challenges_pending_expiry
+    ON local_access_challenges (expires_at)
+    WHERE status = 'PENDING';
+
+CREATE INDEX ix_display_claimable
+    ON hub_display_outbox (next_attempt_at, created_at)
+    WHERE status IN ('PENDING', 'DISPATCHED');
+```
 
 ### 5.2 Index de lecture et de traitement
 
@@ -1112,6 +1330,10 @@ CREATE INDEX ix_inbound_messages_operation_received
     ON inbound_device_messages (operation_id, received_at)
     WHERE operation_id IS NOT NULL;
 
+CREATE INDEX ix_inbound_messages_command_message
+    ON inbound_device_messages (command_message_id, received_at)
+    WHERE command_message_id IS NOT NULL;
+
 CREATE INDEX ix_physical_observations_operation_time
     ON physical_observations (operation_id, observed_at)
     WHERE operation_id IS NOT NULL;
@@ -1149,6 +1371,12 @@ CREATE INDEX ix_rest_idempotency_expiry
 
 ## 6. Contraintes que PostgreSQL ne déduit pas seul
 
+- Lier le défi à l’initiateur et à un contexte d’opération immuable; vérifier que la session ciblée du device est encore courante.
+- Borner son échéance par l’horaire et la réservation; vérifier l’échéance à la validation, sans attendre un job périodique.
+- Consommer le défi et créer la commande en une transaction, en interdisant tout autre chemin d’insertion de commande.
+- Ne publier le QR que tant que son défi et son opération attendent la preuve; allouer les révisions sous verrou du locker.
+
+
 Les FK et les `CHECK` protègent les valeurs dans une ligne et les liens déclarés. Les règles suivantes nécessitent en plus une transaction backend, parce qu’elles comparent plusieurs lignes, plusieurs tables ou une preuve temporelle.
 
 | Règle métier | Protection PostgreSQL | Protection applicative obligatoire |
@@ -1182,7 +1410,8 @@ Quand plusieurs agrégats sont requis, le backend les verrouille dans cet ordre 
 4. `lockers`;
 5. `compartments`;
 6. `locker_operations`;
-7. `anomalies`.
+7. `local_access_challenges`, si concerné;
+8. `anomalies`.
 
 Les lectures de garde utilisent `SELECT ... FOR UPDATE` sur les lignes existantes. Le verrou de la ligne `lockers` sérialise le parcours physique; l’index partiel reste la barrière finale lorsqu’aucune opération ouverte n’existait encore.
 
@@ -1201,22 +1430,15 @@ Dans une seule transaction :
 
 Une violation `23505` sur un index d’invariant est convertie en `CONFLICT`; la transaction est annulée et aucune réservation partielle ne reste visible.
 
-### 7.3 Autorisation d’une opération
+### 7.3 Préparation puis autorisation locale
 
-Dans une seule transaction :
+**Transaction de préparation :** vérifier et verrouiller le contexte, créer l’opération `AWAITING_LOCAL_PROOF`, le défi `PENDING` et son affichage chiffré dans `hub_display_outbox`. Incrémenter `lockers.display_revision` sous verrou. Ne créer aucune commande de serrure et ne pas modifier le prêt.
 
-1. verrouiller utilisateur, actif, réservation ou prêt, locker et compartiment dans l’ordre canonique;
-2. vérifier l’horaire et l’état `ONLINE` du device;
-3. vérifier le placement attendu, l’identifiant actif, la porte fermée, la serrure connue et l’absence d’anomalie bloquante;
-4. vérifier qu’aucune opération du locker n’est non terminale;
-5. insérer `locker_operations` en `REQUESTED`, puis la faire passer à `AUTHORIZED`;
-6. calculer `expires_at = authorized_at + 120 secondes`;
-7. insérer `command_outbox` avec un `message_id` stable;
-8. pour un retour, passer le prêt à `RETURN_PENDING`;
-9. ajouter l’audit et la réponse REST;
-10. valider.
+**Transaction de validation QR :** verrouiller utilisateur, actif, réservation/prêt, locker, compartiment, opération puis défi; vérifier l’initiateur, le hash constant-time, l’affichage, la session, l’expiration et toutes les gardes métier courantes. Consommer le défi; passer l’opération à `AUTHORIZED`; renseigner `local_proof_validated_at = authorized_at`, `expires_at = authorized_at + 120 secondes`; passer le prêt à `RETURN_PENDING` pour un retour; insérer l’unique `command_outbox`; purger le ciphertext du QR et enregistrer audit/réponse idempotente. Tout est validé ou annulé ensemble.
 
-Aucun appel MQTT n’est effectué avant le commit. Le backend ne garde pas une transaction SQL ouverte en attendant le locker.
+Les refus avec incrément d’essais doivent être commités. Une erreur applicative ne doit pas annuler ce compteur. Le même `Idempotency-Key` et la même requête rejouent la réponse initiale; une autre clé après consommation ne produit aucune commande supplémentaire.
+
+Aucun appel MQTT dans une transaction SQL. Le contrôle des relations `CONSUMED ↔ AUTHORIZED` et l’immuabilité du contexte exigent le service transactionnel et ses tests; les CHECK et FK ci-dessus ne suffisent pas à garantir ces règles intertables.
 
 ### 7.4 Confirmation d’un checkout
 
@@ -1238,10 +1460,15 @@ L’ingestion verrouille opération, prêt et actif, vérifie la preuve stable d
 
 Un retour échoué avant toute ouverture peut remettre le prêt à `ACTIVE` dans la même transaction. Après ouverture, perte du device ou état ambigu, l’opération devient `ANOMALY`, le prêt reste `RETURN_PENDING` et une anomalie `OPEN` est créée.
 
+Les confirmations de retrait et de retour ajoutent également une instruction `DISPLAY_OPERATION_STATUS` dans la transaction métier. Cette instruction ne contient pas le secret du défi.
+
 ### 7.6 Expiration et événements désordonnés
 
+Avant autorisation, seule l’échéance du défi s’applique : son expiration termine l’opération en `EXPIRED`, sans modifier le prêt. Une réservation atteignant `reserved_until` pendant l’attente QR expire aussi; l’attente QR ne reporte pas sa fin. Le report existant reste limité aux opérations déjà autorisées ou physiquement incertaines.
+
+
 - Le scheduler ne confirme jamais un prêt et ne simule jamais un retour.
-- Une réservation expirée est différée tant qu’un checkout non terminal ou incertain existe.
+- Une réservation expirée est différée tant qu’un checkout déjà autorisé non terminal ou incertain existe.
 - Une opération échue devient `EXPIRED` seulement si l’absence d’interaction est certaine; sinon elle devient `ANOMALY`.
 - Les observations sont conservées même si elles arrivent dans un ordre réseau différent. L’évaluation porte sur leurs dates, leur corrélation et leur cohérence, pas seulement sur l’ordre d’insertion.
 - Une observation tardive ne peut pas modifier une opération terminale.
@@ -1262,9 +1489,9 @@ Les mutations suivantes exigent une clé `Idempotency-Key` : création de réser
 Flux :
 
 1. normaliser la route logique et calculer un SHA-256 du corps canonique;
-2. insérer `(actor_user_id, endpoint, idempotency_key, request_hash)`;
-3. si l’insertion gagne, exécuter la mutation et enregistrer la réponse dans la même transaction;
-4. si la clé existe, verrouiller sa ligne et comparer le hash;
+2. tenter d’insérer `(actor_user_id, endpoint, idempotency_key, request_hash)` avec `status = 'IN_PROGRESS'`;
+3. si l’insertion gagne, exécuter la mutation, enregistrer la réponse et passer la clé à `COMPLETED` dans la même transaction;
+4. si la clé existe, attendre la fin de la transaction gagnante, verrouiller sa ligne et comparer le hash;
 5. avec le même hash, retourner exactement `response_status` et `response_body` déjà enregistrés;
 6. avec un hash différent, retourner `409 IDEMPOTENCY_KEY_REUSED` sans modifier le métier.
 
@@ -1279,7 +1506,7 @@ L’identité d’un message entrant est `(locker_device_id, message_id)`. Le `l
 Dans une transaction :
 
 1. authentifier le device et vérifier le topic autorisé;
-2. parser le minimum nécessaire pour obtenir `message_id`, `message_type` et la version;
+2. parser le minimum nécessaire pour obtenir `message_id`, `message_type`, la version et `command_message_id` pour un accusé de commande;
 3. insérer `inbound_device_messages`;
 4. si la contrainte `uq_inbound_messages_device_message` est en conflit, ne produire aucune observation ni transition et, si utile, ajouter `MQTT_MESSAGE_DUPLICATE_IGNORED`;
 5. pour un nouveau message, conserver `raw_payload`, normaliser les observations, mettre à jour la projection de santé et appliquer au plus une progression de machine à états;
@@ -1304,6 +1531,9 @@ Si le worker s’arrête après la publication et avant le commit, la reprise pe
 ---
 
 ## 9. Transactional outbox
+
+Les mécanismes de claim/retry s’appliquent séparément aux commandes de serrure et aux instructions d’écran. L’accusé d’affichage référence `display_message_id`; il ne passe jamais une opération en `COMMAND_ACKNOWLEDGED`. Les clés de chiffrement de l’outbox écran ne sont pas stockées dans PostgreSQL. Le dispatcher masque les payloads sensibles dans ses logs et purge le QR dès qu’il devient inutilisable.
+
 
 ### 9.1 Propriété recherchée
 
@@ -1347,7 +1577,7 @@ Le délai de lease de 15 secondes est un choix d’exploitation P0; il ne doit p
 
 ### 9.3 Accusé et erreur
 
-L’ingestion d’un `COMMAND_ACKNOWLEDGED` ou `COMMAND_REJECTED` vérifie `operation_id`, `message_id`, locker, type et fenêtre de validité. Elle met à jour `command_outbox` et `locker_operations` dans la même transaction que l’insertion du message entrant. Un accusé dupliqué ne change rien.
+L’ingestion d’un `COMMAND_ACKNOWLEDGED` ou `COMMAND_REJECTED` vérifie `operation_id`, le `command_message_id` référant au `message_id` de l’outbox, le locker, le type et la fenêtre de validité. Elle met à jour `command_outbox` et `locker_operations` dans la même transaction que l’insertion du message entrant. Un accusé dupliqué ne change rien.
 
 Une perte du dispatcher après publication n’est pas interprétée comme un échec sûr. Le système assume une livraison au moins une fois et s’appuie sur l’identité stable de commande et la déduplication du hub.
 
@@ -1455,12 +1685,14 @@ Découpage recommandé :
 | `V004__create_operating_schedules.sql` | `operating_schedules`, `operating_windows` et leurs index. |
 | `V005__create_reservations.sql` | `reservations` et index d’unicité active. |
 | `V006__create_operations_and_loans.sql` | `locker_operations`, `loans`, FK circulaire ajoutée après les deux tables. |
-| `V007__create_command_outbox.sql` | `command_outbox` et index de claim. |
+| `V007__create_command_outbox.sql` | `command_outbox`, `local_access_challenges`, `hub_display_outbox` et index de claim, si aucune migration n’a encore été appliquée. |
 | `V008__create_device_messages_and_observations.sql` | `inbound_device_messages`, `physical_observations`. |
 | `V009__create_anomalies_and_audit.sql` | `anomalies`, `audit_events`. |
 | `V010__create_rest_idempotency.sql` | `rest_idempotency_keys`. |
 | `V011__create_read_indexes.sql` | Index de lecture et index partiels restant. |
 | `V012__seed_demo_reference_data.sql` | Facultatif et réservé à l’environnement de démonstration; comptes et UUIDs fixes documentés. |
+
+Si V001–V012 existent déjà dans une base, ajouter une migration V013 dédiée : nouvelles tables/colonnes, enums textuels CHECK, FK et index partiel des opérations ouvertes. Déployer pendant une pause sans opération physique active; traiter explicitement les lignes historiques sans preuve QR. Ne pas inventer des preuves pour satisfaire le nouveau CHECK. Ce document décrit le schéma cible neuf, pas un ALTER rétroactif prêt à exécuter sur des données existantes.
 
 Les numéros ne sont pas réécrits après application. Une correction ajoute `V013`, `V014`, etc.; elle ne modifie pas le fichier déjà enregistré dans `flyway_schema_history`.
 
@@ -1535,11 +1767,18 @@ Les métriques recommandées sont : profondeur de l’outbox, âge de la plus an
 | `ReadinessAssessment` | Projection calculée, éventuellement copiée dans `audit_events.details` | Dérivé, non administrable |
 | Disponibilité, calibration, retard, statut locker | Calculs backend + colonnes de projection matériel | Dérivé |
 
-Le libellé algorithmique `ASSET_PRESENT_WITH_ACTIVE_LOAN`, apparu dans le document 06 comme cas particulier, est normalisé dans ce schéma en `UNEXPECTED_ASSET_OBSERVED` avec les détails de contexte dans `anomalies.details`. Il ne crée pas une seconde valeur d’énumération métier.
+Le type `ASSET_PRESENT_WITH_ACTIVE_LOAN` reste distinct : il indique qu’une présence physique a été observée alors que la chaîne de possession demeure ouverte. Cette observation ne termine jamais le prêt sans opération `RETURN` confirmée.
 
 ---
 
 ## 14. Critères de conformité du modèle physique
+
+- Une préparation en attente QR est couverte par l’unicité du locker.
+- Une double validation concurrente consomme exactement une fois le défi et crée une commande.
+- Le rollback annule consommation, autorisation et commande ensemble.
+- Aucun token en clair dans les tables, logs, audits ou réponses REST; les payloads écran sont chiffrés puis purgés.
+- Le schéma admet une confirmation physique après `due_at` sans terminer artificiellement le prêt.
+
 
 Le modèle est conforme si :
 
