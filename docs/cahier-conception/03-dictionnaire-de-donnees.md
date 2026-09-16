@@ -2,7 +2,7 @@
 
 **Version :** 0.1  
 **Statut :** Proposition de conception — à valider avec le modèle de domaine  
-**Source principale :** `scope.md` v0.3 (9 septembre 2026)
+**Source principale :** `02-scope.md` v0.3 (16 septembre 2026)
 
 ## 1. Rôle du document
 
