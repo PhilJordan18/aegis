@@ -4,7 +4,6 @@
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date :** 16 septembre 2026  
 **Version :** 1.0  
-**Statut :** Proposition normative à valider avant implémentation
 
 ---
 
