@@ -486,6 +486,3 @@ INCONSISTENT_PHYSICAL_STATE
 | Quelle preuve physique est suffisante pour `ASSET_PRESENT` ou `ASSET_ABSENT`? | Détermine la logique de confirmation et le payload d’observation. | POC RFID/fallback. |
 | Plusieurs réservations par utilisateur sont-elles permises? | Impacte les règles métier et l’UX mobile. | Story map / règle P0. |
 | L’administrateur peut-il résoudre une anomalie sans corriger l’état matériel? | Détermine le workflow d’exception. | ADR et stories P1/P0. |
-
-
-Ce document doit évoluer lorsqu’un POC matériel ou un ADR change une hypothèse. Toute évolution doit conserver les principes : backend autoritaire, observation physique normalisée, idempotence et audit.
