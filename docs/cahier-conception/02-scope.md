@@ -5,8 +5,7 @@
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de révision :** 9 septembre 2026  
 **Version :** 0.3 — architecture matérielle hub/cellule  
-**Statut :** Proposition à valider en équipe et avec l'enseignant  
-**Échéance :** Semaine 15, entre le 15 et le 23 décembre 2026
+**Échéance :** Semaine 15, le 23 décembre 2026
 
 ---
 
