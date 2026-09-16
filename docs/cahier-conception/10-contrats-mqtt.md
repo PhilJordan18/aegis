@@ -2,9 +2,8 @@
 
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Date :** 16 septembre 2026  
-**Version :** 1.0  
-**Statut :** Proposition normative à valider avant implémentation
+**Date de révision :** 16 septembre 2026
+**Version :** 1.2 — contrôle local QR et étoile
 
 ---
 
@@ -106,7 +105,8 @@ L’identité authentifiée est la source de confiance. Un lockerId déclaré da
 | Environnement | Exigence |
 |---|---|
 | Broker distant | TLS 1.2 ou supérieur, validation du certificat serveur |
-| Docker local | Connexion non chiffrée autorisée uniquement sur le réseau Docker privé |
+| Docker local isolé avec simulateur | Non chiffré seulement sur réseau privé sans hub réel ni exposition; tokens de test exclusivement |
+| Hub réel, même au laboratoire | TLS validé obligatoire, car le QR transporte un secret éphémère |
 | PostgreSQL | Aucun accès depuis le broker ou le hub |
 
 Le P0 utilise un nom d’utilisateur et un secret uniques par device au-dessus de TLS. Le mTLS peut être ajouté ultérieurement sans changer les topics ni les payloads.
@@ -114,7 +114,8 @@ Le P0 utilise un nom d’utilisateur et un secret uniques par device au-dessus d
 ### 4.3 Secrets
 
 - jamais committés;
-- jamais inclus dans un payload;
+- identifiants MQTT et mots de passe jamais inclus dans un payload;
+- le token QR est une donnée métier éphémère distincte, autorisée uniquement dans le message d’écran chiffré en transit décrit au §27;
 - jamais journalisés;
 - stockés par configuration externe côté backend et broker;
 - provisionnés dans le stockage non volatil du hub;
@@ -130,6 +131,7 @@ Pour un locker donné :
 aegis/v1/lockers/{lockerId}/commands
 aegis/v1/lockers/{lockerId}/events
 aegis/v1/lockers/{lockerId}/status
+aegis/v1/lockers/{lockerId}/display
 ```
 
 | Topic | Producteur | Consommateur | Contenu |
@@ -137,6 +139,7 @@ aegis/v1/lockers/{lockerId}/status
 | commands | Backend | Hub ciblé | UNLOCK_COMPARTMENT |
 | events | Hub | Backend | ACK, rejet, porte, serrure, RFID, erreur |
 | status | Hub ou broker via LWT | Backend | Heartbeat et disponibilité de connexion |
+| display | Backend | Hub ciblé | QR temporaire et résultat backend |
 
 Règles :
 
@@ -155,13 +158,13 @@ Règles :
 
 Pour son propre locker, un hub peut :
 
-- s’abonner à commands;
+- s’abonner à commands et display pour son seul locker;
 - publier sur events;
 - publier sur status.
 
 Il ne peut pas :
 
-- publier sur commands;
+- publier sur commands ou display;
 - s’abonner aux events ou status d’un autre locker;
 - utiliser un wildcard;
 - accéder à un topic d’administration du broker.
@@ -170,7 +173,7 @@ Il ne peut pas :
 
 Le backend peut :
 
-- publier sur aegis/v1/lockers/+/commands;
+- publier sur les topics commands et display autorisés par l’ACL `aegis/v1/lockers/+/...` (le topic réellement publié contient un lockerId, jamais `+`);
 - s’abonner à aegis/v1/lockers/+/events;
 - s’abonner à aegis/v1/lockers/+/status.
 
@@ -187,6 +190,8 @@ Tout droit non explicitement accordé est refusé. Les ACL sont testées avec un
 | Message | QoS | Retain | Justification |
 |---|---:|---:|---|
 | Commande | 1 | false | Livraison au moins une fois; déduplication obligatoire |
+| Instruction d’écran | 1 | false | Expiration, session et révision vérifiées même après redélivrance |
+| Accusé/rejet d’affichage | 1 | false | Ne constitue pas un ACK de serrure |
 | Accusé ou rejet | 1 | false | La décision technique doit atteindre le backend |
 | Porte, serrure, RFID, erreur | 1 | false | Les preuves peuvent être redélivrées sans double effet |
 | Heartbeat périodique | 0 | false | Fréquent et remplacé après 10 secondes |
@@ -205,7 +210,7 @@ Le backend ne compte jamais sur une livraison exactement une fois. Toute livrais
 
 ### 7.2 Retain
 
-Une commande retain=true est strictement interdite. Une ancienne commande ne doit jamais être livrée à un hub simplement parce qu’il vient de se reconnecter.
+Une commande ou une instruction d’écran `retain=true` est strictement interdite. Une ancienne commande ne doit jamais être livrée à un hub simplement parce qu’il vient de se reconnecter.
 
 Seuls DEVICE_AVAILABILITY ONLINE et le Last Will OFFLINE sont retenus.
 
@@ -257,6 +262,9 @@ Le hub n’a pas besoin de connaître l’actif attendu. Il rapporte les identif
 ---
 
 ## 9. Commande UNLOCK_COMPARTMENT
+
+Le backend crée cette commande uniquement après consommation atomique du défi QR et revalidation des gardes métier. La préparation ne suffit jamais. Le hub masque le QR de cette opération au début de l’exécution; aucune logique locale ne remplace l’autorisation backend.
+
 
 Topic :
 
@@ -635,8 +643,14 @@ Le backend réserve la paire lockerDeviceId + messageId dans PostgreSQL avant to
 
 ### 16.3 Identifiants distincts
 
+L’idempotence des messages d’écran est indépendante de celle des commandes : afficher un QR ne doit pas consommer le droit technique d’exécuter l’unique `UNLOCK_COMPARTMENT` de la même opération. Les clés sont le type de flux, `messageId` et, pour l’écran, `displayRevision`.
+
+
 | Identifiant | Portée |
 |---|---|
+| displayMessageId | Instruction d’écran visée par un accusé; jamais commandMessageId |
+| challengeId | Défi local, sans révéler son secret dans les événements |
+| displayRevision | Ordre d’affichage monotone pour un locker |
 | command.messageId | Intention backend stable, réutilisée à chaque republication |
 | event.messageId | Fait device unique |
 | commandMessageId | Commande dont un ACK ou REJECT décrit le résultat |
@@ -758,6 +772,18 @@ Un événement de porte ou de RFID hors opération reste permis pour surveiller 
 
 ---
 
+
+Les types ajoutés pour l’écran sont exclus des trois topics de commande/état ci-dessus, sauf les accusés d’affichage qui utilisent `events` :
+
+| Type | Topic | operationId | compartmentId |
+|---|---|---|---|
+| DISPLAY_ACCESS_CHALLENGE | display | requis | requis |
+| DISPLAY_OPERATION_STATUS | display | requis | requis |
+| ACCESS_CHALLENGE_DISPLAYED | events | requis | requis |
+| DISPLAY_REJECTED | events | requis si le message est corrélable | requis si corrélable |
+
+Un message impossible à corréler produit un `DEVICE_ERROR` expurgé, pas un faux `DISPLAY_REJECTED` sans identifiants obligatoires.
+
 ## 21. Codes de rejet backend
 
 Lorsqu’un message device est rejeté par l’ingestion, processingError utilise une valeur contrôlée :
@@ -787,6 +813,9 @@ Les erreurs de parsing ne sont jamais publiées vers un topic de commande. Elles
 ## 22. Observabilité
 
 ### 22.1 Logs
+
+Ne jamais tracer le token, l’URI QR ou le payload `DISPLAY_ACCESS_CHALLENGE`, y compris dans les logs broker, les callbacks MQTT et les dumps firmware. Les accusés ne recopient pas ce contenu. Si un message entrant illégitime contient un secret, le diagnostic est expurgé avant conservation; la politique d’événements bruts ne justifie pas une fuite de secrets.
+
 
 Champs de corrélation :
 
@@ -820,6 +849,15 @@ Les logs n’incluent aucun secret, mot de passe ou payload complet par défaut.
 ## 23. Tests contractuels minimaux
 
 ### 23.1 ACL et sécurité
+
+- Le hub ne peut lire que son topic display, et ne peut y publier.
+- Aucune ancienne instruction d’écran expirée ou d’un autre démarrage ne s’affiche.
+- Les doublons d’écran ne provoquent aucune impulsion de serrure.
+- Les révisions anciennes ne remplacent pas un résultat récent.
+- L’accusé d’affichage ne fait pas avancer l’opération vers COMMAND_ACKNOWLEDGED.
+- Le token n’apparaît ni dans les accusés ni dans les traces.
+- Couper l’écran ou retarder son accusé empêche l’autorisation QR; aucun fallback logiciel ne contourne la preuve.
+
 
 1. Un device peut publier uniquement sur ses topics events et status.
 2. Il ne peut pas publier commands.
@@ -924,3 +962,87 @@ Le contrat est respecté si :
 12. une coupure réseau ne provoque ni double ouverture ni confirmation silencieuse;
 13. les tests de doublon, expiration, reconnexion et ACL passent;
 14. les payloads réels correspondent aux exemples et schémas de cette version.
+
+## 27. Contrat de l’écran du hub
+
+### 27.1 DISPLAY_ACCESS_CHALLENGE
+
+Topic : `aegis/v1/lockers/{lockerId}/display`. QoS 1, `retain=false`, TLS et ACL requis. Exemple fictif :
+
+```json
+{
+  "schemaVersion": "1.0",
+  "messageId": "fd6c4a94-4ac4-4a91-9249-59347c3b648b",
+  "type": "DISPLAY_ACCESS_CHALLENGE",
+  "lockerId": "d46a74ae-39dc-460b-8af0-38fc791b376a",
+  "compartmentId": "1ae77ae3-8490-4f09-9412-a7816b77bff9",
+  "operationId": "2f38d3b6-c18f-4a74-aa9a-2d574286013f",
+  "targetDeviceSessionId": "1b24299c-028f-4c9f-a942-1c1ce36be899",
+  "displayRevision": 41,
+  "issuedAt": "2026-09-16T14:31:00Z",
+  "expiresAt": "2026-09-16T14:32:00Z",
+  "payload": {
+    "challengeId": "9d65cbae-4610-4e40-a314-3b93af07be9c",
+    "action": "CHECKOUT",
+    "compartmentCode": "A1",
+    "token": "<base64url-de-32-octets-aleatoires>"
+  }
+}
+```
+
+Tous les champs montrés sont requis. `action` vaut CHECKOUT ou RETURN. Le hub construit le QR selon ce format :
+
+```text
+aegis://local-access?v=1&challengeId=<UUID>&operationId=<UUID>&lockerId=<UUID>&token=<base64url>
+```
+
+L’application lit ce format dans son scanner interne. Aucun site Web ni service tiers ne reçoit l’URI. Aucun nom de technicien, email, mot de passe ou jeton de connexion n’est affiché.
+
+L’horloge du hub doit être synchronisée avant affichage. Il vérifie son locker, son `deviceSessionId`, l’échéance et la révision. Il n’étend jamais la durée de 60 secondes proposée. Si la fermeture ou la fin de réservation intervient avant, le backend fournit cette échéance réduite.
+
+### 27.2 Accusé applicatif d’affichage
+
+`ACCESS_CHALLENGE_DISPLAYED`, sur `events`, reprend l’enveloppe hub §8.1 et ajoute :
+
+```json
+{
+  "displayMessageId": "fd6c4a94-4ac4-4a91-9249-59347c3b648b",
+  "challengeId": "9d65cbae-4610-4e40-a314-3b93af07be9c",
+  "displayRevision": 41
+}
+```
+
+Cet extrait est ajouté à l’enveloppe complète, pas publié seul. Il est émis après rendu effectif du QR. Le backend valide le device, la session et la correspondance exacte du message et du défi avant de renseigner `displayedAt`. Un PUBACK MQTT ne suffit pas.
+
+`DISPLAY_REJECTED` utilise la même corrélation (`challengeId` seulement pour un défi) et une raison : `SCREEN_UNAVAILABLE`, `TARGET_SESSION_MISMATCH`, `DISPLAY_EXPIRED`, `STALE_DISPLAY_REVISION` ou `INVALID_DISPLAY_PAYLOAD`. Aucun de ces événements ne contient le token ni `commandMessageId`.
+
+### 27.3 DISPLAY_OPERATION_STATUS
+
+Même enveloppe backend que §27.1, nouveau `messageId`, révision supérieure, échéance d’affichage de 30 secondes, et payload :
+
+```json
+{
+  "action": "CHECKOUT",
+  "compartmentCode": "A1",
+  "status": "CONFIRMED",
+  "reasonCode": null
+}
+```
+
+`status` décrit un état backend validé, notamment CONFIRMED, FAILED, EXPIRED ou ANOMALY. Le hub utilise des messages d’interface prédéfinis selon ces codes. Un état local de porte ne produit jamais « retrait confirmé ». Après l’échéance d’affichage, l’écran revient à l’accueil; l’état métier persiste.
+
+Ce message n’exige pas d’accusé applicatif positif au P0; sa distribution reste suivie par le dispatcher et QoS 1. Une erreur d’écran peut produire `DISPLAY_REJECTED` corrélé.
+
+### 27.4 Ordre, reconnexion et purge
+
+Le backend alloue `displayRevision` sous verrou du locker. Le hub conserve la plus grande révision acceptée pendant son démarrage; un doublon identique peut être acquitté à nouveau sans réafficher un QR masqué ou consommé. Une ancienne révision est ignorée.
+
+Un nouveau démarrage efface tout QR et génère un nouveau `deviceSessionId`. Les anciennes instructions ciblant l’ancienne session sont rejetées, même si une session MQTT persistante les restitue. Avant autorisation, une perte de connexion invalide le défi côté backend et masque l’écran côté hub.
+
+L’outbox écran conserve le token sous chiffrement applicatif uniquement jusqu’à consommation, expiration ou invalidation, puis le purge. Les délais et la consommation backend restent la protection finale si un paquet ancien est déjà en transit.
+
+### 27.5 Portée de sécurité et compatibilité
+
+Un code peut être relayé par photo ou vidéo. Ce mécanisme ajoute une barrière à l’ouverture distante; il n’est ni une preuve anti-relais ni un nouveau facteur d’identité indépendant.
+
+Le topic display est séparé pour conserver le contrat UNLOCK_COMPARTMENT. Cette révision définit les nouveaux types avant leur implémentation : mettre à jour hub, simulateur, backend et clients ensemble. Un hub sans capacité d’affichage ne peut pas ouvrir dans ce parcours; aucun ancien chemin direct n’est conservé.
