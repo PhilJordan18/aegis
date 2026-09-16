@@ -2,8 +2,8 @@
 
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Date :** 16 septembre 2026  
-**Version :** 1.0  
+**Date de révision :** 16 septembre 2026
+**Version :** 1.2 — contrôle local QR et étoile
 
 ---
 
@@ -335,6 +335,11 @@ Exemple :
 | loanId | UUID ou null | oui |
 | createdAt | instant | oui |
 | authorizedAt | instant ou null | oui |
+| localAccessChallengeId | UUID ou null | oui |
+| localProofExpiresAt | instant ou null | oui |
+| localProofDisplayedAt | instant ou null | oui |
+| localProofValidatedAt | instant ou null | oui |
+| requiredAction | SCAN_HUB_QR, WAIT ou NONE | oui |
 | expiresAt | instant ou null | oui |
 | commandSentAt | instant ou null | oui |
 | acknowledgedAt | instant ou null | oui |
@@ -348,6 +353,7 @@ Exemple :
 LockerOperationStatus :
 
 - REQUESTED;
+- AWAITING_LOCAL_PROOF;
 - AUTHORIZED;
 - COMMAND_SENT;
 - COMMAND_ACKNOWLEDGED;
@@ -409,6 +415,9 @@ Les détails techniques sensibles ne sont inclus que dans la vue de détail admi
 
 ### 9.2 Technicien
 
+Route supplémentaire : `POST /locker-operations/{operationId}/authorize-local` — initiateur uniquement, `Idempotency-Key`, réponse 202, détails §15.5.
+
+
 | Méthode | Route | Résultat |
 |---|---|---|
 | GET | /assets | Catalogue avec readiness personnelle |
@@ -421,6 +430,7 @@ Les détails techniques sensibles ne sont inclus que dans la vue de détail admi
 | GET | /me/loan | Prêt ouvert du technicien |
 | GET | /loans/{loanId} | Prêt appartenant au technicien |
 | POST | /loans/{loanId}/return | Commencer un retour |
+| POST | /locker-operations/{operationId}/authorize-local | Consommer le QR et autoriser l’opération préparée |
 | GET | /locker-operations/{operationId} | Progression de sa propre opération |
 | GET | /lockers/{lockerId}/status | État utile du locker |
 
@@ -737,98 +747,127 @@ Réponse 200 avec ReservationView CANCELLED.
 
 Une répétition avec la même clé rejoue la première réponse. Une réservation déjà CANCELLED avec une nouvelle clé retourne 200 et ALREADY_APPLIED dans l’audit. Une réservation FULFILLED ou EXPIRED retourne 409 RESERVATION_NOT_CANCELLABLE.
 
-L’annulation est refusée si une opération CHECKOUT non terminale ou incertaine existe.
+L’annulation est refusée si une opération CHECKOUT déjà autorisée ou une incertitude physique existe. Une opération `AWAITING_LOCAL_PROOF` est terminée en `FAILED` et son défi invalidé atomiquement avec l’annulation de la réservation; aucune serrure n’a été commandée.
 
 ---
 
 ## 15. Retrait, retour et suivi asynchrone
 
-### 15.1 Retrait
+### 15.1 Préparer un retrait
 
-POST /reservations/{reservationId}/checkout
+`POST /reservations/{reservationId}/checkout`
 
-- accès TECHNICIAN propriétaire;
-- Idempotency-Key obligatoire;
-- corps vide;
-- recalcule immédiatement l’horaire, la réservation, la readiness et les gardes physiques;
-- crée LockerOperation et command_outbox dans une seule transaction;
-- ne publie pas MQTT dans la transaction HTTP.
+Accès : `TECHNICIAN` propriétaire. `Idempotency-Key` obligatoire; corps vide.
 
-Réponse 202 :
+Le backend vérifie l’horaire, la réservation, la readiness tenant compte de la réservation du titulaire et les gardes physiques. Il crée l’opération `AWAITING_LOCAL_PROOF`, le défi et l’instruction d’écran. **Il ne crée aucune commande de serrure.** La route de réservation elle-même ne lance pas cette préparation.
 
-```http
-Location: /api/v1/locker-operations/2f38d3b6-c18f-4a74-aa9a-2d574286013f
-Retry-After: 1
-```
+Réponse `202 Accepted`, `Location: /api/v1/locker-operations/{id}`, `Retry-After: 1` et `Cache-Control: no-store`.
+
+Exemple des champs de suivi de `LockerOperationView` (les autres champs obligatoires de §8.5 restent présents dans la réponse complète) :
 
 ```json
 {
   "id": "2f38d3b6-c18f-4a74-aa9a-2d574286013f",
   "type": "CHECKOUT",
-  "status": "AUTHORIZED",
-  "userId": "75acc15f-fc23-45d9-857d-b543694e4fc2",
-  "assetId": "300e72fd-118c-4d1f-af9c-7fb61e89f62c",
-  "lockerId": "d46a74ae-39dc-460b-8af0-38fc791b376a",
-  "compartmentId": "1ae77ae3-8490-4f09-9412-a7816b77bff9",
-  "reservationId": "7b726e56-2a19-44de-887b-d3e2bfc8bf28",
-  "loanId": null,
-  "authorizedAt": "2026-09-16T14:31:00Z",
-  "expiresAt": "2026-09-16T14:33:00Z",
-  "failureReason": null,
-  "anomalyId": null
+  "status": "AWAITING_LOCAL_PROOF",
+  "localAccessChallengeId": "9d65cbae-4610-4e40-a314-3b93af07be9c",
+  "localProofExpiresAt": "2026-09-16T14:32:00Z",
+  "localProofDisplayedAt": null,
+  "localProofValidatedAt": null,
+  "authorizedAt": null,
+  "expiresAt": null,
+  "requiredAction": "SCAN_HUB_QR"
 }
 ```
 
-### 15.2 Retour
+L’API ne fournit ni token, ni image QR, ni URI du QR. `localProofDisplayedAt` est renseigné à réception de l’accusé applicatif du hub. La caméra peut attendre cet accusé avant d’accepter le scan.
 
-POST /loans/{loanId}/return
+### 15.2 Préparer un retour
 
-- accès TECHNICIAN titulaire;
-- Idempotency-Key obligatoire;
-- corps vide;
-- exige un prêt ACTIVE;
-- crée une opération RETURN;
-- passe le prêt à RETURN_PENDING dans la même transaction;
-- crée l’intention de commande durable.
+`POST /loans/{loanId}/return`
 
-Réponse 202 avec Location et LockerOperationView.
+Accès : titulaire du prêt; clé d’idempotence obligatoire; corps vide.
 
-Si un échec sûr survient avant toute ouverture, le prêt peut revenir à ACTIVE. Après ouverture ou incertitude physique, il reste RETURN_PENDING et une anomalie est créée.
+Même préparation que le retrait, pour un prêt `ACTIVE`, ou une nouvelle tentative de récupération `RETURN_PENDING` explicitement admissible après une opération précédente terminale. Pendant l’attente QR, le prêt garde son état courant. L’opération attend son défi sans commande de serrure.
+
+Réponse `202` avec `Location` et `LockerOperationView`. Le passage de `ACTIVE` à `RETURN_PENDING` intervient seulement lors de l’autorisation locale en §15.5.
 
 ### 15.3 Lecture du prêt
 
-GET /me/loan retourne l’unique prêt ACTIVE ou RETURN_PENDING du technicien. Sans prêt ouvert : 404 ACTIVE_LOAN_NOT_FOUND.
+`GET /me/loan` retourne le prêt courant de l’utilisateur dans le parcours P0; aucun prêt ouvert donne `404 ACTIVE_LOAN_NOT_FOUND`. `GET /loans/{loanId}` exige que l’utilisateur soit le titulaire.
 
-GET /loans/{loanId} retourne le prêt appartenant au technicien.
+L’échéance `dueAt` dépassée indique un retard; elle ne clôture jamais le prêt et ne libère jamais l’actif. Si plusieurs prêts par technicien sont admis ultérieurement, remplacer explicitement la vue singulière par une collection; ne pas déduire une contrainte SQL nouvelle de cet écran P0.
 
 ### 15.4 Lecture d’une opération
 
-GET /locker-operations/{operationId}
+`GET /locker-operations/{operationId}`
 
-Le client interroge cette route toutes les secondes tant que l’état est non terminal. Une réponse non terminale retourne Retry-After: 1.
+Accès au propriétaire; aucune donnée secrète du défi. Polling toutes les secondes tant que non terminal, avec `Retry-After: 1`.
 
-Les états terminaux sont CONFIRMED, FAILED, EXPIRED et ANOMALY. Le client arrête alors le polling et rafraîchit sa réservation, son prêt et l’actif.
+| État | Affichage mobile | requiredAction |
+|---|---|---|
+| `AWAITING_LOCAL_PROOF` | Se rendre au hub et scanner son QR; échéance visible | `SCAN_HUB_QR` |
+| Autorisée / commande / porte / observation | Progression de l’opération | `WAIT` |
+| `CONFIRMED`, `FAILED`, `EXPIRED`, `ANOMALY` | Résultat et rafraîchissement des vues métier | `NONE` |
 
 ```mermaid
 sequenceDiagram
-    participant M as Aegis Mobile
+    participant M as Mobile
     participant A as API
-    participant D as PostgreSQL
-    participant I as Passerelle IoT
-
-    M->>A: POST checkout + Idempotency-Key
-    A->>D: Opération + commande durable
-    A-->>M: 202 + Location
-    I-->>D: Accusés et observations
-    loop Toutes les secondes
-        M->>A: GET LockerOperation
-        A-->>M: État courant
+    participant H as Hub via MQTT
+    M->>A: POST checkout ou return
+    A-->>M: 202 AWAITING_LOCAL_PROOF
+    A->>H: Afficher le défi
+    H-->>A: Affichage confirmé
+    H-->>M: Scan optique
+    M->>A: POST authorize-local
+    A-->>M: 202 AUTHORIZED
+    A->>H: Commande autorisée
+    H-->>A: Observations physiques
+    loop Suivi
+        M->>A: GET opération
+        A-->>M: État backend courant
     end
-    M->>A: GET réservation ou prêt
-    A-->>M: État métier final
+    A->>H: Afficher le résultat backend
 ```
 
-Le mobile ne contacte jamais le broker MQTT.
+Le mobile ne contacte jamais le broker. La confirmation visuelle est une mise à jour de l’application ouverte, pas une notification APNS ajoutée au P0.
+
+### 15.5 Valider le QR et autoriser
+
+`POST /locker-operations/{operationId}/authorize-local`
+
+Accès : **initiateur authentifié de l’opération**. `Idempotency-Key` obligatoire. Limite stricte de taille; HTTPS et `Cache-Control: no-store`.
+
+```json
+{
+  "challengeId": "9d65cbae-4610-4e40-a314-3b93af07be9c",
+  "token": "<base64url-de-32-octets-aleatoires>"
+}
+```
+
+L’application extrait ces champs du QR Aegis attendu et vérifie que les identifiants visibles correspondent à l’opération affichée; elle ne suit pas une URL arbitraire. Ces vérifications clientes facilitent l’usage; le serveur refait toutes les vérifications.
+
+Le backend vérifie propriétaire, type/cible liés à l’opération, défi `PENDING`, affichage confirmé, session courante du hub, secret, échéance et toutes les gardes métier. Dans une transaction : consommation unique, opération `AUTHORIZED`, `localProofValidatedAt = authorizedAt`, délai physique de 120 s, passage éventuel du prêt à `RETURN_PENDING`, commande durable, audit et résultat idempotent.
+
+Réponse `202`, `Location` identique, `LockerOperationView` avec `requiredAction=WAIT`. Un succès HTTP n’est pas une confirmation du mouvement physique.
+
+| HTTP | Code stable | Effet |
+|---|---|---|
+| 400 | `LOCAL_PROOF_MALFORMED` | Format invalide; aucune commande |
+| 404 | `OPERATION_NOT_FOUND` | Inexistante ou appartenant à un autre utilisateur |
+| 403 | `LOCAL_PROOF_INVALID` | Secret faux; essai compté pour l’initiateur |
+| 409 | `LOCAL_PROOF_NOT_DISPLAYED` | Attendre l’accusé d’affichage; nouvel essai avec nouvelle clé |
+| 409 | `LOCAL_PROOF_CONTEXT_MISMATCH` | Défi d’une autre opération/cible |
+| 409 | `LOCAL_PROOF_ALREADY_USED` | Consommé; aucune deuxième commande |
+| 409 | `LOCAL_PROOF_INVALIDATED` | Défi invalidé ou opération non admissible |
+| 410 | `LOCAL_PROOF_EXPIRED` | Échéance dépassée; nouvelle préparation nécessaire |
+| 429 | `LOCAL_PROOF_RATE_LIMITED` | Limite atteinte, avec `Retry-After` |
+| 409 | Codes de gardes métier existants | État, droits métier, réservation, horaire ou matériel devenus incompatibles |
+
+La même clé et le même corps rejouent la réponse initiale; une réponse refusée rejouée ne recompte pas les essais. Un corps différent avec la même clé est rejeté. La nouvelle clé après consommation donne un refus, jamais un second déverrouillage. Le token n’est pas copié dans la table d’idempotence : seul le hash de la requête canonique y figure.
+
+Le délai du défi est proposé à 60 secondes maximum, borné par l’horaire et la réservation. Limites proposées : 5 secrets erronés par défi et 3 préparations par utilisateur et locker sur 15 minutes. Un tiers ne peut épuiser les essais du titulaire. Ces protections limitent l’abus, sans empêcher totalement un compte autorisé de monopoliser une réservation.
 
 ---
 
@@ -943,6 +982,9 @@ Le curseur encode au minimum occurredAt et id. Le client le traite comme opaque.
 
 ### 20.1 Routes exigeant Idempotency-Key
 
+- `POST /locker-operations/{operationId}/authorize-local`.
+
+
 - POST /reservations;
 - POST /reservations/{id}/cancel;
 - POST /reservations/{id}/checkout;
@@ -1052,6 +1094,9 @@ La recherche utilisateur :
 
 ### 23.3 Protection des secrets
 
+Le secret QR et le corps de `authorize-local` sont exclus des logs HTTP, traces APM, analytics mobile, captures de diagnostic, réponses d’erreur, audits et exemples de données réelles. Ne créer aucune route de lecture du QR, même réservée à l’administrateur. Le scan prouve seulement l’accès au code frais; le relais par photo ou vidéo reste un risque.
+
+
 Ne sont jamais retournés :
 
 - passwordHash;
@@ -1140,6 +1185,16 @@ Une ouverture passe obligatoirement par une réservation ou un prêt valide et p
 
 ### 26.5 Checkout et retour
 
+- Réservation ou préparation depuis un autre réseau : aucun déverrouillage sans scan valide.
+- Aucune réponse de préparation, lecture ou erreur ne contient le token ou une image du QR.
+- Défi lié à l’initiateur, à l’opération et au hub; refus des substitutions, délais expirés et rejeux.
+- Deux scans concurrents : une consommation et une commande; rollback complet si erreur SQL.
+- Changement des droits, calibration, horaire ou santé après affichage : gardes réévaluées.
+- Expiration ou annulation pendant l’attente : prêt inchangé, écran effacé, réservation traitée normalement.
+- Nouveau démarrage du hub : ancien défi refusé.
+- Appareil photo refusé ou écran illisible : erreur explicite, sans bouton de contournement.
+
+
 1. Les routes retournent 202 et Location.
 2. Le client peut suivre tous les états via GET LockerOperation.
 3. Un locker OFFLINE empêche la création d’une nouvelle commande.
@@ -1176,6 +1231,9 @@ Le polling HTTP à une seconde est retenu pour suivre une LockerOperation. Cette
 ---
 
 ## 28. Critères de conformité
+
+Cette révision modifie la sémantique de préparation de `checkout`/`return` et ajoute un état obligatoire. Tous les clients, simulateurs et tests doivent être mis à jour ensemble avant une démo. Aucun ancien chemin d’ouverture directe n’est conservé comme compatibilité cachée.
+
 
 Le contrat est respecté si :
 
