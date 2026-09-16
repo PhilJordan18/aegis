@@ -10,7 +10,20 @@ Le système physique se compose de deux types de modules :
 * **Master Hub (7.0" HMI)** : Module central d'affichage et de communication réseau. Il pilote la liaison Wi-Fi / MQTT avec le backend, génère le QR code dynamique et injecte l'alimentation et les ordres sur le bus.
 * **Cellules Modulaires (Casiers)** : Nœuds esclaves autonomes empilables/interverrouillables par pions de centrage, chaînés en cascade (Daisy-Chain) via un câble réseau unique.
 
-![Interconnexion matérielle en Daisy-Chain RJ45](architecture-physique-connectivite.svg)
+```mermaid
+flowchart LR
+    PSU["Alimentation 12V / 5A"] --> HUB["Master Hub<br/>(ESP32-S3 HMI 7.0\")"]
+    HUB -->|Câble RJ45 Cat6<br/>12V + GND + RS485| C1["Cellule 1<br/>(Arduino Nano)"]
+    C1 -->|Câble RJ45 Cat6<br/>12V + GND + RS485| C2["Cellule 2<br/>(Arduino Nano)"]
+    C2 -->|Câble RJ45 Cat6<br/>12V + GND + RS485| C3["Cellule 3<br/>(Terminaison 120 Ω)"]
+
+    classDef hub fill:#243828,stroke:#8fd382,color:#e8e8e8
+    classDef cell fill:#303030,stroke:#a3a3a3,color:#e8e8e8
+    classDef psu fill:#2d2222,stroke:#ff7b72,color:#ff7b72
+    class HUB hub
+    class C1,C2,C3 cell
+    class PSU psu
+```
 
 ---
 
