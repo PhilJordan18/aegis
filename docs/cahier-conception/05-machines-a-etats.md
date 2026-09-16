@@ -3,9 +3,8 @@
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Session :** Automne 2026  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Date :** 9 septembre 2026  
-**Version :** 1.0  
-**Statut :** Proposition à valider en équipe
+**Date :** 16 septembre 2026  
+**Version :** 1.1  
 
 ---
 
