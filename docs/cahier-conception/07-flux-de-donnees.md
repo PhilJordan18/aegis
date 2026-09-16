@@ -3,9 +3,8 @@
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Session :** Automne 2026  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Date :** 10 septembre 2026  
-**Version :** 1.0  
-**Statut :** Proposition à valider en équipe
+**Date :** 16 septembre 2026  
+**Version :** 1.1  
 
 ---
 
@@ -29,7 +28,7 @@ Ce document est lié au dictionnaire de données métier. Il ne décrit pas les 
 
 Les flux respectent :
 
-1. `docs/cahier-conception/scope.md`, version 0.3;
+1. `docs/cahier-conception/01-scope.md`, version 0.4;
 2. `03-dictionnaire-de-donnees.md`;
 3. `04-modele-de-donnees-logique.md`;
 4. `05-machines-a-etats.md`;
