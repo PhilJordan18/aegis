@@ -12,7 +12,7 @@ Le marché de référence est celui des équipes de maintenance, d’inspection 
 | Équipe | Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa |
 | Prototype | Un hub avec écran et deux cellules indépendantes, A1 et A2 |
 | Budget matériel | Maximum de 500 $ CA pour le prototype complet |
-| Échéance | Semaine pédagogique 15; le scope indique le 23 décembre 2026, à rapprocher du calendrier officiel |
+| Échéance | Semaine pédagogique 15, le 23 décembre 2026 |
 
 Ce prototype académique vise une démonstration répétable. Les performances, la fiabilité industrielle et les bénéfices commerciaux ne sont pas présentés comme déjà démontrés.
 
