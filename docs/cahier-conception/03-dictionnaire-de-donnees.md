@@ -3,7 +3,7 @@
 **Version :** 1.3 — contrôle local QR, étoile et cohérence du retour
 **Date de révision :** 16 septembre 2026
 **Statut :** Version de référence pour le cahier de conception  
-**Source principale :** `scope.md` v0.3 (9 septembre 2026)
+**Source principale :** `02-scope.md` v0.3 (9 septembre 2026)
 
 ## 1. Rôle du document
 

@@ -42,4 +42,4 @@ flowchart TD
 
 - Le Web et le mobile ne parlent qu'à `Aegis Control` — jamais directement à PostgreSQL ni au locker.
 - `Aegis Control` est la seule autorité métier; le broker et le locker ne font que transporter et exécuter des commandes déjà autorisées.
-- Le nœud reste nommé « Aegis Locker Node » plutôt que « hub/cellule » : cette architecture matérielle est encore soumise au POC de [`scope.md` §17.5](../cahier-conception/scope.md) et n'est pas un engagement du P0.
+- Le nœud reste nommé « Aegis Locker Node » dans cette vue système. Le hub, les deux cellules et l’étoile sont retenus; la réalisation électrique, le protocole local et le RFID demeurent soumis aux POC du [scope §17](../cahier-conception/02-scope.md).

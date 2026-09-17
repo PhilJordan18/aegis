@@ -5,7 +5,7 @@
 **Date de révision :** 17 septembre 2026  
 **Version :** 2.0 — dossier de réalisation, interfaces et responsabilités  
 **Statut :** architecture de référence; étoile et deux cellules retenues. Les choix électriques et les résultats de POC restent explicitement ouverts.  
-**Références :** [scope](02-scope.md), [contrat MQTT](10-contrats-mqtt.md), [ADRs](13-decisions-architecture.md).
+**Références :** [scope](02-scope.md), [contrat MQTT](10-contrats-mqtt.md), [ADRs](13-registre-adrs-proposes.md).
 
 ## 1. Périmètre matériel
 

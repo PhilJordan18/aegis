@@ -29,7 +29,7 @@ Ce document reste indépendant des classes Java, des routes REST, des tables SQL
 
 Les règles proviennent, dans cet ordre, de :
 
-1. `docs/cahier-conception/scope.md`, version 0.3;
+1. `docs/cahier-conception/02-scope.md`, version 0.3;
 2. `03-dictionnaire-de-donnees.md`;
 3. `04-modele-de-donnees-logique.md`;
 4. `05-machines-a-etats.md`;

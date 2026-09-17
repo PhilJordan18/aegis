@@ -28,7 +28,7 @@ Ce document est lié au dictionnaire de données métier. Il ne décrit pas les 
 
 Les flux respectent :
 
-1. `docs/cahier-conception/scope.md`, version 0.3;
+1. `docs/cahier-conception/02-scope.md`, version 0.3;
 2. `03-dictionnaire-de-donnees.md`;
 3. `04-modele-de-donnees-logique.md`;
 4. `05-machines-a-etats.md`;

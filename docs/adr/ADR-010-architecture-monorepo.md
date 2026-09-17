@@ -95,4 +95,4 @@ Une future séparation de dépôt exige un ADR indiquant les responsabilités de
 - [Autorité métier du backend](ADR-001-backend-autorite-metier.md)
 - [Scope](../cahier-conception/02-scope.md)
 - [Story Map et backlog](../cahier-conception/11-user-story-map-p0.md)
-- [Plan d’exécution](../cahier-conception/14-plan-execution-et-iterations.md)
+- [Plan d’itérations](../cahier-conception/14-plan-iterations-semaines-4-a-15.md)

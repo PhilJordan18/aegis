@@ -5,7 +5,7 @@
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de révision :** 17 septembre 2026  
 **Version :** 2.0 — backlog d’exécution, responsabilités et tickets initiaux  
-**Références :** [scope](02-scope.md), documents 03–10 et [plan d’exécution](14-plan-execution-et-iterations.md).
+**Références :** [scope](02-scope.md), documents 03–10 et [plan d’itérations](14-plan-iterations-semaines-4-a-15.md).
 
 ---
 
