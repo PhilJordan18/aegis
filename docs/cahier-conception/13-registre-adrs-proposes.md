@@ -1,321 +1,219 @@
-# Aegis — Registre et brouillons d’ADR
+# Aegis — Décisions d’architecture
 
 **Cours :** 420-5X7-SO — Écosystème connecté  
-**Session :** Automne 2026  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Date :** 16 septembre 2026  
-**Version :** 0.1 — propositions à arbitrer  
-**Destination après validation :** un fichier par décision dans `docs/adr/`
+**Date de consignation :** 17 septembre 2026  
+**Version :** 2.0 — registre opérationnel et décisions explicites  
+**Références :** [scope](02-scope.md), documents 03–10 et [architecture physique](12-architecture-physique.md).
 
----
+## 1. Portée et statuts
 
-## 1. Règle d’utilisation
+Ce document contient les ADRs du P0. Chaque fiche expose un choix, son coût, ses alternatives et sa vérification. Le statut d’une décision ne prouve pas que son implémentation fonctionne.
 
-Un ADR consigne une décision structurante difficile ou coûteuse à inverser. Il explique le contexte, les options et les conséquences; il ne duplique pas un contrat détaillé.
+| Statut | Sens |
+|---|---|
+| `PROPOSED` | Option documentée, arbitrage restant avant l’implémentation concernée |
+| `ACCEPTED` | Principe déjà retenu dans les décisions de projet, applicable dans le périmètre de la fiche |
+| `REJECTED` | Proposition examinée et refusée |
+| `SUPERSEDED` | Décision acceptée remplacée explicitement par une autre |
 
-Statuts autorisés :
+Une proposition peut être acceptée ou rejetée. Une décision acceptée peut ensuite être remplacée; sa révision ne doit pas effacer le motif d’origine. La date ci-dessus est celle de consignation, sans inventer de signature ou de date de réunion.
 
-```text
-PROPOSED → ACCEPTED → SUPERSEDED
-              ↘ REJECTED
-```
+Le statut `ACCEPTED` des ADR-001, 002 et 008 consigne des principes déjà exprimés dans le scope et les échanges d’équipe. Il ne valide ni tous les paramètres des contrats, ni le matériel, ni l’ensemble de ce registre. Les autres fiches doivent être arbitrées par Philippe et Jimmy avant leur réalisation définitive.
 
-- `PROPOSED` : recommandation non encore approuvée par Philippe et Jimmy;
-- `ACCEPTED` : décision applicable à l’implémentation;
-- `REJECTED` : option étudiée mais non retenue;
-- `SUPERSEDED` : remplacée par un nouvel ADR, sans réécrire l’historique.
+## 2. Registre
 
----
-
-## 2. Template d’ADR
-
-```markdown
-# ADR-NNN — Titre de la décision
-
-**Date :** YYYY-MM-DD
-**Statut :** PROPOSED | ACCEPTED | REJECTED | SUPERSEDED
-**Décideurs :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa
-**Documents liés :**
-
-## Contexte
-
-[Problème, contraintes et raison de décider maintenant.]
-
-## Options considérées
-
-1. [Option A]
-2. [Option B]
-3. [Option C]
-
-## Décision
-
-[Option choisie et règles précises.]
-
-## Conséquences
-
-### Positives
-- [...]
-
-### Négatives et risques
-- [...]
-
-## Validation
-
-[Tests, mesure ou événement permettant de confirmer la décision.]
-
-## Repli ou remplacement
-
-[Fallback et condition de déclenchement.]
-```
-
----
-
-## 3. Registre priorisé
-
-| ID | Décision | Statut initial | À trancher avant | Preuve attendue |
+| ADR | Objet | Statut | Pilote de l’arbitrage | Point de contrôle |
 |---|---|---|---|---|
-| ADR-001 | Autorité backend et monolithe modulaire | PROPOSED | Première implémentation | Revue d’architecture |
-| ADR-002 | Hub maître et cellules RS-485 | PROPOSED | Fin semaine 6 | POC bus/alimentation |
-| ADR-003 | RFID UHF local par cellule | PROPOSED | Fin semaine 6 | POC de localisation |
-| ADR-004 | MQTT, QoS, sessions et disponibilité | PROPOSED | Walking skeleton | Tests contractuels broker |
-| ADR-005 | Outbox transactionnelle et idempotence | PROPOSED | Première commande IoT | Test crash/redelivery |
-| ADR-006 | Suivi des opérations par polling REST | PROPOSED | Écran de retrait | Test du parcours mobile |
-| ADR-007 | Authentification P0 par jeton court | PROPOSED | Story IAM-01 | Tests de sécurité |
-| ADR-008 | Sémantique de réservation et d’emprunt | PROPOSED | Story RES-01 | Tests concurrence/expiration |
+| 001 | Autorité Spring et monolithe modulaire | `ACCEPTED` | Philippe | Première tranche API |
+| 002 | Hub et deux cellules en étoile | `ACCEPTED` pour la topologie | Jimmy | Réalisation électrique à décider après POC |
+| 003 | Réalisation de la détection RFID locale | `PROPOSED`, POC requis | Jimmy | Avant de dépendre du capteur réel; cible interne S6 |
+| 004 | Livraison MQTT, sessions et disponibilité | `PROPOSED` | Philippe, revue Jimmy | Walking skeleton |
+| 005 | Outbox et idempotence | `PROPOSED` | Philippe | Première commande persistée |
+| 006 | Suivi client par polling REST | `PROPOSED` | Philippe | Première interface d’opération |
+| 007 | Authentification des comptes de démonstration | `PROPOSED` | Philippe | IAM-01 |
+| 008 | Réservation, horaires et échéance du prêt | `ACCEPTED` | Philippe | RES-01 et transitions de prêt |
+| 009 | Mise en œuvre du contrôle QR local | `PROPOSED`; principe intégré au scope | Philippe, revue Jimmy | LOC-01/02, avec essai écran/caméra anticipé |
 
-Les ADR-002 et ADR-003 sont conditionnels aux POC. Les autres peuvent être approuvés dès la revue d’équipe si leurs conséquences sont acceptées.
+Les pilotes préparent les preuves et recommandations; ils n’approuvent pas seuls un changement de scope. Les cibles pédagogiques sont précisées dans le document 14.
 
----
+## ADR-001 — Spring comme autorité dans un monolithe modulaire
 
-## ADR-001 — Backend autoritaire dans un monolithe modulaire
+**Statut :** `ACCEPTED` — principe imposé par le scope.  
+**Liens :** scope §7 et §16; modèles 04/08; contrats 09/10.
 
-**Statut :** PROPOSED  
-**Documents liés :** scope v0.3, modèle logique, contrats REST/MQTT
+### Contexte et décision
 
-### Contexte
+Le projet relie deux clients, PostgreSQL et un dispositif physique. Spring Boot décide de la readiness, des réservations, de l’autorisation d’ouverture, des prêts et des anomalies. Les modules métier sont organisés par fonctionnalité dans un seul service déployable.
 
-Le système combine deux clients, une base et un locker connecté. Distribuer les décisions métier entre iOS, React et ESP32 créerait des états incohérents et rendrait l’audit impossible. Une équipe de deux personnes ne bénéficie pas d’une architecture microservices.
+React et iOS utilisent l’API HTTPS. Le hub reçoit les commandes par MQTT et exécute les contrôles techniques de cible, d’expiration et de rejeu. Il n’accorde aucun droit métier. PostgreSQL protège les contraintes et les transactions.
 
-### Options considérées
+### Alternatives et conséquences
 
-1. Spring Boot monolithe modulaire, seule autorité métier.
-2. Décisions partagées entre mobile, backend et ESP32.
-3. Plusieurs microservices spécialisés.
+Distribuer les décisions entre clients et firmware multiplierait les incohérences. Des microservices ajouteraient une exploitation disproportionnée pour deux personnes. Le monolithe réduit cette coordination, mais impose la disponibilité du backend pour toute nouvelle autorisation; l’ouverture métier hors ligne reste exclue du P0.
 
-### Décision recommandée
+### Vérification
 
-Retenir l’option 1. Spring Boot décide readiness, réservation, autorisation, confirmation du retrait/retour et anomalie. Les modules métier restent séparés dans le code, mais sont déployés ensemble. Web et iOS utilisent uniquement REST; le hub utilise uniquement MQTT et n’accorde aucun droit.
+Un appel non autorisé est refusé côté serveur, même si l’interface est contournée. Un événement IoT ne crée un prêt qu’après validation des gardes de l’opération. Le firmware ne comporte aucune règle d’admissibilité de l’utilisateur.
 
-### Conséquences
+## ADR-002 — Un hub et deux cellules reliées en étoile
 
-- Positif : invariants transactionnels centralisés, déploiement et diagnostic plus simples.
-- Négatif : le backend est requis pour toute nouvelle ouverture; aucune ouverture métier hors ligne en P0.
-- Repli : aucun pour le P0; un changement exigerait un nouveau scope et un ADR de remplacement.
+**Statut :** `ACCEPTED` pour la topologie; réalisation électrique ouverte.  
+**Liens :** scope §11.6 et §17.5; document 12.
 
----
+### Contexte et décision
 
-## ADR-002 — Hub maître et cellules adressables sur RS-485
+L’équipe a retenu un hub avec écran et deux cellules A1/A2. Une cellule correspond à un compartiment. Chaque cellule rejoint directement un port du hub par un câble dédié; une fixation mécanique en pile n’impose pas un bus électrique traversant.
 
-**Statut :** PROPOSED — conditionné au POC  
-**Documents liés :** scope §17.5, blueprint physique
+La proposition actuelle de réalisation utilise des connecteurs RJ45 propriétaires et deux segments RS-485 indépendants. **Ce choix de composants, le brochage et le protocole local ne sont pas encore acceptés par cet ADR.** Une étoile passive avec les lignes A/B réunies n’est pas la réalisation proposée. RJ45 ne signifie ni Ethernet ni PoE.
 
-### Contexte
+### Alternatives et conséquences
 
-Le concept produit exige un hub avec écran/réseau et des cellules empilables, une cellule correspondant à un compartiment. Il faut une liaison robuste, économique et extensible transportée avec l’alimentation dans un câble commun.
+Une chaîne de cellules économiserait des départs mais contredirait la topologie choisie. Deux départs facilitent le repérage et limitent les dépendances de câblage entre cellules; ils ajoutent des interfaces et des protections au hub. Un port supplémentaire exige une capacité électrique et logicielle supplémentaire.
 
-### Options considérées
+### Vérification et repli
 
-1. Hub maître et bus RS-485 half-duplex multidrop.
-2. Bus I²C ou UART logique sur les modules empilés.
-3. Une connexion Wi-Fi/MQTT par cellule.
-4. Un ESP32 unique câblé directement aux deux compartiments.
+Jimmy présente un brochage, les composants, le budget complet, le courant d’actionnement et la tension mesurée dans chaque cellule. Les essais couvrent ciblage, déconnexion, reprise et défaut d’un départ. Si le POC dépasse les moyens disponibles, le repli du scope est un contrôleur pilotant directement deux compartiments. Le changement est consigné par un ADR de remplacement; deux cellules et le QR restent requis.
 
-### Décision recommandée
+## ADR-003 — Identification RFID UHF locale par cellule
 
-Tester l’option 1. Le hub est l’unique maître; chaque cellule possède une adresse et répond à des trames courtes avec CRC. Les cellules n’utilisent ni IP ni MQTT. L’option 4 est le fallback P0.
+**Statut :** `PROPOSED` pour la réalisation et ses seuils; RFID local retenu comme premier choix à tester.  
+**Liens :** scope §17.1–17.4; observation normalisée des documents 03/06/10; POC-01.
 
-### Conséquences
+### Contexte et décision proposée
 
-- Positif : modularité, câblage partagé, meilleure immunité au bruit.
-- Négatif : contrôleur/transceiver par cellule, protocole local et budget supplémentaires.
-- Validation : deux cellules, 100 cycles de communication, mesure de chute de tension, débranchement/reprise et déduplication d’ouverture.
-- Repli : architecture monolithique si la fiabilité, le coût ou le calendrier échoue au plus tard fin semaine 6.
+L’identité de l’actif doit être localisée dans la bonne cellule. Tester un lecteur/antenne local par cellule, avec un tag unique par actif. Une observation utilisable provient d’une fenêtre complète et saine; ni une coupure de lecteur ni un message manquant ne prouvent l’absence.
 
----
+Les contrats actuels utilisent une fenêtre de stabilisation et des lectures cohérentes, dont un seuil initial de trois lectures pour la présence. Ces valeurs sont une base d’essai à mesurer, puis à harmoniser dans les documents 03–10 avant fixation. Le retrait et le retour restent conditionnés à la fermeture de porte et au contexte de l’opération.
 
-## ADR-003 — RFID UHF local par cellule comme preuve physique principale
+### Alternatives et conséquences
 
-**Statut :** PROPOSED — conditionné au POC  
-**Documents liés :** scope §17.1–17.4, contrat MQTT §12, blueprint physique
+Un lecteur global réduit certains coûts mais ne garantit pas la localisation. Le repli QR/NFC pour l’identité de l’actif, associé à une mesure de présence/poids et au capteur de porte, rend le parcours plus explicite. Le QR du hub destiné à autoriser l’ouverture n’est pas cette identification d’actif.
 
-### Contexte
+### Vérification et repli
 
-Aegis doit identifier l’actif retiré ou retourné sans confondre les deux compartiments. Une lecture globale ne localise pas nécessairement le tag; l’absence de lecture ne prouve pas automatiquement l’absence.
+Tester orientation, matériaux, cellule voisine, tag extérieur, retrait, retour et interruption du lecteur. Consigner faux positifs, faux négatifs et délai. Définir les seuils de conservation avant de conclure. Si les essais ne permettent pas une démonstration fiable dans le budget et la cible S6, déclencher le repli du scope. Le logiciel poursuit ses essais avec le simulateur pendant le POC.
 
-### Options considérées
+## ADR-004 — MQTT avec doublons et reconnexion prévus
 
-1. Lecteur/antenne RFID UHF local par cellule et tag unique par actif.
-2. Un lecteur RFID commun au locker.
-3. QR ou NFC pour l’identité, combiné au capteur de porte et à un capteur de présence/poids.
+**Statut :** `PROPOSED`.  
+**Liens :** document 10; FND-02, PHY-01, IOT-01/02, LOC-01.
 
-### Décision recommandée
+### Contexte et décision proposée
 
-Tester l’option 1. Le hub publie une fenêtre complète `RFID_SCAN_COMPLETED`; le backend transforme seulement une lecture stable et saine en observation métier. Le retour exige au moins trois lectures cohérentes du tag attendu. Le checkout exige, après fermeture, une fenêtre saine sans ce tag. L’absence d’un message n’est jamais une preuve.
+Retenir la configuration MQTT 3.1.1 du contrat 10 : QoS 1 pour les messages critiques, QoS 0 pour le heartbeat, identités/ACL du device et TLS pour les communications distantes. Les commandes, défis et résultats transitoires ne sont pas retained. Le statut retained ne remplace pas la vérification de fraîcheur.
 
-### Conséquences
+Le document 10 définit les sessions, les identifiants, le Last Will et la reprise. La base proposée est un heartbeat toutes les 10 secondes et `OFFLINE` après plus de 30 secondes sans heartbeat valide. Un QR relève aussi de la session courante du hub et d’un acquittement réel d’affichage.
 
-- Positif : expérience automatisée et observation localisée.
-- Négatif : coût par cellule, interférences, orientation et matériaux à caractériser.
-- Validation : matrice de tests de position/orientation, cellule voisine, tag externe, faux positifs/négatifs et durée de stabilisation.
-- Repli : option 3 si la localisation n’est pas répétable au plus tard fin semaine 6.
+### Alternatives et conséquences
 
----
+QoS 2 partout ne supprimerait pas le besoin de gérer les répétitions métier et les reprises après crash. HTTP direct ne correspond pas au rail IoT retenu. La proposition exige une déduplication applicative, des délais et la gestion des événements tardifs; elle n’offre aucune garantie magique d’effet physique « exactement une fois ».
 
-## ADR-004 — MQTT 3.1.1 à livraison au moins une fois
+### Vérification
 
-**Statut :** PROPOSED  
-**Documents liés :** contrat MQTT détaillé
+Tester ACL, mauvais device, redelivery, expiration, reconnexion, message retained ancien, redémarrage de session et perte d’acquittement. Aucun défi ancien ne doit permettre une ouverture après reprise.
 
-### Contexte
+## ADR-005 — Transactions, outbox et traitement idempotent
 
-Le locker doit recevoir des commandes et émettre des preuves sur un réseau pouvant se déconnecter. Le système ne peut pas supposer une livraison exactement une fois.
+**Statut :** `PROPOSED`.  
+**Liens :** documents 06/08/09/10; IOT-01, LOC-02, CHK-02, RET-02.
 
-### Options considérées
+### Contexte et décision proposée
 
-1. MQTT 3.1.1 avec QoS 1 pour commandes/événements critiques, QoS 0 pour heartbeat et idempotence applicative.
-2. QoS 2 partout.
-3. HTTP direct du hub vers l’API.
+Un commit PostgreSQL et une publication MQTT sont deux opérations distinctes. Enregistrer la décision métier, l’entrée d’outbox et l’audit dans une même transaction, puis publier par un worker capable de reprendre après crash.
 
-### Décision recommandée
+Lors de la validation QR, la consommation du défi et la création de la commande sont atomiques avec l’autorisation. Les données temporaires permettant l’affichage sont protégées selon le modèle 08; le token ne figure ni dans les réponses REST ni dans les journaux. Les clés HTTP, `messageId`, `operationId` et contraintes uniques portent la déduplication.
 
-Retenir l’option 1. Utiliser trois topics versionnés `commands`, `events`, `status`; commandes non retained; présence `ONLINE/OFFLINE` retained; heartbeat toutes les 10 s; locker `OFFLINE` après plus de 30 s sans heartbeat valide; TLS et identifiants/ACL propres au device à distance.
+### Alternatives et conséquences
 
-### Conséquences
+Publier directement pendant une requête HTTP laisse une fenêtre d’incohérence; une transaction distribuée serait trop lourde. L’outbox ajoute un worker, des reprises et de l’observabilité. Une publication peut se répéter : la protection contre une seconde impulsion reste aussi une responsabilité du firmware, y compris après redémarrage.
 
-- Positif : reconnexion et redelivery explicites avec complexité contenue.
-- Négatif : chaque consommateur doit dédupliquer; l’ordre global n’est pas garanti.
-- Validation : tests d’ACL, doublon, message tardif, reconnexion, Last Will et commande expirée.
+### Vérification
 
----
+Interrompre le backend après commit et avant publication, puis après publication et avant marquage de l’outbox. Vérifier l’absence de perte silencieuse et de double transition. Tester deux scans simultanés, une commande tardive et la reprise du hub; un état physique incertain doit conduire au refus ou à une réconciliation, jamais à un rejeu aveugle.
 
-## ADR-005 — Outbox transactionnelle pour les commandes IoT
+## ADR-006 — Polling REST pendant les opérations
 
-**Statut :** PROPOSED  
-**Documents liés :** algorithmes, modèle PostgreSQL, contrats MQTT
+**Statut :** `PROPOSED`.  
+**Liens :** document 09; interfaces CHK-01, LOC-02, LOAN-01, RET-01.
 
-### Contexte
+### Contexte et décision proposée
 
-Écrire une `LockerOperation` puis publier MQTT dans deux actions indépendantes crée une fenêtre où la base indique une commande qui n’a jamais été envoyée, ou inversement.
+Les opérations sont asynchrones. Les clients interrogent `GET /api/v1/locker-operations/{id}` environ chaque seconde pendant une opération active, avec ralentissement en cas d’erreur et arrêt lorsqu’elle est terminale. Ils rafraîchissent ensuite réservation, prêt et actif.
 
-### Options considérées
+### Alternatives et conséquences
 
-1. Outbox enregistrée dans la même transaction PostgreSQL que l’opération, puis publication asynchrone.
-2. Publication MQTT directe depuis la transaction HTTP.
-3. Transaction distribuée entre PostgreSQL et le broker.
+SSE ou WebSocket ajoutent une gestion de connexion pour peu d’utilisateurs. MQTT direct depuis les clients est exclu. Le polling garde une intégration simple mais produit des requêtes répétées et une latence dépendant de l’intervalle. Les notifications push et le suivi permanent à haute fréquence ne sont pas nécessaires au P0.
 
-### Décision recommandée
+### Vérification
 
-Retenir l’option 1. Un worker publie les entrées non envoyées, enregistre les tentatives et accepte les redeliveries. `messageId`, `operationId`, la clé HTTP et les contraintes uniques empêchent tout second effet métier.
+Tester écran en arrière-plan, perte réseau, jeton expiré, reprise de consultation et arrêt du polling. Un message visuel de succès correspond à une décision du backend, pas à un simple accusé MQTT.
 
-### Conséquences
+## ADR-007 — Jeton expirant pour les comptes préparés
 
-- Positif : aucune commande métier validée n’est silencieusement perdue lors d’un crash.
-- Négatif : table, worker, reprise et observabilité supplémentaires.
-- Validation : provoquer un arrêt entre commit et publication, redémarrer puis vérifier une publication et un seul effet physique.
+**Statut :** `PROPOSED`.  
+**Liens :** scope §11.1; document 09; IAM-01/02.
 
----
+### Contexte et décision proposée
 
-## ADR-006 — Polling REST pour suivre une opération P0
+Retenir la proposition actuelle du contrat REST : jeton bearer signé de 60 minutes, sans refresh token P0, pour des comptes de démonstration préparés. Utiliser le mécanisme d’authentification du framework, le hachage adapté des mots de passe et des vérifications d’autorisation côté serveur. Le jeton iOS est conservé dans Keychain; aucune persistance navigateur durable n’est ajoutée sans justification.
 
-**Statut :** PROPOSED  
-**Documents liés :** contrat REST §15
+### Alternatives et conséquences
 
-### Contexte
+Une session serveur par cookie demeure une alternative à arbitrer avant IAM-01. Un jeton long terme augmente l’exposition. La proposition réduit le parcours d’authentification à construire mais implique une reconnexion à expiration; elle ne fournit pas une gestion avancée des identités ou de la révocation.
 
-Le retrait et le retour sont asynchrones. Le mobile doit afficher la progression sans accéder au broker. WebSocket/SSE augmentent l’infrastructure et la gestion de reconnexion pour un faible volume P0.
+### Vérification
 
-### Options considérées
+Tester mot de passe erroné, jeton expiré ou falsifié, mauvais rôle et accès aux données d’un autre technicien. L’expiration de session ne termine aucun prêt et ne libère aucun actif. Consigner la décision de l’équipe avant de figer les clients.
 
-1. Polling de `GET /api/v1/locker-operations/{id}` environ chaque seconde jusqu’à un état terminal.
-2. Server-Sent Events.
-3. WebSocket.
-4. MQTT direct depuis iOS/Web.
+## ADR-008 — Une réservation n’est pas la durée réelle de possession
 
-### Décision recommandée
+**Statut :** `ACCEPTED` — règle demandée par l’équipe et intégrée au scope.  
+**Liens :** documents 03–06, 08/09; CFG-02, RES-01/02, LOAN-01, RET-01/02.
 
-Retenir l’option 1 pour le P0, avec backoff raisonnable en cas d’erreur, arrêt après état terminal ou expiration, puis rafraîchissement de la réservation, du prêt et de l’actif. L’option 4 reste interdite.
+### Contexte et décision
 
-### Conséquences
+La réservation P0 est immédiate. Le technicien choisit `reservedUntil` dans la plage d’exploitation courante du locker. Il n’existe qu’une réservation active par technicien et par actif. Une réservation distante est possible; elle ne commande aucune serrure.
 
-- Positif : implémentation testable et identique pour les clients.
-- Négatif : requêtes répétées et latence maximale proche de l’intervalle.
-- Remplacement : SSE peut faire l’objet d’un ADR P1 si la mesure justifie le changement.
+Lors du retrait confirmé, `Loan.dueAt` reprend `Reservation.reservedUntil`. L’échéance indique ensuite un retard éventuel, sans terminer le prêt. Un retrait autorisé avant l’échéance peut se terminer après celle-ci et créer un prêt déjà en retard.
 
----
+Une réservation n’est pas libérée pendant un retrait physique encore actif ou incertain. Un tag réapparu sans retour confirmé ne termine pas le prêt. Le retour utilise une opération dédiée; ses gardes vérifient l’identité du titulaire et la situation physique, sans exiger la readiness d’emprunt d’un actif déjà `BORROWED`.
 
-## ADR-007 — Jeton d’accès de 60 minutes pour les comptes P0
+### Alternatives et conséquences
 
-**Statut :** PROPOSED  
-**Documents liés :** contrat REST §4, exigences de sécurité
+Une durée fixe de 20 minutes ne couvre pas les usages décrits. Libérer l’actif à l’échéance malgré un prêt ouvert rompt la chaîne de possession. Le choix retenu exige des horaires, un fuseau explicite et des états en retard visibles. Les réservations futures ou récurrentes restent hors P0.
 
-### Contexte
+### Vérification
 
-Le P0 utilise des comptes préparés et n’exige ni inscription, ni SSO, ni récupération autonome. Il faut néanmoins authentifier Web/iOS sans stocker un mot de passe en clair ou exposer un jeton durable.
+Tester fermeture de la plage, réservation concurrente, expiration avant retrait, retrait en cours à l’échéance, prêt dépassé et actif endommagé au retour. Aucune de ces situations ne doit rendre réservable un actif encore détenu.
 
-### Options considérées
+## ADR-009 — Défi QR temporaire avant chaque ouverture métier
 
-1. Jeton bearer signé expirant après 60 minutes, sans refresh token P0.
-2. Session serveur par cookie.
-3. Jeton long terme stocké sur les clients.
+**Statut :** `PROPOSED` pour la mise en œuvre et ses paramètres; le contrôle local figure déjà dans le scope.  
+**Liens :** documents 02–10 et 12; LOC-01/02, CHK-01, RET-01.
 
-### Décision recommandée
+### Contexte et décision proposée
 
-Retenir l’option 1. Stocker le jeton iOS dans Keychain et éviter une persistance navigateur non nécessaire. Hacher les mots de passe avec une fonction adaptée. L’expiration du jeton ne modifie jamais une réservation ou un prêt existant.
+Un compte valide peut préparer un retrait depuis un réseau distant. Exiger ensuite un QR dynamique affiché sur le hub, lié à l’utilisateur, à l’opération, au locker, à la cellule et à la session du device.
 
-### Conséquences
+La préparation crée `AWAITING_LOCAL_PROOF`, sans commande de serrure. Le hub confirme l’affichage. Le mobile scanne puis soumet le défi par une route authentifiée; le backend revérifie les gardes, consomme le défi une seule fois et autorise atomiquement. Les **120 secondes physiques commencent alors**, pas au début de la préparation.
 
-- Positif : flux simple et durée d’exposition limitée.
-- Négatif : reconnexion possible pendant une longue démonstration; révocation fine non couverte.
-- Validation : tests d’expiration, mauvais rôle, mauvaise identité et absence de secret dans logs/configuration versionnée.
+Les paramètres proposés sont un secret aléatoire de 256 bits, une validité maximale de 60 secondes bornée par les autres échéances, cinq essais erronés et une limitation des préparations selon les contrats. Ils doivent être arbitrés comme paramètres communs, sans variantes locales dans les clients ou le firmware.
 
----
+### Alternatives et conséquences
 
-## ADR-008 — Réservation bornée par les horaires, prêt terminé uniquement par preuve
+Un QR statique est recopiable durablement. Une vérification anti-relais spécialisée ajoute une complexité hors démonstration. Le QR dynamique limite l’usage d’un code ancien mais une photo ou vidéo relayée reste possible : il ne prouve pas absolument la présence de l’humain et n’est pas présenté comme une authentification multifacteur.
 
-**Statut :** PROPOSED  
-**Documents liés :** dictionnaire, machines à états, contrat REST §13–15
+L’écran, son pilote et la caméra iOS deviennent des dépendances P0. Les coûts touchent backend, DB, MQTT, firmware, simulateur, iOS et tests. Le périmètre de l’écran reste limité au QR, aux consignes et au résultat. Cette limitation ne constitue pas, à elle seule, une économie d’heures mesurée.
 
-### Contexte
+### Vérification
 
-Une réservation fixe de 20 minutes ne représente pas l’usage réel d’un outil. À l’inverse, une réservation illimitée peut dépasser les heures d’exploitation. L’échéance de réservation ne doit jamais faire croire qu’un actif emprunté est revenu.
+Tester préparation distante sans scan, mauvais compte, QR faux/ancien, double scan, droits modifiés après affichage, écran défaillant, redémarrage et acquittement perdu. Aucune commande ne part avant consommation valide. Le QR ne remplace pas la fermeture de porte ni l’observation de l’actif pour confirmer le prêt.
 
-### Options considérées
+La liaison du contrôle à la transaction et son usage unique s’appuient sur les principes de l’[OWASP Transaction Authorization Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Transaction_Authorization_Cheat_Sheet.html). Les risques de transfert d’un code d’appareil sont illustrés par le [RFC 8628, §5.4](https://www.rfc-editor.org/rfc/rfc8628.html#section-5.4); Aegis n’implémente pas ce protocole OAuth.
 
-1. L’utilisateur choisit une période entièrement comprise dans les heures configurées; une seule réservation active par utilisateur et par actif; le prêt reste ouvert jusqu’au retour physique confirmé.
-2. Durée fixe de 20 minutes pour toute réservation.
-3. Rendre automatiquement l’actif disponible à `expiresAt`, même après le retrait.
+## 3. Conservation des décisions
 
-### Décision recommandée
+Ce fichier constitue le registre de référence actuel. Il peut être conservé tel quel dans le cahier de conception; il n’est pas nécessaire de créer neuf fichiers vides supplémentaires. Si les ADRs sont ensuite séparés dans `docs/adr/`, remplacer les fiches ici par des liens pour éviter deux textes normatifs concurrents.
 
-Retenir l’option 1. `expiresAt` limite l’intention avant retrait. Après confirmation du checkout, le prêt et la disponibilité `BORROWED` deviennent la source d’autorité; dépasser l’heure attendue signale un retard, mais ne rend jamais l’actif réservable. Le retour exige une `LockerOperation RETURN` et une preuve physique cohérente.
-
-### Conséquences
-
-- Positif : disponibilité fidèle à la réalité et horaires administrables.
-- Négatif : nécessite la gestion du fuseau, des fermetures et des prêts en retard.
-- Validation : tests de frontière d’horaire, concurrence, expiration avant retrait et dépassement pendant un prêt.
-
----
-
-## 4. Procédure de validation rapide
-
-Pour chaque ADR, Philippe et Jimmy doivent :
-
-1. lire le contexte et vérifier qu’il décrit le vrai problème;
-2. ajouter toute option sérieuse manquante;
-3. accepter, rejeter ou demander une mesure;
-4. dater la décision;
-5. déplacer le contenu dans `docs/adr/ADR-NNN-titre.md`;
-6. ne jamais réécrire un ADR accepté pour masquer un changement : créer un ADR qui le remplace.
-
-Les ADR-001, 004, 005, 006, 007 et 008 peuvent être arbitrés en une séance de 45 minutes. Les ADR-002 et 003 restent `PROPOSED` jusqu’aux résultats de POC.
+Une validation ajoute le décideur, la date réelle, la justification et la preuve disponible. Un changement incompatible crée une nouvelle décision qui cite celle qu’il remplace. L’état des tâches et leur affectation restent dans le backlog; l’ADR explique le choix architectural.
