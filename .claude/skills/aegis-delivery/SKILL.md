@@ -111,6 +111,31 @@ Record:
 
 Never claim that something works solely because the code compiles.
 
+When changing `AGENTS.md`, `CLAUDE.md`, `.claude/`, `.codex/`, or project
+skills, run:
+
+```bash
+python3 .claude/skills/aegis-delivery/scripts/validate_agent_setup.py
+```
+
+Treat reported configuration errors as blocking. Documentation warnings require
+human review but do not authorize an automatic rewrite of the affected source.
+
+## Commits
+
+Commit only after explicit human authorization. Before committing:
+
+1. inspect the complete diff and staged files;
+2. separate unrelated concerns into focused commits;
+3. run the relevant verification;
+4. use the Conventional Commit rules in `AGENTS.md`;
+5. write an English imperative subject that describes the actual change;
+6. include a body when the reason, tradeoff, migration, or verification is not
+   obvious from the subject.
+
+Use `fix` when restructuring is part of correcting a defect. Use `refactor`
+only when observable behavior is intentionally unchanged.
+
 ## Handoff format
 
 ### Outcome
@@ -136,3 +161,6 @@ Known limitations, unresolved assumptions, or environmental gaps.
 ### Next owner
 
 The specialist or human decision needed next.
+
+For a concrete handoff and review example, read
+`references/handoff-example.md` only when preparing or evaluating a handoff.

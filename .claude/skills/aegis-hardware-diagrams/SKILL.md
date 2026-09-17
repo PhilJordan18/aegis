@@ -63,7 +63,7 @@ Match the project's current terms exactly — do not reintroduce `master`/`node`
 - Color by category, not sequence: hub = one color, cellule(s) = a second, PSU/power = neutral gray. Keep it to 2 colors + gray, same rule as the visualize tool's palette discipline.
 - Label every cable with what it actually carries: `power + data`, `power only`, `MQTT/WiFi`. Never leave a connector line unlabeled in a wiring diagram — that's the ambiguity that caused the star-topology mix-up (a single point where 4 lines meet reads as one shared cable, not 4 dedicated ones; give each line its own distinct port/anchor point).
 - Star topology = one dedicated port per cellule on the hub, one cable per cellule, no cable shared between cellules. Daisy-chain/loop = one hub port serving multiple cellules on a shared line. Never draw one as if it were the other.
-- Keep P0 diagrams (single hub + up to 2 cellules) and product-vision diagrams (multi-cellule scaling) visually distinct — don't imply P0 commits to more hardware than `docs/cahier-conception/scope.md` §11.6/§17.5 actually requires.
+- Keep P0 diagrams (one hub and exactly two cells for the prototype) and product-vision diagrams (multi-cell scaling) visually distinct. Use `docs/cahier-conception/02-scope.md` sections 11.6 and 17.5 as the authority.
 
 ## Default conceptual style (dark palette, single file, mandatory)
 
@@ -146,7 +146,7 @@ What this encodes, apply it every time:
 | hardware (ESP32/locker) | `#3A2A0E` | `#D9A441` | `#FCEACD` |
 
 - **Match existing official names exactly** — `Aegis Mobile`, `Aegis Manager`, `Aegis Control`, `Aegis Locker Node`, `Technicien`, `Administrateur` are already defined in `README.md`; never rename them or invent alternates in a new diagram.
-- **Never bake a POC-gated architecture into this diagram as if committed.** `hub`/`cellule` is a documented product-vision idea still gated behind `docs/cahier-conception/scope.md` §17.5 (not decided; has a monolithic fallback) — keep `Aegis Locker Node` as the node label until that gate resolves one way or the other. Mixing a gated hypothesis into the "official" system diagram misrepresents P0 as committing to more hardware than it does.
+- **Separate accepted topology from POC-gated implementation.** The hub, two cells, and star topology are accepted for P0. The electrical design, exact local protocol, and RFID performance still require POC evidence and retain documented fallbacks. Keep `Aegis Locker Node` as the canonical system-level label; show lower-level details only in physical diagrams and label unvalidated choices as proposed.
 
 ## Where diagrams live and GitHub rendering
 

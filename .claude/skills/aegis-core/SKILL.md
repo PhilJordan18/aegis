@@ -1,106 +1,94 @@
 ---
-name: aegis-contracts
-description: Design and review Aegis REST, MQTT, domain state, and cross-component contracts with compatibility, traceability, expiry, and idempotency.
+name: aegis-core
+description: Apply the authoritative Aegis product scope, domain vocabulary, trust model, priorities, and invariants to every architecture, implementation, review, or design task.
 ---
 
-# Aegis Contract-First Development
+# Aegis Core
 
-Use this skill whenever a change crosses component boundaries.
+Use the shared rules in `AGENTS.md` and apply this domain guidance to every
+Aegis task.
 
-Relevant boundaries include:
+## Sources of truth
 
-- React to Spring;
-- iOS to Spring;
-- Spring to MQTT;
-- MQTT to ESP32;
-- Spring to PostgreSQL;
-- physical observations to business operations.
+Before making a significant decision, inspect only the relevant project
+documents. Apply this precedence order:
 
-## Before implementation
+1. `docs/cahier-conception/02-scope.md`
+2. Accepted ADRs in `docs/adr/`
+3. Approved domain and communication documents 03-10
+4. `README.md`
+5. The current issue or task description
+6. Informal assumptions
 
-Identify:
+If a requested change conflicts with scope, state the conflict and apply the
+scope-change process from `aegis-delivery`.
 
-1. producer;
-2. consumer;
-3. request, command, event, or stored fact;
-4. identifiers;
-5. expected state before the interaction;
-6. possible state after the interaction;
-7. errors, expiry, retries, and duplicates;
-8. compatibility impact.
+## Product objective
 
-Inspect:
+Aegis is a Critical Asset Readiness and Chain-of-Custody Platform. The P0
+promise is to:
 
-- `docs/cahier-conception/communication.md`;
-- domain model documentation;
-- state-machine documentation;
-- relevant accepted ADRs;
-- existing API DTOs and MQTT payloads.
+- show whether an asset is ready;
+- prevent unauthorized or non-compliant checkout;
+- open only the expected compartment;
+- confirm checkout and return from coherent physical observations;
+- maintain a complete, inspectable chain of custody.
 
-If documentation is missing, do not invent a hidden contract. Propose or create the missing contract as part of the task.
+Do not reduce Aegis to inventory management.
 
-## REST rules
+## System authority
 
-- The backend remains authoritative.
-- Use explicit request and response DTOs.
-- Do not expose persistence entities directly.
-- Validate all external input server-side.
-- Return stable machine-readable error codes.
-- Distinguish authentication, authorization, validation, conflict, expiry, and unavailable physical state.
-- Do not make a client reproduce authoritative readiness logic.
-- Make retriable and non-retriable failures distinguishable.
-- Treat contract-breaking changes as architecture decisions.
+The Spring backend is the sole business authority:
 
-## MQTT rules
+- React and iOS never connect directly to PostgreSQL;
+- clients never communicate directly with a locker;
+- the ESP32 executes commands but never grants authorization;
+- a physical action is not complete until the backend confirms it;
+- PostgreSQL remains private;
+- client validation never replaces server validation.
 
-Use distinct topics for commands, events, and device status:
+## Mandatory invariants
 
-- `aegis/v1/lockers/{lockerId}/commands`
-- `aegis/v1/lockers/{lockerId}/events`
-- `aegis/v1/lockers/{lockerId}/status`
+Preserve these invariants across all implementations:
 
-Include where applicable:
+1. An asset can have at most one active reservation.
+2. An asset can have at most one active loan.
+3. Checkout requires an authorized, non-expired, non-consumed operation.
+4. Checkout and return require coherent physical observations.
+5. A terminal operation cannot be reused.
+6. Duplicate commands or events cannot repeat a transition.
+7. The compartment and physical identity must match the expected values.
+8. Readiness is derived from domain facts.
+9. Security- and custody-relevant transitions are auditable.
 
-- `messageId`;
-- `operationId`;
-- `lockerId`;
-- message `type`;
-- `timestamp`;
-- `schemaVersion`;
-- expiry or validity deadline;
-- compartment identifier;
-- expected asset or physical identifier.
+## Canonical states
 
-Every command requires a deterministic acknowledgement outcome.
+- Readiness: `READY`, `BLOCKED`, `UNKNOWN`.
+- Availability: `AVAILABLE`, `RESERVED`, `BORROWED`, `UNAVAILABLE`.
+- Operational status: `SERVICEABLE`, `MAINTENANCE`, `DAMAGED`.
+- Calibration: `NOT_REQUIRED`, `VALID`, `EXPIRED`, `UNKNOWN`.
+- Reservation: `ACTIVE`, `FULFILLED`, `CANCELLED`, `EXPIRED`.
+- Loan: `ACTIVE`, `RETURN_PENDING`, `COMPLETED`.
+- Locker operation: `REQUESTED`, `AWAITING_LOCAL_PROOF`, `AUTHORIZED`,
+  `COMMAND_SENT`, `COMMAND_ACKNOWLEDGED`, `DOOR_OPENED`,
+  `OBSERVATION_RECEIVED`, `CONFIRMED`, `FAILED`, `EXPIRED`, `ANOMALY`.
 
-The backend and device must both tolerate duplicate delivery.
+Do not introduce synonymous states without updating the authoritative domain
+documentation and every affected contract.
 
-Commands are intents. Events are immutable observations or outcomes. Do not represent the same payload as both.
+## Scope discipline
 
-## State-machine changes
+P0 includes readiness, reservation, physical checkout, automatic loan,
+physical return, audit, anomalies, required security, a simulator, and a
+demonstrable deployment.
 
-For every state change, document:
+P1 starts only after P0 is integrated and stable. P2 includes AI Vision,
+multi-site behavior, advanced analytics, prediction, and research extensions.
 
-- allowed origin states;
-- trigger;
-- guard conditions;
-- resulting state;
-- emitted audit information;
-- idempotent duplicate behavior;
-- timeout behavior;
-- anomaly behavior.
+Within approved scope, inspect existing work, choose sound implementation
+details, add focused tests, document assumptions, and prefer the smallest
+complete vertical slice.
 
-Illegal transitions must fail explicitly.
-
-## Compatibility
-
-When changing a contract:
-
-1. list all producers and consumers;
-2. preserve compatibility when reasonably possible;
-3. increment `schemaVersion` when message interpretation changes;
-4. update tests for both valid and invalid payloads;
-5. update documentation in the same change;
-6. state the rollout or migration order.
-
-Do not merge a producer change that leaves a known consumer incompatible.
+Request a human decision before changing a public contract, core invariant,
+P0 scope, authentication strategy, destructive migration, significant
+dependency, or hardware safety/electrical assumption.

@@ -43,12 +43,12 @@ Only place a diagram directly into a file yourself when explicitly asked to, and
 
 ## Method
 
-1. Read `docs/cahier-conception/scope.md`, `README.md`, and any relevant ADR or contract for current authoritative actor/component names and states — never rename what's already official.
+1. Read `docs/cahier-conception/02-scope.md`, `README.md`, and any relevant ADR or contract for current authoritative actor/component names and states — never rename what's already official.
 2. Invoke `aegis-hardware-diagrams` to pick the format: Mermaid `flowchart` for system/actor architecture, `sequenceDiagram`/`stateDiagram-v2`/`erDiagram` for behavior/domain diagrams, draw.io XML for wiring/electrical/floorplan.
 3. Apply the matching palette from the skill exactly — **dark palette, one file, no light variant, for both Mermaid and wiring/physical XML/SVG diagrams by default.** Only ship a light/dark pair when the doc explicitly needs to render correctly for a GitHub-light-mode audience you don't control (rare — see the skill's opt-in exception); default to one dark file. Either way: do not invent new colors or a 5th category.
 4. Write (or update) the accompanying markdown doc to match the canonical shape defined in `aegis-hardware-diagrams`' "Document format" section — same skeleton as `docs/diagrams/architecture-globale.md`: a short description (1–3 sentences), exactly one diagram artifact, an optional short legend, an optional ≤5-bullet recap. A small set of closely related diagrams may share one doc (one `##` section each, still short) per the skill's shared-doc exception — never a multi-image single section, and never a long prose "decisions" essay anywhere.
 5. Check the diagram against the mandatory trust invariants (`aegis-contracts`): backend is sole authority, no client touches PostgreSQL or the locker directly, ESP32 never authorizes.
-6. Check whether any element being drawn is P0-committed vs. still gated behind an open POC (e.g. hub/cellule behind scope §17.5). Never draw a gated hypothesis as if it were decided.
+6. Distinguish accepted topology from open implementation choices. The hub with two cells and star topology is accepted; RFID performance, electrical realization, and the exact local protocol remain POC-gated. Never draw an open implementation choice as settled.
 7. Render via the draw.io MCP connector (`create_diagram`, `search_shapes`).
 8. If the diagram must render outside chat on GitHub: Mermaid → embed directly in Markdown (renders natively, no export needed); XML → export and commit one dark `.svg`/`.png` alongside the `.drawio` source, per the skill's GitHub-rendering rule.
 9. Hand off to the relevant owner for placement, or place it directly only when explicitly asked.

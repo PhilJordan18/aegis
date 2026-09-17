@@ -125,13 +125,15 @@ La cible finale est **10 retraits et 10 retours consécutifs**, sans interventio
 | `docs/cahier-conception/` | Documents 02–14 ci-dessous |
 | `docs/architecture/`, `docs/diagrams/`, `docs/research/` | Dessins, sources des diagrammes et résultats de POC |
 | `docs/journal/`, `docs/meetings/` | Travail réellement effectué et décisions de réunion |
-| `.claude/agents/`, `.claude/skills/`, `CLAUDE.md` | Configuration partagée de l’assistance au développement |
+| `AGENTS.md`, `.claude/`, `.codex/`, `.agents/skills/` | Configuration partagée de l’assistance au développement |
 
-Philippe porte principalement le logiciel; Jimmy porte principalement le matériel. La capacité de référence est de **10 h/semaine pour Philippe** et **6 h/semaine pour Jimmy**, dont 6 h communes à l’école. La répartition précise du firmware reste à confirmer; le [plan d’exécution](docs/cahier-conception/14-plan-execution-et-iterations.md) expose l’hypothèse et la charge de chaque personne.
+Philippe porte principalement le logiciel; Jimmy porte principalement le matériel. La capacité de référence est de **10 h/semaine pour Philippe** et **6 h/semaine pour Jimmy**, dont 6 h communes à l’école. La répartition précise du firmware reste à confirmer; le [plan d’exécution](docs/cahier-conception/14-plan-iterations-semaines-4-a-15.md) expose l’hypothèse et la charge de chaque personne.
 
 Le développement iOS nécessitant les Macs de l’école, ses compilations et essais sont prévus pendant ces séances. Les quatre heures hors cours de Philippe servent prioritairement au backend, au Web, au simulateur, aux tests et à la documentation.
 
-Linear est l’outil envisagé pour le backlog opérationnel. Le document 11 conserve la carte des parcours et les références stables des stories; Linear suivra responsables, état et cycle. GitHub conserve code, revues et historique des documents. Les agents Claude assistent ces tâches; les deux membres gardent la responsabilité des décisions et des validations.
+Linear est l’outil envisagé pour le backlog opérationnel. Le document 11 conserve la carte des parcours et les références stables des stories; Linear suivra responsables, état et cycle. GitHub conserve code, revues et historique des documents. Claude Code et Codex assistent ces tâches; les deux membres gardent la responsabilité des décisions et des validations.
+
+Le [guide de travail avec les agents et les skills](docs/ai/agentic-workflow.md) explique la séparation entre instructions, skills, sous-agents et outils, ainsi que la stratégie de contexte commune à Claude Code et Codex.
 
 Le travail avance par petites tranches intégrées, avec une tâche d’exécution active par personne, une revue croisée et des preuves de fonctionnement. Les commandes de lancement seront documentées à mesure que les composants seront réellement initialisés et testés; ce README ne suppose pas un environnement déjà opérationnel.
 
@@ -152,5 +154,5 @@ Le scope fixe les engagements. Les autres documents le détaillent; une modifica
 | [10 — MQTT](docs/cahier-conception/10-contrats-mqtt.md) | Topics, messages, sécurité et comportement du hub |
 | [11 — Story Map et backlog](docs/cahier-conception/11-user-story-map-p0.md) | Parcours, stories et premiers tickets à saisir |
 | [12 — Architecture physique](docs/cahier-conception/12-architecture-physique.md) | Hub, deux cellules, interfaces et vérification matérielle |
-| [13 — Décisions d’architecture](docs/cahier-conception/13-decisions-architecture.md) | ADRs, décisions actées et arbitrages restants |
-| [14 — Plan d’exécution](docs/cahier-conception/14-plan-execution-et-iterations.md) | Capacité par personne, cycles, jalons et organisation Linear |
+| [13 — Décisions d’architecture](docs/cahier-conception/13-registre-adrs-proposes.md) | ADRs, décisions actées et arbitrages restants |
+| [14 — Plan d’exécution](docs/cahier-conception/14-plan-iterations-semaines-4-a-15.md) | Capacité par personne, cycles, jalons et organisation Linear |

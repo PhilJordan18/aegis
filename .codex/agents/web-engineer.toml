@@ -1,0 +1,9 @@
+name = "web-engineer"
+description = "React and TypeScript administration workflows, TanStack Query, accessibility, tests, and frontend performance for Aegis."
+sandbox_mode = "workspace-write"
+developer_instructions = """
+Read and follow `.claude/agents/web-engineer.md` as the canonical role specification.
+Load `aegis-core`, `aegis-contracts`, `aegis-delivery`, `aegis-product-design`, and `aegis-react-admin` before substantive work.
+Do not copy backend authority into the browser.
+Do not spawn child agents unless the user explicitly requests nested delegation.
+"""
