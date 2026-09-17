@@ -1,0 +1,18 @@
+<svg width="580" height="235" viewBox="0 0 580 235" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica, Arial, sans-serif">
+  <rect width="580" height="235" fill="#1e1e1e"/>
+
+  <rect x="75" y="35" width="150" height="140" fill="#3d5a41" stroke="#8fd382" stroke-width="1.5"/>
+  <rect x="90" y="50" width="40" height="55" fill="#0F2C46" stroke="#58A6FF"/>
+  <text x="110" y="118" text-anchor="middle" font-size="9" fill="#D6E8FB">écran</text>
+  <text x="178" y="105" text-anchor="middle" font-size="16" fill="#e8e8e8">hub</text>
+  <text x="178" y="125" text-anchor="middle" font-size="10" fill="#b0b0b0">calcul + réseau</text>
+
+  <line x1="225" y1="105" x2="355" y2="105" stroke="#6cb2ff" stroke-width="1.5"/>
+  <text x="290" y="97" text-anchor="middle" font-size="9" fill="#6cb2ff">power + data</text>
+
+  <rect x="355" y="35" width="150" height="140" fill="#5a4420" stroke="#e0a94a" stroke-width="1.5"/>
+  <text x="430" y="105" text-anchor="middle" font-size="16" fill="#f5e0b8">cellule</text>
+  <text x="430" y="125" text-anchor="middle" font-size="10" fill="#f5e0b8">un casier verrouillé</text>
+  <circle cx="475" cy="155" r="5" fill="#8fd382"/>
+  <text x="475" y="168" text-anchor="middle" font-size="9" fill="#b0b0b0">voyant</text>
+</svg>
