@@ -3,9 +3,8 @@
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Session :** Automne 2026  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Date :** 10 septembre 2026  
-**Version :** 1.0  
-**Statut :** Proposition à valider en équipe
+**Date de révision :** 16 septembre 2026
+**Version :** 1.2 — contrôle local QR et étoile
 
 ---
 
@@ -103,7 +102,10 @@ Les opérations concurrentes verrouillent toujours les objets dans un ordre stab
 3. réservation ou prêt;
 4. locker puis compartiment;
 5. LockerOperation;
-6. anomalie, si nécessaire.
+6. LocalAccessChallenge, si concerné;
+7. anomalie, si nécessaire.
+
+La ligne d’idempotence REST propre à la requête est acquise avant les agrégats. Les handlers MQTT, les jobs et les actions humaines suivent le même ordre d’agrégats.
 
 Les contraintes PostgreSQL demeurent la dernière barrière contre les doublons, même lorsque les vérifications applicatives ont déjà été exécutées.
 
@@ -324,26 +326,9 @@ sequenceDiagram
 
 ### 5.5 Annulation
 
-Une réservation peut être annulée uniquement par son titulaire tant qu’aucune opération `CHECKOUT` non terminale ou physiquement incertaine ne lui est liée.
+Une réservation `ACTIVE` peut être annulée par son titulaire si aucune commande de serrure n’a été autorisée et si aucune incertitude physique n’existe. Si une opération attend son QR, la même transaction termine cette opération en `FAILED` avec `RESERVATION_CANCELLED`, invalide le défi et programme l’effacement de l’écran. Une opération déjà autorisée ou une anomalie physique bloque cette annulation.
 
-```text
-function cancelReservation(userId, reservationId):
-    begin transaction
-        lock user, asset, reservation
-        require reservation.userId == userId
-
-        if reservation.status == CANCELLED:
-            return ALREADY_APPLIED
-
-        require reservation.status == ACTIVE
-        require no non-terminal or anomalous CHECKOUT
-
-        reservation.status = CANCELLED
-        reservation.cancelledAt = now
-        append AuditEvent(RESERVATION_CANCELLED)
-    commit
-```
-
+La répétition avec la même clé d’idempotence rejoue le résultat initial; elle ne recrée pas de défi.
 ---
 
 ## 6. Autorisation d’une opération physique
@@ -387,45 +372,91 @@ Une opération `RETURN` exige aussi :
 
 Si le prêt est déjà `RETURN_PENDING`, une nouvelle tentative est permise uniquement lorsque l’opération précédente est terminale et que la procédure de récupération autorise cette nouvelle tentative.
 
-### 6.4 Création et autorisation
+### 6.4 Préparation sans ouverture
 
 ```text
-function authorizeOperation(type, userId, sourceId, requestKey):
-    now = clock.now()
-
-    if requestKey already completed:
-        return existing operation
-
+function prepareOperation(type, userId, sourceId, requestKey):
+    authenticate and authorize caller
     begin transaction
-        load and lock all aggregates in the canonical order
-        create LockerOperation(status = REQUESTED)
-
-        verify common locker guards
-
-        if type == CHECKOUT:
-            verify checkout guards
-
-        if type == RETURN:
-            verify return guards
-            change Loan from ACTIVE to RETURN_PENDING
-
-        operation.status = AUTHORIZED
-        operation.authorizedAt = now
-        operation.expiresAt = now + 120 seconds
-
-        create durable command intent with stable messageId
-        append AuditEvent(OPERATION_AUTHORIZED)
-        save requestKey result
+        acquire REST idempotency row bound to caller, method, URI and request hash
+        if completed identical request: return stored response
+        load and lock aggregates in canonical order
+        verify common locker guards and type-specific guards
+        enforce preparation rate limit
+        create operation REQUESTED
+        create random 256-bit token
+        create challenge PENDING bound to operation and current hub session
+        challenge.expiresAt = min(now + 60 seconds, currentClosingTime,
+                                  reservedUntil for CHECKOUT)
+        require challenge.expiresAt > now
+        persist SHA-256(token) in challenge
+        persist encrypted display payload in hub_display_outbox
+        operation.status = AWAITING_LOCAL_PROOF
+        keep authorizedAt, localProofValidatedAt and operation.expiresAt null
+        keep Loan unchanged
+        append audit without token
+        save 202 response containing operation and challenge metadata only
     commit
-
-    return IN_PROGRESS with operationId and expiresAt
+    return stored response
 ```
 
-Une garde refusée termine l’opération en `FAILED` et produit un audit lisible. Aucune intention de commande n’est alors créée.
+La préparation n’insère **aucune ligne dans `command_outbox`**. Une réservation peut être effectuée à distance; elle ne lance pas automatiquement cette préparation.
+
+Le dispatcher d’écran publie le QR au seul hub concerné, via le topic privé `display`, avec TLS, QoS 1 et `retain=false`. Le message cible le démarrage courant du hub et porte une révision croissante d’écran. Le hub vérifie sa cible et son échéance avant affichage, puis émet `ACCESS_CHALLENGE_DISPLAYED` sans le secret.
+
+### 6.5 Validation locale et autorisation atomique
+
+```text
+function authorizeLocal(operationId, challengeId, token, caller, requestKey):
+    authenticate and authorize caller
+    begin transaction
+        acquire REST idempotency row bound to caller, method, URI and request hash
+        if completed identical request: return stored response
+        lock user, asset, reservation or loan, locker, compartment, operation, challenge
+        now = trustedBackendClock.now() after all lock waits
+        require caller owns operation
+        require operation.status == AWAITING_LOCAL_PROOF
+        require challenge.operationId == operationId
+        require challenge.status == PENDING
+        require now < challenge.expiresAt
+        require challenge.displayedAt != null
+        require same enabled hub and deviceSessionId, with fresh health
+        compare SHA-256(token) to tokenHash in constant time
+        re-evaluate current identity, access, schedule and all operation guards
+        exclude this operation when checking absence of OTHER operations
+
+        consume challenge, set consumedAt and closedAt = now
+        operation.status = AUTHORIZED
+        operation.localProofValidatedAt = operation.authorizedAt = now
+        operation.expiresAt = now + 120 seconds
+        for RETURN: change ACTIVE loan to RETURN_PENDING
+                    or retain authorized recovery RETURN_PENDING
+        create exactly one durable UNLOCK_COMPARTMENT in command_outbox
+        purge QR ciphertext from display outbox
+        append audit without token
+        store idempotent 202 result
+    commit
+    return 202 operation view without token
+```
+
+La validation ne fait aucun appel réseau dans la transaction SQL. Un rollback ne consomme pas le défi et ne laisse pas de commande isolée. L’accusé d’affichage peut arriver après le scan : `LOCAL_PROOF_NOT_DISPLAYED` est alors transitoire; le mobile réessaie avec une nouvelle clé après confirmation de l’affichage.
+
+Un secret erroné incrémente `failedAttempts` dans une transaction **effectivement validée**, même si l’API renvoie un refus. Ne pas annuler ce compteur par une exception entraînant un rollback. Au cinquième échec, invalider le défi et terminer l’opération en `FAILED`. Une requête provenant d’un autre compte ne peut pas consommer le défi ni épuiser ces essais.
+
+Les refus devenus définitifs (expiration, nouvelle session du hub, réservation annulée, garde devenue invalide) ferment le défi, terminent l’opération sans ouverture et programment un nouvel état d’écran. Un simple secret erroné laisse le défi utilisable tant que les limites ne sont pas atteintes. Les limites proposées sont 5 essais par défi et 3 préparations par utilisateur et locker sur 15 minutes; un rejeu idempotent ne compte pas comme nouvelle préparation. Ces paramètres sont à valider à l’usage.
+
+### 6.6 Portée de la preuve et affichage
+
+Le QR prouve l’accès au code frais de l’écran. Il peut être relayé par photo ou vidéo; il ne garantit pas à lui seul la présence physique de la personne authentifiée. Aucun critère de pays ou d’adresse IP ne remplace cette règle.
+
+Après autorisation, le hub masque le QR lorsqu’il reçoit la commande correspondante. Après une transition terminale validée en base, le backend crée une instruction `DISPLAY_OPERATION_STATUS`. Le téléphone observe la même vérité par le polling REST existant. Aucune notification push supplémentaire n’est nécessaire au P0.
 
 ---
 
 ## 7. Émission fiable de la commande MQTT
+
+Ce flux s’applique uniquement après consommation du défi. L’opération doit être `AUTHORIZED`, `localProofValidatedAt` renseigné, et son défi `CONSUMED`. Le dispatcher ne transforme jamais une simple demande ou une instruction d’écran en commande de serrure.
+
 
 ### 7.1 Risque traité
 
@@ -509,7 +540,7 @@ Le hub accepte une commande seulement si :
 - `messageId`, `operationId` et `compartmentId` sont présents;
 - l’instant d’expiration n’est pas dépassé;
 - la commande n’a jamais été consommée;
-- la cellule existe et répond sur le bus RS-485;
+- la cellule existe et répond sur son port RS-485 dédié;
 - aucune autre ouverture locale n’est en cours;
 - les conditions électriques et matérielles permettent une exécution sûre.
 
@@ -530,16 +561,21 @@ function handleUnlockCommand(command):
         publish COMMAND_REJECTED with reason
         return
 
-    send addressed unlock request to target cell over RS-485
+    persist command EXECUTING durably before any physical action
+    send addressed unlock request to target cell over its dedicated RS-485 port
 
     if cell accepts:
-        persist command as consumed locally
+        persist command ACKNOWLEDGED locally
         publish COMMAND_ACKNOWLEDGED
         enforce maximum unlock duration
         relay door, lock and RFID observations
+    else if cell explicitly guarantees no execution:
+        persist REJECTED and publish COMMAND_REJECTED
     else:
-        publish COMMAND_REJECTED with reason
+        retain uncertain EXECUTING, publish DEVICE_ERROR, never retry the impulse blindly
 ```
+
+Une entrée EXECUTING retrouvée après redémarrage interdit un nouvel actionnement; elle exige une réconciliation physique selon le contrat MQTT.
 
 ### 8.3 Ciblage d’une cellule
 
@@ -720,6 +756,9 @@ Une preuve `INCOMPLETE` avant `expiresAt` maintient l’opération en cours. Une
 
 ### 11.1 Effets atomiques
 
+La confirmation exige une opération autorisée par un défi consommé. Ajouter à la même transaction une instruction d’écran sans secret portant le résultat confirmé; l’envoi MQTT intervient après commit.
+
+
 Une preuve `COHERENT_CHECKOUT` provoque dans une seule transaction :
 
 1. le verrouillage de l’opération, de la réservation et de l’actif;
@@ -782,8 +821,15 @@ sequenceDiagram
     participant B as Broker MQTT
     participant H as Locker
 
-    M->>A: Demander le retrait
-    A->>D: Autoriser CHECKOUT pour 120 s
+    M->>A: Préparer le retrait
+    A->>D: Opération en attente et défi
+    A->>B: Instruction d’écran
+    B->>H: Afficher le QR
+    H-->>B: Affichage confirmé
+    B-->>A: Accusé d’affichage
+    H-->>M: QR scanné
+    M->>A: Valider le défi
+    A->>D: Consommer et autoriser CHECKOUT pour 120 s
     A->>B: Commander la cellule attendue
     B->>H: UNLOCK_COMPARTMENT
     H-->>B: Accusé, porte et RFID
@@ -813,6 +859,9 @@ sequenceDiagram
 ## 12. Confirmation d’un retour
 
 ### 12.1 Effets atomiques
+
+Le QR seul ne termine aucun prêt. Ajouter à la transaction de confirmation une instruction d’écran sans secret; le hub affiche le succès seulement après cette décision backend.
+
 
 Une preuve `COHERENT_RETURN` provoque dans une seule transaction :
 
@@ -867,8 +916,15 @@ sequenceDiagram
     participant B as Broker MQTT
     participant H as Locker
 
-    M->>A: Demander le retour
-    A->>D: Loan RETURN_PENDING et opération RETURN
+    M->>A: Préparer le retour
+    A->>D: Opération en attente et défi, prêt inchangé
+    A->>B: Instruction d’écran
+    B->>H: Afficher le QR
+    H-->>B: Affichage confirmé
+    B-->>A: Accusé d’affichage
+    H-->>M: QR scanné
+    M->>A: Valider le défi
+    A->>D: Consommer, autoriser et passer Loan RETURN_PENDING
     A->>B: Commander la cellule attendue
     B->>H: UNLOCK_COMPARTMENT
     H-->>B: Accusé, porte et RFID
@@ -962,53 +1018,48 @@ Les règles temporelles sont exécutées par une tâche planifiée et réévalu�
 ```text
 function expireReservation(reservationId, now):
     begin transaction
-        lock asset and reservation
-
-        if reservation.status != ACTIVE:
-            return without effect
-
-        if now < reservation.reservedUntil:
-            return without effect
-
+        lock affected aggregates in canonical order
+        if reservation.status != ACTIVE or now < reservedUntil: return
         operation = latest CHECKOUT for reservation
-
-        if operation is non-terminal or physically uncertain:
-            defer expiration
+        if operation.status == AWAITING_LOCAL_PROOF:
+            expire its challenge, set operation EXPIRED, enqueue screen clear
+        else if operation is authorized non-terminal or physically uncertain:
+            defer expiration until physical operation is classified
             return
-
-        reservation.status = EXPIRED
-        reservation.expiredAt = now
-        append AuditEvent(RESERVATION_EXPIRED)
+        set reservation EXPIRED, expiredAt = now
+        append audit
     commit
 ```
 
-L’expiration libère uniquement une réservation non utilisée. Si le retrait a été confirmé, la réservation est déjà `FULFILLED`; le prêt continue jusqu’au retour physique confirmé.
+Le report ne concerne pas l’attente QR. Une réservation `FULFILLED` ne libère jamais un actif emprunté. Si le retrait, autorisé avant `reservedUntil`, est confirmé après cette échéance, le prêt peut être créé déjà en retard; il reste ouvert jusqu’au retour confirmé.
 
 ### 14.2 Expiration d’une LockerOperation
 
 ```text
 function expireOperation(operationId, now):
     begin transaction
-        lock affected aggregates and operation
-
-        if operation is terminal or now < operation.expiresAt:
-            return without effect
-
-        evidence = classifyExecutionEvidence(operation)
-
-        if command never sent:
-            conclude EXPIRED
-        else if hub explicitly rejected without unlock:
-            conclude FAILED
-        else if device stayed online and door certainly stayed closed:
-            conclude EXPIRED
-        else:
-            conclude ANOMALY and create Anomaly OPEN
-
-        apply checkout or return consequences atomically
-        append AuditEvent
+        lock affected aggregates in canonical order
+        if operation is terminal: return
+        if operation.status == AWAITING_LOCAL_PROOF:
+            if now < challenge.expiresAt: return
+            challenge = EXPIRED, closedAt = now
+            operation = EXPIRED, terminalAt = now
+            purge QR ciphertext and enqueue terminal screen message
+            keep Loan unchanged
+            append audit
+            commit and return
+        if authorizedAt is null or now < operation.expiresAt: return
+        classify physical execution evidence
+        if command never sent: EXPIRED
+        else if explicit rejection before unlock: FAILED
+        else if certainty of no physical effect: EXPIRED
+        else: ANOMALY with incident
+        apply existing checkout or return consequences atomically
+        enqueue backend-confirmed screen status and append audit
     commit
 ```
+
+Un redémarrage ou une perte de connexion avant autorisation invalide le défi et produit un échec sûr. Après autorisation ou publication, la classification repose sur les preuves d’exécution; on ne suppose pas une absence d’effet physique.
 
 ### 14.3 Prêt en retard
 
@@ -1136,6 +1187,7 @@ sequenceDiagram
 
 Les décisions suivantes produisent un `AuditEvent` :
 
+- défi créé, affiché, consommé, refusé, expiré ou invalidé : `LOCAL_CHALLENGE_CREATED`, `LOCAL_CHALLENGE_DISPLAYED`, `LOCAL_CHALLENGE_CONSUMED`, `LOCAL_CHALLENGE_REJECTED`, `LOCAL_CHALLENGE_EXPIRED`, `LOCAL_CHALLENGE_INVALIDATED`; ne conserver que les identifiants, dates, acteur, résultat et raison, jamais le token;
 - authentification acceptée ou refus sensible;
 - calcul de readiness utilisé pour une décision;
 - réservation créée, annulée, accomplie ou expirée;
@@ -1219,6 +1271,16 @@ Une vérification applicative seule n’est pas suffisante pour les invariants c
 - répétition avec la même clé d’idempotence.
 
 ### 19.2 Commande et device
+
+- Réservation distante : aucune commande et aucun déverrouillage.
+- Préparation distante : QR affiché mais serrure inchangée.
+- Scan valide : une seule commande après revalidation de toutes les gardes.
+- Token modifié, autre compte, autre opération, expiration, rejeu : aucune nouvelle commande.
+- Deux scans simultanés et rollback SQL : pas de consommation ou de commande partielle.
+- Défi expiré avant toute commande : pas d’anomalie physique artificielle et prêt inchangé.
+- Redémarrage, écran indisponible, ACK d’affichage perdu : refus explicite sans ouverture.
+- Rejeu d’un ancien message d’écran après succès : QR non réaffiché.
+
 
 - reprise du dispatcher après arrêt entre publication et commit;
 - republication avec le même `messageId`;

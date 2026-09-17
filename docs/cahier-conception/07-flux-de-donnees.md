@@ -3,9 +3,8 @@
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Session :** Automne 2026  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Date :** 10 septembre 2026  
-**Version :** 1.0  
-**Statut :** Proposition à valider en équipe
+**Date de révision :** 16 septembre 2026
+**Version :** 1.2 — contrôle local QR et étoile
 
 ---
 
@@ -112,6 +111,15 @@ Ces processus sont des modules d’un monolithe Spring Boot. Ils ne sont pas des
 `D8` est un magasin technique associé à l’outbox transactionnel décrit dans le document 06. Il ne devient pas une nouvelle autorité métier.
 
 ---
+
+#### Magasins supplémentaires du contrôle local
+
+| Magasin | Contenu | Accès |
+|---|---|---|
+| `D9` — Défis locaux | LocalAccessChallenge, empreinte et consommation | Validation backend seulement |
+| `D10` — Outbox écran | HubDisplayMessage et charge utile chiffrée | Dispatcher écran seulement |
+
+Le broker reçoit temporairement le secret du QR. Son ACL et ses logs doivent respecter cette sensibilité; TLS est requis sur le trajet vers le hub réel.
 
 ## 4. DFD-0 — Vue globale
 
@@ -326,23 +334,30 @@ Le Web peut consulter les réservations, mais il ne reproduit pas le parcours te
 
 ## 9. DFD-1 — Demande d’opération physique
 
-### 9.1 Création d’une intention de retrait ou de retour
+### 9.1 Préparation, affichage et validation
 
 ```mermaid
 sequenceDiagram
-    participant M as Aegis Mobile
-    participant P as P4 · Opérations API
-    participant D3 as D3 · Locker
-    participant D5 as D5 · Transactions
-    participant D8 as D8 · Commandes
-
-    M->>P: H15 · Demande CHECKOUT ou RETURN
-    P->>D3: S19 · Locker, cellule et affectation attendue
-    P->>D5: S20 · Reservation ou Loan et opération concurrente
-    P->>D5: S21 · Nouvelle LockerOperation
-    P->>D8: S22 · Intention UNLOCK_COMPARTMENT
-    P-->>M: H16 · operationId, état et expiresAt
+    participant M as Mobile
+    participant P as API opérations
+    participant D as PostgreSQL
+    participant H as Hub via MQTT
+    M->>P: H15 Préparer CHECKOUT ou RETURN
+    P->>D: S19-S21 Lire le contexte et créer l’opération
+    P->>D: S38-S39 Défi et affichage durable
+    P-->>M: H16 Métadonnées sans secret
+    P->>H: M09-M10 QR temporaire
+    H-->>P: M11-M12 Accusé d’affichage
+    H-->>M: O01 Lecture optique du QR
+    M->>P: H25 Soumettre le défi scanné
+    P->>D: S40 Consommer et autoriser
+    P->>D: S22 Commande de serrure durable
+    P-->>M: H26 Opération autorisée
 ```
+
+`S40` et `S22`, le passage éventuel du prêt à `RETURN_PENDING`, l’audit et la réponse idempotente appartiennent à une seule transaction. Le flux optique `O01` part de l’écran; le secret n’est jamais fourni au téléphone par une réponse REST.
+
+Le QR ne transmet ni mot de passe ni identité personnelle. Ses identifiants visibles ne sont pas des autorisations. Son token reste secret jusqu’à son scan; sa validité est contrôlée exclusivement par le backend.
 
 ### 9.2 Données de corrélation
 
@@ -356,12 +371,19 @@ sequenceDiagram
 | lockerId | `D3` | Device réseau attendu |
 | compartmentId | `D3` | Cellule physique ciblée |
 | expectedAssetIdentifier | `D2` | Tag attendu dans les preuves |
+| challengeId | `D9` | Défi unique de cette opération |
+| displayMessageId | `D10` | Instruction d’écran acquittée par le hub |
+| deviceSessionId | Hub enregistré | Démarrage autorisé à afficher le défi |
+| displayRevision | Locker | Ordre des instructions d’écran |
 
 ---
 
 ## 10. DFD-1 — Distribution d’une commande
 
 ### 10.1 Du backend à la cellule
+
+Cette distribution commence uniquement après consommation du défi et revalidation des gardes métier. Une simple réservation ou une préparation ne produit pas `S22`.
+
 
 ```mermaid
 sequenceDiagram
@@ -564,7 +586,7 @@ La résolution ne provient pas d’un flux administratif. Elle provient d’une 
 | `H13` | Mobile → `P3` | Intention d’annulation | Sensible métier |
 | `H14` | `P3` → Mobile | Résultat de l’annulation | Sensible métier |
 | `H15` | Mobile → `P4` | Demande CHECKOUT ou RETURN | Critique opérationnel |
-| `H16` | `P4` → Mobile | operationId, statut et expiresAt | Critique opérationnel |
+| `H16` | `P4` → Mobile | operationId, statut, challengeId et localProofExpiresAt; expiresAt nul avant autorisation | Critique opérationnel |
 | `H17` | Client → `P4` | Lecture d’une opération, réservation, prêt ou actif | Sensible métier |
 | `H18` | `P4` → Client | État métier actualisé | Sensible métier |
 | `H19` | Client → `P5` | Lecture du statut du locker | Interne |
@@ -573,6 +595,8 @@ La résolution ne provient pas d’un flux administratif. Elle provient d’une 
 | `H22` | `P6` → Manager | AuditEvent, Anomaly et références utiles | Sensible |
 | `H23` | Manager → `P6` | anomalyId et note d’accusé | Sensible |
 | `H24` | `P6` → Manager | AnomalyView actualisée | Sensible |
+| `H25` | Mobile → `P4` | operationId, challengeId, token scanné, clé d’idempotence | Secret transitoire, jamais journalisé |
+| `H26` | `P4` → Mobile | LockerOperationView autorisée ou refus, sans token | Sensible |
 
 Toutes les requêtes applicatives distantes utilisent HTTPS. Les entrées sont validées et les réponses sont filtrées selon le rôle et la propriété des ressources.
 
@@ -600,6 +624,9 @@ Toutes les requêtes applicatives distantes utilisent HTTPS. Les entrées sont v
 | `S27`–`S32` | `D5`/`D6`/`D7` ↔ `P4` | Preuves, états, anomalies et audit | Transaction/lecture |
 | `S33`–`S34` | `P5` ↔ `D3` | lastSeenAt et état de device | Écriture/lecture |
 | `S35`–`S37` | `P6` ↔ `D6`/`D7` | Chronologie, preuve et reconnaissance | Lecture/transaction |
+| `S38` | `P4` ↔ `D9` | Défi, empreinte, cible, dates et essais | Transaction |
+| `S39` | `P4`/`P5` ↔ `D10` | Message d’écran chiffré, envoi, accusé et purge | Transaction/traitement |
+| `S40` | `P4` ↔ `D5`/`D9` | Consommation et autorisation | Même transaction que S22 |
 
 PostgreSQL ne reçoit aucune connexion directe d’iOS, de React, du broker, du hub ou d’une cellule.
 
@@ -617,6 +644,8 @@ PostgreSQL ne reçoit aucune connexion directe d’iOS, de React, du broker, du 
 | `M06` | Broker → `P5` | `.../events` ou `.../status` | Événement ou erreur authentifié |
 | `M07` | Hub → broker | `aegis/v1/lockers/{lockerId}/status` | DeviceHeartbeat |
 | `M08` | Broker → `P5` | `.../status` | Heartbeat à ingérer |
+| `M09`–`M10` | `P5` → broker → hub ciblé | `.../display` | DISPLAY_ACCESS_CHALLENGE ou DISPLAY_OPERATION_STATUS |
+| `M11`–`M12` | Hub → broker → `P5` | `.../events` | ACCESS_CHALLENGE_DISPLAYED ou DISPLAY_REJECTED; sans token |
 
 Chaque enveloppe pertinente contient `messageId`, `lockerId`, `timestamp` et `schemaVersion`. `operationId` et `compartmentId` sont obligatoires lorsque le message concerne une opération ou une cellule précise.
 
@@ -653,11 +682,12 @@ Le mot « producteur » indique l’origine de la donnée. Il ne donne pas autom
 
 | ID | Frontière | Flux | Protection minimale |
 |---|---|---|---|
-| `TB1` | Mobile/Manager ↔ API publique | `H01` à `H24` | HTTPS, authentification, autorisation serveur, validation et limitation des abus |
-| `TB2` | API ↔ PostgreSQL privé | `S01` à `S37` | Réseau privé, compte applicatif limité, requêtes paramétrées, transactions |
-| `TB3` | API/dispatcher ↔ broker | `M01`, `M04`, `M06`, `M08` | MQTT authentifié et chiffré, permissions minimales de topics |
-| `TB4` | Broker ↔ hub distant | `M02`, `M03`, `M05`, `M07` | Identité propre au device, TLS, ACL par locker, expiration et déduplication |
+| `TB1` | Mobile/Manager ↔ API publique | `H01` à `H26` | HTTPS, authentification, autorisation serveur, validation et limitation des abus |
+| `TB2` | API ↔ PostgreSQL privé | `S01` à `S40` | Réseau privé, compte applicatif limité, requêtes paramétrées, transactions |
+| `TB3` | API/dispatcher ↔ broker | `M01`, `M04`, `M06`, `M08`, `M09`, `M12` | MQTT authentifié et chiffré, permissions minimales de topics |
+| `TB4` | Broker ↔ hub | `M02`, `M03`, `M05`, `M07`, `M10`, `M11` | Identité propre au device, TLS, ACL par locker, expiration et déduplication |
 | `TB5` | Hub ↔ cellules locales | `R01` à `R04` | Adressage unique, contrôle d’intégrité, timeouts et détection de déconnexion |
+| `TB6` | Écran du hub → caméra mobile | `O01` | Format strict, validation backend, courte durée et usage unique; relais possible |
 
 ### 19.2 Changement de niveau de confiance
 
@@ -671,6 +701,12 @@ Le mot « producteur » indique l’origine de la donnée. Il ne donne pas autom
 | Note d’administrateur | Information humaine | Audit; jamais preuve de résolution à elle seule |
 
 ---
+
+### 19.3 Frontière optique et câble de cellule
+
+`O01` (écran du hub → caméra iOS) est une entrée non fiable à valider, pas une connexion réseau. Le mobile parse le format Aegis attendu; il n’ouvre aucune URL arbitraire. Une photo relayée reste possible.
+
+Les liaisons `R01/R02` empruntent chacune le port dédié d’une cellule dans l’étoile. Le connecteur RJ45 transporte un câblage Aegis propriétaire; il ne fournit ni IP, ni Ethernet, ni PoE standard. Les trames d’une cellule ne doivent jamais être attribuées à l’autre port.
 
 ## 20. Classification des données
 
@@ -688,6 +724,11 @@ Le payload brut peut contenir des identifiants physiques. Son exposition est plu
 ---
 
 ## 21. Flux explicitement interdits
+
+- Renvoyer le token ou l’image QR dans une réponse REST, un audit, une route de diagnostic ou des logs.
+- Transformer un accusé d’affichage en accusé de commande de serrure.
+- Envoyer une commande de serrure depuis une opération `AWAITING_LOCAL_PROOF`.
+
 
 | Source | Destination interdite | Pourquoi |
 |---|---|---|
@@ -732,8 +773,15 @@ sequenceDiagram
     participant B as Broker MQTT
     participant H as Hub ESP32
 
-    M->>P: requestId + reservationId
-    P->>D: operationId + commandMessageId
+    M->>P: Préparation avec reservationId
+    P->>D: operationId et challengeId
+    P->>B: displayMessageId et défi
+    B->>H: QR pour la session courante
+    H-->>B: Accusé d’affichage
+    B-->>P: Défi affiché
+    H-->>M: Code scanné
+    M->>P: operationId, challengeId et token
+    P->>D: Consommation et commandMessageId
     P->>B: commandMessageId + operationId
     B->>H: lockerId + compartmentId
     H-->>B: deviceMessageId + operationId
@@ -747,6 +795,9 @@ Un identifiant de corrélation facilite le suivi, mais ne remplace jamais l’au
 ---
 
 ## 23. Couverture du dictionnaire de données
+
+`LocalAccessChallenge` est porté par D9 et H25/S38/S40. `HubDisplayMessage` est porté par D10 et M09–M12. Le retour visuel iOS utilise H17/H18; le résultat sur écran utilise DISPLAY_OPERATION_STATUS. Aucun transport de notification push n’est ajouté.
+
 
 | Concept du dictionnaire | Magasin | Flux entrants principaux | Flux sortants principaux |
 |---|---|---|---|
