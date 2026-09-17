@@ -2,542 +2,155 @@
 
 > **Ready assets. Ready teams.**
 
-Aegis est un prototype de **plateforme de disponibilité opérationnelle et de traçabilité d'équipements critiques**. Il combine un casier connecté, une application iOS, une administration Web et un backend central afin que le bon équipement soit disponible, conforme, autorisé et traçable au moment où une équipe technique en a besoin.
+Aegis est un prototype de **plateforme de disponibilité opérationnelle et de chaîne de possession pour des équipements critiques partagés**. Il relie une application iOS, une administration Web et un casier connecté pour vérifier qu’un équipement est présent, disponible, conforme et autorisé avant son retrait.
 
-Le projet est réalisé dans le cadre du cours **420-5X7-SO — Écosystème connecté** au Cégep de Sorel-Tracy, durant la session d'automne 2026.
+Le marché de référence est celui des équipes de maintenance, d’inspection et de services techniques. Le laboratoire du Cégep de Sorel-Tracy constitue le terrain de validation.
 
-| Élément | État actuel |
+| Repère | Situation au 17 septembre 2026 |
 |---|---|
-| Phase | Cadrage produit et architecture |
-| Équipe | 2 étudiants |
-| Prototype physique | 1 locker, 2 compartiments |
-| Marché de référence | Maintenance et services techniques |
-| Terrain de validation | Laboratoire technique du Cégep |
-| Échéance | Semaine 15, décembre 2026 |
+| Cours | 420-5X7-SO — Écosystème connecté, automne 2026 |
+| Équipe | Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa |
+| Prototype | Un hub avec écran et deux cellules indépendantes, A1 et A2 |
+| Budget matériel | Maximum de 500 $ CA pour le prototype complet |
+| Échéance | Semaine pédagogique 15; le scope indique le 23 décembre 2026, à rapprocher du calendrier officiel |
 
-> [!IMPORTANT]
-> Aegis est actuellement un prototype académique. Le dépôt documente une vision produit et une architecture extensible, mais ne prétend pas fournir un équipement industriel certifié ni un service prêt pour la production.
+Ce prototype académique vise une démonstration répétable. Les performances, la fiabilité industrielle et les bénéfices commerciaux ne sont pas présentés comme déjà démontrés.
 
----
+## La valeur démontrée
 
-## Le problème
+Un inventaire peut déclarer un outil disponible alors qu’il est emprunté, absent, endommagé, non calibré ou inaccessible à son demandeur. Aegis évalue sa **readiness pour un utilisateur donné** : `READY`, `BLOCKED` ou `UNKNOWN`, avec une raison explicite.
 
-Dans les équipes de maintenance, d'inspection et de service technique, savoir qu'un équipement existe ne suffit pas. Au moment d'une intervention, il doit également être :
+La démonstration utilise deux équipements comparables : A1 est présent, disponible et conforme; A2 est présent mais sa calibration a expiré. Pour un technicien autorisé, A1 peut être réservé et A2 est bloqué avec la raison `CALIBRATION_EXPIRED`.
 
-- physiquement présent;
-- disponible;
-- en état de fonctionnement;
-- conforme aux exigences applicables, notamment la calibration;
-- autorisé pour la personne qui souhaite l'utiliser;
-- attribué et retourné avec une chaîne de possession vérifiable.
+## Parcours de retrait et de retour
 
-Lorsque ces informations sont dispersées entre des feuilles de calcul, des registres, des armoires à clés et la mémoire des employés, plusieurs problèmes apparaissent :
-
-- temps perdu à chercher du matériel;
-- interventions retardées;
-- équipements utilisés malgré une calibration expirée;
-- actifs empruntés sans responsabilité claire;
-- retours incomplets, tardifs ou non enregistrés;
-- inventaire numérique différent de la réalité physique;
-- surachat d'équipements dont l'utilisation réelle est inconnue;
-- audits manuels longs et peu fiables.
-
-La question directrice d'Aegis est donc :
-
-> **Comment garantir qu'un équipement critique est présent, conforme, accessible à la bonne personne et traçable pendant tout son cycle d'utilisation?**
-
----
-
-## Positionnement
-
-Aegis se positionne comme une **Critical Asset Readiness and Chain-of-Custody Platform** destinée en priorité aux petites et moyennes équipes techniques qui partagent des équipements coûteux, calibrés, spécialisés ou essentiels à leurs opérations.
-
-### Marché de référence
-
-- équipes de maintenance industrielle;
-- ateliers techniques;
-- services d'inspection;
-- équipes de terrain;
-- laboratoires de mesure;
-- organisations possédant de 20 à 200 actifs techniques partagés.
-
-### Équipements visés
-
-- multimètres et appareils de mesure;
-- caméras thermiques;
-- détecteurs de gaz;
-- clés dynamométriques;
-- radios et tablettes;
-- scanners;
-- trousses d'inspection;
-- équipements nécessitant une maintenance ou une calibration périodique.
-
-### Acheteurs et utilisateurs
-
-| Rôle | Besoin principal |
-|---|---|
-| Responsable des opérations | Éviter qu'une intervention soit retardée faute d'équipement prêt |
-| Responsable de maintenance | Connaître l'état, l'usage et la disponibilité du parc |
-| Responsable qualité | Empêcher l'utilisation d'un équipement non conforme |
-| Gestionnaire d'atelier | Réduire les recherches, pertes et audits manuels |
-| Technicien | Obtenir rapidement le bon équipement sans dépendre d'un responsable |
-
-Le laboratoire du Cégep demeure un excellent **terrain de prototypage**. Il permet de reproduire les règles d'un environnement professionnel avec du matériel accessible, mais il ne constitue plus à lui seul le marché ni la justification économique du produit.
-
----
-
-## Proposition de valeur
-
-Aegis ne cherche pas uniquement à indiquer où se trouve un actif ou à ouvrir une serrure à distance.
-
-Avant d'autoriser un retrait, la plateforme vérifie quatre dimensions :
-
-```text
-PRÉSENCE
-L'actif est-il réellement dans le locker?
-
-DISPONIBILITÉ
-Est-il libre, non réservé et non emprunté?
-
-CONFORMITÉ
-Est-il utilisable et sa calibration est-elle valide?
-
-AUTORISATION
-Cette personne peut-elle accéder à cette classe d'équipement?
-```
-
-Si toutes les règles sont satisfaites, Aegis orchestre l'accès physique, confirme le retrait, crée le prêt et conserve la trace de l'opération. Sinon, le système bloque l'action et fournit une raison compréhensible.
-
-La promesse peut se résumer ainsi :
-
-> **Aegis garantit que chaque technicien reçoit un équipement disponible, conforme et traçable pour son intervention.**
-
----
-
-## Ce qui différencie Aegis
-
-Les casiers connectés et les systèmes de suivi d'actifs existent déjà. La différenciation recherchée par Aegis ne repose donc pas sur la serrure, le RFID ou l'application mobile pris séparément.
-
-Elle repose sur la combinaison suivante :
-
-1. **Readiness plutôt que simple inventaire** — un actif présent peut tout de même être bloqué s'il est non conforme ou non autorisé.
-2. **Validation physique** — un clic dans l'application ne suffit pas à confirmer un emprunt ou un retour.
-3. **Backend comme autorité métier** — ni l'application ni l'ESP32 ne peuvent décider seuls d'ouvrir un compartiment ou de modifier un prêt.
-4. **Chaîne de possession explicite** — chaque retrait et retour est relié à un utilisateur, un actif, un compartiment et une opération.
-5. **Architecture indépendante du capteur** — le cœur métier traite des observations; la méthode de détection peut évoluer après expérimentation.
-6. **Approche adaptée aux PME** — le prototype explore une solution modulaire et plus accessible qu'une infrastructure industrielle lourde.
-
----
-
-## Démonstration de référence
-
-Le prototype comprend deux compartiments contenant deux multimètres comparables :
-
-| Compartiment | État physique | Calibration | Résultat Aegis |
-|---|---|---|---|
-| `A1` | Présent | Valide | `READY` |
-| `A2` | Présent | Expirée | `BLOCKED` |
-
-Le scénario principal est le suivant :
-
-1. Un technicien recherche un multimètre dans l'application iOS.
-2. Aegis évalue les équipements correspondants.
-3. Le multimètre `A2` est présent, mais bloqué parce que sa calibration est expirée.
-4. Seul `A1` peut être réservé par le technicien.
-5. Le backend vérifie l'identité, l'autorisation, la réservation et l'état de l'actif.
-6. Une opération temporaire de retrait est créée.
-7. L'ESP32 reçoit l'ordre d'ouvrir uniquement le compartiment `A1`.
-8. Le retrait et la fermeture de la porte sont détectés physiquement.
-9. Le backend crée le prêt et la chaîne de possession.
-10. Au retour, le dépôt de l'actif est confirmé avant que le prêt soit terminé.
-11. L'administration Web permet de reconstruire l'ensemble de l'opération.
-
-Ce scénario démontre la valeur produit et l'intégration de toutes les composantes sans nécessiter un prototype industriel de grande taille.
-
----
-
-## Capacités du prototype
-
-### Aegis Mobile
-
-Application iOS utilisée par le technicien pour :
-
-- s'authentifier;
-- consulter les équipements et leur état de readiness;
-- connaître la raison d'un blocage;
-- réserver un équipement admissible;
-- demander l'accès au bon compartiment;
-- suivre l'opération de retrait ou de retour;
-- consulter son prêt actif.
-
-### Aegis Manager
-
-Application Web utilisée par l'administrateur pour :
-
-- gérer le catalogue et les actifs physiques;
-- associer un actif à un identifiant et à un compartiment;
-- définir son état opérationnel et sa date de calibration;
-- consulter les réservations et les prêts;
-- surveiller le locker et ses compartiments;
-- consulter les anomalies et la piste d'audit.
-
-### Aegis Control
-
-Backend central responsable de :
-
-- l'authentification et des autorisations;
-- l'évaluation de la readiness;
-- la cohérence des réservations et des prêts;
-- l'orchestration des opérations physiques;
-- la communication MQTT;
-- l'idempotence des commandes et événements;
-- la conservation de la chaîne de possession.
-
-### Aegis Locker Node
-
-Prototype physique responsable de :
-
-- contrôler deux serrures indépendantes;
-- observer l'ouverture et la fermeture des portes;
-- produire une observation de présence ou de mouvement;
-- recevoir les commandes autorisées;
-- publier les résultats, événements et états de santé.
-
----
-
-## Architecture du système
-
-```mermaid
-flowchart TD
-    TECH["Technicien"]:::persona
-    ADMIN["Administrateur"]:::persona
-    IOS["Aegis Mobile<br/>SwiftUI"]:::software
-    WEB["Aegis Manager<br/>React"]:::software
-    API["Aegis Control<br/>Spring Boot"]:::software
-    DB[("PostgreSQL")]:::infra
-    BROKER["Broker MQTT"]:::infra
-    NODE["Aegis Locker Node<br/>ESP32"]:::hardware
-
-    TECH -->|utilise| IOS
-    ADMIN -->|utilise| WEB
-    IOS -->|HTTPS| API
-    WEB -->|HTTPS| API
-    API --> DB
-    API <-->|MQTT sécurisé| BROKER
-    BROKER <-->|Commandes et événements| NODE
-
-    classDef persona fill:#2B2440,stroke:#9F91F0,color:#EDE9FE
-    classDef software fill:#0F2C46,stroke:#58A6FF,color:#D6E8FB
-    classDef infra fill:#2A2A2E,stroke:#9CA3AF,color:#E6EDF3
-    classDef hardware fill:#3A2A0E,stroke:#D9A441,color:#FCEACD
-```
-
-### Règles de confiance
-
-- Le backend est la seule autorité métier.
-- Le Web et le mobile ne communiquent jamais directement avec les serrures.
-- L'ESP32 exécute des commandes valides, mais ne décide pas qui a le droit d'emprunter.
-- Une opération métier n'est confirmée qu'après réception d'observations physiques cohérentes.
-- Chaque commande et événement possède un identifiant unique.
-- Les doublons MQTT ne doivent pas créer plusieurs prêts ou retours.
-- PostgreSQL n'est jamais exposé directement aux clients ni au contrôleur.
-
-### Flux d'un retrait
+1. Le technicien se connecte sur iOS et consulte les actifs admissibles.
+2. Il réserve A1 jusqu’à une heure choisie dans la plage d’exploitation définie par l’administrateur. **La réservation, même distante, n’ouvre aucune porte.**
+3. Il prépare son retrait. Le backend fait afficher sur le hub un QR temporaire lié à cette opération et à son compte.
+4. Le technicien scanne ce QR. Le backend revérifie les droits, la réservation et les conditions actuelles, puis autorise une commande pour A1 uniquement.
+5. Après l’accusé de commande, l’ouverture, le retrait et la fermeture, les observations physiques permettent au backend de créer le prêt.
+6. Au retour, un nouveau parcours avec QR puis confirmation physique permet de terminer le prêt. La readiness est recalculée.
 
 ```mermaid
 sequenceDiagram
-    participant M as Mobile
-    participant A as API
-    participant B as MQTT
-    participant L as Locker
-    M->>A: Demande d'accès
-    A->>A: Vérifier readiness et réservation
-    A->>B: Commande d'ouverture
-    B->>L: Ouvrir le compartiment
-    L-->>B: Porte et observation physique
-    B-->>A: Événements corrélés
-    A->>A: Confirmer le prêt
-    A-->>M: Opération réussie
+    participant M as Mobile iOS
+    participant A as API Spring
+    participant H as Hub avec écran
+    participant C as Cellule A1
+    M->>A: Réserver puis préparer le retrait
+    A->>H: Afficher le défi via MQTT
+    H-->>A: Affichage confirmé
+    H-->>M: QR lu par la caméra
+    M->>A: Soumettre le défi via HTTPS
+    A->>A: Revérifier et autoriser une fois
+    A->>H: Commande ciblée via MQTT
+    H->>C: Déverrouiller A1
+    C-->>H: Accusé, porte et observations
+    H-->>A: Événements corrélés via MQTT
+    A->>A: Confirmer le retrait et créer le prêt
+    M->>A: Lire le résultat
+    A-->>M: Prêt actif
+    A->>H: Afficher le résultat
 ```
 
----
+Le broker relaie les échanges MQTT du diagramme. Le QR est lu optiquement : le téléphone ne se connecte pas au hub. Un code relayé par photo ou vidéo reste une limite de ce contrôle; il ne constitue pas une garantie absolue de présence physique. Le QR autorise l’accès, tandis que les capteurs confirment le mouvement de l’actif.
 
-## Modèle métier initial
+## Architecture
 
-Le modèle P0 s'articule autour des concepts suivants :
-
-```text
-User
-AssetModel
-Asset
-AssetTag
-Locker
-Compartment
-Reservation
-Loan
-LockerOperation
-Device
-DeviceCommand
-DeviceEvent
-AuditEvent
+```mermaid
+flowchart TB
+    IOS["Aegis Mobile — SwiftUI"] -->|HTTPS| API["Aegis Control — Spring Boot"]
+    WEB["Aegis Manager — React"] -->|HTTPS| API
+    API <--> DB[("PostgreSQL privé")]
+    API <-->|MQTT sécurisé| MQTT["Broker MQTT"]
+    MQTT <-->|Commandes et événements| HUB["Hub ESP32 avec écran"]
+    HUB <-->|Port et câble dédiés| A1["Cellule A1"]
+    HUB <-->|Port et câble dédiés| A2["Cellule A2"]
 ```
 
-La readiness n'est pas un simple champ modifiable sans contrôle. Elle est dérivée de règles portant au minimum sur :
+| Composante | Responsabilité |
+|---|---|
+| Mobile — SwiftUI | Authentification, catalogue, réservation, scan QR, suivi du retrait et du retour |
+| Web — React/TypeScript | Catalogue, règles de conformité, horaires, supervision et audit |
+| API — Java/Spring Boot | Seule autorité métier; monolithe modulaire, transactions et autorisations |
+| PostgreSQL/Flyway | Historique, contraintes d’intégrité, migrations, déduplication et outbox |
+| MQTT | Échanges authentifiés entre le backend et le hub; canaux distincts pour commandes, événements et statuts |
+| Hub et cellules — ESP32/firmware | Affichage, exécution ciblée, acquisition des capteurs et remontée d’observations |
 
-- l'état de disponibilité de l'actif;
-- sa présence physique connue;
-- son état opérationnel;
-- la validité de sa calibration lorsqu'elle est requise;
-- le niveau d'accès de l'utilisateur.
-
-Les détails fonctionnels et les frontières du MVP sont définis dans [`docs/cahier-conception/scope.md`](docs/cahier-conception/scope.md).
-
----
+Les clients communiquent uniquement avec l’API. PostgreSQL reste privé. Le hub et les cellules exécutent les commandes autorisées; ils ne créent ni réservation ni prêt et n’accordent aucun droit métier.
 
 ## Prototype physique
 
-```text
-Aegis Locker Node
-├── ESP32
-├── compartiment A1
-│   ├── serrure électronique
-│   ├── capteur de porte
-│   ├── indicateur LED
-│   └── mécanisme de détection
-├── compartiment A2
-│   ├── serrure électronique
-│   ├── capteur de porte
-│   ├── indicateur LED
-│   └── mécanisme de détection
-└── alimentation sécurisée
-```
+La **topologie en étoile est retenue** : chaque cellule correspond à un compartiment et possède son propre câble vers un port du hub. Le P0 comporte deux cellules, même si leur fixation prévoit des extensions.
 
-### Stratégie de détection
+- L’écran du hub fait partie du P0 : QR d’accès, consignes et résultat fourni par le backend.
+- Jimmy propose des câbles à connecteurs RJ45 pour l’alimentation et les données. Cette connectique propriétaire Aegis **n’est ni Ethernet ni PoE**; le brochage et le dimensionnement restent à valider.
+- Deux segments RS-485 indépendants constituent une réalisation proposée de l’étoile. Le protocole local et les composants ne sont pas déclarés validés avant le POC.
+- La détection principale prévue est le RFID UHF local par cellule. Sa localisation et sa stabilité doivent être mesurées. Le repli associe identification QR/NFC de l’actif, porte et présence/poids, conformément au scope.
 
-Le RFID UHF demeure une technologie à évaluer, pas une hypothèse imposée au produit.
+L’[architecture physique](docs/cahier-conception/12-architecture-physique.md) distingue les décisions retenues, les interfaces à réaliser et les essais attendus.
 
-Le POC doit comparer sa fiabilité dans le meuble réel. Si la lecture n'est pas suffisamment localisée ou répétable, le MVP utilisera une combinaison plus déterministe, par exemple :
+## Invariants du P0
 
-```text
-QR ou NFC pour identifier l'actif
-+
-capteur de porte
-+
-capteur de présence ou de poids
-```
+- Une seule réservation active par technicien et par actif; sa fin reste dans les heures d’exploitation.
+- La réservation du demandeur est prise en compte lors du retrait : elle ne bloque pas son propre titulaire.
+- Une réservation ou un défi QR ne commande jamais, à lui seul, l’ouverture.
+- Une commande expirée, rejouée ou destinée à une autre cellule n’est pas exécutée une seconde fois.
+- Le délai physique de 120 secondes commence après autorisation locale; les essais ne le prolongent pas.
+- Un prêt commence et se termine uniquement après des observations physiques cohérentes, incluant la fermeture de porte.
+- Dépasser `Loan.dueAt` indique un retard et **ne rend jamais l’actif réservable**.
+- Le retour d’un actif emprunté n’exige pas qu’il soit `READY` : un actif endommagé ou non calibré doit pouvoir revenir par le parcours autorisé.
+- Une anomalie ne peut pas être résolue administrativement sans correction vérifiable de la situation.
 
-Le backend reçoit des **observations physiques normalisées**. Cette séparation permet de changer la technologie du prototype sans réécrire les règles de réservation, de readiness ou de prêt.
+## Périmètre et critères de réussite
 
----
-
-## Stack technique
-
-| Composante | Technologies principales |
-|---|---|
-| Administration Web | React, TypeScript, Vite, TanStack Query |
-| Application mobile | Swift, SwiftUI, async/await, URLSession |
-| Backend | Java, Spring Boot, Spring Security, Spring Data JPA, Bean Validation |
-| Base de données | PostgreSQL, Flyway |
-| IoT | ESP32, C++ / Arduino Framework |
-| Messagerie | MQTT |
-| Infrastructure | Docker Compose, reverse proxy HTTPS |
-| Documentation | Markdown, Mermaid, ADR |
-
-Le backend est développé comme un **monolithe modulaire organisé par fonctionnalité**. Une architecture microservices n'apporterait aucune valeur proportionnelle au prototype.
-
-Exemple de modules :
-
-```text
-com.aegis
-├── identity
-├── asset
-├── readiness
-├── reservation
-├── loan
-├── locker
-├── operation
-├── device
-├── audit
-└── shared
-```
-
----
-
-## Organisation du dépôt
-
-```text
-aegis/
-├── apps/
-│   ├── admin-web/
-│   └── ios/
-├── services/
-│   └── api/
-├── firmware/
-│   └── locker-controller/
-├── infra/
-│   ├── docker/
-│   └── mqtt/
-├── docs/
-│   ├── journal/
-│   ├── cahier-conception/
-│   ├── architecture/
-│   ├── diagrams/
-│   ├── adr/
-│   ├── research/
-│   └── meetings/
-├── .github/
-├── README.md
-├── CONTRIBUTING.md
-├── .editorconfig
-└── .gitignore
-```
-
-Le service `vision` de l'ancienne structure a été retiré du cœur du produit. Une assistance AI Vision pourra être explorée ultérieurement, mais elle n'est ni une dépendance architecturale ni une capacité du MVP.
-
----
-
-## Stratégie de développement
-
-Le développement suit des **vertical slices** et commence par un walking skeleton qui prouve la communication entre toutes les plateformes :
-
-```text
-PostgreSQL + broker MQTT
-        ↓
-Spring Boot : health check, migration et consommation MQTT
-        ↓
-React : état de l'API et du locker
-        ↓
-Simulateur ou ESP32 : heartbeat
-        ↓
-iOS : appel HTTPS vers l'API
-```
-
-Les tranches métier sont ensuite livrées dans cet ordre :
-
-1. registre d'actifs et calcul de readiness;
-2. réservation d'un actif admissible;
-3. opération physique de retrait;
-4. création automatique du prêt;
-5. opération physique de retour;
-6. anomalies, audit et durcissement de la sécurité.
-
-### Jalons principaux
-
-| Période | Résultat attendu |
-|---|---|
-| Semaines 2–3 | Scope, User Story Map, architecture et choix du matériel de POC |
-| Semaines 3–4 | Walking skeleton et POC de détection |
-| Semaines 5–7 | Identité, actifs, readiness, réservation et IoT |
-| Semaines 8–9 | Retrait complet et création du prêt |
-| Semaine 10 | Retour complet |
-| Semaine 11 | Anomalies, idempotence et sécurité |
-| Semaine 12 | Gel fonctionnel du P0 |
-| Semaines 13–14 | Stabilisation, documentation et répétitions |
-| Semaine 15 | Présentation finale |
-
----
-
-## Mesures de succès
-
-Le prototype doit démontrer des résultats vérifiables :
-
-- un actif non conforme est bloqué même s'il est physiquement présent;
-- un utilisateur insuffisamment autorisé ne peut pas accéder à un actif restreint;
-- le bon compartiment est ouvert pour la bonne opération;
-- le prêt n'est créé qu'après confirmation physique du retrait;
-- le retour n'est complété qu'après confirmation physique du dépôt;
-- l'historique permet de reconstruire qui a utilisé quel actif et quand;
-- un événement dupliqué ne produit pas une deuxième transition métier;
-- l'état logiciel converge en quelques secondes après l'événement physique;
-- le parcours réussit au moins 10 retraits et 10 retours consécutifs sans modification manuelle de la base de données.
-
-Les indicateurs commerciaux tels que la réduction des pertes, du temps de recherche ou des interventions retardées sont au cœur du positionnement. Ils devront toutefois être présentés comme **hypothèses à valider**, et non comme bénéfices déjà prouvés par ce prototype académique.
-
----
-
-## Périmètre résumé
-
-| P0 — obligatoire | P1 — après le parcours complet | Hors scope de la session |
+| P0 | P1 après le parcours complet | P2 / hors engagement de la session |
 |---|---|---|
-| Readiness minimale | Maintenance structurée | Produit industriel certifié |
-| Réservation | Notifications | Déploiement massif |
-| Retrait et retour physiques | Gestion de kits | SaaS multi-organisation complet |
-| Chaîne de possession | Mesure de batterie | Intégrations ERP/CMMS |
-| Web, iOS, API et ESP32 | Statistiques simples | IA décisionnelle |
-| Sécurité et audit minimal | Écran central | Application Android |
+| Identité, catalogue, readiness et horaires | Workflow de maintenance | Kits et interventions |
+| Réservation, QR local, retrait et retour | Notifications et statistiques simples | Multi-site et intégrations ERP/CMMS |
+| Deux cellules, écran minimal et capteurs | Interfaces enrichies | AI Vision et recommandations |
+| Audit, anomalies, idempotence et simulateur | Historique mobile enrichi | Application Android |
 
-Le document de référence en cas de doute reste le [`scope.md`](docs/cahier-conception/scope.md).
+La cible finale est **10 retraits et 10 retours consécutifs**, sans intervention manuelle dans PostgreSQL et sans double effet lors du rejeu d’un message. Les refus, expirations, anomalies et redémarrages doivent aussi être démontrés. Les exigences complètes figurent dans le [scope](docs/cahier-conception/02-scope.md).
 
----
+## Organisation du dépôt et du travail
 
-## Méthode de travail
-
-Le projet est développé par deux personnes avec :
-
-- GitHub Issues pour les tâches traçables;
-- branches courtes par fonctionnalité;
-- Pull Requests et revue de code;
-- Conventional Commits;
-- ADR pour les décisions structurantes;
-- journaux de bord hebdomadaires;
-- tests automatisés pour les règles métier critiques;
-- simulateur IoT afin de ne pas bloquer le logiciel sur le matériel.
-
-Branches recommandées :
-
-```text
-feature/*
-fix/*
-docs/*
-research/*
-```
-
-Exemples de commits :
-
-```text
-feat(readiness): reject assets with expired calibration
-feat(operation): correlate checkout events by operation id
-research(rfid): document compartment isolation results
-docs(scope): clarify detection fallback
-```
-
----
-
-## Documentation
-
-| Document | Rôle |
+| Emplacement | Contenu |
 |---|---|
-| [`scope.md`](docs/cahier-conception/scope.md) | Frontières, P0, P1, hors scope et critères de succès |
-| `user-story-map.md` | Parcours utilisateurs et ordre des stories |
-| `domain-model.md` | Concepts métier, relations et invariants |
-| `state-machines.md` | États et transitions des réservations, prêts et opérations |
-| `communication.md` | Contrats REST et MQTT |
-| `docs/adr/` | Décisions architecturales importantes |
-| `docs/journal/` | Évolution réelle du projet semaine après semaine |
+| `apps/admin-web/` | Administration React |
+| `apps/ios/` | Application SwiftUI |
+| `services/api/` | API Spring Boot et migrations Flyway |
+| `firmware/locker-controller/` | Firmware du hub et des cellules |
+| `infra/docker/`, `infra/mqtt/` | Environnement reproductible et broker |
+| `docs/cahier-conception/` | Documents 02–14 ci-dessous |
+| `docs/architecture/`, `docs/diagrams/`, `docs/research/` | Dessins, sources des diagrammes et résultats de POC |
+| `docs/journal/`, `docs/meetings/` | Travail réellement effectué et décisions de réunion |
+| `.claude/agents/`, `.claude/skills/`, `CLAUDE.md` | Configuration partagée de l’assistance au développement |
 
-Les liens seront activés au fur et à mesure que les documents correspondants seront ajoutés au dépôt.
+Philippe porte principalement le logiciel; Jimmy porte principalement le matériel. La capacité de référence est de **10 h/semaine pour Philippe** et **6 h/semaine pour Jimmy**, dont 6 h communes à l’école. La répartition précise du firmware reste à confirmer; le [plan d’exécution](docs/cahier-conception/14-plan-execution-et-iterations.md) expose l’hypothèse et la charge de chaque personne.
 
----
+Le développement iOS nécessitant les Macs de l’école, ses compilations et essais sont prévus pendant ces séances. Les quatre heures hors cours de Philippe servent prioritairement au backend, au Web, au simulateur, aux tests et à la documentation.
 
-## Équipe et contexte académique
+Linear est l’outil envisagé pour le backlog opérationnel. Le document 11 conserve la carte des parcours et les références stables des stories; Linear suivra responsables, état et cycle. GitHub conserve code, revues et historique des documents. Les agents Claude assistent ces tâches; les deux membres gardent la responsabilité des décisions et des validations.
 
-- **Philippe Jordan Monfouayi Mba**
-- **Yoël Jimmy Razafindretsa**
+Le travail avance par petites tranches intégrées, avec une tâche d’exécution active par personne, une revue croisée et des preuves de fonctionnement. Les commandes de lancement seront documentées à mesure que les composants seront réellement initialisés et testés; ce README ne suppose pas un environnement déjà opérationnel.
 
-**Cours :** 420-5X7-SO — Écosystème connecté  
-**Établissement :** Cégep de Sorel-Tracy  
-**Session :** Automne 2026
+## Documentation de référence
 
----
+Le scope fixe les engagements. Les autres documents le détaillent; une modification structurante passe par une décision explicite. Les variantes encore proposées sont signalées dans le registre des ADRs.
 
-## Statut du projet
-
-Aegis se trouve actuellement en **phase de cadrage produit et d'architecture**. Aucune fonctionnalité n'est considérée comme terminée tant qu'elle n'a pas été intégrée et démontrée de bout en bout.
-
-Les prochaines décisions structurantes sont :
-
-1. valider le scope repositionné avec l'équipe et l'enseignant;
-2. construire la User Story Map;
-3. figer le modèle de domaine et les machines à états;
-4. tester la méthode de détection physique;
-5. réaliser le walking skeleton Web–API–PostgreSQL–MQTT–ESP32–iOS.
+| Document | Contenu |
+|---|---|
+| [02 — Scope](docs/cahier-conception/02-scope.md) | P0, limites, exigences et acceptation |
+| [03 — Dictionnaire](docs/cahier-conception/03-dictionnaire-de-donnees.md) | Vocabulaire, données et règles métier |
+| [04 — Modèle logique](docs/cahier-conception/04-modele-de-donnees-logique.md) | Entités, responsabilités et relations |
+| [05 — Machines à états](docs/cahier-conception/05-machines-a-etats.md) | Réservations, prêts, opérations et anomalies |
+| [06 — Algorithmes](docs/cahier-conception/06-algorithmes-et-flux-fonctionnels.md) | Décisions et parcours fonctionnels |
+| [07 — Flux de données](docs/cahier-conception/07-flux-de-donnees.md) | Échanges entre acteurs, traitements et stockages |
+| [08 — PostgreSQL](docs/cahier-conception/08-modele-physique-postgresql.md) | Tables, contraintes, index et transactions |
+| [09 — REST](docs/cahier-conception/09-contrats-rest.md) | Routes, payloads, erreurs et idempotence HTTP |
+| [10 — MQTT](docs/cahier-conception/10-contrats-mqtt.md) | Topics, messages, sécurité et comportement du hub |
+| [11 — Story Map et backlog](docs/cahier-conception/11-user-story-map-p0.md) | Parcours, stories et premiers tickets à saisir |
+| [12 — Architecture physique](docs/cahier-conception/12-architecture-physique.md) | Hub, deux cellules, interfaces et vérification matérielle |
+| [13 — Décisions d’architecture](docs/cahier-conception/13-decisions-architecture.md) | ADRs, décisions actées et arbitrages restants |
+| [14 — Plan d’exécution](docs/cahier-conception/14-plan-execution-et-iterations.md) | Capacité par personne, cycles, jalons et organisation Linear |
