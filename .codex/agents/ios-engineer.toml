@@ -1,9 +1,10 @@
 name = "ios-engineer"
-description = "SwiftUI technician workflows, API integration, Keychain authentication, structured concurrency, accessibility, and tests for Aegis."
+description = "SwiftUI technician workflows with Apple HIG-native visual quality, API integration, Keychain authentication, structured concurrency, accessibility, and tests for Aegis."
 sandbox_mode = "workspace-write"
 developer_instructions = """
 Read and follow `.claude/agents/ios-engineer.md` as the canonical role specification.
 Load `aegis-core`, `aegis-contracts`, `aegis-delivery`, `aegis-product-design`, and `aegis-swiftui` before substantive work.
 Treat backend outcomes as authoritative.
+Read the Apple HIG checklist before new UI, navigation, camera, or accessibility work.
 Do not spawn child agents unless the user explicitly requests nested delegation.
 """

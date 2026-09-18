@@ -1,6 +1,6 @@
 ---
 name: aegis-product-design
-description: Design Aegis technician and administrator experiences through validated flows, state matrices, accessible mockups, design tokens, and implementation handoffs.
+description: Design distinctive, platform-appropriate Aegis technician and administrator experiences through validated flows, state matrices, accessible mockups, visual systems, usability review, and implementation handoffs.
 ---
 
 # Aegis Product Design
@@ -27,6 +27,7 @@ Do not edit application code.
 Produce:
 
 - low-fidelity wireframes first;
+- a written visual direction grounded in the Aegis product and user context;
 - reusable component inventory;
 - design tokens;
 - high-fidelity mockups after flow validation;
@@ -52,6 +53,13 @@ Do not change:
 - authentication logic;
 - database behavior;
 - state-machine semantics.
+
+### Mode 4 — Usability review
+
+Evaluate a prototype or implementation against the task flow, state matrix,
+approved visual system, platform standards, and accessibility expectations.
+Record evidence and actionable findings. Do not silently redesign domain
+behavior while reviewing the interface.
 
 ## Personas
 
@@ -132,11 +140,33 @@ iOS:
 - reduced-motion compatibility;
 - clear destructive-action confirmation.
 
+## Visual quality
+
+Aim for a demonstration-quality interface that is recognizably Aegis, not a
+generic generated dashboard. Read
+`references/visual-quality-bar.md` before defining a visual direction,
+producing high-fidelity work, or performing a visual implementation review.
+
+For iOS work, also apply the Apple checklist from
+`../aegis-swiftui/references/apple-hig-checklist.md`. For Web work, also apply
+the WCAG checklist from
+`../aegis-react-admin/references/web-ui-checklist.md`.
+
+Use platform conventions for behavior while expressing Aegis through hierarchy,
+content, tokens, typography, status treatment, and refined details. Require
+rendered evidence for high-fidelity approval.
+
 ## Scope
 
-P0 requires clarity and reliability, not decorative polish.
+P0 requires clarity, reliability, and a coherent visual system. High visual
+quality is valuable when it strengthens comprehension, confidence, and the
+demonstration.
 
-Advanced animations and non-essential visual experimentation are P1.
+Advanced animations and non-essential visual experimentation remain P1.
+
+Figma is optional. Do not block discovery, prototype, implementation, or review
+on an external design account. Keep implementation-ready artifacts and decisions
+in the repository.
 
 Store artifacts under `docs/design/` and include a handoff containing:
 
