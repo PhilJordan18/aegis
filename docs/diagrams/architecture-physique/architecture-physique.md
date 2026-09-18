@@ -1,124 +1,76 @@
-# Architecture physique du système Aegis (Hub & Cellules Modulaires)
+# Architecture physique du prototype Aegis
 
-Ce document décrit l'architecture matérielle retenue pour le système Aegis : le Master Hub (écran 7.0" tactile + ESP32-S3), les Cellules modulaires de casiers (Arduino + verrou rotatif 12V) et leur interconnexion en bus série RJ45 unifié.
+Ces figures consolident les vues et recherches matérielles de Jimmy avec le
+périmètre P0, le [document 12](../../cahier-conception/12-architecture-physique.md)
+et [ADR-002](../../adr/ADR-002-etoile-rs485.md). Elles distinguent la topologie
+acceptée des composants et paramètres qui doivent encore être qualifiés.
 
----
+## Vue du prototype
 
-## 1. Vue d'ensemble du matériel
+La vue avant/arrière conserve les choix de présentation de Jimmy : écran dans
+le hub, trappe complète et voyant sur chaque cellule, connecteurs regroupés à
+l'arrière. La disposition illustre un hub avec exactement deux compartiments
+A1/A2 sans figer les dimensions ni la fixation mécanique.
 
-Le système physique se compose de deux types de modules :
-* **Master Hub (7.0" HMI)** : Module central d'affichage et de communication réseau. Il pilote la liaison Wi-Fi / MQTT avec le backend, génère le QR code dynamique et injecte l'alimentation et les ordres sur le bus.
-* **Cellules Modulaires (Casiers)** : Nœuds esclaves autonomes empilables/interverrouillables par pions de centrage, chaînés en cascade (Daisy-Chain) via un câble réseau unique.
+![Vue avant et arrière du hub et des deux cellules](architecture-physique-vues.svg)
 
-```mermaid
-flowchart LR
-    PSU["Alimentation 12V / 5A"] --> HUB["Master Hub<br/>(ESP32-S3 HMI 7.0\")"]
-    HUB -->|Câble RJ45 Cat6<br/>12V + GND + RS485| C1["Cellule 1<br/>(Arduino Nano)"]
-    C1 -->|Câble RJ45 Cat6<br/>12V + GND + RS485| C2["Cellule 2<br/>(Arduino Nano)"]
-    C2 -->|Câble RJ45 Cat6<br/>12V + GND + RS485| C3["Cellule 3<br/>(Terminaison 120 Ω)"]
+- Une cellule correspond exactement à un compartiment.
+- Le hub porte l'écran, le calcul et le réseau; les cellules n'ont pas d'écran.
+- Chaque cellule possède un connecteur arrière dédié vers le hub.
+- Les dimensions, l'empilage et la fixation restent à valider avec le prototype.
 
-    classDef hub fill:#243828,stroke:#8fd382,color:#e8e8e8
-    classDef cell fill:#303030,stroke:#a3a3a3,color:#e8e8e8
-    classDef psu fill:#2d2222,stroke:#ff7b72,color:#ff7b72
-    class HUB hub
-    class C1,C2,C3 cell
-    class PSU psu
-```
+## Topologie en étoile
 
----
+La topologie P0 utilise deux départs directs depuis le hub. Les segments A1 et
+A2 ne partagent ni câble de cellule ni lignes RS-485; seul le hub communique
+avec le broker MQTT.
 
-## 2. Spécifications du matériel par module
+![Topologie physique en étoile avec deux départs](architecture-physique-topologie-etoile.svg)
 
-### 2.1 Master Hub (Le Cerveau)
-* **Écran & Processeur :** Module tout-en-un HMI 7.0" capacitif (800 × 480) avec **ESP32-S3** intégré (Wi-Fi 802.11 b/g/n, Bluetooth BLE, 16 Mo Flash, 8 Mo PSRAM).
-* **Alimentation externe :** Prise Jack DC 5.5 × 2.1 mm recevant du **12V DC / 5A** (bloc secteur 60W).
-* **Régulation interne :** Convertisseur DC-DC Buck (12V ➔ 5V 3A) alimentant l'écran et la logique.
-* **Communication bus :** Transceiver différentiel **MAX485** relié à l'UART de l'ESP32-S3.
-* **Sortie Bus :** 1 port femelle **RJ45 (`BUS OUT`)** injectant la puissance 12V et les signaux RS-485.
+- Deux ports, deux câbles et deux segments RS-485 indépendants sont retenus.
+- Les cellules n'ont ni identité IP, ni Wi-Fi, ni client MQTT.
+- Un M12 codé A à 5 contacts est recommandé à la revue comme connecteur de cellule.
+- Son brochage, les protections, le protocole local et la puissance exigent encore un POC.
 
-### 2.2 Cellule Modulaire (Le Casier)
-* **Microcontrôleur local :** **Arduino Nano** (ou RP2040 Pico) dédié au décodage de trames, à la commande du verrou et à la lecture des capteurs.
-* **Ports d'interconnexion :** 2 embases **RJ45 (`BUS IN` et `BUS OUT`)** avec pistes de cuivre directes pour faire passer le 12V et le GND sans interruption vers le casier suivant.
-* **Adressage matériel :** **DIP Switch 4 positions** permettant de définir manuellement l'adresse du casier de 1 à 16 sur le bus.
-* **Actuateur :** Verrou rotatif électrique **Sutertech 12V** (force de retenue 330 lbs / 1500 N, électromécanique *fail-secure*, déverrouillage manuel de secours).
-* **Éjecteur mécanique :** Poussoir à ressort interne comprimé à la fermeture qui projette la porte vers l'avant de 10 à 15 mm dès l'ouverture du loquet.
-* **Driver de puissance :** Transistor **MOSFET canal N** (AO3400 ou IRLZ44N) + diode de roue libre **1N4007** + condensateur tampon **470 µF / 25V** (amortit l'appel de courant sans creux de tension sur le bus).
-* **Voyant de façade :** LED RGB en façade (Vert = Prêt/Verrouillé, Bleu/Ambre = Déverrouillé, Rouge = Alarme/Mal fermé).
+## Composition fonctionnelle d'une cellule
 
----
+Cette vue borne les responsabilités locales sans choisir prématurément le
+microcontrôleur, le brochage ou les protections. Le bloc de connecteur se trouve
+bien entre le câble dédié du hub et l'interface RS-485 de la cellule. Le
+contrôleur reçoit une commande ciblée, actionne le verrou et produit des
+observations; il ne décide jamais si l'utilisateur est autorisé.
 
-## 3. Le Câble RJ45 Tout-en-un (Brochage unifié)
+![Blocs fonctionnels internes d'une cellule](architecture-physique-cellule.svg)
 
-Un seul câble réseau Cat6 standard relie chaque module au suivant, transportant à la fois l'électricité et les signaux différentiels (style Passive PoE) :
+- Le verrou est actionné par un driver adapté, jamais directement par un GPIO.
+- Le M12 codé A à 5 contacts est une proposition verrouillable, pas une décision acceptée.
+- Le capteur de porte et le RFID produisent des observations distinctes.
+- Le RFID local reste le premier choix soumis au POC et à son fallback documenté.
+- Une perte de lecteur ou de liaison ne constitue jamais une preuve d'absence.
 
-| Broches RJ45 | Paire de fils | Signal / Fonction | Rôle |
-|:---:|:---:|:---:|:---|
-| **1 & 2** | Paire Orange | **RS-485 Data (A / B)** | Ligne série différentielle semi-duplex (ordres & statuts) |
-| **4 & 5** | Paire Bleue | **+12V DC (Power Bus)** | Alimentation partagée pour les solénoïdes (conducteurs doublés) |
-| **7 & 8** | Paire Marron | **GND (Masse retour)** | Retour de masse commun (conducteurs doublés) |
-| **3 & 6** | Paire Verte | **Sense / Détection** | Ligne auxiliaire de détection de boucle de continuité |
+## Banc d'essai du verrou
 
-> **Note :** La dernière cellule de la chaîne active un cavalier de résistance de terminaison de **120 Ω** entre les lignes A et B pour éviter les échos sur le signal.
+Le banc caractérise le verrou candidat avant son intégration dans une cellule.
+Le schéma montre le principe de mesure, non un câblage final approuvé.
 
----
+![Banc d'essai du verrou rotatif](architecture-physique-test-verrou.svg)
 
-## 4. Système Double Capteur & Logique de Sécurité
+- L'ampèremètre est placé en série dans la boucle d'actionnement.
+- L'interrupteur est momentané et l'impulsion reste volontairement contrôlée.
+- La protection exacte dépend de la fiche du composant et des mesures réelles.
+- Courant, durée, ouverture, échauffement et repos sans tension sont consignés.
 
-Chaque casier dispose de **deux capteurs physiques indépendants** pour éliminer tout faux positif et certifier la tenue mécanique :
+## Légende commune
 
-```mermaid
-flowchart TD
-    subgraph DUAL_SENSORS ["Double Système de Capteurs Indépendants"]
-        SA["Capteur A : Contact Reed Magnétique<br/>(Monté sur cadre + aimant porte)"]
-        SB["Capteur B : Microswitch Interne Gâche<br/>(Intégré dans le corps du verrou)"]
-    end
+| Style | Sens |
+|---|---|
+| Vert | Hub ou élément retenu de l'architecture |
+| Gris | Cellule, interface ou composant générique |
+| Bleu | Données, réseau ou liaison locale |
+| Ambre | Actionnement ou choix soumis à qualification |
+| Pointillé | Composant, protection ou technologie encore à confirmer |
 
-    subgraph DETECTION ["Grandeurs Physiques Mesurées"]
-        DA["Présence physique du battant<br/>Alignement de la porte avec le cadre"]
-        DB["Verrouillage mécanique réel<br/>Prise du cliquet sur le pêne de gâche"]
-    end
+## Statut
 
-    SA -->|Mesure| DA
-    SB -->|Mesure| DB
-
-    DA & DB --> MCU["MCU Esclave (Arduino/RP2040)<br/>Évaluation de la table de vérité"]
-
-    MCU -->|A=1 et B=1| OK["État SÉCURISÉ (LOCKED_SECURE)<br/>Voyant Vert"]
-    MCU -->|A=1 et B=0| WARN1["Porte plaquée NON verrouillée<br/>(CLOSED_UNLATCHED) - Voyant Rouge"]
-    MCU -->|A=0 et B=1| ALARM["Effraction / Forçage mécanique<br/>(TAMPER_FORCED) - Alerte Immédiate"]
-    MCU -->|A=0 et B=0| OPEN["Porte Ouverte Normale<br/>(AJAR_UNLATCHED) - Voyant Ambre"]
-
-    classDef sensor fill:#251e30,stroke:#a78bfa,color:#e8e8e8
-    classDef logic fill:#1c2636,stroke:#6cb2ff,color:#e8e8e8
-    classDef ok fill:#1e3823,stroke:#8fd382,color:#8fd382
-    classDef warn fill:#382218,stroke:#f0a500,color:#f0a500
-    classDef alarm fill:#3a1d1d,stroke:#ff7b72,color:#ff7b72
-    class SA,SB,DA,DB sensor
-    class MCU logic
-    class OK ok
-    class WARN1 warn
-    class ALARM alarm
-    class OPEN warn
-```
-
-### Table de vérité des capteurs
-
-| Capteur A (Reed) | Capteur B (Microswitch) | État Casier | Diagnostic & Comportement Système |
-|:---:|:---:|:---:|:---|
-| **1 (Fermé)** | **1 (Engagé)** | `LOCKED_SECURE` | **Verrouillage effectif.** Battant plaqué et verrou enclenché. Voyant Vert fixe. |
-| **0 (Ouvert)** | **0 (Dégagé)** | `AJAR_UNLATCHED` | **Ouverture nominale.** Porte libérée suite à déverrouillage autorisé. Voyant Ambre clignotant. |
-| **1 (Fermé)** | **0 (Dégagé)** | `CLOSED_UNLATCHED` | **Porte mal claquée.** Battant contre le montant mais loquet non pris. Voyant Rouge (l'utilisateur doit appuyer fermement). |
-| **0 (Ouvert)** | **1 (Engagé)** | `TAMPER_FORCED` | **ALERTE EFFRACTION.** Loquet armé mais battant écarté du cadre (pied de biche). Alerte MQTT critique immédiate. |
-
-### Traitement anti-rebond (Debounce)
-* **Matériel (Filtre RC) :** Résistance de rappel $10\text{ k}\Omega$ + condensateur $100\text{ nF}$ ($\tau = 1\text{ ms}$) éliminant les étincelles de contact.
-* **Logiciel (Hystérésis) :** Scrutation toutes les 10 ms. Un état n'est validé par l'Arduino que s'il reste **stable pendant 40 ms consécutives**.
-
----
-
-## 5. Invariants et Sécurité Électromécanique
-
-1. **Sécurité passive (*Fail-Secure*) :** Le verrou rotatif reste bloqué mécaniquement sous ressort en l'absence totale de tension. Une coupure de courant ne libère aucun casier.
-2. **Protection thermique du solénoïde :** Le firmware de la cellule coupe impérativement le MOSFET après **200 ms** (coupure matérielle de sécurité à 250 ms) avec une période de repos forcé de 1.5 s, empêchant la destruction thermique de la bobine 12V.
-3. **Bypass de puissance :** Le passage du courant 12V/GND entre les ports `BUS IN` et `BUS OUT` d'une cellule s'effectue directement sur le PCB, garantissant l'alimentation des casiers suivants même si le microcontrôleur d'une cellule est réinitialisé.
-
+**Architecture P0 acceptée; disposition, composants électriques, brochage,
+puissance et performance RFID à qualifier par POC.**

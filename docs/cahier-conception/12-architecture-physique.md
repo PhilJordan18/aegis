@@ -2,7 +2,7 @@
 
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Date de révision :** 17 septembre 2026  
+**Date de révision :** 18 septembre 2026
 **Version :** 2.0 — dossier de réalisation, interfaces et responsabilités  
 **Statut :** architecture de référence; étoile et deux cellules retenues. Les choix électriques et les résultats de POC restent explicitement ouverts.  
 **Références :** [scope](02-scope.md), [contrat MQTT](10-contrats-mqtt.md), [ADRs](13-registre-adrs-proposes.md).
@@ -13,7 +13,10 @@ Le prototype comporte **un hub avec écran et deux cellules indépendantes A1 et
 
 Chaque cellule rejoint directement le hub par son propre câble. Ce document remplace l’ancienne représentation en chaîne avec bus traversant.
 
-Les dessins mécaniques de Jimmy décrivent l’encombrement, les fixations et le verrou. Ce document fixe les interfaces et conditions de validation nécessaires à la réalisation. Un schéma électrique coté et un brochage approuvé devront correspondre aux composants effectivement retenus.
+Les dessins mécaniques produits par l’équipe décrivent l’encombrement, les
+fixations et le verrou. Ce document fixe les interfaces et les conditions de
+validation nécessaires à la réalisation. Un schéma électrique coté et un
+brochage approuvé devront correspondre aux composants effectivement retenus.
 
 ### 1.1 Décisions et points ouverts
 
@@ -22,11 +25,11 @@ Les dessins mécaniques de Jimmy décrivent l’encombrement, les fixations et l
 | Modularité | Un hub et deux cellules; une cellule = un compartiment | Retenu par l’équipe |
 | Topologie | Deux départs directs depuis le hub; pas de câble traversant entre cellules | Étoile validée |
 | Écran | QR temporaire, consignes et résultat backend | Inclus au P0 |
-| Connectique | Cat5e/Cat6 et RJ45 propriétaire | Proposition de Jimmy, dimensionnement à vérifier |
+| Connectique | M12 codé A à 5 contacts recommandé pour la revue; RJ45 propriétaire comme option initiale | Proposition en attente de validation conjointe de l’équipe; dimensionnement à vérifier |
 | Transport local | Un segment RS-485 indépendant par départ | Proposition technique, pas une conséquence automatique de l’étoile |
 | Protocole local | Modbus RTU minimal ou alternative explicitement documentée | À choisir avec les composants |
 | Détection | RFID UHF local, tag propre à chaque actif | Premier choix soumis au POC |
-| Verrou | Verrou rotatif à impulsion, candidat 12 V décrit par Jimmy | Fonctionnement et caractéristiques à vérifier |
+| Verrou | Verrou rotatif à impulsion, candidat 12 V étudié par l’équipe | Fonctionnement et caractéristiques à vérifier |
 
 ### 1.2 Responsabilité de réalisation
 
@@ -58,9 +61,33 @@ Les cellules peuvent partager l’alimentation principale dans le hub. Un câble
 
 Ajouter une troisième cellule exige un port, les interfaces et la capacité d’alimentation correspondants. La modularité n’implique pas un nombre illimité de cellules sans changement du hub.
 
-## 4. Ce que signifie RJ45 ici
+## 4. Connecteur entre le câble du hub et la cellule
 
-Jimmy propose un câble à paires torsadées Cat5e/Cat6 avec connecteurs couramment appelés **RJ45 (8P8C)**. Il fournit huit conducteurs. Le connecteur ne choisit ni le protocole ni les tensions.
+Le connecteur représenté entre le câble dédié du hub et l’interface RS-485 est
+la prise physique de la cellule. La chaîne complète est : contrôleur du hub,
+transceiver RS-485 du port, câble et connecteurs, transceiver RS-485 de la
+cellule, puis contrôleur local. L’alimentation 12 V et son retour empruntent des
+conducteurs séparés dans le même câble; ils ne traversent pas le transceiver.
+
+Pour la revue d’équipe, le choix recommandé est un **M12 codé A à 5 contacts**.
+Il est verrouillable, robuste et physiquement distinct d’Ethernet. Quatre contacts
+suffisent aux fonctions minimales (+12 V, 0 V, RS-485 A et RS-485 B); le
+cinquième demeure réservé jusqu’à la décision sur le blindage ou un besoin de
+diagnostic. Cette affectation est propre à Aegis et ne doit pas être présentée
+comme un brochage M12 standard.
+
+Le M12 reste une proposition jusqu’à la mesure du courant du verrou, au choix
+de la section du câble et à la validation de la référence exacte. À titre de
+repère, des [références industrielles M12 A à 5 contacts](https://www.te.com/en/product-CAT-M1-B8722.html)
+existent avec une capacité annoncée de 4 A par contact, mais la valeur
+applicable est toujours celle de la fiche du connecteur et du câble réellement
+achetés.
+
+### 4.1 Option RJ45 initialement étudiée
+
+Une première option étudiée par l’équipe utilise un câble à paires torsadées
+Cat5e/Cat6 avec des connecteurs couramment appelés **RJ45 (8P8C)**. Elle fournit
+huit conducteurs. Le connecteur ne détermine ni le protocole ni les tensions.
 
 La réalisation proposée transporte :
 
@@ -70,7 +97,12 @@ La réalisation proposée transporte :
 
 **Cette prise Aegis n’est pas un port Ethernet et n’utilise pas le PoE standard.** Ne pas la raccorder à un switch, routeur, ordinateur ou injecteur PoE. Étiqueter les deux extrémités, employer des câbles dédiés et différencier les prises du réseau. Si le risque de confusion reste important, choisir un connecteur physiquement incompatible.
 
-Le brochage n’est pas fixé dans cette révision. Il dépend de la section réelle du câble, du courant des deux cellules et du lecteur RFID, de la longueur, des contacts et de l’alimentation. Le marquage Cat5e/Cat6 ne garantit pas à lui seul la capacité à alimenter la serrure.
+Le RJ45 demeure un repli économique possible, mais son risque de confusion avec
+Ethernet/PoE impose davantage de prévention. Le brochage final n’est fixé pour
+aucune des deux options dans cette révision. Il dépend de la section réelle du
+câble, du courant d’une cellule et du lecteur RFID, de la longueur, des contacts
+et de l’alimentation. Le marquage Cat5e/Cat6 ne garantit pas à lui seul la
+capacité à alimenter la serrure.
 
 ## 5. RS-485 dans une étoile
 
@@ -85,7 +117,10 @@ Les sorties A/B des deux ports ne sont pas raccordées ensemble pour créer une 
 
 Modbus RTU minimal reste une proposition applicative de départ à confirmer au POC. La trame exacte ou la table de registres doit être documentée avant implémentation; une trame personnalisée avec CRC ne doit pas être appelée Modbus sans conformité au protocole.
 
-Les contraintes de topologie et de terminaison RS-485 sont décrites dans le [guide de conception de Texas Instruments](https://www.ti.com/lit/an/slla272d/slla272d.pdf). Les deux segments indépendants sont notre proposition d’implémentation de votre étoile.
+Les contraintes de topologie et de terminaison RS-485 sont décrites dans le
+[guide de conception de Texas Instruments](https://www.ti.com/lit/an/slla272d/slla272d.pdf).
+Les deux segments indépendants constituent la proposition d’implémentation de
+la topologie en étoile retenue pour le prototype.
 
 ## 6. Rôle de l’écran au P0
 
@@ -130,7 +165,10 @@ Les 120 secondes du workflow physique commencent après autorisation QR. Ni un s
 
 ## 8. Serrure et alimentation
 
-Le mécanisme décrit par Jimmy est un verrou rotatif libéré par une impulsion, mécaniquement verrouillé au repos, avec secours manuel. Le fonctionnement exact, l’ouverture effective de la porte et le courant restent à vérifier sur le composant choisi.
+Le mécanisme étudié par l’équipe est un verrou rotatif libéré par une impulsion,
+mécaniquement verrouillé au repos, avec secours manuel. Le fonctionnement exact,
+l’ouverture effective de la porte et le courant restent à vérifier sur le
+composant choisi.
 
 | Élément | Exigence de conception |
 |---|---|
@@ -170,7 +208,10 @@ Le RFID peut également être remplacé par le fallback d’identification et de
 
 ## 11. Nomenclature de réalisation
 
-Cette nomenclature compte les deux cellules. Jimmy complète les références et prix **avant achat**, en intégrant taxes, livraison, matériel déjà disponible et éléments fournis par le laboratoire. Les quantités électroniques dépendent de la réalisation RS-485 proposée.
+Cette nomenclature compte les deux cellules. L’équipe complète les références et
+les prix **avant tout achat**, en intégrant les taxes, la livraison, le matériel
+déjà disponible et les éléments fournis par le laboratoire. Les quantités
+électroniques dépendent de la réalisation RS-485 proposée.
 
 | Ensemble | Quantité cible | Information à obtenir |
 |---|---:|---|
@@ -214,4 +255,9 @@ Le nom exact des fonctions C++ sera défini lors de l’initialisation du firmwa
 | Relevés POC | Conditions, répétitions, échecs et choix RFID/liaisons motivé | Jimmy, revue Philippe |
 | Essai écran–mobile | QR affiché sur le composant réel et scanné par l’iPhone de démonstration | Philippe et Jimmy |
 
-Les vues SVG déjà préparées par Jimmy sont réutilisables après vérification contre cette architecture. Leur présence et leurs résultats ne sont pas attestés par ce document. Le cahier académique doit contenir des figures légendées et lisibles; les sources éditables restent dans le dépôt.
+Les [figures physiques consolidées](../diagrams/architecture-physique/architecture-physique.md)
+reprennent les vues et recherches matérielles de l’équipe en les alignant sur
+cette architecture et sur ADR-002. Chaque SVG possède une source Draw.io éditable
+dans le dépôt. Ces
+figures expliquent la conception; elles ne transforment pas un composant, un
+brochage ou une performance non mesurée en résultat de POC.
