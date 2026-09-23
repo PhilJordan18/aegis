@@ -267,6 +267,7 @@ Le nom exact des fonctions C++ sera défini lors de l’initialisation du firmwa
 | Banc du verrou | Montage, matériel de mesure, impulsion testée, courant et conclusion | Jimmy |
 | Relevés POC | Conditions, répétitions, échecs et choix RFID/liaisons motivé | Jimmy, revue Philippe |
 | Essai écran–mobile | QR affiché sur le composant réel et scanné par l’iPhone de démonstration | Philippe et Jimmy |
+| Rendu 3D d’intention | Vues avant, portes ouvertes et arrière du P0, modèle STL et page interactive, sans valeur de mesure | Jimmy |
 
 Les [figures physiques consolidées](../diagrams/architecture-physique/architecture-physique.md)
 reprennent les vues et recherches matérielles de l’équipe en les alignant sur

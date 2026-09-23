@@ -60,6 +60,19 @@ Le schéma montre le principe de mesure, non un câblage final approuvé.
 - La protection exacte dépend de la fiche du composant et des mesures réelles.
 - Courant, durée, ouverture, échauffement et repos sans tension sont consignés.
 
+## Rendu 3D d'intention
+
+Rendu Three.js du prototype P0 : trois modules de même gabarit, le hub portant
+l'écran sur une porte de service, A1 et A2 reliées chacune au hub par leur
+propre câble M12. Illustration de conception, non un résultat de POC.
+
+![Rendu 3D du casier P0 : vue avant, portes ouvertes et vue arrière](rendu-3d/casier-p0-vues.png)
+
+- Le modèle [`casier-p0.stl`](rendu-3d/casier-p0.stl) se consulte en 3D directement dans GitHub.
+- La page [`casier-3d.html`](rendu-3d/casier-3d.html) est interactive : portes, vues, M12 ou RJ45, pose murale.
+- Le gabarit de 300 × 260 × 340 mm et le hub au même format que les cellules sont des propositions à valider.
+- Les motifs à quatre modules sont hors P0 et restent dans [`docs/research/rendu-3d-motifs.md`](../../research/rendu-3d-motifs.md).
+
 ## Légende commune
 
 | Style | Sens |
