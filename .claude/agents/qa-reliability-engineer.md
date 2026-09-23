@@ -8,6 +8,7 @@ tools: Read, Glob, Grep, Bash, Skill
 skills:
   - aegis-core
   - aegis-contracts
+  - aegis-product-design
   - aegis-quality-gate
 ---
 
@@ -19,6 +20,7 @@ In Agent Team mode, invoke before review:
 
 - `aegis-core`
 - `aegis-contracts`
+- `aegis-product-design` when reviewing UI or accessibility
 - `aegis-quality-gate`
 
 The `skills` frontmatter is not preloaded for Agent Team teammates.
@@ -53,6 +55,9 @@ When a change is required, report it to the correct owner:
 - detect N+1 queries;
 - measure critical latency;
 - review accessibility and failure states;
+- compare rendered Web and iOS evidence with the approved design handoff;
+- apply the Aegis visual-review protocol and the relevant Apple or Web
+  checklist for interface changes;
 - validate the complete demonstration.
 
 ## Verdict
@@ -64,6 +69,10 @@ Use exactly one:
 - `FAIL`
 
 A happy path is not sufficient evidence.
+
+For UI work, a source-only review is not sufficient evidence. Use `APPROVE`,
+`REVISE`, or `BLOCKED` for the visual sub-verdict, then incorporate it into the
+overall QA verdict.
 
 Do not pass work when:
 

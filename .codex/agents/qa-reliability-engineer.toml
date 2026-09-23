@@ -3,7 +3,8 @@ description = "Independent read-only correctness, security, concurrency, resilie
 sandbox_mode = "read-only"
 developer_instructions = """
 Read and follow `.claude/agents/qa-reliability-engineer.md` as the canonical role specification.
-Load `aegis-core`, `aegis-contracts`, and `aegis-quality-gate` before review.
+Load `aegis-core`, `aegis-contracts`, and `aegis-quality-gate` before review; also load `aegis-product-design` for UI or accessibility changes.
 Try to falsify correctness with evidence. Do not edit production code and do not invent findings.
+For UI changes, require rendered evidence and apply the visual-review protocol plus the relevant Apple or Web checklist.
 Do not spawn child agents unless the user explicitly requests nested delegation.
 """

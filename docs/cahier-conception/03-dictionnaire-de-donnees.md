@@ -2,6 +2,7 @@
 
 **Version :** 1.3 — contrôle local QR, étoile et cohérence du retour
 **Date de révision :** 16 septembre 2026
+**Mise à jour ciblée :** 23 septembre 2026 — paramètres QR approuvés, vocabulaire inchangé.
 **Statut :** Version de référence pour le cahier de conception  
 **Source principale :** `02-scope.md` v0.3 (9 septembre 2026)
 
@@ -440,9 +441,9 @@ Secret éphémère affiché sur l’écran du hub pour une opération précise. 
 | `displayedAt` | Accusé applicatif d’affichage émis par le bon hub. |
 | `consumedAt` | Validation unique dans la transaction d’autorisation. |
 | `closedAt` | Instant de consommation, d’expiration ou d’invalidation. |
-| `failedAttempts` | Nombre de secrets erronés soumis par l’initiateur; maximum proposé : 5. |
+| `failedAttempts` | Nombre de secrets erronés soumis par l’initiateur; maximum retenu : 5. |
 
-Les **60 secondes et 5 essais sont des paramètres proposés dans cette révision**, à confirmer pendant le test d’usage. Le délai physique de 120 secondes reste inchangé et commence après validation.
+Les **60 secondes maximum après création et 5 secrets erronés sont retenus par l’ADR-009**, approuvé par Philippe le 23 septembre 2026. Leur ergonomie reste à mesurer; une lecture caméra sans soumission ne compte pas comme essai. Le délai physique de 120 secondes reste inchangé et commence après validation.
 
 Le secret est transmis uniquement au hub via MQTT chiffré, puis optiquement au téléphone. Il n’est jamais renvoyé par une route de lecture REST, un audit ou une page d’administration. Une nouvelle tentative après expiration crée une nouvelle opération et un nouveau défi.
 

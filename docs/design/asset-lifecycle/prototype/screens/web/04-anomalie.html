@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="fr-CA" data-platform="web">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Aegis Manager — Dossier d'anomalie (prototype)</title>
+<!--
+  Web 04 « Détail d'anomalie — dialogue Reconnaître » — moment 11 h 20 (key "11:20").
+  Same instant as Web 03 (one simultaneous snapshot). Treatment A, light only.
+  Composition A: liste + dossier (sections.md §5.5).
+  Anomaly: ASSET_PRESENT_WITH_ACTIVE_LOAN on A1 / MM-001, OPEN, detected 11 h 04 min 18 s
+  (03 §5.11, 06 §12.4). Out-of-operation RFID scan (10 §20): lockerOperationId null.
+  The loan stays ACTIVE and the asset BORROWED (06 §12.4).
+  Evidence: normalized observations only (09 §18.1); the evidence item shape is not defined by 09
+  → « Fictif » (F). Holder name: LoanView exposes only holderUserId (09 §8.4); UserSummary (§8.8)
+  is not added to LoanView → illustrative « Fictif · C4 ». acknowledgedBy IS a UserSummary (§8.7):
+  an acknowledging actor name would be normative (none yet: OPEN). Institution label → C6.
+  Action: « Reconnaître » dialog, mandatory note 1–500 chars, 09 §18.2 example note.
+  Permanent reminder; no « Résoudre » (05 §6.4, 09 §18.2).
+-->
+<link rel="stylesheet" href="../../tokens/brand.css">
+<link rel="stylesheet" href="../../tokens/scales.css">
+<link rel="stylesheet" href="../../components/base.css">
+<link rel="stylesheet" href="../../components/web.css">
+<script src="../../data/fixture.js"></script>
+<script src="../../data/screens.js"></script>
+<script src="../../lib/aegis.js"></script>
+<style>
+  .an-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 360px 1fr; gap: 20px; }
+  .an-list { display: flex; flex-direction: column; }
+  .an-list ul { flex: 1; }
+  .an-foot { padding: 14px 20px 18px; font-size: 13px; color: var(--ag-text-2); border-top: 1px solid var(--ag-separator); }
+  .an-detail { display: flex; flex-direction: column; overflow: hidden; }
+  .an-detail .web-inspector__scroll { padding: 24px 30px 0; }
+  .an-detail .web-inspector__foot { padding: 14px 30px; }
+  .an-summary { margin-top: 8px; font-size: 15px; color: var(--ag-text); }
+  .an-callout { margin-top: 16px; }
+  .an-sec { margin-top: 20px; }
+  .an-sec .ag-evidence { margin-top: 10px; }
+  .an-links { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .an-links .web-linkcard { flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px 14px; }
+  .dlg-field { margin-top: 18px; }
+  /* Figure adaptation: the modal is anchored over the list pane (not centred) and the scrim is
+     lighter, so the evidence and the permanent reminder stay readable in the notebook figure.
+     Text behind the scrim keeps ≥ 4.5:1 (checked by tools/contrast.py samples). */
+  .ag-dialog-layer { background: rgba(8, 16, 40, .18); place-items: center start; padding-left: 262px; }
+  .ag-dialog { width: 432px; padding: 24px 24px 20px; }
+  .dlg-count { font-size: 13px; color: var(--ag-text-2); font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  const v = AG.at("11:20");
+  const { c, web, icon, fmt, copy } = AG;
+  const an = v.anomaly, loan = v.loan;
+  const a = v.assets[an.assetCode];
+  const holder = AG.fx.users[loan.holder];
+  const obs = AG.fx.observations;
+  const age = fmt.minutes(an.detectedAt, v.moment.at);
+  const note = an.noteDraft;
+  const sev = c.status("sev-medium", "Gravité " + copy.severity[an.severity].toLowerCase());
+
+  const ctx = o => o.operation ? `Retrait ${fmt.time(AG.fx.checkoutOperation.confirmedAt)}` : "Hors opération";
+  const detail = o => {
+    if (o.type === "ASSET_ABSENT") return `${o.assetCode} absent · lecteur sain, fenêtre de ${o.windowSeconds} s`;
+    if (o.type === "ASSET_PRESENT") return `${o.assetCode} présent · ${o.readCount} lectures cohérentes, lecteur sain`;
+    return "";
+  };
+  const evidence = obs.filter(o => o.type !== "DOOR_OPENED").map(o => ({
+    time: fmt.clock(o.at), cell: o.compartment, label: copy.observation[o.type], detail: detail(o), context: ctx(o), key: o.operation === null
+  }));
+
+  function compose() {
+    return `<div class="web-shell"><div class="web-decor ag-decor" aria-hidden="true"></div>
+      ${web.sidebar("anomalies", v)}
+      <main class="web-main">
+        <header class="web-pagehead">
+          <div>
+            <h1 class="web-pagehead__title">Anomalies</h1>
+            <div class="web-tabs" role="tablist"><span class="web-tabs__item is-active" role="tab" aria-selected="true">Ouvertes</span><span class="web-tabs__item" role="tab">Reconnues</span><span class="web-tabs__item" role="tab">Résolues</span></div>
+          </div>
+          <div class="web-pagehead__actions">${web.lockerChip(v)}</div>
+        </header>
+        <div class="an-body">
+          <section class="web-panel web-list an-list" aria-label="Anomalies ouvertes">
+            <div class="web-list__head"><h2 class="web-list__title">1 anomalie ouverte</h2><span class="web-list__meta">Par gravité, puis détection</span></div>
+            <ul><li><a class="web-item is-selected" href="#" aria-current="true">
+              <div class="web-item__status">${sev}<span class="web-item__reason">Ouverte · il y a ${age}</span></div>
+              <div class="web-item__name" style="font-size:17px">${c.esc(copy.anomalyType[an.type])}</div>
+              <div class="web-item__facts"><span>Cellule ${c.esc(an.compartment)}</span><span>·</span><span>${c.esc(a.model.name)} ${c.esc(a.assetCode)}</span><span>·</span><span>détectée à ${fmt.time(an.detectedAt)}</span></div>
+            </a></li></ul>
+            <p class="an-foot">Données de ${fmt.time(v.moment.at)}, heure du casier</p>
+          </section>
+          <section class="web-panel web-inspector an-detail" aria-label="Dossier d'anomalie">
+            <div class="web-inspector__scroll">
+              <div class="web-dossier-overline">${sev}<span>Ouverte · détectée à ${fmt.time(an.detectedAt)} (il y a ${age})</span></div>
+              <h2 class="web-dossier-title">${c.esc(copy.anomalyType[an.type])}</h2>
+              <p class="an-summary">${c.esc(an.summary)}</p>
+              <div class="ag-callout ag-callout--accent an-callout">${icon("info")}<span><strong>Une anomalie se résout seulement lorsqu'une nouvelle observation du casier le confirme.</strong> Reconnaître l'anomalie indique qu'elle est prise en charge; cela ne modifie ni le prêt ni l'équipement.</span></div>
+              <div class="an-sec">
+                <div class="web-section-title">Preuves normalisées ${c.mock("F")} <span class="web-section-title__ro">${icon("lock")}sans message brut</span></div>
+                ${c.evidence(evidence)}
+              </div>
+              <div class="an-sec">
+                <div class="web-section-title">Éléments liés</div>
+                <div class="an-links">
+                  <a class="web-linkcard" href="#"><span class="web-linkcard__title">Prêt ${copy.loanStatus[loan.status].toLowerCase()}</span><span class="web-linkcard__meta">${c.esc(holder.displayName)} ${c.mock("C4")}</span><span class="web-linkcard__meta">Reste actif · échéance ${fmt.time(loan.dueAt)}</span></a>
+                  <div class="web-linkcard"><span class="web-linkcard__title">Équipement ${c.esc(a.assetCode)}</span><span class="web-linkcard__meta">${c.status("progress", "Emprunté", { size: "sm", icon: "st-borrowed" })}</span><span class="web-linkcard__meta">Présence observée dans ${c.esc(an.compartment)}</span></div>
+                  <div class="web-linkcard"><span class="web-linkcard__title">Opération</span><span class="web-linkcard__meta">Aucune : observation hors opération</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="web-inspector__foot">
+              <span class="web-inspector__hint">Note de reconnaissance : aucune pour l'instant</span>
+              ${c.btn("Reconnaître", {})}
+            </div>
+          </section>
+        </div>
+      </main>
+      ${c.dialog({
+        title: "Reconnaître l'anomalie",
+        body: `<p>${c.esc(copy.anomalyType[an.type])} · cellule ${c.esc(an.compartment)} · ${c.esc(a.assetCode)}. La reconnaissance ne résout pas l'anomalie&nbsp;: seule une nouvelle observation cohérente du casier la résoudra.</p>
+          <label class="web-field dlg-field">
+            <span class="web-field__row"><span class="web-field__label">Note (obligatoire)</span><span class="dlg-count">${note.length} / 500</span></span>
+            <span class="web-textarea is-focus">${c.esc(note)}</span>
+            <span class="web-field__help">De 1 à 500 caractères. La note est conservée dans l'historique.</span>
+          </label>`,
+        actions: `${c.btn("Annuler", { variant: "secondary" })}${c.btn("Reconnaître", {})}`
+      })}
+    </div>`;
+  }
+  AG.mount(compose);
+})();
+</script>
+</body>
+</html>

@@ -3,6 +3,7 @@
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de révision :** 16 septembre 2026
+**Mise à jour ciblée :** 23 septembre 2026 — statut des paramètres QR et de RS-485; SQL inchangé.
 **Version :** 1.2 — contrôle local QR et étoile
 
 ---
@@ -293,7 +294,7 @@ CREATE TABLE lockers (
 
 #### `compartments`
 
-`local_address` est l’adresse logique de cellule. `hub_port` identifie sa liaison point à point dans l’étoile RS-485 proposée; les deux cellules ont des ports distincts. Une cellule physique correspond à un compartiment métier.
+`local_address` est l’adresse logique de cellule. `hub_port` identifie sa liaison point à point dans l’étoile RS-485 retenue par l’ADR-002; les deux cellules ont des ports distincts. Une cellule physique correspond à un compartiment métier.
 
 ```sql
 CREATE TABLE compartments (
@@ -702,7 +703,7 @@ CREATE TABLE local_access_challenges (
 );
 ```
 
-Les bornes de 60 secondes et 5 essais correspondent aux paramètres proposés de cette révision; leur modification exige une migration et une mise à jour cohérente des contrats.
+Les bornes de 60 secondes après création et 5 secrets erronés correspondent aux paramètres retenus par l’ADR-009 le 23 septembre 2026. Le SQL ci-dessus ne change pas; toute modification ultérieure de ces bornes après bootstrap exigera une migration et une mise à jour cohérente des contrats.
 
 #### `hub_display_outbox`
 

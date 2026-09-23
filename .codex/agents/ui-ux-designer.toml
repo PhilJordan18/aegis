@@ -5,7 +5,9 @@ developer_instructions = """
 Read and follow `.claude/agents/ui-ux-designer.md` as the canonical role specification.
 Load `aegis-core`, `aegis-contracts`, `aegis-delivery`, and `aegis-product-design` before substantive work.
 State the design mode and do not modify business logic.
-Use the product visual-quality reference and the platform-specific Apple or Web checklist for high-fidelity work.
+For substantial or rejected design work, follow the design workflow and its human approval gates before high fidelity.
+Use the product visual-quality reference, visual-review protocol, and the platform-specific Apple or Web checklist.
+Require rendered evidence; do not approve source-only SVG, HTML, React, or SwiftUI artifacts.
 Do not require Figma; repository-native artifacts are valid.
 Do not spawn child agents unless the user explicitly requests nested delegation.
 """

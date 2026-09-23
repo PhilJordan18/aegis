@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="fr-CA" data-platform="web" data-theme="light" data-treatment="a">
+<head>
+<meta charset="utf-8">
+<title>Aegis — Prototype : jeu du cahier (traitement A)</title>
+<!-- Hub: notebook sheets and screens (treatment A, light), then the A/B comparison trace. -->
+<script src="data/fixture.js"></script>
+<script src="data/screens.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #F2F5FB; color: #0A1430; font: 15px/1.45 -apple-system, "SF Pro Text", system-ui, sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; padding: 40px 24px 56px; }
+  h1 { margin: 0; font: 700 32px/1.1 "SF Pro Display", -apple-system, sans-serif; letter-spacing: -0.02em; }
+  .lede { margin: 10px 0 0; color: #394563; max-width: 800px; }
+  .flag { display: inline-block; margin-top: 14px; font-size: 13px; font-weight: 650; color: #8E1277; background: #FCEAF8; border: 1px dashed #B8349B; border-radius: 6px; padding: 5px 10px; }
+  .decision { margin-top: 18px; padding: 14px 16px; border-radius: 12px; background: #E1F4EA; color: #0B3D26; font-size: 14px; }
+  h2 { margin: 36px 0 12px; font-size: 19px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid rgba(10,20,48,.12); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid rgba(10,20,48,.08); font-size: 14px; vertical-align: top; }
+  th { background: #EAEFF8; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #394563; }
+  a { color: #1A45CC; font-weight: 600; }
+  a:focus-visible { outline: 2px solid #1F4FE6; outline-offset: 2px; }
+  .muted { color: #394563; font-size: 13.5px; }
+  ul { padding-left: 18px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Aegis — jeu du cahier de conception (traitement A)</h1>
+  <p class="lede">Illustrations du parcours technicien (iOS) et de l'administration (Web), traitement A « Verre lumineux », thème clair. Données : fixture unique du mercredi 16 septembre 2026 (America/Toronto).</p>
+  <div class="decision"><strong>Sélection du 23 septembre 2026 :</strong> traitement A retenu pour iOS et pour le Web. Le traitement B et les rendus sombres des pivots restent comme trace de la comparaison.</div>
+  <span class="flag">Illustrations, non prêtes à implémenter · alignées sur 09 v1.3 · nom du titulaire (C4), libellé d'institution (C6) et forme des preuves (F) fictifs</span>
+
+  <h2>Planches du cahier</h2>
+  <table>
+    <thead><tr><th>Planche</th><th>Lecture</th><th>Page</th><th>Rendu</th></tr></thead>
+    <tbody>
+      <tr><td>Parcours technicien — étapes successives (illustratives)</td><td>4 moments successifs : 10 h 30 → 10 h 31 → 10 h 39 → 10 h 43</td><td><a href="cahier.html?sheet=ios">cahier.html?sheet=ios</a></td><td><a href="renders/cahier/ios-parcours-technicien.png">renders/cahier/ios-parcours-technicien.png</a></td></tr>
+      <tr><td>Administration</td><td>État simultané 10 h 30 (avec l'étape 1), puis état simultané 11 h 20</td><td><a href="cahier.html?sheet=web">cahier.html?sheet=web</a></td><td><a href="renders/cahier/web-administration.png">renders/cahier/web-administration.png</a></td></tr>
+    </tbody>
+  </table>
+
+  <h2>Écrans du jeu (A, clair)</h2>
+  <table>
+    <thead><tr><th>Écran</th><th>Moment</th><th>Page vivante</th><th>Rendu</th></tr></thead>
+    <tbody id="set"></tbody>
+  </table>
+  <p class="muted">iOS : 393 × 852 pt rendu à 2×. Web : 1440 × 900 rendu à 1×. Rendre : <code>python3 tools/render.py</code>, <code>--cahier</code>, <code>--compare</code>.</p>
+
+  <h2>Comparaison historique A / B (pivots) — traitement A retenu le 23 septembre 2026</h2>
+  <p class="muted">Trace exploratoire, pas un choix ouvert. Les pivots ont été re-rendus pour l'alignement sur 09 v1.3 (diagnostic opérationnel).</p>
+  <table>
+    <thead><tr><th>Planche ou rendu</th><th>Page</th><th>Rendu</th></tr></thead>
+    <tbody id="trace"></tbody>
+  </table>
+
+  <h2>Documentation</h2>
+  <ul>
+    <li><a href="../jeu-cahier.md">../jeu-cahier.md</a> — texte prêt à coller dans le cahier : sélection, figures, écrans, données fictives, limites, suite.</li>
+    <li><a href="README.md">README.md</a> — fondation, rendu, polices, journaux d'inspection.</li>
+    <li><a href="data/fixture.js">data/fixture.js</a> — source unique des données, champs étiquetés.</li>
+  </ul>
+</main>
+<script>
+  const T = window.AEGIS_TREATMENTS, TH = { light: "Clair", dark: "Sombre" }, M = window.AEGIS_FIXTURE.moments;
+  const built = window.AEGIS_SCREENS.filter(s => s.status === "built");
+  const row = (s, t, th) => {
+    const page = `screens/${s.platform}/${s.n}-${s.slug}.html?treatment=${t}&theme=${th}`;
+    const png = `renders/${s.platform}/${t}/${th}/${s.n}-${s.slug}.png`;
+    return { page, png };
+  };
+  const order = ["ios-02", "ios-03", "ios-05", "ios-06", "web-02", "web-03", "web-04"];
+  document.getElementById("set").innerHTML = order.map(id => built.find(s => s.id === id)).map(s => {
+    const r = row(s, "a", "light");
+    return `<tr><td>${s.platform === "ios" ? "iOS" : "Web"} ${s.n} — ${s.title}${s.phase === 1 ? " <span class='muted'>(pivot)</span>" : ""}</td><td>${M[s.moment].label}</td><td><a href="${r.page}">ouvrir</a></td><td><a href="${r.png}">${r.png}</a></td></tr>`;
+  }).join("");
+  const trace = [
+    `<tr><td>Planche A/B — iOS catalogue</td><td><a href="compare.html?platform=ios">compare.html?platform=ios</a></td><td><a href="renders/compare/ios.png">renders/compare/ios.png</a></td></tr>`,
+    `<tr><td>Planche A/B — Web équipements</td><td><a href="compare.html?platform=web">compare.html?platform=web</a></td><td><a href="renders/compare/web.png">renders/compare/web.png</a></td></tr>`
+  ].concat(built.filter(s => s.phase === 1).flatMap(s => ["a", "b"].flatMap(t => ["light", "dark"].map(th => {
+    const r = row(s, t, th);
+    return `<tr><td>${s.platform === "ios" ? "iOS" : "Web"} ${s.n} · ${T[t].short} · ${TH[th]}</td><td><a href="${r.page}">ouvrir</a></td><td><a href="${r.png}">${r.png}</a></td></tr>`;
+  }))));
+  document.getElementById("trace").innerHTML = trace.join("");
+</script>
+</body>
+</html>

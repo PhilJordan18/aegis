@@ -5,6 +5,7 @@
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de révision :** 17 septembre 2026  
 **Version :** 2.0 — backlog d’exécution, responsabilités et tickets initiaux  
+**Mise à jour ciblée :** 23 septembre 2026 — IAM-01 alignée sur l’ADR-007; POC-02 conserve le choix de connecteur ouvert.
 **Références :** [scope](02-scope.md), documents 03–10 et [plan d’itérations](14-plan-iterations-semaines-4-a-15.md).
 
 ---
@@ -146,7 +147,7 @@ Les points ci-dessous conservent les premières estimations pour comparaison; il
 | ID | Story / enabler | Critères essentiels | Dépendances | Composants | Points |
 |---|---|---|---|---|---:|
 | POC-01 | Valider la lecture RFID UHF locale par cellule | Le bon tag est détecté dans la bonne cellule selon plusieurs orientations; faux positifs/négatifs et délai de stabilisation sont mesurés; le fallback est déclenchable selon un seuil écrit. | Matériel RFID | Hub, cellule, docs | 3 |
-| POC-02 | Valider les deux liaisons de l’étoile | Chaque cellule possède son câble alimentation/données et son port; chute de tension, actionnement, déconnexion et reprise sont mesurés séparément; brochage RJ45 documenté, sans connexion Ethernet/PoE. | Architecture physique 12, composants disponibles | Hub, cellules, docs | 3 |
+| POC-02 | Valider les deux liaisons de l’étoile | Chaque cellule possède son câble alimentation/données et son port; chute de tension, actionnement, déconnexion et reprise sont mesurés séparément; connecteur sélectionné et brochage propriétaire documentés, sans confusion avec Ethernet/PoE. | Architecture physique 12, composants disponibles | Hub, cellules, docs | 3 |
 | FND-01 | Lancer l’environnement local reproductible | Une commande documentée démarre PostgreSQL et le broker; aucun secret réel n’est committé; PostgreSQL n’est pas exposé publiquement. | Aucune | Infra | 3 |
 | FND-02 | Prouver le walking skeleton | `GET /api/v1/system/health` répond; une migration Flyway s’applique; un heartbeat du simulateur est ingéré; Web/iOS lisent l’API. Le statut privé du locker est exposé aux clients seulement après IAM-01/02. | FND-01; IAM-01/02 pour le statut privé | API, DB, MQTT, Web, iOS, simulateur | 5 |
 
@@ -154,7 +155,7 @@ Les points ci-dessous conservent les premières estimations pour comparaison; il
 
 | ID | Story | Critères essentiels | Dépendances | Composants | Points |
 |---|---|---|---|---|---:|
-| IAM-01 | Se connecter avec un compte de démonstration | Un compte valide reçoit un jeton expirant selon ADR-007 (60 minutes proposées); un mot de passe invalide est refusé sans fuite d’information; les mots de passe sont hachés. | Socle API/Flyway de FND-02, ADR-007 | API, DB, Web, iOS | 3 |
+| IAM-01 | Se connecter avec un compte de démonstration | Un compte valide reçoit un JWT signé de 60 minutes, sans refresh token, selon l’ADR-007 accepté; un mot de passe invalide est refusé sans fuite d’information; les mots de passe sont hachés. | Socle API/Flyway de FND-02, ADR-007 | API, DB, Web, iOS | 3 |
 | IAM-02 | Protéger les actions selon le rôle et le niveau d’accès | `ADMIN` et `TECHNICIAN` sont vérifiés côté serveur; un technicien ne lit jamais les données privées d’un autre; `STANDARD` ne permet pas un actif `RESTRICTED`. | IAM-01 | API, tests | 3 |
 | CAT-01 | Gérer un modèle et deux actifs | L’administrateur crée/modifie un modèle et ses exemplaires; un actif archivé conserve son historique; les validations sont explicites. | IAM-02 | API, DB, Web | 3 |
 | CAT-02 | Associer identité physique et cellule | Un tag actif n’appartient qu’à un actif; un placement courant n’associe qu’un actif à une cellule; une mutation conflictuelle est refusée. | CAT-01 | API, DB, Web | 5 |

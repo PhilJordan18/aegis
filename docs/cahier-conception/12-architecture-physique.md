@@ -3,6 +3,7 @@
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de révision :** 18 septembre 2026
+**Mise à jour ciblée :** 23 septembre 2026 — statuts RS-485 et QR alignés sur les ADR; aucun résultat de POC ajouté.
 **Version :** 2.0 — dossier de réalisation, interfaces et responsabilités  
 **Statut :** architecture de référence; étoile et deux cellules retenues. Les choix électriques et les résultats de POC restent explicitement ouverts.  
 **Références :** [scope](02-scope.md), [contrat MQTT](10-contrats-mqtt.md), [ADRs](13-registre-adrs-proposes.md).
@@ -26,7 +27,7 @@ brochage approuvé devront correspondre aux composants effectivement retenus.
 | Topologie | Deux départs directs depuis le hub; pas de câble traversant entre cellules | Étoile validée |
 | Écran | QR temporaire, consignes et résultat backend | Inclus au P0 |
 | Connectique | M12 codé A à 5 contacts recommandé pour la revue; RJ45 propriétaire comme option initiale | Proposition en attente de validation conjointe de l’équipe; dimensionnement à vérifier |
-| Transport local | Un segment RS-485 indépendant par départ | Proposition technique, pas une conséquence automatique de l’étoile |
+| Transport local | Un segment RS-485 indépendant par départ | Choix d’architecture accepté par ADR-002; réalisation électrique à qualifier |
 | Protocole local | Modbus RTU minimal ou alternative explicitement documentée | À choisir avec les composants |
 | Détection | RFID UHF local, tag propre à chaque actif | Premier choix soumis au POC |
 | Verrou | Verrou rotatif à impulsion, candidat 12 V étudié par l’équipe | Fonctionnement et caractéristiques à vérifier |
@@ -106,7 +107,7 @@ capacité à alimenter la serrure.
 
 ## 5. RS-485 dans une étoile
 
-La topologie en étoile ne supprime pas RS-485. Pour la réaliser simplement et proprement avec deux cellules, la proposition est **deux liaisons point à point indépendantes** :
+L’[ADR-002 accepté](../adr/ADR-002-etoile-rs485.md) retient **deux liaisons RS-485 point à point indépendantes**. Ce choix est explicite, pas une conséquence automatique de toute topologie en étoile :
 
 | Port | Côté hub | Côté cellule | Domaine électrique |
 |---|---|---|---|
@@ -119,8 +120,8 @@ Modbus RTU minimal reste une proposition applicative de départ à confirmer au 
 
 Les contraintes de topologie et de terminaison RS-485 sont décrites dans le
 [guide de conception de Texas Instruments](https://www.ti.com/lit/an/slla272d/slla272d.pdf).
-Les deux segments indépendants constituent la proposition d’implémentation de
-la topologie en étoile retenue pour le prototype.
+Les deux segments indépendants constituent l’architecture retenue; les composants,
+le câblage, le débit, la terminaison et les protections restent à qualifier.
 
 ## 6. Rôle de l’écran au P0
 
@@ -132,7 +133,7 @@ la topologie en étoile retenue pour le prototype.
 | Pendant les observations | Vérification en cours |
 | Décision backend | Succès, refus, expiration ou anomalie |
 
-Le QR est renouvelé pour chaque nouvelle opération, utilisable une fois, et valable au plus 60 secondes (paramètre proposé). Le backend le borne aussi par les horaires et la réservation. Le hub ne fournit pas de fonction autonome de réservation, d’authentification ou d’autorisation.
+Le QR est renouvelé pour chaque nouvelle opération, utilisable une fois, et valable au plus 60 secondes après création (ADR-009 accepté). Le backend le borne aussi par les horaires et la réservation. Un affichage tardif ne redémarre pas ce délai. Le hub ne fournit pas de fonction autonome de réservation, d’authentification ou d’autorisation.
 
 Un écran lisible permettant un QR complet est nécessaire : contraste, taille, marge blanche, angle et éclairage seront testés avec l’iPhone utilisé à la démo. Un écran uniquement textuel ne suffit pas.
 
@@ -211,7 +212,7 @@ Le RFID peut également être remplacé par le fallback d’identification et de
 Cette nomenclature compte les deux cellules. L’équipe complète les références et
 les prix **avant tout achat**, en intégrant les taxes, la livraison, le matériel
 déjà disponible et les éléments fournis par le laboratoire. Les quantités
-électroniques dépendent de la réalisation RS-485 proposée.
+électroniques correspondent à la réalisation candidate des deux segments RS-485 retenus.
 
 Une estimation complète avec références, prix et disponibilités est
 conservée dans
@@ -226,7 +227,7 @@ les POC et les paniers; elles ne constituent ni un devis ni une limite technique
 | Contrôleur du hub | 1 | Référence, interfaces série, GPIO disponibles et compatibilité écran |
 | Écran graphique | 1 | Résolution, pilote, tension, courant et essai de scan réel |
 | Contrôleur local de cellule | 2 si segments intelligents retenus | Entrées/sorties et mémoire nécessaires |
-| Transceivers RS-485 | 4 si deux segments retenus | Un à chaque extrémité de chaque segment; niveaux et protections |
+| Transceivers RS-485 | 4 pour les deux segments retenus | Un à chaque extrémité de chaque segment; niveaux et protections |
 | Verrous avec mécanisme | 2 | Tension, impulsion admissible, courant et secours manuel |
 | Drivers et protection des charges | 2 ensembles | Compatibilité avec le verrou et état au redémarrage |
 | Capteurs de porte | 2 | Type, montage sur cadre et comportement en rupture de fil |

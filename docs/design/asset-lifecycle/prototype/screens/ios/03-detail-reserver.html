@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="fr-CA" data-platform="ios">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=393, initial-scale=1">
+<title>Aegis Mobile — Détail et feuille « Réserver » (prototype)</title>
+<!--
+  iOS 03 « Détail d'équipement — feuille Réserver » — moment 10 h 31 (key "10:31").
+  Treatment A, light only (A selected on 2026-09-23).
+  Spec: sections.md §4.1 (détail, feuille « Réserver »), U8 (pas de 15 min, confort seulement).
+  Contracts: GET /assets/{id} (09 §11.2); GET /lockers/{id}/status → currentWindow (09 §8.6,
+  §16.1); POST /reservations (09 §14.1), not yet sent.
+  Return time 16 h 30 = fixture reservation.reservedUntil (09 §14.1 example).
+  Closing time 17 h 00 = currentWindow.closesAt (open=true, nextOpensAt=null): normative, no marker.
+  Display only; the server still validates the chosen time (422 RESERVATION_END_AFTER_CLOSING).
+-->
+<link rel="stylesheet" href="../../tokens/brand.css">
+<link rel="stylesheet" href="../../tokens/scales.css">
+<link rel="stylesheet" href="../../components/base.css">
+<link rel="stylesheet" href="../../components/ios.css">
+<script src="../../data/fixture.js"></script>
+<script src="../../data/screens.js"></script>
+<script src="../../lib/aegis.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  const v = AG.at("10:31");
+  const { c, ios, icon, fmt, status, copy } = AG;
+  const a = v.assets["MM-001"];
+  const st = status.technician(a, v);
+  const reservedUntil = fmt.time(AG.fx.reservation.reservedUntil);
+  const closes = fmt.time(v.currentWindow.closesAt);
+
+  function compose() {
+    return `<main class="ios-screen">
+      ${ios.statusBar(v.moment.at)}
+      <header class="ios-nav">
+        <div class="ios-nav__toolbar ios-nav__toolbar--split">${ios.toolbarButton("chevron-left", "Retour à Équipements")}${ios.toolbarButton("more", "Plus d'options")}</div>
+      </header>
+      <section class="ios-detail-head" aria-label="Identité et statut">
+        ${c.statusOf(st, { size: "lg" })}
+        <h1 class="ios-card__name">${c.esc(a.model.name)}</h1>
+        <p class="ios-card__meta tnum">${c.esc(a.assetCode)} · ${c.esc(a.model.manufacturer)} ${c.esc(a.model.modelNumber)}</p>
+      </section>
+      <dl class="ios-facts">
+        <div class="ios-fact"><dt class="ios-fact__label">Raisons de blocage</dt><dd class="ios-fact__value">Aucune</dd></div>
+        <div class="ios-fact"><dt class="ios-fact__label">Calibration</dt><dd class="ios-fact__value">${c.esc(copy.calibration[a.calibrationStatus](a))}</dd></div>
+        <div class="ios-fact"><dt class="ios-fact__label">Niveau d'accès requis</dt><dd class="ios-fact__value">${copy.accessLevel[a.requiredAccessLevel]}</dd></div>
+        <div class="ios-fact"><dt class="ios-fact__label">Cellule</dt><dd class="ios-fact__value tnum">${c.esc(a.placement.compartmentCode)} · ${c.esc(a.placement.lockerCode)}</dd></div>
+      </dl>
+      <div class="ios-screen-actions">${c.btn("Réserver", { size: "lg", block: true })}</div>
+
+      ${ios.sheet(`
+        <div class="ios-inset">
+          <div class="ios-inset__row"><span class="ios-inset__label">${c.esc(a.model.name)} · ${c.esc(a.assetCode)}</span>${c.statusOf(st, { size: "sm" })}</div>
+        </div>
+        <p class="ios-sheet__section-label">Aujourd'hui, mercredi 16 septembre</p>
+        <div class="ios-inset">
+          <div class="ios-inset__row"><span class="ios-inset__label">Heure de retour</span><span class="ios-timepill">${reservedUntil}</span></div>
+          <div class="ios-inset__row"><span class="ios-inset__label">Fermeture du casier</span><span class="ios-inset__value">${closes}</span></div>
+        </div>
+        <p class="ios-helper">Choisissez une heure avant la fermeture. Le serveur vérifie l'horaire à la confirmation.</p>
+        <div class="ag-callout ag-callout--accent">${icon("lock")}<span><strong>Retirez l'équipement avant cette heure; la réservation n'ouvre aucune porte.</strong> Le retrait se prépare ensuite depuis Mon activité.</span></div>
+        <div class="ios-sheet__spacer"></div>
+        ${c.btn("Confirmer la réservation", { size: "lg", block: true })}
+      `, { title: "Réserver", leading: ios.toolbarButton("xmark", "Fermer sans réserver"), trailing: "<span></span>" })}
+      <div class="ios-home ios-home--top"></div>
+    </main>`;
+  }
+  AG.mount(compose);
+  document.querySelector(".ios-sheet").style.top = "292px";
+})();
+</script>
+</body>
+</html>

@@ -4,6 +4,7 @@
 **Session :** Automne 2026
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa
 **Date de révision :** 16 septembre 2026
+**Mise à jour ciblée :** 23 septembre 2026 — statut du délai QR aligné sur l’ADR-009; transitions inchangées.
 **Version :** 1.2 — contrôle local QR et étoile
 **Statut :** Proposition à valider en équipe
 
@@ -280,7 +281,7 @@ Les sorties anormales sont volontairement décrites dans une table séparée afi
 
 ### 5.5 Expiration
 
-Avant autorisation, `LockerOperation.expiresAt` est nul : le défi possède sa propre échéance, au plus 60 secondes (valeur proposée), bornée par la fermeture et par `reservedUntil` pour un retrait. À l’autorisation seulement, `expiresAt` est fixé à `authorizedAt + 120 secondes`. La livraison MQTT, un nouvel essai ou un doublon ne prolongent aucun délai.
+Avant autorisation, `LockerOperation.expiresAt` est nul : le défi possède sa propre échéance, au plus 60 secondes après création (ADR-009 accepté), bornée par la fermeture et par `reservedUntil` pour un retrait. À l’autorisation seulement, `expiresAt` est fixé à `authorizedAt + 120 secondes`. La livraison MQTT, un nouvel essai ou un doublon ne prolongent aucun délai.
 
 Le délai ne suffit pas à choisir entre EXPIRED et ANOMALY :
 
@@ -418,7 +419,7 @@ Une seule transaction :
 | Élément | Délai ou fréquence | Effet |
 |---|---:|---|
 | Reservation.reservedUntil | Choisi par le technicien dans la plage ouverte | EXPIRED uniquement si aucun CHECKOUT actif ou incertain |
-| LocalAccessChallenge.expiresAt | Au plus 60 secondes proposées, bornées par horaire et réservation | Défi et opération EXPIRED avant toute commande |
+| LocalAccessChallenge.expiresAt | Au plus 60 secondes après création, bornées par horaire et réservation | Défi et opération EXPIRED avant toute commande |
 | LockerOperation.expiresAt | 120 secondes après authorizedAt | EXPIRED si la situation est sûre; ANOMALY si elle est incertaine |
 | Loan.dueAt | Copié depuis Reservation.reservedUntil | overdue devient vrai; aucun changement de statut |
 | DeviceHeartbeat | Toutes les 10 secondes | Met à jour lastSeenAt |

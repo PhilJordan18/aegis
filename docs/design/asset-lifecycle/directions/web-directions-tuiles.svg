@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="560" viewBox="0 0 1400 560" role="img" aria-labelledby="title desc">
+  <title id="title">Tuiles de style — trois directions visuelles Web</title>
+  <desc id="desc">Trois compositions courtes montrant palette, typographie et signature pour Poste d'opérations, Salle de contrôle et Registre. Ce ne sont pas des écrans finis.</desc>
+  <style>
+    .t { font-family: Inter, -apple-system, Helvetica, Arial, sans-serif; }
+    .title { font-size: 15px; font-weight: 800; }
+    .lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.4px; }
+    .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  </style>
+  <rect width="1400" height="560" fill="#fff"/>
+  <text x="30" y="30" class="t" font-size="16" font-weight="800" fill="#111">Web — trois directions concurrentes (Prototype, non approuvées)</text>
+
+  <!-- Direction A: Poste d'opérations -->
+  <g class="t" transform="translate(30,50)">
+    <rect width="430" height="490" fill="#0D1B27"/>
+    <text x="20" y="30" class="title" fill="#E7EEF4">A · Poste d'opérations</text>
+    <text x="20" y="48" font-size="10" fill="#8CA3B5">Maître-détail · table dense + inspecteur</text>
+
+    <rect x="20" y="66" width="55" height="55" fill="#142B3C"/>
+    <text x="24" y="98" fill="#E7EEF4" font-size="9">Fond</text>
+    <rect x="83" y="66" width="55" height="55" fill="#142B3C" stroke="#2E86AB" stroke-width="2"/>
+    <text x="87" y="98" fill="#E7EEF4" font-size="9">Surface</text>
+    <rect x="146" y="66" width="55" height="55" fill="#2E86AB"/>
+    <text x="150" y="98" fill="#0D1B27" font-size="9">Accent</text>
+    <rect x="209" y="66" width="55" height="55" fill="#2F8F6B"/>
+    <text x="213" y="98" fill="#fff" font-size="9">PRÊT</text>
+    <rect x="272" y="66" width="55" height="55" fill="#B5473C"/>
+    <text x="276" y="98" fill="#fff" font-size="9">BLOQUÉ</text>
+    <rect x="335" y="66" width="55" height="55" fill="#C68A2E"/>
+    <text x="339" y="98" fill="#0D1B27" font-size="8">VÉRIF.</text>
+
+    <rect x="20" y="140" width="180" height="220" fill="#142B3C" stroke="#2B4A63"/>
+    <text x="30" y="160" fill="#8CA3B5" font-size="9">CODE · MODÈLE · STATUT</text>
+    <rect x="26" y="170" width="168" height="20" fill="#0D1B27"/>
+    <text x="32" y="184" fill="#E7EEF4" font-size="10" class="mono">MM-001</text>
+    <text x="150" y="184" fill="#2F8F6B" font-size="9" font-weight="800">PRÊT</text>
+    <rect x="26" y="194" width="168" height="20" fill="#1A3346" stroke="#2E86AB"/>
+    <text x="32" y="208" fill="#E7EEF4" font-size="10" class="mono">MM-002</text>
+    <text x="150" y="208" fill="#B5473C" font-size="9" font-weight="800">BLOQUÉ</text>
+    <rect x="26" y="218" width="168" height="20" fill="#0D1B27"/>
+    <text x="32" y="232" fill="#E7EEF4" font-size="10" class="mono">CAM-014</text>
+    <text x="150" y="232" fill="#C68A2E" font-size="9" font-weight="800">RETARD</text>
+
+    <rect x="210" y="140" width="200" height="220" fill="#0D1B27" stroke="#2E86AB" stroke-width="1.4"/>
+    <text x="220" y="160" fill="#E7EEF4" font-size="11" font-weight="800">MM-002 · Inspecteur</text>
+    <text x="220" y="180" fill="#B5473C" font-size="10" font-weight="800">BLOQUÉ · CALIBRATION_EXPIRED</text>
+    <text x="220" y="204" fill="#C7D6E2" font-size="9">Expirée le 8 sept. 2026</text>
+    <text x="220" y="220" fill="#C7D6E2" font-size="9">Compartiment A2</text>
+    <text x="220" y="244" fill="#8CA3B5" font-size="9">Reste ouvert sur la même</text>
+    <text x="220" y="258" fill="#8CA3B5" font-size="9">table filtrée — pas de perte</text>
+    <text x="220" y="272" fill="#8CA3B5" font-size="9">de contexte de navigation.</text>
+
+    <text x="20" y="392" class="lbl" fill="#8CA3B5">SIGNATURE</text>
+    <text x="20" y="410" fill="#E7EEF4" font-size="11">j/k, /, inspecteur qui s'ouvre sans quitter</text>
+    <text x="20" y="426" fill="#E7EEF4" font-size="11">le tableau. Identifiants en chasse fixe.</text>
+    <text x="20" y="454" class="lbl" fill="#8CA3B5">RISQUE</text>
+    <text x="20" y="470" fill="#8CA3B5" font-size="10">Discipline de mise en page requise pour</text>
+    <text x="20" y="484" fill="#8CA3B5" font-size="10">rester lisible sur écran 13".</text>
+  </g>
+
+  <!-- Direction B: Salle de contrôle -->
+  <g class="t" transform="translate(485,50)">
+    <rect width="430" height="490" fill="#10161C"/>
+    <text x="20" y="30" class="title" fill="#E9EEF2">B · Salle de contrôle</text>
+    <text x="20" y="48" font-size="10" fill="#7E8C96">Bandeau temps réel · onglets de tables</text>
+
+    <rect x="20" y="66" width="55" height="55" fill="#1B242C"/>
+    <text x="24" y="98" fill="#E9EEF2" font-size="9">Fond</text>
+    <rect x="83" y="66" width="55" height="55" fill="#1B242C" stroke="#35B6C9" stroke-width="2"/>
+    <text x="87" y="98" fill="#E9EEF2" font-size="9">Surface</text>
+    <rect x="146" y="66" width="55" height="55" fill="#35B6C9"/>
+    <text x="150" y="98" fill="#10161C" font-size="9">En direct</text>
+    <rect x="209" y="66" width="55" height="55" fill="#34A06B"/>
+    <text x="213" y="98" fill="#fff" font-size="9">PRÊT</text>
+    <rect x="272" y="66" width="55" height="55" fill="#C1483A"/>
+    <text x="276" y="98" fill="#fff" font-size="9">BLOQUÉ</text>
+    <rect x="335" y="66" width="55" height="55" fill="#CB9A3D"/>
+    <text x="339" y="98" fill="#10161C" font-size="8">VÉRIF.</text>
+
+    <rect x="20" y="140" width="390" height="40" fill="#1B242C"/>
+    <text x="30" y="158" fill="#E9EEF2" font-size="10">EN LIGNE</text>
+    <text x="30" y="172" fill="#7E8C96" font-size="8">mis à jour il y a 4 s</text>
+    <text x="150" y="158" fill="#E9EEF2" font-size="10">PRÊTS ACTIFS : 1</text>
+    <text x="280" y="158" fill="#C1483A" font-size="10" font-weight="800">ANOMALIES : 1</text>
+
+    <rect x="20" y="190" width="390" height="24" fill="#0F1418"/>
+    <text x="30" y="206" fill="#35B6C9" font-size="10" font-weight="800">Actifs</text>
+    <text x="90" y="206" fill="#7E8C96" font-size="10">Réservations</text>
+    <text x="190" y="206" fill="#7E8C96" font-size="10">Prêts</text>
+    <text x="250" y="206" fill="#7E8C96" font-size="10">Anomalies</text>
+    <text x="330" y="206" fill="#7E8C96" font-size="10">Audit</text>
+
+    <rect x="20" y="222" width="390" height="120" fill="#1B242C" stroke="#2A343C"/>
+    <text x="30" y="242" fill="#7E8C96" font-size="9">Table dense virtualisée (aperçu)</text>
+
+    <text x="20" y="372" class="lbl" fill="#7E8C96">SIGNATURE</text>
+    <text x="20" y="390" fill="#E9EEF2" font-size="11">Bandeau de commande toujours visible,</text>
+    <text x="20" y="406" fill="#E9EEF2" font-size="11">micro-tick « il y a Xs » sur les compteurs</text>
+    <text x="20" y="422" fill="#E9EEF2" font-size="11">seulement — jamais sur le statut lui-même.</text>
+    <text x="20" y="450" class="lbl" fill="#7E8C96">RISQUE</text>
+    <text x="20" y="466" fill="#7E8C96" font-size="10">Ton « supervision temps réel » peut sur-</text>
+    <text x="20" y="480" fill="#7E8C96" font-size="10">jouer l'urgence pour des tâches de gestion.</text>
+  </g>
+
+  <!-- Direction C: Registre -->
+  <g class="t" transform="translate(940,50)">
+    <rect width="430" height="490" fill="#F7F6F2" stroke="#ddd"/>
+    <text x="20" y="30" class="title" fill="#1B1B1B">C · Registre</text>
+    <text x="20" y="48" font-size="10" fill="#6B6558">Chronologie d'audit en premier · quasi sans couleur</text>
+
+    <rect x="20" y="66" width="55" height="55" fill="#FFFFFF" stroke="#ddd"/>
+    <text x="24" y="98" fill="#1B1B1B" font-size="9">Fond</text>
+    <rect x="83" y="66" width="55" height="55" fill="#FFFFFF" stroke="#35506B" stroke-width="2"/>
+    <text x="87" y="98" fill="#1B1B1B" font-size="9">Surface</text>
+    <rect x="146" y="66" width="55" height="55" fill="#35506B"/>
+    <text x="150" y="98" fill="#fff" font-size="9">Accent</text>
+    <rect x="209" y="66" width="55" height="55" fill="none" stroke="#1B1B1B" stroke-width="2"/>
+    <text x="213" y="98" fill="#1B1B1B" font-size="8">[PRÊT]</text>
+    <rect x="272" y="66" width="55" height="55" fill="none" stroke="#1B1B1B" stroke-width="2" stroke-dasharray="4,3"/>
+    <text x="276" y="98" fill="#1B1B1B" font-size="8">[BLOQUÉ]</text>
+    <rect x="335" y="66" width="55" height="55" fill="none" stroke="#888" stroke-width="2" stroke-dasharray="1,3"/>
+    <text x="339" y="98" fill="#1B1B1B" font-size="7">[VÉRIF.]</text>
+
+    <line x1="40" y1="150" x2="40" y2="330" stroke="#bbb" stroke-width="2"/>
+    <circle cx="40" cy="158" r="5" fill="#1B1B1B"/>
+    <text x="56" y="162" fill="#1B1B1B" font-size="10" font-weight="700">16 sept. 14:30 — Calibration EXPIRED</text>
+    <circle cx="40" cy="196" r="5" fill="none" stroke="#1B1B1B" stroke-width="1.6"/>
+    <text x="56" y="200" fill="#1B1B1B" font-size="10">2 sept. 09:10 — Retour confirmé</text>
+    <circle cx="40" cy="234" r="5" fill="none" stroke="#1B1B1B" stroke-width="1.6"/>
+    <text x="56" y="238" fill="#1B1B1B" font-size="10">1 sept. 08:02 — Retrait confirmé</text>
+    <circle cx="40" cy="272" r="5" fill="none" stroke="#888" stroke-width="1.6" stroke-dasharray="1,2"/>
+    <text x="56" y="276" fill="#6B6558" font-size="10">31 août 17:02 — Réservation ACTIVE</text>
+
+    <text x="20" y="372" class="lbl" fill="#6B6558">SIGNATURE</text>
+    <text x="20" y="390" fill="#1B1B1B" font-size="11">Statuts en cadres typographiques, pas en</text>
+    <text x="20" y="406" fill="#1B1B1B" font-size="11">pastilles remplies ; hiérarchie par la taille</text>
+    <text x="20" y="422" fill="#1B1B1B" font-size="11">et le poids, pas par l'iconographie.</text>
+    <text x="20" y="450" class="lbl" fill="#6B6558">RISQUE</text>
+    <text x="20" y="466" fill="#6B6558" font-size="10">Diagnostic readiness (tâche n°1 de la</text>
+    <text x="20" y="480" fill="#6B6558" font-size="10">persona) relégué derrière l'audit par défaut.</text>
+  </g>
+
+  <text x="30" y="548" class="t" font-size="11" fill="#666">Recommandation : Direction A (Poste d'opérations) — voir directions.md §4 pour la justification.</text>
+</svg>

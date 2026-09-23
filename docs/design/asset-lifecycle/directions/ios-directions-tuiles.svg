@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="560" viewBox="0 0 1400 560" role="img" aria-labelledby="title desc">
+  <title id="title">Tuiles de style — trois directions visuelles iOS</title>
+  <desc id="desc">Trois compositions courtes montrant palette, typographie et signature pour Instrument de bord, Carnet de terrain et Console de statut mobile. Ce ne sont pas des écrans finis.</desc>
+  <style>
+    .t { font-family: -apple-system, "SF Pro Text", Helvetica, Arial, sans-serif; }
+    .title { font-size: 15px; font-weight: 800; }
+    .lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.4px; }
+    .body { font-size: 11px; }
+    .muted { font-size: 10px; }
+  </style>
+  <rect width="1400" height="560" fill="#fff"/>
+  <text x="30" y="30" class="t" font-size="16" font-weight="800" fill="#111">iOS — trois directions concurrentes (Prototype, non approuvées)</text>
+
+  <!-- Direction A: Instrument de bord -->
+  <g class="t" transform="translate(30,50)">
+    <rect width="430" height="490" fill="#0B1720"/>
+    <text x="20" y="30" class="title" fill="#EAF2F8">A · Instrument de bord</text>
+    <text x="20" y="48" class="muted" fill="#8FA8BA">Sombre par défaut · listes groupées natives</text>
+
+    <rect x="20" y="66" width="60" height="60" fill="#142433"/>
+    <text x="26" y="102" fill="#EAF2F8" font-size="10">Fond</text>
+    <rect x="90" y="66" width="60" height="60" fill="#142433" stroke="#3F8FBF" stroke-width="2"/>
+    <text x="96" y="102" fill="#EAF2F8" font-size="10">Surface</text>
+    <rect x="160" y="66" width="60" height="60" fill="#3F8FBF"/>
+    <text x="166" y="102" fill="#0B1720" font-size="10">Accent</text>
+    <rect x="230" y="66" width="60" height="60" fill="#2F8F6B"/>
+    <text x="234" y="102" fill="#fff" font-size="9">PRÊT</text>
+    <rect x="300" y="66" width="60" height="60" fill="#B5473C"/>
+    <text x="304" y="102" fill="#fff" font-size="9">BLOQUÉ</text>
+    <rect x="370" y="66" width="42" height="60" fill="#C68A2E"/>
+    <text x="374" y="102" fill="#0B1720" font-size="8">VÉRIF.</text>
+
+    <text x="20" y="160" fill="#EAF2F8" font-size="18" font-weight="800">Multimètre A1</text>
+    <rect x="20" y="172" width="90" height="20" fill="none" stroke="#2F8F6B" stroke-width="1.6"/>
+    <text x="28" y="187" fill="#2F8F6B" font-size="11" font-weight="800">[ PRÊT ]</text>
+
+    <text x="20" y="222" fill="#8FA8BA" font-size="11" font-family="SF Mono, ui-monospace, monospace">00:47 avant expiration du QR</text>
+    <circle cx="60" cy="270" r="34" fill="none" stroke="#3F8FBF" stroke-width="5"/>
+    <path d="M60 236 A34 34 0 0 1 90 270" fill="none" stroke="#EAF2F8" stroke-width="5"/>
+    <text x="105" y="266" fill="#EAF2F8" font-size="11">Fenêtre physique</text>
+    <text x="105" y="282" fill="#EAF2F8" font-size="11" font-family="SF Mono, ui-monospace, monospace">00:58 / 120s</text>
+
+    <text x="20" y="340" class="lbl" fill="#8FA8BA">SIGNATURE</text>
+    <text x="20" y="360" fill="#EAF2F8" font-size="11">Anneau de progression natif toujours</text>
+    <text x="20" y="376" fill="#EAF2F8" font-size="11">accompagné d'un libellé de phase en texte.</text>
+    <text x="20" y="396" fill="#EAF2F8" font-size="11">Horodatages et comptes à rebours en chasse</text>
+    <text x="20" y="412" fill="#EAF2F8" font-size="11">fixe (SF Mono) pour une lecture instantanée.</text>
+    <text x="20" y="440" class="lbl" fill="#8FA8BA">RISQUE</text>
+    <text x="20" y="458" fill="#8FA8BA" font-size="10">Contraste des badges à vérifier en plein</text>
+    <text x="20" y="472" fill="#8FA8BA" font-size="10">soleil d'atelier (mode sombre par défaut).</text>
+  </g>
+
+  <!-- Direction B: Carnet de terrain -->
+  <g class="t" transform="translate(485,50)">
+    <rect width="430" height="490" fill="#F6F4EF" stroke="#ddd"/>
+    <text x="20" y="30" class="title" fill="#1E1E1E">B · Carnet de terrain</text>
+    <text x="20" y="48" class="muted" fill="#6B6558">Clair, chaud, calme · liste de vérification</text>
+
+    <rect x="20" y="66" width="60" height="60" fill="#FFFFFF" stroke="#ddd"/>
+    <text x="26" y="102" fill="#1E1E1E" font-size="10">Fond</text>
+    <rect x="90" y="66" width="60" height="60" fill="#FFFFFF" stroke="#2B4E6B" stroke-width="2"/>
+    <text x="96" y="102" fill="#1E1E1E" font-size="10">Surface</text>
+    <rect x="160" y="66" width="60" height="60" fill="#2B4E6B"/>
+    <text x="164" y="102" fill="#fff" font-size="10">Accent</text>
+    <rect x="230" y="66" width="60" height="60" fill="#3B6F52"/>
+    <text x="234" y="102" fill="#fff" font-size="9">PRÊT</text>
+    <rect x="300" y="66" width="60" height="60" fill="#8B3A32"/>
+    <text x="304" y="102" fill="#fff" font-size="9">BLOQUÉ</text>
+    <rect x="370" y="66" width="42" height="60" fill="#8A6A2E"/>
+    <text x="374" y="102" fill="#fff" font-size="8">VÉRIF.</text>
+
+    <text x="20" y="160" fill="#1E1E1E" font-size="18" font-weight="700">Retrait — A1</text>
+    <text x="20" y="180" fill="#6B6558" font-size="11">Suivez les étapes dans l'ordre.</text>
+
+    <circle cx="30" cy="210" r="11" fill="none" stroke="#1E1E1E" stroke-width="1.4"/>
+    <text x="26" y="214" fill="#1E1E1E" font-size="10">1</text>
+    <text x="50" y="214" fill="#1E1E1E" font-size="12">Regardez l'écran du hub</text>
+
+    <circle cx="30" cy="240" r="11" fill="none" stroke="#1E1E1E" stroke-width="1.4"/>
+    <text x="26" y="244" fill="#1E1E1E" font-size="10">2</text>
+    <text x="50" y="244" fill="#1E1E1E" font-size="12">Scannez le code avec l'app</text>
+
+    <circle cx="30" cy="270" r="11" fill="#2B4E6B"/>
+    <text x="26" y="274" fill="#fff" font-size="10">3</text>
+    <text x="50" y="274" fill="#1E1E1E" font-size="12" font-weight="700">Ouvrez, retirez, refermez</text>
+
+    <circle cx="30" cy="300" r="11" fill="none" stroke="#bbb" stroke-width="1.4"/>
+    <text x="26" y="304" fill="#bbb" font-size="10">4</text>
+    <text x="50" y="304" fill="#8a8a8a" font-size="12">Confirmation du serveur</text>
+
+    <text x="20" y="350" class="lbl" fill="#6B6558">SIGNATURE</text>
+    <text x="20" y="370" fill="#1E1E1E" font-size="11">Étapes numérotées façon carnet papier,</text>
+    <text x="20" y="386" fill="#1E1E1E" font-size="11">glyphes système à trait fin, aucune icône</text>
+    <text x="20" y="402" fill="#1E1E1E" font-size="11">décorative. Balayage natif pour annuler.</text>
+    <text x="20" y="430" class="lbl" fill="#6B6558">RISQUE</text>
+    <text x="20" y="448" fill="#6B6558" font-size="10">Moins d'urgence visuelle pour une anomalie</text>
+    <text x="20" y="462" fill="#6B6558" font-size="10">critique — compenser par un badge ferme.</text>
+  </g>
+
+  <!-- Direction C: Console de statut mobile -->
+  <g class="t" transform="translate(940,50)">
+    <rect width="430" height="490" fill="#0E1116"/>
+    <text x="20" y="30" class="title" fill="#F2F4F6">C · Console de statut mobile</text>
+    <text x="20" y="48" class="muted" fill="#8A93A0">Dense, multi-colonnes, utilisateur intensif</text>
+
+    <rect x="20" y="66" width="60" height="60" fill="#1B2027"/>
+    <text x="26" y="102" fill="#F2F4F6" font-size="10">Fond</text>
+    <rect x="90" y="66" width="60" height="60" fill="#1B2027" stroke="#2FB6A3" stroke-width="2"/>
+    <text x="96" y="102" fill="#F2F4F6" font-size="10">Surface</text>
+    <rect x="160" y="66" width="60" height="60" fill="#2FB6A3"/>
+    <text x="164" y="102" fill="#0E1116" font-size="10">Accent</text>
+    <rect x="230" y="66" width="60" height="60" fill="#2FA36B"/>
+    <text x="234" y="102" fill="#fff" font-size="9">PRÊT</text>
+    <rect x="300" y="66" width="60" height="60" fill="#D2503F"/>
+    <text x="304" y="102" fill="#fff" font-size="9">BLOQUÉ</text>
+    <rect x="370" y="66" width="42" height="60" fill="#D69A3B"/>
+    <text x="374" y="102" fill="#0E1116" font-size="8">VÉRIF.</text>
+
+    <rect x="20" y="150" width="390" height="26" fill="#1B2027"/>
+    <text x="30" y="168" fill="#F2F4F6" font-size="11">Équipements</text>
+    <text x="150" y="168" fill="#5C6675" font-size="11">Réservation</text>
+    <text x="270" y="168" fill="#5C6675" font-size="11">Mon prêt</text>
+
+    <text x="20" y="204" fill="#5C6675" font-size="9">CODE</text>
+    <text x="100" y="204" fill="#5C6675" font-size="9">MODÈLE</text>
+    <text x="260" y="204" fill="#5C6675" font-size="9">STATUT</text>
+    <text x="340" y="204" fill="#5C6675" font-size="9">CASE</text>
+
+    <text x="20" y="228" fill="#F2F4F6" font-size="11" font-family="SF Mono, ui-monospace, monospace">MM-001</text>
+    <text x="100" y="228" fill="#F2F4F6" font-size="11">Multimètre 1</text>
+    <text x="260" y="228" fill="#2FA36B" font-size="10" font-weight="800">[ PRÊT ]</text>
+    <text x="340" y="228" fill="#F2F4F6" font-size="11">A1</text>
+
+    <text x="20" y="252" fill="#F2F4F6" font-size="11" font-family="SF Mono, ui-monospace, monospace">MM-002</text>
+    <text x="100" y="252" fill="#F2F4F6" font-size="11">Multimètre 2</text>
+    <text x="260" y="252" fill="#D2503F" font-size="10" font-weight="800">[ BLOQUÉ ]</text>
+    <text x="340" y="252" fill="#F2F4F6" font-size="11">A2</text>
+
+    <text x="20" y="350" class="lbl" fill="#8A93A0">SIGNATURE</text>
+    <text x="20" y="370" fill="#F2F4F6" font-size="11">Rangées compactes façon Réglages/Fichiers,</text>
+    <text x="20" y="386" fill="#F2F4F6" font-size="11">segmented control persistant, chiffres en</text>
+    <text x="20" y="402" fill="#F2F4F6" font-size="11">SF Pro Rounded pour les compteurs.</text>
+    <text x="20" y="430" class="lbl" fill="#8A93A0">RISQUE</text>
+    <text x="20" y="448" fill="#8A93A0" font-size="10">Densité proche de l'anti-patron « web étiré » ;</text>
+    <text x="20" y="462" fill="#8A93A0" font-size="10">cibles tactiles et Dynamic Type à surveiller.</text>
+  </g>
+
+  <text x="30" y="548" class="t muted" fill="#666">Recommandation : Direction A (Instrument de bord) — voir directions.md §3 pour la justification.</text>
+</svg>

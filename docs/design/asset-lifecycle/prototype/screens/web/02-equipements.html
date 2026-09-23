@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="fr-CA" data-platform="web">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Aegis Manager — Équipements (prototype)</title>
+<!--
+  Web « Gestion des équipements — inspecteur ouvert » — moment 10 h 30 (key "10:30"),
+  same instant as the iOS catalogue. Inspector open on MM-002 (one impediment).
+  Spec: sections.md §5.2 (table, inspecteur, actions), §1.1–1.3.
+  Contracts (09 v1.3): GET /admin/assets[/{id}] → AdminAssetView (§8.9, §12.2): AssetView fields
+  without readiness, + serialNumber, + operationalDiagnostic { evaluatedAt, reasons }.
+  The diagnostic is shown from `reasons` only: no result, no reference technician, never
+  ACCESS_DENIED, no authorization computed by the Web. No marker (normative).
+  RFID identifier: NOT in AdminAssetView and no read route (§12.3 is write-only) → omitted.
+  Institution label (C6) → « Fictif · C6 ». Only admin actions shown:
+  « Nouvel équipement », « Enregistrer les modifications ». Readiness and
+  availability are read-only facts, never editable.
+  ?treatment=a|b  ?theme=light|dark  [?transparency=reduce]
+  H2 — A: liste maîtresse + dossier large (le détail domine).
+       B: table dense à colonnes + inspecteur ancré à droite.
+  H1 — A: diagnostic opérationnel en tête de rangée, puis identité.
+       B: identité (code, modèle) en premières colonnes, statuts ensuite.
+-->
+<link rel="stylesheet" href="../../tokens/brand.css">
+<link rel="stylesheet" href="../../tokens/scales.css">
+<link rel="stylesheet" href="../../components/base.css">
+<link rel="stylesheet" href="../../components/web.css">
+<script src="../../data/fixture.js"></script>
+<script src="../../data/screens.js"></script>
+<script src="../../lib/aegis.js"></script>
+<style>
+  /* Screen-local layout only (no new tokens). */
+  [data-treatment="a"] .eq-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 452px 1fr; gap: 20px; }
+  [data-treatment="a"] .eq-detail { display: flex; flex-direction: column; overflow: hidden; }
+  [data-treatment="a"] .eq-detail .web-inspector__scroll { padding: 24px 32px 0; }
+  [data-treatment="a"] .eq-detail .web-inspector__foot { padding: 16px 32px; }
+  .eq-overline { font-size: 13px; font-weight: 600; color: var(--ag-text-2); display: flex; align-items: center; gap: 8px; }
+  .eq-title { margin-top: 6px; font-family: var(--t-font-display); font-size: var(--t-title-md-size); font-weight: var(--t-title-md-weight); letter-spacing: var(--t-title-md-track); line-height: 1.1; }
+  .eq-sub { margin-top: 6px; font-size: var(--t-sub-size); color: var(--ag-text-2); }
+  [data-treatment="a"] .web-diag { margin-top: 18px; padding: 16px 20px; background: var(--ag-blocked-bg); border-color: transparent; }
+  /* Empty diagnostic: neutral surface, never the readiness green (09 §8.9). */
+  .web-diag--none { background: var(--ag-surface-sunken) !important; }
+  .web-diag__more { margin: 6px 0 0; padding-left: 0; display: flex; flex-direction: column; gap: 4px; }
+  .web-diag__row { margin-top: 12px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .web-diag__reason { font-size: 16px; font-weight: 600; color: var(--ag-text); }
+  .web-diag .web-diag__note { margin-top: 10px; }
+  [data-treatment="a"] .eq-cols { margin-top: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  [data-treatment="a"] .eq-cols .ag-facts { margin-top: 14px; grid-template-columns: 1fr; gap: 12px; }
+  [data-treatment="a"] .web-list { display: flex; flex-direction: column; }
+  [data-treatment="a"] .web-list ul { flex: 1; }
+  .web-list__foot { padding: 14px 20px 18px; font-size: 13px; color: var(--ag-text-2); border-top: 1px solid var(--ag-separator); }
+  [data-treatment="a"] .eq-cols .web-fields { margin-top: 14px; }
+  .eq-idval { font-family: var(--t-font-mono); font-size: 13px; letter-spacing: 0; }
+
+  /* B */
+  [data-treatment="b"] .eq-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 384px; }
+  [data-treatment="b"] .eq-left { min-width: 0; display: flex; flex-direction: column; }
+  [data-treatment="b"] .web-inspector { border-left: 1px solid var(--ag-border); }
+  [data-treatment="b"] .web-inspector__head { padding: 16px 20px 14px; border-bottom: 1px solid var(--ag-separator); display: flex; justify-content: space-between; gap: 12px; }
+  [data-treatment="b"] .eq-title { margin-top: 0; font-size: 18px; }
+  [data-treatment="b"] .eq-sub { margin-top: 3px; font-size: 13px; }
+  [data-treatment="b"] .insp-sec { padding: 14px 20px; border-bottom: 1px solid var(--ag-separator); }
+  [data-treatment="b"] .web-diag { margin-top: 10px; padding: 12px 14px; background: var(--ag-surface-sunken); }
+  [data-treatment="b"] .web-diag__row { margin-top: 0; }
+  [data-treatment="b"] .web-diag__reason { font-size: 13.5px; }
+  [data-treatment="b"] .ag-facts { margin-top: 10px; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
+  [data-treatment="b"] .ag-fact__value { font-size: 13.5px; }
+  [data-treatment="b"] .web-fields { margin-top: 10px; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+  [data-treatment="b"] .web-field--wide { grid-column: 1 / -1; }
+  [data-treatment="b"] .web-inspector__foot { padding: 12px 20px; }
+  .cal-expired { color: var(--ag-blocked-fg); font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  const v = AG.at("10:30");
+  const { c, web, icon, fmt, status, copy } = AG;
+  const sel = v.assets["MM-002"];
+  const evaluated = fmt.time(sel.operationalDiagnostic.evaluatedAt);
+  const calText = a => copy.calibration[a.calibrationStatus](a);
+  const presence = a => `${copy.presence[a.presence]} dans ${a.placement.compartmentCode}`;
+  const diagNote = `Empêchements non personnels connus (disponibilité, état de service, calibration, présence), évalués à ${evaluated}. Une liste vide ne donne ni droit d'emprunt ni possibilité d'ouvrir le casier.`;
+
+  // 09 §8.9: display derived from operationalDiagnostic.reasons only.
+  function diagBlock(a, compact) {
+    const d = status.operationalDiagnostic(a);
+    const more = d.lines.slice(1).map(l => `<li class="web-diag__reason">${c.esc(l)}</li>`).join("");
+    return `<div class="web-diag${d.empty ? " web-diag--none" : ""}">
+      ${compact ? "" : `<div class="web-section-title">Diagnostic opérationnel</div>`}
+      <div class="web-diag__row">${c.statusOf(d, { size: compact ? "md" : "lg" })}${d.empty ? "" : `<span class="web-diag__reason">${c.esc(d.lines[0])}</span>`}</div>
+      ${more ? `<ul class="web-diag__more">${more}</ul>` : ""}
+      <p class="web-diag__note">${c.esc(diagNote)}</p>
+    </div>`;
+  }
+  function field(label, value, opts) {
+    const o = opts || {};
+    const ctl = o.switch
+      ? `<span class="web-switch"><span class="web-switch__track" aria-hidden="true"></span>${c.esc(value)}</span>`
+      : `<span class="web-field__control"><span class="${o.mono ? "eq-idval" : ""}">${c.esc(value)}</span>${icon(o.icon || "chevron-down")}</span>`;
+    return `<label class="web-field${o.wide ? " web-field--wide" : ""}"><span class="web-field__label">${c.esc(label)}</span>${ctl}${o.help ? `<span class="web-field__help">${c.esc(o.help)}</span>` : ""}</label>`;
+  }
+  const settings = a => [
+    field("Niveau d'accès requis", copy.accessLevel[a.requiredAccessLevel]),
+    field("État de service", copy.service[a.operationalStatus]),
+    field("Calibration requise", a.calibration.required ? "Oui" : "Non", { switch: true }),
+    field("Échéance de calibration", fmt.isoDate(a.calibration.dueAt), { icon: "calendar", help: "Fuseau du casier : America/Toronto", wide: true })
+  ].join("");
+  const factsHtml = a => [
+    c.fact("Disponibilité", c.statusOf(status.availabilityAdmin(a, v), { size: "sm" })),
+    c.fact("Présence", c.esc(presence(a))),
+    c.fact("Calibration", `<span class="${a.calibrationStatus === "EXPIRED" ? "cal-expired" : ""}">${c.esc(calText(a))}</span>`),
+    c.fact("Placement", `<span class="tnum">${c.esc(a.placement.lockerCode)} · ${c.esc(a.placement.compartmentCode)}</span>`),
+    c.fact("Numéro de série", a.serialNumber ? `<span class="tnum">${c.esc(a.serialNumber)}</span>` : "Non renseigné", { wide: true })
+  ].join("");
+  const foot = `<div class="web-inspector__foot">
+      <a class="web-link" href="#">${icon("history")}Historique dans Audit</a>
+      <span style="display:flex;align-items:center;gap:12px"><span class="web-inspector__hint">Aucune modification</span>${c.btn("Enregistrer les modifications", { disabled: true, size: AG.treatment === "b" ? "sm" : "md" })}</span>
+    </div>`;
+
+  const footB = `<div class="web-inspector__foot"><span class="web-inspector__hint">Aucune modification</span>${c.btn("Enregistrer les modifications", { disabled: true, size: "sm" })}</div>`;
+
+  // ---------------------------------------------------------------- A
+  function itemA(a) {
+    const d = status.operationalDiagnostic(a);
+    const av = status.availabilityAdmin(a, v);
+    const selected = a.assetCode === sel.assetCode;
+    return `<li><a class="web-item${selected ? " is-selected is-focus" : ""}" href="#"${selected ? ' aria-current="true"' : ""}>
+      <div class="web-item__status">${c.statusOf(d, { size: "md" })}${d.empty ? "" : `<span class="web-item__reason">${c.esc(d.lines[0])}</span>`}</div>
+      <div class="web-item__name">${c.esc(a.model.name)}<span class="web-item__code">${c.esc(a.assetCode)}</span></div>
+      <div class="web-item__facts"><span>${c.esc(av.label)}</span><span>·</span><span>${c.esc(presence(a))}</span><span>·</span><span>${c.esc(copy.service[a.operationalStatus])}</span></div>
+    </a></li>`;
+  }
+  function composeA() {
+    return `<div class="web-shell"><div class="web-decor ag-decor" aria-hidden="true"></div>
+      ${web.sidebar("equipements", v)}
+      <main class="web-main">
+        <header class="web-pagehead">
+          <div>
+            <h1 class="web-pagehead__title">Équipements</h1>
+            <div class="web-tabs" role="tablist"><span class="web-tabs__item is-active" role="tab" aria-selected="true">Exemplaires</span><span class="web-tabs__item" role="tab">Modèles</span></div>
+          </div>
+          <div class="web-pagehead__actions">${web.lockerChip(v)}${c.btn("Nouvel équipement", { icon: "plus" })}</div>
+        </header>
+        <div class="eq-body">
+          <section class="web-panel web-list" aria-label="Exemplaires">
+            <div class="web-list__head"><h2 class="web-list__title">${v.assetList.length} exemplaires</h2><span class="web-list__meta">Diagnostic opérationnel</span></div>
+            <ul>${v.assetList.map(itemA).join("")}</ul>
+            <p class="web-list__foot">Triés par code · diagnostic évalué à ${evaluated}, heure du casier</p>
+          </section>
+          <section class="web-panel web-inspector eq-detail" aria-label="Détail de ${c.esc(sel.model.name)}">
+            <div class="web-inspector__scroll">
+              <div class="eq-overline">Exemplaire sélectionné</div>
+              <h2 class="eq-title">${c.esc(sel.model.name)} · ${c.esc(sel.assetCode)}</h2>
+              <p class="eq-sub">${c.esc(sel.model.manufacturer)} ${c.esc(sel.model.modelNumber)} · Casier ${c.esc(sel.placement.lockerCode)}, cellule ${c.esc(sel.placement.compartmentCode)}</p>
+              ${diagBlock(sel)}
+              <div class="eq-cols">
+                <div><div class="web-section-title">Faits dérivés <span class="web-section-title__ro">${icon("lock")}lecture seule</span></div><dl class="ag-facts">${factsHtml(sel)}</dl></div>
+                <div><div class="web-section-title">Réglages modifiables</div><div class="web-fields">${settings(sel)}</div></div>
+              </div>
+            </div>
+            ${foot}
+          </section>
+        </div>
+      </main>
+    </div>`;
+  }
+
+  // ---------------------------------------------------------------- B
+  function rowB(a) {
+    const d = status.operationalDiagnostic(a);
+    const av = status.availabilityAdmin(a, v);
+    const selected = a.assetCode === sel.assetCode;
+    return `<tr class="${selected ? "is-selected is-focus" : ""}"${selected ? ' aria-selected="true"' : ""}>
+      <td><span class="ag-id">${c.esc(a.assetCode)}</span></td>
+      <td>${c.esc(a.model.name)}</td>
+      <td>${c.statusOf(av, { size: "sm", variant: "plain" })}</td>
+      <td class="cell-2l">${c.statusOf(d, { size: "sm", variant: "plain" })}${d.empty ? "" : `<span class="cell-sub">${c.esc(d.short.join(", "))}</span>`}</td>
+      <td>${c.esc(copy.service[a.operationalStatus])}</td>
+      <td class="cell-2l"><span class="${a.calibrationStatus === "EXPIRED" ? "cal-expired" : ""}">${a.calibrationStatus === "EXPIRED" ? "Expirée" : "Valide"}</span><span class="cell-sub tnum">${fmt.date(a.calibration.dueAt)}</span></td>
+      <td>${c.esc(copy.presence[a.presence])} · <span class="ag-id">${c.esc(a.placement.compartmentCode)}</span></td>
+    </tr>`;
+  }
+  function composeB() {
+    return `<div class="web-shell">
+      ${web.sidebar("equipements", v)}
+      <main class="web-main">
+        <div class="web-topbar ag-glass">
+          <nav class="web-crumbs" aria-label="Fil d'Ariane"><span>Équipements</span>${icon("chevron-right")}<strong>Exemplaires</strong>${icon("chevron-right")}<strong class="ag-id">${c.esc(sel.assetCode)}</strong></nav>
+          <div class="web-topbar__right">${web.lockerChip(v)}<span class="web-freshness">${icon("clock")}Données de ${fmt.time(v.moment.at)}</span></div>
+        </div>
+        <div class="eq-body">
+          <div class="eq-left">
+            <header class="web-pagehead">
+              <div><h1 class="web-pagehead__title">Équipements</h1>
+                <div class="web-tabs" role="tablist"><span class="web-tabs__item is-active" role="tab" aria-selected="true">Exemplaires</span><span class="web-tabs__item" role="tab">Modèles</span></div></div>
+              <div class="web-pagehead__actions">${c.btn("Nouvel équipement", { icon: "plus", size: "sm" })}</div>
+            </header>
+            <div class="web-tablewrap">
+              <table class="web-table">
+                <colgroup><col style="width:76px"><col style="width:104px"><col style="width:104px"><col style="width:150px"><col style="width:86px"><col style="width:118px"><col style="width:138px"></colgroup>
+                <thead><tr>
+                  <th class="th-sort" aria-sort="ascending">Code ${icon("chevron-down")}</th><th>Modèle</th><th>Disponibilité</th>
+                  <th>Diagnostic opérationnel</th><th>État de service</th><th>Calibration</th><th>Présence · cellule</th>
+                </tr></thead>
+                <tbody>${v.assetList.map(rowB).join("")}</tbody>
+              </table>
+              <div class="web-tablefoot"><span>${v.assetList.length} exemplaires · triés par code</span><span>Diagnostic évalué à ${evaluated}, heure du casier</span></div>
+            </div>
+          </div>
+          <aside class="web-inspector" aria-label="Inspecteur : ${c.esc(sel.model.name)}">
+            <div class="web-inspector__head">
+              <div><h2 class="eq-title">${c.esc(sel.model.name)}</h2><p class="eq-sub"><span class="ag-id">${c.esc(sel.assetCode)}</span> · ${c.esc(sel.model.manufacturer)} ${c.esc(sel.model.modelNumber)}</p></div>
+              <button type="button" class="web-closebtn" aria-label="Fermer l'inspecteur">${icon("xmark")}</button>
+            </div>
+            <div class="web-inspector__scroll">
+              <div class="insp-sec"><div class="web-section-title">Diagnostic opérationnel</div>${diagBlock(sel, true)}</div>
+              <div class="insp-sec"><div class="web-section-title">Faits dérivés <span class="web-section-title__ro">${icon("lock")}lecture seule</span></div><dl class="ag-facts">${factsHtml(sel)}</dl></div>
+              <div class="insp-sec"><div class="web-section-title">Réglages modifiables</div><div class="web-fields">${settings(sel)}</div></div>
+              <div class="insp-sec"><a class="web-link" href="#">${icon("history")}Historique de ${c.esc(sel.assetCode)} dans Audit</a></div>
+            </div>
+            ${footB}
+          </aside>
+        </div>
+      </main>
+    </div>`;
+  }
+
+  AG.mount(AG.treatment === "b" ? composeB : composeA);
+})();
+</script>
+</body>
+</html>

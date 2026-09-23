@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="fr-CA" data-platform="web" data-theme="light" data-treatment="b">
+<head>
+<meta charset="utf-8">
+<title>Aegis — Comparaison historique A et B</title>
+<!--
+  Comparison sheet, one per platform: compare.html?platform=ios | web
+  Lays out the rendered PNGs of every built screen of that platform:
+  A and B, light and dark, same data, same viewport. Labels carry screen,
+  moment, theme and treatment (the moment never appears in product UI).
+  Rendered to renders/compare/<platform>.png by tools/render.py --compare.
+-->
+<link rel="stylesheet" href="tokens/brand.css">
+<link rel="stylesheet" href="tokens/scales.css">
+<script src="data/fixture.js"></script>
+<script src="data/screens.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #E9EDF5; color: #0A1430; font-family: -apple-system, "SF Pro Text", system-ui, sans-serif; }
+  .sheet { padding: 36px 40px 32px; }
+  .top { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; }
+  h1 { margin: 0; font-family: "SF Pro Display", -apple-system, sans-serif; font-size: 30px; letter-spacing: -0.02em; }
+  .sub { margin-top: 6px; font-size: 14px; color: #394563; }
+  .flag { font-size: 12.5px; font-weight: 650; color: #8E1277; background: #FCEAF8; border: 1px dashed #B8349B; border-radius: 6px; padding: 6px 10px; white-space: nowrap; }
+  .grid { margin-top: 24px; display: grid; gap: 24px 28px; }
+  .grid--ios { grid-template-columns: repeat(4, 393px); }
+  .grid--web { grid-template-columns: repeat(2, 720px); }
+  .group { grid-column: span 2; display: flex; align-items: baseline; gap: 12px; border-bottom: 2px solid #0A1430; padding-bottom: 6px; }
+  .grid--web .group { grid-column: span 1; }
+  .group b { font-size: 17px; white-space: nowrap; flex: none; }
+  .group span { font-size: 13px; color: #394563; }
+  figure { margin: 0; }
+  figcaption { display: flex; justify-content: space-between; white-space: nowrap; font-size: 12.5px; color: #394563; margin-bottom: 8px; }
+  figcaption strong { color: #0A1430; }
+  .shot { display: block; border-radius: 10px; box-shadow: 0 0 0 1px rgba(10,20,48,.14), 0 10px 30px -18px rgba(10,20,48,.5); background: #fff; }
+  .grid--ios .shot { width: 393px; height: 852px; border-radius: 28px; }
+  .grid--web .shot { width: 720px; height: 450px; }
+  .missing { display: grid; place-items: center; color: #56627F; font-size: 13px; border: 1px dashed #7A849E; }
+  .notes { margin-top: 22px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; font-size: 12.5px; line-height: 1.45; color: #394563; }
+  .notes h2 { margin: 0 0 6px; font-size: 13px; color: #0A1430; }
+  .notes ul { margin: 0; padding-left: 16px; }
+  .mk { font-weight: 650; color: #8E1277; background: #FCEAF8; border: 1px dashed #B8349B; border-radius: 4px; padding: 1px 5px; font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="sheet" id="sheet"></div>
+<script>
+(function () {
+  const platform = new URLSearchParams(location.search).get("platform") === "web" ? "web" : "ios";
+  const screens = window.AEGIS_SCREENS.filter(s => s.platform === platform && s.status === "built" && s.phase === 1);
+  const vp = window.AEGIS_VIEWPORTS[platform];
+  const T = window.AEGIS_TREATMENTS;
+  const moments = window.AEGIS_FIXTURE.moments;
+  const legend = window.AEGIS_MOCK_LEGEND;
+  const H = {
+    ios: {
+      a: "H1 : le statut ouvre la carte (au-dessus du nom), l'identité suit en grand. Cartes généreuses, puces de filtre à symbole.",
+      b: "H1 : l'identité ouvre la rangée, le statut est en fin de ligne sur la même rangée; raison en pleine largeur dessous. Liste groupée native, contrôle segmenté."
+    },
+    web: {
+      a: "H2 : liste maîtresse (2 lignes par exemplaire) + dossier large qui domine; H1 : diagnostic en tête de rangée, puis identité.",
+      b: "H2 : table dense à colonnes (ordre §5.2) + inspecteur ancré à droite; H1 : identité (code, modèle) en premières colonnes, statuts ensuite."
+    }
+  };
+  const img = (s, t, th) => `renders/${platform}/${t}/${th}/${s.n}-${s.slug}.png`;
+  const themeLabel = { light: "Clair", dark: "Sombre" };
+  let html = "";
+  screens.forEach(s => {
+    const m = moments[s.moment].label;
+    html += `<div class="top"><div>
+        <h1>${platform === "ios" ? "Aegis Mobile" : "Aegis Manager"} — ${s.title}</h1>
+        <div class="sub">Traitements A et B, thèmes clair et sombre · mêmes données (fixture) · moment : mercredi 16 septembre 2026, ${m} (America/Toronto) · ${vp.note}</div>
+      </div><span class="flag">Comparaison historique — traitement A retenu le 23 septembre 2026</span></div>
+      <div class="grid grid--${platform}">`;
+    const cells = [];
+    ["a", "b"].forEach(t => {
+      html += `<div class="group"><b>${T[t].name}</b><span>${H[platform][t]}</span></div>`;
+    });
+    if (platform === "ios") {
+      ["a", "b"].forEach(t => ["light", "dark"].forEach(th => cells.push([t, th])));
+    } else {
+      ["light", "dark"].forEach(th => ["a", "b"].forEach(t => cells.push([t, th])));
+    }
+    cells.forEach(([t, th]) => {
+      html += `<figure><figcaption><strong>${T[t].short} · ${themeLabel[th]}</strong><span>${m}</span></figcaption>
+        <img class="shot" src="${img(s, t, th)}" alt="${s.title}, ${T[t].name}, thème ${themeLabel[th]}" onerror="this.outerHTML='<div class=&quot;shot missing&quot;>Rendu manquant : ${img(s, t, th)}</div>'"></figure>`;
+    });
+    html += `</div>`;
+    const mocks = s.mocks.length ? s.mocks.map(k => `<li><span class="mk">Fictif · ${k}</span> ${legend[k]}</li>`).join("") : "<li>Aucune donnée fictive sur cet écran : toutes les valeurs viennent de champs définis par 09 (voir data/fixture.js pour les hypothèses de valeur).</li>";
+    html += `<div class="notes">
+      <div><h2>Marqueurs de données fictives</h2><ul>${mocks}${platform === "web" ? "<li>Diagnostic opérationnel : <code>AdminAssetView.operationalDiagnostic</code> (09 v1.3 §8.9), normatif, sans marqueur; identifiant RFID non affiché (absent de la vue).</li>" : ""}<li>Même marqueur (tiret magenta, losange) dans A et B; il annote la maquette et ne fait pas partie du produit.</li></ul></div>
+      <div><h2>Lecture</h2><ul><li>Le statut porte toujours symbole + forme + texte; jamais la couleur seule.</li><li>Le moment figure dans ces légendes uniquement${platform === "ios" ? " (l'horloge de la barre d'état est un élément système)" : ""}.</li><li>Rendu : Chrome ${platform === "ios" ? "393 × 852 pt à 2×" : "1440 × 900 à 1×, affiché ici à 50 %"}.</li></ul></div>
+      <div><h2>Polices rendues</h2><ul><li>SF Pro Text et SF Pro Display (installées localement, /Library/Fonts), Menlo pour les identifiants monospaces.</li><li>SF Pro convient à iOS; non licenciée pour une console Web publique (voir README).</li></ul></div>
+    </div>`;
+  });
+  document.getElementById("sheet").innerHTML = html;
+})();
+</script>
+</body>
+</html>

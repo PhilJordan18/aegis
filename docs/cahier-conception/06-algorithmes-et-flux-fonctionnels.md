@@ -4,6 +4,7 @@
 **Session :** Automne 2026  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de révision :** 16 septembre 2026
+**Mise à jour ciblée :** 23 septembre 2026 — outbox et protections QR approuvées.
 **Version :** 1.2 — contrôle local QR et étoile
 
 ---
@@ -443,7 +444,7 @@ La validation ne fait aucun appel réseau dans la transaction SQL. Un rollback n
 
 Un secret erroné incrémente `failedAttempts` dans une transaction **effectivement validée**, même si l’API renvoie un refus. Ne pas annuler ce compteur par une exception entraînant un rollback. Au cinquième échec, invalider le défi et terminer l’opération en `FAILED`. Une requête provenant d’un autre compte ne peut pas consommer le défi ni épuiser ces essais.
 
-Les refus devenus définitifs (expiration, nouvelle session du hub, réservation annulée, garde devenue invalide) ferment le défi, terminent l’opération sans ouverture et programment un nouvel état d’écran. Un simple secret erroné laisse le défi utilisable tant que les limites ne sont pas atteintes. Les limites proposées sont 5 essais par défi et 3 préparations par utilisateur et locker sur 15 minutes; un rejeu idempotent ne compte pas comme nouvelle préparation. Ces paramètres sont à valider à l’usage.
+Les refus devenus définitifs (expiration, nouvelle session du hub, réservation annulée, garde devenue invalide) ferment le défi, terminent l’opération sans ouverture et programment un nouvel état d’écran. Un simple secret erroné laisse le défi utilisable tant que les limites ne sont pas atteintes. La limite retenue est de cinq secrets erronés soumis par défi; une lecture caméra sans soumission ne compte pas. La fréquence des préparations est limitée par utilisateur et casier selon un seuil configurable à qualifier contre les rafales et les cycles normaux. Un rejeu idempotent ne compte pas comme nouvelle préparation. L’ancien plafond de trois préparations en quinze minutes est abandonné conformément à l’ADR-009; la limitation elle-même n’est pas supprimée.
 
 ### 6.6 Portée de la preuve et affichage
 
@@ -476,7 +477,7 @@ L’autorisation enregistre dans la transaction PostgreSQL une intention de comm
 - `issuedAt`, `expiresAt` et `schemaVersion`;
 - son état de publication.
 
-Un worker publie ensuite cette intention. Le mécanisme recommandé est un **outbox transactionnel**. Une implémentation équivalente est acceptable seulement si elle garantit les mêmes propriétés.
+Une tâche du monolithe Spring publie ensuite cette intention depuis l’**outbox transactionnelle PostgreSQL**, conformément à l’ADR-005 accepté. Une autre stratégie nécessiterait une décision explicite conservant ces propriétés; aucune transaction SQL n’attend la réponse du matériel.
 
 ### 7.3 Pseudocode du dispatcher
 

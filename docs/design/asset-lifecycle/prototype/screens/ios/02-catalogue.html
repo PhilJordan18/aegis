@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="fr-CA" data-platform="ios">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=393, initial-scale=1">
+<title>Aegis Mobile — Équipements (prototype)</title>
+<!--
+  iOS « Catalogue d'équipements » — moment 10 h 30 (fixture key "10:30").
+  Spec: sections.md §4.1 (hiérarchie liste), §1.2 (statuts), §1.3 (raisons).
+  Contracts: GET /assets (09 §11.1) — no mock field on this screen.
+  ?treatment=a|b  ?theme=light|dark  [?transparency=reduce]
+  H1 — A: statut au-dessus de l'identité (le statut ouvre la lecture).
+       B: identité en tête, statut en fin de ligne sur la même rangée.
+-->
+<link rel="stylesheet" href="../../tokens/brand.css">
+<link rel="stylesheet" href="../../tokens/scales.css">
+<link rel="stylesheet" href="../../components/base.css">
+<link rel="stylesheet" href="../../components/ios.css">
+<script src="../../data/fixture.js"></script>
+<script src="../../data/screens.js"></script>
+<script src="../../lib/aegis.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  const v = AG.at("10:30");
+  const { c, ios, icon, fmt, status } = AG;
+  const rows = v.assetList.map(a => ({ a, st: status.technician(a, v) }));
+  const evaluated = fmt.time(v.assetList[0].readiness.evaluatedAt);
+  const footnote = `État évalué à ${evaluated}, heure du casier.`;
+
+  // ---------------------------------------------------------------- A
+  function cardA({ a, st }) {
+    const detail = st.kind === "blocked"
+      ? c.reason(st.secondary, { more: st.more, action: st.action + "." })
+      : `<p class="ios-card__line">${icon("pin")}<span>${c.esc(st.secondary)}</span></p>`;
+    return `<article class="ios-card" aria-label="${c.esc(a.model.name)}, ${c.esc(a.assetCode)}, ${c.esc(st.label)}">
+      <div class="ios-card__top">${c.statusOf(st, { size: "lg" })}<span class="ios-card__chev">${icon("chevron-right")}</span></div>
+      <h2 class="ios-card__name">${c.esc(a.model.name)}</h2>
+      <p class="ios-card__meta tnum">${c.esc(a.assetCode)} · ${c.esc(a.model.manufacturer)} ${c.esc(a.model.modelNumber)}</p>
+      <div class="ios-card__rule"></div>
+      ${detail}
+    </article>`;
+  }
+  function composeA() {
+    return `<main class="ios-screen">
+      ${ios.statusBar(v.moment.at)}
+      <header class="ios-nav">
+        <div class="ios-nav__toolbar">${ios.toolbarButton("sort", "Trier par code ou modèle")}</div>
+        <h1 class="ios-largetitle">Équipements</h1>
+      </header>
+      <div class="ios-search" role="search">${icon("search")}<span>Code ou modèle</span></div>
+      <div class="ios-chips" role="group" aria-label="Filtrer">
+        <span class="ios-chip is-selected">Tous</span>
+        <span class="ios-chip ios-chip--ready">${icon("st-ready")}Prêt</span>
+        <span class="ios-chip ios-chip--blocked">${icon("st-blocked")}Bloqué</span>
+        <span class="ios-chip ios-chip--unknown">${icon("st-unknown")}À vérifier</span>
+      </div>
+      <div class="ios-section-head"><h2 class="ios-section-head__title">Casier ${c.esc(v.locker.code)}</h2><span class="ios-section-head__meta">${rows.length} équipements</span></div>
+      <div class="ios-cards">${rows.map(cardA).join("")}</div>
+      <p class="ios-footnote">${footnote}</p>
+      ${ios.tabBar("equipements")}
+      ${ios.homeIndicator()}
+    </main>`;
+  }
+
+  // ---------------------------------------------------------------- B
+  function rowB({ a, st }) {
+    const reason = st.kind === "blocked"
+      ? `<div class="ios-row__reason">${c.reason(st.secondary, { more: st.more, action: st.action + "." })}</div>` : "";
+    const cell = a.placement.compartmentCode;
+    return `<li class="ios-row" aria-label="${c.esc(a.model.name)}, ${c.esc(a.assetCode)}, ${c.esc(st.label)}">
+      <div><div class="ios-row__name">${c.esc(a.model.name)}</div>
+        <div class="ios-row__meta"><span class="ag-id">${c.esc(a.assetCode)}</span><span>·</span><span>Cellule ${c.esc(cell)}</span></div></div>
+      ${c.statusOf(st, { size: "md", variant: "plain" })}
+      <span class="ios-row__chev">${icon("chevron-right")}</span>
+      ${reason}
+    </li>`;
+  }
+  function composeB() {
+    return `<main class="ios-screen">
+      ${ios.statusBar(v.moment.at)}
+      <header class="ios-nav">
+        <div class="ios-nav__toolbar">${ios.toolbarButton("sort", "Trier par code ou modèle")}</div>
+        <h1 class="ios-largetitle">Équipements</h1>
+      </header>
+      <div class="ios-search" role="search">${icon("search")}<span>Code ou modèle</span></div>
+      <div class="ios-segmented" role="group" aria-label="Filtrer">
+        <span class="ios-segmented__item is-selected">Tous</span>
+        <span class="ios-segmented__item">Prêt</span>
+        <span class="ios-segmented__item">Bloqué</span>
+        <span class="ios-segmented__item">À vérifier</span>
+      </div>
+      <div class="ios-group-head"><h2 class="ios-group-head__title">Casier <span class="ag-id">${c.esc(v.locker.code)}</span></h2><span class="ios-group-head__meta">${rows.length} équipements</span></div>
+      <ul class="ios-group">${rows.map(rowB).join("")}</ul>
+      <p class="ios-footnote">${footnote}</p>
+      ${ios.tabBar("equipements")}
+      ${ios.homeIndicator()}
+    </main>`;
+  }
+
+  AG.mount(AG.treatment === "b" ? composeB : composeA);
+})();
+</script>
+</body>
+</html>
