@@ -83,6 +83,15 @@ Do not display a completed loan before backend confirmation.
 
 Implement approved artifacts from `docs/design/`.
 
+Read `references/apple-hig-checklist.md` before designing or implementing a new
+screen, changing navigation or interaction patterns, adding camera behavior, or
+performing an iOS design/accessibility review. When platform guidance may have
+changed, verify it against the linked official Apple sources.
+
+Prefer familiar SwiftUI components and platform behavior. Express Aegis through
+purposeful hierarchy, content, semantic colors, typography, SF Symbols, and
+refined feedback rather than by replacing standard iOS interaction patterns.
+
 Support:
 
 - Dynamic Type;
@@ -91,6 +100,9 @@ Support:
 - reduced motion;
 - unambiguous READY, BLOCKED, and UNKNOWN communication;
 - useful recovery messages.
+
+Support camera permission denial, QR scan failure, expired codes, and return to
+an interrupted operation as designed states rather than generic alerts.
 
 ## Verification
 
@@ -103,3 +115,8 @@ Include:
 - duplicate-action prevention;
 - operation state-transition tests;
 - accessibility identifiers for critical flows.
+
+For critical screens, also verify rendered previews or the running app at
+representative iPhone sizes, large accessibility text, light/dark appearance,
+Increase Contrast, Reduce Motion, and VoiceOver. Camera-dependent acceptance
+requires the real demonstration device.

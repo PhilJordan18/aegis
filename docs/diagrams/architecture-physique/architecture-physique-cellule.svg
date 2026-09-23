@@ -1,0 +1,77 @@
+<svg width="1200" height="680" viewBox="0 0 1200 680" xmlns="http://www.w3.org/2000/svg" font-family="Inter, Helvetica, Arial, sans-serif">
+  <rect width="1200" height="680" fill="#1e1e1e"/>
+  <text x="600" y="50" text-anchor="middle" font-size="24" font-weight="700" fill="#e8e8e8">Cellule Aegis — responsabilités matérielles locales</text>
+  <rect x="260" y="95" width="890" height="500" rx="22" fill="#252525" stroke="#a3a3a3" stroke-width="2"/>
+  <text x="290" y="130" font-size="14" font-weight="700" fill="#b0b0b0">CELLULE A1 OU A2</text>
+
+  <rect x="30" y="285" width="200" height="90" rx="14" fill="#0F2C46" stroke="#6cb2ff" stroke-width="2"/>
+  <text x="130" y="322" text-anchor="middle" font-size="15" font-weight="700" fill="#D6E8FB">câble dédié du hub</text>
+  <text x="130" y="348" text-anchor="middle" font-size="11" fill="#D6E8FB">alimentation + RS-485</text>
+  <path d="M230 330 H285" stroke="#6cb2ff" stroke-width="3"/>
+  <polygon points="275,324 285,330 275,336" fill="#6cb2ff"/>
+
+  <rect x="285" y="280" width="160" height="95" rx="12" fill="#3a2a0e" stroke="#d9a441" stroke-dasharray="7 5"/>
+  <text x="365" y="313" text-anchor="middle" font-size="13" font-weight="700" fill="#fceacd">connecteur de cellule</text>
+  <text x="365" y="337" text-anchor="middle" font-size="10" fill="#fceacd">M12 A — 5 contacts</text>
+  <text x="365" y="354" text-anchor="middle" font-size="10" fill="#fceacd">proposition à valider</text>
+
+  <rect x="475" y="155" width="170" height="85" rx="12" fill="#0F2C46" stroke="#6cb2ff"/>
+  <text x="560" y="190" text-anchor="middle" font-size="14" font-weight="700" fill="#D6E8FB">interface RS-485</text>
+  <text x="560" y="214" text-anchor="middle" font-size="10" fill="#D6E8FB">segment propre</text>
+  <rect x="700" y="155" width="190" height="85" rx="12" fill="#3d5a41" stroke="#8fd382" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="795" y="190" text-anchor="middle" font-size="16" font-weight="700" fill="#e8e8e8">contrôleur local</text>
+  <text x="795" y="214" text-anchor="middle" font-size="10" fill="#b0b0b0">composant à choisir</text>
+  <path d="M445 305 V197 H475" stroke="#6cb2ff" stroke-width="2" fill="none"/>
+  <polygon points="465,191 475,197 465,203" fill="#6cb2ff"/>
+  <path d="M645 197 H700" stroke="#6cb2ff" stroke-width="2"/>
+  <polygon points="655,191 645,197 655,203" fill="#6cb2ff"/>
+  <polygon points="690,191 700,197 690,203" fill="#6cb2ff"/>
+  <rect x="650" y="169" width="90" height="20" rx="6" fill="#1e1e1e"/>
+  <text x="695" y="183" text-anchor="middle" font-size="11" fill="#6cb2ff">trames locales</text>
+
+  <rect x="475" y="300" width="170" height="85" rx="12" fill="#3a2a0e" stroke="#d9a441" stroke-dasharray="7 5"/>
+  <text x="560" y="335" text-anchor="middle" font-size="14" font-weight="700" fill="#fceacd">driver de serrure</text>
+  <text x="560" y="359" text-anchor="middle" font-size="10" fill="#fceacd">protection inductive</text>
+  <rect x="700" y="300" width="190" height="85" rx="12" fill="#5a4420" stroke="#e0a94a" stroke-width="2"/>
+  <text x="795" y="335" text-anchor="middle" font-size="15" font-weight="700" fill="#f5e0b8">verrou rotatif</text>
+  <text x="795" y="359" text-anchor="middle" font-size="10" fill="#f5e0b8">impulsion bornée</text>
+  <path d="M755 240 V270 H560 V300" stroke="#e0a94a" stroke-width="2" fill="none"/>
+  <polygon points="554,290 560,300 566,290" fill="#e0a94a"/>
+  <rect x="598" y="251" width="110" height="20" rx="6" fill="#1e1e1e"/>
+  <text x="653" y="265" text-anchor="middle" font-size="11" fill="#e0a94a">commande bornée</text>
+  <path d="M645 342 H700" stroke="#e0a94a" stroke-width="2"/>
+  <polygon points="690,336 700,342 690,348" fill="#e0a94a"/>
+  <rect x="648" y="316" width="74" height="20" rx="6" fill="#1e1e1e"/>
+  <text x="685" y="330" text-anchor="middle" font-size="11" fill="#e0a94a">impulsion</text>
+
+  <rect x="940" y="150" width="165" height="80" rx="12" fill="#454545" stroke="#a3a3a3"/>
+  <text x="1022.5" y="183" text-anchor="middle" font-size="14" font-weight="700" fill="#e8e8e8">capteur de porte</text>
+  <text x="1022.5" y="207" text-anchor="middle" font-size="10" fill="#b0b0b0">observation locale</text>
+  <rect x="940" y="285" width="165" height="90" rx="12" fill="#3a2a0e" stroke="#d9a441" stroke-dasharray="7 5"/>
+  <text x="1022.5" y="320" text-anchor="middle" font-size="14" font-weight="700" fill="#fceacd">lecteur RFID local</text>
+  <text x="1022.5" y="344" text-anchor="middle" font-size="10" fill="#fceacd">premier choix</text>
+  <text x="1022.5" y="360" text-anchor="middle" font-size="10" fill="#fceacd">POC requis</text>
+  <rect x="940" y="430" width="165" height="80" rx="12" fill="#454545" stroke="#a3a3a3"/>
+  <circle cx="965" cy="470" r="8" fill="#8fd382"/>
+  <text x="1025" y="463" text-anchor="middle" font-size="14" font-weight="700" fill="#e8e8e8">voyant</text>
+  <text x="1025" y="486" text-anchor="middle" font-size="10" fill="#b0b0b0">état local minimal</text>
+
+  <path d="M940 190 H915 V175 H890" stroke="#a3a3a3" stroke-width="2" fill="none"/>
+  <polygon points="900,169 890,175 900,181" fill="#a3a3a3"/>
+  <rect x="894" y="154" width="48" height="20" rx="6" fill="#1e1e1e"/>
+  <text x="918" y="168" text-anchor="middle" font-size="11" fill="#b0b0b0">porte</text>
+  <path d="M940 330 H915 V220 H890" stroke="#d9a441" stroke-width="2" fill="none"/>
+  <polygon points="900,214 890,220 900,226" fill="#d9a441"/>
+  <rect x="900" y="246" width="110" height="20" rx="6" fill="#1e1e1e"/>
+  <text x="955" y="260" text-anchor="middle" font-size="10" fill="#d9a441">identité + qualité</text>
+  <path d="M850 240 V470 H940" stroke="#8fd382" stroke-width="2" fill="none"/>
+  <polygon points="930,464 940,470 930,476" fill="#8fd382"/>
+  <rect x="858" y="449" width="66" height="20" rx="6" fill="#1e1e1e"/>
+  <text x="891" y="463" text-anchor="middle" font-size="10" fill="#8fd382">indication</text>
+
+  <rect x="420" y="535" width="530" height="42" rx="9" fill="#3a3a3a" stroke="#b0b0b0"/>
+  <text x="685" y="561" text-anchor="middle" font-size="13" fill="#e8e8e8">distribution d’alimentation locale — dimensionnement ouvert</text>
+  <path d="M365 375 V556 H420" stroke="#b0b0b0" stroke-width="2" fill="none"/>
+  <path d="M560 535 V385" stroke="#b0b0b0" stroke-width="2" fill="none"/>
+  <path d="M795 535 V385" stroke="#b0b0b0" stroke-width="2" fill="none"/>
+</svg>

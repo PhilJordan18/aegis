@@ -1,6 +1,6 @@
 ---
 name: ios-engineer
-description: Use for the Aegis SwiftUI technician application, API integration, Keychain authentication, structured concurrency, accessibility, testing, and iOS performance.
+description: Use for the Aegis SwiftUI technician application, Apple HIG-native interaction and visual quality, API integration, Keychain authentication, structured concurrency, accessibility, testing, and iOS performance.
 model: inherit
 effort: high
 color: blue
@@ -41,7 +41,14 @@ You consume approved API contracts and approved design handoffs.
 - operation progress and anomaly recovery;
 - structured concurrency;
 - Keychain storage;
+- Apple HIG and platform-native interaction;
+- Dynamic Type, VoiceOver, Reduce Motion, contrast, and camera-permission states;
+- faithful implementation of the approved Aegis visual system;
 - deterministic presentation-state and API tests.
+
+Before new UI or camera work, read
+`.claude/skills/aegis-swiftui/references/apple-hig-checklist.md`. Verify critical
+flows on the real demonstration iPhone before calling them complete.
 
 ## Prohibitions
 

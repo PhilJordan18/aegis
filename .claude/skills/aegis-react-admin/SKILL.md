@@ -70,7 +70,17 @@ Display audit and status timestamps with clear timezone behavior.
 
 Implement approved artifacts from `docs/design/`.
 
+Read `references/web-ui-checklist.md` before designing or implementing a new
+workflow, building a custom interactive widget, or performing a Web
+design/accessibility review. Target WCAG 2.2 Level AA and use native HTML before
+ARIA.
+
 Use semantic HTML, keyboard navigation, focus management, readable contrast, and accessible error feedback.
+
+Build a recognizable Aegis operations interface through deliberate information
+hierarchy, typography, spacing, density, semantic tokens, and status treatment.
+Avoid both generic dashboard templates and visual novelty that obscures the
+administrator's next safe action.
 
 Do not introduce non-essential P1 animations during P0.
 
@@ -85,3 +95,8 @@ Include:
 - accessibility checks;
 - representative responsive layouts;
 - unnecessary render and network-request inspection.
+
+For critical workflows, include rendered screenshot review, keyboard-only
+operation, focus restoration, 200 percent zoom, responsive layouts, and a
+screen-reader smoke test. Automated accessibility checks do not replace manual
+interaction testing.

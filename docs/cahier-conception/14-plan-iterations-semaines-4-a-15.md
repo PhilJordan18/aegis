@@ -3,7 +3,7 @@
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Session :** Automne 2026  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Point de départ :** mercredi 16 septembre 2026, semaine 4  
+**Point de départ :** mercredi 23 septembre 2026, semaine 4
 **Version :** 1.0 — plan de rattrapage soutenable
 
 ---
@@ -24,29 +24,29 @@ Cette organisation permet de rester aligné avec le cours tout en obtenant un fe
 
 Hypothèses explicitement connues :
 
-- 6 heures communes et productives le mercredi;
-- 2 personnes pendant cette plage, donc **12 heures-personnes**;
+- 7 heures communes et productives le mercredi, selon l’horaire de 9 h à 12 h et de 13 h à 17 h;
+- 2 personnes pendant cette plage, donc **14 heures-personnes**;
 - Philippe ajoute **4 heures hors cours par semaine**;
 - aucun temps supplémentaire de Jimmy n’est compté tant qu’il ne l’a pas engagé;
 - les fins de semaine restent un buffer volontaire, jamais une dépendance du chemin critique.
 
 | Période | Calcul | Capacité garantie |
 |---|---:|---:|
-| Une semaine | `6 h × 2 + 4 h` | 16 h-personnes |
-| Semaines 4–12, avant gel | `9 × 16` | 144 h-personnes |
-| Semaines 13–14, stabilisation | `2 × 16` | 32 h-personnes |
-| Semaines 4–14 | `11 × 16` | 176 h-personnes |
-| Semaine 15, démo/contingence | `1 × 16` | 16 h-personnes |
-| Total jusqu’à la présentation | `12 × 16` | 192 h-personnes |
+| Une semaine | `7 h × 2 + 4 h` | 18 h-personnes |
+| Semaines 4–12, avant gel | `9 × 18` | 162 h-personnes |
+| Semaines 13–14, stabilisation | `2 × 18` | 36 h-personnes |
+| Semaines 4–14 | `11 × 18` | 198 h-personnes |
+| Semaine 15, démo/contingence | `1 × 18` | 18 h-personnes |
+| Total jusqu’à la présentation | `12 × 18` | 216 h-personnes |
 
-Si Jimmy engage lui aussi 4 heures hors cours chaque semaine, la capacité devient 20 h-personnes par semaine. Cette capacité supplémentaire doit d’abord absorber apprentissage, POC et dette, pas ajouter du P1.
+Si Jimmy engage lui aussi 4 heures hors cours chaque semaine, la capacité devient 22 h-personnes par semaine. Cette capacité supplémentaire doit d’abord absorber apprentissage, POC et dette, pas ajouter du P1.
 
 ### Allocation hebdomadaire recommandée
 
-| Usage | Part | Sur 16 h-personnes |
+| Usage | Part | Sur 18 h-personnes |
 |---|---:|---:|
-| Stories planifiées | 70 % | environ 11 h |
-| Tests, intégration et documentation | 20 % | environ 3 h |
+| Stories planifiées | 70 % | environ 12,5 h |
+| Tests, intégration et documentation | 20 % | environ 3,5 h |
 | Imprévu et apprentissage | 10 % | environ 2 h |
 
 Les story points restent relatifs. Ne pas annoncer une vélocité avant d’avoir observé deux cycles complets.
@@ -89,9 +89,9 @@ Les story points restent relatifs. Ne pas annoncer une vélocité avant d’avoi
 
 ---
 
-## 5. Plan concret des six heures du 16 septembre
+## 5. Plan concret des sept heures de la semaine 4
 
-Les six heures communes représentent 12 h-personnes. Le résultat attendu aujourd’hui est une base approuvée et un walking skeleton commencé, pas une journée entière de discussion.
+Les sept heures communes représentent 14 h-personnes. Le résultat attendu le 23 septembre est une base approuvée et un squelette fonctionnel commencé, pas une journée entière de discussion.
 
 | Heure | Travail commun ou parallèle | Livrable observable |
 |---|---|---|
@@ -99,9 +99,9 @@ Les six heures communes représentent 12 h-personnes. Le résultat attendu aujou
 | 0:45–1:30 | Arbitrer ADR-001, 004, 005, 006, 007 et 008 | Statuts et conséquences approuvés ou questions nommées |
 | 1:30–2:15 | Revoir le blueprint avec Jimmy; préparer les POC et composants | Schéma annoté; critères et propriétaires POC |
 | 2:15–2:30 | Choisir les deux stories actives et leurs critères | Tableau de travail avec WIP = 2 |
-| 2:30–4:30 | Travail parallèle : environnement/infra et squelette API | PostgreSQL + broker + API santé démarrables |
-| 4:30–5:15 | Intégrer les branches et exécuter les tests ensemble | Une version commune reproductible |
-| 5:15–6:00 | Démo interne, journal du jour, décisions et prochain cycle | Journal 2026-09-16, résultats de commandes, prochaine priorité |
+| 2:30–5:00 | Travail parallèle : environnement/infra et squelette API | PostgreSQL + broker + API santé démarrables |
+| 5:00–6:00 | Intégrer les branches et exécuter les tests ensemble | Une version commune reproductible |
+| 6:00–7:00 | Démo interne, journal du jour, décisions et prochain cycle | Journal de semaine 4, résultats de commandes, prochaine priorité |
 
 Une répartition possible pendant le bloc parallèle :
 
@@ -147,7 +147,7 @@ Les rôles peuvent être inversés; chaque changement doit être relu par l’au
 [Une phrase démontrable]
 
 ### Capacité
-- Mercredi en équipe : 12 h-personnes
+- Mercredi en équipe : 14 h-personnes
 - Philippe hors cours : 4 h
 - Jimmy hors cours confirmé : [0 ou valeur]
 - Absences/contraintes :

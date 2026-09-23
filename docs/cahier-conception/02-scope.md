@@ -825,7 +825,7 @@ Sont explicitement exclus :
 | Équipe | Deux étudiants |
 | Temps | Une session, présentation en semaine 15 |
 | Prototype | Un hub avec écran et deux cellules/compartiments; étoile retenue, réalisation électrique en POC |
-| Budget matériel | Maximum de 500 $ CA, partagé 50/50 |
+| Estimation matérielle | Repère initial de 500 $ CA; coût et partage finaux à décider après nomenclature complète, inventaire et POC |
 | Mobile | Application iOS native avec SwiftUI |
 | Accès à Xcode | Principalement sur les Macs du Cégep |
 | Web | React avec TypeScript |
@@ -942,7 +942,7 @@ Le choix doit être consigné dans un ADR. Sélectionner une solution plus fiabl
 
 L'équipe a retenu un hub maître avec écran et deux cellules indépendantes. Une cellule forme exactement un compartiment. L'empilage mécanique reste possible, avec un câble direct du hub vers chaque cellule; aucun câble de cellule ne sert de passage vers l'autre.
 
-Le POC valide l'alimentation, les interfaces, la connectique et le protocole dans le budget et le calendrier. Il ne remplace pas le prototype par une seule cellule.
+Le POC valide l'alimentation, les interfaces, la connectique et le protocole dans les ressources disponibles et le calendrier. Il ne remplace pas le prototype par une seule cellule.
 
 #### 17.5.2 Connectique et communication proposées
 
@@ -962,11 +962,11 @@ Aucune tension admissible, section, intensité, terminaison ou affectation de br
 - reprendre la communication sans réexécuter une ancienne commande;
 - tester redémarrages, délais et doublons;
 - vérifier la lisibilité du QR sur le téléphone réel et son effacement après usage;
-- inclure écran, deux lecteurs RFID, interfaces, câbles, connecteurs, alimentation et mécanique dans le budget de 500 $ CA.
+- chiffrer l'écran, les deux lecteurs RFID, les interfaces, les câbles, les connecteurs, l'alimentation, les protections et la mécanique dans une nomenclature complète.
 
 #### 17.5.4 Critère de conservation et fallback
 
-La réalisation modulaire est conservée si les deux liaisons sont fiables et répétables, sans dépasser le budget ni retarder le gel de semaine 12. La décision matérielle doit intervenir selon les jalons de POC de l'équipe.
+La réalisation modulaire est conservée si les deux liaisons sont fiables et répétables et si son coût, sa disponibilité et son effort d'intégration restent compatibles avec les ressources et le gel de semaine 12. La décision matérielle doit intervenir selon les jalons de POC de l'équipe, après examen de la nomenclature complète.
 
 Si la réalisation échoue, le repli documenté est un ESP32 pilotant directement les deux compartiments. Un ADR explicite le changement; les identifiants A1/A2, l'écran QR, l'autorité du backend et les preuves physiques restent requis. La modularité plus avancée demeure une évolution ultérieure.
 
@@ -1175,4 +1175,3 @@ La présente version adopte une base plus précise :
 | Calibration en P2 | Règle minimale de calibration en P0 |
 | IA mise en avant | IA exclue du cœur du MVP |
 | RFID comme différenciateur possible | Détection physique remplaçable après POC |
-
