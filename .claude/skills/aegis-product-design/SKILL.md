@@ -27,10 +27,12 @@ Do not edit application code.
 Produce:
 
 - low-fidelity wireframes first;
-- a written visual direction grounded in the Aegis product and user context;
+- two or three materially different visual directions for substantial new or
+  rejected work;
+- a written recommendation grounded in the Aegis product and user context;
 - reusable component inventory;
 - design tokens;
-- high-fidelity mockups after flow validation;
+- high-fidelity mockups only after flow and direction approval;
 - responsive and accessibility annotations.
 
 Do not edit application code.
@@ -60,6 +62,18 @@ Evaluate a prototype or implementation against the task flow, state matrix,
 approved visual system, platform standards, and accessibility expectations.
 Record evidence and actionable findings. Do not silently redesign domain
 behavior while reviewing the interface.
+
+## Substantial redesign workflow
+
+For a new product surface, a major redesign, or work rejected for visual
+quality, read `references/design-workflow.md` and follow its approval gates.
+
+Do not polish a rejected mockup by default. First identify why its hierarchy,
+composition, platform fit, content, or visual character failed, then develop
+fresh directions from the validated flow.
+
+Small presentation corrections do not require multiple directions or renewed
+approval when they stay within an already approved visual system.
 
 ## Personas
 
@@ -152,6 +166,11 @@ For iOS work, also apply the Apple checklist from
 the WCAG checklist from
 `../aegis-react-admin/references/web-ui-checklist.md`.
 
+Before approving high-fidelity work or an implementation, read and apply
+`references/visual-review-protocol.md`. Source files alone are not visual
+evidence. Inspect rendered output at representative sizes and record the
+result.
+
 Use platform conventions for behavior while expressing Aegis through hierarchy,
 content, tokens, typography, status treatment, and refined details. Require
 rendered evidence for high-fidelity approval.
@@ -179,3 +198,18 @@ Store artifacts under `docs/design/` and include a handoff containing:
 - copy;
 - unresolved questions;
 - acceptance checklist.
+
+For substantial flows, keep the evidence together under
+`docs/design/<flow-or-surface>/`:
+
+- `brief.md` — user, environment, problem, constraints, success criteria;
+- `states.md` — flow and state matrix;
+- `directions.md` — alternatives, references, tradeoffs, selected direction;
+- `wireframes/` — low-fidelity artifacts;
+- `mockups/` — approved high-fidelity artifacts and rendered evidence;
+- `handoff.md` — tokens, components, copy, behavior, accessibility and
+  acceptance checks;
+- `review.md` — implementation comparison and remaining findings.
+
+Do not create empty placeholders. Add only the artifacts required by the
+current design stage.

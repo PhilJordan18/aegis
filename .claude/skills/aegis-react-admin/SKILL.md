@@ -70,6 +70,12 @@ Display audit and status timestamps with clear timezone behavior.
 
 Implement approved artifacts from `docs/design/`.
 
+For a substantial new or redesigned surface, confirm that the handoff includes
+the approved flow, selected visual direction, state matrix, tokens, responsive
+behavior and acceptance checks. Do not invent the brand direction while writing
+components. Return incomplete design work to the designer instead of filling the
+gap with a generic dashboard template.
+
 Read `references/web-ui-checklist.md` before designing or implementing a new
 workflow, building a custom interactive widget, or performing a Web
 design/accessibility review. Target WCAG 2.2 Level AA and use native HTML before
@@ -83,6 +89,11 @@ Avoid both generic dashboard templates and visual novelty that obscures the
 administrator's next safe action.
 
 Do not introduce non-essential P1 animations during P0.
+
+Keep the page hierarchy visible in the component structure. Prefer a small set
+of purposeful layout and status components over a universal card abstraction.
+Use real French content and realistic data density during development; idealized
+short labels are not sufficient layout evidence.
 
 ## Verification
 
@@ -100,3 +111,7 @@ For critical workflows, include rendered screenshot review, keyboard-only
 operation, focus restoration, 200 percent zoom, responsive layouts, and a
 screen-reader smoke test. Automated accessibility checks do not replace manual
 interaction testing.
+
+Apply
+`../aegis-product-design/references/visual-review-protocol.md` to the rendered
+implementation and record differences from the approved handoff.

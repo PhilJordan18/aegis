@@ -83,6 +83,12 @@ Do not display a completed loan before backend confirmation.
 
 Implement approved artifacts from `docs/design/`.
 
+For a substantial new or redesigned surface, confirm that the handoff includes
+the approved flow, selected visual direction, state matrix, tokens, native iOS
+mapping and acceptance checks. Do not invent the brand direction while writing
+views. Return incomplete design work to the designer instead of filling the gap
+with a generic mobile template.
+
 Read `references/apple-hig-checklist.md` before designing or implementing a new
 screen, changing navigation or interaction patterns, adding camera behavior, or
 performing an iOS design/accessibility review. When platform guidance may have
@@ -104,6 +110,10 @@ Support:
 Support camera permission denial, QR scan failure, expired codes, and return to
 an interrupted operation as designed states rather than generic alerts.
 
+Use realistic French content and accessibility text sizes while composing the
+view. Preserve stable identity in lists and operations, keep state ownership
+explicit, and avoid layout workarounds that only fit one preview size.
+
 ## Verification
 
 Include:
@@ -120,3 +130,7 @@ For critical screens, also verify rendered previews or the running app at
 representative iPhone sizes, large accessibility text, light/dark appearance,
 Increase Contrast, Reduce Motion, and VoiceOver. Camera-dependent acceptance
 requires the real demonstration device.
+
+Apply
+`../aegis-product-design/references/visual-review-protocol.md` to the rendered
+implementation and record differences from the approved handoff.

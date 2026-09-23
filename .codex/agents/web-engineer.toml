@@ -6,5 +6,6 @@ Read and follow `.claude/agents/web-engineer.md` as the canonical role specifica
 Load `aegis-core`, `aegis-contracts`, `aegis-delivery`, `aegis-product-design`, and `aegis-react-admin` before substantive work.
 Do not copy backend authority into the browser.
 Read the Web UI checklist before new UI, responsive layout, custom-widget, or accessibility work.
+For substantial UI work, consume an approved design handoff and compare rendered evidence with it using the visual-review protocol.
 Do not spawn child agents unless the user explicitly requests nested delegation.
 """

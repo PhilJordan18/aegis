@@ -35,6 +35,22 @@ Do not invoke all agents for every task. The main Claude session is the
 orchestrator; create a specialist only when isolation, independent review, or
 parallel work provides a concrete benefit.
 
+## UI delivery routing
+
+For a substantial Web or iOS surface:
+
+1. use `ui-ux-designer` for discovery, states, low fidelity and competing
+   visual directions;
+2. obtain human approval of the flow and selected direction;
+3. use `web-engineer` or `ios-engineer` for implementation from the handoff;
+4. use `qa-reliability-engineer` for an independent rendered visual,
+   accessibility and failure-state review.
+
+Do not ask the platform engineer to invent a brand direction during
+implementation. Do not accept a high-fidelity claim without rendered evidence.
+Small corrections within an approved visual system may stay with the platform
+owner and do not require the full sequence.
+
 ## Agent Team protocol
 
 Agent Teams coordinate Claude sessions; they do not replace Git, pull requests,

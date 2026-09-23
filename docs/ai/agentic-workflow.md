@@ -50,6 +50,19 @@ skill canonique est donc visible par les deux outils.
 Claude. Cette séparation évite que les règles métier divergent quand l'équipe
 passe d'un outil à l'autre.
 
+### 3.1 Les fichiers ne lancent pas un agent à eux seuls
+
+Les fichiers `.claude/agents/` et `.claude/skills/` sont découverts lorsque
+Claude Code ouvre le dépôt. Une conversation ordinaire sur claude.ai ne parcourt
+pas automatiquement ces fichiers et ne devient pas Claude Code simplement parce
+qu'ils existent dans Git.
+
+Si Claude Code n'est pas installé sur un poste, la configuration reste utile et
+versionnée : Codex utilise les adaptateurs `.codex/agents/` et les liens
+`.agents/skills/`, tandis que Claude Code peut l'utiliser sur un autre poste
+compatible, par exemple les Macs du Cégep. Installer un skill et disposer d'un
+runtime capable d'exécuter les agents sont deux sujets distincts.
+
 ## 4. Skill, sous-agent ou simple instruction?
 
 Utiliser ce test:
@@ -88,6 +101,42 @@ Exemples:
 L'agent principal reste l'orchestrateur. Il n'est généralement pas utile de
 créer un autre rôle « expert général » qui orchestre les mêmes spécialistes:
 cela ajoute une couche et des tokens sans clarifier la responsabilité.
+
+### Chaîne UI recommandée
+
+Une interface importante ne passe plus directement d'une demande vague à une
+maquette unique ou à du code :
+
+1. `ui-ux-designer` critique l'existant, établit le brief, le flux et les états;
+2. pour une nouvelle direction ou une maquette rejetée, il propose deux ou trois
+   directions réellement différentes et en recommande une;
+3. Philippe et Jimmy valident le flux et la direction avant le high fidelity;
+4. `web-engineer` ou `ios-engineer` implémente le handoff approuvé sans inventer
+   une autre direction en chemin;
+5. `qa-reliability-engineer` inspecte le rendu, les états défavorables,
+   l'accessibilité et l'écart avec le handoff.
+
+Web et iOS partagent les mêmes significations, la même voix et les mêmes rôles
+de statut. Ils ne partagent pas nécessairement la même composition : iOS reste
+natif à la plateforme, tandis que l'administration Web peut être plus dense et
+orientée clavier.
+
+Exemple de demande au designer :
+
+```text
+Utilise ui-ux-designer en mode Prototype pour reprendre le parcours de retrait.
+Critique d'abord la maquette actuelle, puis produis le brief, la matrice d'états
+et deux directions visuelles distinctes pour iOS. N'implémente rien et arrête-toi
+à la porte d'approbation de la direction.
+```
+
+Après validation :
+
+```text
+Utilise ios-engineer pour implémenter la direction approuvée du parcours de
+retrait. Respecte le handoff, montre les états nominal, expiré et anomalie, puis
+fournis des rendus sur les tailles d'iPhone convenues avant la revue QA.
+```
 
 ## 6. Utiliser un reviewer sans créer de faux problèmes
 
@@ -131,11 +180,32 @@ trouver absolument un défaut crée le biais inverse et produit du bruit.
 - Faire relire indéfiniment un résultat sans nouvel indice.
 - Coller une sortie de test énorme quand seules quelques erreurs sont utiles.
 - Transformer `AGENTS.md` ou `CLAUDE.md` en manuel de framework.
+- Précharger plusieurs gros skills visuels et performance dans chaque agent alors
+  qu'un seul mode de travail est actif.
 
 Un sous-agent protège parfois le contexte principal, mais il consomme sa propre
 entrée et sa propre sortie. Il peut économiser du contexte sans réduire le coût
 total. Pour Aegis, deux ou trois sous-agents constituent une limite normale;
 un seul agent reste préférable pour une tâche séquentielle.
+
+Les skills externes spécialisés restent utiles, mais doivent être chargés au
+moment où leur expertise est nécessaire : direction visuelle Web, revue des
+performances React, audit Web ou implémentation SwiftUI. Les précharger tous dans
+le designer ferait consommer du contexte à des règles d'implémentation qu'il
+n'utilise pas. React Native ne s'applique pas à l'application SwiftUI d'Aegis.
+
+| Skill externe évalué | Usage éventuel | Décision actuelle |
+|---|---|---|
+| [Anthropic `frontend-design`](https://github.com/anthropics/skills/tree/main/skills/frontend-design) | Exploration et craft visuel Web | Bon renfort ponctuel du designer Web; ne remplace pas le brief, les états ni les portes d'approbation Aegis |
+| [Vercel `react-best-practices`](https://github.com/vercel-labs/agent-skills/tree/main/skills/react-best-practices) | Performance et structure React | À charger par `web-engineer` lors d'une implémentation ou d'une mesure, en ignorant les règles propres à Next.js qui ne s'appliquent pas à Vite |
+| [Vercel `web-design-guidelines`](https://github.com/vercel-labs/agent-skills/tree/main/skills/web-design-guidelines) | Audit d'interaction et d'accessibilité Web | À charger pour une revue ciblée, pas comme direction artistique |
+| [AvdLee `swiftui-expert-skill`](https://github.com/AvdLee/SwiftUI-Agent-Skill) | Composition, état, navigation et performance SwiftUI | Bon renfort ponctuel de `ios-engineer`; la HIG Apple et le handoff Aegis restent prioritaires |
+| `ui-ux-pro-max` ou `design-taste-frontend` | Recherche de styles, palettes et recettes visuelles | Ne pas précharger ni combiner par défaut; évaluer un seul outil sur un écran test avant de l'ajouter au dépôt |
+
+Une dépendance externe n'est ajoutée au projet qu'après vérification de sa
+licence, de sa taille, de son contenu, de son chevauchement avec les skills Aegis
+et d'un essai comparatif. Si elle est retenue, fixer sa révision au lieu de
+dépendre silencieusement de la branche principale.
 
 ## 8. Workflow recommandé pour une story
 

@@ -6,5 +6,6 @@ Read and follow `.claude/agents/ios-engineer.md` as the canonical role specifica
 Load `aegis-core`, `aegis-contracts`, `aegis-delivery`, `aegis-product-design`, and `aegis-swiftui` before substantive work.
 Treat backend outcomes as authoritative.
 Read the Apple HIG checklist before new UI, navigation, camera, or accessibility work.
+For substantial UI work, consume an approved design handoff and compare rendered evidence with it using the visual-review protocol.
 Do not spawn child agents unless the user explicitly requests nested delegation.
 """
