@@ -19,7 +19,7 @@ Ce document contient les ADRs du P0. Chaque fiche expose un choix, son coût, se
 
 Une proposition peut être acceptée ou rejetée. Une décision acceptée peut ensuite être remplacée; sa révision ne doit pas effacer le motif d’origine. La date ci-dessus est celle de consignation, sans inventer de signature ou de date de réunion.
 
-Le statut `ACCEPTED` des ADR-001, 002 et 008 consigne des principes déjà exprimés dans le scope et les échanges d’équipe. Il ne valide ni tous les paramètres des contrats, ni le matériel, ni l’ensemble de ce registre. Les autres fiches doivent être arbitrées par Philippe et Jimmy avant leur réalisation définitive.
+Le statut `ACCEPTED` des ADR-001, 002, 008 et 010 consigne des principes déjà exprimés dans le scope et les échanges d’équipe. Il ne valide ni tous les paramètres des contrats, ni le matériel, ni l’ensemble de ce registre. Les autres fiches doivent être arbitrées par Philippe et Jimmy avant leur réalisation définitive. L’ADR-010 est conservé dans son fichier détaillé sous `docs/adr/` afin de ne pas dupliquer deux textes normatifs.
 
 ## 2. Registre
 
@@ -34,6 +34,7 @@ Le statut `ACCEPTED` des ADR-001, 002 et 008 consigne des principes déjà expri
 | 007 | Authentification des comptes de démonstration | `PROPOSED` | Philippe | IAM-01 |
 | 008 | Réservation, horaires et échéance du prêt | `ACCEPTED` | Philippe | RES-01 et transitions de prêt |
 | 009 | Mise en œuvre du contrôle QR local | `PROPOSED`; principe intégré au scope | Philippe, revue Jimmy | LOC-01/02, avec essai écran/caméra anticipé |
+| 010 | [Monorepo commun pour les composants du P0](../adr/ADR-010-architecture-monorepo.md) | `ACCEPTED` | Équipe | Structure initiale et première évolution transversale |
 
 Les pilotes préparent les preuves et recommandations; ils n’approuvent pas seuls un changement de scope. Les cibles pédagogiques sont précisées dans le document 14.
 
@@ -65,7 +66,7 @@ Un appel non autorisé est refusé côté serveur, même si l’interface est co
 
 L’équipe a retenu un hub avec écran et deux cellules A1/A2. Une cellule correspond à un compartiment. Chaque cellule rejoint directement un port du hub par un câble dédié; une fixation mécanique en pile n’impose pas un bus électrique traversant.
 
-La proposition actuelle de réalisation utilise des connecteurs RJ45 propriétaires et deux segments RS-485 indépendants. **Ce choix de composants, le brochage et le protocole local ne sont pas encore acceptés par cet ADR.** Une étoile passive avec les lignes A/B réunies n’est pas la réalisation proposée. RJ45 ne signifie ni Ethernet ni PoE.
+La proposition actuelle de réalisation utilise des connecteurs M12 codés A à 5 contacts et deux segments RS-485 indépendants. Le RJ45 propriétaire demeure seulement une option de repli économique. **Le connecteur, les références, le brochage, les protections et le protocole local ne sont pas encore acceptés par cet ADR.** Une étoile passive avec les lignes A/B réunies n’est pas la réalisation proposée.
 
 ### Alternatives et conséquences
 

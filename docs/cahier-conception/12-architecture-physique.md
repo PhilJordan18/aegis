@@ -194,7 +194,7 @@ La porte « fermée » ne prouve pas à elle seule le verrouillage mécanique, n
 | Reprise | Aucun ancien défi affiché après redémarrage, aucune seconde impulsion sur rejeu |
 | RFID | Localisation, orientation, cellule voisine et tag extérieur testés; lectures stables après fermeture |
 | Écran | QR lisible sur le téléphone réel, effacé après usage/expiration; absence d’écran = refus d’ouverture |
-| Budget | Deux lecteurs/antennes, écran, alimentation, câbles, protections et mécanique inclus dans les 500 $ CA |
+| Nomenclature | Deux lecteurs/antennes, écran, alimentation, câbles, protections et mécanique sont tous quantifiés; les provisions et le matériel fourni sont distingués |
 
 Le choix matériel et le protocole exact restent conditionnés aux mesures. Les résultats seront ajoutés au dossier de POC; aucune valeur électrique non mesurée n’est présentée comme validée.
 
@@ -213,6 +213,14 @@ les prix **avant tout achat**, en intégrant les taxes, la livraison, le matéri
 déjà disponible et les éléments fournis par le laboratoire. Les quantités
 électroniques dépendent de la réalisation RS-485 proposée.
 
+Une estimation complète avec références, prix et disponibilités est
+conservée dans
+[`docs/research/nomenclature-materielle-candidate.md`](../research/nomenclature-materielle-candidate.md).
+Elle chiffre la configuration candidate à 714,02 $ CA avant taxes et livraison,
+dont 92,00 $ de provisions à remplacer. Avec les taxes indicatives, le total
+avant livraison est de 820,94 $. Ces valeurs servent à préparer l’inventaire,
+les POC et les paniers; elles ne constituent ni un devis ni une limite technique.
+
 | Ensemble | Quantité cible | Information à obtenir |
 |---|---:|---|
 | Contrôleur du hub | 1 | Référence, interfaces série, GPIO disponibles et compatibilité écran |
@@ -229,7 +237,12 @@ déjà disponible et les éléments fournis par le laboratoire. Les quantités
 | Alimentation, conversion et protections | 1 ensemble dimensionné | Somme des charges, actionnement et protection de chaque départ |
 | Mécanique et fixations | 1 hub + 2 cellules | Porte, cadre, fixation et accès au secours manuel |
 
-Le total documenté doit rester inférieur ou égal à **500 $ CA**. Un devis dépassant cette limite déclenche un arbitrage avant commande; aucune économie supposée n’est imputée à un matériel non identifié.
+Le repère initial de **500 $ CA** demeure une estimation de planification et non
+un critère d’acceptation. Avant la commande, toutes les fonctions doivent être
+chiffrées, le matériel du laboratoire doit être identifié explicitement, les
+provisions doivent être remplacées et les taxes et livraisons doivent être
+calculées. L’équipe arbitre ensuite les références et les replis selon les preuves
+techniques, le délai, les ressources disponibles et le coût total observé.
 
 ## 12. Interface entre firmware et matériel
 

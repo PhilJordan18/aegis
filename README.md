@@ -6,12 +6,12 @@ Aegis est un prototype de **plateforme de disponibilité opérationnelle et de c
 
 Le marché de référence est celui des équipes de maintenance, d’inspection et de services techniques. Le laboratoire du Cégep de Sorel-Tracy constitue le terrain de validation.
 
-| Repère | Situation au 17 septembre 2026 |
+| Repère | Situation au 23 septembre 2026 |
 |---|---|
 | Cours | 420-5X7-SO — Écosystème connecté, automne 2026 |
 | Équipe | Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa |
 | Prototype | Un hub avec écran et deux cellules indépendantes, A1 et A2 |
-| Budget matériel | Maximum de 500 $ CA pour le prototype complet |
+| Estimation matérielle | Repère initial de 500 $ CA; enveloppe finale à décider après nomenclature, inventaire et POC |
 | Échéance | Semaine pédagogique 15, le 23 décembre 2026 |
 
 Ce prototype académique vise une démonstration répétable. Les performances, la fiabilité industrielle et les bénéfices commerciaux ne sont pas présentés comme déjà démontrés.
@@ -84,11 +84,15 @@ Les clients communiquent uniquement avec l’API. PostgreSQL reste privé. Le hu
 La **topologie en étoile est retenue** : chaque cellule correspond à un compartiment et possède son propre câble vers un port du hub. Le P0 comporte deux cellules, même si leur fixation prévoit des extensions.
 
 - L’écran du hub fait partie du P0 : QR d’accès, consignes et résultat fourni par le backend.
-- Jimmy propose des câbles à connecteurs RJ45 pour l’alimentation et les données. Cette connectique propriétaire Aegis **n’est ni Ethernet ni PoE**; le brochage et le dimensionnement restent à valider.
+- Un M12 codé A à 5 contacts est recommandé pour la revue d’équipe; le RJ45 propriétaire étudié initialement demeure une option économique. Le choix final, le brochage et le dimensionnement restent à valider conjointement.
 - Deux segments RS-485 indépendants constituent une réalisation proposée de l’étoile. Le protocole local et les composants ne sont pas déclarés validés avant le POC.
 - La détection principale prévue est le RFID UHF local par cellule. Sa localisation et sa stabilité doivent être mesurées. Le repli associe identification QR/NFC de l’actif, porte et présence/poids, conformément au scope.
 
 L’[architecture physique](docs/cahier-conception/12-architecture-physique.md) distingue les décisions retenues, les interfaces à réaliser et les essais attendus.
+La [nomenclature matérielle candidate](docs/research/nomenclature-materielle-candidate.md)
+chiffre toutes les fonctions connues, distingue les prix sourcés des provisions
+et calcule une enveloppe de planification. Elle sert à préparer l’inventaire, les
+POC et la décision d’équipe; elle ne constitue pas une liste d’achat approuvée.
 
 ## Invariants du P0
 
@@ -122,12 +126,12 @@ La cible finale est **10 retraits et 10 retours consécutifs**, sans interventio
 | `services/api/` | API Spring Boot et migrations Flyway |
 | `firmware/locker-controller/` | Firmware du hub et des cellules |
 | `infra/docker/`, `infra/mqtt/` | Environnement reproductible et broker |
-| `docs/cahier-conception/` | Documents 02–14 ci-dessous |
+| `docs/cahier-conception/` | Documents 02–15 ci-dessous |
 | `docs/architecture/`, `docs/diagrams/`, `docs/research/` | Dessins, sources des diagrammes et résultats de POC |
 | `docs/journal/`, `docs/meetings/` | Travail réellement effectué et décisions de réunion |
 | `AGENTS.md`, `.claude/`, `.codex/`, `.agents/skills/` | Configuration partagée de l’assistance au développement |
 
-Philippe porte principalement le logiciel; Jimmy porte principalement le matériel. La capacité de référence est de **10 h/semaine pour Philippe** et **6 h/semaine pour Jimmy**, dont 6 h communes à l’école. La répartition précise du firmware reste à confirmer; le [plan d’exécution](docs/cahier-conception/14-plan-iterations-semaines-4-a-15.md) expose l’hypothèse et la charge de chaque personne.
+Philippe porte principalement le logiciel; Jimmy porte principalement le matériel. La capacité garantie de référence est de **11 h/semaine pour Philippe** et **7 h/semaine pour Jimmy**, dont 7 h communes à l’école. La répartition précise du firmware reste à confirmer; le [plan d’exécution](docs/cahier-conception/14-plan-iterations-semaines-4-a-15.md) expose l’hypothèse et la charge de chaque personne.
 
 Le développement iOS nécessitant les Macs de l’école, ses compilations et essais sont prévus pendant ces séances. Les quatre heures hors cours de Philippe servent prioritairement au backend, au Web, au simulateur, aux tests et à la documentation.
 
@@ -156,3 +160,4 @@ Le scope fixe les engagements. Les autres documents le détaillent; une modifica
 | [12 — Architecture physique](docs/cahier-conception/12-architecture-physique.md) | Hub, deux cellules, interfaces et vérification matérielle |
 | [13 — Décisions d’architecture](docs/cahier-conception/13-registre-adrs-proposes.md) | ADRs, décisions actées et arbitrages restants |
 | [14 — Plan d’exécution](docs/cahier-conception/14-plan-iterations-semaines-4-a-15.md) | Capacité par personne, cycles, jalons et organisation Linear |
+| [15 — Cahier de conception](docs/cahier-conception/15-cahier-de-conception.md) | Synthèse de validation destinée à la remise académique |

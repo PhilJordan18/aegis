@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-labelledby="title desc">
+  <title id="title">Maquettes fonctionnelles des interfaces Aegis</title>
+  <desc id="desc">Deux écrans iOS pour le technicien et un tableau de bord Web pour l’administrateur, dans une identité bleu nuit.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#081521"/>
+      <stop offset="1" stop-color="#12304A"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#02070C" flood-opacity="0.35"/>
+    </filter>
+    <style>
+      .font { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .muted { fill: #9FB3C8; }
+      .body { fill: #E8F1FA; }
+      .label { fill: #C5D5E5; font-size: 14px; font-weight: 600; }
+      .tiny { fill: #9FB3C8; font-size: 12px; }
+      .panel { fill: #10283C; stroke: #31516A; stroke-width: 1.5; }
+      .card { fill: #16344D; stroke: #355B78; stroke-width: 1.2; }
+      .divider { stroke: #31516A; stroke-width: 1; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="900" fill="url(#bg)"/>
+  <circle cx="1300" cy="70" r="260" fill="#1B4D73" opacity="0.2"/>
+  <circle cx="80" cy="880" r="280" fill="#102F49" opacity="0.45"/>
+
+  <g class="font">
+    <text x="72" y="74" class="body" font-size="34" font-weight="760">Aegis — parcours essentiels du P0</text>
+    <text x="72" y="108" class="muted" font-size="16">Maquettes fonctionnelles · hiérarchie, états, décisions et accessibilité</text>
+
+    <!-- iOS list -->
+    <g filter="url(#shadow)">
+      <rect x="72" y="150" width="316" height="620" rx="38" fill="#07121C" stroke="#5D7183" stroke-width="2"/>
+      <rect x="84" y="162" width="292" height="596" rx="29" fill="#F4F7FA"/>
+      <rect x="180" y="171" width="100" height="24" rx="12" fill="#07121C"/>
+    </g>
+    <text x="108" y="226" fill="#12304A" font-size="13" font-weight="700">AEGIS MOBILE</text>
+    <text x="108" y="264" fill="#10283C" font-size="27" font-weight="760">Équipements</text>
+    <text x="108" y="288" fill="#577087" font-size="14">2 actifs · Atelier principal</text>
+
+    <rect x="108" y="316" width="244" height="154" rx="18" fill="#FFFFFF" stroke="#CBD9E5"/>
+    <circle cx="132" cy="347" r="10" fill="#12805C"/>
+    <path d="M127 347l4 4 7-9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="152" y="352" fill="#126044" font-size="13" font-weight="760">PRÊT</text>
+    <text x="126" y="385" fill="#10283C" font-size="19" font-weight="700">Multimètre A1</text>
+    <text x="126" y="410" fill="#577087" font-size="13">Calibré jusqu’au 18 déc. 2026</text>
+    <rect x="126" y="428" width="200" height="28" rx="14" fill="#DCEEFF"/>
+    <text x="164" y="447" fill="#145B91" font-size="13" font-weight="700">Réserver cet actif</text>
+
+    <rect x="108" y="488" width="244" height="166" rx="18" fill="#FFFFFF" stroke="#CBD9E5"/>
+    <circle cx="132" cy="519" r="10" fill="#B5473C"/>
+    <path d="M132 513v7m0 4h.1" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
+    <text x="152" y="524" fill="#8B2F28" font-size="13" font-weight="760">BLOQUÉ</text>
+    <text x="126" y="557" fill="#10283C" font-size="19" font-weight="700">Multimètre A2</text>
+    <text x="126" y="582" fill="#577087" font-size="13">Calibration expirée</text>
+    <text x="126" y="607" fill="#577087" font-size="13">le 8 septembre 2026</text>
+    <text x="126" y="636" fill="#8B2F28" font-size="13" font-weight="700">Réservation indisponible</text>
+
+    <line x1="108" y1="684" x2="352" y2="684" stroke="#D8E3EC"/>
+    <text x="126" y="720" fill="#145B91" font-size="13" font-weight="700">Équipements</text>
+    <text x="276" y="720" fill="#6D8294" font-size="13">Mon prêt</text>
+
+    <!-- iOS operation -->
+    <g filter="url(#shadow)">
+      <rect x="430" y="150" width="316" height="620" rx="38" fill="#07121C" stroke="#5D7183" stroke-width="2"/>
+      <rect x="442" y="162" width="292" height="596" rx="29" fill="#F4F7FA"/>
+      <rect x="538" y="171" width="100" height="24" rx="12" fill="#07121C"/>
+    </g>
+    <text x="466" y="226" fill="#12304A" font-size="13" font-weight="700">RETRAIT · A1</text>
+    <text x="466" y="264" fill="#10283C" font-size="25" font-weight="760">Confirmer sur place</text>
+    <text x="466" y="292" fill="#577087" font-size="14">Le casier doit afficher votre code.</text>
+
+    <rect x="466" y="322" width="244" height="98" rx="18" fill="#E7F2FC" stroke="#A9CCE8"/>
+    <circle cx="495" cy="351" r="13" fill="#1E6FA8"/>
+    <text x="490" y="356" fill="#fff" font-size="15" font-weight="800">1</text>
+    <text x="520" y="350" fill="#163E5C" font-size="14" font-weight="730">Regardez l’écran du hub</text>
+    <text x="520" y="374" fill="#45677F" font-size="13">Le QR expire dans 00:47</text>
+    <text x="520" y="397" fill="#45677F" font-size="13">Aucune serrure n’est ouverte.</text>
+
+    <rect x="466" y="438" width="244" height="52" rx="16" fill="#146EA8"/>
+    <rect x="488" y="451" width="20" height="20" rx="3" fill="none" stroke="#fff" stroke-width="2"/>
+    <path d="M493 456h4v4h-4zm10 0h-4v4h4zm-10 10h4v-4h-4zm10 0v-4h-4v4z" fill="#fff"/>
+    <text x="526" y="471" fill="#FFFFFF" font-size="15" font-weight="760">Scanner le QR</text>
+
+    <text x="466" y="536" fill="#10283C" font-size="15" font-weight="730">Progression</text>
+    <line x1="481" y1="568" x2="481" y2="671" stroke="#B8CBDA" stroke-width="3"/>
+    <circle cx="481" cy="571" r="10" fill="#12805C"/>
+    <path d="M477 571l3 3 5-7" fill="none" stroke="#fff" stroke-width="2"/>
+    <text x="506" y="576" fill="#23445C" font-size="14" font-weight="650">Réservation validée</text>
+    <circle cx="481" cy="620" r="10" fill="#1E6FA8"/>
+    <circle cx="481" cy="620" r="4" fill="#fff"/>
+    <text x="506" y="625" fill="#23445C" font-size="14" font-weight="650">Preuve locale attendue</text>
+    <circle cx="481" cy="669" r="10" fill="#D4DEE6"/>
+    <text x="506" y="674" fill="#6D8294" font-size="14">Retrait confirmé par le serveur</text>
+    <text x="466" y="714" fill="#577087" font-size="11">Le succès ne s’affiche qu’après</text>
+    <text x="466" y="730" fill="#577087" font-size="11">la preuve physique confirmée.</text>
+
+    <!-- Web admin -->
+    <g filter="url(#shadow)">
+      <rect x="794" y="150" width="574" height="620" rx="24" class="panel"/>
+    </g>
+    <rect x="794" y="150" width="574" height="56" rx="24" fill="#0A1C2A"/>
+    <rect x="794" y="182" width="574" height="24" fill="#0A1C2A"/>
+    <circle cx="824" cy="178" r="6" fill="#FF6B64"/>
+    <circle cx="844" cy="178" r="6" fill="#EFB84B"/>
+    <circle cx="864" cy="178" r="6" fill="#43B581"/>
+    <text x="900" y="184" class="body" font-size="14" font-weight="750">AEGIS MANAGER</text>
+
+    <rect x="794" y="206" width="132" height="564" fill="#0D2132"/>
+    <text x="816" y="250" class="tiny" font-weight="760">SUPERVISION</text>
+    <rect x="806" y="268" width="108" height="38" rx="10" fill="#194466"/>
+    <text x="824" y="292" class="body" font-size="14" font-weight="700">Vue d’ensemble</text>
+    <text x="824" y="338" class="muted" font-size="14">Actifs</text>
+    <text x="824" y="380" class="muted" font-size="14">Prêts</text>
+    <text x="824" y="422" class="muted" font-size="14">Anomalies</text>
+    <circle cx="897" cy="417" r="11" fill="#B5473C"/>
+    <text x="894" y="422" fill="#fff" font-size="11" font-weight="800">1</text>
+    <text x="824" y="464" class="muted" font-size="14">Audit</text>
+    <text x="824" y="728" class="tiny">Admin · Démo</text>
+
+    <text x="958" y="250" class="body" font-size="24" font-weight="760">État opérationnel</text>
+    <text x="958" y="275" class="muted" font-size="13">Dernière mise à jour il y a 4 s</text>
+
+    <rect x="958" y="300" width="174" height="88" rx="14" class="card"/>
+    <text x="976" y="326" class="tiny" font-weight="700">CASIER PRINCIPAL</text>
+    <circle cx="980" cy="356" r="8" fill="#43B581"/>
+    <text x="997" y="361" class="body" font-size="16" font-weight="760">En ligne</text>
+    <text x="1084" y="361" class="tiny">4 s</text>
+
+    <rect x="1148" y="300" width="174" height="88" rx="14" class="card"/>
+    <text x="1166" y="326" class="tiny" font-weight="700">PRÊTS ACTIFS</text>
+    <text x="1166" y="365" class="body" font-size="28" font-weight="780">1</text>
+    <text x="1194" y="363" class="muted" font-size="13">aucun retard</text>
+
+    <text x="958" y="432" class="body" font-size="17" font-weight="730">Cellules</text>
+    <rect x="958" y="450" width="364" height="92" rx="14" class="card"/>
+    <text x="976" y="480" class="body" font-size="15" font-weight="760">A1 · Multimètre A1</text>
+    <text x="976" y="507" class="muted" font-size="13">Porte fermée · verrouillée · actif présent</text>
+    <rect x="1247" y="471" width="57" height="24" rx="12" fill="#174F42"/>
+    <text x="1261" y="488" fill="#88E0BD" font-size="11" font-weight="760">PRÊT</text>
+
+    <rect x="958" y="556" width="364" height="104" rx="14" fill="#412A2C" stroke="#7A4548"/>
+    <text x="976" y="586" fill="#FFD5D1" font-size="15" font-weight="760">A2 · Calibration expirée</text>
+    <text x="976" y="611" fill="#DDB1AE" font-size="13">Anomalie ouverte · intervention requise</text>
+    <rect x="976" y="626" width="112" height="24" rx="12" fill="#6B3437"/>
+    <text x="988" y="643" fill="#FFE5E2" font-size="11" font-weight="760">VOIR LA PREUVE</text>
+
+    <rect x="958" y="688" width="364" height="48" rx="12" fill="#173A55"/>
+    <text x="976" y="717" class="body" font-size="13" font-weight="650">↗ Ouvrir le journal d’audit corrélé</text>
+
+    <rect x="72" y="812" width="1296" height="1" fill="#31516A"/>
+    <text x="72" y="850" class="label">Principes communs</text>
+    <text x="222" y="850" class="muted" font-size="14">Décision serveur explicite</text>
+    <circle cx="402" cy="845" r="3" fill="#58A6FF"/>
+    <text x="418" y="850" class="muted" font-size="14">Couleur + symbole + libellé</text>
+    <circle cx="632" cy="845" r="3" fill="#58A6FF"/>
+    <text x="648" y="850" class="muted" font-size="14">États d’attente et d’erreur visibles</text>
+    <circle cx="918" cy="845" r="3" fill="#58A6FF"/>
+    <text x="934" y="850" class="muted" font-size="14">Actions physiques confirmées, jamais anticipées</text>
+  </g>
+</svg>

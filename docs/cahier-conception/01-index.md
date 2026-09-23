@@ -3,7 +3,7 @@
 **Cours :** 420-5X7-SO — Écosystème connecté
 **Session :** Automne 2026
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa
-**Date de révision :** 17 septembre 2026
+**Date de révision :** 23 septembre 2026
 
 ---
 
@@ -47,6 +47,7 @@ validation explicite et, lorsque requis, sans ADR distinct.
 | 12 | [Architecture physique](12-architecture-physique.md) | Hub, cellules, étoile, interfaces et essais matériels | Concevoir ou valider le prototype physique |
 | 13 | [Registre des ADRs proposés](13-registre-adrs-proposes.md) | Statut des décisions et arbitrages ouverts | Vérifier ce qui est accepté, proposé ou à remplacer |
 | 14 | [Plan d’itérations des semaines 4 à 15](14-plan-iterations-semaines-4-a-15.md) | Capacité, séquencement, limites de travail et alertes | Planifier les cycles et protéger l’échéance |
+| 15 | [Cahier de conception](15-cahier-de-conception.md) | Synthèse destinée à la validation et à la remise académique | Relire le projet dans son ensemble avant la production du PDF |
 
 ## 4. Documents complémentaires
 
