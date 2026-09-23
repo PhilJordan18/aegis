@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="fr-CA" data-platform="ios">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=393, initial-scale=1">
+<title>Aegis Mobile — Retrait guidé, scanner (prototype)</title>
+<!--
+  iOS 05 « Retrait guidé — scanner contextuel (SIMULATION) » — moment 10 h 39 min 50 s (key "10:39").
+  Treatment A, light only.
+  State: LockerOperation CHECKOUT AWAITING_LOCAL_PROOF, requiredAction SCAN_HUB_QR,
+  localProofDisplayedAt set (code shown on the locker), localProofExpiresAt − moment = 47 s.
+  Spec: sections.md §1.4 (row « code affiché »), §6 (feuille « Scanner le code »).
+  Contracts: GET /locker-operations/{id} (09 §15.4); POST …/authorize-local (09 §15.5), not yet sent.
+  The viewfinder is a SIMULATION: decorative placeholder pattern, no token, not scannable (09 §15.1:
+  the API never provides a QR image or token).
+-->
+<link rel="stylesheet" href="../../tokens/brand.css">
+<link rel="stylesheet" href="../../tokens/scales.css">
+<link rel="stylesheet" href="../../components/base.css">
+<link rel="stylesheet" href="../../components/ios.css">
+<script src="../../data/fixture.js"></script>
+<script src="../../data/screens.js"></script>
+<script src="../../lib/aegis.js"></script>
+<style>
+  .op-head { padding: 4px var(--t-gutter) 0; }
+  .op-eyebrow { font-size: 15px; font-weight: 600; color: var(--ag-text-2); }
+  .op-title { margin-top: 4px; font-family: var(--t-font-display); font-size: 30px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; }
+  .op-step { margin-top: 12px; }
+  .scan-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 2px; }
+  .scan-title { font-family: var(--t-font-display); font-size: 22px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; margin: -46px 56px 0 4px; }
+  .ag-scanner { height: 286px; }
+  .scan-safe { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 650; color: var(--ag-text); }
+  .scan-safe .ag-ico { width: 20px; height: 20px; color: var(--ag-accent-text); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  const v = AG.at("10:39");
+  const { c, ios, icon, fmt, copy } = AG;
+  const op = v.operation;
+  const a = v.assets["MM-001"];
+  const [title, instruction] = copy.operation.AWAITING_LOCAL_PROOF;
+  const total = Math.round((new Date(op.localProofExpiresAt) - new Date(op.createdAt)) / 1000);
+
+  function compose() {
+    return `<main class="ios-screen">
+      ${ios.statusBar(v.moment.at)}
+      <header class="ios-nav"><div class="ios-nav__toolbar ios-nav__toolbar--split">${ios.toolbarButton("xmark", "Quitter le retrait guidé")}<span></span></div></header>
+      <section class="op-head" aria-label="Retrait guidé">
+        <p class="op-eyebrow">Retrait guidé · cellule ${c.esc(a.placement.compartmentCode)}</p>
+        <h1 class="op-title">${c.esc(title)}</h1>
+        <div class="op-step">${c.status("progress", "Code affiché sur le casier", { size: "md" })}</div>
+      </section>
+
+      ${ios.sheet(`
+        <h2 class="scan-title">Scannez le code affiché sur le casier</h2>
+        ${c.scanner({})}
+        <div class="scan-status">
+          ${c.countdown(v.snap.operation.secondsLeft, total)}
+          ${c.mock("SIM")}
+        </div>
+        <p class="scan-safe">${icon("lock")}${c.esc(instruction)}</p>
+        <p class="ios-helper" style="margin-top:-4px">Le scan n'ouvre rien tant que le serveur n'a pas autorisé. Visez l'écran du casier ${c.esc(a.placement.lockerCode)}.</p>
+        <div class="ios-sheet__spacer"></div>
+        ${c.btn("Annuler le scan", { variant: "secondary", size: "lg", block: true })}
+      `, { title: " ", leading: "<span></span>", trailing: ios.toolbarButton("xmark", "Fermer le scanner") })}
+      <div class="ios-home ios-home--top"></div>
+    </main>`;
+  }
+  AG.mount(compose);
+  document.querySelector(".ios-sheet").style.top = "214px";
+})();
+</script>
+</body>
+</html>

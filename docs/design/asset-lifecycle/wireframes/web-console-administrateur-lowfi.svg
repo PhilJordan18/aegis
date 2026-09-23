@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900" role="img" aria-labelledby="title desc">
+  <title id="title">Wireframe basse fidélité — console Aegis Manager (Web)</title>
+  <desc id="desc">Agencement dense en niveaux de gris : navigation, bandeau d'état du casier, table de données filtrable avec colonnes readiness/disponibilité/calibration, panneau d'inspection contextuel, bandeau d'anomalie non ignorable.</desc>
+  <style>
+    .t { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+    .frame { fill:#fff; stroke:#111; stroke-width:2; }
+    .box { fill:#fff; stroke:#888; stroke-width:1.2; }
+    .boxAlt { fill:#f2f2f2; stroke:#111; stroke-width:1.4; stroke-dasharray:5,4; }
+    .h1 { fill:#111; font-size:20px; font-weight:700; }
+    .h2 { fill:#111; font-size:12px; font-weight:700; letter-spacing:0.4px; }
+    .body { fill:#222; font-size:13px; }
+    .muted { fill:#777; font-size:11px; }
+    .status { fill:#111; font-size:11px; font-weight:700; }
+    .sep { stroke:#ddd; stroke-width:1; }
+    .navrow { fill:#222; font-size:13px; }
+  </style>
+
+  <rect width="1400" height="900" fill="#fafafa"/>
+  <text x="40" y="30" class="t h1">Aegis Manager — wireframe basse fidélité (sans direction visuelle)</text>
+  <text x="40" y="50" class="t muted">Gris uniquement · table de données dense, orientée clavier · statut = forme + texte, jamais la couleur seule</text>
+
+  <g class="t">
+    <rect x="40" y="70" width="1320" height="800" class="frame"/>
+
+    <!-- top status strip -->
+    <rect x="40" y="70" width="1320" height="46" fill="#111"/>
+    <text x="60" y="98" fill="#fff" font-size="13" font-weight="700">AEGIS MANAGER</text>
+    <text x="300" y="98" fill="#ddd" font-size="12">Casier AEGIS-DEMO-01 · [ EN LIGNE ] · dernier signal il y a 4 s</text>
+    <text x="780" y="98" fill="#ddd" font-size="12">Prêts actifs : 1 (0 en retard)</text>
+    <text x="1000" y="98" fill="#ddd" font-size="12">Anomalies ouvertes : [ 1 ]</text>
+    <text x="1230" y="98" fill="#ddd" font-size="12">admin@aegis · Déconnexion</text>
+
+    <!-- left nav -->
+    <rect x="40" y="116" width="180" height="754" fill="#f0f0f0"/>
+    <text x="60" y="146" class="h2">SUPERVISION</text>
+    <rect x="52" y="158" width="156" height="30" fill="#111"/>
+    <text x="64" y="178" fill="#fff" font-size="13">Vue d'ensemble</text>
+    <text x="64" y="216" class="navrow">Actifs</text>
+    <text x="64" y="250" class="navrow">Réservations</text>
+    <text x="64" y="284" class="navrow">Prêts</text>
+    <text x="64" y="318" class="navrow">Anomalies [ 1 ]</text>
+    <text x="64" y="352" class="navrow">Audit</text>
+    <line x1="52" y1="380" x2="208" y2="380" class="sep"/>
+    <text x="60" y="404" class="h2">CONFIGURATION</text>
+    <text x="64" y="430" class="navrow">Catalogue</text>
+    <text x="64" y="464" class="navrow">Horaires du casier</text>
+    <text x="60" y="850" class="muted">Raccourcis : / recherche</text>
+    <text x="60" y="864" class="muted">j / k ligne suivante·précédente</text>
+
+    <!-- anomaly banner -->
+    <rect x="236" y="132" width="1108" height="52" class="boxAlt"/>
+    <text x="252" y="152" class="status">[ ANOMALIE OUVERTE · A2 ]</text>
+    <text x="252" y="170" class="body">EXPECTED_ASSET_NOT_OBSERVED — actif attendu non observé après fermeture de porte. Intervention requise.</text>
+    <text x="1180" y="162" class="muted">Voir →</text>
+
+    <!-- filter row -->
+    <rect x="236" y="200" width="700" height="30" class="box"/>
+    <text x="248" y="220" class="muted">Rechercher un actif, un code, un modèle…</text>
+    <rect x="948" y="200" width="130" height="30" class="box"/>
+    <text x="958" y="220" class="muted">Readiness ▾</text>
+    <rect x="1088" y="200" width="130" height="30" class="box"/>
+    <text x="1098" y="220" class="muted">Compartiment ▾</text>
+    <rect x="1228" y="200" width="116" height="30" fill="none" stroke="#111" stroke-width="1.4"/>
+    <text x="1244" y="220" class="body">+ Nouvel actif</text>
+
+    <!-- table -->
+    <rect x="236" y="244" width="1108" height="26" fill="#e8e8e8"/>
+    <text x="248" y="262" class="h2">CODE</text>
+    <text x="330" y="262" class="h2">MODÈLE</text>
+    <text x="520" y="262" class="h2">READINESS</text>
+    <text x="700" y="262" class="h2">DISPONIBILITÉ</text>
+    <text x="860" y="262" class="h2">CALIBRATION</text>
+    <text x="1020" y="262" class="h2">COMPARTIMENT</text>
+    <text x="1180" y="262" class="h2">ACTIONS</text>
+
+    <!-- row 1 READY -->
+    <rect x="236" y="270" width="1108" height="34" fill="#fff" stroke="#eee"/>
+    <text x="248" y="292" class="body">MM-001</text>
+    <text x="330" y="292" class="body">Multimètre 1 (Fluke 117)</text>
+    <text x="520" y="292" class="status">[ PRÊT ]</text>
+    <text x="700" y="292" class="body">AVAILABLE</text>
+    <text x="860" y="292" class="body">Valide · 1 déc. 2026</text>
+    <text x="1020" y="292" class="body">A1</text>
+    <text x="1180" y="292" class="muted">Détail</text>
+
+    <!-- row 2 BLOCKED (selected, feeds inspector) -->
+    <rect x="236" y="304" width="1108" height="34" fill="#f4f4f4" stroke="#111" stroke-width="1.4"/>
+    <text x="248" y="326" class="body">MM-002</text>
+    <text x="330" y="326" class="body">Multimètre 2 (Fluke 117)</text>
+    <text x="520" y="326" class="status">[ BLOQUÉ ]</text>
+    <text x="700" y="326" class="body">UNAVAILABLE</text>
+    <text x="860" y="326" class="body">Expirée · 8 sept. 2026</text>
+    <text x="1020" y="326" class="body">A2</text>
+    <text x="1180" y="326" class="muted">Détail ►</text>
+
+    <!-- row 3 BORROWED overdue -->
+    <rect x="236" y="338" width="1108" height="34" fill="#fff" stroke="#eee"/>
+    <text x="248" y="360" class="body">CAM-014</text>
+    <text x="330" y="360" class="body">Caméra thermique (Flir E5)</text>
+    <text x="520" y="360" class="status">[ PRÊT ]</text>
+    <text x="700" y="360" class="body" font-size="11.5">BORROWED · [ RETARD ]</text>
+    <text x="860" y="360" class="body">Valide · 4 mars 2027</text>
+    <text x="1020" y="360" class="body">—</text>
+    <text x="1180" y="360" class="muted">Détail</text>
+
+    <!-- row 4 UNKNOWN -->
+    <rect x="236" y="372" width="1108" height="34" fill="#fff" stroke="#eee"/>
+    <text x="248" y="394" class="body">GAZ-002</text>
+    <text x="330" y="394" class="body">Détecteur de gaz (BW Max XT II)</text>
+    <text x="520" y="394" class="status">[ À VÉRIFIER ]</text>
+    <text x="700" y="394" class="body">RESERVED</text>
+    <text x="860" y="394" class="body">Requise · inconnue</text>
+    <text x="1020" y="394" class="body">—</text>
+    <text x="1180" y="394" class="muted">Détail</text>
+
+    <text x="248" y="424" class="muted">4 actifs affichés sur 4 · dernière mise à jour il y a 4 s</text>
+
+    <!-- inspector panel -->
+    <rect x="236" y="450" width="1108" height="404" class="box"/>
+    <text x="252" y="476" class="h1" font-size="16">Multimètre 2 · MM-002</text>
+    <rect x="252" y="490" width="200" height="22" fill="none" stroke="#111" stroke-width="1.4"/>
+    <text x="260" y="506" class="status">[ BLOQUÉ · CALIBRATION_EXPIRED ]</text>
+
+    <line x1="252" y1="524" x2="1330" y2="524" class="sep"/>
+    <text x="252" y="548" class="h2">RAISON DE BLOCAGE</text>
+    <text x="252" y="568" class="body">Calibration expirée depuis le 8 septembre 2026 (America/Toronto).</text>
+    <text x="252" y="586" class="body">Aucune réservation ni retrait n'est possible tant que la calibration</text>
+    <text x="252" y="602" class="body">n'est pas renouvelée par un administrateur.</text>
+
+    <text x="252" y="632" class="h2">ASSOCIATION PHYSIQUE</text>
+    <text x="252" y="652" class="body">Casier AEGIS-DEMO-01 · Compartiment A2 · identifiant RFID lié</text>
+
+    <text x="252" y="682" class="h2">HISTORIQUE RÉCENT (audit corrélé)</text>
+    <rect x="252" y="694" width="700" height="90" fill="#fafafa" stroke="#ddd"/>
+    <text x="264" y="714" class="muted">16 sept. 14:30 — Calibration marquée EXPIRED (recalcul readiness)</text>
+    <text x="264" y="732" class="muted">2 sept. 09:10 — Retour confirmé, prêt COMPLETED</text>
+    <text x="264" y="750" class="muted">1 sept. 08:02 — Retrait confirmé, prêt ACTIVE</text>
+    <text x="264" y="768" class="muted">→ Ouvrir le journal d'audit complet</text>
+
+    <rect x="980" y="694" width="360" height="100" class="boxAlt"/>
+    <text x="992" y="714" class="h2">ACTIONS SÛRES DISPONIBLES</text>
+    <text x="992" y="736" class="body">Mettre à jour la calibration</text>
+    <text x="992" y="754" class="body">Marquer en maintenance</text>
+    <text x="992" y="772" class="muted">Aucune action ne force la readiness ni ne</text>
+    <text x="992" y="786" class="muted">résout une anomalie sans preuve physique.</text>
+  </g>
+
+  <text x="40" y="892" class="t muted">Basse fidélité — hiérarchie, densité et états seulement. Aucune palette, typographie ou identité finale n'est engagée ici (voir directions.md).</text>
+</svg>

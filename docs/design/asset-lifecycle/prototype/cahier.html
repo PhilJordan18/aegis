@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="fr-CA" data-platform="web" data-theme="light" data-treatment="a">
+<head>
+<meta charset="utf-8">
+<title>Aegis — Planches du cahier de conception</title>
+<!--
+  Notebook sheets (treatment A, light), cahier.html?sheet=ios | web
+  ios : « Parcours technicien — étapes successives (illustratives) », iOS 02 → 03 → 05 → 06.
+  web : « Administration » — état simultané 10 h 30 (Web 02 + iOS 02, deux perspectives),
+        puis état simultané 11 h 20 (Web 03 + Web 04), après le parcours.
+  Rendered by tools/render.py --cahier to renders/cahier/.
+-->
+<script src="data/fixture.js"></script>
+<script src="data/screens.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #EEF2FA; color: #0A1430; font-family: -apple-system, "SF Pro Text", system-ui, sans-serif; }
+  .sheet { padding: 34px 40px 30px; }
+  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+  h1 { margin: 0; font-family: "SF Pro Display", -apple-system, sans-serif; font-size: 30px; letter-spacing: -0.02em; }
+  .sub { margin-top: 6px; font-size: 14px; color: #394563; max-width: 1100px; line-height: 1.45; }
+  .flag { font-size: 12.5px; font-weight: 650; color: #8E1277; background: #FCEAF8; border: 1px dashed #B8349B; border-radius: 6px; padding: 6px 10px; white-space: nowrap; }
+  .kind { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; border-radius: 999px; padding: 5px 11px; }
+  .kind--seq { color: #1A45CC; background: #E6EDFF; }
+  .kind--sim { color: #0B6B3F; background: #E1F4EA; }
+  .kind svg { width: 14px; height: 14px; }
+  /* iOS journey */
+  .journey { margin-top: 26px; display: grid; grid-template-columns: repeat(4, 393px); column-gap: 36px; justify-content: start; }
+  .step-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; height: 64px; }
+  .num { flex: none; width: 30px; height: 30px; border-radius: 50%; background: #1F4FE6; color: #fff; font-weight: 700; font-size: 15px; display: grid; place-items: center; }
+  .step-title { font-size: 15px; font-weight: 650; line-height: 1.25; }
+  .step-time { display: block; font-size: 13px; font-weight: 500; color: #394563; margin-top: 2px; }
+  .shot { display: block; background: #fff; box-shadow: 0 0 0 1px rgba(10,20,48,.14), 0 14px 34px -20px rgba(10,20,48,.55); }
+  .ios-shot { width: 393px; height: 852px; border-radius: 30px; }
+  .step { position: relative; }
+  .step + .step::before { content: ""; position: absolute; left: -30px; top: 440px; width: 24px; height: 24px; background: no-repeat center / 24px url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="%231F4FE6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'); }
+  .gap-note { margin-top: 10px; font-size: 12.5px; color: #394563; line-height: 1.4; }
+  /* Web administration */
+  .block { margin-top: 24px; padding: 18px 20px 20px; border-radius: 18px; background: #F7F9FE; border: 1px solid rgba(10,20,48,.10); }
+  .block-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .block-title { font-size: 17px; font-weight: 700; }
+  .block-note { font-size: 13px; color: #394563; }
+  .pair { margin-top: 14px; display: flex; gap: 24px; align-items: flex-start; }
+  figure { margin: 0; }
+  figcaption { font-size: 12.5px; color: #394563; margin-bottom: 8px; display: flex; justify-content: space-between; gap: 12px; white-space: nowrap; }
+  figcaption strong { color: #0A1430; }
+  .web-shot { width: 720px; height: 450px; border-radius: 10px; }
+  .ios-mini { width: 208px; height: 451px; border-radius: 18px; }
+  .persp { font-size: 12.5px; color: #394563; margin-top: 8px; line-height: 1.4; white-space: normal; }
+  .legend { margin-top: 22px; display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 26px; font-size: 12.5px; line-height: 1.45; color: #394563; }
+  .legend h2 { margin: 0 0 6px; font-size: 13px; color: #0A1430; }
+  .legend ul { margin: 0; padding-left: 16px; }
+  .mk { font-weight: 650; color: #8E1277; background: #FCEAF8; border: 1px dashed #B8349B; border-radius: 4px; padding: 1px 5px; font-size: 11px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="sheet" id="sheet"></div>
+<script>
+(function () {
+  const sheet = new URLSearchParams(location.search).get("sheet") === "web" ? "web" : "ios";
+  const S = Object.fromEntries(window.AEGIS_SCREENS.map(s => [s.id, s]));
+  const M = window.AEGIS_FIXTURE.moments;
+  const L = window.AEGIS_MOCK_LEGEND;
+  const png = id => { const s = S[id]; return `renders/${s.platform}/a/light/${s.n}-${s.slug}.png`; };
+  const seqIcon = '<svg viewBox="0 0 24 24"><path d="M4 12h12M12 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const simIcon = '<svg viewBox="0 0 24 24"><path d="M5 8h14M5 16h14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>';
+  const kindSeq = `<span class="kind kind--seq">${seqIcon}Étapes successives</span>`;
+  const kindSim = `<span class="kind kind--sim">${simIcon}État simultané</span>`;
+  const mockList = keys => keys.map(k => `<li><span class="mk">${k === "SIM" ? "Simulation" : k === "F" ? "Fictif" : "Fictif · " + k}</span> ${L[k]}</li>`).join("");
+  const legendCommon = `
+    <div><h2>Étape successive ou état simultané</h2><ul>
+      <li><b>Étape successive</b> : moments différents d'un même parcours, dans l'ordre; les états intermédiaires non montrés existent (voir notes).</li>
+      <li><b>État simultané</b> : vues prises au même instant; elles montrent le même état du système sous deux perspectives et ne peuvent pas se contredire.</li>
+      <li>Le moment figure dans les légendes; dans l'interface, seule l'horloge système iOS l'affiche.</li></ul></div>`;
+  const disclaimer = `
+    <div><h2>Statut de ces figures</h2><ul>
+      <li>Illustrations du traitement A (sélectionné le 23 septembre 2026), thème clair; ce ne sont pas des spécifications prêtes à implémenter.</li>
+      <li>Rendus statiques Chrome : VoiceOver, Dynamic Type et clavier non démontrés; réfraction Liquid Glass non reproduite.</li>
+      <li>Données : fixture unique (casier AEGIS-DEMO-01, mercredi 16 septembre 2026, America/Toronto).</li></ul></div>`;
+  let html = "";
+
+  if (sheet === "ios") {
+    const steps = [
+      ["ios-02", "Catalogue — MM-001 prêt, MM-002 bloqué (calibration expirée)"],
+      ["ios-03", "Détail de MM-001 et feuille « Réserver »"],
+      ["ios-05", "Retrait guidé — code affiché, scanner (simulation)"],
+      ["ios-06", "Mon activité — prêt actif après confirmation"]
+    ];
+    html += `<div class="top"><div><h1>Parcours technicien — étapes successives (illustratives)</h1>
+      <div class="sub">Aegis Mobile, traitement A, thème clair · 393 × 852 pt (iPhone 16) · quatre moments d'un même parcours, du catalogue au prêt actif. ${kindSeq}</div></div>
+      <span class="flag">Illustration — non prête à implémenter</span></div>
+      <div class="journey">${steps.map(([id, t], i) => `<div class="step">
+        <div class="step-head"><span class="num">${i + 1}</span><span class="step-title">${t}<span class="step-time">${M[S[id].moment].label} · ${S[id].n === "02" ? "rendu pivot réutilisé" : "écran " + S[id].n}</span></span></div>
+        <img class="shot ios-shot" src="${png(id)}" alt="Étape ${i + 1} : ${t}">
+      </div>`).join("")}</div>
+      <p class="gap-note">Non montrés entre les étapes : réservation créée (10 h 31 min 40 s) et Mon activité avec réservation active (10 h 32) entre 2 et 3; après le scan, accès autorisé, commande transmise, déverrouillage lancé, porte ouverte, observation reçue, puis retrait confirmé à 10 h 42 entre 3 et 4. Seul l'état confirmé par le serveur affiche un succès.</p>
+      <div class="legend">${legendCommon}
+        <div><h2>Marqueurs et contrat (09 v1.3)</h2><ul>${mockList(["SIM"])}<li>Heure de fermeture (étape 2) : <code>LockerStatusView.currentWindow</code> (§8.6), normative, sans marqueur.</li><li>Étapes 1, 2 et 4 : aucune donnée fictive.</li></ul></div>
+        ${disclaimer}</div>`;
+  } else {
+    html += `<div class="top"><div><h1>Administration</h1>
+      <div class="sub">Aegis Manager, traitement A, thème clair · 1440 × 900, affiché ici à 50 % · deux états simultanés : le même instant que l'étape 1 du parcours technicien, puis un instantané après le parcours.</div></div>
+      <span class="flag">Illustration — non prête à implémenter</span></div>
+      <section class="block">
+        <div class="block-head">${kindSim}<span class="block-title">10 h 30 — même instant que l'étape 1 du parcours technicien</span><span class="block-note">Deux perspectives du même état : readiness personnelle (technicien) et diagnostic opérationnel (administrateur).</span></div>
+        <div class="pair">
+          <figure><figcaption><strong>Technicien · iOS 02</strong><span>${M["10:30"].label}</span></figcaption><img class="shot ios-mini" src="${png("ios-02")}" alt="Catalogue iOS à 10 h 30">
+            <p class="persp" style="width:208px">Readiness évaluée <b>pour ce technicien</b> : MM-002 « Bloqué ».</p></figure>
+          <figure><figcaption><strong>Administrateur · Web 02 — Équipements, inspecteur sur MM-002</strong><span>${M["10:30"].label}</span></figcaption><img class="shot web-shot" src="${png("web-02")}" alt="Gestion des équipements à 10 h 30">
+            <p class="persp" style="width:720px"><b>Diagnostic opérationnel</b> (<code>AdminAssetView.operationalDiagnostic</code>, 09 §8.9) : empêchements non personnels seulement, ici la même raison (calibration expirée). Sans résultat ni technicien de référence; une liste vide ne vaut ni droit d'emprunt ni ouverture. Disponibilité affichée à part.</p></figure>
+        </div>
+      </section>
+      <section class="block">
+        <div class="block-head">${kindSim}<span class="block-title">11 h 20 — instantané unique, après le parcours</span><span class="block-note">Prêt de MM-001 actif (retrait confirmé à 10 h 42); anomalie ouverte sur A1 depuis 11 h 04.</span></div>
+        <div class="pair">
+          <figure><figcaption><strong>Web 03 — Réservations et prêts, onglet Prêts</strong><span>${M["11:20"].label}</span></figcaption><img class="shot web-shot" src="${png("web-03")}" alt="Réservations et prêts à 11 h 20"></figure>
+          <figure><figcaption><strong>Web 04 — Dossier d'anomalie, dialogue « Reconnaître »</strong><span>${M["11:20"].label}</span></figcaption><img class="shot web-shot" src="${png("web-04")}" alt="Dossier d'anomalie à 11 h 20"></figure>
+        </div>
+      </section>
+      <div class="legend">${legendCommon}
+        <div><h2>Marqueurs de données fictives</h2><ul>${mockList(["C4", "C6", "F"])}<li>Diagnostic opérationnel (§8.9) et chronologie (§8.5) : normatifs, sans marqueur. Identifiant RFID : absent de <code>AdminAssetView</code>, non affiché.</li></ul></div>
+        ${disclaimer}</div>`;
+  }
+  document.getElementById("sheet").innerHTML = html;
+})();
+</script>
+</body>
+</html>

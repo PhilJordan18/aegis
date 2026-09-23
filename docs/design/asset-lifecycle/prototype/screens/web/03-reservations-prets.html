@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="fr-CA" data-platform="web">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Aegis Manager — Réservations et prêts (prototype)</title>
+<!--
+  Web 03 « Réservations et prêts — onglet Prêts » — moment 11 h 20 (key "11:20").
+  Same instant as Web 04: together they form ONE simultaneous snapshot.
+  Treatment A, light only. Composition A: liste maîtresse + dossier large.
+  Spec: sections.md §5.3 (onglets, inspecteur : chronologie, opérations liées, anomalie liée,
+  lien Audit; lecture seule), §1.4 (« Déverrouillage lancé » ≠ « Porte ouverte »).
+  Contracts: GET /admin/loans[/{id}], GET /admin/locker-operations/{id} (09 §17, read-only),
+  LockerOperationView timestamps (09 §8.5), GET /admin/anomalies?assetId= (09 §18.1).
+  Holder name: LoanView exposes only holderUserId (09 §8.4); UserSummary (§8.8) is defined but
+  not added to LoanView → illustrative « Fictif · C4 ». Institution label → C6.
+  No forced action: no complete-loan / confirm / force-return (09 §17, §25).
+-->
+<link rel="stylesheet" href="../../tokens/brand.css">
+<link rel="stylesheet" href="../../tokens/scales.css">
+<link rel="stylesheet" href="../../components/base.css">
+<link rel="stylesheet" href="../../components/web.css">
+<script src="../../data/fixture.js"></script>
+<script src="../../data/screens.js"></script>
+<script src="../../lib/aegis.js"></script>
+<style>
+  .rp-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 360px 1fr; gap: 20px; }
+  .rp-list { display: flex; flex-direction: column; }
+  .rp-list ul { flex: 1; }
+  .rp-foot { padding: 14px 20px 18px; font-size: 13px; color: var(--ag-text-2); border-top: 1px solid var(--ag-separator); }
+  .rp-detail { display: flex; flex-direction: column; overflow: hidden; }
+  .rp-detail .web-inspector__scroll { padding: 24px 30px 0; }
+  .rp-detail .web-inspector__foot { padding: 14px 30px; }
+  .rp-cols { margin-top: 22px; display: grid; grid-template-columns: 0.86fr 1.2fr; gap: 28px; }
+  .rp-cols .ag-facts { margin-top: 12px; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+  .rp-cols .web-linkcard { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .rp-detail .web-link { white-space: nowrap; }
+  .rp-cols .ag-chrono__body { padding-bottom: 10px; }
+  .rp-cols .web-linkcard { margin-top: 18px; }
+  .rp-chrono { margin-top: 12px; }
+  .rp-holder { display: inline-flex; align-items: center; gap: 6px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  const v = AG.at("11:20");
+  const { c, web, icon, fmt, copy } = AG;
+  const loan = v.loan, op = v.operation, res = v.reservation, an = v.anomaly;
+  const a = v.assets[loan.assetCode];
+  const holder = AG.fx.users[loan.holder];
+  const holderHtml = `<span class="rp-holder">${c.esc(holder.displayName)} ${c.mock("C4")}</span>`;
+  const t = iso => fmt.clock(iso);
+  const cell = op.compartment;
+
+  // Chronology built only from LockerOperationView timestamps (09 §8.5); wording from sections.md §1.4.
+  const chrono = [
+    { time: t(op.createdAt), title: "Retrait demandé", detail: "Aucune commande de serrure." },
+    { time: t(op.localProofDisplayedAt), title: "Code affiché sur le casier", detail: "Accusé d'affichage du casier." },
+    { time: t(op.authorizedAt), title: "Accès autorisé", detail: `Délai physique jusqu'à ${t(op.expiresAt)}.` },
+    { time: t(op.commandSentAt), title: "Commande transmise au casier", detail: `Cible : cellule ${cell}.` },
+    { time: t(op.acknowledgedAt), title: "Déverrouillage lancé", detail: "Accusé de commande, sans preuve d'ouverture." },
+    { time: t(op.doorOpenedAt), title: "Porte ouverte", detail: `Observée dans la cellule ${cell}.` },
+    { time: t(op.observationReceivedAt), title: "Observation reçue", detail: "Preuve physique en évaluation." },
+    { time: t(op.confirmedAt), title: "Retrait confirmé", detail: "Réservation honorée, prêt créé.", state: "success" }
+  ];
+
+  function compose() {
+    return `<div class="web-shell"><div class="web-decor ag-decor" aria-hidden="true"></div>
+      ${web.sidebar("transactions", v)}
+      <main class="web-main">
+        <header class="web-pagehead">
+          <div>
+            <h1 class="web-pagehead__title">Réservations et prêts</h1>
+            <div class="web-tabs" role="tablist"><span class="web-tabs__item" role="tab">Réservations</span><span class="web-tabs__item is-active" role="tab" aria-selected="true">Prêts</span><span class="web-tabs__item" role="tab">Opérations physiques</span></div>
+          </div>
+          <div class="web-pagehead__actions"><span class="web-readonly">${icon("lock")}Lecture seule</span>${web.lockerChip(v)}</div>
+        </header>
+        <div class="rp-body">
+          <section class="web-panel web-list rp-list" aria-label="Prêts">
+            <div class="web-list__head"><h2 class="web-list__title">1 prêt ouvert</h2><span class="web-list__meta">Actifs et retours en cours</span></div>
+            <ul><li><a class="web-item is-selected is-focus" href="#" aria-current="true">
+              <div class="web-item__status">${c.status("progress", copy.loanStatus[loan.status], { icon: "st-borrowed" })}<span class="web-item__reason">Dans les délais · échéance ${fmt.time(loan.dueAt)}</span></div>
+              <div class="web-item__name">${c.esc(a.model.name)}<span class="web-item__code">${c.esc(a.assetCode)}</span></div>
+              <div class="web-item__facts">${holderHtml}<span>·</span><span>retrait ${fmt.time(loan.checkedOutAt)}</span></div>
+            </a></li></ul>
+            <p class="rp-foot">Triés par échéance · données de ${fmt.time(v.moment.at)}</p>
+          </section>
+          <section class="web-panel web-inspector rp-detail" aria-label="Dossier du prêt">
+            <div class="web-inspector__scroll">
+              <div class="web-dossier-overline">${c.status("progress", "Prêt " + copy.loanStatus[loan.status].toLowerCase(), { icon: "st-borrowed", size: "md" })}<span>Pas en retard · l'équipement reste emprunté jusqu'au retour confirmé</span></div>
+              <h2 class="web-dossier-title">${c.esc(a.model.name)} · ${c.esc(a.assetCode)}</h2>
+              <p class="web-dossier-sub">Titulaire : ${holderHtml} · cellule ${c.esc(a.placement.compartmentCode)}, casier ${c.esc(a.placement.lockerCode)}</p>
+              <div class="rp-cols">
+                <div>
+                  <div class="web-section-title">Faits du prêt <span class="web-section-title__ro">${icon("lock")}lecture seule</span></div>
+                  <dl class="ag-facts">
+                    ${c.fact("Retrait confirmé", `<span class="tnum">${fmt.time(loan.checkedOutAt)}</span>`)}
+                    ${c.fact("Échéance", `<span class="tnum">${fmt.time(loan.dueAt)}</span><span class="ag-sub">Reprise de la réservation</span>`)}
+                    ${c.fact("Réservation liée", `Honorée<span class="ag-sub">créée à ${fmt.time(res.createdAt)}</span>`)}
+                    ${c.fact("Retour", "Non demandé")}
+                  </dl>
+                  <a class="web-linkcard" href="#">
+                    <span class="web-linkcard__body">
+                      <span class="web-linkcard__title">Anomalie sur cet équipement</span>
+                      <span class="web-linkcard__meta">${c.status("sev-medium", "Gravité " + copy.severity[an.severity].toLowerCase(), { size: "sm" })}</span>
+                      <span class="web-linkcard__meta">${copy.anomalyStatus[an.status]} · détectée à ${fmt.time(an.detectedAt)}</span>
+                      <span class="web-linkcard__meta">${c.esc(copy.anomalyType[an.type])}</span>
+                    </span>
+                    <span class="web-link">Ouvrir le dossier d'anomalie ${icon("arrow")}</span>
+                  </a>
+                </div>
+                <div>
+                  <div class="web-section-title">Chronologie du retrait <span class="web-section-title__ro">opération ${c.esc(op.id.slice(0, 8))}</span></div>
+                  <div class="rp-chrono">${c.chrono(chrono)}</div>
+                </div>
+              </div>
+            </div>
+            <div class="web-inspector__foot">
+              <a class="web-link" href="#">${icon("history")}Voir l'opération dans Audit</a>
+              <span class="web-inspector__hint">Lecture seule : aucune fin de prêt, confirmation ni retour forcé.</span>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>`;
+  }
+  AG.mount(compose);
+})();
+</script>
+</body>
+</html>

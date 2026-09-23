@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="fr-CA" data-platform="ios">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=393, initial-scale=1">
+<title>Aegis Mobile — Mon activité, prêt actif (prototype)</title>
+<!--
+  iOS 06 « Mon activité — prêt actif » — moment 10 h 43 (key "10:43").
+  Treatment A, light only.
+  State: checkout LockerOperation CONFIRMED by the backend at 10 h 42 (only state allowed to show
+  success, sections.md §1.4); Reservation FULFILLED; Loan ACTIVE, dueAt = reservedUntil = 16 h 30
+  (03 §4.13, 05 §8), overdue false. Asset BORROWED ⇒ « Emprunté par vous » (§1.2), never « Prêt ».
+  Spec: sections.md §4.2 (carte d'état unique, action « Retourner l'équipement »).
+  Contracts: GET /me/loan (09 §15.3), POST /loans/{id}/return (09 §15.2), not yet sent.
+-->
+<link rel="stylesheet" href="../../tokens/brand.css">
+<link rel="stylesheet" href="../../tokens/scales.css">
+<link rel="stylesheet" href="../../components/base.css">
+<link rel="stylesheet" href="../../components/ios.css">
+<script src="../../data/fixture.js"></script>
+<script src="../../data/screens.js"></script>
+<script src="../../lib/aegis.js"></script>
+<style>
+  .act-card { margin: 22px var(--t-gutter) 0; }
+  .act-lines { display: flex; flex-direction: column; gap: 12px; }
+  .act-line { display: flex; align-items: flex-start; gap: 10px; font-size: 16px; font-weight: 500; color: var(--ag-text); line-height: 1.3; }
+  .act-line .ag-ico { width: 19px; height: 19px; color: var(--ag-text-2); margin-top: 1px; }
+  .act-line small { display: block; font-size: 13px; color: var(--ag-text-2); font-weight: 400; margin-top: 2px; }
+  .act-line--ok .ag-ico { color: var(--ag-ready-icon); }
+  .act-actions { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
+  .act-note { margin: 14px var(--t-gutter) 0; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  const v = AG.at("10:43");
+  const { c, ios, icon, fmt, status } = AG;
+  const a = v.assets["MM-001"];
+  const st = status.technician(a, v);
+  const loan = v.loan;
+
+  function compose() {
+    return `<main class="ios-screen">
+      ${ios.statusBar(v.moment.at)}
+      <header class="ios-nav">
+        <div class="ios-nav__toolbar"></div>
+        <h1 class="ios-largetitle">Mon activité</h1>
+      </header>
+      <article class="ios-card act-card" aria-label="${c.esc(a.model.name)}, ${c.esc(st.label)}">
+        <div class="ios-card__top">${c.statusOf(st, { size: "lg" })}</div>
+        <h2 class="ios-card__name">${c.esc(a.model.name)}</h2>
+        <p class="ios-card__meta tnum">${c.esc(a.assetCode)} · ${c.esc(a.model.manufacturer)} ${c.esc(a.model.modelNumber)}</p>
+        <div class="ios-card__rule"></div>
+        <div class="act-lines">
+          <p class="act-line">${icon("clock")}<span>${c.esc(st.secondary)}<small>Échéance de la réservation, heure du casier</small></span></p>
+          <p class="act-line">${icon("pin")}<span>Retour dans la cellule ${c.esc(a.placement.compartmentCode)}<small>Casier ${c.esc(a.placement.lockerCode)}</small></span></p>
+          <p class="act-line act-line--ok">${icon("check")}<span>Retrait confirmé à ${fmt.time(loan.checkedOutAt)}<small>Confirmé par le serveur à partir des observations du casier</small></span></p>
+        </div>
+        <div class="act-actions">
+          ${c.btn("Retourner l'équipement", { size: "lg", block: true })}
+          ${c.btn("Voir l'équipement", { variant: "tertiary", size: "md", block: true })}
+        </div>
+      </article>
+      <div class="act-note ag-callout">${icon("info")}<span>Le retour se prépare ici, puis un nouveau code s'affiche sur le casier. L'équipement reste sous votre responsabilité jusqu'à la confirmation du retour.</span></div>
+      ${ios.tabBar("activite")}
+      ${ios.homeIndicator()}
+    </main>`;
+  }
+  AG.mount(compose);
+})();
+</script>
+</body>
+</html>

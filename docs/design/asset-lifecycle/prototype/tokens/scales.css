@@ -1,0 +1,170 @@
+/*
+ * Aegis prototype — treatment-specific scales.
+ *
+ * Selected by explicit attributes on <html>:
+ *   data-platform="ios" | "web"
+ *   data-treatment="a" | "b"
+ *
+ * A — Verre lumineux : generous spacing, large tightly tracked display titles,
+ *     generous curves, optical depth (gradients + glass on chrome).
+ * B — Opérationnel précis : restrained glass (chrome only), tighter grouping,
+ *     stronger tabular structure, smaller radii, flat layered surfaces with
+ *     fine borders, monospaced identifiers.
+ *
+ * Every component reads only these --t-* roles; never hard-code a size in a
+ * screen. Fonts are local only (see README.md § Polices).
+ */
+
+:root {
+  --t-font-display: "SF Pro Display", -apple-system, system-ui, sans-serif;
+  --t-font-text: -apple-system, "SF Pro Text", system-ui, sans-serif;
+  /* Chrome ignores ui-monospace and cannot see SF Mono by name: Menlo renders (see README § Polices). */
+  --t-font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  --t-space-1: 4px;
+  --t-space-2: 8px;
+  --t-space-3: 12px;
+  --t-space-4: 16px;
+  --t-space-5: 20px;
+  --t-space-6: 24px;
+  --t-space-7: 32px;
+  --t-space-8: 40px;
+  --t-r-pill: 999px;
+}
+
+/* ================= iOS ================= */
+
+[data-platform="ios"][data-treatment="a"] {
+  --t-gutter: 20px;
+  --t-title-lg-size: 40px;       /* large title */
+  --t-title-lg-track: -0.035em;
+  --t-title-lg-weight: 700;
+  --t-title-md-size: 24px;       /* card / row identity */
+  --t-title-md-track: -0.022em;
+  --t-title-md-weight: 650;
+  --t-title-sm-size: 20px;
+  --t-body-size: 16px;
+  --t-body-lh: 1.35;
+  --t-sub-size: 15px;
+  --t-caption-size: 13px;
+  --t-label-size: 15px;          /* status label */
+  --t-label-weight: 650;
+  --t-id-font: var(--t-font-text);  /* identifiers in proportional, tabular */
+  --t-id-size: 15px;
+  --t-r-sheet: 40px;
+  --t-r-card: 28px;
+  --t-r-control: 22px;
+  --t-r-chip: 999px;
+  --t-r-small: 14px;
+  --t-row-gap: 14px;
+  --t-card-pad: 20px;
+  --t-glass-blur: 28px;
+  --t-glass-sat: 190%;
+  --t-shadow-card: 0 1px 0 var(--ag-inset-hi) inset, 0 18px 40px -18px rgba(var(--ag-shadow-color), .35), 0 2px 6px rgba(var(--ag-shadow-color), .06);
+  --t-shadow-chrome: 0 12px 32px -10px rgba(var(--ag-shadow-color), .35), 0 1px 2px rgba(var(--ag-shadow-color), .08);
+  --t-border-card: 1px solid transparent;
+}
+
+[data-platform="ios"][data-treatment="b"] {
+  --t-gutter: 16px;
+  --t-title-lg-size: 34px;
+  --t-title-lg-track: -0.012em;
+  --t-title-lg-weight: 700;
+  --t-title-md-size: 17px;
+  --t-title-md-track: -0.01em;
+  --t-title-md-weight: 600;
+  --t-title-sm-size: 17px;
+  --t-body-size: 15px;
+  --t-body-lh: 1.33;
+  --t-sub-size: 15px;
+  --t-caption-size: 13px;
+  --t-label-size: 15px;
+  --t-label-weight: 600;
+  --t-id-font: var(--t-font-mono);
+  --t-id-size: 13px;
+  --t-r-sheet: 28px;
+  --t-r-card: 14px;
+  --t-r-control: 12px;
+  --t-r-chip: 8px;
+  --t-r-small: 8px;
+  --t-row-gap: 0px;
+  --t-card-pad: 16px;
+  --t-glass-blur: 20px;
+  --t-glass-sat: 150%;
+  --t-shadow-card: none;
+  --t-shadow-chrome: 0 6px 18px -8px rgba(var(--ag-shadow-color), .30), 0 0 0 .5px var(--ag-border);
+  --t-border-card: 1px solid var(--ag-border);
+}
+
+/* ================= Web ================= */
+
+[data-platform="web"][data-treatment="a"] {
+  --t-sidebar-w: 256px;
+  --t-sidebar-inset: 16px;
+  --t-title-lg-size: 34px;
+  --t-title-lg-track: -0.03em;
+  --t-title-lg-weight: 700;
+  --t-title-md-size: 28px;
+  --t-title-md-track: -0.025em;
+  --t-title-md-weight: 700;
+  --t-title-sm-size: 17px;
+  --t-title-sm-weight: 650;
+  --t-body-size: 15px;
+  --t-body-lh: 1.45;
+  --t-sub-size: 14px;
+  --t-caption-size: 13px;
+  --t-overline-size: 12px;
+  --t-overline-track: 0.02em;
+  --t-label-size: 13px;
+  --t-label-weight: 650;
+  --t-id-font: var(--t-font-text);
+  --t-id-size: 14px;
+  --t-row-h: 84px;
+  --t-cell-pad-x: 20px;
+  --t-control-h: 40px;
+  --t-r-panel: 28px;
+  --t-r-card: 20px;
+  --t-r-control: 14px;
+  --t-r-chip: 999px;
+  --t-r-small: 10px;
+  --t-glass-blur: 30px;
+  --t-glass-sat: 180%;
+  --t-shadow-panel: 0 1px 0 var(--ag-inset-hi) inset, 0 24px 60px -30px rgba(var(--ag-shadow-color), .45), 0 2px 8px rgba(var(--ag-shadow-color), .06);
+  --t-shadow-chrome: 0 20px 50px -24px rgba(var(--ag-shadow-color), .40);
+  --t-border-panel: 1px solid var(--ag-glass-border);
+}
+
+[data-platform="web"][data-treatment="b"] {
+  --t-sidebar-w: 224px;
+  --t-sidebar-inset: 0px;
+  --t-title-lg-size: 22px;
+  --t-title-lg-track: -0.01em;
+  --t-title-lg-weight: 650;
+  --t-title-md-size: 18px;
+  --t-title-md-track: -0.005em;
+  --t-title-md-weight: 650;
+  --t-title-sm-size: 14px;
+  --t-title-sm-weight: 650;
+  --t-body-size: 13.5px;
+  --t-body-lh: 1.4;
+  --t-sub-size: 13px;
+  --t-caption-size: 12px;
+  --t-overline-size: 11px;
+  --t-overline-track: 0.06em;
+  --t-label-size: 12.5px;
+  --t-label-weight: 600;
+  --t-id-font: var(--t-font-mono);
+  --t-id-size: 12.5px;
+  --t-row-h: 52px;
+  --t-cell-pad-x: 10px;
+  --t-control-h: 32px;
+  --t-r-panel: 10px;
+  --t-r-card: 8px;
+  --t-r-control: 6px;
+  --t-r-chip: 5px;
+  --t-r-small: 4px;
+  --t-glass-blur: 18px;
+  --t-glass-sat: 140%;
+  --t-shadow-panel: none;
+  --t-shadow-chrome: none;
+  --t-border-panel: 1px solid var(--ag-border);
+}

@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="860" viewBox="0 0 1400 860" role="img" aria-labelledby="title desc">
+  <title id="title">Wireframe basse fidélité — parcours technicien iOS</title>
+  <desc id="desc">Trois écrans en niveaux de gris : catalogue avec statuts READY et BLOCKED, réservation avec choix de reservedUntil, opération de retrait avec les six phases distinctes de LockerOperation et un chemin d'anomalie alternatif.</desc>
+  <style>
+    .fr { fill:#fff; stroke:#111; stroke-width:2; }
+    .box { fill:#fff; stroke:#888; stroke-width:1.4; }
+    .boxAlt { fill:#f2f2f2; stroke:#111; stroke-width:1.4; stroke-dasharray:5,4; }
+    .t { font-family: -apple-system, "SF Pro Text", Helvetica, Arial, sans-serif; }
+    .h1 { fill:#111; font-size:20px; font-weight:700; }
+    .h2 { fill:#111; font-size:13px; font-weight:700; letter-spacing:0.4px; }
+    .body { fill:#222; font-size:13px; }
+    .muted { fill:#777; font-size:11px; }
+    .status { fill:#111; font-size:12px; font-weight:700; }
+    .sep { stroke:#ddd; stroke-width:1; }
+  </style>
+
+  <rect width="1400" height="860" fill="#fafafa"/>
+  <text x="40" y="34" class="t h1">Aegis Mobile — wireframe basse fidélité (sans direction visuelle)</text>
+  <text x="40" y="54" class="t muted">Gris uniquement · statut = forme + texte entre crochets, jamais la couleur seule · aucune décoration</text>
+
+  <!-- FRAME 1: Catalogue -->
+  <g class="t">
+    <rect x="40" y="86" width="300" height="620" rx="30" class="fr"/>
+    <rect x="150" y="98" width="80" height="18" rx="9" fill="#111"/>
+    <text x="62" y="150" class="h2">AEGIS MOBILE</text>
+    <text x="62" y="178" class="h1">Équipements</text>
+    <rect x="62" y="192" width="256" height="30" class="box"/>
+    <text x="72" y="212" class="muted">Rechercher un actif…</text>
+
+    <rect x="62" y="236" width="256" height="118" class="box"/>
+    <rect x="72" y="248" width="86" height="20" fill="none" stroke="#111" stroke-width="1.5"/>
+    <text x="78" y="262" class="status">[ PRÊT ]</text>
+    <text x="72" y="288" class="body">Multimètre A1 · MM-001</text>
+    <text x="72" y="306" class="muted">Calibration valide jusqu'au 1 déc. 2026</text>
+    <text x="72" y="326" class="muted">Compartiment A1 · casier AEGIS-DEMO-01</text>
+    <rect x="72" y="336" width="130" height="14" fill="#eee"/>
+
+    <rect x="62" y="366" width="256" height="132" class="box"/>
+    <rect x="72" y="378" width="236" height="20" fill="none" stroke="#111" stroke-width="1.5"/>
+    <text x="78" y="392" class="status" font-size="10.5">[ BLOQUÉ · CALIBRATION_EXPIRED ]</text>
+    <text x="72" y="418" class="body">Multimètre A2 · MM-002</text>
+    <text x="72" y="436" class="muted">Calibration expirée depuis le 8 sept. 2026</text>
+    <text x="72" y="454" class="muted">Compartiment A2 · casier AEGIS-DEMO-01</text>
+    <text x="72" y="478" class="muted">Réservation indisponible tant que non recalibré</text>
+
+    <line x1="62" y1="530" x2="318" y2="530" class="sep"/>
+    <text x="72" y="560" class="muted">Statuts possibles : [ PRÊT ] / [ BLOQUÉ · raison ] / [ À VÉRIFIER ]</text>
+    <text x="72" y="580" class="muted">— jamais rendus par la couleur seule.</text>
+
+    <rect x="62" y="662" width="256" height="34" fill="none" stroke="#111" stroke-width="1.2"/>
+    <text x="72" y="683" class="body">Équipements</text>
+    <text x="170" y="683" class="muted">Réservation</text>
+    <text x="262" y="683" class="muted">Mon prêt</text>
+  </g>
+
+  <!-- FRAME 2: reservation -->
+  <g class="t">
+    <rect x="380" y="86" width="300" height="620" rx="30" class="fr"/>
+    <rect x="490" y="98" width="80" height="18" rx="9" fill="#111"/>
+    <text x="402" y="150" class="h2">RÉSERVATION · A1</text>
+    <text x="402" y="178" class="h1">Multimètre A1</text>
+    <rect x="412" y="192" width="90" height="20" fill="none" stroke="#111" stroke-width="1.5"/>
+    <text x="418" y="206" class="status">[ PRÊT ]</text>
+
+    <text x="402" y="236" class="body">Compartiment A1 · casier AEGIS-DEMO-01</text>
+    <text x="402" y="256" class="muted">Calibration valide jusqu'au 1 déc. 2026</text>
+
+    <line x1="402" y1="278" x2="658" y2="278" class="sep"/>
+    <text x="402" y="304" class="h2">RENDRE AVANT (reservedUntil)</text>
+    <rect x="402" y="316" width="256" height="40" class="box"/>
+    <text x="414" y="341" class="body">16 h 30 — plage ouverte jusqu'à 17 h 00</text>
+    <text x="402" y="372" class="muted">Choix borné par l'horaire d'exploitation du casier.</text>
+
+    <rect x="402" y="402" width="256" height="40" fill="none" stroke="#111" stroke-width="1.6"/>
+    <text x="440" y="427" class="body">Réserver cet actif</text>
+
+    <text x="402" y="464" class="muted">Aucune ouverture n'est commandée par cette</text>
+    <text x="402" y="480" class="muted">réservation — elle sera vérifiée à nouveau au scan.</text>
+
+    <rect x="402" y="510" width="256" height="86" class="boxAlt"/>
+    <text x="414" y="530" class="h2">SI REFUS</text>
+    <text x="414" y="550" class="body">« Réservation impossible : niveau d'accès</text>
+    <text x="414" y="566" class="body">insuffisant pour ce compartiment. »</text>
+    <text x="414" y="584" class="muted">Motif structuré, pas un message générique.</text>
+  </g>
+
+  <!-- FRAME 3: retrait/opération -->
+  <g class="t">
+    <rect x="720" y="86" width="320" height="660" rx="30" class="fr"/>
+    <rect x="840" y="98" width="80" height="18" rx="9" fill="#111"/>
+    <text x="742" y="150" class="h2">RETRAIT · A1</text>
+    <text x="742" y="178" class="h1">Confirmer sur place</text>
+    <text x="742" y="198" class="muted">Le casier doit afficher votre code.</text>
+
+    <!-- step list -->
+    <line x1="758" y1="222" x2="758" y2="560" stroke="#bbb" stroke-width="2"/>
+
+    <circle cx="758" cy="228" r="9" fill="#111"/>
+    <text x="778" y="233" class="body">Réservation vérifiée</text>
+
+    <rect x="742" y="248" width="276" height="52" class="box"/>
+    <circle cx="758" cy="270" r="9" fill="none" stroke="#111" stroke-width="2"/>
+    <text x="778" y="266" class="body">QR affiché sur le hub</text>
+    <text x="778" y="284" class="muted">Expire dans 00:47 · aucune serrure ouverte</text>
+
+    <circle cx="758" cy="320" r="9" fill="none" stroke="#111" stroke-width="2"/>
+    <text x="778" y="325" class="muted">QR scanné et soumis à l'API</text>
+
+    <circle cx="758" cy="360" r="9" fill="none" stroke="#111" stroke-width="2"/>
+    <text x="778" y="358" class="muted">Autorisé — fenêtre physique 120 s</text>
+    <text x="778" y="374" class="muted">démarrée</text>
+
+    <circle cx="758" cy="404" r="9" fill="none" stroke="#111" stroke-width="2"/>
+    <text x="778" y="402" class="muted">Commande envoyée</text>
+
+    <circle cx="758" cy="436" r="9" fill="none" stroke="#111" stroke-width="2"/>
+    <text x="778" y="434" class="muted">Commande accusée par le hub</text>
+    <text x="778" y="450" class="muted">(≠ porte ouverte)</text>
+
+    <circle cx="758" cy="478" r="9" fill="none" stroke="#111" stroke-width="2"/>
+    <text x="778" y="476" class="muted">Porte ouverte — retirez l'actif</text>
+    <text x="778" y="492" class="muted">et refermez la porte</text>
+
+    <circle cx="758" cy="524" r="9" fill="none" stroke="#111" stroke-width="2"/>
+    <text x="778" y="522" class="muted">Preuve physique reçue,</text>
+    <text x="778" y="538" class="muted">en cours de validation</text>
+
+    <rect x="742" y="560" width="276" height="46" class="box"/>
+    <text x="754" y="580" class="status">[ CONFIRMÉ ]</text>
+    <text x="754" y="598" class="muted">Seul état qui affiche un succès.</text>
+
+    <rect x="742" y="618" width="276" height="112" class="boxAlt"/>
+    <text x="754" y="638" class="h2">CHEMIN ALTERNATIF</text>
+    <text x="754" y="660" class="status">[ ANOMALIE ]</text>
+    <text x="754" y="680" class="body">« Intervention requise : l'actif attendu</text>
+    <text x="754" y="696" class="body">n'a pas été observé dans A1. »</text>
+    <text x="754" y="716" class="muted">Pas de bouton « réessayer » direct — voir un</text>
+    <text x="754" y="730" class="muted">administrateur ou le support technique.</text>
+  </g>
+
+  <text x="40" y="820" class="t muted">Basse fidélité — hiérarchie et états seulement. Aucune palette, typographie ou densité finale n'est engagée ici (voir directions.md).</text>
+</svg>

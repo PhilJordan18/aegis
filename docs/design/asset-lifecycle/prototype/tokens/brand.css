@@ -1,0 +1,173 @@
+/*
+ * Aegis prototype — shared brand semantics (both treatments, both platforms).
+ *
+ * Status: prototype tokens, NOT approved. Values are proposals for the
+ * H1/H2 visual comparison (docs/design/asset-lifecycle/sections.md §0).
+ *
+ * Theme is chosen by an explicit attribute on <html>:
+ *   data-theme="light" | "dark"
+ * (set from the ?theme= URL parameter by lib/aegis.js) so renders are
+ * deterministic. prefers-color-scheme is intentionally NOT used here.
+ *
+ * Format rule (read by tools/contrast.py): one declaration per line,
+ * `--name: #RRGGBB;` or `--name: rgba(r, g, b, a);` inside the two theme blocks.
+ */
+
+/* ---------- Theme-independent brand ramp ---------- */
+:root {
+  --ag-blue-50: #EEF3FF;
+  --ag-blue-100: #DCE6FF;
+  --ag-blue-200: #B9CCFF;
+  --ag-blue-300: #8EABFF;
+  --ag-blue-400: #5F86FF;
+  --ag-blue-500: #3366FF;
+  --ag-blue-600: #1F4FE6;
+  --ag-blue-700: #1A3FB8;
+  --ag-blue-800: #16318A;
+  --ag-blue-900: #0F2160;
+  --ag-blue-950: #08133A;
+  --ag-indigo-300: #A9A2FF;
+  --ag-indigo-400: #8177FF;
+  --ag-indigo-500: #6153F5;
+  --ag-indigo-600: #4B3BD9;
+  --ag-indigo-700: #3B2DB0;
+  --ag-night-950: #040817;
+  --ag-night-900: #050A1C;
+
+  /* Motion (shared). Reduced motion collapses these to 0ms in components/base.css. */
+  --ag-motion-fast: 120ms;
+  --ag-motion-base: 200ms;
+  --ag-ease: cubic-bezier(.2, .8, .2, 1);
+}
+
+/* ---------- Light ---------- */
+[data-theme="light"] {
+  color-scheme: light;
+  --ag-canvas: #F2F5FB;
+  --ag-surface: #FFFFFF;
+  --ag-surface-raised: #FFFFFF;
+  --ag-surface-sunken: #EAEFF8;
+  --ag-surface-selected: #E6EDFF;
+  --ag-text: #0A1430;
+  --ag-text-2: #394563;
+  --ag-text-3: #56627F;
+  --ag-text-on-accent: #FFFFFF;
+  --ag-text-disabled: #6B7591;
+  --ag-border: rgba(10, 20, 48, 0.12);
+  --ag-border-strong: rgba(10, 20, 48, 0.24);
+  --ag-separator: rgba(10, 20, 48, 0.10);
+  --ag-control-border: #7A849E;
+  --ag-accent: #1F4FE6;
+  --ag-accent-hover: #1A45CC;
+  --ag-accent-text: #1A45CC;
+  --ag-accent-soft: #E6EDFF;
+  --ag-focus: #1F4FE6;
+  --ag-disabled-bg: #E3E8F2;
+
+  /* Glass (chrome only). Fallback = opaque value used when backdrop-filter is
+     unsupported or transparency is reduced. */
+  --ag-glass-bg: rgba(255, 255, 255, 0.62);
+  --ag-glass-bg-strong: rgba(255, 255, 255, 0.80);
+  --ag-glass-border: rgba(255, 255, 255, 0.85);
+  --ag-glass-edge: rgba(10, 20, 48, 0.10);
+  --ag-glass-fallback: #F7F9FE;
+  --ag-scrim: rgba(8, 16, 40, 0.32);
+
+  /* Readiness / status semantics. fg = label text, bg = label fill,
+     icon = symbol fill. Never used without symbol + text. */
+  --ag-ready-fg: #0B6B3F;
+  --ag-ready-bg: #E1F4EA;
+  --ag-ready-icon: #12824D;
+  --ag-blocked-fg: #A3161A;
+  --ag-blocked-bg: #FCE7E6;
+  --ag-blocked-icon: #C8262B;
+  --ag-unknown-fg: #7A4B00;
+  --ag-unknown-bg: #FFF0D1;
+  --ag-unknown-icon: #A86400;
+  --ag-mine-fg: #3726B8;
+  --ag-mine-bg: #ECEAFF;
+  --ag-mine-icon: #4B3BD9;
+  --ag-neutral-fg: #3A4560;
+  --ag-neutral-bg: #E7EBF3;
+  --ag-neutral-icon: #58627C;
+  --ag-progress-fg: #1A45CC;
+  --ag-progress-bg: #E6EDFF;
+  --ag-progress-icon: #1F4FE6;
+  --ag-glyph: #FFFFFF;
+
+  /* Annotation layer: mock-data marker. Deliberately outside the brand and
+     status palettes (magenta, dashed) so it never reads as product status. */
+  --ag-mock-fg: #8E1277;
+  --ag-mock-bg: #FCEAF8;
+  --ag-mock-border: #B8349B;
+
+  /* Decorative optical depth (treatment A uses it most). Never behind body text
+     without an opaque surface in between. */
+  --ag-glow-1: rgba(51, 102, 255, 0.55);
+  --ag-glow-2: rgba(97, 83, 245, 0.35);
+  --ag-glow-3: rgba(142, 171, 255, 0.55);
+  --ag-shadow-color: 22, 49, 138;
+  --ag-inset-hi: rgba(255, 255, 255, 0.60);
+}
+
+/* ---------- Dark ---------- */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --ag-canvas: #050A1C;
+  --ag-surface: #0C1430;
+  --ag-surface-raised: #111B3D;
+  --ag-surface-sunken: #080F26;
+  --ag-surface-selected: #16255A;
+  --ag-text: #EDF1FF;
+  --ag-text-2: #B6C0DE;
+  --ag-text-3: #939FC4;
+  --ag-text-on-accent: #FFFFFF;
+  --ag-text-disabled: #8791B0;
+  --ag-border: rgba(170, 190, 255, 0.14);
+  --ag-border-strong: rgba(170, 190, 255, 0.28);
+  --ag-separator: rgba(170, 190, 255, 0.12);
+  --ag-control-border: #5F6C96;
+  --ag-accent: #2F5CF0;
+  --ag-accent-hover: #3F6BFF;
+  --ag-accent-text: #93B1FF;
+  --ag-accent-soft: #16255A;
+  --ag-focus: #93B1FF;
+  --ag-disabled-bg: #1A2447;
+
+  --ag-glass-bg: rgba(20, 30, 66, 0.58);
+  --ag-glass-bg-strong: rgba(16, 25, 56, 0.80);
+  --ag-glass-border: rgba(170, 190, 255, 0.20);
+  --ag-glass-edge: rgba(0, 0, 0, 0.40);
+  --ag-glass-fallback: #0F1838;
+  --ag-scrim: rgba(0, 0, 0, 0.55);
+
+  --ag-ready-fg: #6FE3A8;
+  --ag-ready-bg: #0E2E2A;
+  --ag-ready-icon: #4ED393;
+  --ag-blocked-fg: #FFA59E;
+  --ag-blocked-bg: #3A1424;
+  --ag-blocked-icon: #FF7A70;
+  --ag-unknown-fg: #FFD27A;
+  --ag-unknown-bg: #33280F;
+  --ag-unknown-icon: #FFC247;
+  --ag-mine-fg: #C2BCFF;
+  --ag-mine-bg: #221D5C;
+  --ag-mine-icon: #A69CFF;
+  --ag-neutral-fg: #C8CFE6;
+  --ag-neutral-bg: #1A2447;
+  --ag-neutral-icon: #A4AFCC;
+  --ag-progress-fg: #A9C0FF;
+  --ag-progress-bg: #16255A;
+  --ag-progress-icon: #93B1FF;
+  --ag-glyph: #06102A;
+
+  --ag-mock-fg: #FF9CE8;
+  --ag-mock-bg: #3A1336;
+  --ag-mock-border: #E57AD0;
+
+  --ag-glow-1: rgba(51, 102, 255, 0.50);
+  --ag-glow-2: rgba(97, 83, 245, 0.45);
+  --ag-glow-3: rgba(40, 70, 190, 0.55);
+  --ag-shadow-color: 0, 0, 0;
+  --ag-inset-hi: rgba(170, 190, 255, 0.10);
+}
