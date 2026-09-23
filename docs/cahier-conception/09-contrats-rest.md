@@ -2,8 +2,8 @@
 
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Date de révision :** 16 septembre 2026
-**Version :** 1.2 — contrôle local QR et étoile
+**Date de révision :** 23 septembre 2026
+**Version :** 1.3 — décisions logicielles P0 et données de suivi des clients
 
 ---
 
@@ -72,7 +72,7 @@ Les clients doivent tolérer l’ajout de nouveaux champs dans une réponse v1. 
 
 ### 4.1 Jeton d’accès P0
 
-Après une connexion réussie, le backend émet un jeton d’accès signé et expirable :
+Après une connexion réussie, le backend émet un JWT signé et expirable, conformément à l’ADR-007 accepté le 23 septembre :
 
 - le client le traite comme une chaîne opaque;
 - sa durée P0 est de 60 minutes;
@@ -81,7 +81,7 @@ Après une connexion réussie, le backend émet un jeton d’accès signé et ex
 - l’expiration du jeton n’altère jamais une réservation ou un prêt existant;
 - l’utilisateur se reconnecte après expiration.
 
-Le mécanisme de signature, la rotation des clés et les claims techniques exacts doivent être consignés dans l’ADR d’authentification. Ils ne doivent pas devenir une dépendance du code des clients.
+Spring Security vérifie la signature, l’algorithme explicitement autorisé, l’émetteur, le destinataire et la validité temporelle. L’algorithme, la gestion des clés et le mapping des claims techniques doivent être consignés au bootstrap avant la première connexion réelle. Ils ne deviennent pas une dépendance du code des clients. L’état actif du compte, son rôle et ses droits courants sont vérifiés côté serveur sur les requêtes protégées; un ancien claim ne conserve pas un droit retiré.
 
 ### 4.2 Stockage côté client
 
@@ -90,6 +90,8 @@ Le mécanisme de signature, la rotation des clés et les claims techniques exact
 | iOS | Jeton stocké dans le Keychain; jamais dans UserDefaults. |
 | Web | Jeton conservé en mémoire; jamais dans localStorage ou sessionStorage. |
 | Tous | Jeton supprimé localement lors de la déconnexion. |
+
+La déconnexion locale ne révoque pas immédiatement une copie du JWT. Ce compromis P0 est explicite : un jeton copié reste utilisable jusqu’à son expiration, sous réserve des contrôles courants du compte. Le rechargement du Web impose une reconnexion. L’expiration ne suspend ni les délais ni le traitement d’une opération physique déjà autorisée.
 
 ### 4.3 En-tête
 
@@ -124,6 +126,7 @@ Une absence de jeton, un jeton invalide ou expiré produit 401. Un jeton valide 
 | Lire sa réservation, son prêt et ses opérations | non | oui | non |
 | Lire le statut utile du locker | non | oui | oui |
 | Administrer modèles, actifs, tags et placements | non | non | oui |
+| Lire le diagnostic opérationnel des actifs, sans readiness personnelle | non | non | oui |
 | Administrer les horaires | non | non | oui |
 | Lire toutes les réservations, prêts et opérations | non | non | oui |
 | Lire et reconnaître les anomalies | non | non | oui |
@@ -301,6 +304,7 @@ Exemple :
 | cancelledAt | instant ou null | oui |
 | fulfilledAt | instant ou null | oui |
 | expiredAt | instant ou null | oui |
+| currentOperationId | UUID ou null | oui |
 | availableActions | string[] | oui |
 
 ### 8.4 LoanView
@@ -318,7 +322,12 @@ Exemple :
 | returnedAt | instant ou null | oui |
 | checkoutOperationId | UUID | oui |
 | returnOperationId | UUID ou null | oui |
+| currentOperationId | UUID ou null | oui |
 | availableActions | string[] | oui |
+
+`currentOperationId` est une référence de suivi calculée, pas un nouvel état métier. Pour une réservation `ACTIVE`, elle désigne sa dernière tentative de retrait; pour un prêt `ACTIVE` ou `RETURN_PENDING`, sa dernière tentative de retour. Elle reste renseignée si cette tentative est terminale, afin d’expliquer un échec ou une anomalie. Elle vaut `null` sans tentative ou lorsque la réservation/le prêt est clos. Une opération non terminale liée est prioritaire. La lecture utilise les mêmes contrôles de propriété que la ressource parente.
+
+`returnOperationId` conserve son sens historique : il désigne uniquement le retour **confirmé**, conformément au modèle logique. Il ne sert pas à retrouver une tentative en cours. Les références de suivi sont dérivées des relations existantes, sans colonne SQL supplémentaire imposée.
 
 ### 8.5 LockerOperationView
 
@@ -375,9 +384,12 @@ LockerOperationStatus :
 | connectionStatus | ONLINE, OFFLINE ou UNKNOWN | oui |
 | lastSeenAt | instant ou null | oui |
 | evaluatedAt | instant | oui |
+| currentWindow | OperatingWindowView | oui |
 | compartments | CompartmentStatusView[] | oui |
 
 Un CompartmentStatusView contient id, code, enabled, connectionStatus, rfidReaderStatus, doorState, lockState et lastObservedAt. Il ne contient pas de message MQTT brut.
+
+`OperatingWindowView` fournit `timeZone` (identifiant IANA), `open` (booléen), `closesAt` (instant UTC ou null) et `nextOpensAt` (instant UTC ou null), calculés par le serveur à `evaluatedAt`. Quand la plage est ouverte, `closesAt` est son échéance et `nextOpensAt` vaut null. Quand elle est fermée, `closesAt` vaut null et `nextOpensAt` indique la prochaine ouverture, ou null si aucune n’est configurée. Sans horaire exploitable, `open=false` et les deux instants valent null. Ces données permettent l’affichage et la sélection d’une échéance; elles n’autorisent jamais une action sans revalidation serveur.
 
 ### 8.7 AnomalyView
 
@@ -400,6 +412,16 @@ Un CompartmentStatusView contient id, code, enabled, connectionStatus, rfidReade
 | summary | string | oui |
 
 Les détails techniques sensibles ne sont inclus que dans la vue de détail administrateur.
+
+### 8.8 Résumés d’identité
+
+`AssetSummary` contient `id` (UUID), `assetCode` (string), `model` (le résumé de modèle de §8.2) et `placement` (le résumé de placement de §8.2 ou null). Il ne contient ni identifiant RFID brut ni readiness supposée courante. `UserSummary` contient seulement `id` (UUID) et `displayName` (string). Un résumé n’accorde aucun droit de lecture supplémentaire.
+
+### 8.9 AdminAssetView et diagnostic opérationnel
+
+La vue administrative reprend les champs de `AssetView` de §8.2 **sauf `readiness`**, et ajoute `serialNumber` (string ou null) et `operationalDiagnostic`. Ce dernier contient `evaluatedAt` (instant) et `reasons` (tableau des raisons de §8.1, sauf `ACCESS_DENIED`). Il expose les empêchements non personnels connus : disponibilité, état de service, calibration et présence physique. Une réservation active rend l’actif indisponible dans cette vue générale, sans empêcher le retrait autorisé de son titulaire.
+
+Ce diagnostic n’invente ni technicien de référence ni résultat `READY` universel. Un tableau vide signifie seulement « aucun empêchement non personnel détecté ». Il ne prouve ni le droit d’un utilisateur ni la possibilité d’ouvrir le casier. L’administrateur ne reçoit pas de `canCheckout` et ne se substitue pas au technicien. L’horaire et la santé du casier restent consultables via leurs vues dédiées.
 
 ---
 
@@ -544,6 +566,8 @@ Paramètres :
 
 Chaque élément est un AssetView évalué pour l’utilisateur authentifié. La réponse inclut evaluatedAt; le client ne réutilise pas une readiness ancienne pour décider une action.
 
+Dans le déploiement mono-institution P0, le catalogue montre les actifs de l’institution, y compris ceux dont le niveau requis dépasse celui du technicien. Ils portent notamment la raison `ACCESS_DENIED`; leur visibilité ne donne aucun droit de réservation. Les données d’un autre titulaire et les identifiants matériels restent exclus.
+
 Réponse :
 
 ```json
@@ -585,6 +609,8 @@ PUT /admin/asset-models/{modelId} retourne 200. Un PUT identique est un no-op m�
 POST /admin/asset-models/{modelId}/archive retourne 200. Il est refusé avec 409 ASSET_MODEL_IN_USE si un actif non archivé l’utilise.
 
 ### 12.2 Asset
+
+Les lectures `GET /admin/assets` et `GET /admin/assets/{assetId}` retournent respectivement une page et une instance de `AdminAssetView` (§8.9). La liste conserve l’enveloppe de pagination de §11.1. Les réponses de création et de modification emploient la même vue administrative, jamais une readiness calculée pour un administrateur traité comme technicien.
 
 CreateAssetRequest et UpdateAssetRequest :
 
@@ -802,7 +828,9 @@ L’échéance `dueAt` dépassée indique un retard; elle ne clôture jamais le 
 
 `GET /locker-operations/{operationId}`
 
-Accès au propriétaire; aucune donnée secrète du défi. Polling toutes les secondes tant que non terminal, avec `Retry-After: 1`.
+Accès au propriétaire; aucune donnée secrète du défi. Polling environ chaque seconde tant que non terminal, avec `Retry-After: 1`, selon l’ADR-006 accepté. Une seule requête de suivi est en vol à la fois. Ralentir sur erreur réseau et respecter un `Retry-After` plus long; suspendre en arrière-plan, relire immédiatement au retour au premier plan et arrêter au terminal. Aucun polling permanent à une seconde du catalogue n’est requis.
+
+Après réouverture ou reconnexion, relire `/me/reservation` et `/me/loan`, puis suivre `currentOperationId` lorsqu’il existe. Une réponse 404 sur une vue courante peut traduire la fin du parcours : rafraîchir l’autre vue métier, sans recréer automatiquement une opération. Un 401 arrête le suivi protégé et demande une reconnexion, sans annuler l’opération serveur. Reprendre signifie **relire**, pas redéclencher l’ouverture. Aucun secret QR n’est conservé pour cette reprise.
 
 | État | Affichage mobile | requiredAction |
 |---|---|---|
@@ -867,7 +895,9 @@ Réponse `202`, `Location` identique, `LockerOperationView` avec `requiredAction
 
 La même clé et le même corps rejouent la réponse initiale; une réponse refusée rejouée ne recompte pas les essais. Un corps différent avec la même clé est rejeté. La nouvelle clé après consommation donne un refus, jamais un second déverrouillage. Le token n’est pas copié dans la table d’idempotence : seul le hash de la requête canonique y figure.
 
-Le délai du défi est proposé à 60 secondes maximum, borné par l’horaire et la réservation. Limites proposées : 5 secrets erronés par défi et 3 préparations par utilisateur et locker sur 15 minutes. Un tiers ne peut épuiser les essais du titulaire. Ces protections limitent l’abus, sans empêcher totalement un compte autorisé de monopoliser une réservation.
+Le délai retenu est de 60 secondes maximum **depuis la création** du défi, borné par l’horaire et la réservation applicable. Le technicien prépare l’opération devant le casier : la latence d’affichage consomme une partie de ces 60 secondes, sans renouveler l’échéance. Les 120 secondes physiques commencent seulement à l’autorisation locale.
+
+Au cinquième secret erroné soumis par l’initiateur, le défi est invalidé et l’opération termine en `FAILED`. Une lecture caméra sans soumission ne compte pas. Un tiers ne peut épuiser les essais du titulaire. La fréquence des nouvelles préparations reste limitée par utilisateur et casier, avec un seuil configurable à qualifier avant intégration et `429 LOCAL_PROOF_RATE_LIMITED` accompagné de `Retry-After`. Les rejeux idempotents ne comptent pas comme nouvelles préparations. L’ancien plafond de trois préparations en quinze minutes est abandonné : il peut bloquer une série normale de retraits/retours. Cela ne supprime ni la limitation de débit ni les autres contrôles (ADR-009).
 
 ---
 
@@ -1208,6 +1238,17 @@ Une ouverture passe obligatoirement par une réservation ou un prêt valide et p
 3. Un actif avec workflow ouvert ne peut être archivé ou déplacé.
 4. Une anomalie peut être ACKNOWLEDGED mais jamais RESOLVED par REST.
 
+### 26.7 Décisions et données de suivi du 23 septembre
+
+Ces cas sont à implémenter et à exécuter, pas déclarés réussis par la présente révision :
+
+1. Un compte désactivé ou dont le rôle/niveau a changé ne conserve pas ses anciens droits grâce aux claims d’un JWT encore valide.
+2. Les horaires serveur couvrent ouverture, fermeture, aucun horaire exploitable et changement d’heure dans le fuseau du locker.
+3. Après arrière-plan ou reconnexion, retrouver une tentative en cours, échouée ou en anomalie, sans deuxième commande; `returnOperationId` reste null tant que le retour n’est pas confirmé.
+4. La vue administrateur exclut `readiness` et `ACCESS_DENIED`; le technicien de niveau insuffisant voit le blocage sans recevoir de secret matériel.
+5. Le cinquième secret erroné ferme le défi; une image illisible et un rejeu idempotent n’épuisent pas le compteur.
+6. La cadence représentative de dix retraits et dix retours reste possible avec la limitation de préparation activée; une rafale abusive est refusée.
+
 ---
 
 ## 27. Limites du contrat P0
@@ -1226,13 +1267,15 @@ Le P0 ne comprend pas :
 - multi-organisation;
 - action administrative de force sur une chaîne de possession.
 
-Le polling HTTP à une seconde est retenu pour suivre une LockerOperation. Cette décision limite la complexité du P0 sans donner au client un accès direct à MQTT.
+Le polling HTTP ciblé de §15.4 est retenu pour suivre une LockerOperation. Cette décision limite la complexité du P0 sans donner au client un accès direct à MQTT.
 
 ---
 
 ## 28. Critères de conformité
 
-Cette révision modifie la sémantique de préparation de `checkout`/`return` et ajoute un état obligatoire. Tous les clients, simulateurs et tests doivent être mis à jour ensemble avant une démo. Aucun ancien chemin d’ouverture directe n’est conservé comme compatibilité cachée.
+La révision 1.2 a modifié la préparation de `checkout`/`return` et ajouté l’attente de preuve locale. Aucun ancien chemin d’ouverture directe n’est conservé comme compatibilité cachée.
+
+La révision documentaire 1.3 consigne les choix approuvés par Philippe le 23 septembre et précise les réponses de suivi et d’administration avant bootstrap. Producteur : Spring; consommateurs : SwiftUI, React et leurs fixtures de contrat. `currentWindow` et `currentOperationId` sont des ajouts; `AdminAssetView` explicite une réponse jusque-là non définie, sans readiness personnelle. Les maquettes restent illustratives : leurs autres champs ne deviennent pas normatifs par cette révision. Aucun topic/payload MQTT, état métier ou schéma SQL n’est modifié ici. Les DTO et fixtures devront être alignés ensemble avant intégration; aucune exécution de ces tests n’est revendiquée.
 
 
 Le contrat est respecté si :

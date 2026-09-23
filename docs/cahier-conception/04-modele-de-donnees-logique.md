@@ -4,6 +4,7 @@
 **Session :** Automne 2026  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de révision :** 16 septembre 2026
+**Mise à jour ciblée :** 23 septembre 2026 — statut RS-485 aligné sur l’ADR-002; modèle inchangé.
 **Version :** 1.3 — contrôle local QR, étoile et cohérence du retour
 
 ---
@@ -130,7 +131,7 @@ sequenceDiagram
 | Locker — LockerDevice | Un locker conserve 0..N devices historiques | Un device appartient à 1 locker | Un seul hub actif commande le locker P0 |
 | Compartment — AssetPlacement | Un compartiment possède 0..1 actif attendu courant | Un actif placé possède 1 compartiment attendu | L’affectation attendue n’est pas une preuve de présence |
 
-Le P0 cible un hub maître et deux cellules. Chaque cellule possède une serrure, un capteur de porte, un indicateur et un lecteur RFID UHF local. Les cellules rejoignent des ports indépendants du hub dans l’étoile validée. RS-485 point à point et Modbus RTU minimal sont la proposition de réalisation à confirmer au POC; elles ne possèdent ni Wi-Fi, ni client MQTT, ni autorité métier.
+Le P0 cible un hub maître et deux cellules. Chaque cellule possède une serrure, un capteur de porte, un indicateur et un lecteur RFID UHF local. Les cellules rejoignent des ports indépendants du hub dans l’étoile validée. L’ADR-002 retient RS-485 point à point; le protocole applicatif, dont l’option Modbus RTU minimal, et le dimensionnement restent à qualifier. Les cellules ne possèdent ni Wi-Fi, ni client MQTT, ni autorité métier.
 
 ### 5.3 Commande d’une cellule précise
 
@@ -574,4 +575,4 @@ Ces choix d’implémentation devront respecter les relations, séquences et inv
 
 La validation du défi et toutes les gardes métier sont réévaluées dans une même transaction avant la création de l’unique commande de serrure. L’API ne renvoie jamais le contenu secret du QR. La possession du code n’est pas une preuve anti-relais.
 
-Chaque cellule possède un `hubPort` dédié. La proposition électrique conserve RS-485 sur des liaisons point à point indépendantes en étoile. Le câble Cat5e/Cat6 à connecteurs RJ45 transporte alimentation et signaux Aegis; ce n’est pas un réseau Ethernet. Le numéro de port n’est pas l’identité métier du compartiment.
+Chaque cellule possède un `hubPort` dédié. L’ADR-002 retient RS-485 sur des liaisons point à point indépendantes en étoile. Le câble et les connecteurs restent à qualifier dans le document 12; l’option initiale Cat5e/Cat6 à connecteurs RJ45 transporte alimentation et signaux Aegis, pas un réseau Ethernet. Le numéro de port n’est pas l’identité métier du compartiment.

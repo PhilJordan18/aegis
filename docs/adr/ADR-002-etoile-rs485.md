@@ -5,6 +5,11 @@
 **Décideurs :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Périmètre :** liaison entre un hub avec écran et deux cellules du prototype.
 
+> **Amendement du 23 septembre 2026 :** les mentions historiques de plafond à
+> 500 $ CA ci-dessous sont remplacées par l’[ADR-011](ADR-011-evolution-estimation-materielle.md).
+> Il s’agissait d’une estimation initiale, pas d’un critère d’acceptation.
+> La décision de topologie et les exigences de qualification restent inchangées.
+
 ## Contexte
 
 Une cellule Aegis correspond à un compartiment verrouillé indépendant. Les cellules peuvent être fixées ou empilées autour du hub. Le P0 comporte A1 et A2; cette modularité doit permettre des extensions sans imposer leur réalisation pendant la session.
@@ -73,7 +78,7 @@ Le firmware conserve les limites d’actionnement, le ciblage, la prévention du
 | Ciblage | Une commande A1 n’actionne pas A2, et inversement |
 | Déconnexion | Cellule absente signalée; aucune confirmation physique fabriquée |
 | Rejeu et redémarrage | Aucune seconde impulsion ni réutilisation d’une ancienne commande |
-| Budget | Nomenclature complète du hub et des deux cellules ≤ 500 $ CA |
+| Budget — disposition historique remplacée par ADR-011 | L’ancien seuil « nomenclature complète ≤ 500 $ CA » n’est plus applicable; conserver une estimation complète et faire approuver les achats séparément |
 
 Jimmy pilote les mesures et le dossier physique. Philippe vérifie leur traduction dans les événements et les parcours backend. Les essais finaux de ciblage sont réalisés ensemble. L’acceptation architecturale ne signifie pas que ces essais ont déjà réussi.
 

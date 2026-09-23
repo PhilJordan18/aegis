@@ -254,7 +254,7 @@ Un actif emprunté est normalement `BORROWED` et non disponible pour un nouvel e
 Utilisateur de l'application iOS qui peut :
 
 - s'authentifier;
-- consulter les actifs correspondant à ses droits;
+- consulter le parc institutionnel, y compris les actifs à accès restreint affichés comme bloqués lorsque son niveau est insuffisant;
 - voir leur état de readiness;
 - réserver un actif prêt;
 - demander l'accès au compartiment attribué et scanner le QR affiché sur le hub;
@@ -456,9 +456,9 @@ Une réservation, un retrait ou un retour est initié pendant une plage ouverte.
 |---|---|---|
 | Réservation | Fin personnalisée au plus tard à la fermeture de la plage courante | Décision intégrée |
 | Opération physique | 120 s après `authorizedAt` | Décision intégrée |
-| Défi QR | Au plus 60 s après création, sans dépasser fermeture ni `reservedUntil` pour un retrait | Proposition à tester |
-| Essais de secret | Au plus 5 essais erronés par défi; seul l'initiateur peut en consommer les essais | Proposition à tester |
-| Fréquence des préparations | 3 par utilisateur et locker sur 15 minutes; un rejeu idempotent ne recompte pas | Proposition à tester |
+| Défi QR | Au plus 60 s après création, sans dépasser fermeture ni `reservedUntil` pour un retrait; préparation lorsque le technicien est devant le casier | Retenu le 23 septembre; ergonomie à mesurer |
+| Essais de secret | Au plus 5 secrets erronés soumis par défi; seul l'initiateur peut en consommer les essais; une lecture caméra sans soumission ne compte pas | Retenu le 23 septembre |
+| Fréquence des préparations | Limitation configurable par utilisateur et casier, sans recompter les rejeux idempotents; compatible avec les retraits/retours normaux et testée contre les rafales | Principe retenu; seuil numérique à qualifier, ancien plafond de 3/15 min abandonné |
 | Heartbeat | Toutes les 10 s; `OFFLINE` après plus de 30 s sans heartbeat valide | Base P0 configurable |
 | Fenêtre RFID | Départ POC : 3 s après fermeture; retour avec au moins 3 lectures cohérentes, retrait sans le tag sur une fenêtre saine complète | À mesurer au POC |
 
@@ -542,6 +542,20 @@ Le P0 représente le minimum requis pour considérer le prototype comme fonction
 - fournir des comptes de démonstration préparés.
 
 Ne sont pas exigés : inscription publique, authentification sociale, récupération autonome du mot de passe et gestion avancée des identités d'entreprise.
+
+**Cadre institutionnel P0 — clarification validée le 23 septembre 2026.**
+Un déploiement sert une seule institution. Les comptes administrateur et
+technicien préparés pour ce déploiement accèdent au même parc institutionnel,
+selon leurs rôles et niveaux d'accès vérifiés par le backend. La connexion ne
+comporte ni choix d'institution ni demande d'adhésion; l'administrateur ne valide
+pas chaque connexion. Le partage du parc ne donne pas au technicien les droits
+administratifs ni l'accès aux réservations et prêts des autres techniciens.
+
+Cette limite ne constitue pas une architecture multi-tenant : ni entité
+d'organisation, ni adhésions multiples, ni sélecteur d'institution ne sont requis
+au P0. L'accueil de plusieurs institutions dans une même instance et les
+invitations de membres constituent une évolution future à concevoir et à
+valider séparément, sans engagement pour cette session.
 
 ### 11.2 Catalogue et actifs
 
@@ -834,11 +848,11 @@ Sont explicitement exclus :
 | Contrôleur | ESP32 |
 | Clients | HTTPS vers une API REST |
 | IoT | MQTT entre backend, broker et hub ESP32; cellules sans accès IP/MQTT |
-| Liaison de cellule | Un port/câble dédié par cellule; RJ45 proposé, brochage propriétaire à valider; RS-485 point à point indépendant proposé |
+| Liaison de cellule | Un port/câble dédié et un segment RS-485 indépendant par cellule, selon ADR-002; connecteur et brochage propriétaire à valider |
 | Accès local | QR à usage unique affiché par le hub et validé par le backend |
 | Détection | Une méthode fiable obligatoire; RFID UHF soumis à POC |
 | IA | Non requise dans le produit |
-| Déploiement | Environnement de démonstration distant prévu |
+| Déploiement | Services sur un hôte local de démonstration, accessible par le réseau autorisé depuis les iPhone et le hub |
 | Utilisateurs P0 | Comptes de démonstration préparés |
 | Échelle P0 | Un locker, deux actifs principaux, quelques comptes |
 
@@ -944,11 +958,11 @@ L'équipe a retenu un hub maître avec écran et deux cellules indépendantes. U
 
 Le POC valide l'alimentation, les interfaces, la connectique et le protocole dans les ressources disponibles et le calendrier. Il ne remplace pas le prototype par une seule cellule.
 
-#### 17.5.2 Connectique et communication proposées
+#### 17.5.2 Communication retenue et connectique à valider
 
-Jimmy propose un câble à paires torsadées Cat5e/Cat6 terminé en connecteurs RJ45. Le câble transporte alimentation et signaux Aegis selon un brochage à définir; la prise n'est ni un port Ethernet ni du PoE standard et ne doit pas être raccordée à un équipement réseau.
+La proposition initiale de Jimmy est un câble à paires torsadées Cat5e/Cat6 terminé en connecteurs RJ45. Le document 12 recommande aussi l’étude du M12 codé A à 5 contacts, sans approbation définitive de connecteur. Le câble transporte alimentation et signaux Aegis selon un brochage à définir; une prise RJ45 Aegis n'est ni un port Ethernet ni du PoE standard et ne doit pas être raccordée à un équipement réseau.
 
-Pour conserver RS-485 dans l'étoile, la proposition est une liaison point à point indépendante par port du hub, avec ses interfaces propres. Les A/B des départs ne sont pas simplement raccordés en étoile passive sur un bus unique. Modbus RTU minimal reste une proposition de protocole applicatif à confirmer; le choix final et ses contraintes sont consignés dans l'ADR matériel.
+L’[ADR-002 accepté](../adr/ADR-002-etoile-rs485.md) retient une liaison RS-485 point à point indépendante par port du hub, avec ses interfaces propres. Cette formulation aligne le scope sur la décision consignée; elle ne valide pas le montage électrique. Les A/B des départs ne sont pas simplement raccordés en étoile passive sur un bus unique. Modbus RTU minimal reste une proposition de protocole applicatif à confirmer; le choix final et ses contraintes seront consignés dans l'ADR matériel.
 
 Aucune tension admissible, section, intensité, terminaison ou affectation de broche non vérifiée n'est considérée comme validée. Ajouter une cellule exige un port, des interfaces et un budget de puissance correspondants.
 
@@ -1143,18 +1157,24 @@ Les points suivants restent à décider ou à valider :
 - capteur de présence ou de poids si le fallback de détection devient nécessaire;
 - verrou retenu, mécanisme de porte, courant d'actionnement, durée d'impulsion et secours manuel;
 - alimentation et protections électriques des deux départs;
-- section, longueur, brochage et différenciation des connecteurs RJ45 propriétaires;
+- choix, section, longueur, brochage et différenciation des connecteurs propriétaires (M12 recommandé ou option RJ45);
 - réalisation des segments RS-485 indépendants, nombre d'interfaces disponibles et protocole applicatif;
 - modèle d'écran, lisibilité du QR et comportement de l'application en cas de refus de caméra;
-- validation des propositions QR : 60 secondes, 5 essais et 3 préparations sur 15 minutes;
+- qualification du délai réel d'affichage/scan du QR et du seuil de fréquence des préparations, compatible avec les cycles normaux;
 - seuils mesurables des POC et méthode de mesure des délais et de la répétabilité;
 - actifs de démonstration exacts et configuration des heures d'exploitation;
 - fournisseur et topologie de déploiement;
-- ratification des choix proposés dans les contrats et ADR : mécanisme exact de jeton et cadence de rafraîchissement des clients;
+- choix d'implémentation du JWT (algorithme autorisé et clés), puis tests des choix logiciels acceptés dans les ADR-004 à 007 et 009;
 - estimation des stories de contrôle local et validation des jalons internes au regard du calendrier du cours;
 - niveau de finition visuelle compatible avec la capacité disponible.
 
 Ne restent pas ouverts : un hub avec deux cellules, une cellule par compartiment, l'étoile, une seule réservation active par technicien, une durée de réservation personnalisée bornée par l'horaire, les 120 secondes après autorisation et la nécessité d'une preuve corrective pour résoudre une anomalie.
+
+Philippe a également validé le 23 septembre : JWT signé de 60 minutes sans
+refresh token, Mosquitto/MQTT avec identités séparées et TLS pour le hub réel,
+outbox PostgreSQL, polling REST limité aux opérations et QR de 60 secondes maximum
+avec cinq secrets erronés maximum. Cette validation de conception ne constitue
+pas une preuve d'implémentation ou de réussite des POC.
 
 Chaque décision structurante et chaque résultat de POC sont consignés dans le cahier de conception ou un ADR. Aucune valeur proposée n'est présentée comme un résultat expérimental.
 

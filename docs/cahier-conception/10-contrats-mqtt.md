@@ -2,8 +2,8 @@
 
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Date de révision :** 16 septembre 2026
-**Version :** 1.2 — contrôle local QR et étoile
+**Date de révision :** 23 septembre 2026
+**Version documentaire :** 1.3 — choix MQTT ratifiés; sujets et payloads inchangés
 
 ---
 
@@ -110,6 +110,11 @@ L’identité authentifiée est la source de confiance. Un lockerId déclaré da
 | PostgreSQL | Aucun accès depuis le broker ou le hub |
 
 Le P0 utilise un nom d’utilisateur et un secret uniques par device au-dessus de TLS. Le mTLS peut être ajouté ultérieurement sans changer les topics ni les payloads.
+
+Le broker P0 retenu est Mosquitto, hébergé localement avec les services de
+démonstration. Le compte backend est distinct de celui du hub. Un `clientId`
+stable permet la gestion de session; il ne remplace jamais l’authentification
+par le secret et les ACL. Voir ADR-004, accepté le 23 septembre.
 
 ### 4.3 Secrets
 
@@ -998,7 +1003,7 @@ aegis://local-access?v=1&challengeId=<UUID>&operationId=<UUID>&lockerId=<UUID>&t
 
 L’application lit ce format dans son scanner interne. Aucun site Web ni service tiers ne reçoit l’URI. Aucun nom de technicien, email, mot de passe ou jeton de connexion n’est affiché.
 
-L’horloge du hub doit être synchronisée avant affichage. Il vérifie son locker, son `deviceSessionId`, l’échéance et la révision. Il n’étend jamais la durée de 60 secondes proposée. Si la fermeture ou la fin de réservation intervient avant, le backend fournit cette échéance réduite.
+L’horloge du hub doit être synchronisée avant affichage. Il vérifie son locker, son `deviceSessionId`, l’échéance et la révision. Il n’étend jamais la durée maximale retenue de 60 secondes après création. Si la fermeture ou la fin de réservation intervient avant, le backend fournit cette échéance réduite. Un affichage tardif n’ouvre pas une nouvelle fenêtre de 60 secondes.
 
 ### 27.2 Accusé applicatif d’affichage
 

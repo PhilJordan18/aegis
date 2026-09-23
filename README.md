@@ -24,7 +24,7 @@ La démonstration utilise deux équipements comparables : A1 est présent, dispo
 
 ## Parcours de retrait et de retour
 
-1. Le technicien se connecte sur iOS et consulte les actifs admissibles.
+1. Le technicien se connecte sur iOS et consulte les actifs de son institution, avec leur readiness personnelle et leurs éventuels blocages.
 2. Il réserve A1 jusqu’à une heure choisie dans la plage d’exploitation définie par l’administrateur. **La réservation, même distante, n’ouvre aucune porte.**
 3. Il prépare son retrait. Le backend fait afficher sur le hub un QR temporaire lié à cette opération et à son compte.
 4. Le technicien scanne ce QR. Le backend revérifie les droits, la réservation et les conditions actuelles, puis autorise une commande pour A1 uniquement.
@@ -85,7 +85,7 @@ La **topologie en étoile est retenue** : chaque cellule correspond à un compar
 
 - L’écran du hub fait partie du P0 : QR d’accès, consignes et résultat fourni par le backend.
 - Un M12 codé A à 5 contacts est recommandé pour la revue d’équipe; le RJ45 propriétaire étudié initialement demeure une option économique. Le choix final, le brochage et le dimensionnement restent à valider conjointement.
-- Deux segments RS-485 indépendants constituent une réalisation proposée de l’étoile. Le protocole local et les composants ne sont pas déclarés validés avant le POC.
+- Deux segments RS-485 indépendants sont retenus par l’ADR-002. Le protocole local, les composants et le dimensionnement ne sont pas déclarés validés avant le POC.
 - La détection principale prévue est le RFID UHF local par cellule. Sa localisation et sa stabilité doivent être mesurées. Le repli associe identification QR/NFC de l’actif, porte et présence/poids, conformément au scope.
 
 L’[architecture physique](docs/cahier-conception/12-architecture-physique.md) distingue les décisions retenues, les interfaces à réaliser et les essais attendus.
