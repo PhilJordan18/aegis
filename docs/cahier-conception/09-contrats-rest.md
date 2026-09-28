@@ -454,7 +454,7 @@ Route supplémentaire : `POST /locker-operations/{operationId}/authorize-local` 
 | POST | /loans/{loanId}/return | Commencer un retour |
 | POST | /locker-operations/{operationId}/authorize-local | Consommer le QR et autoriser l’opération préparée |
 | GET | /locker-operations/{operationId} | Progression de sa propre opération |
-| GET | /lockers/{lockerId}/status | État utile du locker |
+| GET | /lockers/{lockerId}/status | État utile du locker; accessible au technicien et à l’administrateur (§5, §16.1) |
 
 ### 9.3 Administration
 
