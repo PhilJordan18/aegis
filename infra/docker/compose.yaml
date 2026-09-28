@@ -1,0 +1,58 @@
+name: aegis-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    environment:
+      POSTGRES_DB: aegis
+      POSTGRES_USER: aegis
+      POSTGRES_PASSWORD: ${AEGIS_DB_PASSWORD:?Set AEGIS_DB_PASSWORD in the env file}
+    ports:
+      - "127.0.0.1:${AEGIS_DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aegis -d aegis"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  mqtt-auth-init:
+    image: eclipse-mosquitto:2@sha256:38c0da4f2ef84284d47b3b3eeea1cb3bdeabe81ee10caf0cd5c5ff61ee3ea408
+    entrypoint: ["sh", "-ec"]
+    command:
+      - |
+        if [ -f /mosquitto/data/passwords ]; then
+          mosquitto_passwd -b /mosquitto/data/passwords "$$AEGIS_MQTT_API_USER" "$$AEGIS_MQTT_API_PASSWORD"
+        else
+          mosquitto_passwd -b -c /mosquitto/data/passwords "$$AEGIS_MQTT_API_USER" "$$AEGIS_MQTT_API_PASSWORD"
+        fi
+        mosquitto_passwd -b /mosquitto/data/passwords "$$AEGIS_MQTT_DEVICE_USER" "$$AEGIS_MQTT_DEVICE_PASSWORD"
+        chown 1883:1883 /mosquitto/data/passwords
+        chmod 0600 /mosquitto/data/passwords
+    environment:
+      AEGIS_MQTT_API_USER: aegis_api
+      AEGIS_MQTT_API_PASSWORD: ${AEGIS_MQTT_API_PASSWORD:?Set AEGIS_MQTT_API_PASSWORD in the env file}
+      AEGIS_MQTT_DEVICE_USER: d46a74ae-39dc-460b-8af0-38fc791b376a
+      AEGIS_MQTT_DEVICE_PASSWORD: ${AEGIS_MQTT_DEVICE_PASSWORD:?Set AEGIS_MQTT_DEVICE_PASSWORD in the env file}
+    volumes:
+      - mqtt_auth:/mosquitto/data
+    restart: "no"
+
+  mosquitto:
+    image: eclipse-mosquitto:2@sha256:38c0da4f2ef84284d47b3b3eeea1cb3bdeabe81ee10caf0cd5c5ff61ee3ea408
+    depends_on:
+      mqtt-auth-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${AEGIS_MQTT_PORT:-1883}:1883"
+    volumes:
+      - ../mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ../mqtt/acl:/mosquitto/config/acl:ro
+      - mqtt_auth:/mosquitto/auth:ro
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  mqtt_auth:

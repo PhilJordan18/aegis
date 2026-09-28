@@ -101,9 +101,12 @@ Run the smallest relevant checks first, then the affected broader suite. Never
 claim success from compilation alone. Report exact commands, observed results,
 tests not run, contract or migration impact, and residual risks.
 
-The repository is currently pre-bootstrap. Do not invent build commands. Add
-verified commands here or in a component-local `AGENTS.md` after that component
-is initialized and the command has run successfully.
+The API bootstrap is documented in `services/api/README.md`. Its verified
+local checks are `docker compose --env-file infra/docker/.env.example -f
+infra/docker/compose.yaml up -d --wait` from the repository root and
+`AEGIS_DB_PASSWORD=local-demo-db-password-change-me ./mvnw test` from
+`services/api/`. The example credentials are for an isolated local simulator
+only. Do not invent commands for components that are not initialized yet.
 
 Do not commit, push, merge, release, deploy, perform destructive migrations, or
 alter Git history without explicit human authorization.

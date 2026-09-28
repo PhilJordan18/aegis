@@ -139,7 +139,9 @@ Linear est l’outil envisagé pour le backlog opérationnel. Le document 11 con
 
 Le [guide de travail avec les agents et les skills](docs/ai/agentic-workflow.md) explique la séparation entre instructions, skills, sous-agents et outils, ainsi que la stratégie de contexte commune à Claude Code et Codex.
 
-Le travail avance par petites tranches intégrées, avec une tâche d’exécution active par personne, une revue croisée et des preuves de fonctionnement. Les commandes de lancement seront documentées à mesure que les composants seront réellement initialisés et testés; ce README ne suppose pas un environnement déjà opérationnel.
+Le travail avance par petites tranches intégrées, avec une tâche d’exécution active par personne, une revue croisée et des preuves de fonctionnement. Chaque composant documentera ses commandes de lancement seulement après vérification réelle.
+
+Le premier socle exécutable est maintenant documenté dans le [guide local de l'API](services/api/README.md). Il démarre PostgreSQL et Mosquitto avec Docker Compose, applique les migrations Flyway V001 et V002, puis expose la santé de l'API, la connexion et le profil courant avec leurs contrôles d'accès. Le catalogue, les parcours métier, l'ingestion MQTT et les clients Web et iOS suivront dans les prochaines tranches.
 
 ## Documentation de référence
 

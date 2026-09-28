@@ -1,0 +1,12 @@
+user aegis_api
+topic write aegis/v1/lockers/+/commands
+topic write aegis/v1/lockers/+/display
+topic read aegis/v1/lockers/+/events
+topic read aegis/v1/lockers/+/status
+
+# Fixed fictitious locker identity from the MQTT contract, simulator only.
+user d46a74ae-39dc-460b-8af0-38fc791b376a
+topic read aegis/v1/lockers/d46a74ae-39dc-460b-8af0-38fc791b376a/commands
+topic read aegis/v1/lockers/d46a74ae-39dc-460b-8af0-38fc791b376a/display
+topic write aegis/v1/lockers/d46a74ae-39dc-460b-8af0-38fc791b376a/events
+topic write aegis/v1/lockers/d46a74ae-39dc-460b-8af0-38fc791b376a/status

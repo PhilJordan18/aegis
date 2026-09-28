@@ -773,4 +773,6 @@ FodyWeavers.xsd
 # Claude Code personal configuration
 **/.claude/settings.local.json
 CLAUDE.local.md
+# Local development credentials. The committed example is safe for an isolated simulator only.
+infra/docker/.env
 
