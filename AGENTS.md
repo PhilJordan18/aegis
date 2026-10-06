@@ -111,6 +111,24 @@ only. Do not invent commands for components that are not initialized yet.
 Do not commit, push, merge, release, deploy, perform destructive migrations, or
 alter Git history without explicit human authorization.
 
+## Git workflow
+
+The backlog lives in GitHub Issues and the `Aegis P0` project board. Backlog
+items, pull requests, and reviews are written in English. `CONTRIBUTING.md`
+holds the full workflow.
+
+- Never commit on `main` or `dev`, and never push to them. `dev` receives only
+  pull requests from issue branches; `main` receives only a pull request from
+  `dev`, merged by a human.
+- Work on one issue per branch, created from an up-to-date `dev` and named
+  `<issue>-<type>-<slug>` with a Conventional Commit type, for example
+  `25-feat-asset-catalog`. Ask for the issue number when it is unknown.
+- Before any pull request, pass the delivery gate of the `aegis-delivery`
+  skill: produce the delivery report and stop. Push the branch and open the
+  pull request into `dev` only after the human answers "deliver".
+- Never merge a pull request, and never open one into `main` unless a human
+  explicitly asks for it.
+
 ## Commit convention
 
 When a human authorizes a commit, use Conventional Commits:
