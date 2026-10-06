@@ -1,0 +1,24 @@
+# Dependencies and build output
+node_modules
+dist
+dist-ssr
+dist-preview
+*.local
+*.tsbuildinfo
+
+# Test output
+coverage
+test-results
+playwright-report
+blob-report
+playwright/.cache
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor and OS files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store

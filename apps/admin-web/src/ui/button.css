@@ -1,0 +1,37 @@
+.ag-btn {
+  --h: var(--ag-control-h); --px: 18px; --fs: 0.9375rem;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: var(--h); padding: 0 var(--px); border-radius: var(--ag-r-control);
+  font-size: var(--fs); font-weight: 600; line-height: 1.1; letter-spacing: -0.005em;
+  border: 1px solid transparent; cursor: pointer; text-decoration: none; text-align: center;
+  transition: background var(--ag-motion-fast) var(--ag-ease-out), box-shadow var(--ag-motion-fast) var(--ag-ease-out), transform var(--ag-motion-fast) var(--ag-ease-out);
+}
+.ag-btn .ag-icon { width: 18px; height: 18px; }
+.ag-btn--lg { --h: var(--ag-control-h-lg); --px: 22px; --fs: 1rem; }
+.ag-btn--sm { --h: 36px; --px: 14px; --fs: 0.875rem; border-radius: 10px; }
+.ag-btn--block { width: 100%; }
+.ag-btn--primary { background: var(--ag-accent-gradient); color: var(--ag-text-on-accent); box-shadow: var(--ag-shadow-primary); }
+.ag-btn--primary:hover { background: var(--ag-accent-gradient-hover); }
+.ag-btn--primary:active { transform: translateY(1px); }
+.ag-btn--secondary { background: var(--ag-surface); color: var(--ag-accent-text); border-color: var(--ag-border-strong); }
+.ag-btn--secondary:hover { background: var(--ag-accent-soft); }
+.ag-btn--ghost { background: transparent; color: var(--ag-accent-text); padding: 0 10px; }
+.ag-btn--ghost:hover { background: var(--ag-accent-soft); }
+.ag-btn--plain { background: var(--ag-disabled-bg); color: var(--ag-text-disabled); }
+
+.ag-btn:disabled,
+.ag-btn.is-inert {
+  background: var(--ag-disabled-bg); color: var(--ag-text-disabled);
+  box-shadow: none; border-color: transparent; cursor: not-allowed; transform: none;
+}
+.ag-btn.is-busy { cursor: progress; }
+.ag-btn.is-busy:active { transform: none; }
+.ag-btn--primary.is-busy:hover { background: var(--ag-accent-gradient); }
+
+.ag-spinner { width: 18px; height: 18px; animation: ag-spin 800ms linear infinite; }
+@keyframes ag-spin { to { transform: rotate(360deg); } }
+
+@media (forced-colors: active) {
+  .ag-btn { border-color: ButtonText; }
+  .ag-btn:disabled, .ag-btn.is-inert { color: GrayText; border-color: GrayText; }
+}

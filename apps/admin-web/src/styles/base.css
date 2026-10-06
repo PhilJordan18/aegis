@@ -1,0 +1,96 @@
+/* Global base: reset, type, focus, glass and decor fallbacks (handoff §1, §2.3, §4, §8, §9). */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  min-height: 100vh;
+  background: var(--ag-canvas);
+  color: var(--ag-text);
+  font-family: var(--ag-font-sans);
+  font-size: var(--ag-type-body-size);
+  line-height: var(--ag-type-body-lh);
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+h1, h2, h3, p, ul, ol, dl, dd, figure, fieldset { margin: 0; padding: 0; }
+fieldset { border: 0; min-width: 0; }
+ul, ol { list-style: none; }
+a { color: inherit; }
+svg { flex: none; }
+
+#root { min-height: 100vh; display: flex; flex-direction: column; }
+
+.ag-tnum { font-variant-numeric: tabular-nums; }
+.ag-nowrap { white-space: nowrap; }
+.ag-sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+/* Focus ring (§8): never removed, never hidden by sticky content. */
+:focus-visible {
+  outline: 2px solid var(--ag-focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px var(--ag-focus-halo);
+}
+[tabindex="-1"]:focus:not(:focus-visible) { outline: none; }
+
+.ag-icon { width: 20px; height: 20px; flex: none; display: inline-block; vertical-align: middle; }
+
+.ag-overline {
+  font-family: var(--ag-font-mono);
+  font-size: var(--ag-type-overline-size);
+  font-weight: var(--ag-type-overline-weight);
+  letter-spacing: var(--ag-type-overline-track);
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: var(--ag-text-2);
+}
+
+.ag-link {
+  display: inline-flex; align-items: center; min-height: 24px;
+  color: var(--ag-accent-text); font-weight: 600;
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px;
+}
+
+/* Glass: navigation layers only (§2.3). Three opaque fallbacks. */
+.ag-glass {
+  background: var(--ag-glass-bg);
+  -webkit-backdrop-filter: blur(var(--ag-glass-blur)) saturate(var(--ag-glass-sat));
+  backdrop-filter: blur(var(--ag-glass-blur)) saturate(var(--ag-glass-sat));
+  border: 1px solid var(--ag-glass-border);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .ag-glass { background: var(--ag-glass-fallback); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .ag-glass { background: var(--ag-glass-fallback); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .ag-decor { display: none !important; }
+}
+
+/* Signature: compartment grid with at most one lit cell, decorative only (§0.8). */
+.ag-cells { position: absolute; display: grid; gap: 12px; pointer-events: none; }
+.ag-cells i { display: block; border-radius: var(--ag-r-cell); border: 1px solid var(--ag-cell-line); }
+.ag-cells--lit { -webkit-mask-image: none !important; mask-image: none !important; }
+.ag-cells--lit i { visibility: hidden; border-color: transparent; }
+.ag-cells--lit i.is-lit-wide { visibility: visible; background: var(--ag-cell-lit-fill); box-shadow: var(--ag-cell-lit-glow); }
+@media (max-width: 767px) {
+  .ag-cells--lit i.is-lit-wide { visibility: hidden; }
+  .ag-cells--lit i.is-lit-compact { visibility: visible; background: var(--ag-cell-lit-fill); box-shadow: var(--ag-cell-lit-glow); }
+}
+.ag-cells--page i { border-color: var(--ag-cell-line-page); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0ms !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .ag-decor, .ag-cells { display: none !important; }
+  .ag-glass { background: Canvas; border-color: CanvasText; }
+}

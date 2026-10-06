@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr-CA">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aegis Manager</title>
+    <!--
+      Applies the appearance preference before first paint to avoid a theme flash.
+      Keep in sync with src/features/appearance/appearance.ts (parity tested in
+      appearance.boot.test.ts). The stored value is a UI preference, never a token.
+      A future Content-Security-Policy must allow this script by hash.
+    -->
+    <script id="appearance-boot">
+      (function () {
+        var preference = 'system';
+        try {
+          var stored = window.localStorage.getItem('aegis.manager.appearance');
+          if (stored === 'light' || stored === 'dark' || stored === 'system') preference = stored;
+        } catch (e) {}
+        var prefersDark = false;
+        try {
+          prefersDark = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        } catch (e) {}
+        var theme = preference === 'system' ? (prefersDark ? 'dark' : 'light') : preference;
+        var root = document.documentElement;
+        root.setAttribute('data-appearance', preference);
+        root.setAttribute('data-theme', theme);
+        root.style.colorScheme = theme;
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

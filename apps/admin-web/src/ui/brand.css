@@ -1,0 +1,9 @@
+.ag-brand { display: inline-flex; align-items: center; gap: 10px; min-height: 32px; text-decoration: none; border-radius: var(--ag-r-small); }
+.ag-brand__mark { width: 26px; height: 26px; }
+.ag-brand__frame { color: var(--ag-text); }
+.ag-brand__cross { color: var(--ag-text-3); }
+.ag-brand__name { font-weight: 650; font-size: 1.25rem; line-height: 1; letter-spacing: -0.035em; color: var(--ag-text); }
+.ag-brand__sub { font-weight: 500; font-size: 0.9375rem; line-height: 1; letter-spacing: -0.01em; color: var(--ag-text-2); }
+@media (forced-colors: active) {
+  .ag-brand__frame, .ag-brand__cross { color: currentColor; }
+}
