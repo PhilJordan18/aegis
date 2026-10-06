@@ -1,8 +1,10 @@
 import { lazy, Suspense, useEffect, type ComponentType } from 'react'
 import { SignInPage } from '../features/auth/SignInPage'
+import { EquipmentPage } from '../pages/EquipmentPage'
 import { LandingPage } from '../pages/LandingPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 import { useSignInPreviewScenario } from '../preview/PreviewContext'
+import { RequireAdminSession } from './RequireAdminSession'
 import { useLocation } from './router'
 import { matchRoute, pathOf, ROUTES, type RouteId } from './routes'
 
@@ -10,8 +12,8 @@ import { matchRoute, pathOf, ROUTES, type RouteId } from './routes'
 const EquipmentPreviewPage: ComponentType | null = __AEGIS_PREVIEW__ ? lazy(() => import('../preview/EquipmentPreviewPage')) : null
 const PreviewStrip: ComponentType | null = __AEGIS_PREVIEW__ ? lazy(() => import('../preview/PreviewStrip')) : null
 
-// Q7 (handoff §14): the equipment preview is the only Manager screen in this slice.
-const AFTER_SIGN_IN_PATH = __AEGIS_PREVIEW__ ? pathOf('equipmentPreview') : pathOf('landing')
+// Q7 (handoff §14): the static equipment preview in design-review builds, the protected Équipements page otherwise.
+const AFTER_SIGN_IN_PATH = pathOf(__AEGIS_PREVIEW__ ? 'equipmentPreview' : 'equipment')
 
 export function App() {
   const { pathname } = useLocation()
@@ -41,6 +43,8 @@ function Page({ routeId }: { readonly routeId: RouteId }) {
       return <LandingPage />
     case 'signIn':
       return <SignInPage key={scenario ?? 'default'} afterSignInPath={AFTER_SIGN_IN_PATH} />
+    case 'equipment':
+      return <RequireAdminSession>{(profile) => <EquipmentPage sessionProfile={profile} />}</RequireAdminSession>
     case 'equipmentPreview':
       return EquipmentPreviewPage ? (
         <Suspense fallback={null}>

@@ -1,8 +1,9 @@
 /**
  * Typed route map. Paths are French because they are visible to users; ids stay English.
  * Preview-only routes resolve to `notFound` when the preview is disabled.
+ * `equipment` requires an administrator session (see RequireAdminSession).
  */
-export type RouteId = 'landing' | 'signIn' | 'equipmentPreview' | 'notFound'
+export type RouteId = 'landing' | 'signIn' | 'equipment' | 'equipmentPreview' | 'notFound'
 
 export interface RouteDefinition {
   readonly path: string | null
@@ -13,6 +14,7 @@ export interface RouteDefinition {
 export const ROUTES: Readonly<Record<RouteId, RouteDefinition>> = {
   landing: { path: '/', title: 'Aegis Manager', previewOnly: false },
   signIn: { path: '/connexion', title: 'Connexion — Aegis Manager', previewOnly: false },
+  equipment: { path: '/equipements', title: 'Équipements — Aegis Manager', previewOnly: false },
   equipmentPreview: { path: '/apercu/equipements', title: 'Équipements — Aegis Manager', previewOnly: true },
   notFound: { path: null, title: 'Page introuvable — Aegis Manager', previewOnly: false },
 }

@@ -10,6 +10,7 @@ import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { StatusChip } from '../ui/StatusChip'
 import { PREVIEW_ONLY_TAG } from './previewOnlyTag'
+import '../app/page.css'
 import './equipment-preview.css'
 
 /**
