@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="fr-CA" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Référence Manager</title>
+<!--
+  Aegis Manager — rendered reference of the entry slice. NOT product code, NOT a spec by itself:
+  handoff.md is authoritative; this page proves the tokens and type roles on real pixels.
+  Params:
+    ?vue=accueil | connexion | equipements
+    &etat=<slug>   (connexion only; slugs match apps/admin-web preview: inactif, envoi,
+                    identifiants-refuses, validation, trop-de-tentatives, service-injoignable,
+                    erreur-service, session-expiree, session-invalide, role-non-autorise, deconnecte)
+    &theme=light|dark   &menu=1 (account menu open)   &apercu=1 (preview strip)
+    &transparency=reduce   &focus=<id> (static focus ring for evidence)
+  Fonts: Fontsource CDN for this document only; the product self-hosts the same npm packages.
+-->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/geist@5.3.0/index.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/geist-mono@5.3.0/index.css">
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="reference.css">
+<script>
+  (function () {
+    var q = new URLSearchParams(location.search);
+    document.documentElement.dataset.theme = q.get('theme') === 'dark' ? 'dark' : 'light';
+    if (q.get('transparency') === 'reduce') document.documentElement.dataset.transparency = 'reduce';
+  })();
+</script>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  const q = new URLSearchParams(location.search);
+  const vue = q.get('vue') || 'accueil';
+  const etat = q.get('etat') || 'inactif';
+  const theme = document.documentElement.dataset.theme;
+  const apercu = q.get('apercu') === '1';
+  const menuOpen = q.get('menu') === '1';
+
+  /* ---------------------------------------------------------------- icons (inline, authored for Aegis) */
+  const G = 'stroke="var(--ag-glyph)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"';
+  const S = 'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';
+  const I = {
+    'st-blocked': `<path d="M8.1 2.6h7.8l5.5 5.5v7.8l-5.5 5.5H8.1l-5.5-5.5V8.1z" fill="currentColor"/><path d="M7.5 12h9" ${G}/>`,
+    'st-error': `<path d="M8.1 2.6h7.8l5.5 5.5v7.8l-5.5 5.5H8.1l-5.5-5.5V8.1z" fill="currentColor"/><path d="M12 7.4v5.4" ${G}/><circle cx="12" cy="16.5" r="1.3" fill="var(--ag-glyph)"/>`,
+    'st-info': `<circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M12 11v5.4" ${G}/><circle cx="12" cy="7.6" r="1.3" fill="var(--ag-glyph)"/>`,
+    'st-clock': `<path d="M12 1.6L22.4 12 12 22.4 1.6 12z" fill="currentColor"/><path d="M12 7.6v4.6l2.8 1.8" ${G}/>`,
+    'st-offline': `<path d="M12 1.6L22.4 12 12 22.4 1.6 12z" fill="currentColor"/><path d="M8.3 10.6a5.4 5.4 0 0 1 7.4 0M8 8l8 8" ${G}/>`,
+    'st-online': `<circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M7.6 10.4a6.2 6.2 0 0 1 8.8 0M9.6 12.9a3.2 3.2 0 0 1 4.8 0" ${G}/><circle cx="12" cy="15.8" r="1.2" fill="var(--ag-glyph)"/>`,
+    'st-person': `<rect x="2.2" y="2.2" width="19.6" height="19.6" rx="5.5" fill="currentColor"/><circle cx="12" cy="10" r="2.8" ${G}/><path d="M7.4 17a5.2 5.2 0 0 1 9.2 0" ${G}/>`,
+    info: `<circle cx="12" cy="12" r="8.5" ${S}/><path d="M12 11v5.2" ${S}/><circle cx="12" cy="7.9" r="1.1" fill="currentColor"/>`,
+    arrow: `<path d="M5 12h14M13 6l6 6-6 6" ${S}/>`, down: `<path d="M12 5v14M6 13l6 6 6-6" ${S}/>`, back: `<path d="M19 12H5M11 6l-6 6 6 6" ${S}/>`,
+    grid: `<rect x="4" y="4" width="7" height="7" rx="2" ${S}/><rect x="13" y="4" width="7" height="7" rx="2" ${S}/><rect x="4" y="13" width="7" height="7" rx="2" ${S}/><rect x="13" y="13" width="7" height="7" rx="2" ${S}/>`,
+    box: `<path d="M12 3l8 4.3v9.4L12 21l-8-4.3V7.3z" ${S}/><path d="M4 7.3l8 4.4 8-4.4M12 11.7V21" ${S}/>`,
+    calendar: `<rect x="3.5" y="5" width="17" height="15.5" rx="3" ${S}/><path d="M3.5 10h17M8 3v4M16 3v4" ${S}/>`,
+    locker: `<rect x="4" y="3.5" width="16" height="17" rx="2.5" ${S}/><path d="M12 3.5v17M9.2 10.5v3M14.8 10.5v3" ${S}/>`,
+    alert: `<path d="M12 4l8.8 15.2H3.2z" ${S}/><path d="M12 10v4" ${S}/><circle cx="12" cy="16.9" r="1" fill="currentColor"/>`,
+    list: `<path d="M9 6.5h11M9 12h11M9 17.5h11" ${S}/><circle cx="5" cy="6.5" r="1.2" fill="currentColor"/><circle cx="5" cy="12" r="1.2" fill="currentColor"/><circle cx="5" cy="17.5" r="1.2" fill="currentColor"/>`,
+    updown: `<path d="M8 9.5l4-4 4 4M8 14.5l4 4 4-4" ${S}/>`, chevron: `<path d="M6 9.5l6 6 6-6" ${S}/>`,
+    lock: `<rect x="5" y="10.5" width="14" height="10" rx="2.5" ${S}/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" ${S}/>`,
+    history: `<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v3.2h3.2" ${S}/><path d="M12 8v4.3l2.8 1.7" ${S}/>`,
+    logout: `<path d="M10 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H10M14.5 8l4 4-4 4M18.5 12H9" ${S}/>`,
+    plus: `<path d="M12 5v14M5 12h14" ${S}/>`, menu: `<path d="M4 7h16M4 12h16M4 17h16" ${S}/>`
+  };
+  const ic = (n, cls) => `<svg class="ico ${cls || ''}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${I[n]}</svg>`;
+  const spinner = `<svg class="spinner" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-opacity=".3" stroke-width="2.6"/><path d="M21 12a9 9 0 0 0-9-9" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>`;
+  const mark = `<svg class="brand__mark" viewBox="0 0 26 26" aria-hidden="true" focusable="false"><defs><linearGradient id="agm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3366FF"/><stop offset="1" stop-color="#4B3BD9"/></linearGradient></defs><rect x="1" y="1" width="24" height="24" rx="7" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--ag-text)"/><path d="M13 1.8v22.4M1.8 13h22.4" stroke="currentColor" stroke-width="1.2" style="color:var(--ag-text-3)"/><rect x="14.6" y="14.6" width="8.6" height="8.6" rx="3" fill="url(#agm)"/></svg>`;
+  const brand = (href) => `<a class="brand" href="${href || '#'}" aria-label="Aegis Manager, accueil">${mark}<span class="brand__name">Aegis</span><span class="brand__sub">Manager</span></a>`;
+  /* Two layers (review R1): masked line grid + unmasked overlay with the same geometry holding only the lit cell.
+     `lit` = index at >= 768 px; `litCompact` = index below 768 px (null = no lit cell). */
+  const cells = (n, lit, cls, litCompact) => {
+    const line = Array.from({ length: n }, () => '<i></i>').join('');
+    const over = Array.from({ length: n }, (_, i) => `<i class="${i === lit ? 'lit lit--wide' : ''}${i === litCompact ? ' lit lit--compact' : ''}"></i>`).join('');
+    return `<div class="cells decor ${cls || ''}" aria-hidden="true">${line}</div><div class="cells cells--lit decor ${cls || ''}" aria-hidden="true">${over}</div>`;
+  };
+  const chip = (kind, icon, label, size) => `<span class="chip st-${kind}${size ? ' chip--' + size : ''}">${ic(icon)}${label}</span>`;
+
+  const strip = apercu ? `<div class="preview-strip" role="region" aria-label="Mode aperçu">
+      <span class="preview-strip__label">Mode aperçu — aucune connexion réelle, données fictives</span>
+      <span class="preview-strip__controls"><label>État <select><option>${etat}</option></select></label><label>Thème <select><option>${theme === 'dark' ? 'Sombre' : 'Clair'}</option></select></label></span>
+    </div>` : '';
+  if (apercu) document.documentElement.style.setProperty('--strip-h', '36px');
+
+  /* ================================================================ LANDING */
+  function accueil() {
+    const g = [
+      ['Disponibilité réelle', "Chaque équipement indique s'il peut servir; sinon, la raison précise : calibration expirée, maintenance, absence de sa cellule."],
+      ['Retrait conforme', "Le serveur refuse un retrait non autorisé ou non conforme; l'interface l'explique, elle ne le décide pas."],
+      ['Bonne cellule', "Seule la cellule attendue s'ouvre, après une autorisation valide. Une réservation ou un code affiché n'ouvre rien."],
+      ['Preuve physique', "Retrait et retour sont confirmés par des observations cohérentes du casier, jamais par un simple clic."],
+      ['Chaîne de possession', "Chaque action et chaque observation restent consultables dans l'audit, sans effacement."]
+    ];
+    return `${strip}<div class="landing">
+      <header class="l-head">${brand('#')}<a class="btn btn--secondary btn--sm" href="#connexion">Se connecter</a></header>
+      <main id="contenu">
+        <section class="l-hero" aria-labelledby="titre">
+          <div class="l-copy">
+            <p class="overline">Aegis Manager · console d'administration</p>
+            <h1 class="display" id="titre">Autorisé<span class="dot">.</span><br>Observé<span class="dot">.</span><br>Tracé<span class="dot">.</span></h1>
+            <p class="lead">Aegis montre si chaque équipement critique peut servir, n'ouvre que la cellule attendue et conserve une chaîne de possession complète, du retrait au retour.</p>
+            <div class="l-cta">
+              <a class="btn btn--primary btn--lg${q.get('focus') === 'cta' ? ' is-focus' : ''}" href="#connexion">Se connecter${ic('arrow')}</a>
+              <a class="link" href="#garanties">Voir les cinq garanties</a>
+            </div>
+            <p class="mention">${ic('info')}Compte fourni par votre administrateur.</p>
+          </div>
+          <div class="atmos">
+            ${cells(42, 15, '', 9)}
+            <figure class="atmos__figure">
+              <figcaption><span class="overline">Diagnostic d'un exemplaire</span><span class="mock">Exemple illustratif</span></figcaption>
+              <div class="mini-row">${chip('blocked', 'st-blocked', '1 empêchement')}<p class="mini-row__reason">Calibration expirée depuis le <span class="nowrap">8 sept. 2026</span></p><p class="mini-row__name">Multimètre 2<span class="mini-row__code">MM-002</span></p></div>
+              <div class="mini-row">${chip('neutral', 'st-info', 'Aucun empêchement détecté')}<p class="mini-row__name">Multimètre 1<span class="mini-row__code">MM-001</span></p></div>
+            </figure>
+          </div>
+        </section>
+        <section id="garanties" aria-label="Cinq garanties du P0">
+          <ol class="l-guarantees">${g.map(([t, d], i) => `<li><p class="g-num">0${i + 1}</p><h2 class="g-title">${t}</h2><p class="g-text">${d}</p></li>`).join('')}</ol>
+        </section>
+      </main>
+      <footer class="l-foot"><p>Prototype académique en cours de validation en laboratoire, conçu pour les équipes de maintenance et d'inspection.</p><p>Technicien ? Utilisez l'application Aegis sur iPhone.</p></footer>
+    </div>`;
+  }
+
+  /* ================================================================ SIGN-IN */
+  const EMAIL = 'admin@aegis.demo';
+  function alertBox(kind, icon, title, body, code) {
+    const role = kind === 'info' ? 'role="status"' : 'role="alert"';
+    return `<div class="alert${kind === 'error' ? '' : ' alert--' + kind}" ${role} id="form-alert">${ic(icon)}<div><p class="alert__title">${title}</p>${body ? `<p>${body}</p>` : ''}${code ? `<span class="alert__code">${code}</span>` : ''}</div></div>`;
+  }
+  function field(o) {
+    const err = o.error ? `<p class="field__error" id="${o.id}-err">${ic('st-error')}${o.error}</p>` : '';
+    const reveal = o.password ? `<button type="button" class="field__reveal" aria-controls="${o.id}">Afficher</button>` : '';
+    return `<div class="field"><label class="field__label" for="${o.id}">${o.label}</label>
+      <div class="field__control${o.focus ? ' is-focus' : ''}"${o.error ? ' data-invalid' : ''}${o.readonly ? ' data-readonly' : ''}>
+        <input id="${o.id}" name="${o.id}" type="${o.password ? 'password' : 'email'}" value="${o.value || ''}" autocomplete="${o.password ? 'current-password' : 'username'}"${o.error ? ` aria-invalid="true" aria-describedby="${o.id}-err"` : ''}${o.readonly ? ' readonly' : ''}>${reveal}
+      </div>${err}</div>`;
+  }
+  function connexion() {
+    const S = {
+      inactif: {}, envoi: { busy: true, email: EMAIL, pw: '••••••••••••••' },
+      'identifiants-refuses': { email: EMAIL, focus: 'password', alert: alertBox('error', 'st-error', 'Adresse courriel ou mot de passe incorrect.', 'Vérifiez les deux champs, puis réessayez.') },
+      validation: { email: 'admin@aegis', focus: 'email', emailErr: 'Saisissez une adresse courriel valide, par exemple nom@example.com.', pwErr: 'Saisissez votre mot de passe.' },
+      'trop-de-tentatives': { email: EMAIL, pw: '••••••••••••••', locked: true, alert: alertBox('warning', 'st-clock', 'Trop de tentatives.', 'Réessayez dans <span class="tnum">55</span> secondes.') },
+      'service-injoignable': { email: EMAIL, pw: '••••••••••••••', alert: alertBox('warning', 'st-offline', 'Connexion au service impossible.', 'Vérifiez le réseau, puis réessayez.') },
+      'erreur-service': { email: EMAIL, pw: '••••••••••••••', alert: alertBox('error', 'st-error', "Le service n'a pas pu traiter la connexion.", 'Réessayez dans un instant. Si le problème persiste, transmettez ce code au support :', '5f4bc22e-66a4-48ef-8bf3-6e7184d71c30') },
+      'session-expiree': { email: EMAIL, focus: 'password', alert: alertBox('info', 'st-clock', 'Votre session a expiré. Reconnectez-vous.', "L'expiration ne modifie ni les réservations, ni les prêts, ni les opérations en cours.") },
+      'session-invalide': { email: EMAIL, focus: 'password', alert: alertBox('info', 'st-info', "Votre session n'est plus valide. Reconnectez-vous.", "Aucune réservation, aucun prêt ni aucune opération n'a été modifié.") },
+      deconnecte: { alert: alertBox('info', 'st-info', 'Vous êtes déconnecté.', null) },
+      'role-non-autorise': { role: true }
+    }[etat] || {};
+    const locked = S.locked;
+    const btn = S.busy
+      ? `<button class="btn btn--primary btn--lg btn--block is-busy" type="submit" aria-disabled="true">${spinner}Connexion…</button><p class="sr-only" role="status">Connexion en cours.</p>`
+      : `<button class="btn btn--primary btn--lg btn--block" type="submit"${locked ? ' disabled aria-describedby="form-alert"' : ''}>Se connecter</button>${locked ? '<p class="s-hint tnum">Disponible dans 0:55</p>' : ''}`;
+    const form = S.role ? `
+      <div class="s-body s-result">
+        <div class="alert alert--warning" role="alert">${ic('st-person')}<div><p class="alert__title">Ce compte technicien s'utilise dans l'application Aegis.</p><p>Aegis Manager est réservé aux comptes administrateur. Aucune donnée n'a été chargée et la session a été fermée.</p></div></div>
+        <p class="who">Compte utilisé : <span class="tnum">technician@aegis.demo</span></p>
+        <button class="btn btn--primary btn--lg btn--block${q.get('focus') === 'other' ? ' is-focus' : ''}" type="button">Se connecter avec un autre compte</button>
+      </div>` : `
+      <form class="s-body" novalidate${S.busy ? ' aria-busy="true"' : ''}>
+        ${S.alert || ''}
+        ${field({ id: 'email', label: 'Adresse courriel', value: S.email, error: S.emailErr, focus: S.focus === 'email', readonly: S.busy })}
+        ${field({ id: 'password', label: 'Mot de passe', password: true, value: S.pw, error: S.pwErr, focus: S.focus === 'password', readonly: S.busy })}
+        ${btn}
+        <p class="s-mention">${ic('info')}Compte fourni par votre administrateur.</p>
+      </form>`;
+    return `${strip}<div class="signin-page">
+      <div class="decor-bg decor" aria-hidden="true"></div>${cells(98, 38, 'cells--page', null)}
+      <div class="s-top"><a class="btn btn--ghost btn--sm" href="#accueil">${ic('back')}Accueil</a></div>
+      <main class="s-center" id="contenu">
+        <div class="s-panel">
+          ${brand('#accueil')}
+          <h1 class="s-title" tabindex="-1">${S.role ? 'Accès réservé aux administrateurs' : 'Connexion'}</h1>
+          ${form}
+        </div>
+      </main>
+      <p class="s-foot">Technicien ? Utilisez l'application Aegis sur iPhone.</p>
+    </div>`;
+  }
+
+  /* ================================================================ SHELL + EQUIPMENT PREVIEW */
+  function equipements() {
+    const nav = [['grid', "Vue d'ensemble", 0], ['box', 'Équipements', 1], ['calendar', 'Réservations et prêts', 0], ['locker', 'Casiers', 0], ['alert', 'Anomalies', 0], ['list', 'Audit', 0]];
+    const menu = menuOpen ? `<div class="menu" id="account-menu" role="group" aria-label="Compte">
+        <div class="menu__id"><span class="menu__name">Administrateur Démo</span><span class="menu__mail">admin@aegis.demo</span></div>
+        <div class="menu__sep"></div>
+        <fieldset style="border:0;margin:0;padding:0;display:grid;gap:6px"><legend class="menu__label">Apparence</legend>
+          <div class="seg">${['Système', 'Clair', 'Sombre'].map((l, i) => `<label><input type="radio" name="appearance"${(theme === 'dark' ? 2 : 0) === i ? ' checked' : ''}>${l}</label>`).join('')}</div></fieldset>
+        <div class="menu__sep"></div>
+        <button class="menu__item" type="button">${ic('logout')}Se déconnecter</button>
+      </div>` : '';
+    const item = (o) => `<li><a class="item" href="#"${o.sel ? ' aria-current="true"' : ''}>
+        <span>${o.chip}</span>${o.reason ? `<span class="item__reason">${o.reason}</span>` : ''}
+        <span class="item__name">${o.name}<span class="item__code">${o.code}</span></span>
+        <span class="item__facts">${o.facts}</span></a></li>`;
+    return `${strip}<div class="shell">
+      <div class="decor-bg decor" aria-hidden="true"></div>
+      <a class="skip${q.get('focus') === 'skip' ? ' is-focus' : ''}" href="#contenu">Aller au contenu principal</a>
+      <nav class="side glass" aria-label="Sections">
+        ${brand('#')}
+        <ul class="nav">${nav.map(([i, l, cur]) => cur
+          ? `<li><a class="nav__item" href="#" aria-current="page">${ic(i)}${l}</a></li>`
+          : `<li><span class="nav__item nav__item--soon" aria-disabled="true">${ic(i)}${l}<span class="sr-only">, à venir</span><span class="soon" aria-hidden="true"></span></span></li>`).join('')}</ul>
+        <p class="nav__legend" aria-hidden="true"><span class="soon"></span>Section à venir</p>
+        <div class="account">${menu}
+          <button class="account__btn" type="button" aria-expanded="${menuOpen}" aria-controls="account-menu"><span class="avatar" aria-hidden="true">AD</span><span class="account__who"><span class="account__name">Administrateur Démo</span><span class="account__role">Administrateur</span></span>${ic('updown', 'account__chev')}</button>
+        </div>
+      </nav>
+      <div class="main">
+        <div class="topbar glass">${brand('#')}<button class="btn btn--ghost btn--sm" type="button" aria-label="Ouvrir le menu">${ic('menu')}</button></div>
+        <header class="phead">
+          <div><h1 class="phead__title">Équipements</h1>
+            <nav class="tabs glass" aria-label="Vues des équipements"><a href="#" aria-current="page">Exemplaires</a><span class="tab--soon" aria-disabled="true">Modèles<span class="sr-only">, à venir</span><span class="soon" aria-hidden="true"></span></span></nav></div>
+          <div class="phead__actions"><span class="lockerchip">${chip('ready', 'st-online', 'En ligne', null)}<span>Casier <span class="nowrap">AEGIS-DEMO-01</span> · dernier signal <span class="tnum nowrap">10 h 29</span></span></span>
+            <button class="btn btn--primary" type="button" aria-disabled="true" aria-describedby="apercu-note">${ic('plus')}Nouvel équipement</button></div>
+        </header>
+        <p class="previewbar" id="apercu-note">Aperçu visuel<span>Données illustratives, sans lien avec l'API; les actions sont inactives. La liste réelle arrive avec CAT-01.</span></p>
+        <main class="eq" id="contenu" tabindex="-1">
+          <section class="panel list" aria-labelledby="list-title">
+            <div class="list__head"><h2 class="list__title" id="list-title">2 exemplaires</h2><span class="list__meta">Diagnostic opérationnel</span></div>
+            <ul>
+              ${item({ chip: chip('neutral', 'st-info', 'Aucun empêchement détecté'), name: 'Multimètre 1', code: 'MM-001', facts: 'Disponible · Présent dans A1 · En service' })}
+              ${item({ sel: 1, chip: chip('blocked', 'st-blocked', '1 empêchement'), reason: 'Calibration expirée depuis le <span class="nowrap">8 sept. 2026</span>', name: 'Multimètre 2', code: 'MM-002', facts: 'Disponible · Présent dans A2 · En service' })}
+            </ul>
+            <p class="list__foot">Triés par code · diagnostic évalué à <span class="tnum">10 h 30</span>, heure du casier</p>
+          </section>
+          <section class="panel dossier" aria-labelledby="dossier-title">
+            <div class="dossier__scroll">
+              <p class="overline">Exemplaire sélectionné</p>
+              <h2 class="dossier__title" id="dossier-title">Multimètre 2 · MM-002</h2>
+              <p class="dossier__sub">Fluke 117 · Casier <span class="nowrap">AEGIS-DEMO-01</span>, cellule A2</p>
+              <div class="diag">
+                <p class="overline">Diagnostic opérationnel</p>
+                <div class="diag__row">${chip('blocked', 'st-blocked', '1 empêchement', 'lg')}<span class="diag__reason">Calibration expirée depuis le <span class="nowrap">8 sept. 2026</span></span></div>
+                <p class="diag__note">Empêchements non personnels connus (disponibilité, état de service, calibration, présence), évalués à <span class="tnum">10 h 30</span>. Une liste vide ne donne ni droit d'emprunt ni possibilité d'ouvrir le casier.</p>
+              </div>
+              <div class="cols">
+                <div><p class="overline sec-title">Faits dérivés <span class="ro">${ic('lock')}lecture seule</span></p>
+                  <dl class="facts">
+                    <div class="fact"><dt>Disponibilité</dt><dd>${chip('progress', 'st-info', 'Disponible')}</dd></div>
+                    <div class="fact"><dt>Présence</dt><dd>Présent dans A2</dd></div>
+                    <div class="fact"><dt>Calibration</dt><dd class="cal-expired">Expirée depuis le <span class="nowrap">8 sept. 2026</span></dd></div>
+                    <div class="fact"><dt>Placement</dt><dd class="tnum">AEGIS-DEMO-01 · A2</dd></div>
+                    <div class="fact"><dt>Numéro de série</dt><dd>Non renseigné</dd></div>
+                  </dl></div>
+                <div><p class="overline">Réglages modifiables</p>
+                  <div class="fields">
+                    <div class="field"><span class="field__label">Niveau d'accès requis</span><span class="select">Standard${ic('chevron')}</span></div>
+                    <div class="field"><span class="field__label">État de service</span><span class="select">En service${ic('chevron')}</span></div>
+                    <div class="field"><span class="field__label">Calibration requise</span><span class="switch"><span class="switch__track" aria-hidden="true"></span>Oui</span></div>
+                    <div class="field"><span class="field__label">Échéance de calibration</span><span class="select tnum">2026-09-08${ic('calendar')}</span><span class="help">Fuseau du casier : America/Toronto</span></div>
+                  </div></div>
+              </div>
+            </div>
+            <div class="dossier__foot"><a class="link" href="#">Historique dans Audit</a><span style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span class="hint" id="save-hint">Aucune modification</span><button class="btn" type="button" disabled aria-describedby="save-hint">Enregistrer les modifications</button></span></div>
+          </section>
+        </main>
+      </div>
+    </div>`;
+  }
+
+  document.getElementById('app').innerHTML = ({ accueil, connexion, equipements }[vue] || accueil)();
+})();
+</script>
+</body>
+</html>

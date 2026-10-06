@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Filaires Manager</title>
+<!--
+  Low-fidelity wireframes: hierarchy and task completion only. No colour, no font choice.
+  ?v=landing | connexion | shell   (width comes from the viewport: 1440 or 390)
+  Numbers in circles = reading / focus order.
+-->
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; background: #F4F4F4; color: #222; font: 14px/1.4 system-ui, -apple-system, sans-serif; }
+  .wf { min-height: 100vh; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .box { border: 1.5px solid #888; border-radius: 10px; background: #FFF; padding: 12px; position: relative; }
+  .hatch { background: repeating-linear-gradient(135deg, #E6E6E6 0 8px, #F4F4F4 8px 16px); border: 1.5px dashed #999; }
+  .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #666; }
+  .h1 { font-size: 44px; font-weight: 700; line-height: 1.02; letter-spacing: -.03em; }
+  .h2 { font-size: 26px; font-weight: 700; }
+  .t { color: #555; }
+  .bar { height: 12px; background: #CFCFCF; border-radius: 3px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; height: 44px; padding: 0 18px; border: 2px solid #222; border-radius: 10px; font-weight: 700; background: #222; color: #FFF; }
+  .btn--2 { background: #FFF; color: #222; }
+  .link { text-decoration: underline; }
+  .field { display: grid; gap: 4px; } .field .in { height: 44px; border: 1.5px solid #666; border-radius: 8px; background: #FFF; display: flex; align-items: center; justify-content: flex-end; padding: 0 10px; font-size: 12px; }
+  .n { position: absolute; top: -10px; left: -10px; width: 22px; height: 22px; border-radius: 50%; background: #222; color: #FFF; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+  .note { font-size: 12px; color: #444; background: #FFF8C8; border: 1px solid #D9C75A; border-radius: 6px; padding: 6px 8px; }
+  .row { display: flex; gap: 16px; align-items: center; }
+  .grid5 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0; border-top: 1.5px solid #888; }
+  .grid5 > div { padding: 12px; border-right: 1px solid #BBB; }
+  .cells { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .cells i { aspect-ratio: 1; border: 1px solid #AAA; border-radius: 6px; }
+  .cells i.lit { background: #222; }
+  .top { display: flex; justify-content: space-between; align-items: center; }
+  .split { display: grid; grid-template-columns: 7fr 5fr; gap: 24px; }
+  .signin { display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; flex: 1; }
+  .panel { width: 440px; max-width: 100%; display: grid; gap: 14px; padding: 28px; }
+  .shell { display: grid; grid-template-columns: 248px 1fr; gap: 20px; flex: 1; }
+  .side { display: flex; flex-direction: column; gap: 6px; }
+  .nav { height: 40px; border: 1px solid #BBB; border-radius: 8px; display: flex; align-items: center; padding: 0 10px; gap: 8px; }
+  .nav.cur { border: 2px solid #222; font-weight: 700; }
+  .nav.off { color: #777; border-style: dashed; }
+  .nav .tag { margin-left: auto; font-size: 10px; border: 1px solid #999; border-radius: 4px; padding: 1px 4px; }
+  .eq { display: grid; grid-template-columns: 400px 1fr; gap: 20px; flex: 1; }
+  .item { border: 1px solid #BBB; border-radius: 10px; padding: 10px; display: grid; gap: 6px; }
+  .item.sel { border: 2px solid #222; }
+  @media (max-width: 700px) {
+    .wf { padding: 16px; } .h1 { font-size: 40px; } .split { grid-template-columns: 1fr; }
+    .panel { padding: 20px; } .shell, .eq { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main id="wf" class="wf"></main>
+<script>
+const v = new URLSearchParams(location.search).get('v') || 'landing';
+const mobile = innerWidth < 700;
+const V = {
+landing: () => `
+  <div class="top box"><span class="n">1</span><b>▦ Aegis Manager</b><span class="row"><span class="t">${mobile ? '' : 'Lien discret'}</span><span class="btn btn--2">Se connecter</span></span></div>
+  <div class="split">
+    <div class="box" style="display:grid;gap:14px;padding:24px">
+      <span class="n">2</span>
+      <span class="lbl">Surtitre · console d'administration</span>
+      <div class="h1">Autorisé.<br>Observé.<br>Tracé.</div>
+      <div class="t">Promesse P0 en une phrase (lead, 2 lignes max. sur ordinateur).</div>
+      <div class="row" style="flex-wrap:wrap"><span class="btn" style="position:relative"><span class="n">3</span>Se connecter →</span><span class="link">Voir les cinq garanties</span></div>
+      <div class="t">ⓘ Compte fourni par votre administrateur.</div>
+      <div class="note">Une seule action principale. Aucun « Créer un compte ».</div>
+    </div>
+    <div class="box hatch" style="display:grid;gap:12px;align-content:space-between;${mobile ? 'min-height:220px' : 'min-height:420px'}">
+      <span class="lbl">Couche d'atmosphère (décor, aria-hidden)</span>
+      <div class="cells">${Array.from({length: mobile ? 8 : 20}, (_, i) => `<i class="${i === (mobile ? 6 : 10) ? 'lit' : ''}"></i>`).join('')}</div>
+      <div class="box" style="display:grid;gap:6px"><span class="lbl">Exemple illustratif (figure)</span><div class="bar" style="width:40%"></div><div class="bar" style="width:80%"></div><div class="bar" style="width:55%"></div></div>
+    </div>
+  </div>
+  <div class="box" id="garanties"><span class="n">4</span><span class="lbl">Cinq garanties P0 (01 → 05), lignes fines</span>
+    <div class="grid5" style="margin-top:8px">${['Disponibilité réelle', 'Retrait conforme', 'Bonne cellule', 'Preuve physique', 'Chaîne de possession'].map((t, i) => `<div><span class="lbl">0${i + 1}</span><br><b>${t}</b><div class="bar" style="margin-top:6px"></div><div class="bar" style="margin-top:4px;width:70%"></div></div>`).join('')}</div></div>
+  <div class="box"><span class="n">5</span><span class="t">Pied : prototype en validation au laboratoire · technicien → application iPhone</span></div>`,
+connexion: () => `
+  <div class="top"><span class="link">← Accueil</span>${mobile ? '' : '<span class="lbl">fond : atmosphère + grille (décor)</span>'}</div>
+  <div class="signin ${mobile ? '' : 'hatch'}" style="border-radius:16px;padding:${mobile ? 0 : 40}px">
+    <div class="box panel">
+      <span class="n">1</span>
+      <b>▦ Aegis Manager</b>
+      <div class="h2">Connexion</div>
+      <div class="box" style="border-style:dashed;position:relative"><span class="n">2</span><span class="lbl">Zone d'alerte (vide au repos)</span><div class="t">Erreur de formulaire, session expirée, trop de tentatives…</div></div>
+      <div class="field" style="position:relative"><span class="n">3</span><b>Adresse courriel</b><div class="in"></div><span class="t" style="font-size:12px">Erreur de champ sous le champ</span></div>
+      <div class="field" style="position:relative"><span class="n">4</span><b>Mot de passe</b><div class="in"><span class="btn btn--2" style="height:28px;padding:0 8px;font-size:12px;position:relative"><span class="n" style="top:-8px;left:-8px">5</span>Afficher</span></div></div>
+      <span class="btn" style="width:100%;position:relative"><span class="n">6</span>Se connecter</span>
+      <div class="t">ⓘ Compte fourni par votre administrateur.</div>
+      <div class="note">Ni « Créer un compte », ni « Mot de passe oublié », ni choix d'institution.</div>
+    </div>
+  </div>
+  <div class="t" style="text-align:center">Technicien ? Application Aegis sur iPhone.</div>`,
+shell: () => `
+  <div class="shell">
+    <div class="box side hatch"><span class="n">1</span>
+      <span class="btn btn--2" style="height:28px;font-size:12px">Aller au contenu principal</span>
+      <b style="padding:8px 4px">▦ Aegis Manager</b>
+      ${[['Vue d\'ensemble', 'off'], ['Équipements', 'cur'], ['Réservations et prêts', 'off'], ['Casiers', 'off'], ['Anomalies', 'off'], ['Audit', 'off']].map(([t, s]) => `<div class="nav ${s}">□ ${t}${s === 'off' ? '<span class="tag">À venir</span>' : ''}</div>`).join('')}
+      <div style="flex:1"></div>
+      <div class="box" style="display:grid;gap:6px;position:relative"><span class="n">2</span><span class="lbl">Menu du compte (ouvert)</span><b>Administrateur Démo</b><span class="t">Administrateur</span>
+        <span class="lbl">Apparence</span><div class="row" style="gap:4px"><span class="nav" style="height:28px">Système</span><span class="nav cur" style="height:28px">Clair</span><span class="nav" style="height:28px">Sombre</span></div>
+        <span class="link">Se déconnecter</span></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="top"><div><div class="h2">Équipements</div><span class="t">[Exemplaires | Modèles]</span></div><span class="row"><span class="t">Casier · en ligne</span><span class="btn">+ Nouvel équipement</span></span></div>
+      <div class="note">Bandeau « Aperçu visuel · données illustratives » (non issues de l'API)</div>
+      <div class="eq">
+        <div class="box" style="display:grid;gap:8px;align-content:start"><span class="n">3</span><span class="lbl">Liste maîtresse · statut en tête</span>
+          <div class="item"><span class="lbl">ⓘ Aucun empêchement détecté</span><b>Multimètre 1 · MM-001</b><div class="bar" style="width:70%"></div></div>
+          <div class="item sel"><span class="lbl">⬣ 1 empêchement</span><span>Calibration expirée depuis le 8 sept. 2026</span><b>Multimètre 2 · MM-002</b><div class="bar" style="width:70%"></div></div>
+        </div>
+        <div class="box" style="display:grid;gap:10px;align-content:start"><span class="n">4</span><span class="lbl">Dossier large</span>
+          <div class="h2">Multimètre 2 · MM-002</div>
+          <div class="box hatch"><span class="lbl">Diagnostic opérationnel</span><br>⬣ 1 empêchement — Calibration expirée…</div>
+          <div class="split" style="grid-template-columns:1fr 1fr"><div class="box"><span class="lbl">Faits dérivés · lecture seule</span><div class="bar" style="margin-top:8px"></div><div class="bar" style="margin-top:8px;width:60%"></div></div><div class="box"><span class="lbl">Réglages modifiables</span><div class="field" style="margin-top:8px"><div class="in"></div></div></div></div>
+          <div class="top" style="border-top:1px solid #BBB;padding-top:10px"><span class="link">Historique dans Audit</span><span class="btn btn--2">Enregistrer les modifications (inactif)</span></div>
+        </div>
+      </div>
+    </div>
+  </div>`
+};
+document.getElementById('wf').innerHTML = V[v]();
+</script>
+</body>
+</html>
