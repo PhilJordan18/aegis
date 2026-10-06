@@ -1,0 +1,536 @@
+/* Aegis — feuille d’impression du cahier de conception (Chrome, CSS Paged Media, A4). */
+
+:root {
+  --navy-950: #06152B;
+  --navy-900: #0B1F3A;
+  --navy-800: #0F2C46;
+  --blue-600: #1D4ED8;
+  --blue-500: #2F6FEB;
+  --sky-400: #58A6FF;
+  --indigo-700: #3730A3;
+  --indigo-600: #4338CA;
+  --violet-500: #7C6FE0;
+  --ink: #152033;
+  --ink-2: #3A4659;
+  --ink-3: #5B6679;
+  --line: #D6DFEE;
+  --line-2: #E6ECF6;
+  --tint: #F4F7FC;
+  --tint-2: #EDF2FB;
+  --tint-violet: #F4F2FE;
+  --diagram: #1e1e1e;
+  --sans: "Inter", "Helvetica Neue", Arial, sans-serif;
+  --display: "Inter Tight", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+}
+
+/* ------------------------------------------------------------ pages */
+
+@page {
+  size: A4;
+  margin: 21mm 19mm 19mm 19mm;
+  @top-left {
+    content: "Aegis · Cahier de conception P0";
+    font: 600 6.9pt/1 var(--sans);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #0F2C46;
+    vertical-align: bottom;
+    padding-bottom: 5.5mm;
+  }
+  @top-right {
+    content: "420-5X7-SO · Écosystème connecté · Automne 2026";
+    font: 500 6.9pt/1 var(--sans);
+    color: #5B6679;
+    vertical-align: bottom;
+    padding-bottom: 5.5mm;
+  }
+  @bottom-left {
+    content: "Philippe Jordan Monfouayi Mba · Yoël Jimmy Razafindretsa · 23 septembre 2026";
+    font: 400 6.8pt/1 var(--sans);
+    color: #5B6679;
+    vertical-align: top;
+    padding-top: 5mm;
+  }
+  @bottom-right {
+    content: counter(page) " / " counter(pages);
+    font: 600 7.4pt/1 var(--sans);
+    color: #0F2C46;
+    vertical-align: top;
+    padding-top: 5mm;
+  }
+}
+
+@page wide {
+  size: A4 landscape;
+  margin: 14mm 18mm 13mm 18mm;
+}
+
+@page cover {
+  margin: 0;
+  @top-left { content: none; }
+  @top-right { content: none; }
+  @bottom-left { content: none; }
+  @bottom-right { content: none; }
+}
+
+html {
+  font-family: var(--sans);
+  font-size: 9.5pt;
+  line-height: 1.47;
+  color: var(--ink);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern", "liga", "calt";
+}
+
+body { margin: 0; }
+main { display: block; }
+
+p { margin: 0 0 2.3mm; orphans: 3; widows: 3; }
+strong { font-weight: 600; color: #0D1828; }
+em { font-style: italic; }
+a { color: var(--indigo-600); text-decoration: none; }
+a.repo-link::after {
+  content: " (" attr(data-repo-path) ")";
+  font-family: var(--mono);
+  font-size: 0.8em;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+
+ul, ol { margin: 0 0 3mm; padding-left: 5.2mm; }
+li { margin: 0 0 0.6mm; padding-left: 0.6mm; }
+li > p { margin: 0; }
+ul li::marker { color: var(--indigo-600); }
+ol li::marker { color: var(--navy-800); font-weight: 600; }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.84em;
+  color: #26307A;
+  background: var(--tint-2);
+  border: 0.3pt solid #D9E2F2;
+  border-radius: 0.9mm;
+  padding: 0.05em 0.3em;
+  overflow-wrap: anywhere;
+}
+
+pre {
+  background: #F5F7FC;
+  border: 0.45pt solid var(--line);
+  border-left: 1.1mm solid var(--indigo-600);
+  border-radius: 2.2mm;
+  padding: 3.2mm 4mm;
+  margin: 2mm 0 4mm;
+  font-size: 7.8pt;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  break-inside: avoid;
+}
+pre code { background: none; border: 0; padding: 0; color: #1B2540; font-size: 1em; }
+
+/* ------------------------------------------------------------ headings */
+
+h1.chapter {
+  break-before: page;
+  break-after: avoid;
+  display: flex;
+  align-items: center;
+  gap: 4.2mm;
+  margin: 0 0 5.6mm;
+  padding-bottom: 3.8mm;
+  font-family: var(--display);
+  font-size: 21pt;
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  color: var(--navy-900);
+  position: relative;
+}
+h1.chapter::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0.5mm;
+  border-radius: 0;
+  background: linear-gradient(90deg, var(--navy-800) 0 82%, var(--blue-500) 82% 100%);
+  opacity: 1;
+}
+h1.chapter .h-num {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 11.5mm;
+  height: 11.5mm;
+  padding: 0 1.6mm;
+  box-sizing: border-box;
+  border-radius: 1.8mm;
+  background: var(--navy-900);
+  color: #FFFFFF;
+  font-size: 13.5pt;
+  font-weight: 700;
+  letter-spacing: 0;
+  box-shadow: none;
+}
+
+h2.section {
+  break-after: avoid;
+  margin: 5.8mm 0 2.5mm;
+  font-family: var(--display);
+  font-size: 12.6pt;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.005em;
+  color: var(--navy-900);
+}
+h2.section .h-num {
+  color: var(--indigo-600);
+  margin-right: 2.4mm;
+  font-variant-numeric: tabular-nums;
+}
+h1.chapter + h2.section { margin-top: 0; }
+h2.section--break { break-before: page; margin-top: 0; }
+h1.chapter--flow { break-before: auto; margin-top: 12mm; }
+.keep { break-inside: avoid; margin-bottom: 5mm; }
+.keep > figure.fig:last-child { margin-bottom: 0; }
+p:has(+ figure.fig) { break-inside: avoid; }
+section.landscape > h2.section:first-child { margin-top: 0; }
+
+/* Keep a heading with the start of its content. */
+h2.section + p, h2.section + ul, h2.section + ol,
+h2.section + .tbl, h2.section + .card { break-before: avoid; }
+
+/* ------------------------------------------------------------ cover */
+
+.cover {
+  page: cover;
+  width: 210mm;
+  height: 297mm;
+  box-sizing: border-box;
+  padding: 25mm 22mm 19mm;
+  display: flex;
+  flex-direction: column;
+  color: #FFFFFF;
+  background:
+    radial-gradient(118mm 92mm at 88% 10%, rgba(124, 111, 224, 0.38), rgba(124, 111, 224, 0) 70%),
+    radial-gradient(150mm 120mm at -8% 104%, rgba(47, 111, 235, 0.32), rgba(47, 111, 235, 0) 70%),
+    linear-gradient(158deg, #06152B 0%, #0B1F3A 40%, #17245A 78%, #231C58 100%);
+  overflow: hidden;
+  break-after: page;
+}
+.cover-kicker {
+  font: 600 8.4pt/1 var(--sans);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #9FC3FF;
+}
+.cover-title {
+  margin: 7mm 0 5mm;
+  font: 800 66pt/0.92 var(--display);
+  letter-spacing: -0.035em;
+  color: #FFFFFF;
+}
+.cover-lede {
+  margin: 0;
+  max-width: 150mm;
+  font: 400 15.5pt/1.34 var(--sans);
+  color: #DCE7F8;
+}
+.cover-course {
+  margin: 6mm 0 0;
+  font: 600 10pt/1.3 var(--sans);
+  letter-spacing: 0.02em;
+  color: #FFFFFF;
+}
+.cover-art {
+  width: 128mm;
+  height: auto;
+  margin: 10mm 0 0 auto;
+  display: block;
+}
+.cover-panel {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4.4mm 9mm;
+  padding: 6.2mm 7mm;
+  border-radius: 4.2mm;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.035));
+  border: 0.5pt solid rgba(191, 211, 255, 0.28);
+  box-shadow: inset 0 0.3mm 0 rgba(255, 255, 255, 0.10);
+}
+.cover-item { display: flex; flex-direction: column; gap: 1.2mm; }
+.cover-k {
+  font: 600 6.6pt/1 var(--sans);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #9FB6DA;
+}
+.cover-v { font: 500 9.6pt/1.4 var(--sans); color: #FFFFFF; }
+.cover-status {
+  margin-top: 4.5mm;
+  padding: 4mm 5mm;
+  border-radius: 3.2mm;
+  background: rgba(88, 166, 255, 0.10);
+  border: 0.5pt solid rgba(88, 166, 255, 0.40);
+  font: 400 8.5pt/1.5 var(--sans);
+  color: #DCE7F8;
+}
+.cover-status strong { color: #FFFFFF; }
+
+/* ------------------------------------------------------------ table of contents */
+
+nav.toc { break-before: page; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; }
+nav.toc li { margin: 0; padding: 0; }
+nav.toc a {
+  display: flex;
+  align-items: baseline;
+  color: inherit;
+}
+nav.toc .toc-l1 {
+  margin-top: 2.6mm;
+  font-weight: 650;
+  font-size: 9.6pt;
+  color: var(--navy-900);
+  break-after: avoid;
+}
+nav.toc .toc-l2 {
+  margin-top: 0.7mm;
+  padding-left: 9mm;
+  font-size: 8.6pt;
+  color: var(--ink-2);
+}
+nav.toc .toc-num {
+  flex: none;
+  min-width: 7mm;
+  padding-right: 1.8mm;
+  color: var(--indigo-600);
+  font-variant-numeric: tabular-nums;
+}
+nav.toc .toc-l1 .toc-num { min-width: 9mm; }
+nav.toc .toc-l2 .toc-num { min-width: 11mm; }
+nav.toc .toc-t { flex: none; max-width: 140mm; }
+nav.toc .toc-dots {
+  flex: 1;
+  margin: 0 1.8mm 0.8mm;
+  border-bottom: 0.7pt dotted #AEBBD3;
+}
+nav.toc .toc-pg {
+  flex: none;
+  min-width: 7mm;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--navy-800);
+}
+
+/* ------------------------------------------------------------ callouts and cards */
+
+.callout {
+  margin: 4mm 0 4.5mm;
+  padding: 3.8mm 4.6mm;
+  border-radius: 1.6mm;
+  border: 0.45pt solid #D5DDEA;
+  background: #F7F9FC;
+  break-inside: avoid;
+}
+.callout p:last-child { margin-bottom: 0; }
+.callout--status { border-left: 0.9mm solid #5B5BD6; }
+.callout p:first-child > strong:first-child { font-weight: 600; color: var(--navy-900); }
+
+.card {
+  margin: 0 0 3mm;
+  padding: 3.4mm 4.4mm 3mm;
+  border-radius: 1.6mm;
+  border: 0.45pt solid #D5DDEA;
+  break-inside: avoid;
+}
+.card p:last-child { margin-bottom: 0; }
+.card--reasoning {
+  background: #F7F9FC;
+  border-left: 0.9mm solid var(--blue-500);
+}
+.card--open {
+  background: #F8F7FC;
+  border-left: 0.9mm solid var(--violet-500);
+}
+.card strong:first-child { color: var(--navy-900); }
+
+/* ------------------------------------------------------------ tables */
+
+.tbl { margin: 3.2mm 0 5mm; }
+.tbl--keep { break-inside: avoid; }
+.tbl-caption {
+  margin: 0 0 1.8mm;
+  font-size: 8.4pt;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--navy-900);
+  break-after: avoid;
+}
+.tbl-label, .fig-label {
+  display: inline-block;
+  margin-right: 1.8mm;
+  font-size: 7.1pt;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--indigo-600);
+}
+.tbl-note {
+  margin: 0 0 2.2mm;
+  font-size: 7.9pt;
+  line-height: 1.45;
+  color: var(--ink-2);
+  break-after: avoid;
+}
+
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 8.1pt;
+  line-height: 1.4;
+  border: 0.5pt solid var(--line);
+  border-radius: 1.4mm;
+}
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+th {
+  text-align: left;
+  vertical-align: bottom;
+  padding: 1.8mm 2.4mm;
+  font-size: 7.6pt;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--navy-900);
+  background: #EDF2F8;
+  border-bottom: 0.75pt solid #B9C7DC;
+}
+th:first-child { border-top-left-radius: 1.4mm; }
+th:last-child { border-top-right-radius: 1.4mm; }
+td {
+  padding: 1.5mm 2.4mm;
+  vertical-align: top;
+  border-bottom: 0.4pt solid var(--line-2);
+}
+tbody tr:nth-child(even) td { background: #F8FAFD; }
+tbody tr:last-child td { border-bottom: 0; }
+td code, th code { font-size: 0.86em; }
+td strong { color: var(--navy-900); }
+
+#tableau-20 th:nth-child(3),
+#tableau-20 td:nth-child(3) { text-align: center; }
+
+#tableau-20 th:nth-child(4),
+#tableau-20 td:nth-child(4),
+#tableau-20 th:nth-child(5),
+#tableau-20 td:nth-child(5),
+#tableau-21 th:last-child,
+#tableau-21 td:last-child {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------ figures */
+
+figure.fig {
+  margin: 4mm 0 5mm;
+  break-inside: avoid;
+}
+.fig-media {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 9mm;
+}
+.fig-media img { display: block; }
+figcaption {
+  margin: 2.5mm auto 0;
+  max-width: 172mm;
+  font-size: 8.4pt;
+  line-height: 1.42;
+  color: var(--ink-2);
+}
+.fig-title { font-weight: 600; color: var(--navy-900); margin-right: 0.6mm; }
+
+.fig--ui-pair .fig-media img {
+  box-sizing: border-box;
+  border-radius: 5.5mm;
+  border: 0.5pt solid rgba(15, 44, 70, 0.26);
+}
+.fig--web .fig-media img,
+.fig--render3d .fig-media img {
+  box-sizing: border-box;
+  border-radius: 2.6mm;
+  border: 0.5pt solid rgba(15, 44, 70, 0.28);
+}
+.fig--schematic .fig-media img {
+  box-sizing: border-box;
+  border-radius: 2.4mm;
+  border: 0.45pt solid rgba(15, 44, 70, 0.28);
+}
+.fig--diagram .fig-media {
+  background: var(--diagram);
+  border-radius: 3.2mm;
+  padding: 4.5mm 4mm;
+}
+.fig--diagram svg { display: block; font-size: 16px; line-height: normal; }
+.fig--diagram svg p { margin: 0; orphans: 1; widows: 1; }
+.fig--diagram svg strong { color: inherit; }
+.fig--part + .fig--part { break-before: page; }
+.nobr { white-space: nowrap; }
+p:has(+ figure.fig), p:has(+ pre), p:has(+ .tbl) { break-after: avoid; }
+
+.status {
+  display: inline-block;
+  margin-left: 0.8mm;
+  padding: 0.25mm 2.2mm 0.35mm;
+  border-radius: 8mm;
+  font-size: 7.1pt;
+  font-weight: 600;
+  font-style: normal;
+  line-height: 1.45;
+}
+.status em { font-style: normal; }
+.status--normative { background: #E9EFFA; color: #0F2C46; border: 0.45pt solid #BFD0EE; }
+.status--illustration { background: #EAF2FF; color: #1D4ED8; border: 0.45pt solid #C3D8FF; }
+.status--proposal { background: var(--tint-violet); color: #4C3FB8; border: 0.45pt solid #D6D0F7; }
+.status--poc { background: #FFF5E3; color: #875600; border: 0.45pt solid #EFD6A2; }
+
+/* ------------------------------------------------------------ landscape pages */
+
+section.landscape { page: wide; }
+section.landscape figure.fig { margin: 0; }
+section.landscape figure.fig + figure.fig { break-before: page; }
+section.landscape figcaption { max-width: 250mm; }
+section.landscape .tbl { margin-top: 0; }
+section.landscape table { font-size: 7.1pt; }
+section.landscape .notes {
+  column-count: 2;
+  column-gap: 8mm;
+  margin: 2.6mm 0 0;
+  padding-top: 2.2mm;
+  border-top: 0.5pt solid var(--line);
+  break-inside: avoid;
+}
+section.landscape .notes p { font-size: 8.8pt; line-height: 1.42; margin: 0 0 1.4mm; }
+section.landscape .notes p:last-child { margin-bottom: 0; }
+section.landscape p.lead { max-width: 172mm; margin: 0 auto 3.5mm; }
+/* A lead-in paragraph shares the landscape page: cap the screen so its caption stays on it. */
+section.landscape .keep--lead .fig--web .fig-media img { width: auto !important; height: 144mm !important; }
+
+/* ------------------------------------------------------------ annex details */
+
+#sec-annexe-c-references ~ ul a[href^="http"]::after {
+  content: " — " attr(href);
+  color: var(--ink-3);
+  font-size: 0.86em;
+  overflow-wrap: anywhere;
+}
