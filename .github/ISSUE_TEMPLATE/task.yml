@@ -1,0 +1,33 @@
+name: Enabler, POC or chore
+description: Technical foundation, hardware proof of concept, tooling or documentation
+title: "<ID> · "
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options: [enabler, poc, chore, docs]
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+    validations:
+      required: true
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Acceptance criteria
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+  - type: textarea
+    id: references
+    attributes:
+      label: References

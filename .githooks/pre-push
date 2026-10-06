@@ -1,0 +1,25 @@
+#!/bin/sh
+# main and dev only change through reviewed pull requests; issue branches
+# follow <issue>-<type>-<slug> (CONTRIBUTING.md).
+pattern='^[0-9]+-(feat|fix|docs|test|refactor|perf|build|ci|chore|revert)-[a-z0-9]+(-[a-z0-9]+)*$'
+status=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  branch=${remote_ref#refs/heads/}
+  [ "$branch" = "$remote_ref" ] && continue
+  case "$branch" in
+    main|dev)
+      echo "pre-push: pushing to '$branch' is not allowed; open a pull request instead." >&2
+      status=1
+      continue
+      ;;
+  esac
+  case "$local_sha" in
+    *[!0]*) ;;
+    *) continue ;;  # deleting a remote branch
+  esac
+  if ! printf '%s\n' "$branch" | grep -Eq "$pattern"; then
+    echo "pre-push: branch '$branch' does not match <issue>-<type>-<slug>, e.g. 25-feat-asset-catalog." >&2
+    status=1
+  fi
+done
+exit $status
