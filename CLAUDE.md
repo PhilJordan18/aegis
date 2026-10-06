@@ -67,4 +67,6 @@ When running as a teammate:
 - do not edit a file owned by another teammate;
 - send blockers, contract changes, and migration concerns to the relevant owner;
 - return verification evidence, limitations, and a concise handoff;
+- never commit on `main` or `dev`; the lead owns the delivery gate and the
+  pull request described in `AGENTS.md`;
 - do not create nested teammates unless the human explicitly requests it.

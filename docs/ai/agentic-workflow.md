@@ -230,10 +230,14 @@ dépendre silencieusement de la branche principale.
 3. Corriger les constats prouvés avec le propriétaire approprié.
 4. Relancer uniquement les vérifications affectées, puis la suite élargie.
 
-### Handoff
+### Handoff et livraison
 
 Résumer le résultat, les fichiers, contrats, migrations, commandes exécutées,
 résultats observés, limites, risques et prochain propriétaire.
+
+Ce rapport constitue la porte de livraison : l'agent s'arrête après l'avoir
+présenté. Seule la réponse humaine « deliver » autorise le push de la branche
+d'issue et l'ouverture de la PR vers `dev` (voir `CONTRIBUTING.md`).
 
 ## 9. Exemple de bonne demande
 

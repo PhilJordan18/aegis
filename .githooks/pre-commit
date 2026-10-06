@@ -1,0 +1,11 @@
+#!/bin/sh
+# main and dev only change through reviewed pull requests (CONTRIBUTING.md).
+branch=$(git symbolic-ref --short -q HEAD)
+case "$branch" in
+  main|dev)
+    echo "pre-commit: direct commits on '$branch' are not allowed." >&2
+    echo "Create an issue branch: git switch -c <issue>-<type>-<slug> dev" >&2
+    exit 1
+    ;;
+esac
+exit 0
