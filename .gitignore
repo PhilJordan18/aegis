@@ -776,3 +776,6 @@ CLAUDE.local.md
 # Local development credentials. The committed example is safe for an isolated simulator only.
 infra/docker/.env
 
+
+# JetBrains project files (local IDE state)
+.idea/
