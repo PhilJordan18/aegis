@@ -1,0 +1,36 @@
+name: Branch policy
+
+on:
+  pull_request:
+    branches: [main, dev]
+    types: [opened, edited, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  source-branch:
+    name: Source branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the head branch against the base branch
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REPO" != "$REPO" ]; then
+            echo "::error::Pull requests must come from a branch of $REPO."
+            exit 1
+          fi
+          if [ "$BASE_REF" = "main" ]; then
+            if [ "$HEAD_REF" != "dev" ]; then
+              echo "::error::Only dev may target main (got $HEAD_REF)."
+              exit 1
+            fi
+            exit 0
+          fi
+          if ! printf '%s\n' "$HEAD_REF" | grep -Eq '^[0-9]+-(feat|fix|docs|test|refactor|perf|build|ci|chore|revert)-[a-z0-9]+(-[a-z0-9]+)*$'; then
+            echo "::error::Branch '$HEAD_REF' must be named <issue>-<type>-<slug>, e.g. 25-feat-asset-catalog."
+            exit 1
+          fi

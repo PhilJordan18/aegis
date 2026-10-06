@@ -71,7 +71,8 @@ Request a human decision before:
 - performing destructive data changes;
 - changing deployment or authentication strategy;
 - altering hardware electrical assumptions;
-- committing, pushing, merging, or releasing.
+- committing, pushing, merging, or releasing;
+- opening a pull request (see the delivery gate).
 
 ## ADR triggers
 
@@ -121,6 +122,20 @@ python3 .claude/skills/aegis-delivery/scripts/validate_agent_setup.py
 Treat reported configuration errors as blocking. Documentation warnings require
 human review but do not authorize an automatic rewrite of the affected source.
 
+## Branches
+
+Work happens on an issue branch created from an up-to-date `dev`:
+
+```bash
+git switch dev
+git pull --ff-only
+git switch -c <issue>-<type>-<slug>
+```
+
+`<type>` is a Conventional Commit type and `<slug>` a short kebab-case summary,
+for example `25-feat-asset-catalog`. Never commit on `main` or `dev` and never
+push to them; the versioned hooks in `.githooks/` reject both.
+
 ## Commits
 
 Commit only after explicit human authorization. Before committing:
@@ -135,6 +150,23 @@ Commit only after explicit human authorization. Before committing:
 
 Use `fix` when restructuring is part of correcting a defect. Use `refactor`
 only when observable behavior is intentionally unchanged.
+
+## Delivery gate
+
+No pull request is opened without this gate.
+
+1. Re-read the issue and check every acceptance criterion as met or remaining.
+2. Run the verification of this skill and record exact commands and results.
+3. Confirm that no secret, generated artifact, or unrelated change is staged.
+4. Write the delivery report in the handoff format below, in English.
+5. Stop and present the report to the human.
+
+Only an explicit "deliver" from the human authorizes pushing the branch and
+opening the pull request into `dev`. Use the report as the pull request body
+with `Closes #<issue>`, and a Conventional Commit pull request title.
+
+Never merge a pull request. Never open a pull request into `main` unless a
+human explicitly asks; `main` only receives `dev`.
 
 ## Handoff format
 

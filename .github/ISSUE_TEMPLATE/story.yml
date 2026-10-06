@@ -1,0 +1,43 @@
+name: Story
+description: User-facing capability from the story map (doc 11)
+title: "<ID> · "
+labels: ["type: story"]
+body:
+  - type: textarea
+    id: story
+    attributes:
+      label: Story
+      placeholder: As a <actor>, I want <capability>, so that <value>.
+    validations:
+      required: true
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Acceptance criteria
+      description: Testable conditions, including refusals and duplicates.
+      value: |
+        - [ ] Given ..., when ..., then ...
+        - [ ] Given a refusal case, when ..., then a stable error and no business effect
+        - [ ] A repetition or duplicate produces no second business effect
+    validations:
+      required: true
+  - type: textarea
+    id: tasks
+    attributes:
+      label: Tasks
+      value: |
+        - [ ] API
+        - [ ] DB
+        - [ ] Web
+        - [ ] iOS
+        - [ ] Tests
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      placeholder: "#25 CAT-01"
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Doc sections and contracts this story must respect.
