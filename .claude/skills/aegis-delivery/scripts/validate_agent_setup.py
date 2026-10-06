@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -16,6 +17,8 @@ except ModuleNotFoundError:  # Python 3.9 and 3.10 on older macOS installations.
 
 
 ROOT = Path(__file__).resolve().parents[4]
+# Used only when Git cannot list the files; dependency READMEs are not ours to fix.
+IGNORED_DIRECTORIES = {".git", "node_modules", "dist", "dist-preview", "target", "test-results"}
 ERRORS: list[str] = []
 WARNINGS: list[str] = []
 
@@ -146,11 +149,27 @@ def validate_stale_routes() -> None:
                 )
 
 
+def markdown_files() -> list[Path]:
+    """Return the Markdown files Git tracks or would track, skipping ignored paths."""
+    try:
+        listing = subprocess.run(
+            ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.md"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+        ).stdout.decode("utf-8")
+    except (OSError, subprocess.CalledProcessError, UnicodeError):
+        warning("Git could not list files; Markdown links checked with a fixed ignore list")
+        return sorted(
+            path for path in ROOT.rglob("*.md")
+            if not IGNORED_DIRECTORIES.intersection(path.relative_to(ROOT).parts)
+        )
+    return sorted(path for path in (ROOT / name for name in listing.split("\0") if name) if path.is_file())
+
+
 def validate_markdown_links() -> None:
     link_pattern = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
-    for path in sorted(ROOT.rglob("*.md")):
-        if ".git" in path.parts:
-            continue
+    for path in markdown_files():
         for target in link_pattern.findall(read_text(path)):
             clean = target.strip().split("#", 1)[0]
             if not clean or clean.startswith(("http://", "https://", "mailto:")):
