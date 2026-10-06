@@ -26,7 +26,7 @@ aegis-dark: "#111827"
 | Équipe | Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa |
 | Enseignants | Alexandre Vovan, Jean-Philippe Hébert et Jordan Rioux-Leclair |
 | Date du document | 23 septembre 2026 |
-| Remise du cahier | Semaine 4, le 23 septembre 2026 au soir, selon l’échéance confirmée par l’équipe |
+| Remise du cahier | Semaine 4, le 23 septembre 2026 |
 | Statut | Conception du P0; choix matériels à confirmer après les POC |
 
 > **Statut du document.** Ce cahier synthétise la conception du P0 avant le
@@ -51,7 +51,7 @@ central est une **disponibilité opérationnelle** (*readiness*) explicite :
 
 Le P0 démontre un parcours complet et traçable : configuration d’un actif,
 évaluation de sa disponibilité opérationnelle, réservation, contrôle local par
-QR, ouverture du bon
+QR, déverrouillage du bon
 compartiment, confirmation physique du retrait, création du prêt, retour et fin
 de la chaîne de possession. Les actions sensibles sont auditables et résistent
 aux doublons, aux expirations et aux événements désordonnés.
@@ -93,12 +93,14 @@ présenté au cours de la session.
 
 Le P0 doit permettre de :
 
-- gérer des comptes de démonstration pour les techniciens et administrateurs;
+- fournir des comptes préparés pour les techniciens et administrateurs, sans
+  inscription publique;
 - configurer deux actifs et leur affectation aux cellules A1 et A2;
-- calculer la disponibilité opérationnelle selon la présence, la disponibilité, l’état, la
-  calibration et le niveau d’accès;
+- calculer la disponibilité opérationnelle selon la présence, la disponibilité
+  transactionnelle (réservation, prêt), l’état de service, la calibration et le
+  niveau d’accès;
 - réserver un actif admissible dans une plage d’exploitation valide;
-- exiger un QR temporaire affiché localement avant chaque ouverture métier;
+- exiger un QR temporaire affiché localement avant chaque déverrouillage métier;
 - cibler uniquement le compartiment attendu;
 - créer un prêt après un retrait physiquement confirmé;
 - terminer un prêt après un retour physiquement confirmé;
@@ -113,8 +115,9 @@ Le P0 doit permettre de :
 - La disponibilité opérationnelle est calculée; elle n’est jamais modifiée comme un simple booléen.
 - Un actif possède au plus une réservation active et un prêt actif.
 - Un technicien possède au plus une réservation active.
-- Une réservation ou un QR ne commande jamais seul une ouverture.
-- Un ACK du hub ne prouve ni un retrait ni un retour.
+- Une réservation ou un QR ne commande jamais seul un déverrouillage.
+- Un accusé de commande (ACK) du hub ne prouve ni l’ouverture, ni un retrait,
+  ni un retour.
 - Une commande ou un événement dupliqué ne produit pas un second effet métier.
 - Une opération expirée, consommée ou destinée à une autre cellule est refusée.
 - Un prêt en retard garde l’actif indisponible.
@@ -130,8 +133,10 @@ disponibilité 24/7 ou un gain financier mesuré chez un client réel.
 
 L’autorisation métier hors ligne, Android, AI Vision, le multi-site, les
 intégrations ERP/CMMS, les analyses prédictives, les réservations récurrentes et
-une garantie anti-relais du QR sont hors périmètre. Ces limites protègent le parcours
-central et la date de livraison.
+une garantie anti-relais du QR sont hors périmètre. Le P0 dessert une seule
+institution par déploiement, avec des comptes préparés, sans inscription
+publique ni sélection d’institution. Ces limites protègent le parcours central
+et la date de livraison.
 
 # 4. Scénario de démonstration
 
@@ -141,26 +146,32 @@ Deux équipements comparables sont configurés :
 
 **Tableau 2 — Conditions initiales du scénario de démonstration.**
 
-| Actif | Situation initiale | Résultat attendu |
+| Actif et cellule | Situation initiale | Résultat attendu |
 |---|---|---|
-| A1 | Présent, disponible, fonctionnel, calibré et accessible | `READY` |
-| A2 | Présent et disponible, mais calibration expirée | `BLOCKED` avec `CALIBRATION_EXPIRED` |
+| Multimètre 1 (`MM-001`), cellule A1 | Présent, disponible, fonctionnel, calibré et accessible | `READY` |
+| Multimètre 2 (`MM-002`), cellule A2 | Présent et disponible, mais calibration expirée | `BLOCKED` avec `CALIBRATION_EXPIRED` |
 
-Un administrateur prépare les actifs, les tags, les cellules, l’horaire et les
-comptes. Le hub est en ligne, l’écran fonctionne et les deux cellules sont
+Les codes `MM-001` et `MM-002`, le modèle Fluke 117 et l’expiration de la
+calibration de MM-002 au 8 septembre 2026 sont des **données de démonstration**,
+cohérentes avec les contrats; ce ne sont pas des faits matériels vérifiés sur des
+appareils réels. Un administrateur prépare les actifs, les tags, les cellules,
+l’horaire et les comptes. Le hub est en ligne, l’écran fonctionne et les deux cellules sont
 fermées.
 
 ## 4.2 Démonstration nominale
 
 1. Le technicien se connecte à Aegis Mobile.
-2. Il voit A1 prêt et A2 bloqué avec une raison explicite.
-3. Il réserve A1 jusqu’à une heure permise par l’horaire.
-4. Il prépare le retrait; aucune serrure ne s’ouvre à cette étape.
+2. Il voit MM-001 prêt à l’emprunt (`READY`) et MM-002 bloqué avec une raison
+   explicite.
+3. Il réserve MM-001 jusqu’à une heure permise par l’horaire.
+4. Il prépare le retrait; aucune serrure n’est déverrouillée à cette étape.
 5. Le hub affiche un QR temporaire propre à l’opération.
 6. Le technicien scanne le QR avec l’iPhone.
 7. Le service central revalide les droits et consomme le défi une seule fois.
 8. Une commande MQTT cible uniquement la cellule A1.
-9. Le hub accuse la commande, ouvre A1 et remonte les observations de porte et
+9. Le hub accuse la commande et actionne la serrure de A1. Cet accusé ne prouve
+   ni l’ouverture ni le retrait : le technicien ouvre ensuite la porte, retire
+   l’actif et referme, tandis que le hub remonte les observations de porte et
    d’actif.
 10. Après une séquence cohérente, le service central confirme le retrait et crée le prêt.
 11. Le technicien exécute un nouveau parcours local pour le retour.
@@ -170,7 +181,7 @@ fermées.
 
 La présentation inclut au minimum :
 
-- le refus de réserver A2 en raison de sa calibration;
+- le refus de réserver MM-002 en raison de sa calibration;
 - le refus d’un QR expiré, rejoué ou soumis par un autre compte;
 - l’absence de double effet lors de la rediffusion d’un message MQTT;
 - le ciblage exclusif de A1 ou A2;
@@ -216,20 +227,7 @@ prêts, les anomalies et l’audit. Un administrateur peut reconnaître une anom
 et documenter son intervention, mais ne peut pas la marquer arbitrairement comme
 résolue.
 
-## 5.3 Aperçu des interfaces
-
-![Parcours essentiels des interfaces iOS et Web](../design/aegis-parcours-ui.svg)
-
-**Figure 1 — Maquettes fonctionnelles du P0.** L’application iOS privilégie
-l’action immédiate du technicien : comprendre pourquoi un actif est disponible
-ou bloqué, réserver, scanner puis suivre l’opération. L’administration Web
-privilégie la densité utile : état des casiers, anomalies, prêts et actions de
-configuration. La couleur n’est jamais l’unique porteur d’information; chaque
-statut comporte un libellé et un symbole. Cette illustration historique n'est
-pas une maquette approuvée pour l'implémentation; la navigation retenue et les
-écrans détaillés doivent être distingués de sa présentation exploratoire.
-
-## 5.4 Navigation et identité visuelle
+## 5.3 Navigation et identité visuelle
 
 La structure de navigation retenue le 23 septembre 2026 comprend trois sections
 sur iOS — **Équipements**, **Mon activité**, **Compte** — et six sections sur le
@@ -247,11 +245,72 @@ n'impose pas une disposition identique sur téléphone et ordinateur.
 La transparence et le mouvement soutiennent la hiérarchie sans masquer les
 statuts, les raisons de blocage ou les consignes physiques. Des surfaces opaques
 et une présentation sans animation doivent préserver l'usage lorsque ces effets
-sont réduits. La famille typographique, les valeurs de couleurs et les maquettes
-détaillées restent à valider. Le [brief de direction visuelle](../design/asset-lifecycle/direction-validee.md)
-consigne les références, les limites et les écrans à préciser avant réalisation.
+sont réduits.
+
+Après la comparaison de deux traitements sur les mêmes données, en thèmes clair
+et sombre, Philippe a retenu le traitement A sur les deux plateformes le
+23 septembre 2026 : le statut précède l’identité de l’équipement, et la gestion des équipements Web
+associe une liste à un dossier détaillé. Restent à valider avant réalisation :
+les valeurs définitives des couleurs et des espacements, une police Web sous
+licence (SF Pro convient à l’application iOS, mais pas à une console Web
+publique), le libellé « Aucun empêchement détecté » et les états défavorables.
+Le [dossier de conception des interfaces](../design/asset-lifecycle/jeu-cahier.md)
+conserve les sources modifiables, la comparaison historique et la liste des
+écrans restants.
+
+## 5.4 Aperçu des interfaces (traitement A)
+
+Les figures 1 à 3 illustrent le traitement visuel A, « Verre lumineux »,
+retenu par Philippe le 23 septembre 2026 pour iOS et pour le Web. Elles
+proviennent d’un
+prototype statique alimenté par un seul jeu de données fictives, cohérent avec
+les contrats : casier `AEGIS-DEMO-01`, mercredi 16 septembre 2026, heure du
+casier. Les écrans iOS montrent des **étapes successives** d’un même parcours.
+L’écran Web de la figure 3 montre le **même instant** que le catalogue de la
+figure 1, vu par l’administrateur. Ces illustrations ne constituent pas une
+spécification prête à implémenter; les états défavorables et les écrans
+restants sont listés à la section 10.4.
+
+![Catalogue iOS : Multimètre 1 prêt, Multimètre 2 bloqué](../design/asset-lifecycle/prototype/renders/ios/a/light/02-catalogue.png){width=42%}
+![Détail de Multimètre 1 et feuille « Réserver »](../design/asset-lifecycle/prototype/renders/ios/a/light/03-detail-reserver.png){width=42%}
+
+**Figure 1 — Aegis Mobile : consulter, puis réserver (10 h 30 et 10 h 31).** À
+gauche, le catalogue place le statut avant l’identité : MM-001 est « Prêt »,
+MM-002 est « Bloqué » avec sa raison, « Calibration expirée depuis le
+8 sept. 2026 ». À droite, la feuille « Réserver » borne l’heure de retour par la
+fermeture du casier, calculée par le serveur (`currentWindow`), et rappelle que
+la réservation n’ouvre aucune porte. *Statut : illustration du traitement
+retenu; données fictives.*
+
+![Retrait guidé : code affiché sur le casier et scanner simulé](../design/asset-lifecycle/prototype/renders/ios/a/light/05-retrait-scanner.png){width=42%}
+![Mon activité : prêt actif après confirmation du serveur](../design/asset-lifecycle/prototype/renders/ios/a/light/06-pret-actif.png){width=42%}
+
+**Figure 2 — Aegis Mobile : preuve locale, puis prêt confirmé (10 h 39 et
+10 h 43).** À gauche, l’opération attend la preuve locale : le code est affiché
+sur le casier, le compte à rebours reflète le défi de 60 s et l’écran rappelle
+qu’aucune porte n’est ouverte. Le viseur est une **simulation** sans secret
+réel. À droite, le prêt n’apparaît qu’après la confirmation du serveur à partir
+des observations du casier; son échéance reprend l’heure de la réservation. Les
+étapes intermédiaires (accès autorisé, commande transmise, déverrouillage
+lancé, porte ouverte, vérification) existent mais ne sont pas illustrées.
+*Statut : illustration; scanner simulé.*
+
+![Aegis Manager : gestion des équipements avec dossier de MM-002](../design/asset-lifecycle/prototype/renders/web/a/light/02-equipements.png){width=100%}
+
+**Figure 3 — Aegis Manager : gestion des équipements (10 h 30, même instant que
+la figure 1).** La liste et le dossier de MM-002 présentent le diagnostic
+opérationnel calculé par le serveur (`AdminAssetView.operationalDiagnostic`) :
+des empêchements non personnels, ici la calibration expirée. Ce diagnostic
+n’est ni la disponibilité opérationnelle d’un technicien ni une autorisation;
+une liste vide signifie seulement qu’aucun empêchement non personnel n’est
+détecté. La disponibilité et les faits dérivés restent en lecture seule; seuls
+les réglages administratifs sont modifiables. *Statut : illustration conforme au
+contrat REST v1.3; libellé d’institution fictif.*
 
 # 6. Architecture globale et frontières de confiance
+
+La figure 4 présente les composantes logiques du P0 et les seuls canaux
+autorisés entre elles.
 
 ```mermaid
 flowchart TD
@@ -262,7 +321,7 @@ flowchart TD
     API["Aegis Control<br/>Spring Boot"]:::software
     DB[("PostgreSQL")]:::infra
     BROKER["Broker MQTT"]:::infra
-    NODE["Aegis Locker Node<br/>ESP32"]:::hardware
+    NODE["Hub du casier<br/>ESP32"]:::hardware
 
     TECH -->|utilise| IOS
     ADMIN -->|utilise| WEB
@@ -278,9 +337,10 @@ flowchart TD
     classDef hardware fill:#3A2A0E,stroke:#D9A441,color:#FCEACD
 ```
 
-**Figure 2 — Architecture logique du P0.** Le service central Spring Boot est l’unique
+**Figure 4 — Architecture logique du P0.** Le service central Spring Boot est l’unique
 autorité métier. Les interfaces et le casier transmettent des intentions ou des
-faits; ils ne confirment pas seuls une transition métier.
+faits; ils ne confirment pas seuls une transition métier. *Statut : normatif
+(ADR-001).*
 
 ## 6.1 Responsabilités
 
@@ -315,6 +375,9 @@ Les flux suivants sont interdits :
 # 7. Modèle de données et machines à états essentielles
 
 ## 7.1 Vue logique avec attributs essentiels
+
+La figure 5 résume les entités métier et leurs relations, avec les seuls
+attributs nécessaires pour suivre le parcours.
 
 ```mermaid
 erDiagram
@@ -434,10 +497,10 @@ erDiagram
     USER o|--o{ AUDIT_EVENT : peut_agir
 ```
 
-**Figure 3 — Relations et attributs métier essentiels.** Le diagramme rend le
+**Figure 5 — Relations et attributs métier essentiels.** Le diagramme rend le
 cahier autonome pour comprendre les identifiants, états et échéances qui portent
 le parcours. Les types SQL, contraintes et attributs techniques complets sont
-précisés dans le modèle PostgreSQL détaillé.
+précisés dans le modèle PostgreSQL détaillé. *Statut : normatif, vue simplifiée.*
 
 Le modèle sépare notamment :
 
@@ -448,6 +511,8 @@ Le modèle sépare notamment :
 - l’anomalie active (`Anomaly`) de l’historique immuable (`AuditEvent`).
 
 ## 7.2 Reservation
+
+La figure 6 décrit le cycle de vie d’une réservation.
 
 ```mermaid
 stateDiagram-v2
@@ -460,14 +525,17 @@ stateDiagram-v2
     EXPIRED --> [*]
 ```
 
-**Figure 4 — Cycle de vie d’une réservation.** Une réservation demeure une
+**Figure 6 — Cycle de vie d’une réservation.** Une réservation demeure une
 intention exclusive; elle ne devient accomplie qu’avec le retrait confirmé.
+*Statut : normatif.*
 
 Une réservation active ne devient `FULFILLED` que dans la transaction qui crée
 le prêt. Elle n’expire pas pendant une opération de retrait déjà autorisée ou
 physiquement incertaine.
 
 ## 7.3 Loan
+
+La figure 7 décrit le cycle de vie d’un prêt.
 
 ```mermaid
 stateDiagram-v2
@@ -478,13 +546,20 @@ stateDiagram-v2
     COMPLETED --> [*]
 ```
 
-**Figure 5 — Cycle de vie d’un prêt.** L’état `RETURN_PENDING` protège la chaîne
+**Figure 7 — Cycle de vie d’un prêt.** L’état `RETURN_PENDING` protège la chaîne
 de possession pendant une restitution en cours ou physiquement incertaine.
+*Statut : normatif.*
 
 Le dépassement de `dueAt` ne modifie pas le statut. Il produit une information
 de retard, tandis que l’actif demeure `BORROWED` jusqu’à un retour confirmé.
+Après une anomalie de retour, le prêt peut aussi revenir à `ACTIVE` lorsqu’une
+correction prouve qu’aucun dépôt n’a eu lieu : porte fermée, actif absent et
+titulaire inchangé.
 
 ## 7.4 LockerOperation
+
+La figure 8 suit une opération de casier, de la demande de l’utilisateur à la
+confirmation physique.
 
 ```mermaid
 stateDiagram-v2
@@ -502,8 +577,8 @@ stateDiagram-v2
     DOOR_OPENED --> ANOMALY : preuve incohérente
 ```
 
-**Figure 6 — Chemin principal d’une opération de casier.** Les sorties anormales
-complètes sont résumées au tableau 5.
+**Figure 8 — Chemin principal d’une opération de casier.** Les sorties anormales
+principales sont résumées au tableau 5. *Statut : normatif, chemin principal.*
 
 Le diagramme montre le chemin nominal et les sorties anormales les plus
 représentatives. Toute étape non terminale peut être interrompue selon les règles
@@ -523,8 +598,9 @@ suivantes :
 Une nouvelle tentative crée un nouvel identifiant; elle ne réactive jamais une
 ancienne opération.
 
-**Repères temporels du P0.** Les délais métier ne définissent pas la durée
-d’alimentation de la serrure.
+Les délais métier ne définissent pas la durée d’alimentation de la serrure.
+
+**Tableau 6 — Repères temporels du P0.**
 
 | Repère | Début et durée | Conséquence |
 |---|---|---|
@@ -543,9 +619,27 @@ reconnaissance n’est donc pas une étape obligatoire avant la résolution. Une
 récidive crée une nouvelle anomalie. L’historique précédent n’est ni rouvert ni
 supprimé.
 
+La figure 9 illustre cette règle dans l’administration Web. À 11 h 04, une
+lecture hors opération observe MM-001 dans A1 alors que son prêt est actif :
+le service central ouvre l’anomalie `ASSET_PRESENT_WITH_ACTIVE_LOAN`, sans
+terminer le prêt ni rendre l’actif disponible.
+
+![Aegis Manager : dossier d’anomalie et dialogue « Reconnaître »](../design/asset-lifecycle/prototype/renders/web/a/light/04-anomalie.png){width=100%}
+
+**Figure 9 — Reconnaître une anomalie sans la résoudre (11 h 20).** Le dossier
+présente des preuves normalisées, sans message MQTT brut : fermeture de A1 et
+absence de MM-001 lors du retrait, puis présence hors opération. Le dialogue
+exige une note; la reconnaissance ne clôt ni l’anomalie ni le prêt. Aucun bouton
+ne permet de la déclarer résolue : seule une nouvelle observation cohérente du
+casier la résoudra. *Statut : illustration; nom du titulaire et forme détaillée
+des preuves fictifs, en attente de contrat.*
+
 # 8. Flux de données et parcours retrait/retour
 
 ## 8.1 Diagramme de flux de données de niveau 0
+
+La figure 10 montre, au niveau le plus général, les échanges entre les acteurs
+externes, la plateforme et ses données.
 
 ```mermaid
 flowchart LR
@@ -568,13 +662,14 @@ flowchart LR
     classDef store fill:#2A2A2E,stroke:#9CA3AF,color:#E6EDF3
 ```
 
-**Figure 7 — DFD-0 du P0.** Tous les échanges métier passent par Aegis Control.
+**Figure 10 — DFD-0 du P0.** Tous les échanges métier passent par Aegis Control.
 Les interfaces humaines et le hub ne communiquent jamais directement avec le
-magasin de données et ne s’accordent aucune transition métier.
+magasin de données et ne s’accordent aucune transition métier. *Statut :
+normatif.*
 
 ## 8.2 Données échangées
 
-**Tableau 6 — Canaux, données et protections.**
+**Tableau 7 — Canaux, données et protections.**
 
 | Canal | Flux principal | Protections attendues |
 |---|---|---|
@@ -585,6 +680,9 @@ magasin de données et ne s’accordent aucune transition métier.
 | Optique | QR temporaire affiché par le hub et lu par l’iPhone | Secret éphémère, usage unique, liaison à l’opération et à l’initiateur |
 
 ## 8.3 Retrait
+
+La figure 11 détaille un retrait, de la préparation demandée par le technicien
+jusqu’à la création du prêt.
 
 ```mermaid
 sequenceDiagram
@@ -625,8 +723,9 @@ sequenceDiagram
     A-->>M: Prêt actif et disponibilité mise à jour
 ```
 
-**Figure 8 — Séquence de retrait.** Le courtier transporte les commandes et les
+**Figure 11 — Séquence de retrait.** Le courtier transporte les commandes et les
 observations; PostgreSQL porte la décision durable et la déduplication.
+*Statut : normatif.*
 
 Le suivi REST se poursuit pendant les phases d’attente et d’exécution; la boucle
 est regroupée en bas pour la lisibilité. Les publications sont asynchrones :
@@ -640,7 +739,25 @@ Le QR et l’accusé de commande sont des étapes nécessaires, mais insuffisant
 Le prêt est créé avec la confirmation de l’actif attendu, dans la bonne cellule,
 après la séquence de porte requise.
 
+La figure 12 montre comment l’administrateur relit cette séquence une fois
+l’opération terminée. La chronologie reprend les horodatages de l’opération
+enregistrés par le service central; elle distingue l’accusé de commande
+(« Déverrouillage lancé ») de l’ouverture observée de la porte et du retrait
+confirmé.
+
+![Aegis Manager : prêt actif et chronologie du retrait](../design/asset-lifecycle/prototype/renders/web/a/light/03-reservations-prets.png){width=100%}
+
+**Figure 12 — Chaîne de possession d’un retrait (11 h 20).** Le prêt de MM-001
+est actif et n’est pas en retard. La chronologie va de la demande de retrait à
+10 h 39 min 37 s jusqu’au retrait confirmé à 10 h 42 min 00 s, dans la fenêtre
+physique de 120 s ouverte à l’autorisation (10 h 40 min 05 s). La vue est en
+lecture seule : aucune fin de prêt, confirmation ou restitution forcée.
+*Statut : illustration; le nom du titulaire est fictif, car le contrat n’expose
+que son identifiant.*
+
 ## 8.4 Retour
+
+La figure 13 applique le même principe au retour de l’actif.
 
 ```mermaid
 sequenceDiagram
@@ -685,10 +802,11 @@ sequenceDiagram
     A-->>M: Retour confirmé ou intervention requise
 ```
 
-**Figure 9 — Séquence de retour.** Le prêt n’est terminé que lorsque les
+**Figure 13 — Séquence de retour.** Le prêt n’est terminé que lorsque les
 événements corrélés prouvent le retour de l’actif attendu et la fermeture.
 Comme au retrait, le mobile consulte l’opération pendant l’attente et l’exécution;
-la réponse `202` accepte la demande, elle ne confirme pas le retour.
+la réponse `202` accepte la demande, elle ne confirme pas le retour. *Statut :
+normatif.*
 
 Un actif endommagé ou non calibré peut être retourné. Après la restitution, sa
 non-conformité continue toutefois de bloquer un nouvel emprunt.
@@ -700,7 +818,7 @@ une clé `Idempotency-Key`; les erreurs suivent `application/problem+json` avec 
 code métier stable. Les routes suivantes suffisent à comprendre le parcours sans
 consulter le catalogue complet :
 
-**Tableau 7 — Routes REST essentielles au scénario.**
+**Tableau 8 — Routes REST essentielles au scénario.**
 
 | Intention | Route principale | Autorisation et résultat |
 |---|---|---|
@@ -726,7 +844,7 @@ Le rail MQTT est versionné sous `aegis/v1/lockers/{lockerId}`. QoS 1 autorise
 des doublons : le service central et le micrologiciel dédupliquent avec
 `messageId`, `operationId`, l’expiration et l’état courant.
 
-**Tableau 8 — Sujets MQTT du P0.**
+**Tableau 9 — Sujets MQTT du P0.**
 
 | Suffixe du sujet | Sens | QoS / rétention |
 |---|---|---|
@@ -751,36 +869,78 @@ Exemple abrégé d’une commande après consommation valide du défi QR :
 ```
 
 Chaque hub possède une identité et des listes de contrôle d’accès limitées à son
-propre casier. TLS est obligatoire pour le hub réel. Un acquittement MQTT ou une
-confirmation d’affichage ne constitue jamais une preuve de retrait ou de retour.
+propre casier. TLS est obligatoire pour le hub réel. La commande porte sa propre
+échéance (`expiresAt`); le hub refuse une commande reçue après celle-ci, destinée
+à une autre cellule ou déjà exécutée.
+
+L’accusé `COMMAND_ACKNOWLEDGED` prouve seulement que le hub a validé la commande
+(cible, échéance, absence de doublon), que la cellule l’a acceptée et que
+l’actionnement est lancé. Il ne prouve ni l’ouverture de la porte, ni le retrait,
+ni le retour; ces faits proviennent des observations physiques qui suivent. De
+même, la confirmation d’affichage du QR indique seulement que le défi est
+visible sur l’écran.
 
 # 9. Architecture physique du prototype
 
 ## 9.1 Forme du prototype
 
-![Vue avant et arrière du hub et des deux cellules](../diagrams/architecture-physique/architecture-physique-vues.svg)
+Le prototype P0 se compose d’un hub (concentrateur) et de deux cellules
+identiques. Le hub porte l’écran du QR, le calcul et la seule connexion réseau;
+chaque cellule forme un compartiment complet avec sa porte, son verrou, sa
+détection de porte et son identification d’actif. Le rendu de la figure 14
+donne une image d’ensemble; la figure 15 en fixe les faces utiles de manière
+schématique.
 
-**Figure 10 — Prototype P0.** Le concentrateur porte l’écran, le calcul et la connexion
-réseau. Chaque cellule correspond à un compartiment complet et ne possède ni
-écran ni client MQTT.
+![Rendu 3D d’intention du casier P0 : vue avant, portes ouvertes et vue arrière](../diagrams/architecture-physique/rendu-3d/casier-p0-vues.png){width=100%}
+
+**Figure 14 — Modèle d’intention du casier P0 (vue avant, portes ouvertes, vue
+arrière).** Le rendu montre la répartition des rôles : le hub porte l’écran du
+QR, chaque cellule un compartiment, et deux câbles dédiés forment l’étoile à
+l’arrière. Ce n’est pas un dessin technique coté : gabarit, fixation et
+connectique (M12 proposé, RJ45 en repli) restent soumis aux POC. Les voyants
+illustrent un état technique; ils n’affichent pas la disponibilité
+opérationnelle d’une personne, que seul le service central calcule. Dans ce
+rendu, l’écran apparaît sur une porte de service du hub; cet emplacement, comme
+les connecteurs M12 représentés, est illustratif ou proposé, pas une décision de
+construction. *Statut : modèle d’intention non coté, réalisé par Yoël Jimmy
+Razafindretsa.*
+
+![Vue avant et arrière du hub et des deux cellules](../diagrams/architecture-physique/architecture-physique-vues.svg){width=100%}
+
+**Figure 15 — Faces avant et arrière du prototype.** À l’avant, l’écran du hub
+et les portes A1 et A2; à l’arrière, l’alimentation et un port par cellule.
+Chaque cellule ne possède ni écran ni client MQTT. *Statut : schéma de principe,
+disposition illustrative.*
 
 ## 9.2 Topologie retenue
 
-![Topologie physique en étoile](../diagrams/architecture-physique/architecture-physique-topologie-etoile.svg)
+Un départ indépendant par cellule isole les défauts : un court-circuit, un câble
+arraché ou une erreur de trame sur A2 ne peut ni alimenter ni commander A1, et
+chaque défaut se diagnostique par port. Un bus partagé aurait réduit le câblage,
+mais aurait fait dépendre les deux cellules d’un même segment électrique. La
+figure 16 représente cette étoile.
 
-**Figure 11 — Étoile à deux départs indépendants.** ADR-002 accepte deux ports,
-deux câbles et deux segments RS-485 indépendants. Le brochage, les protections,
-le protocole local et le budget de puissance restent soumis au POC.
+![Topologie physique en étoile](../diagrams/architecture-physique/architecture-physique-topologie-etoile.svg){width=100%}
+
+**Figure 16 — Étoile à deux départs indépendants.** ADR-002 accepte deux ports,
+deux câbles et deux segments RS-485 indépendants, chacun transportant données et
+alimentation. Le brochage, les protections, le protocole local et le budget de
+puissance restent soumis au POC. *Statut : topologie acceptée; réalisation à
+qualifier.*
 
 ## 9.3 Composition d’une cellule
 
-![Composition fonctionnelle d’une cellule](../diagrams/architecture-physique/architecture-physique-cellule.svg)
+La figure 17 décompose une cellule en responsabilités locales, de la liaison
+avec le hub jusqu’au verrou, au capteur de porte et à l’identification.
 
-**Figure 12 — Responsabilités locales.** Le M12 codé A à 5 contacts est la
+![Composition fonctionnelle d’une cellule](../diagrams/architecture-physique/architecture-physique-cellule.svg){width=100%}
+
+**Figure 17 — Responsabilités locales d’une cellule.** Le M12 codé A à 5 contacts est la
 recommandation actuelle pour la revue d’équipe. Il n’est pas accepté tant que la
 référence, le courant, le câble, le brochage et les protections ne sont pas
 validés. Le RJ45 propriétaire demeure une option initiale de repli économique,
-avec un risque de confusion Ethernet/PoE à maîtriser.
+avec un risque de confusion Ethernet/PoE à maîtriser. *Statut : proposition à
+qualifier par POC.*
 
 # 10. Choix technologiques et ADR importants
 
@@ -792,14 +952,57 @@ une solution plus simple, compare les options, puis fixe une preuve capable de
 réfuter le choix. Les termes « retenu » et « proposé » conservent ici le statut
 des ADR : une solution proposée doit encore réussir son arbitrage ou son POC.
 
-**Tableau 9 — Besoins, alternatives et solutions techniques.**
+**Une autorité, puis des données fiables.** Réservation, prêt, autorisation et
+audit doivent recevoir une seule interprétation, même si un client est modifié
+ou contourné. Une règle placée dans iOS, React ou le micrologiciel divergerait
+et pourrait être évitée. D’où un service central unique, Spring Boot en
+monolithe modulaire (ADR-001). Cette autorité doit ensuite garantir, sous accès
+concurrents, une seule réservation et un seul prêt actifs par actif, sans
+effacer l’historique. Il faut donc des transactions, des verrous de ligne et des
+contraintes d’unicité appliqués par la base elle-même : PostgreSQL, avec des
+migrations Flyway reproductibles.
+
+**Une communication bidirectionnelle, reconnectable et auditable avec le hub.**
+Le hub doit recevoir des commandes, remonter des observations, signaler sa
+présence, se reconnecter après une coupure et tolérer les doublons comme les
+messages tardifs. Le téléphone ne doit jamais servir de relais vers la serrure.
+Ce besoin de messages dans les deux sens, sur un lien intermittent, oriente vers
+MQTT, avec message de dernière volonté (*Last Will*), identité et ACL propres à
+chaque hub et TLS (ADR-004). Comme la décision SQL et la publication réseau ne
+peuvent pas partager une transaction, la décision, le message à publier et
+l’audit sont enregistrés ensemble dans une boîte d’envoi, puis publiés par le
+monolithe (ADR-005). Les doublons que QoS 1 peut produire sont neutralisés par
+`messageId`, `operationId`, l’échéance et l’état courant.
+
+**Des clients adaptés à leur usage, sans pouvoir métier.** Le technicien agit
+devant le casier avec un iPhone : caméra, Keychain, taille de texte dynamique et
+accessibilité justifient SwiftUI. L’administrateur travaille sur des vues denses
+au clavier : un client React séparé consomme la même API, sans accès direct aux
+données ni au courtier. Les deux clients suivent une opération par lecture REST
+ciblée, environ chaque seconde (ADR-006), et s’authentifient par un JWT signé de
+60 minutes, conservé dans Keychain sur iOS et en mémoire sur le Web (ADR-007).
+
+**Un casier physique qui exécute sans décider.** Chaque cellule doit recevoir
+données et alimentation sans radio ni autorité, et une panne sur un départ ne
+doit pas toucher l’autre : deux segments RS-485 filaires point à point
+(ADR-002). La preuve de présence locale doit utiliser l’écran et la caméra déjà
+prévus; ses paramètres — 60 s au plus, usage unique, cinq secrets erronés —
+découlent du besoin de limiter la copie et le rejeu (ADR-009). Enfin, la présence
+d’un actif ne doit pas être déclarée par l’utilisateur : l’identification doit
+être automatique et propre à chaque cellule, ce qui oriente vers un lecteur RFID
+UHF local, encore à éprouver par POC (ADR-003, proposé).
+
+Le tableau 10 détaille, pour chaque besoin, les options écartées et la preuve
+qui pourra réfuter le choix.
+
+**Tableau 10 — Besoins, alternatives et solutions techniques.**
 
 | Besoin à satisfaire | Contraintes du P0 | Options examinées et limites | Solution retenue ou proposée | Preuve attendue |
 |---|---|---|---|---|
 | Guider le technicien lors d’une opération physique et lire le QR du hub | L’équipement de démonstration est un iPhone; Android est hors P0; le jeton doit être protégé; caméra, taille dynamique et accessibilité doivent rester cohérentes | Une PWA serait une autre réalisation possible, à qualifier sur les iPhone ciblés. SwiftUI est retenu pour intégrer directement les API iOS et Keychain; le bénéfice multiplateforme de Flutter n’est pas nécessaire au P0 | **Swift et SwiftUI**, base technique du client iOS | Scan sur l’iPhone réel, refus de caméra géré, jeton dans Keychain, états lisibles avec taille de texte agrandie |
 | Administrer un catalogue et superviser les anomalies depuis un poste courant | Parcours denses, clavier, navigateur et accessibilité Web; aucune connexion directe à PostgreSQL ou MQTT | Des vues servies par Spring pourraient aussi respecter les règles métier. React est retenu pour un client interactif séparé consommant l’API; cette séparation impose en contrepartie sa propre construction et ses tests | **React et TypeScript**, base technique du client Web | Parcours réalisables au clavier, focus visible, erreurs nommées et accès uniquement par l’API |
 | Appliquer une seule décision métier aux clients et au casier | Réservation, prêt, autorisation, audit et idempotence doivent rester cohérents et transactionnels; équipe de deux personnes | Des règles dans iOS, React ou le firmware seraient contournables et divergentes. Des microservices ajouteraient des pannes et déploiements distribués sans besoin de charge démontré | **Spring Boot en monolithe modulaire**, retenu par l’ADR-001 | Un client contourné reste refusé par le serveur; les gardes et transitions sont testées atomiquement |
-| Conserver contraintes, historique et concurrence sans perte silencieuse | Une seule réservation et un seul prêt actifs par actif; migrations reproductibles; historique non destructif | Une base embarquée pourrait servir un petit backend; le choix privilégie ici un serveur relationnel distinct, les transactions concurrentes et les contraintes d’intégrité. Un stockage documentaire reste possible mais demanderait une autre démonstration des invariants | **PostgreSQL avec Flyway** | Migrations sur base vierge et existante, contraintes d’unicité et test de concurrence sur deux réservations |
+| Conserver contraintes, historique et concurrence sans perte silencieuse | Une seule réservation et un seul prêt actifs par actif; migrations reproductibles; historique non destructif | Une base embarquée pourrait servir un petit backend, mais supporte moins bien l’accès concurrent de l’API et de la tâche de publication; PostgreSQL fournit index uniques partiels, verrous de ligne et transactions concurrentes. Un stockage documentaire reste possible mais demanderait une autre démonstration des invariants | **PostgreSQL avec Flyway** | Migrations sur base vierge et existante, contraintes d’unicité et test de concurrence sur deux réservations |
 | Échanger commandes, événements et disponibilité avec un hub qui peut se déconnecter | Communication bidirectionnelle, reconnexion, messages tardifs, doublons et identité propre au hub; le téléphone n’est jamais le canal d’ouverture | Un transport BLE pourrait conserver une autorité serveur, mais utiliser le téléphone comme relais ajouterait une dépendance exclue de notre architecture. Aucun besoin de longue portée ne justifie ici une liaison LoRa et sa passerelle. HTTP avec interrogation périodique reste possible; MQTT est retenu pour le modèle commandes/événements et la signalisation de disponibilité | **Wi-Fi, Mosquitto local et MQTT 3.1.1**, identité/secret par hub, TLS et ACL retenus par l’ADR-004 | ACL et TLS, Last Will, reconnexion, message expiré et rediffusion QoS 1 sans second effet |
 | Relier le hub aux deux cellules en transportant données et alimentation sur un câble dédié | Un départ direct par cellule, environnement câblé, diagnostic A1/A2 et absence de radio ou d’autorité dans une cellule | BLE ou Wi-Fi imposeraient radio, configuration et alimentation dans chaque cellule sans transporter la puissance. I²C ou UART logique sont plus sensibles hors carte. Une étoile RS-485 passive avec A/B réunis crée un seul bus et ne fournit pas l’isolation attendue | **Deux segments RS-485 point à point indépendants**, topologie retenue par l’ADR-002; connectique et protection proposées | A1 n’actionne jamais A2; mesures d’erreurs, chute de tension, déconnexion et reprise sur chaque départ |
 | Contrôler l’écran, le réseau et les E/S sans système d’exploitation généraliste | Sorties sûres, Wi-Fi, affichage du QR et E/S dans un prototype limité | Un Raspberry Pi serait capable d’assurer ces fonctions, mais aucun besoin applicatif de Linux n’est établi ici. L’ESP32 limite la pile à maintenir, sous réserve de vérifier mémoire, interfaces et broches disponibles | **ESP32**, référence exacte conditionnée aux broches et aux essais | Sorties inactives au démarrage, QR affiché, deux liaisons locales disponibles et reconnexion réseau maîtrisée |
@@ -810,7 +1013,15 @@ des ADR : une solution proposée doit encore réussir son arbitrage ou son POC.
 
 ## 10.2 Décisions acceptées
 
-**Tableau 10 — Décisions d’architecture acceptées.**
+Le statut « acceptée » a deux origines. Les ADR-001, 002, 008 et 010 consignent
+des principes déjà retenus dans le périmètre et les échanges d’équipe. Les choix
+logiciels des ADR-004 à 007 et 009, ainsi que la clarification de l’ADR-011, ont
+été approuvés par Philippe le 23 septembre 2026. Cette consignation les attribue
+à Philippe seul : elle n’invente ni signature ni approbation de Jimmy. Dans tous
+les cas, l’acceptation fixe l’architecture sans prouver que la décision est déjà
+implémentée ou testée.
+
+**Tableau 11 — Décisions d’architecture acceptées.**
 
 | ADR | Décision | Conséquence principale |
 |---|---|---|
@@ -823,10 +1034,7 @@ des ADR : une solution proposée doit encore réussir son arbitrage ou son POC.
 | ADR-008 | Réservation et durée réelle de possession sont distinctes | Un retard ne termine pas un prêt et ne libère pas l’actif |
 | ADR-009 | Défi QR lié à l’opération, 60 s maximum et 5 secrets erronés | Préparer devant le casier; la fenêtre physique de 120 s commence après autorisation |
 | ADR-010 | Monorepo pour le P0 | Les changements transversaux restent révisables dans un même historique |
-
-Les choix logiciels des ADR-004 à 007 et 009 ont été explicitement approuvés par
-Philippe le 23 septembre 2026. Cette consignation ne vaut ni signature de Jimmy
-ni preuve que leur implémentation est déjà testée.
+| ADR-011 | L’estimation initiale de 500 $ n’est pas un plafond | La nomenclature complète reste visible; aucun achat n’est approuvé par cette décision |
 
 ## 10.3 Paramètres ouverts et preuves à produire
 
@@ -834,7 +1042,7 @@ L’arbitrage logiciel principal est fermé; ses tests restent à réaliser. Les
 références matérielles, le dimensionnement et les seuils dépendant du terrain ne
 sont pas présentés comme validés par une décision documentaire.
 
-**Tableau 11 — Conditions de réalisation et de validation restantes.**
+**Tableau 12 — Conditions de réalisation et de validation restantes.**
 
 | Référence | Ce qui reste à fixer ou vérifier | Moment de validation |
 |---|---|---|
@@ -844,6 +1052,7 @@ sont pas présentés comme validés par une décision documentaire.
 | ADR-007 | Algorithme et gestion des clés documentés; jeton falsifié/expiré et droits retirés refusés | Bootstrap de la connexion réelle |
 | ADR-009 | Taille et lecture du QR sur écran réel; seuil de fréquence des préparations | Avant intégration du contrôle local et répétition des cycles |
 | Déploiement | Hôte compatible, réseau autorisé, signature et confiance TLS sur les iPhone | Première tranche sur appareils réels |
+| Contrat REST | Exposer à l’administrateur les identifiants physiques actifs d’un actif (`identifierId`, type, date d’assignation) | Avant le récit CAT-02 |
 
 Le plafond antérieurement proposé de trois préparations en quinze minutes est
 abandonné, car il peut interrompre une série normale. La limitation des
@@ -852,6 +1061,39 @@ les cycles représentatifs tout en refusant une rafale abusive. Aucun essai de
 démonstration ne désactive les contrôles de propriétaire, de secret, d’expiration
 ou d’usage unique. Les résultats des POC ne sont pas un prérequis à la remise de
 ce cahier : celui-ci expose la méthode et les critères, pas des succès supposés.
+
+## 10.4 Éléments à fermer avant la réalisation
+
+**Décision proposée pour la lecture des identifiants physiques.** Avant le récit
+CAT-02, la vue détaillée `AdminAssetView` sera proposée avec une collection
+`physicalIdentifiers` limitée aux identifiants actifs. Chaque entrée exposera
+`identifierId`, le type, une valeur masquée et la date d’assignation. L’interface
+Web pourra ainsi présenter le bon identifiant et appeler la révocation existante
+sans révéler inutilement sa valeur complète. L’historique des identifiants
+révoqués restera accessible par l’audit, pas par cette collection. Cette
+extension additive doit encore être acceptée et inscrite au contrat REST avec
+ses tests avant le bootstrap; elle ne remet en cause ni `AssetIdentifier` ni le
+prototype.
+
+**Propositions de contrat encore non normatives.** Cinq besoins approuvés
+restent sous forme de proposition, sans champ ajouté au contrat : le nom du
+titulaire dans les vues administratives, qui n’exposent aujourd’hui que son
+identifiant; les notes ajoutées après la reconnaissance d’une anomalie et la
+source de `resolutionNote`; un libellé d’institution optionnel, configuré au
+déploiement; la pagination, le tri et les filtres multiples des listes
+administratives; enfin, des codes stables pour les motifs d’échec d’une
+opération. Les illustrations marquent comme fictives les données qui en
+dépendent.
+
+**Écrans et états encore à produire.** Les sept écrans des figures 1, 2, 3, 9 et
+12 illustrent les parcours principaux, sans couvrir toute l’interface. Restent à
+concevoir : la connexion et ses erreurs; « Mon activité » avec une réservation
+active ou sans activité; les étapes intermédiaires d’une opération et ses issues
+`FAILED`, `EXPIRED` et `ANOMALY`; le parcours de retour complet; les erreurs de
+scan et le refus de la caméra; le casier hors ligne et la session expirée; le
+compte et l’apparence; côté Web, la vue d’ensemble, les casiers et l’horaire,
+l’audit, les modèles, les formulaires et leurs conflits, ainsi que les états
+vides, de chargement et d’erreur partielle.
 
 # 11. Sécurité, fiabilité et gestion des anomalies
 
@@ -864,10 +1106,11 @@ ce cahier : celui-ci expose la méthode et les critères, pas des succès suppos
   secrets QR ne sont jamais retournés par REST; seul le jeton d’accès du compte
   authentifié est remis au client lors de sa connexion.
 - Le QR est éphémère, lié à une opération et consommé atomiquement.
-- Le firmware refuse une mauvaise cible, une commande expirée ou déjà exécutée.
-- Les sorties de serrure restent inactives au démarrage.
-- Le circuit de commande et les protections électriques empêchent de piloter directement le
-  verrou depuis un GPIO.
+- Le micrologiciel doit refuser une mauvaise cible, une commande expirée ou
+  déjà exécutée.
+- Les sorties de serrure doivent rester inactives au démarrage.
+- Le circuit de commande et les protections électriques doivent empêcher de
+  piloter directement le verrou depuis une broche GPIO.
 
 Le QR réduit l’utilisation d’un code ancien, mais ne garantit pas qu’une photo
 ou une vidéo ne soit jamais relayée. Cette limite est assumée pour le P0.
@@ -945,7 +1188,7 @@ détaille les étapes, les sources Apple/Docker et les preuves de validation.
 
 ## 11.5 Stratégie de vérification
 
-**Tableau 12 — Niveaux de vérification et preuves attendues.**
+**Tableau 13 — Niveaux de vérification et preuves attendues.**
 
 | Niveau | Cible | Preuves attendues |
 |---|---|---|
@@ -964,20 +1207,26 @@ ni la cohérence transactionnelle, ni le mouvement physique.
 
 # 12. POC matériels et critères de validation
 
-**Tableau 13 — POC matériels, critères de décision et replis.**
+**Tableau 14 — POC matériels, critères de décision et replis.**
 
 | POC | Mesures ou essais | Critère de décision | Repli prévu |
 |---|---|---|---|
 | RFID local | Orientations, matériaux, voisin, tag extérieur, répétitions, faux positifs/négatifs, délai | Changement attendu identifié de manière répétable dans la bonne cellule, selon des seuils fixés avant l’essai | QR/NFC d’identité + porte + présence ou poids |
-| Verrou rotatif | Courant, durée d’impulsion, ouverture, échauffement et repos sans tension | Actionnement répétable dans les limites de la fiche et sans commande GPIO directe | Changer le verrou ou son circuit de commande avant intégration |
+| Verrou (rotatif ou loquet candidat) | Courant, durée d’impulsion, ouverture, échauffement et repos sans tension | Actionnement répétable dans les limites de la fiche et sans commande GPIO directe | Changer le verrou ou son circuit de commande avant intégration |
 | Alimentation et connecteur | Courant par cellule, chute de tension, contacts, polarité, court-circuit et protection par départ | Deux cellules alimentées sans surcharge; un défaut ne crée pas d’action sur l’autre | Simplifier la réalisation et réviser la connectique |
 | RS-485 et ciblage | A1/A2, erreurs, délais, déconnexion, reprise, doublon et redémarrage | A1 n’actionne jamais A2; reprise sans ancienne impulsion | Un ESP32 pilote directement les deux compartiments |
 | Écran et QR | Contraste, taille, éclairage, angle, expiration, effacement et caméra iPhone | QR lisible sur le matériel réel et inutilisable après expiration ou redémarrage | Changer l’écran ou sa disposition; aucun contournement du contrôle local |
-| Nomenclature complète | Deux cellules, écran, RFID, câbles, interfaces, alimentation, protections, mécanique, taxes et livraison | Chaque fonction possède une quantité et un coût; les provisions sont identifiées; l’inventaire et les paniers réels remplacent les hypothèses avant achat | Ajuster les références ou l’architecture seulement après comparaison des POC, du matériel fourni, du coût et du délai |
+| Nomenclature fonctionnelle candidate | Deux cellules, écran, RFID, câbles, interfaces, alimentation, protections, mécanique, taxes et livraison | Chaque fonction possède une quantité et une estimation; les provisions sont identifiées; l’inventaire et les paniers réels remplacent les hypothèses avant achat | Ajuster les références ou l’architecture après comparaison des POC, du matériel fourni, du coût et du délai |
 
-## 12.1 Estimation avant sélection
+## 12.1 Estimation indicative et révisable
 
-La nomenclature candidate complète, conservée dans
+Un montant d’environ 500 $ CA a été évoqué au début du projet. C’était une
+estimation de départ, pas une exigence du cours ni un plafond d’acceptation du
+prototype (ADR-011). La nomenclature détaillée l’a dépassée parce qu’elle
+chiffre enfin toutes les fonctions : hub, cellules, détection, actionnement,
+alimentation, protections et mécanique.
+
+La nomenclature fonctionnelle candidate, conservée dans
 `docs/research/nomenclature-materielle-candidate.md` et datée du 23 septembre
 2026, couvre le hub, les deux cellules, les tags, les pilotes de serrure, les
 protections, la conversion de tension, le câblage interne et la mécanique. Elle
@@ -986,11 +1235,14 @@ et 92,00 $ de provisions encore à remplacer. Avec les taxes québécoises
 indicatives, le total avant livraison est de **820,94 $**. Une provision de
 40,00 $ pour la livraison porte l’enveloppe de planification à **860,94 $**.
 
-Ces montants sont une vue de travail, pas un devis ni une limite d’acceptation.
-La liste complète figure en **annexe E** : elle ne suppose pas que le lecteur
-ouvre un autre document. Le coût d’achat changera selon les pièces fournies par
-le laboratoire et la sélection des références réelles. Aucun montant n’est ici
-présenté comme une exigence financière du cours.
+Ces montants forment un **instantané de planification daté**, pas un devis, un
+budget imposé, une configuration gelée ou une limite d’acceptation. La liste
+exhaustive par fonction figure en **annexe E** afin de montrer que toutes les
+responsabilités matérielles ont été considérées; les références, quantités et
+solutions peuvent être remplacées après inventaire ou POC, à condition de
+préserver les fonctions et les critères de validation. Le coût d’achat changera
+selon les pièces fournies par le laboratoire et la sélection réelle. Aucun
+montant n’est présenté comme une exigence financière du cours.
 
 Les deux lecteurs UHF candidats représentent 225,72 $ et annoncent une portée de
 1,5 à 2 m. Le point à démontrer n’est pas seulement leur prix : il faut surtout
@@ -1007,10 +1259,14 @@ aux ressources disponibles.
 
 ## 12.2 Bancs d’essai et preuves
 
-![Banc d’essai du verrou](../diagrams/architecture-physique/architecture-physique-test-verrou.svg)
+La figure 18 présente la méthode prévue pour caractériser le verrou avant son
+intégration.
 
-**Figure 13 — Banc de caractérisation du verrou.** Le schéma illustre la méthode;
+![Banc d’essai du verrou](../diagrams/architecture-physique/architecture-physique-test-verrou.svg){width=100%}
+
+**Figure 18 — Banc de caractérisation du verrou.** Le schéma illustre la méthode;
 les valeurs finales proviendront de la fiche du composant et des mesures réelles.
+*Statut : méthode proposée; aucune mesure réalisée.*
 
 Chaque rapport de POC consignera la date, les références, le montage, les
 conditions, le nombre de répétitions, les données brutes, les échecs et la
@@ -1018,11 +1274,11 @@ décision. Un essai non effectué restera indiqué « non mesuré ».
 
 Les validations à préparer avec Jimmy portent précisément sur la localisation
 RFID, le verrou et la porte, l’alimentation/connectique, le ciblage RS-485, le
-scan sur les iPhone et la connectivité sécurisée. Une première campagne de dix
-essais par condition pertinente est proposée dans la fiche de déploiement et
-de validations. Le délai et le taux de lecture RFID admissibles doivent être
-fixés avant mesure; les limites électriques proviennent des fiches et du
-dimensionnement. Aucune fausse attribution de cellule ni ouverture non commandée
+scan sur les iPhone et la connectivité sécurisée. Une première campagne est
+proposée : chaque condition pertinente (orientation, matériau, cellule voisine,
+tag extérieur, coupure) est répétée dix fois et chaque échec est consigné. Le
+délai et le taux de lecture RFID admissibles sont fixés avant la mesure; les
+limites électriques proviennent des fiches et du dimensionnement. Aucune fausse attribution de cellule ni ouverture non commandée
 n’est acceptable dans la campagne. Ces essais préparatoires ne sont pas
 présentés comme réalisés pour la remise du cahier.
 
@@ -1030,7 +1286,7 @@ présentés comme réalisés pour la remise du cahier.
 
 ## 13.1 Répartition
 
-**Tableau 14 — Responsabilités principales et revues croisées.**
+**Tableau 15 — Responsabilités principales et revues croisées.**
 
 | Domaine | Responsable principal | Revue ou collaboration |
 |---|----------------------|---|
@@ -1057,16 +1313,16 @@ est une limite de planification, pas une obligation de remplir toutes les heures
 
 ## 13.2 Macro-itérations
 
-**Tableau 15 — Objectifs des macro-itérations.**
+**Tableau 16 — Objectifs des macro-itérations.**
 
 | Période | Objectif | Porte de sortie |
 |---|---|---|
-| Semaines 4 à 7 | Réduire les risques et rendre un actif prêt/réservable | Environnement reproductible, POC décidés, A1 `READY`, A2 bloqué |
+| Semaines 4 à 7 | Réduire les risques et rendre un actif prêt/réservable | Environnement reproductible, POC décidés, MM-001 `READY`, MM-002 bloqué |
 | Semaines 8 à 11 | Livrer la chaîne de possession complète | Réservation, retrait et retour de bout en bout |
 | Semaines 12 à 15 | Geler, durcir, mesurer et présenter | Refus, anomalies, sécurité, 10 + 10 répétitions et démo maîtrisée |
 
 Le travail avance par tranches verticales. Le maximum de travail en cours est de deux récits utilisateur,
-une par personne. Chaque cycle se termine par une intégration, des tests, une
+un par personne. Chaque cycle se termine par une intégration, des tests, une
 mini-démonstration et une entrée de journal. Les semaines 13 et 14 servent à la
 stabilisation, pas à l’ajout tardif d’une fonctionnalité P1.
 
@@ -1074,7 +1330,7 @@ stabilisation, pas à l’ajout tardif d’une fonctionnalité P1.
 
 ## 14.1 Registre synthétique des risques
 
-**Tableau 16 — Risques, signaux d’alerte et replis.**
+**Tableau 17 — Risques, signaux d’alerte et replis.**
 
 | Risque | Signal d’alerte | Réduction ou repli |
 |---|---|---|
@@ -1086,10 +1342,10 @@ stabilisation, pas à l’ajout tardif d’une fonctionnalité P1.
 | Accès limité aux Macs | Compilation iOS non vérifiée hors cours | Réserver les séances à la compilation, à la caméra et aux tests sur appareil |
 | Intégration tardive logiciel–matériel | Contrats ou événements encore instables en semaine 10 | Simulateur fidèle dès le départ et contrats versionnés avant intégration |
 | Absence ou capacité réduite | Stories bloquées par une seule personne | Documentation continue, branches courtes, revue croisée et réduction de la finition |
-| Écart entre l’estimation et le coût d’achat | Prix et stocks variables, provisions à remplacer, taxes, livraisons et matériel du laboratoire encore inconnus | Nomenclature complète versionnée, inventaire, POC RFID et paniers consolidés avant commande |
+| Écart entre l’estimation et le coût d’achat | Prix et stocks variables, provisions à remplacer, taxes, livraisons et matériel du laboratoire encore inconnus | Nomenclature fonctionnelle versionnée, inventaire, POC RFID et paniers consolidés avant commande |
 | Croissance du périmètre | Travail P1 alors qu’un jalon P0 manque | Porte de changement, gel semaine 12 et réduction de la finition non essentielle |
 
-## 14.2 Replis approuvés en principe
+## 14.2 Replis approuvés en principe dans le périmètre
 
 - Si le RFID UHF ne localise pas suffisamment, utiliser une identification
   QR/NFC de l’actif avec porte et présence ou poids.
@@ -1133,7 +1389,7 @@ traçables.
 
 ## Annexe A — Glossaire court
 
-**Tableau 17 — Glossaire du cahier.**
+**Tableau 18 — Glossaire du cahier.**
 
 | Terme | Définition |
 |---|---|
@@ -1141,9 +1397,13 @@ traçables.
 | Chaîne de possession | Historique vérifiable de la responsabilité d’un actif |
 | Concentrateur (*hub*) | Contrôleur central avec écran, réseau et ports de cellules |
 | Cellule | Compartiment physique indépendant relié au hub |
-| Défi local | Secret QR temporaire requis avant une ouverture métier |
+| Défi local | Secret QR temporaire requis avant un déverrouillage métier |
 | Observation physique | Fait normalisé provenant de la porte, du verrou ou de l’identification d’actif |
 | Idempotence | Propriété empêchant un doublon de produire un second effet |
+| Disponibilité transactionnelle | État de l’actif vis-à-vis des engagements : `AVAILABLE`, `RESERVED`, `BORROWED` ou `UNAVAILABLE`; ne se confond pas avec la disponibilité opérationnelle |
+| « Prêt » (statut) et prêt (emprunt) | Le libellé « Prêt » affiché correspond à `READY`, prêt à l’emprunt; le nom « prêt » désigne l’emprunt (`Loan`) en cours |
+| État de connexion du casier | `ONLINE`, `OFFLINE` ou `UNKNOWN`, déduit du signal de vie du hub; n’est pas une disponibilité d’actif |
+| Service central, courtier, micrologiciel | Termes français employés pour Aegis Control (*backend* Spring Boot), le *broker* MQTT et le *firmware* des contrôleurs |
 | ADR | Trace d’une décision d’architecture, de ses alternatives et conséquences |
 | POC | Expérience bornée qui produit une mesure avant un choix matériel |
 | P0 | Périmètre obligatoire nécessaire à la démonstration évaluée |
@@ -1157,7 +1417,7 @@ traçables.
 
 ## Annexe B — Traçabilité documentaire
 
-**Tableau 18 — Correspondance entre le cahier et ses sources normatives.**
+**Tableau 19 — Correspondance entre le cahier et ses sources normatives.**
 
 | Sujet du cahier | Sources de référence |
 |---|---|
@@ -1169,7 +1429,9 @@ traçables.
 | REST et MQTT | Documents 09 et 10 — contrats détaillés |
 | Parcours et récits utilisateur | Document 11 — carte des récits du P0 |
 | Matériel et POC | Document 12 et `docs/research/nomenclature-materielle-candidate.md` |
-| Décisions | Document 13 et les ADR acceptés dans `docs/adr/` |
+| Décisions | Document 13 (registre de tous les ADR) et fiches détaillées dans `docs/adr/` |
+| Interfaces | `docs/design/asset-lifecycle/` — spécification des sections, jeu d’illustrations et prototype |
+| Rendu 3D d’intention | `docs/diagrams/architecture-physique/rendu-3d/` — vues P0; motifs exploratoires dans `docs/research/rendu-3d-motifs.md` |
 | Planification | Document 14 — semaines 4 à 15 |
 
 ## Annexe C — Références
@@ -1196,33 +1458,37 @@ traçables.
 
 Claude Code et Codex ont contribué à la recherche, à la structuration, à la
 révision linguistique, à l’analyse de cohérence et à la production de diagrammes
-et de maquettes. Claude Opus a été utilisé comme contre-relecteur du présent
-cahier; ses remarques ont été vérifiées contre le scope, les ADR, les contrats et
+et de maquettes. Les illustrations d’interface du traitement A ont été produites avec Claude Code
+à partir d’un prototype HTML versionné et de données fictives, puis retenues par
+Philippe après comparaison. Claude Opus a été utilisé comme contre-relecteur du
+présent cahier; ses remarques ont été vérifiées contre le scope, les ADR, les contrats et
 le plan d’étude avant intégration. Aucune mesure matérielle ni réussite de test
 n’a été inventée.
 
 Philippe et Jimmy demeurent responsables des décisions, des sources, des
 mesures, de la validation du contenu et de leur capacité à expliquer chaque
-partie du projet. Les interventions matérielles et les changements significatifs
+partie du projet. Les contributions substantielles et les changements significatifs
 assistés par IA sont consignés dans le journal de bord. Pour cette remise,
 l’équipe confirme que l’usage de l’IA est autorisé. Cette annexe déclare les
 outils utilisés, la nature de leur contribution et la responsabilité humaine;
 elle ne présente pas cette autorisation comme une question encore ouverte.
 
 
-## Annexe E — Nomenclature matérielle complète du prototype
+## Annexe E — Nomenclature fonctionnelle candidate du prototype
 
-**Tableau 17 — Références candidates, quantités et estimation du 23 septembre 2026.**
+**Tableau 20 — Références candidates, quantités et estimation du 23 septembre 2026.**
 Les prix et liens ci-dessous reprennent la [nomenclature de recherche](../research/nomenclature-materielle-candidate.md).
 Ils n’ont pas été relevés à nouveau lors de cette intégration. Les références
 restent candidates : leur présence dans le tableau ne vaut ni compatibilité
-vérifiée, ni achat approuvé. « Sourcé » désigne un prix relevé dans cette fiche;
-« provisionnel » désigne une estimation sans référence finale.
+vérifiée, ni achat approuvé, et une solution équivalente peut les remplacer si
+elle satisfait la même fonction et les mêmes critères. « Sourcé » désigne un
+prix relevé dans cette fiche; « provisionnel » désigne une estimation sans
+référence finale.
 
 | Sous-ensemble | Référence candidate ou base d’estimation | Qté | Prix unitaire | Sous-total | Nature et validation requise |
 |---|---|---:|---:|---:|---|
 | Hub avec écran | [Makerfabs ESP32S3SPI35 — MaTouch ESP32-S3, TFT 3,5 po](https://ca.robotshop.com/products/matouch-esp32-s3-spi-tft-capacitive-touch-display-35-inch-ili9488-rgb) | 1 | 61,14 $ | 61,14 $ | Sourcé; confirmer GPIO, deux liaisons série, bibliothèque QR et lisibilité sur l’iPhone réel |
-| Contrôleurs de cellules | [Seeed Studio 102010572 — XIAO ESP32-C3, paquet de trois](https://ca.robotshop.com/products/seeedstudio-xiao-esp32c3-unsoldered-3x) | 1 paquet | 20,00 $ | 20,00 $ | Sourcé; deux unités utilisées et une de rechange; confirmer UART, broches et alimentation |
+| Contrôleurs de cellules | [Seeed Studio 102010572 — XIAO ESP32-C3, paquet de trois](https://ca.robotshop.com/products/seeedstudio-xiao-esp32c3-unsoldered-3x) | 1 paquet | 20,00 $ | 20,00 $ | Sourcé; deux unités utilisées et une de rechange; confirmer UART, broches et alimentation; radio intégrée désactivée par le micrologiciel, aucune identité réseau |
 | Interfaces RS-485 | [Waveshare 4777 — SP3485 3,3 V](https://ca.robotshop.com/products/waveshare-rs485-board-33v) | 4 | 5,70 $ | 22,80 $ | Sourcé; une interface à chaque extrémité des deux segments; terminaison et polarisation à mesurer |
 | Lecteurs RFID UHF | [M5Stack U107 — JRD-4035 avec antenne](https://ca.robotshop.com/products/m5stack-uhf-rfid-unit-jrd-4035) | 2 | 112,86 $ | 225,72 $ | Sourcé; la portée annoncée de 1,5 à 2 m rend la localisation par cellule incertaine; POC obligatoire |
 | Tags d’actifs UHF | [PuriLite PL4-WRL-14151 — EPC Gen2 / ISO 18000-6C, paquet de cinq](https://shoppurilite.ca/products/pl4-wrl-14151) | 1 paquet | 9,99 $ | 9,99 $ | Sourcé; compatibilité avec le lecteur, le matériau et l’orientation à vérifier |
@@ -1252,15 +1518,18 @@ vérifiée, ni achat approuvé. « Sourcé » désigne un prix relevé dans cett
 | Moyens de fabrication | Perceuse, scie ou découpe, équipement de protection et, si requis, impression 3D | 1 ensemble | 0,00 $ | 0,00 $ | Hypothèse d’accès au laboratoire; tout achat ou service externe doit être ajouté |
 | **Total des articles** |  |  |  | **714,02 $** | **Inclut 622,02 $ de lignes sourcées et 92,00 $ de provisions** |
 
+**Tableau 21 — Totaux de planification indicatifs.**
+
 | Total de planification | Montant CA |
 |---|---:|
 | Articles avant taxes et livraison | 714,02 $ |
-| Taxes indicatives reprises de l’estimation | 106,92 $ |
+| Taxes indicatives (TPS + TVQ, 14,975 %) | 106,92 $ |
 | Total indicatif avant livraison | 820,94 $ |
 | Provision de livraison | 40,00 $ |
 | **Enveloppe indicative** | **860,94 $** |
 
-Le détail des taxes et du transport sera recalculé sur les paniers réels.
+Les taxes sur la provision de livraison ne sont pas incluses. Le détail des
+taxes et du transport sera recalculé sur les paniers réels.
 Les valeurs électriques des références candidates ne constituent pas des
 consignes de câblage; le dimensionnement et les protections restent à qualifier.
 

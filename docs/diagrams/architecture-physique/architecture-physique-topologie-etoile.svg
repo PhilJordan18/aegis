@@ -50,7 +50,7 @@
   <text x="825" y="468" text-anchor="middle" font-size="11" fill="#6cb2ff">segment 2</text>
 
   <rect x="130" y="525" width="420" height="85" rx="14" fill="#243828" stroke="#8fd382"/>
-  <text x="340" y="558" text-anchor="middle" font-size="14" font-weight="700" fill="#e8e8e8">VALIDÉ PAR ADR-002</text>
+  <text x="340" y="558" text-anchor="middle" font-size="14" font-weight="700" fill="#e8e8e8">ACCEPTÉ PAR ADR-002</text>
   <text x="340" y="583" text-anchor="middle" font-size="12" fill="#b0b0b0">2 ports • 2 câbles • aucun passage par l’autre cellule</text>
   <rect x="650" y="565" width="420" height="85" rx="14" fill="#3a2a0e" stroke="#d9a441" stroke-dasharray="8 6"/>
   <text x="860" y="598" text-anchor="middle" font-size="14" font-weight="700" fill="#fceacd">À QUALIFIER PAR POC</text>
