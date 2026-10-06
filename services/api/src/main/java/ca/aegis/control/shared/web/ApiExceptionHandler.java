@@ -69,7 +69,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @Override
     protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-        ProblemResponse.Violation violation = switch (ex.getMostSpecificCause()) {
+        ProblemResponse.Violation violation = switch (jacksonCause(ex)) {
             case UnrecognizedPropertyException unknown -> new ProblemResponse.Violation(unknown.getPropertyName(),
                     "UNKNOWN_FIELD", "Ce champ n'est pas reconnu.");
             case JacksonException invalid when fieldName(invalid) != null -> new ProblemResponse.Violation(
@@ -101,6 +101,19 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static HttpServletRequest servlet(WebRequest request) {
         return ((ServletWebRequest) request).getRequest();
+    }
+
+    /**
+     * The outermost Jackson exception, which carries the JSON path. The most specific cause is not used: for a
+     * value such as an instant it is the parser's own exception, which no longer knows the field.
+     */
+    private static Throwable jacksonCause(HttpMessageNotReadableException ex) {
+        for (Throwable cause = ex.getCause(); cause != null; cause = cause.getCause()) {
+            if (cause instanceof JacksonException) {
+                return cause;
+            }
+        }
+        return ex.getMostSpecificCause();
     }
 
     private static String fieldName(JacksonException exception) {
