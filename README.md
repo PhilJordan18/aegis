@@ -135,7 +135,7 @@ Philippe porte principalement le logiciel; Jimmy porte principalement le matéri
 
 Le développement iOS nécessitant les Macs de l’école, ses compilations et essais sont prévus pendant ces séances. Les quatre heures hors cours de Philippe servent prioritairement au backend, au Web, au simulateur, aux tests et à la documentation.
 
-Linear est l’outil envisagé pour le backlog opérationnel. Le document 11 conserve la carte des parcours et les références stables des stories; Linear suivra responsables, état et cycle. GitHub conserve code, revues et historique des documents. Claude Code et Codex assistent ces tâches; les deux membres gardent la responsabilité des décisions et des validations.
+Le backlog opérationnel est suivi dans les [issues GitHub](https://github.com/PhilJordan18/aegis/issues) et sur le tableau [Aegis P0](https://github.com/users/PhilJordan18/projects/2), en anglais. Le document 11 conserve la carte des parcours et les références stables des stories; chaque issue reprend ces identifiants, son responsable, son jalon et ses dépendances. GitHub conserve aussi le code, les revues et l’historique des documents. Le travail passe par une branche par issue, une intégration sur `dev` et une livraison vers `main` validée par un humain, selon le [guide de contribution](CONTRIBUTING.md). Claude Code et Codex assistent ces tâches; les deux membres gardent la responsabilité des décisions et des validations.
 
 Le [guide de travail avec les agents et les skills](docs/ai/agentic-workflow.md) explique la séparation entre instructions, skills, sous-agents et outils, ainsi que la stratégie de contexte commune à Claude Code et Codex.
 
@@ -161,5 +161,5 @@ Le scope fixe les engagements. Les autres documents le détaillent; une modifica
 | [11 — Story Map et backlog](docs/cahier-conception/11-user-story-map-p0.md) | Parcours, stories et premiers tickets à saisir |
 | [12 — Architecture physique](docs/cahier-conception/12-architecture-physique.md) | Hub, deux cellules, interfaces et vérification matérielle |
 | [13 — Décisions d’architecture](docs/cahier-conception/13-registre-adrs-proposes.md) | ADRs, décisions actées et arbitrages restants |
-| [14 — Plan d’exécution](docs/cahier-conception/14-plan-iterations-semaines-4-a-15.md) | Capacité par personne, cycles, jalons et organisation Linear |
+| [14 — Plan d’exécution](docs/cahier-conception/14-plan-iterations-semaines-4-a-15.md) | Capacité par personne, cycles et jalons |
 | [15 — Cahier de conception](docs/cahier-conception/15-cahier-de-conception.md) | Synthèse de validation destinée à la remise académique |

@@ -80,6 +80,8 @@ Il expose aussi davantage de fichiers à chaque développeur et augmente le risq
 
 Jimmy prend en charge la mise en place de Linear, conformément à la répartition confirmée par l’équipe. Linear suit les tâches, responsables, dépendances et cycles; GitHub conserve le code et son historique. Cette responsabilité opérationnelle ne donne pas à Jimmy seul l’autorité sur toutes les décisions architecturales.
 
+**Révision du 5 octobre 2026, décision de Philippe :** Linear n’est pas retenu. Le backlog est suivi dans GitHub Issues et sur le tableau `Aegis P0`, en anglais, ce qui réunit tâches, branches, revues et code dans le même outil. Chaque membre complète les issues dont il est responsable; Jimmy suit notamment celles du matériel et du firmware. Les branches d’issue sont intégrées sur `dev`, puis livrées vers `main` par une PR validée par un humain (`CONTRIBUTING.md`).
+
 Les issues sont reliées aux PR, aux contrats et aux ADRs concernés. Les statuts des tâches ne sont pas maintenus en double dans un second backlog GitHub. Le document de conception résume les décisions; les fichiers de `docs/adr/` en conservent le détail normatif.
 
 ## Critères de vérification et évolution

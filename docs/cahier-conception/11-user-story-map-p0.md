@@ -5,7 +5,8 @@
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de révision :** 17 septembre 2026  
 **Version :** 2.0 — backlog d’exécution, responsabilités et tickets initiaux  
-**Mise à jour ciblée :** 23 septembre 2026 — IAM-01 alignée sur l’ADR-007; POC-02 conserve le choix de connecteur ouvert.
+**Mise à jour ciblée :** 23 septembre 2026 — IAM-01 alignée sur l’ADR-007; POC-02 conserve le choix de connecteur ouvert.  
+**Mise à jour ciblée :** 5 octobre 2026 — le backlog opérationnel est suivi dans GitHub Issues au lieu de Linear.  
 **Références :** [scope](02-scope.md), documents 03–10 et [plan d’itérations](14-plan-iterations-semaines-4-a-15.md).
 
 ---
@@ -257,7 +258,7 @@ Une story est terminée lorsque :
 3. Les stories P1/P2 ne remplacent jamais un test, un refus ou une preuve physique P0.
 4. Toute modification d’un contrat public ou d’un invariant exige une décision d’équipe et, si elle est structurante, un ADR.
 5. Après deux itérations, remplacer les hypothèses de vélocité par la moyenne réellement terminée.
-6. Une story incomplète n’est pas comptée comme terminée. Revoir son engagement au cycle suivant; un report automatique dans Linear ne remplace pas cette décision.
+6. Une story incomplète n’est pas comptée comme terminée. Revoir son engagement au cycle suivant; un report automatique dans le backlog ne remplace pas cette décision.
 
 ## 11. Backlog opérationnel et premiers tickets
 
@@ -271,7 +272,7 @@ Une story est terminée lorsque :
 | CHK, RET, ANO | Philippe pour le résultat métier | Jimmy fournit les observations et participe aux essais physiques |
 | QUA, DEM | Philippe pour le suivi | Les deux exécutent les scénarios; la charge commune compte chez chacun |
 
-Le partage du firmware reste une hypothèse du document 14. Une tâche Linear exécutable a un seul responsable; si deux personnes produisent deux parties distinctes, créer deux sous-tâches. Les IDs ci-dessous sont des références de projet, pas des numéros Linear déjà attribués.
+Le partage du firmware reste une hypothèse du document 14. Une issue GitHub exécutable a un seul responsable; si deux personnes produisent deux parties distinctes, créer deux issues reliées comme sous-issues. Les IDs ci-dessous sont des références de projet reprises dans le titre des issues, pas leurs numéros GitHub.
 
 ### 11.2 Première vague à saisir
 
@@ -280,7 +281,7 @@ Ces tickets sont prêts à être discutés et saisis. Leur budget est une **time
 | Ordre | Ticket | Responsable | Budget initial | Dépendance |
 |---:|---|---|---|---|
 | 1 | DOC-01 — Préparer le cahier de synthèse PDF | Philippe; figures Jimmy | P : 3 h; J : 1 h | Consignes exactes et sources des figures |
-| 2 | PLAN-01 — Initialiser le backlog Linear minimal | Philippe ou Jimmy, un seul assigné | 0,5 h chez l’assigné | Structure du document 14 |
+| 2 | PLAN-01 — Initialiser le backlog GitHub minimal | Philippe ou Jimmy, un seul assigné | 0,5 h chez l’assigné | Structure du document 14 |
 | 3 | HW-01 — Référencer et chiffrer le matériel des deux cellules | Jimmy | J : 1,5 h | Architecture 12 et disponibilité du laboratoire |
 | 4 | POC-03 — Caractériser le verrou sur banc | Jimmy | J : 2 h | Verrou disponible, fiche et banc adapté |
 | 5 | FND-01 — Démarrer PostgreSQL et le broker | Philippe | P : 3 h | Environnement local utilisable |
@@ -302,14 +303,14 @@ Ces huit tickets ne sont pas huit engagements pour la première semaine. DOC-01 
 
 La première timebox peut produire un brouillon complet; le ticket reste ouvert si un diagramme requis ou la relecture manque. La remise aux enseignants est une action distincte de l’export.
 
-### PLAN-01 — Initialiser le backlog Linear minimal
+### PLAN-01 — Initialiser le backlog GitHub minimal
 
 **Résultat :** une équipe, un projet P0, les jalons utiles et un premier cycle compréhensible par les deux membres.
 
 - Saisir la première vague avec IDs de référence, critères, responsable et dépendances.
 - Configurer le modèle d’issue et les budgets par personne décrits dans le document 14.
 - Conserver au maximum deux tâches en cours; ne pas remplir tous les futurs cycles.
-- Lier les documents et le dépôt existants sans recopier tous les contrats dans Linear.
+- Lier les documents et le dépôt existants sans recopier tous les contrats dans les issues.
 
 ### HW-01 — Chiffrer la réalisation complète
 
