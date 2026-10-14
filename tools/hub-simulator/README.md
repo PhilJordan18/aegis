@@ -83,8 +83,12 @@ docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml
 
 Les identifiants complets par défaut sont A1 =
 `1ae77ae3-8490-4f09-9412-a7816b77bff9` (exemple des documents 09 et 10) et
-A2 = `5c1d0b7e-2f4a-4d3b-9a61-0e8b7c2d4f10` (fixture de conception). Les
-données de démonstration du backend devront utiliser les mêmes valeurs.
+A2 = `5c1d0b7e-2f4a-4d3b-9a61-0e8b7c2d4f10`. L'UUID de A2 provient d'une
+fixture de conception (`docs/design/asset-lifecycle/prototype/data/fixture.js`) :
+c'est une valeur de démonstration configurable, pas une donnée de référence
+approuvée pour la base du backend. Aucun seed n'est encore défini; lorsqu'il le
+sera, `AEGIS_SIM_COMPARTMENTS` doit reprendre ses identifiants, et non
+l'inverse.
 
 ## Scénarios scriptables
 

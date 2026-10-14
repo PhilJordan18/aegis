@@ -12,7 +12,8 @@ import {
 /**
  * Fictitious locker of the local broker ACL (infra/mqtt/acl) and of the doc 09/10
  * examples. A1 reuses the documented example compartmentId; A2 reuses the id of the
- * design fixture (docs/design/asset-lifecycle/prototype/data/fixture.js).
+ * design fixture (docs/design/asset-lifecycle/prototype/data/fixture.js). Both are
+ * configurable demo values, not an approved backend seed.
  */
 export const DEFAULT_LOCKER_ID = 'd46a74ae-39dc-460b-8af0-38fc791b376a';
 export const DEFAULT_COMPARTMENTS: readonly CompartmentConfig[] = [
