@@ -29,7 +29,7 @@ npm run preview        # sert dist/
 npm run test:a11y      # Playwright : axe (WCAG 2.x A/AA), absence de défilement horizontal et parcours, sur toute la matrice
 npm run capture        # mêmes contrôles, et écrit la matrice complète dans test-results/captures/ (ignoré par Git)
 npm run capture:evidence  # 16 captures choisies, à 1×, dans docs/design/manager-entree/captures/
-npm run test:e2e:api   # Playwright contre l'API réelle (build de production); ignoré sans API ni identifiants
+npm run test:e2e:api   # recette Playwright contre l'API réelle (build de production); échoue sans API ou sans identifiants
 ```
 
 ### Développer contre l'API
@@ -55,9 +55,13 @@ est jointe, jamais PostgreSQL ni MQTT.
 
 Il lit `AEGIS_DEMO_ADMIN_PASSWORD` et `AEGIS_DEMO_TECHNICIAN_PASSWORD`, les
 mêmes variables que l'API (courriels : `AEGIS_DEMO_ADMIN_EMAIL` et
-`AEGIS_DEMO_TECHNICIAN_EMAIL`, par défaut ceux de la démonstration). Sans ces
-variables, rien n'est construit et les tests sont ignorés; sans API, ils sont
-ignorés aussi. Les mots de passe ne sont jamais écrits dans un fichier ni
+`AEGIS_DEMO_TECHNICIAN_EMAIL`, par défaut ceux de la démonstration). C'est une
+commande de recette : sans ces variables, elle échoue avant toute
+construction; sans API joignable, elle échoue dès la mise en place globale.
+Aucun test n'y est ignoré, donc une exécution réussie signifie que les cinq
+scénarios ont réellement passé contre l'API. Les contrôles hors ligne restent
+`npm test` et les autres projets Playwright, qui ne chargent pas cette
+configuration. Les mots de passe ne sont jamais écrits dans un fichier ni
 affichés.
 
 Ces trois commandes Playwright démarrent leur propre serveur Vite sur

@@ -1,9 +1,9 @@
 import { expect, test, type Page, type Request } from '@playwright/test'
 
 /**
- * WEB-01 against the real Aegis Control API (playwright.api.config.ts). Skipped,
- * never failed, when the demo credentials or the API are absent. Passwords come
- * from the environment only and are never printed.
+ * WEB-01 acceptance against the real Aegis Control API (playwright.api.config.ts).
+ * Nothing here is skipped: missing credentials or an unreachable API fail the
+ * run. Passwords come from the environment only and are never printed.
  */
 const ADMIN_EMAIL = process.env.AEGIS_DEMO_ADMIN_EMAIL ?? 'admin@aegis.demo'
 const TECHNICIAN_EMAIL = process.env.AEGIS_DEMO_TECHNICIAN_EMAIL ?? 'technician@aegis.demo'
@@ -30,10 +30,10 @@ async function signIn(page: Page, email: string, password: string) {
 }
 
 test.beforeAll(async ({ request }) => {
-  test.skip(!ADMIN_PASSWORD || !TECHNICIAN_PASSWORD, 'AEGIS_DEMO_ADMIN_PASSWORD and AEGIS_DEMO_TECHNICIAN_PASSWORD are not set')
+  expect(ADMIN_PASSWORD && TECHNICIAN_PASSWORD, 'demo passwords must be set for the acceptance run').toBeTruthy()
   // Through the preview server's proxy: proves the same path the browser uses.
-  const health = await request.get('/api/v1/system/health').catch(() => null)
-  test.skip(health === null || !health.ok(), 'Aegis Control API unreachable through the /api proxy')
+  const health = await request.get('/api/v1/system/health')
+  expect(health.ok(), 'Aegis Control API reachable through the /api proxy').toBe(true)
 })
 
 test.beforeEach(async ({ page }) => {
