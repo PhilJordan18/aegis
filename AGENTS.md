@@ -25,14 +25,18 @@ Write course and product documentation in French unless the task says otherwise.
 Use this order when sources disagree:
 
 1. `docs/cahier-conception/02-scope.md`
-2. Accepted ADRs in `docs/adr/`
+2. Accepted ADRs, as files in `docs/adr/` or accepted fiches of document 13; an
+   ADR that explicitly supersedes another prevails over it
 3. Approved normative documents 03-10 in `docs/cahier-conception/`
 4. `README.md`
 5. The current issue or task
 6. Informal assumptions
 
 Document 13 is an ADR register; a proposed entry is not accepted merely because
-it appears there. Never silently override the approved scope or invent a missing
+it appears there. Accepted ADRs are never edited. To change a decision, write a
+new ADR that states the earlier decision, the reason for the change, the new
+decision, its consequences, and the sections it supersedes; then update the
+register and the current references, and leave the earlier ADR text unchanged. Never silently override the approved scope or invent a missing
 contract. If a reference is empty, duplicated, wrongly titled, or contradictory,
 report the documentation defect before relying on it.
 

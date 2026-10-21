@@ -108,6 +108,24 @@ git config core.hooksPath .githooks
 `--no-verify` reste réservé à une opération humaine exceptionnelle et
 annoncée à l'autre membre.
 
+## Décisions d'architecture (ADR)
+
+Un ADR accepté n'est jamais modifié, qu'il s'agisse d'un fichier de `docs/adr/`
+ou d'une fiche acceptée du document 13. Pour faire évoluer une décision, créer
+un nouvel ADR qui expose :
+
+- la décision antérieure et sa référence;
+- la raison du changement;
+- la nouvelle décision;
+- ses conséquences;
+- les sections remplacées.
+
+Mettre ensuite à jour le
+[registre du document 13](docs/cahier-conception/13-registre-adrs-proposes.md)
+(statut `SUPERSEDED` ou portée remplacée, lien vers le nouvel ADR) et les
+références courantes. Un ADR `PROPOSED` reste modifiable jusqu'à son
+acceptation. Les amendements déjà présents dans d'anciens ADR restent en l'état.
+
 ## Avant de modifier le dépôt
 
 1. Lire `README.md`, `AGENTS.md` et les sections normatives liées à la tâche.

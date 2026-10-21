@@ -80,7 +80,7 @@ Request a human decision before:
 
 ## ADR triggers
 
-Create or update an ADR when a decision:
+Create an ADR when a decision:
 
 - affects more than one component;
 - changes the trust boundary;
@@ -90,6 +90,13 @@ Create or update an ADR when a decision:
 - introduces significant infrastructure;
 - creates a long-term operational constraint;
 - deliberately accepts an important tradeoff.
+
+Never edit an accepted ADR, whether a file in `docs/adr/` or an accepted fiche
+in document 13. To change a decision, write a new ADR with these sections:
+earlier decision, reason for the change, new decision, consequences, and
+superseded sections. Then update the status and links in the document 13
+register and the current references. A `PROPOSED` ADR may change until it is
+accepted.
 
 ## Scope-change gate
 
