@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="100" viewBox="0 0 400 100" role="img" aria-labelledby="title desc">
+  <title id="title">Aegis Core — logo provisoire</title>
+  <desc id="desc">Un A géométrique ouvert abrite un losange central. Proposition de marque indépendante du matériel.</desc>
+  <g transform="translate(12 16)">
+    <path d="M4 60 27 8H38L15 60Z" fill="#234BCE"/>
+    <path d="M38 8 61 60H49L32 21Z" fill="#234BCE"/>
+    <path d="m32 33 8 8-8 8-8-8Z" fill="#087A9B"/>
+  </g>
+  <text x="95" y="65" fill="#122339" font-family="Inter, Arial, sans-serif" font-size="54" font-weight="600" letter-spacing="-2">aegis</text>
+  <path d="M255 30V70" stroke="#B5C0CC"/>
+  <text x="276" y="59" fill="#344D68" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="500" letter-spacing="4">CORE</text>
+</svg>

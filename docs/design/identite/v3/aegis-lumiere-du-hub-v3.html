@@ -1,0 +1,95 @@
+<style>
+#aegis-v3 { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+#aegis-v3 * { box-sizing:border-box; }
+#aegis-v3 .stage { min-height:800px; padding:22px 8px; display:flex; justify-content:center; align-items:flex-start; }
+#aegis-v3 .device { --bg:#070c13; --panel:#0d1520; --field:#141f2d; --text:#f1f5fc; --muted:#abb9cd; --border:#2b3b50; --accent:#8caeff; --core:#64d8eb; --button:#315ee8; --buttontext:#fff; --halo:#193e7355; --top:#070d17; --ring:#70a7ff30; --errorbg:#3b2024; --errortext:#ffc9cb; color-scheme:dark; width:390px; max-width:100%; min-height:740px; border-radius:44px; border:1px solid #60708950; background:var(--bg); color:var(--text); box-shadow:0 20px 60px #0004; overflow:hidden; position:relative; }
+#aegis-v3 .device.light { --bg:#f5f7fb; --panel:#fff; --field:#f3f5f9; --text:#122339; --muted:#53647b; --border:#d7dfe9; --accent:#234bce; --core:#087a9b; --button:#234bce; --halo:#92b8f73a; --top:#edf2fa; --ring:#5b81c32b; --errorbg:#fff0f1; --errortext:#9e2837; color-scheme:light; }
+#aegis-v3 .hero { height:272px; padding:0 26px; position:relative; background:radial-gradient(ellipse at 75% 80%,var(--halo),transparent 63%),var(--top); }
+#aegis-v3 .status { height:54px; display:flex; justify-content:space-between; align-items:center; padding:0 4px; font-size:13px; font-weight:600; }
+#aegis-v3 .notch { position:absolute; top:0; width:116px; height:25px; left:calc(50% - 58px); background:#05070a; border-radius:0 0 17px 17px; }
+#aegis-v3 .signals { display:flex; gap:5px; }
+#aegis-v3 .signals svg { width:15px; height:15px; }
+#aegis-v3 .brand { display:flex; align-items:center; gap:10px; margin-top:15px; }
+#aegis-v3 .mark { position:relative; width:34px; height:34px; flex:none; color:var(--accent); }
+#aegis-v3 .mark:before { content:""; position:absolute; inset:0; background:currentColor; clip-path:polygon(6.25% 93.75%,42.19% 12.5%,59.38% 12.5%,23.44% 93.75%); }
+#aegis-v3 .mark:after { content:""; position:absolute; inset:0; background:currentColor; clip-path:polygon(59.38% 12.5%,95.31% 93.75%,76.56% 93.75%,50% 32.81%); }
+#aegis-v3 .mark b { position:absolute; left:37.5%; top:51.56%; width:25%; height:25%; background:var(--core); clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%); }
+#aegis-v3 .wordmark { font-size:29px; font-weight:650; letter-spacing:-1.3px; }
+#aegis-v3 .core-label { font-size:10px; font-weight:500; letter-spacing:2.1px; border-left:1px solid var(--border); padding-left:11px; margin-left:3px; color:var(--muted); }
+#aegis-v3 .promise { position:relative; z-index:2; margin:26px 0 0; font-size:30px; line-height:1.08; letter-spacing:-1.1px; font-weight:600; }
+#aegis-v3 .promise span { color:var(--accent); }
+#aegis-v3 .panel { margin-top:-4px; position:relative; z-index:3; padding:25px 26px 20px; background:var(--panel); border-top:1px solid var(--border); border-radius:27px 27px 0 0; min-height:460px; }
+#aegis-v3 .eyebrow { margin:0 0 9px; font-size:10px; font-weight:600; letter-spacing:1.8px; color:var(--muted); text-transform:uppercase; }
+#aegis-v3 h2 { margin:0 0 7px; font-size:29px; font-weight:650; letter-spacing:-.9px; line-height:1.15; color:var(--text); }
+#aegis-v3 .subtitle { margin:0; color:var(--muted); font-size:14px; line-height:1.5; }
+#aegis-v3 .fields { margin-top:23px; background:var(--field); border:1px solid var(--border); border-radius:14px; padding:0 15px; }
+#aegis-v3 .field { display:block; padding:13px 0; }
+#aegis-v3 .field+.field { border-top:1px solid var(--border); }
+#aegis-v3 .caption { display:block; margin-bottom:6px; font-size:12px; font-weight:500; color:var(--text); }
+#aegis-v3 input { background:transparent; border:0; border-radius:3px; padding:0; width:100%; min-width:0; color:var(--text); font:400 16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+#aegis-v3 input::placeholder { color:var(--muted); opacity:1; }
+#aegis-v3 .password { display:flex; align-items:center; gap:5px; }
+#aegis-v3 .eye { width:44px; height:44px; flex:none; background:transparent; border:0; color:var(--muted); display:grid; place-items:center; margin:-10px -7px -10px 0; border-radius:8px; }
+#aegis-v3 .eye svg { width:19px; height:19px; }
+#aegis-v3 .submit { width:100%; min-height:54px; margin-top:17px; border:1px solid #7d9bff66; border-radius:14px; background:var(--button); color:var(--buttontext); font:600 16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; display:flex; align-items:center; justify-content:space-between; padding:0 18px; }
+#aegis-v3 .submit svg { width:18px; height:18px; }
+#aegis-v3 .note { font-size:12px; line-height:1.5; text-align:center; color:var(--muted); margin:17px 0 0; }
+#aegis-v3 .home { width:116px; height:5px; border-radius:5px; background:var(--text); margin:33px auto 0; }
+#aegis-v3 .error { background:var(--errorbg); color:var(--errortext); border-radius:10px; padding:11px 13px; font-size:13px; line-height:1.45; margin-top:14px; }
+#aegis-v3 [hidden] { display:none !important; }
+#aegis-v3 .brand-stage { min-height:800px; padding:24px 12px; display:grid; align-content:center; gap:18px; }
+#aegis-v3 .specimen { --accent:#8caeff; --core:#64d8eb; --border:#35465f; --muted:#b0c0d6; color:#f0f4fc; background:#070c13; border-radius:20px; padding:38px 28px; }
+#aegis-v3 .specimen.paper { --accent:#234bce; --core:#087a9b; --border:#bcc7d4; --muted:#344d68; color:#122339; background:#f7f9fc; }
+#aegis-v3 .specimen .brand { margin:0; justify-content:center; }
+#aegis-v3 .specimen .mark { width:50px; height:50px; }
+#aegis-v3 .specimen .wordmark { font-size:40px; }
+#aegis-v3 .specimen .core-label { font-size:13px; }
+#aegis-v3 .standalone-mark { display:flex; align-items:center; justify-content:center; gap:40px; margin-top:30px; padding-top:25px; border-top:1px solid var(--border); }
+#aegis-v3 .standalone-mark .mark.small { width:24px; height:24px; }
+#aegis-v3 .standalone-mark .mark.mono { --core:var(--accent); }
+@media(max-width:410px) { #aegis-v3 .stage { padding:12px 0; } #aegis-v3 .device { border-radius:30px; } #aegis-v3 .hero { padding:0 21px; } #aegis-v3 .panel { padding-left:21px; padding-right:21px; } #aegis-v3 .core-label { font-size:9px; } #aegis-v3 .specimen { padding:30px 16px; } #aegis-v3 .specimen .wordmark { font-size:33px; } }
+</style>
+<div id="aegis-v3">
+<div class="viz-carousel viz-dotted-background" aria-label="Lumière du hub — révision sans illustration" data-previous-label="Précédente" data-next-label="Suivante">
+<section data-variant="Sombre profond" aria-label="Connexion en mode sombre"><div class="stage"><div class="device" aria-label="Prototype de connexion sombre">
+<div class="hero"><div class="status"><span>9:41</span><div class="notch"></div><div class="signals"><i data-lucide="signal" aria-hidden="true"></i><i data-lucide="wifi" aria-hidden="true"></i><i data-lucide="battery-full" aria-hidden="true"></i></div></div>
+<div class="brand"><span class="mark" aria-hidden="true"><b></b></span><span class="wordmark">aegis</span><span class="core-label">CORE</span></div>
+<div class="promise">Prêt.<br>Autorisé.<br><span>Prouvé.</span></div>
+</div>
+<div class="panel"><p class="eyebrow">Espace technicien</p><h2>Connexion</h2><p class="subtitle">Vos équipements. Votre activité.</p><div class="error" role="status" hidden>Adresse courriel ou mot de passe incorrect.</div>
+<div class="fields"><label class="field"><span class="caption">Adresse courriel</span><input type="email" placeholder="nom@entreprise.ca" autocomplete="off" aria-label="Adresse fictive pour la maquette"></label><label class="field"><span class="caption">Mot de passe</span><span class="password"><input type="password" placeholder="Saisir votre mot de passe" autocomplete="off" aria-label="Mot de passe fictif pour la maquette"><button class="eye" type="button" aria-label="Afficher le mot de passe"><i data-lucide="eye" aria-hidden="true"></i></button></span></label></div>
+<button class="submit" type="button"><span>Se connecter</span><i data-lucide="arrow-right" aria-hidden="true"></i></button><p class="note">Compte fourni par votre administrateur.</p><div class="home"></div></div>
+</div></div></section>
+<section data-variant="Clair minéral" aria-label="Connexion en mode clair" hidden><div class="stage"><div class="device light" aria-label="Prototype de connexion clair">
+<div class="hero"><div class="status"><span>9:41</span><div class="notch"></div><div class="signals"><i data-lucide="signal" aria-hidden="true"></i><i data-lucide="wifi" aria-hidden="true"></i><i data-lucide="battery-full" aria-hidden="true"></i></div></div>
+<div class="brand"><span class="mark" aria-hidden="true"><b></b></span><span class="wordmark">aegis</span><span class="core-label">CORE</span></div>
+<div class="promise">Prêt.<br>Autorisé.<br><span>Prouvé.</span></div>
+</div>
+<div class="panel"><p class="eyebrow">Espace technicien</p><h2>Connexion</h2><p class="subtitle">Vos équipements. Votre activité.</p><div class="error" role="status" hidden>Adresse courriel ou mot de passe incorrect.</div>
+<div class="fields"><label class="field"><span class="caption">Adresse courriel</span><input type="email" placeholder="nom@entreprise.ca" autocomplete="off" aria-label="Adresse fictive pour la maquette"></label><label class="field"><span class="caption">Mot de passe</span><span class="password"><input type="password" placeholder="Saisir votre mot de passe" autocomplete="off" aria-label="Mot de passe fictif pour la maquette"><button class="eye" type="button" aria-label="Afficher le mot de passe"><i data-lucide="eye" aria-hidden="true"></i></button></span></label></div>
+<button class="submit" type="button"><span>Se connecter</span><i data-lucide="arrow-right" aria-hidden="true"></i></button><p class="note">Compte fourni par votre administrateur.</p><div class="home"></div></div>
+</div></div></section>
+<section data-variant="Signature Core" aria-label="Étude de logo provisoire" hidden><div class="brand-stage">
+<div class="specimen"><div class="brand"><span class="mark" aria-hidden="true"><b></b></span><span class="wordmark">aegis</span><span class="core-label">CORE</span></div><div class="standalone-mark" aria-label="Monogramme, version monochrome et petit format"><span class="mark"><b></b></span><span class="mark mono"><b></b></span><span class="mark small"><b></b></span></div></div>
+<div class="specimen paper"><div class="brand"><span class="mark" aria-hidden="true"><b></b></span><span class="wordmark">aegis</span><span class="core-label">CORE</span></div><div class="standalone-mark" aria-label="Monogramme sur fond clair"><span class="mark"><b></b></span><span class="mark mono"><b></b></span><span class="mark small"><b></b></span></div></div>
+</div></section>
+</div>
+</div>
+<script>
+(() => {
+ const initialize = () => {
+  const root=document.getElementById('aegis-v3');
+  if(!root || root.dataset.bound) return;
+  root.dataset.bound='true';
+  root.querySelectorAll('.device').forEach(phone => {
+   const error=phone.querySelector('.error');
+   phone.querySelector('.submit').addEventListener('click',()=>{error.hidden=false;});
+   phone.querySelector('.eye').addEventListener('click',event=>{const button=event.currentTarget; const input=phone.querySelector('.password input'); const reveal=input.type==='password'; input.type=reveal?'text':'password'; button.setAttribute('aria-label',reveal?'Masquer le mot de passe':'Afficher le mot de passe');});
+   const state={error:false};
+   if(globalThis.Tweak) { const tweak=new Tweak({container:phone,onChange:()=>{error.hidden=!state.error;}}); tweak.addToggle(state,'error',{label:'Afficher une erreur'}); }
+  });
+ };
+ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',initialize,{once:true}); else initialize();
+})();
+</script>
+
