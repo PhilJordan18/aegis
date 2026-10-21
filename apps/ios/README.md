@@ -38,9 +38,10 @@ avec les versions réellement testées :
 
 | Configuration | Recette | Résultat (21 octobre 2026, branche #36) |
 |---|---|---|
-| iPhone 17, iOS 26.3.1 (simulateur) | `standalone` | 81 réussis, 0 ignoré; audits d'accessibilité réussis; catalogue cohérent (70 clés) |
+| iPhone 17, iOS 26.3.1 (simulateur) | `standalone` | 93 réussis, 0 ignoré; audits d'accessibilité réussis; catalogue cohérent (71 clés) |
 | iPhone 17, iOS 26.3.1 (simulateur) | `live`, API locale de `dev` (34c056c), comptes de démonstration | 8 réussis, 0 ignoré |
-| iPhone SE (3e génération), iOS 17.5 (simulateur) | `standalone` | 81 réussis, 0 ignoré; audits réussis; catalogue cohérent |
+| Release, simulateur générique | compilation | aucun symbole de couverture, aucun hook de test dans le binaire |
+| iPhone SE (3e génération), iOS 17.5 (simulateur) | `standalone` | 93 réussis, 0 ignoré; audits réussis; catalogue cohérent |
 | iOS 17.0 exact, iOS 18.x, iOS 26.0 | — | non testés (pas de runtime 17.0; autres runtimes non exécutés) |
 | iPhone 12 (Philippe), iPhone 15 Plus (Jimmy) | — | non testés; versions déclarées non confirmées (voir plus bas) |
 
@@ -149,16 +150,23 @@ xcrun simctl launch booted com.example.aegis.mobile
 | Lancement sans session | Formulaire de connexion |
 | Session au Keychain, non expirée | « Reprise de la session… », puis `GET /auth/me`; le compte n'est affiché qu'après acceptation par le serveur |
 | `GET /auth/me` injoignable ou en erreur 5xx | Jeton conservé, écran « Connexion au service impossible » avec Réessayer et Se déconnecter; session non présentée comme vérifiée, aucune action métier |
-| Expiration (`expiresAt`, 60 min, sans refresh token) | Retour à la connexion, courriel prérempli, message d'expiration; vérifiée à l'échéance et au retour au premier plan |
-| 401 ou 403 sur une route protégée | Jeton supprimé; « session expirée » pour `AUTH_TOKEN_EXPIRED`, sinon « session n'est plus valide » |
+| Expiration (`expiresIn`, 60 min, sans refresh token) | Échéance calculée sur l'horloge de l'appareil à la réception; retour à la connexion, courriel prérempli, message d'expiration; vérifiée à l'échéance, après chaque réveil et au retour au premier plan |
+| 401 sur une route protégée | Jeton supprimé; « session expirée » pour `AUTH_TOKEN_EXPIRED`, sinon « session n'est plus valide » |
+| 403 | Refus de l'action, session conservée (doc 09 §4.3); sauf sur `GET /auth/me` à la reprise, où il signifie que le compte ne peut pas utiliser l'app |
+| Réponse tardive | Une réponse arrivée après une déconnexion ou une nouvelle session est ignorée |
 | 401 à la connexion | « Adresse courriel ou mot de passe incorrect. »; mot de passe effacé, courriel conservé |
 | 429 | Délai `Retry-After` affiché une seule fois s'il est valide (1 à 3600 s), bouton désactivé jusque-là; sinon « Réessayez plus tard. » sans verrou |
-| Compte administrateur | Jeton non conservé, aucune donnée chargée, écran « Accès réservé aux techniciens » |
+| Compte administrateur ou rôle inconnu | Jeton non conservé, aucune donnée chargée, écran « Accès réservé aux techniciens » (message neutre pour un rôle inconnu) |
 | Déconnexion | Confirmation, puis suppression locale du jeton (aucune route serveur) |
 
 - Le jeton, son échéance et l'adresse sont un seul élément Keychain
   `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`; jamais `UserDefaults`,
-  jamais journalisés (descriptions de débogage masquées).
+  jamais journalisés (descriptions de débogage et réflexion masquées).
+- Une erreur Keychain passagère au lancement conserve l'élément; un élément
+  illisible est supprimé; si la déconnexion ne peut pas le supprimer, il est
+  écrasé par une session vide et expirée.
+- Seuls les `traceId` alphanumériques (avec tirets, 64 caractères au plus)
+  sont affichés.
 - Le client ne lit jamais le contenu du jeton; le serveur reste l'autorité.
 - Un double envoi est ignoré pendant la requête; l'état d'envoi est annoncé
   à VoiceOver.
