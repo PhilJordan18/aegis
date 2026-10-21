@@ -44,9 +44,12 @@ l'ingestion backend (PHY-01, §15.3 et §23.5 points 5 à 12).
 | `resetReason` | `DEVICE_RESTARTED` | `POWER_ON`, `EXTERNAL_RESET`, `SOFTWARE_RESET`, `WATCHDOG`, `PANIC`, `BROWNOUT` ou `UNKNOWN` |
 
 Un nouveau `connectionId` et un nouveau Last Will (nouveau `messageId`, nouvelle
-`sequence`) sont préparés dès qu'une connexion établie se ferme. Une tentative
-qui n'obtient pas de CONNACK réutilise le Will et le `connectionId` préparés :
-le broker ne les a jamais armés.
+`sequence`) sont préparés avant **chaque** tentative de connexion : au démarrage,
+puis à chaque fermeture, que la connexion ait été établie ou non. Aucun Will
+n'est réutilisé, même après une tentative sans CONNACK : le broker enregistre le
+Will dès qu'il accepte le CONNECT [MQTT-3.1.2-8], donc un CONNACK perdu peut
+cacher un Will déjà armé, dont la publication fermerait ce `connectionId` pour
+de bon.
 
 Le simulateur refuse, à la configuration comme dans un scénario, un
 `resetReason` hors liste. La tolérance du contrat (une valeur inconnue traitée
@@ -203,7 +206,7 @@ tardif, heartbeat retardé, ancien `DEVICE_RESTARTED`, doublon.
 | `type` | Requis : `HEARTBEAT`, `DEVICE_AVAILABILITY` ou `DEVICE_RESTARTED` |
 | `reason` | `DEVICE_AVAILABILITY` seulement; `CONNECTION_LOST` désigne un Last Will préparé |
 | `bootsAgo` | 0 = démarrage courant, 1 = précédent |
-| `connectionsAgo` | 0 = dernière connexion préparée, 1 = la précédente, comptées sur toute l'exécution, démarrages compris; interdit pour `DEVICE_RESTARTED`, qui n'a pas de `connectionId` |
+| `connectionsAgo` | 0 = dernière connexion préparée, 1 = la précédente, comptées sur toute l'exécution, démarrages compris, chaque tentative comptant pour une connexion; interdit pour `DEVICE_RESTARTED`, qui n'a pas de `connectionId` |
 
 Sans `bootsAgo` ni `connectionsAgo`, le message le plus récent du type est
 choisi; les deux ensemble sont refusés. Le simulateur garde, par connexion, le

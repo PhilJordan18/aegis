@@ -82,7 +82,6 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
   #transport: Transport | undefined;
   /** The MQTT connection being attempted or in use, and the Will prepared for it. */
   #connectionId: string | undefined;
-  #willArmed = false;
   #reconnectAttempt = 0;
   #heartbeatTimer: NodeJS.Timeout | undefined;
   #reconnectTimer: NodeJS.Timeout | undefined;
@@ -122,7 +121,7 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
     return this.#session?.bootCount;
   }
 
-  /** The connection being attempted or in use; it changes once a connection was established. */
+  /** The connection being attempted or in use; every connection attempt gets a new one. */
   get connectionId(): string | undefined {
     return this.#connectionId;
   }
@@ -296,7 +295,6 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
 
   #onConnect(transport: Transport): void {
     if (transport !== this.#transport || this.#state === 'stopping' || this.#state === 'stopped') return;
-    this.#willArmed = true;
     this.#reconnectAttempt = 0;
     this.#setState('online');
     // Doc 10 §18 order after (re)connection: ONLINE, DEVICE_RESTARTED on a real boot,
@@ -320,14 +318,12 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
   #onClose(transport: Transport): void {
     if (transport !== this.#transport || this.#state === 'stopping' || this.#state === 'stopped') return;
     this.#clearTimers();
-    if (this.#willArmed) {
-      // The broker has consumed the previous Will; the next connection is a new one
-      // (new connectionId) and its loss a new fact (new messageId, doc 10 §8.1). A
-      // CONNECT that never got a CONNACK keeps the prepared Will and connectionId.
-      this.#willArmed = false;
-      const will = this.#prepareConnection();
-      transport.setWill({ topic: will.topic, body: will.body, delivery: will.delivery });
-    }
+    // Every attempt gets a new connectionId and Will, even when no CONNACK was seen:
+    // the broker stores the Will as soon as it accepts the CONNECT [MQTT-3.1.2-8], so
+    // a lost CONNACK may already have armed it, and publishing it would close that
+    // connectionId for good.
+    const will = this.#prepareConnection();
+    transport.setWill({ topic: will.topic, body: will.body, delivery: will.delivery });
     const attempt = this.#reconnectAttempt++;
     const delay = reconnectDelayMs(attempt, this.#random);
     this.#setState('reconnecting');
@@ -340,7 +336,7 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
     }, delay);
   }
 
-  /** A new connectionId and its Last Will, numbered now, before the CONNECT (decision D6). */
+  /** A new connectionId and its Last Will, numbered now, before each CONNECT (decision D6). */
   #prepareConnection(): OutboundMessage {
     const connectionId = this.#newId();
     this.#connectionId = connectionId;

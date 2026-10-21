@@ -179,28 +179,36 @@ describe('reconnection without reboot (doc 10 §18)', () => {
     expect(t.published.map((p) => p.payload.connectionId)).toEqual([secondWill.connectionId, secondWill.connectionId]);
   });
 
-  it('doubles the delay on consecutive failures up to 30 s and keeps the unused Will', async () => {
+  it('doubles the delay on consecutive failures up to 30 s and prepares a new Will for every attempt', async () => {
     const { sim, transport } = setup();
     const delays: number[] = [];
     sim.on('reconnectScheduled', (delay) => delays.push(delay));
     sim.start();
     const t = transport();
-    const will = t.will.body;
+    // Each attempt's Will, as registered in its CONNECT.
+    const attempts = [JSON.parse(t.will.body)];
     for (let i = 0; i < 7; i++) {
       t.brokerClose();
       await vi.advanceTimersByTimeAsync(30_000);
+      attempts.push(JSON.parse(t.will.body));
     }
     expect(delays).toEqual([1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000]);
-    // No CONNACK was ever received: the prepared Will and connectionId are reused.
-    expect(t.will.body).toBe(will);
+    expect(t.reconnects).toBe(7);
+    // No CONNACK was ever seen, yet no Will is reused: a lost CONNACK may hide an
+    // accepted CONNECT whose Will the broker already stored [MQTT-3.1.2-8].
+    expect(new Set(attempts.map((w) => w.connectionId)).size).toBe(8);
+    expect(new Set(attempts.map((w) => w.messageId)).size).toBe(8);
+    expect(attempts.map((w) => w.sequence)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
     t.brokerAccept();
-    expect(t.published[0]!.payload.connectionId).toBe(JSON.parse(will).connectionId);
+    const online = t.published[0]!.payload;
+    expect(online.connectionId).toBe(attempts.at(-1)!.connectionId);
+    expect(online.sequence).toBe(8);
     t.brokerClose();
     expect(delays.at(-1)).toBe(1_000);
-    expect(JSON.parse(t.will.body).connectionId).not.toBe(JSON.parse(will).connectionId);
+    expect(JSON.parse(t.will.body).connectionId).not.toBe(online.connectionId);
   });
 
-  it('gives every established connection a distinct connectionId and Will messageId', async () => {
+  it('gives every connection a distinct connectionId and Will messageId', async () => {
     const { sim, transport } = setup();
     const wills: Array<Record<string, unknown>> = [];
     sim.on('willPrepared', (m) => wills.push(m.payload as unknown as Record<string, unknown>));

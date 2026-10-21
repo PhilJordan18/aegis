@@ -13,7 +13,7 @@ export interface ReplaySelector {
   readonly bootsAgo?: number;
   /**
    * 0 is the connection prepared last, 1 the one before, counted over the whole run
-   * across boots. Not applicable to DEVICE_RESTARTED, which carries no connectionId.
+   * across boots; every connection attempt counts, established or not. Not applicable to DEVICE_RESTARTED, which carries no connectionId.
    */
   readonly connectionsAgo?: number;
 }
