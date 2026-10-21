@@ -449,7 +449,7 @@ function renderAlert({
       )
     case 'serviceError':
       return (
-        <Alert id={id} kind="error" icon="status-error" title={t.serviceErrorTitle} code={outcome.traceId ?? undefined}>
+        <Alert id={id} kind="error" icon="status-error" title={t.serviceErrorTitle} code={outcome.traceId ?? undefined} codeLabel={t.traceIdLabel}>
           <p>{outcome.traceId ? t.serviceErrorBody : t.serviceErrorBodyWithoutCode}</p>
         </Alert>
       )

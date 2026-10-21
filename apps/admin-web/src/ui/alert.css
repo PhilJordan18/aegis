@@ -12,6 +12,9 @@
   display: block; margin-top: 6px; font-family: var(--ag-font-mono); font-size: var(--ag-type-code-size);
   font-weight: 450; line-height: 1.35; color: var(--ag-text-2); word-break: break-all; user-select: all;
 }
+.ag-alert__code-row { margin-top: 6px; color: var(--ag-text-2); }
+.ag-alert__code-label { font-weight: 600; }
+.ag-alert__code-row .ag-alert__code { display: inline; margin-top: 0; }
 .ag-alert--warning { --fg: var(--ag-unknown-fg); --bg: var(--ag-unknown-bg); --ic: var(--ag-unknown-icon); }
 .ag-alert--info { --fg: var(--ag-info-fg); --bg: var(--ag-info-bg); --ic: var(--ag-info-icon); }
 @keyframes ag-alert-in { from { opacity: 0; transform: translateY(-4px); } }

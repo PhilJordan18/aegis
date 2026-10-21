@@ -154,8 +154,9 @@ export const fr = {
     /** [A] wording split into title and body; « puis réessayez » added [P] (T3). */
     unreachableBody: 'Vérifiez le réseau, puis réessayez.',
     serviceErrorTitle: "Le service n'a pas pu traiter la connexion.",
-    /** The traceId follows this sentence as is; the sentence is its label. */
-    serviceErrorBody: `Réessayez dans un instant. Si le problème persiste, transmettez ce code au support${NBSP}:`,
+    serviceErrorBody: "Réessayez dans un instant. Si le problème persiste, transmettez l'identifiant de suivi au support.",
+    /** Visible label of the traceId, shared with iOS (glossary); the traceId itself is never translated. */
+    traceIdLabel: `Identifiant de suivi${NBSP}:`,
     /** Not in states.md: same message when no traceId is available. */
     serviceErrorBodyWithoutCode: 'Réessayez dans un instant.',
     /** [A] */

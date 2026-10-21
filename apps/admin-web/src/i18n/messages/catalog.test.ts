@@ -115,10 +115,10 @@ describe('catalog consistency (fr is the source of the shape)', () => {
 
   it('writes punctuation the way each language does', () => {
     expect(fr.signIn.roleAccountUsed).toMatch(/\u00A0:$/)
-    expect(fr.signIn.serviceErrorBody).toMatch(/\u00A0:$/)
+    expect(fr.signIn.traceIdLabel).toMatch(/\u00A0:$/)
     expect(fr.signIn.footerTechnician).toContain('\u00A0?')
     expect(en.signIn.roleAccountUsed).toMatch(/[a-z]:$/)
-    expect(en.signIn.serviceErrorBody).toMatch(/[a-z]:$/)
+    expect(en.signIn.traceIdLabel).toMatch(/[A-Za-z]:$/)
     expect(en.signIn.footerTechnician).toContain('Technician?')
   })
 })

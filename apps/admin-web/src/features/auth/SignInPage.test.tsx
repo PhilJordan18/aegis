@@ -181,6 +181,7 @@ describe('SignInPage — submission', () => {
     const alert = await screen.findByRole('alert')
     expect(alert.querySelector('code')?.textContent).toBe('5f4bc22e-66a4-48ef-8bf3-6e7184d71c30')
     expect(alert.textContent).toContain(t.serviceErrorTitle)
+    expect(alert.textContent).toContain('Identifiant de suivi\u00A0: 5f4bc22e-66a4-48ef-8bf3-6e7184d71c30')
     expect(document.body.textContent).not.toContain(SERVER_TEXT)
   })
 

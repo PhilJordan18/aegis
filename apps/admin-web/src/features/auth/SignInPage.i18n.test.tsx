@@ -99,7 +99,7 @@ describe('SignInPage — English wording (explicit strings, not read back from t
       [{ kind: 'network', reason: 'offline' }, 'Unable to reach the service.Check your network, then try again.'],
       [
         httpProblem(500, problemBody(500, 'INTERNAL_ERROR', { detail: SERVER_TEXT })),
-        `The service could not process the sign-in.Try again in a moment. If the problem persists, give this code to support:${TRACE_ID}`,
+        `The service could not process the sign-in.Try again in a moment. If the problem persists, give the trace ID to support.Trace ID: ${TRACE_ID}`,
       ],
     ]
     for (const [result, text] of cases) {
@@ -204,7 +204,7 @@ describe.each(LOCALES)('SignInPage — every state in %s', (locale) => {
     await fillAndSubmit(locale)
     const alert = await screen.findByRole('alert')
     expect(alert.querySelector('code')?.textContent).toBe(TRACE_ID)
-    expect(alert.textContent).toBe(`${t.serviceErrorTitle}${t.serviceErrorBody}${TRACE_ID}`)
+    expect(alert.textContent).toBe(`${t.serviceErrorTitle}${t.serviceErrorBody}${t.traceIdLabel} ${TRACE_ID}`)
     expect(document.body.textContent).not.toContain(SERVER_TEXT)
   })
 
@@ -215,7 +215,7 @@ describe.each(LOCALES)('SignInPage — every state in %s', (locale) => {
     })
     await fillAndSubmit(locale)
     const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toBe(`${t.serviceErrorTitle}${t.serviceErrorBody}${TRACE_ID}`)
+    expect(alert.textContent).toBe(`${t.serviceErrorTitle}${t.serviceErrorBody}${t.traceIdLabel} ${TRACE_ID}`)
     expect(alert.textContent).not.toContain('SOME_CODE')
     expect(document.body.textContent).not.toContain(SERVER_TEXT)
   })

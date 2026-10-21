@@ -177,6 +177,7 @@ test.describe('flow: language', () => {
       await page.getByLabel('Password', { exact: true }).fill('valeur-fictive-apercu')
       await page.getByRole('button', { name: 'Sign in' }).click()
       await expect(page.getByRole('alert')).toContainText('The service could not process the sign-in.')
+      await expect(page.getByRole('alert')).toContainText('Trace ID:')
       await expect(page.locator('code')).toHaveText(/^[0-9a-f-]{8,}$/)
     })
   })
