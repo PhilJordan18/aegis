@@ -45,6 +45,8 @@ When running as an Agent Team teammate:
 5. Do not change a shared contract without notifying every affected owner.
 6. Keep one owner per Flyway migration file.
 7. Send evidence, blockers, and handoff details to the lead.
+8. Commit only files you own, by explicit path, on the issue branch; leave the
+   delivery gate, push, and pull request to the lead.
 
 Do not run parallel edits on the same migration, state machine, API contract,
 or generated file.
@@ -60,7 +62,8 @@ You may:
 - improve nearby naming and structure;
 - fix defects discovered directly within the task;
 - create supporting documentation;
-- recommend follow-up issues.
+- recommend follow-up issues;
+- commit small, coherent, verified changes on the issue branch (see Commits).
 
 Request a human decision before:
 
@@ -71,12 +74,13 @@ Request a human decision before:
 - performing destructive data changes;
 - changing deployment or authentication strategy;
 - altering hardware electrical assumptions;
-- committing, pushing, merging, or releasing;
+- pushing, merging, or releasing;
+- rewriting Git history (amend, rebase, squash, reset, force push);
 - opening a pull request (see the delivery gate).
 
 ## ADR triggers
 
-Create or update an ADR when a decision:
+Create an ADR when a decision:
 
 - affects more than one component;
 - changes the trust boundary;
@@ -86,6 +90,13 @@ Create or update an ADR when a decision:
 - introduces significant infrastructure;
 - creates a long-term operational constraint;
 - deliberately accepts an important tradeoff.
+
+Never edit an accepted ADR, whether a file in `docs/adr/` or an accepted fiche
+in document 13. To change a decision, write a new ADR with these sections:
+earlier decision, reason for the change, new decision, consequences, and
+superseded sections. Then update the status and links in the document 13
+register and the current references. A `PROPOSED` ADR may change until it is
+accepted.
 
 ## Scope-change gate
 
@@ -138,7 +149,9 @@ push to them; the versioned hooks in `.githooks/` reject both.
 
 ## Commits
 
-Commit only after explicit human authorization. Before committing:
+Within an authorized task, commit without asking for each commit: small,
+coherent steps on the issue branch only, each after its relevant verification
+passes. Before committing:
 
 1. inspect the complete diff and staged files;
 2. separate unrelated concerns into focused commits;
@@ -147,6 +160,11 @@ Commit only after explicit human authorization. Before committing:
 5. write an English imperative subject that describes the actual change;
 6. include a body when the reason, tradeoff, migration, or verification is not
    obvious from the subject.
+
+Stage files by explicit path. Never amend, rebase, squash, reset, or
+force-push existing commits without human agreement; correct a mistake with a
+new commit. A commit does not authorize a push: the branch stays local until
+the delivery gate.
 
 Use `fix` when restructuring is part of correcting a defect. Use `refactor`
 only when observable behavior is intentionally unchanged.
@@ -157,7 +175,8 @@ No pull request is opened without this gate.
 
 1. Re-read the issue and check every acceptance criterion as met or remaining.
 2. Run the verification of this skill and record exact commands and results.
-3. Confirm that no secret, generated artifact, or unrelated change is staged.
+3. Confirm that no secret, generated artifact, or unrelated change is
+   committed or staged.
 4. Write the delivery report in the handoff format below, in English.
 5. Stop and present the report to the human.
 
