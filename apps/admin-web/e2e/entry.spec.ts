@@ -100,7 +100,7 @@ test.describe('flow:', () => {
     await submitSignIn(page)
     const heading = page.getByRole('heading', { level: 1, name: 'Accès réservé aux administrateurs' })
     await expect(heading).toBeFocused()
-    await expect(page.getByRole('alert')).toContainText("Ce compte technicien s'utilise dans l'application Aegis.")
+    await expect(page.getByRole('alert')).toContainText("Ce compte technicien s'utilise dans Aegis Mobile.")
     await expect(page.locator('form')).toHaveCount(0)
     expect(requests.slice(before)).toEqual([])
     await page.getByRole('button', { name: 'Se connecter avec un autre compte' }).click()

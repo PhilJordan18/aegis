@@ -88,7 +88,7 @@ test('a technician account is refused, its token is dropped and no request follo
   expect((await login).status()).toBe(200)
 
   await expect(page.getByRole('heading', { level: 1, name: 'Accès réservé aux administrateurs' })).toBeFocused()
-  await expect(page.getByRole('alert')).toContainText("Ce compte technicien s'utilise dans l'application Aegis.")
+  await expect(page.getByRole('alert')).toContainText("Ce compte technicien s'utilise dans Aegis Mobile.")
   await expect(page.locator('form')).toHaveCount(0)
   await page.waitForLoadState('networkidle')
   expect(requests.map((request) => new URL(request.url()).pathname)).toEqual(['/api/v1/auth/login'])
