@@ -16,6 +16,8 @@ pour le Web, `docs/design/mobile-*` pour iOS.
 |---|---|
 | `v3/aegis-design-v3-sans-hub.html` | Aperçu sombre, clair et présentation du logo |
 | `v3/aegis-lumiere-du-hub-v3.html` | Source de la maquette mobile |
+| `v3/web/aegis-web-v3-pour-claude.html` | Maquette Web interactive : thèmes et langues simulés, aucun appel au backend; police chargée depuis Google Fonts pour l'aperçu seulement |
+| `v3/web/aegis-web-v3.html` | Source de la maquette Web |
 | `assets/aegis-core-logo.svg` | Signature complète pour fond clair (400 × 100) |
 | `assets/aegis-core-logo-dark.svg` | Signature complète pour fond sombre (400 × 100) |
 | `assets/aegis-core-mark.svg` | Symbole seul (64 × 64) |
@@ -97,6 +99,30 @@ sans décision de Philippe.
   textes visibles, de la documentation et peut-être des identifiants : elle
   demande une décision explicite avant toute modification.
 
+## Typographie et logo sur le Web (décision de Philippe, 21 octobre 2026)
+
+- Le Web conserve Geist, déjà autohébergé, sans nouvelle police; iOS garde la
+  police du système et Dynamic Type. Les plateformes partagent la hiérarchie, les
+  couleurs et le symbole, pas la police.
+- Échelle Web : texte courant et champs 16 px, texte secondaire environ 14 px;
+  graisse 400 pour le texte, 500 pour les libellés, 600 pour les titres; la grande
+  promesse s'adapte à la largeur.
+- Logo Web temporaire : `assets/aegis-core-mark.svg` (ou sa version sombre) suivi
+  du mot « aegis » composé en Geist, dans un composant unique et remplaçable. Pas
+  d'Inter ajouté pour les signatures SVG, pas de géométrie du symbole recopiée en
+  CSS.
+- À demander au designer pour les versions finales, attendues sous deux à sept
+  jours : signatures vectorisées, versions mono, claire et sombre, petite taille et
+  règles d'espacement.
+
+## Composition Web
+
+- En-tête : identité « Aegis » et « Manager », choix « Français / English ».
+- Bureau : promesse typographique à gauche, formulaire à droite.
+- Petit écran : le formulaire passe en premier.
+- Aucun hub, coffre, orbite, console simulée ni métrique décorative; pas de
+  lavande omniprésente.
+
 ## Hiérarchie
 
 1. Marque, puis signature texte, puis titre de l'écran.
@@ -123,9 +149,9 @@ proposés, à valider par Philippe :
 
 ## Décisions ouvertes
 
-- Articulation de la marque et des noms d'application (option A ou B).
-- Typographie : le Web utilise Geist (autohébergée), iOS la police du système,
-  le texte des signatures SVG la police Inter.
+- Articulation de la marque : l'option A est retenue par la session iOS et par le
+  brief Web du 21 octobre 2026 (les noms Aegis Manager, Aegis Mobile et Aegis
+  Control sont conservés); reste à la consigner comme décision de Philippe.
 - Conversion en tracés du texte des signatures par le designer.
 - Tailles minimales du logo, après mesure dans les rendus.
 - Validation des textes de signature en français et en anglais.
