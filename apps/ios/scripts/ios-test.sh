@@ -1,8 +1,9 @@
 #!/bin/bash
 # Reproducible iOS test recipes, shared by developers and CI.
 #
-#   standalone  Unit and UI tests that need no backend. Live tests are excluded,
-#               not skipped, and any skipped test fails the recipe.
+#   standalone  Unit and UI tests that need no backend, then the String Catalog
+#               check. Live tests are excluded, not skipped, and any skipped
+#               test fails the recipe.
 #   live        Tests against a running Aegis Control. Fails when the address is
 #               missing, the API is unreachable, or a live test is skipped.
 #
@@ -42,6 +43,7 @@ run_tests() {
         -destination "$DESTINATION" \
         -derivedDataPath "$DERIVED_DATA" \
         -resultBundlePath "$bundle" \
+        -parallel-testing-enabled NO \
         -quiet \
         "$@" || status=$?
     if [ ! -d "$bundle" ]; then
@@ -82,6 +84,7 @@ standalone() {
         "-skip-testing:$LIVE_UNIT_TESTS" \
         "-skip-testing:$LIVE_UI_TESTS" || status=$?
     check_results "$bundle"
+    python3 scripts/check-strings.py "$DERIVED_DATA"
     return "$status"
 }
 
