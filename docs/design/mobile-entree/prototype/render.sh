@@ -1,7 +1,8 @@
 #!/bin/bash
-# Renders the sign-in prototype with the real iOS SDK and simulator.
-# The prototype is compiled into a temporary copy of the iOS project, so the
-# application sources are never modified.
+# Renders the sign-in prototype (direction v3) with the real iOS SDK and
+# simulator. The prototype and the provisional mark are compiled into a
+# temporary copy of the iOS project, so the application sources are never
+# modified.
 #
 #   IOS_APP_DIR   iOS project to copy (default: <repo>/apps/ios)
 #   PROTO_DEVICE  simulator name (default: iPhone 17)
@@ -39,6 +40,26 @@ rsync -a --exclude build --exclude docs "$app_dir/" "$work/ios/"
 rm "$work/ios/AegisMobile/App/AegisMobileApp.swift"
 cp "$here/SignInPrototype.swift" "$work/ios/AegisMobile/App/"
 
+# Provisional mark as a vector asset with a dark-appearance variant: the
+# replaceable unit the application will use under the same name.
+mark="$work/ios/AegisMobile/Assets.xcassets/AegisMark.imageset"
+mkdir -p "$mark"
+cp "$here/../marque/aegis-core-mark.svg" "$here/../marque/aegis-core-mark-dark.svg" "$mark/"
+cat > "$mark/Contents.json" <<'JSON'
+{
+  "images" : [
+    { "filename" : "aegis-core-mark.svg", "idiom" : "universal" },
+    {
+      "appearances" : [ { "appearance" : "luminosity", "value" : "dark" } ],
+      "filename" : "aegis-core-mark-dark.svg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 },
+  "properties" : { "preserves-vector-representation" : true }
+}
+JSON
+
 xcodebuild build -quiet \
     -project "$work/ios/AegisMobile.xcodeproj" -scheme AegisMobile -configuration Debug \
     -destination "platform=iOS Simulator,id=$udid" -derivedDataPath "$work/DerivedData" \
@@ -46,40 +67,48 @@ xcodebuild build -quiet \
 
 xcrun simctl boot "$udid" 2>/dev/null || true
 xcrun simctl bootstatus "$udid" -b >/dev/null
+# Skip the one-time keyboard tip so the keyboard capture shows the keyboard.
+xcrun simctl spawn "$udid" defaults write com.apple.Preferences DidShowContinuousPathIntroduction -bool true
+xcrun simctl spawn "$udid" defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction -bool true
 xcrun simctl install "$udid" "$work/DerivedData/Build/Products/Debug-iphonesimulator/AegisMobile.app"
 mkdir -p "$out"
 
-# state theme content-size
+# language state theme content-size (large-contrast = large + Increase Contrast)
 renders="
-reprise light large
-inactif light large
-validation light large
-envoi light large
-identifiants-refuses light large
-trop-de-tentatives light large
-service-injoignable light large
-erreur-service light large
-session-expiree light large
-session-invalide light large
-deconnecte light large
-role-non-autorise light large
-inactif dark large
-role-non-autorise dark large
-session-expiree dark large
-trop-de-tentatives dark large
-identifiants-refuses light accessibility-extra-large
+fr inactif dark large
+fr inactif light large
+en inactif dark large
+en inactif light large
+fr identifiants-refuses dark large
+en identifiants-refuses light large
+fr clavier dark large
+fr inactif light accessibility-extra-large
+fr trop-de-tentatives light large
+fr envoi dark large
+fr reprise-hors-ligne dark large
+en reprise-hors-ligne light large
+fr validation light large
+fr service-injoignable dark large
+fr session-expiree light large
+fr inactif light large-contrast
 "
 
-echo "$renders" | while read -r state theme size; do
-    [ -n "$state" ] || continue
+rm -f "$out"/*.png
+echo "$renders" | while read -r lang state theme size; do
+    [ -n "$lang" ] || continue
     xcrun simctl terminate "$udid" "$bundle_id" 2>/dev/null || true
     xcrun simctl ui "$udid" appearance "$theme"
+    contrast=disabled
+    if [ "$size" = large-contrast ]; then contrast=enabled; size=large; fi
+    xcrun simctl ui "$udid" increase_contrast "$contrast"
     xcrun simctl ui "$udid" content_size "$size"
-    SIMCTL_CHILD_AEGIS_PROTO_STATE="$state" xcrun simctl launch "$udid" "$bundle_id" >/dev/null
-    sleep 5
+    SIMCTL_CHILD_AEGIS_PROTO_STATE="$state" SIMCTL_CHILD_AEGIS_PROTO_LANG="$lang" \
+        xcrun simctl launch "$udid" "$bundle_id" -AppleLanguages "($lang)" >/dev/null
+    sleep 6
     suffix=$theme
     [ "$size" = large ] || suffix="$theme-ax"
-    file="$out/$state-$suffix.png"
+    [ "$contrast" = disabled ] || suffix="$theme-contrast"
+    file="$out/$lang-$state-$suffix.png"
     xcrun simctl io "$udid" screenshot "$file" >/dev/null 2>&1
     sips --resampleWidth 600 "$file" >/dev/null
     echo "$file"
@@ -88,3 +117,4 @@ done
 xcrun simctl terminate "$udid" "$bundle_id" 2>/dev/null || true
 xcrun simctl ui "$udid" appearance light
 xcrun simctl ui "$udid" content_size large
+xcrun simctl ui "$udid" increase_contrast disabled

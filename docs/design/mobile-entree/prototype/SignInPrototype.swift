@@ -1,373 +1,493 @@
-// Design prototype for the Aegis Mobile sign-in proposal (#35, then #36).
-// Static presentation only: no network, no Keychain, no real session. It is
-// compiled into a temporary copy of apps/ios by render.sh to produce the
-// captures in ../captures/, and is never part of the application target.
-// The state is chosen with the AEGIS_PROTO_STATE launch variable.
+// Design prototype for the Aegis Mobile sign-in, direction "Lumière du hub" v3
+// (no hardware illustration). Static presentation only: no network, no
+// Keychain, no session. render.sh compiles it into a temporary copy of
+// apps/ios to produce ../captures/; it is never part of the application.
+//
+// Launch variables: AEGIS_PROTO_STATE (see ProtoState), AEGIS_PROTO_LANG
+// (fr | en). Strings live in a local table here; the application will use a
+// String Catalog (#36 and the iOS localization issue).
 
 import SwiftUI
 
 @main
 struct SignInPrototypeApp: App {
-    private let state = ProtoState(
-        rawValue: ProcessInfo.processInfo.environment["AEGIS_PROTO_STATE"] ?? "") ?? .idle
+    private let environment = ProcessInfo.processInfo.environment
 
     var body: some Scene {
         WindowGroup {
-            SignInPrototypeScreen(state: state)
+            let lang = Lang(rawValue: environment["AEGIS_PROTO_LANG"] ?? "") ?? .fr
+            SignInPrototypeScreen(
+                state: ProtoState(rawValue: environment["AEGIS_PROTO_STATE"] ?? "") ?? .idle,
+                text: Copy(lang: lang))
+                .environment(\.locale, lang.locale)
         }
     }
 }
 
 enum ProtoState: String {
-    case restoring = "reprise"
     case idle = "inactif"
+    case keyboard = "clavier"
     case validation
     case sending = "envoi"
     case rejected = "identifiants-refuses"
     case rateLimited = "trop-de-tentatives"
     case unreachable = "service-injoignable"
-    case serviceError = "erreur-service"
     case expired = "session-expiree"
-    case invalidSession = "session-invalide"
-    case signedOut = "deconnecte"
-    case wrongRole = "role-non-autorise"
+    case offlineResume = "reprise-hors-ligne"
 }
 
 // MARK: - Screen
 
 struct SignInPrototypeScreen: View {
     let state: ProtoState
+    let text: Copy
+
+    @FocusState private var focus: Field?
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    enum Field { case email, password }
+
+    /// The keyboard and accessibility text sizes both need the vertical room.
+    private var compact: Bool { focus != nil || typeSize.isAccessibilitySize }
 
     var body: some View {
-        ZStack {
-            ProtoBackground()
-            switch state {
-            case .restoring:
-                RestoringView()
-            case .wrongRole:
-                ScrollView { WrongRoleView().screenPadding() }
-            default:
-                ScrollView { SignInForm(state: state).screenPadding() }
-                    .scrollDismissesKeyboard(.interactively)
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    Hero(text: text, compact: compact)
+                    Panel {
+                        if state == .offlineResume {
+                            OfflineResume(text: text)
+                        } else {
+                            SignInForm(state: state, text: text, focus: $focus)
+                        }
+                    }
+                    .frame(maxHeight: .infinity, alignment: .top)
+                }
+                .frame(minHeight: proxy.size.height, alignment: .top)
+                .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: compact)
             }
+            .scrollDismissesKeyboard(.interactively)
+            // Hero colour above, panel colour below: no band whatever the
+            // content height or scroll position.
+            .background {
+                VStack(spacing: 0) { Palette.top; Palette.panel }
+                    .ignoresSafeArea()
+            }
+        }
+        .onAppear {
+            if state == .keyboard { focus = .password }
         }
     }
 }
 
-private struct BrandMark: View {
+private struct Hero: View {
+    let text: Copy
+    let compact: Bool
+
     var body: some View {
-        Text("Aegis")
-            .font(.title3.weight(.bold))
-            .foregroundStyle(Color.accentText)
+        VStack(alignment: .leading, spacing: compact ? 0 : 26) {
+            BrandLockup()
+            if !compact {
+                // One localized string, three lines on screen; the accent on the
+                // last line is styling, not a separate sentence fragment.
+                Text(text.promiseStyled)
+                    .font(.system(size: 30, weight: .semibold))
+                    .tracking(-1.1)
+                    .lineSpacing(-2)
+                    .accessibilityLabel(text.promiseSpoken)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 26)
+        .padding(.top, compact ? 12 : 20)
+        .padding(.bottom, compact ? 22 : 40)
+        .background {
+            EllipticalGradient(colors: [Palette.halo, .clear],
+                               center: UnitPoint(x: 0.75, y: 0.8),
+                               startRadiusFraction: 0, endRadiusFraction: 0.63)
+                .ignoresSafeArea(edges: .top)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+/// Provisional "Aegis Core" lockup. The mark is the replaceable `AegisMark`
+/// vector asset; the words are text so they render without the SVG font.
+private struct BrandLockup: View {
+    var body: some View {
+        HStack(spacing: 10) {
+            Image("AegisMark")
+                .resizable()
+                .frame(width: 34, height: 34)
+            Text(verbatim: "aegis")
+                .font(.system(size: 29, weight: .semibold))
+                .tracking(-1.3)
+            Text(verbatim: "CORE")
+                .font(.system(size: 10, weight: .medium))
+                .tracking(2.1)
+                .foregroundStyle(Palette.muted)
+                .padding(.leading, 11)
+                .overlay(alignment: .leading) {
+                    Rectangle().fill(Palette.border).frame(width: 1, height: 22)
+                }
+                .padding(.leading, 3)
+        }
+        .foregroundStyle(Palette.text)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: "Aegis"))
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+private struct Panel<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) { content }
+            .padding(.horizontal, 26)
+            .padding(.top, 25)
+            .padding(.bottom, 24)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background {
+                UnevenRoundedRectangle(topLeadingRadius: 27, topTrailingRadius: 27, style: .continuous)
+                    .fill(Palette.panel)
+                    .overlay {
+                        UnevenRoundedRectangle(topLeadingRadius: 27, topTrailingRadius: 27, style: .continuous)
+                            .strokeBorder(Palette.border, lineWidth: 1)
+                            .mask(alignment: .top) { Rectangle().frame(height: 40) }
+                    }
+                    .ignoresSafeArea(edges: .bottom)
+            }
+    }
+}
+
+private struct PanelHeading: View {
+    let text: Copy
+
+    var body: some View {
+        Text(text.eyebrow)
+            .font(.caption2.weight(.semibold))
+            .tracking(1.8)
+            .textCase(.uppercase)
+            .foregroundStyle(Palette.muted)
+            .padding(.bottom, 9)
+        Text(text.title)
+            .font(.title.weight(.semibold))
+            .foregroundStyle(Palette.text)
             .accessibilityAddTraits(.isHeader)
+            .padding(.bottom, 7)
+        Text(text.subtitle)
+            .font(.subheadline)
+            .foregroundStyle(Palette.muted)
     }
 }
 
 private struct SignInForm: View {
     let state: ProtoState
+    let text: Copy
+    var focus: FocusState<SignInPrototypeScreen.Field?>.Binding
 
-    private var email: String {
+    @State private var email: String
+    @State private var password: String
+    @State private var revealed = false
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    /// The v3 border (1.3–1.6:1) is decorative; Increase Contrast gets an
+    /// edge that meets 3:1 for the input boundary.
+    private var fieldEdge: Color { contrast == .increased ? Palette.muted : Palette.border }
+
+    init(state: ProtoState, text: Copy, focus: FocusState<SignInPrototypeScreen.Field?>.Binding) {
+        self.state = state
+        self.text = text
+        self.focus = focus
         switch state {
-        case .idle, .signedOut, .restoring, .wrongRole: ""
-        case .validation: "technicien.aegis.demo"
-        default: "technician@aegis.demo"
+        case .idle, .keyboard: _email = State(initialValue: "")
+        case .validation: _email = State(initialValue: "technicien.aegis.demo")
+        default: _email = State(initialValue: "technician@aegis.demo")
         }
-    }
-
-    private var password: String {
         switch state {
-        case .sending, .unreachable, .serviceError, .rateLimited: "••••••••••••"
-        default: ""
+        case .sending, .unreachable, .rateLimited: _password = State(initialValue: "demo-password")
+        default: _password = State(initialValue: "")
         }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            BrandMark()
-            Text("Connexion")
-                .font(.largeTitle.weight(.bold))
-                .accessibilityAddTraits(.isHeader)
+        PanelHeading(text: text)
 
-            if let banner = Banner.for(state) {
-                BannerView(banner: banner)
+        if let message = text.banner(for: state) {
+            Banner(message: message)
+                .padding(.top, 14)
+        }
+
+        VStack(spacing: 0) {
+            field(label: text.emailLabel,
+                  error: state == .validation ? text.emailInvalid : nil) {
+                TextField(text.emailLabel, text: $email,
+                          prompt: Text(text.emailExample).foregroundStyle(Palette.muted))
+                    .textContentType(.username)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.next)
+                    .focused(focus, equals: .email)
             }
-
-            VStack(spacing: 0) {
-                FieldRow(label: "Adresse courriel", value: email, placeholder: "nom@example.com",
-                         symbol: nil,
-                         error: state == .validation ? "Saisissez une adresse courriel valide, par exemple nom@example.com." : nil,
-                         readOnly: state == .sending)
-                Divider().padding(.leading, 16)
-                FieldRow(label: "Mot de passe", value: password, placeholder: "",
-                         symbol: "eye",
-                         error: state == .validation ? "Saisissez votre mot de passe." : nil,
-                         readOnly: state == .sending)
-            }
-            .background(Color.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-
-            VStack(spacing: 10) {
-                SubmitButton(state: state)
-                if state == .rateLimited {
-                    Text("Disponible dans 0:55")
-                        .font(.footnote.monospacedDigit())
-                        .foregroundStyle(.secondary)
+            Rectangle().fill(fieldEdge).frame(height: 1)
+            field(label: text.passwordLabel,
+                  error: state == .validation ? text.passwordMissing : nil) {
+                HStack(spacing: 4) {
+                    Group {
+                        // The persistent label names the field; no repeated placeholder.
+                        if revealed {
+                            TextField(text.passwordLabel, text: $password, prompt: Text(verbatim: ""))
+                        } else {
+                            SecureField(text.passwordLabel, text: $password, prompt: Text(verbatim: ""))
+                        }
+                    }
+                    .textContentType(.password)
+                    .submitLabel(.go)
+                    .focused(focus, equals: .password)
+                    Button {
+                        revealed.toggle()
+                    } label: {
+                        Image(systemName: revealed ? "eye.slash" : "eye")
+                            .frame(width: 44, height: 44)
+                    }
+                    .foregroundStyle(Palette.muted)
+                    .accessibilityLabel(revealed ? text.hidePassword : text.showPassword)
+                    .padding(.vertical, -10)
                 }
             }
-
-            Text("Compte fourni par votre administrateur.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-                .multilineTextAlignment(.center)
         }
+        .padding(.horizontal, 15)
+        .background(Palette.field, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(fieldEdge))
+        .disabled(state == .sending)
+        .padding(.top, 23)
+
+        SubmitButton(state: state, text: text)
+            .padding(.top, 17)
+
+        Text(text.accountNote)
+            .font(.footnote)
+            .foregroundStyle(Palette.muted)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 17)
     }
-}
 
-private struct FieldRow: View {
-    let label: String
-    let value: String
-    let placeholder: String
-    let symbol: String?
-    let error: String?
-    let readOnly: Bool
-
-    var body: some View {
+    private func field<Input: View>(label: String, error: String?,
+                                    @ViewBuilder input: () -> Input) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
-                .font(.subheadline.weight(.semibold))
-            HStack(spacing: 8) {
-                Text(value.isEmpty ? placeholder : value)
-                    .foregroundStyle(value.isEmpty || readOnly ? Color.secondary : Color.primary)
-                    .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
-                if let symbol {
-                    Image(systemName: symbol)
-                        .foregroundStyle(Color.accentText)
-                        .frame(width: 44, height: 44)
-                        .accessibilityLabel("Afficher le mot de passe")
-                }
-            }
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(Palette.text)
+                .accessibilityHidden(true)
+            input()
+                .font(.body)
+                .foregroundStyle(Palette.text)
+                .frame(minHeight: 24)
             if let error {
-                Label {
-                    Text(error)
-                } icon: {
-                    Image(systemName: "exclamationmark.circle.fill")
-                        .foregroundStyle(Color.blockedIcon)
-                }
-                .font(.footnote)
-                .foregroundStyle(Color.roleBlockedText)
+                Label(error, systemImage: "exclamationmark.circle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(Palette.errorText)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .frame(minHeight: 72)
+        .padding(.vertical, 13)
     }
 }
 
 private struct SubmitButton: View {
     let state: ProtoState
+    let text: Copy
 
     var body: some View {
         Button {} label: {
-            HStack(spacing: 10) {
+            HStack {
                 if state == .sending {
                     ProgressView().tint(.white)
-                    Text("Connexion…")
+                    Text(text.sending)
+                    Spacer()
                 } else {
-                    Text("Se connecter")
+                    Text(text.signIn)
+                    Spacer()
+                    Image(systemName: "arrow.right")
+                        .accessibilityHidden(true)
                 }
             }
-            .font(.headline)
-            .frame(maxWidth: .infinity, minHeight: 30)
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        // Busy keeps the prominent look so "Connexion…" stays legible; taps are
-        // ignored instead of disabling the control.
+        .buttonStyle(PrimaryButtonStyle())
         .disabled(state == .rateLimited)
+        // Busy stays legible: taps are ignored instead of dimming the control.
         .allowsHitTesting(state != .sending)
+        .accessibilityLabel(state == .sending ? text.sendingSpoken : text.signIn)
     }
 }
 
-// MARK: - Banners
+struct PrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
 
-private struct Banner {
-    enum Role { case error, warning, info }
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .foregroundStyle(isEnabled ? Color.white : Palette.muted)
+            .padding(.horizontal, 18)
+            .frame(maxWidth: .infinity, minHeight: 54)
+            .background(isEnabled ? Palette.button : Palette.field,
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(isEnabled ? Palette.buttonEdge : Palette.border))
+            .opacity(configuration.isPressed ? 0.85 : 1)
+    }
+}
 
-    let role: Role
-    let symbol: String
-    let title: String
-    let message: String?
-    var traceId: String? = nil
+struct SecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .foregroundStyle(Palette.accent)
+            .padding(.horizontal, 18)
+            .frame(maxWidth: .infinity, minHeight: 54)
+            .background(Palette.field, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.border))
+            .opacity(configuration.isPressed ? 0.85 : 1)
+    }
+}
 
-    static func `for`(_ state: ProtoState) -> Banner? {
+private struct Banner: View {
+    let message: String
+
+    var body: some View {
+        Label {
+            Text(message)
+        } icon: {
+            Image(systemName: "exclamationmark.circle.fill")
+        }
+        .font(.footnote)
+        .foregroundStyle(Palette.errorText)
+        .padding(.horizontal, 13)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.errorFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+/// Network failure while resuming a non-expired token: the token is kept, the
+/// session is not presented as verified, and no business action is offered.
+private struct OfflineResume: View {
+    let text: Copy
+
+    var body: some View {
+        Text(text.offlineTitle)
+            .font(.title2.weight(.semibold))
+            .foregroundStyle(Palette.text)
+            .accessibilityAddTraits(.isHeader)
+        Text(text.offlineBody)
+            .font(.subheadline)
+            .foregroundStyle(Palette.muted)
+            .padding(.top, 8)
+        Button(text.retry) {}
+            .buttonStyle(PrimaryButtonStyle())
+            .padding(.top, 24)
+        Button(text.signOut) {}
+            .buttonStyle(SecondaryButtonStyle())
+            .padding(.top, 12)
+    }
+}
+
+// MARK: - Copy (FR reference, EN proposed)
+
+enum Lang: String {
+    case fr, en
+
+    var locale: Locale { Locale(identifier: self == .fr ? "fr_CA" : "en_CA") }
+}
+
+struct Copy {
+    let lang: Lang
+
+    private func t(_ fr: String, _ en: String) -> String { lang == .fr ? fr : en }
+
+    var promise: String { t("Prêt.\nAutorisé.\nProuvé.", "Ready.\nAuthorized.\nProven.") }
+    var promiseSpoken: String { promise.replacingOccurrences(of: "\n", with: " ") }
+    var promiseStyled: AttributedString {
+        var styled = AttributedString(promise)
+        if let lastBreak = styled.characters.lastIndex(of: "\n") {
+            let lastLine = styled.characters.index(after: lastBreak)..<styled.endIndex
+            styled[lastLine].foregroundColor = Palette.accent
+        }
+        return styled
+    }
+    var eyebrow: String { t("Espace technicien", "Technician access") }
+    var title: String { t("Connexion", "Sign in") }
+    var subtitle: String { t("Vos équipements. Votre activité.", "Your equipment. Your activity.") }
+    var emailLabel: String { t("Adresse courriel", "Email address") }
+    var emailExample: String { t("nom@entreprise.ca", "name@company.ca") }
+    var passwordLabel: String { t("Mot de passe", "Password") }
+    var showPassword: String { t("Afficher le mot de passe", "Show password") }
+    var hidePassword: String { t("Masquer le mot de passe", "Hide password") }
+    var signIn: String { t("Se connecter", "Sign in") }
+    var sending: String { t("Connexion…", "Signing in…") }
+    var sendingSpoken: String { t("Connexion en cours", "Signing in") }
+    var accountNote: String { t("Compte fourni par votre administrateur.", "Account provided by your administrator.") }
+    var emailInvalid: String { t("Saisissez une adresse courriel valide.", "Enter a valid email address.") }
+    var passwordMissing: String { t("Saisissez votre mot de passe.", "Enter your password.") }
+    var offlineTitle: String { t("Connexion au service impossible", "Can't reach the service") }
+    var offlineBody: String {
+        t("Votre session est conservée, mais elle n’a pas pu être vérifiée. Aucune action n’est possible hors ligne.",
+          "Your session is kept but couldn't be verified. No action is available offline.")
+    }
+    var retry: String { t("Réessayer", "Try again") }
+    var signOut: String { t("Se déconnecter", "Sign out") }
+
+    func banner(for state: ProtoState) -> String? {
         switch state {
         case .rejected:
-            Banner(role: .error, symbol: "exclamationmark.octagon.fill",
-                   title: "Adresse courriel ou mot de passe incorrect.",
-                   message: "Vérifiez les deux champs, puis réessayez.")
+            t("Adresse courriel ou mot de passe incorrect.", "Incorrect email address or password.")
         case .rateLimited:
-            Banner(role: .warning, symbol: "clock.badge.exclamationmark.fill",
-                   title: "Trop de tentatives.",
-                   message: "Réessayez dans 55 secondes.")
+            // The delay appears once, formatted natively from Retry-After.
+            t("Trop de tentatives. Réessayez dans \(delay).", "Too many attempts. Try again in \(delay).")
         case .unreachable:
-            Banner(role: .warning, symbol: "wifi.exclamationmark",
-                   title: "Connexion au service impossible.",
-                   message: "Vérifiez le réseau, puis réessayez.")
-        case .serviceError:
-            Banner(role: .error, symbol: "exclamationmark.octagon.fill",
-                   title: "Le service n’a pas pu traiter la connexion.",
-                   message: "Réessayez dans un instant. Si le problème persiste, transmettez ce code au support :",
-                   traceId: "5f4bc22e-66a4-48ef-8bf3-6e7184d71c30")
+            t("Connexion au service impossible. Vérifiez le réseau.", "Can't reach the service. Check your network.")
         case .expired:
-            Banner(role: .info, symbol: "clock.fill",
-                   title: "Votre session a expiré. Reconnectez-vous.",
-                   message: "Vos réservations et prêts sont conservés.")
-        case .invalidSession:
-            Banner(role: .info, symbol: "info.circle.fill",
-                   title: "Votre session n’est plus valide. Reconnectez-vous.",
-                   message: "Aucune réservation, aucun prêt ni aucune opération n’a été modifié.")
-        case .signedOut:
-            Banner(role: .info, symbol: "info.circle.fill",
-                   title: "Vous êtes déconnecté.", message: nil)
+            t("Votre session a expiré. Vos réservations et prêts sont conservés.",
+              "Your session has expired. Your reservations and loans are kept.")
         default:
             nil
         }
     }
-}
 
-private struct BannerView: View {
-    let banner: Banner
-
-    private var icon: Color {
-        switch banner.role {
-        case .error: .blockedIcon
-        case .warning: .unknownIcon
-        case .info: .accentText
-        }
-    }
-
-    private var fill: Color {
-        switch banner.role {
-        case .error: .roleBlockedFill
-        case .warning: .roleUnknownFill
-        case .info: .roleInfoFill
-        }
-    }
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Image(systemName: banner.symbol)
-                .foregroundStyle(icon)
-                .font(.body.weight(.semibold))
-            VStack(alignment: .leading, spacing: 4) {
-                Text(banner.title)
-                    .font(.headline)
-                if let message = banner.message {
-                    Text(message)
-                        .font(.subheadline)
-                }
-                if let traceId = banner.traceId {
-                    Text(traceId)
-                        .font(.footnote.monospaced())
-                        .textSelection(.enabled)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(14)
-        .background(fill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .accessibilityElement(children: .combine)
+    private var delay: String {
+        Duration.seconds(55).formatted(.units(allowed: [.seconds], width: .wide).locale(lang.locale))
     }
 }
 
-// MARK: - Other states
+// MARK: - Palette (v3 values from aegis-lumiere-du-hub-v3.html; proposals)
 
-private struct RestoringView: View {
-    var body: some View {
-        VStack(spacing: 16) {
-            BrandMark()
-            ProgressView()
-            Text("Reprise de la session…")
-                .font(.headline)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
+enum Palette {
+    static let top = dynamic(light: 0xEDF2FA, dark: 0x070D17)
+    static let panel = dynamic(light: 0xFFFFFF, dark: 0x0D1520)
+    static let field = dynamic(light: 0xF3F5F9, dark: 0x141F2D)
+    static let text = dynamic(light: 0x122339, dark: 0xF1F5FC)
+    static let muted = dynamic(light: 0x53647B, dark: 0xABB9CD)
+    static let border = dynamic(light: 0xD7DFE9, dark: 0x2B3B50)
+    static let accent = dynamic(light: 0x234BCE, dark: 0x8CAEFF)
+    static let button = dynamic(light: 0x234BCE, dark: 0x315EE8)
+    static let buttonEdge = Color(red: 0x7D / 255, green: 0x9B / 255, blue: 1, opacity: 0.4)
+    static let halo = dynamic(light: 0x92B8F7, dark: 0x193E73, lightAlpha: 0.23, darkAlpha: 0.33)
+    static let errorFill = dynamic(light: 0xFFF0F1, dark: 0x3B2024)
+    static let errorText = dynamic(light: 0x9E2837, dark: 0xFFC9CB)
 
-private struct WrongRoleView: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            BrandMark()
-            Text("Accès réservé aux techniciens")
-                .font(.largeTitle.weight(.bold))
-                .accessibilityAddTraits(.isHeader)
-            BannerView(banner: Banner(
-                role: .warning, symbol: "person.crop.square.fill",
-                title: "Ce compte administrateur s’utilise dans Aegis Manager sur le Web.",
-                message: "L’application Aegis est réservée aux comptes technicien. Aucune donnée n’a été chargée et la session a été fermée."))
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Compte utilisé")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Text(verbatim: "admin@aegis.demo")
-            }
-            .accessibilityElement(children: .combine)
-            Button {} label: {
-                Text("Se connecter avec un autre compte")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, minHeight: 30)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-        }
-    }
-}
-
-// MARK: - Shared presentation
-
-private struct ProtoBackground: View {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
-    var body: some View {
-        ZStack {
-            Color.canvas
-            if !reduceTransparency {
-                RadialGradient(colors: [Color.glowBlue.opacity(0.35), .clear],
-                               center: .topLeading, startRadius: 0, endRadius: 420)
-                RadialGradient(colors: [Color.glowIndigo.opacity(0.25), .clear],
-                               center: .topTrailing, startRadius: 0, endRadius: 360)
-            }
-        }
-        .ignoresSafeArea()
-        .accessibilityHidden(true)
-    }
-}
-
-private extension View {
-    func screenPadding() -> some View {
-        padding(.horizontal, 20)
-            .padding(.vertical, 24)
-            .frame(maxWidth: 480, alignment: .leading)
-            .frame(maxWidth: .infinity)
-    }
-}
-
-/// Alert fills from the Aegis Manager tokens (manager-entree/handoff.md §5);
-/// prototype values, not approved iOS tokens.
-private extension Color {
-    static let roleBlockedFill = dynamic(light: 0xFCE7E6, dark: 0x3A1424)
-    static let roleUnknownFill = dynamic(light: 0xFFF0D1, dark: 0x33280F)
-    static let roleInfoFill = dynamic(light: 0xEEF3FF, dark: 0x111F4D)
-    static let roleBlockedText = dynamic(light: 0xA3161A, dark: 0xFFA59E)
-    /// `--ag-accent-text`: accent used as text or symbol on dark surfaces.
-    static let accentText = dynamic(light: 0x1A45CC, dark: 0x93B1FF)
-
-    static func dynamic(light: UInt32, dark: UInt32) -> Color {
+    static func dynamic(light: UInt32, dark: UInt32,
+                        lightAlpha: CGFloat = 1, darkAlpha: CGFloat = 1) -> Color {
         Color(UIColor { traits in
-            let hex = traits.userInterfaceStyle == .dark ? dark : light
+            let isDark = traits.userInterfaceStyle == .dark
+            let hex = isDark ? dark : light
             return UIColor(red: CGFloat((hex >> 16) & 0xFF) / 255,
                            green: CGFloat((hex >> 8) & 0xFF) / 255,
-                           blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
+                           blue: CGFloat(hex & 0xFF) / 255,
+                           alpha: isDark ? darkAlpha : lightAlpha)
         })
     }
 }
