@@ -6,7 +6,9 @@ const reducedMotion = process.env.AEGIS_MOTION === 'no-preference' ? 'no-prefere
 /**
  * Projects:
  * - `a11y` (npm run test:a11y): full route × state × viewport × theme matrix with
- *   axe WCAG A/AA, no horizontal scroll, and the flow tests; writes no image;
+ *   axe WCAG A/AA, no horizontal scroll, and the flow tests; writes no image.
+ *   entry.spec.ts runs in French (the browser locale below); language.spec.ts
+ *   repeats the matrix in English and tests the language flows;
  * - `capture` (npm run capture): same matrix, PNGs in test-results/captures/ (ignored);
  * - `evidence` (npm run capture:evidence): ~16 curated PNGs at 1× in
  *   docs/design/manager-entree/captures/, the only path outside apps/admin-web
@@ -29,8 +31,8 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [
-    { name: 'a11y', testMatch: 'entry.spec.ts', metadata: { capture: false } },
-    { name: 'capture', testMatch: 'entry.spec.ts', grepInvert: /flow:/, metadata: { capture: true } },
+    { name: 'a11y', testMatch: ['entry.spec.ts', 'language.spec.ts'], metadata: { capture: false } },
+    { name: 'capture', testMatch: ['entry.spec.ts', 'language.spec.ts'], grepInvert: /flow:/, metadata: { capture: true } },
     { name: 'evidence', testMatch: 'evidence.spec.ts' },
   ],
   webServer: {
