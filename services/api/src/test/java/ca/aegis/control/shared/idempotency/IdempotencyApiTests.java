@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -40,6 +41,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -63,16 +66,24 @@ import ca.aegis.control.support.TestAccounts.TestAccount;
 class IdempotencyApiTests extends ApiIntegrationTest {
 
     static final String MODELS = "/api/v1/admin/idempotency-probe/models";
+    static final String ACTOR_GUARD = "/api/v1/admin/idempotency-probe/actor-guard";
     static final String MODEL_LOCATIONS = "/api/v1/admin/asset-models/";
     static final String REFUSED_PREFIX = "refused-";
     static final AtomicInteger executions = new AtomicInteger();
     static final Gate gate = new Gate();
+    static volatile Rendezvous actorGuard;
 
     @Autowired
     JdbcClient jdbc;
 
     @Autowired
     DataSource dataSource;
+
+    @Autowired
+    PlatformTransactionManager transactionManager;
+
+    @Autowired
+    IdempotencyService idempotency;
 
     TestAccount admin;
     String adminToken;
@@ -91,6 +102,11 @@ class IdempotencyApiTests extends ApiIntegrationTest {
     @AfterEach
     void releaseWaitingRequests() throws InterruptedException {
         gate.release();
+        Rendezvous rendezvous = actorGuard;
+        if (rendezvous != null) {
+            rendezvous.released().countDown();
+            actorGuard = null;
+        }
         executor.shutdownNow();
         assertTrue(executor.awaitTermination(30, TimeUnit.SECONDS));
     }
@@ -393,6 +409,83 @@ class IdempotencyApiTests extends ApiIntegrationTest {
         assertEquals(1, keys(admin.id()));
     }
 
+    /**
+     * Only the wait for the key is bounded: once the key is taken, the business mutation keeps the lock policy it
+     * would have without idempotency, so a business lock held longer than the key timeout delays it but does not
+     * fail it.
+     */
+    @Test
+    void aBusinessLockWaitLongerThanTheKeyTimeoutStillSucceeds() throws Exception {
+        String id = json(perform(create(adminToken, UUID.randomUUID().toString(), modelJson("Locked " + suffix))))
+                .get("id").asString();
+        Duration holdFor = IdempotencyService.LOCK_TIMEOUT.plusMillis(1500);
+
+        Future<MockHttpServletResponse> archived;
+        long start;
+        try (Connection holder = dataSource.getConnection()) {
+            holder.setAutoCommit(false);
+            try (PreparedStatement lock = holder.prepareStatement(
+                    "SELECT id FROM aegis.asset_models WHERE id = ? FOR UPDATE")) {
+                lock.setObject(1, UUID.fromString(id));
+                assertTrue(lock.executeQuery().next());
+            }
+            start = System.nanoTime();
+            archived = executor.submit(() -> perform(archive(adminToken, UUID.randomUUID().toString(), id)));
+            awaitLockWaiters(1);
+            Thread.sleep(Math.max(0, holdFor.toMillis() - TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)));
+            holder.commit();
+        }
+
+        MockHttpServletResponse response = archived.get(30, TimeUnit.SECONDS);
+        Duration waited = Duration.ofNanos(System.nanoTime() - start);
+        assertEquals(200, response.getStatus(), () -> response.getStatus() + " after " + waited);
+        assertTrue(waited.compareTo(IdempotencyService.LOCK_TIMEOUT.plusSeconds(1)) >= 0, waited::toString);
+        assertEquals(2, executions.get());
+    }
+
+    /**
+     * Inserting a key takes {@code KEY SHARE} on the actor's {@code users} row. Guards that lock that row with
+     * {@code FOR NO KEY UPDATE} (document 08, section 7.1) let two requests of the same actor, each holding its own
+     * key, run one after the other instead of deadlocking.
+     */
+    @Test
+    void concurrentRequestsOfOneActorWithDifferentKeysPassTheActorGuard() throws Exception {
+        Rendezvous rendezvous = new Rendezvous(new CountDownLatch(2), new CountDownLatch(1));
+        actorGuard = rendezvous;
+
+        Future<MockHttpServletResponse> first = executor.submit(() -> perform(guard(adminToken,
+                UUID.randomUUID().toString(), "first")));
+        Future<MockHttpServletResponse> second = executor.submit(() -> perform(guard(adminToken,
+                UUID.randomUUID().toString(), "second")));
+        assertTrue(rendezvous.arrived().await(10, TimeUnit.SECONDS), "Both requests must hold their key first");
+        rendezvous.released().countDown();
+
+        for (Future<MockHttpServletResponse> request : List.of(first, second)) {
+            MockHttpServletResponse response = request.get(30, TimeUnit.SECONDS);
+            String body = response.getContentAsString(StandardCharsets.UTF_8);
+            assertEquals(200, response.getStatus(), body);
+            assertNull(response.getHeader(IdempotencyService.REPLAYED_HEADER));
+        }
+        assertEquals(2, executions.get());
+        assertEquals(2, keys(admin.id()));
+    }
+
+    @Test
+    void theServiceRefusesToRunInsideAnOuterTransaction() {
+        IdempotentRequest request = new IdempotentRequest(admin.id(), UUID.randomUUID().toString(), "POST",
+                "/admin/idempotency-probe/models", Map.of());
+
+        IllegalStateException refused = new TransactionTemplate(transactionManager).execute(status -> assertThrows(
+                IllegalStateException.class, () -> idempotency.execute(request, () -> {
+                    executions.incrementAndGet();
+                    return IdempotentResult.ok(Map.of());
+                })));
+
+        assertEquals("The idempotency service owns the transaction of the request", refused.getMessage());
+        assertEquals(0, executions.get());
+        assertEquals(0, keys(admin.id()));
+    }
+
     @Test
     void aBusinessRefusalRollsBackTheKeyAndTheBusinessWrite() throws Exception {
         String key = UUID.randomUUID().toString();
@@ -444,6 +537,12 @@ class IdempotencyApiTests extends ApiIntegrationTest {
     private static MockHttpServletRequestBuilder archive(String token, String key, String id) {
         return post(MODELS + "/" + id + "/archive").header(AUTHORIZATION, bearer(token))
                 .header(IdempotentRequest.HEADER, key);
+    }
+
+    private MockHttpServletRequestBuilder guard(String token, String key, String label) {
+        return post(ACTOR_GUARD).header(AUTHORIZATION, bearer(token)).header(IdempotentRequest.HEADER, key)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(jsonMapper.writeValueAsString(Map.of("label", label)));
     }
 
     private String modelJson(String name) {
@@ -525,6 +624,28 @@ class IdempotencyApiTests extends ApiIntegrationTest {
         }
     }
 
+    /** Lets a chosen number of requests reach their mutation before any of them goes further. */
+    record Rendezvous(CountDownLatch arrived, CountDownLatch released) {
+
+        void pass() {
+            arrived.countDown();
+            try {
+                if (!released.await(30, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("The test never released the rendezvous");
+                }
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(interrupted);
+            }
+        }
+    }
+
+    record ProbeGuardRequest(String label) {
+    }
+
+    record ProbeGuardView(String label, UUID actorUserId) {
+    }
+
     record ProbeModelRequest(String name, String manufacturer, List<String> tags) {
     }
 
@@ -581,6 +702,23 @@ class IdempotencyApiTests extends ApiIntegrationTest {
                 return IdempotentResult.created(IdempotentResource.ASSET_MODEL, id, new ProbeModelView(id,
                         request.name(), request.manufacturer(), request.tags(), now.toInstant(), UUID.randomUUID(),
                         false));
+            });
+        }
+
+        /** A use case whose first guard locks the actor's row, as document 08, section 7.2, prescribes. */
+        @PostMapping(path = ACTOR_GUARD, consumes = MediaType.APPLICATION_JSON_VALUE)
+        ResponseEntity<JsonNode> guard(IdempotentRequest idempotent, @RequestBody ProbeGuardRequest request) {
+            return idempotency.execute(idempotent, request, () -> {
+                executions.incrementAndGet();
+                Rendezvous rendezvous = actorGuard;
+                if (rendezvous != null) {
+                    rendezvous.pass();
+                }
+                jdbc.sql("SELECT id FROM aegis.users WHERE id = :actor FOR NO KEY UPDATE")
+                        .param("actor", idempotent.actorUserId())
+                        .query((row, number) -> row.getObject("id", UUID.class))
+                        .single();
+                return IdempotentResult.ok(new ProbeGuardView(request.label(), idempotent.actorUserId()));
             });
         }
 
