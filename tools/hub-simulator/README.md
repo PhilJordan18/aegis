@@ -13,7 +13,11 @@ Cette tranche (P0.0, issue #15, mise au schéma 2.0 par #63) couvre :
 - un Last Will `OFFLINE` (`reason` `CONNECTION_LOST`) préparé avant chaque
   connexion, QoS 1, `retain=true` (§15.2);
 - un `OFFLINE` `SHUTDOWN` publié par le hub lui-même avant un `DISCONNECT` propre,
-  QoS 1, `retain=true`; le broker ne publie alors pas le Last Will (§15.2);
+  QoS 1, `retain=true`; le broker ne publie alors pas le Last Will (§15.2). Rien
+  n'est publié après `SHUTDOWN` sur cette connexion. Si son PUBACK n'arrive pas
+  en 5 s, le message est abandonné et `DISCONNECT` part quand même; si
+  `DISCONNECT` n'aboutit pas en 5 s, le socket est fermé (le broker publie alors
+  le Will) : l'arrêt se termine toujours;
 - `DEVICE_RESTARTED` une seule fois par démarrage, sur `events`, QoS 1, sans
   retain, avec un `resetReason` de la liste contrôlée (§13.1);
 - un `HEARTBEAT` immédiat après connexion puis toutes les 10 s, QoS 0, sans retain (§14);
