@@ -122,6 +122,9 @@ final class SignInUITests: XCTestCase {
         submit(app, email: "technician@aegis.demo", password: "x")
 
         XCTAssertTrue(app.staticTexts[Language.english["serviceError"]].waitForExistence(timeout: 15))
+        let serverText = app.descendants(matching: .any).matching(
+            NSPredicate(format: "label CONTAINS %@", "NOT SHOWN"))
+        XCTAssertEqual(serverText.count, 0)
     }
 
     @MainActor
@@ -159,8 +162,10 @@ final class SignInUITests: XCTestCase {
 
     // MARK: Busy and resume
 
+    /// Duplicate submissions are proven in `SessionModelTests`; this checks
+    /// what the user and VoiceOver perceive while the request is pending.
     @MainActor
-    func testBusyStateIsPerceptibleAndIgnoresRepeatedSubmissions() {
+    func testBusyStateIsPerceptible() {
         let app = launch(.french, scenario: "login-slow")
         submit(app, email: "technician@aegis.demo", password: "x")
 
@@ -180,12 +185,19 @@ final class SignInUITests: XCTestCase {
             XCTAssertTrue(app.buttons["resume.retry"].exists)
             XCTAssertFalse(app.descendants(matching: .any)["account.name"].firstMatch.exists)
 
-            app.buttons["resume.retry"].tap()
-            XCTAssertTrue(app.staticTexts[language["offline"]].waitForExistence(timeout: 30))
-
             app.buttons["resume.signOut"].tap()
             XCTAssertTrue(app.staticTexts[language["signedOut"]].waitForExistence(timeout: 10))
         }
+    }
+
+    @MainActor
+    func testTryAgainChecksTheSessionAgain() {
+        let app = launch(.english, scenario: "resume-recovers")
+        XCTAssertTrue(app.staticTexts[Language.english["offline"]].waitForExistence(timeout: 30))
+        XCTAssertFalse(app.descendants(matching: .any)["account.name"].firstMatch.exists)
+
+        app.buttons["resume.retry"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["account.name"].firstMatch.waitForExistence(timeout: 30))
     }
 
     @MainActor

@@ -42,13 +42,15 @@ enum UITestScenario: String {
     case loginSlow = "login-slow"
     case resumeSlow = "resume-slow"
     case resumeOffline = "resume-offline"
+    /// Unreachable on the first check, accepted on Try again.
+    case resumeRecovers = "resume-recovers"
     case resumeExpired = "resume-expired"
     case resumeInvalid = "resume-invalid"
     case signedIn = "signed-in"
 
     var storedSession: StoredSession? {
         switch self {
-        case .resumeSlow, .resumeOffline, .resumeInvalid, .signedIn:
+        case .resumeSlow, .resumeOffline, .resumeRecovers, .resumeInvalid, .signedIn:
             StoredSession(accessToken: "scenario-token", expiresAt: .now + 3600, email: Self.technicianEmail)
         case .resumeExpired:
             StoredSession(accessToken: "scenario-token", expiresAt: .now - 60, email: Self.technicianEmail)
@@ -65,6 +67,17 @@ enum UITestScenario: String {
 /// Scripted answers by route; any other route is unreachable.
 struct ScenarioTransport: HTTPTransport {
     let scenario: UITestScenario
+    private let profileChecks = Counter()
+
+    init(scenario: UITestScenario) {
+        self.scenario = scenario
+    }
+
+    private final class Counter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = 0
+        func next() -> Int { lock.withLock { value += 1; return value } }
+    }
 
     func data(for request: URLRequest) async throws -> (Data, URLResponse) {
         let path = request.url?.path() ?? ""
@@ -106,6 +119,8 @@ struct ScenarioTransport: HTTPTransport {
             throw URLError(.timedOut)
         case .signedIn, .loginSuccess:
             return response(request, 200, UITestScenario.technician)
+        case .resumeRecovers where profileChecks.next() > 1:
+            return response(request, 200, UITestScenario.technician)
         case .resumeInvalid:
             return problem(request, 401, "AUTH_TOKEN_INVALID")
         default:
@@ -115,7 +130,8 @@ struct ScenarioTransport: HTTPTransport {
 
     private func problem(_ request: URLRequest, _ status: Int, _ code: String,
                          headers: [String: String] = [:]) -> (Data, URLResponse) {
-        let body = #"{"type":"https://aegis.local/problems/scenario","title":"t","status":\#(status),"code":"\#(code)","detail":"d","instance":"/","traceId":"5f4bc22e-66a4-48ef-8bf3-6e7184d71c30","timestamp":"2026-10-21T12:00:00Z"}"#
+        // Distinctive server text, which the app must never display.
+        let body = #"{"type":"https://aegis.local/problems/scenario","title":"SERVER TITLE NOT SHOWN","status":\#(status),"code":"\#(code)","detail":"SERVER DETAIL NOT SHOWN","instance":"/","traceId":"5f4bc22e-66a4-48ef-8bf3-6e7184d71c30","timestamp":"2026-10-21T12:00:00Z"}"#
         return response(request, status, body, contentType: "application/problem+json", headers: headers)
     }
 
