@@ -907,7 +907,7 @@ Au cinquième secret erroné soumis par l’initiateur, le défi est invalidé e
 
 Accessible au technicien et à l’administrateur. Retourne LockerStatusView.
 
-ONLINE signifie qu’un heartbeat valide date de 30 secondes ou moins. OFFLINE signifie plus de 30 secondes. UNKNOWN signifie qu’aucune preuve suffisante n’existe.
+ONLINE signifie que le heartbeat de référence du hub, valide, date de 30 secondes ou moins et que sa connexion MQTT n’a pas été fermée par un OFFLINE. OFFLINE signifie l’inverse. UNKNOWN signifie qu’aucun heartbeat valide n’a été reçu depuis le provisionnement du hub. Les règles sont celles du document 10, §15.3.
 
 Cette lecture ne garantit pas qu’une ouverture sera autorisée : l’autorisation recalcule toutes les gardes dans sa transaction.
 

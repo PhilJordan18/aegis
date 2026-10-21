@@ -192,7 +192,8 @@ Identité logique du contrôleur ESP32 qui communique avec le broker MQTT et pil
 | `deviceKey` | Identité technique stable, par exemple l’identifiant MQTT du device. |
 | `deviceSessionId` | Identifiant du démarrage courant; invalide un ancien défi QR après redémarrage. |
 | `bootCount` | Rang du démarrage courant, persisté et croissant côté hub; ordonne les démarrages sans dépendre de l’ordre de réception (doc 10 §8.1, §15.3). |
-| `heartbeatConnectionId`, `lastValidHeartbeatAt` | Connexion MQTT et réception du dernier heartbeat valide pris en compte; fondent ONLINE (doc 10 §15.3). |
+| `provisionedAt` | Dernier provisionnement du hub; seuls les faits reçus ensuite comptent pour la disponibilité (doc 10 §15.3). |
+| `heartbeatConnectionId`, `heartbeatSequence`, `lastValidHeartbeatAt`, `heartbeatConnectionClosedAt` | Heartbeat de référence (valide, de plus grande `sequence` de la session courante) et fermeture éventuelle de sa connexion; fondent ONLINE (doc 10 §15.3). |
 | `firmwareVersion` | Version déclarée par le device. |
 | `connectionStatus` | État dérivé des heartbeats. |
 | `lastSeenAt` | Date du dernier heartbeat valide. |
@@ -314,8 +315,9 @@ Enveloppe brute d’un message MQTT reçu du locker, conservée pour déduplicat
 | `messageType` | Type déclaré : heartbeat, accusé, événement de porte, observation d’actif, etc. |
 | `operationId` | Corrélation facultative à une opération. |
 | `schemaVersion` | Version du contrat MQTT. |
-| `deviceSessionId`, `bootCount` | Démarrage émetteur et son rang (doc 10 §8.1). |
+| `deviceSessionId`, `bootCount`, `sequence` | Démarrage émetteur, son rang et l’ordre du message dans ce démarrage (doc 10 §8.1). |
 | `connectionId` | Connexion MQTT émettrice d’un heartbeat ou d’une disponibilité; relie un Last Will à son ONLINE et à ses heartbeats (doc 10 §15). |
+| `availabilityStatus` | `ONLINE` ou `OFFLINE` pour une disponibilité; un OFFLINE ferme sa connexion (doc 10 §15.3). |
 | `occurredAt` | Horodatage déclaré par le device. |
 | `receivedAt` | Horodatage de réception backend. |
 | `rawPayload` | Corps original, préservé pour diagnostic. |

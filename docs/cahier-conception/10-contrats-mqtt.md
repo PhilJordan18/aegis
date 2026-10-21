@@ -227,7 +227,7 @@ Tout droit non explicitement accordé est refusé. Les ACL sont testées avec un
 | Porte, serrure, RFID, erreur | 1 | false | Les preuves peuvent être redélivrées sans double effet |
 | Heartbeat périodique | 0 | false | Fréquent et remplacé après 10 secondes |
 | Redémarrage `DEVICE_RESTARTED` | 1 | false | Fait unique par démarrage, dédupliqué par `messageId`; jamais retenu pour un nouvel abonné |
-| Disponibilité ONLINE | 1 | true | État de connexion actuel visible au nouvel abonné |
+| Disponibilité ONLINE | 1 | true | Dernier état publié, visible au nouvel abonné; jamais une preuve de fraîcheur |
 | Last Will OFFLINE `CONNECTION_LOST` | 1 | true | Signal rapide de rupture anormale, publié par le broker |
 | OFFLINE `SHUTDOWN` | 1 | true | Déconnexion propre annoncée par le hub; remplace le ONLINE retenu |
 
@@ -236,7 +236,7 @@ Tout droit non explicitement accordé est refusé. Les ACL sont testées avec un
 - clientId stable;
 - cleanSession=false;
 - keepAlive=30 secondes;
-- un nouveau `connectionId` et un nouveau Last Will préparés avant chaque connexion (§15.2);
+- un nouveau `connectionId` et un nouveau Last Will préparés avant chaque tentative de connexion, sans réutilisation (§15.2);
 - resubscription si le broker ne restaure pas la session;
 - commandes expirées refusées après reconnexion.
 
@@ -275,9 +275,14 @@ signé de 32 bits, et l’incrémente au démarrage, avant tout message; deux d�
 partagent jamais la même valeur. Le compteur appartient à l’identité du hub
 (`deviceKey`, §4.1) : un autre `deviceKey` est un autre device (`locker_devices`,
 doc 08), dont le compteur et la référence backend partent de zéro. Un nouveau
-provisionnement, qui efface la NVS, fait repartir le hub à 1 : la même procédure remet
-à zéro la référence de démarrage du backend pour ce device. Le plafond n’est pas
-atteignable en usage normal; s’il l’était, le hub devrait être reprovisionné.
+provisionnement, qui efface la NVS, fait repartir le hub à 1; la même procédure
+enregistre l’instant du provisionnement côté backend (`provisioned_at`, doc 08 §4.4), et
+les règles du §15.3 ne considèrent que les faits reçus depuis cet instant. Le plafond
+n’est pas atteignable en usage normal; s’il l’était, le hub devrait être reprovisionné.
+
+Le hub ne publie rien tant que le nouveau `bootCount` n’est pas écrit en NVS. Si
+l’écriture échoue durablement, il reste déconnecté plutôt que de réutiliser une valeur :
+le locker apparaît OFFLINE et demande une intervention.
 `connectionId` (§15) identifie une connexion MQTT à l’intérieur d’un démarrage.
 
 ### 8.2 Commandes émises par le backend
@@ -541,7 +546,7 @@ Publié après restauration de la connectivité :
   "timestamp": "2026-09-16T14:35:00Z",
   "deviceSessionId": "bd6a6594-09f7-4ff5-b0df-dae65da7c249",
   "bootCount": 4,
-  "sequence": 0,
+  "sequence": 2,
   "resetReason": "WATCHDOG",
   "firmwareVersion": "0.1.0"
 }
@@ -555,7 +560,7 @@ vers cette liste (ESP32 : `ESP_RST_POWERON` → `POWER_ON`, `ESP_RST_EXT` →
 toute autre cause → `UNKNOWN`). Une valeur hors liste n’invalide pas le message : le
 backend la traite comme `UNKNOWN` et conserve le payload brut.
 
-`DEVICE_RESTARTED` est publié une fois par démarrage, sur `events`, QoS 1, sans retain.
+`DEVICE_RESTARTED` est publié une fois par démarrage, sur `events`, QoS 1, sans retain, après le ONLINE de la première connexion (§18); sa `sequence` suit donc celles du Last Will et du ONLINE.
 Son `bootCount` situe le démarrage parmi les autres; un `DEVICE_RESTARTED` ancien,
 livré tard, ne remplace jamais une session plus récente (§15.3).
 
@@ -604,7 +609,7 @@ Fréquence nominale : toutes les 10 secondes.
   "sequence": 46,
   "connectionId": "5b0f3c1e-7d2a-4c8e-9f61-2a4d8e7b9c03",
   "firmwareVersion": "0.1.0",
-  "uptimeSeconds": 4821,
+  "uptimeSeconds": 75,
   "clockSynchronized": true,
   "network": {
     "rssiDbm": -57
@@ -630,9 +635,10 @@ Le backend :
 - met à jour lastSeenAt avec receivedAt;
 - conserve timestamp pour diagnostic;
 - ne recule pas une projection de compartiment avec une observation plus ancienne;
-- calcule la disponibilité selon le §15.3 : ONLINE exige un heartbeat valide reçu depuis
-  30 secondes ou moins, de la session courante et d’une connexion qui n’a pas été
-  déclarée fermée; OFFLINE sinon.
+- calcule la disponibilité selon le §15.3 : ONLINE exige que le heartbeat de référence
+  (valide, de plus grande `sequence` dans la session courante) ait été reçu depuis
+  30 secondes ou moins et que sa connexion n’ait pas été déclarée fermée; UNKNOWN sans
+  aucun heartbeat valide depuis le provisionnement; OFFLINE sinon.
 
 `connectionId` est celui de la connexion qui publie le heartbeat (§15.2).
 
@@ -669,13 +675,13 @@ locker ONLINE à lui seul (§15.3).
 
 ### 15.2 OFFLINE par Last Will
 
-Un Last Will est préparé avant chaque connexion MQTT, pas seulement au démarrage, sur le
-même topic, avec QoS 1 et retain=true. Il porte un nouveau `connectionId`, que
-partagent le ONLINE et les heartbeats publiés sur cette connexion. Dès qu’un Will a pu
-être consommé par le broker, c’est-à-dire dès qu’une connexion a été établie, le
-suivant reçoit un nouveau `messageId` et un nouveau `connectionId`. Une tentative sans
-CONNACK accepté, refusée ou interrompue, peut réutiliser le Will préparé : le broker ne
-l’a jamais armé.
+Un Last Will est préparé avant chaque tentative de connexion MQTT, pas seulement au
+démarrage, sur le même topic, avec QoS 1 et retain=true. Il porte un nouveau
+`messageId` et un nouveau `connectionId`, que partagent le ONLINE et les heartbeats
+publiés sur cette connexion. Aucune tentative ne réutilise le Will ni le `connectionId`
+d’une tentative précédente : un broker qui accepte le CONNECT arme le Will même si le
+CONNACK se perd (MQTT 3.1.1, [MQTT-3.1.2-8]), puis le publie à la fermeture du socket,
+ce qui ferme cette connexion pour le backend (§15.3, R3).
 
 Sa `sequence` et son `timestamp` sont attribués à la préparation : ils peuvent être
 inférieurs à ceux de messages livrés avant lui, car le broker ne le publie qu’à la
@@ -701,7 +707,8 @@ son `timestamp`; il le déduplique sur `messageId` (§16.2) et date le signaleme
 
 Avant une déconnexion propre, le hub publie lui-même un OFFLINE `SHUTDOWN` avec QoS 1,
 retain=true et le `connectionId` courant, puis envoie DISCONNECT; le broker ne publie
-alors pas le Last Will.
+alors pas le Last Will. Après `SHUTDOWN`, le hub ne publie plus rien sur cette
+connexion.
 
 Le Last Will et `SHUTDOWN` accélèrent la détection, mais la règle de référence reste
 l’absence de heartbeat valide pendant plus de 30 secondes (ADR-004, §15.3).
@@ -722,31 +729,41 @@ Un heartbeat est **valide** s’il est authentifié, conforme, avec
 `clockSynchronized=true` et un `timestamp` ni antérieur de plus de 30 secondes, ni
 postérieur de plus de 5 secondes à `receivedAt` (§17.2).
 
-**R1 — ONLINE vient seulement d’un heartbeat valide.** Le locker est ONLINE si et
-seulement si la session courante a un heartbeat valide reçu depuis 30 secondes ou
-moins, provenant d’une connexion non fermée (R3). Un `DEVICE_AVAILABILITY` ONLINE,
-retenu ou non, ne rend jamais le locker ONLINE à lui seul.
+Seuls les faits acceptés (non rejetés, §19.2) et reçus depuis le dernier
+provisionnement du device comptent pour la projection. Un heartbeat accepté mais hors
+de la fenêtre de temps est enregistré comme traité; il n’est simplement pas valide.
+
+**R1 — ONLINE vient seulement d’un heartbeat valide.** Le heartbeat de référence est,
+dans la session courante, le heartbeat valide de plus grande `sequence` : la `sequence`
+ordonne les messages d’un démarrage, donc aussi ses connexions successives, quel que
+soit l’ordre de réception. Le locker est ONLINE si et seulement si ce heartbeat a été
+reçu il y a 30 secondes ou moins et que sa connexion n’est pas fermée (R3). Un
+`DEVICE_AVAILABILITY` ONLINE, retenu ou non, ne rend jamais le locker ONLINE à lui seul.
+Tant qu’aucun heartbeat valide n’a été reçu depuis le provisionnement, l’état est
+UNKNOWN; ensuite, il est ONLINE ou OFFLINE.
 
 **R2 — Session courante.** La session courante d’un device est le démarrage de plus
-grand `bootCount` parmi ses faits enregistrés. L’ordre de réception ne compte pas : un
+grand `bootCount` parmi ses faits acceptés. L’ordre de réception ne compte pas : un
 `DEVICE_RESTARTED`, un heartbeat ou une disponibilité d’un `bootCount` inférieur est
 enregistré sans effet sur la projection, même reçu en dernier. Un fait d’un
 `bootCount` supérieur fait de son démarrage la session courante, même avant l’arrivée
 de son `DEVICE_RESTARTED`; le locker reste OFFLINE tant qu’aucun heartbeat valide de
 cette session n’est reçu. Deux `deviceSessionId` différents pour le même `bootCount`
 révèlent un compteur non conforme : les faits sont enregistrés, la projection ne
-change pas et le backend signale une anomalie technique.
+change pas et le backend signale une anomalie technique. Le démarrage suivant, d’un
+`bootCount` supérieur, rétablit une session courante normale.
 
 **R3 — Connexion fermée et OFFLINE accéléré.** Une connexion est fermée dès qu’un
 `DEVICE_AVAILABILITY` OFFLINE de la session courante portant son `connectionId` est
 enregistré, Last Will (`CONNECTION_LOST`) ou arrêt propre (`SHUTDOWN`). Elle ne
-redevient jamais ouverte. L’OFFLINE de la connexion qui porte le dernier heartbeat
-valide rend donc le locker OFFLINE immédiatement, sans attendre les 30 secondes, et un
+redevient jamais ouverte. L’OFFLINE de la connexion qui porte le heartbeat de
+référence rend donc le locker OFFLINE immédiatement, sans attendre les 30 secondes, et un
 heartbeat retardé de cette connexion fermée ne rétablit pas ONLINE. L’OFFLINE d’une
 connexion plus ancienne est enregistré sans effet : un ancien Will livré après une
 reconnexion ne dégrade pas l’état courant.
 
-**R4 — Retour à ONLINE.** Après un OFFLINE accéléré, seul un heartbeat valide d’une
+**R4 — Retour à ONLINE.** Après un OFFLINE accéléré, seul un nouveau heartbeat de
+référence, c’est-à-dire un heartbeat valide de plus grande `sequence` provenant d’une
 nouvelle connexion, ou d’un nouveau démarrage, rétablit ONLINE; le ONLINE de cette
 connexion ne suffit pas. Sans Will ni `SHUTDOWN`, des heartbeats valides qui reprennent
 sur une connexion non fermée après plus de 30 secondes de silence rétablissent ONLINE.
@@ -760,13 +777,16 @@ depuis déclarée fermée. À l’inverse, l’absence de heartbeat valide penda
 l’instant présent :
 
 - dans la transaction qui enregistre le fait, le backend persiste pour le device la
-  session courante (`deviceSessionId`, `bootCount`) et le dernier heartbeat valide pris
-  en compte (`connectionId`, `receivedAt`) (doc 08 §4.4); les connexions fermées se
-  lisent dans les faits `DEVICE_AVAILABILITY` OFFLINE enregistrés (doc 08,
-  `inbound_device_messages`);
-- après son propre redémarrage, il relit cet état; ONLINE est recalculé contre
-  l’instant présent, donc après plus de 30 secondes d’arrêt le locker reste OFFLINE
-  jusqu’au prochain heartbeat valide;
+  session courante (`deviceSessionId`, `bootCount`) et le heartbeat de référence
+  (`connectionId`, `sequence`, `receivedAt`, fermeture éventuelle de sa connexion)
+  (doc 08 §4.4); les connexions fermées se lisent dans les faits `DEVICE_AVAILABILITY`
+  OFFLINE enregistrés (doc 08, `inbound_device_messages`);
+- après son propre redémarrage, il relit cet état et recalcule ONLINE contre l’instant
+  présent, comme à toute lecture : un heartbeat de référence reçu moins de 30 secondes
+  avant l’arrêt compte encore jusqu’à ses 30 secondes; un Will publié pendant l’arrêt,
+  reçu au réabonnement comme message retenu ou livraison QoS 1, s’applique selon R3;
+  après plus de 30 secondes d’arrêt, le locker reste OFFLINE jusqu’au prochain
+  heartbeat valide;
 - la projection peut être reconstruite à tout moment en rejouant les faits enregistrés
   du device dans l’ordre de `receivedAt` avec R1 à R4; le résultat doit égaler la
   projection persistée;
@@ -875,8 +895,8 @@ Le hub utilise un backoff exponentiel avec jitter :
 1 s, 2 s, 4 s, 8 s, 16 s, puis maximum 30 s
 ```
 
-Avant chaque connexion, le hub prépare un nouveau `connectionId` et un nouveau Last Will
-(§15.2). Après reconnexion :
+Avant chaque tentative de connexion, le hub prépare un nouveau `connectionId` et un
+nouveau Last Will (§15.2). Après reconnexion :
 
 1. vérifier si la session broker a été restaurée;
 2. se réabonner à commands si nécessaire;
@@ -1069,7 +1089,7 @@ Les logs n’incluent aucun secret, mot de passe ou payload complet par défaut.
 Côté hub (vérifiables avec le simulateur) :
 
 1. Le hub publie un heartbeat toutes les 10 secondes.
-2. Chaque connexion reçoit un nouveau `connectionId` et un nouveau Last Will (nouveau
+2. Chaque tentative de connexion reçoit un nouveau `connectionId` et un nouveau Last Will (nouveau
    `messageId`); son Will, son ONLINE et ses heartbeats portent ce `connectionId`.
 3. Un arrêt propre publie OFFLINE `SHUTDOWN` sans Will; une rupture fait publier par le
    broker le Will `CONNECTION_LOST` de la connexion rompue.
@@ -1094,7 +1114,8 @@ broker, comme le ferait un Will réellement tardif :
 11. Après `SHUTDOWN`, un nouveau démarrage et un heartbeat valide rendent le locker
     ONLINE.
 12. Après un redémarrage du backend, l’état relu égale celui reconstruit à partir des
-    faits, et ONLINE n’est rétabli que par un heartbeat valide reçu après la reprise.
+    faits; un Will publié pendant l’arrêt s’applique au réabonnement; après plus de
+    30 secondes d’arrêt, ONLINE attend un heartbeat valide reçu après la reprise.
 13. Une commande mise en file mais expirée n’est pas exécutée.
 
 ### 23.6 Panne
