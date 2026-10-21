@@ -3,7 +3,8 @@
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de révision :** 23 septembre 2026
-**Version :** 1.3 — décisions logicielles P0 et données de suivi des clients
+**Version :** 1.3 — décisions logicielles P0 et données de suivi des clients  
+**Mise à jour ciblée :** 21 octobre 2026 — `Retry-After` de la connexion (§10.2) et langue de la requête (§6.4), comportement existant documenté (#80)
 
 ---
 
@@ -173,6 +174,14 @@ Idempotency-Replayed: true
 ### 6.3 Localisation d’une nouvelle ressource
 
 Une réponse 201 ou 202 retourne Location lorsque la ressource possède une route de lecture.
+
+### 6.4 Langue de la requête
+
+Un client peut envoyer `Accept-Language`; iOS le fait automatiquement. L’API ne
+modifie selon cet en-tête ni son comportement, ni le statut, ni les codes d’erreur
+ou de violation, ni ses en-têtes. Les clients affichent leurs propres messages à
+partir des codes et n’affichent jamais `detail` (voir la convention de
+localisation, `docs/localisation/convention.md`).
 
 ---
 
@@ -542,6 +551,13 @@ Réponse 200 :
 ```
 
 Erreurs : 400 VALIDATION_ERROR, 401 AUTH_INVALID_CREDENTIALS, 429 RATE_LIMITED.
+
+Limitation : au plus cinq tentatives par minute pour une même adresse cliente et
+un même courriel, sans tenir compte de la casse. Au-delà, la réponse
+`429 RATE_LIMITED` porte l’en-tête `Retry-After` en secondes (delta-seconds) :
+un entier de 1 à 60, arrondi à la seconde supérieure, jamais une date HTTP. Le
+client affiche ce délai une seule fois et seulement à partir d’une valeur valide;
+sans valeur valide, il indique seulement qu’il y a eu trop de tentatives.
 
 ### 10.3 GET /auth/me
 
