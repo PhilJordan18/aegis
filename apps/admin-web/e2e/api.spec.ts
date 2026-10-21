@@ -128,6 +128,7 @@ test('repeated attempts reach the rate limit and use its Retry-After delay', asy
   const alert = page.getByRole('alert')
   await expect(alert).toContainText('Trop de tentatives.')
   await expect(alert).toContainText(/Réessayez dans \d+\s+secondes?\./)
-  await expect(page.getByText(/^Disponible dans \d+:\d{2}$/)).toBeVisible()
+  // The delay is shown once, in the alert: no countdown caption under the button.
+  await expect(page.getByText(/\d+:\d{2}/)).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Se connecter' })).toHaveAttribute('aria-disabled', 'true')
 })
