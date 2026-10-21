@@ -192,7 +192,7 @@ Identité logique du contrôleur ESP32 qui communique avec le broker MQTT et pil
 | `deviceKey` | Identité technique stable, par exemple l’identifiant MQTT du device. |
 | `deviceSessionId` | Identifiant du démarrage courant; invalide un ancien défi QR après redémarrage. |
 | `bootCount` | Rang du démarrage courant, persisté et croissant côté hub; ordonne les démarrages sans dépendre de l’ordre de réception (doc 10 §8.1, §15.3). |
-| `provisionedAt` | Dernier provisionnement du hub; seuls les faits reçus ensuite comptent pour la disponibilité (doc 10 §15.3). |
+| `provisionedAt`, `firstValidHeartbeatAt` | Dernier provisionnement du hub, et premier heartbeat valide reçu depuis; seuls les faits reçus après le provisionnement comptent, et l’état reste UNKNOWN avant ce premier heartbeat (doc 10 §15.3). |
 | `heartbeatConnectionId`, `heartbeatSequence`, `lastValidHeartbeatAt`, `heartbeatConnectionClosedAt` | Heartbeat de référence (valide, de plus grande `sequence` de la session courante) et fermeture éventuelle de sa connexion; fondent ONLINE (doc 10 §15.3). |
 | `firmwareVersion` | Version déclarée par le device. |
 | `connectionStatus` | État dérivé des heartbeats. |

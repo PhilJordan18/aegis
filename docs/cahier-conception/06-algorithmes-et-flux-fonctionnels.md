@@ -1076,8 +1076,10 @@ Le retard ne déclenche aucune transition. Le prêt reste `ACTIVE` ou `RETURN_PE
 reference = valid heartbeat with the highest sequence in the current session
             (facts accepted since provisionedAt, doc 10 §15.3)
 
-if reference is none:
+if no valid heartbeat since provisionedAt:
     deviceStatus = UNKNOWN
+else if reference is none:              # new session, no valid heartbeat yet
+    deviceStatus = OFFLINE
 else if reference.connection was closed by an OFFLINE availability:
     deviceStatus = OFFLINE
 else if now - reference.receivedAt > 30 seconds:

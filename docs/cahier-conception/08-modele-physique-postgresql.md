@@ -341,13 +341,17 @@ persistent la projection de disponibilité du doc 10 §15.3 (#63, schéma MQTT 2
 l’instant du dernier provisionnement, la session courante choisie par le plus grand
 `boot_count`, et le heartbeat de référence (valide, de plus grande `sequence` dans la
 session) avec sa connexion, sa `sequence`, son `receivedAt` et la fermeture éventuelle
-de sa connexion. Elles sont mises à jour dans la transaction qui enregistre le message.
-Un nouveau provisionnement met `provisioned_at` à l’instant courant et vide la session et
-le heartbeat de référence; seuls les faits reçus ensuite comptent.
+de sa connexion. `first_valid_heartbeat_at` garde le premier heartbeat valide reçu
+depuis le provisionnement. Ces colonnes sont mises à jour dans la transaction qui
+enregistre le message. Une nouvelle session (`boot_count` supérieur) vide le heartbeat de
+référence sans toucher à `first_valid_heartbeat_at`. Un nouveau provisionnement (doc 10
+§8.1) met `provisioned_at` à l’instant courant et vide la session, le heartbeat de
+référence et `first_valid_heartbeat_at`; seuls les faits reçus ensuite comptent.
 
-`connection_status` n’est qu’un cache. À la lecture : UNKNOWN sans heartbeat de
-référence; OFFLINE si `heartbeat_connection_closed_at` est renseigné ou si
-`last_valid_heartbeat_at` date de plus de 30 secondes; ONLINE sinon. Après un redémarrage
+`connection_status` n’est qu’un cache. À la lecture : UNKNOWN si
+`first_valid_heartbeat_at` est vide; sinon OFFLINE s’il n’y a pas de heartbeat de
+référence dans la session courante, si `heartbeat_connection_closed_at` est renseigné ou
+si `last_valid_heartbeat_at` date de plus de 30 secondes; ONLINE sinon. Après un redémarrage
 du backend, ces colonnes sont relues telles quelles, et un rejeu des faits acceptés de
 `inbound_device_messages` reçus depuis `provisioned_at` doit redonner les mêmes valeurs.
 
@@ -363,6 +367,7 @@ CREATE TABLE locker_devices (
     heartbeat_sequence bigint NULL,
     last_valid_heartbeat_at timestamptz NULL,
     heartbeat_connection_closed_at timestamptz NULL,
+    first_valid_heartbeat_at timestamptz NULL,
     firmware_version   text NOT NULL,
     connection_status  text NOT NULL DEFAULT 'UNKNOWN',
     last_seen_at       timestamptz NULL,
@@ -391,9 +396,11 @@ CREATE TABLE locker_devices (
                 AND heartbeat_connection_closed_at IS NULL)
             OR
             (heartbeat_connection_id IS NOT NULL
+                AND heartbeat_sequence IS NOT NULL
                 AND heartbeat_sequence >= 0
                 AND last_valid_heartbeat_at IS NOT NULL
-                AND boot_count IS NOT NULL)
+                AND boot_count IS NOT NULL
+                AND first_valid_heartbeat_at IS NOT NULL)
         )
 );
 ```
@@ -945,12 +952,10 @@ CREATE TABLE inbound_device_messages (
         CHECK (boot_count IS NULL OR boot_count BETWEEN 1 AND 4294967295),
     CONSTRAINT ck_inbound_messages_sequence
         CHECK (sequence IS NULL OR sequence >= 0),
-    CONSTRAINT ck_inbound_messages_session_pair
-        CHECK ((device_session_id IS NULL) = (boot_count IS NULL)),
     CONSTRAINT ck_inbound_messages_accepted_envelope
         CHECK (
             processing_status = 'REJECTED'
-            OR (device_session_id IS NOT NULL AND sequence IS NOT NULL)
+            OR (device_session_id IS NOT NULL AND boot_count IS NOT NULL AND sequence IS NOT NULL)
         ),
     CONSTRAINT ck_inbound_messages_connection
         CHECK (

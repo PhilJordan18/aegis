@@ -275,15 +275,21 @@ signé de 32 bits, et l’incrémente au démarrage, avant tout message; deux d�
 partagent jamais la même valeur. Le compteur appartient à l’identité du hub
 (`deviceKey`, §4.1) : un autre `deviceKey` est un autre device (`locker_devices`,
 doc 08), dont le compteur et la référence backend partent de zéro. Un nouveau
-provisionnement, qui efface la NVS, fait repartir le hub à 1; la même procédure
-enregistre l’instant du provisionnement côté backend (`provisioned_at`, doc 08 §4.4), et
-les règles du §15.3 ne considèrent que les faits reçus depuis cet instant. Le plafond
-n’est pas atteignable en usage normal; s’il l’était, le hub devrait être reprovisionné.
+provisionnement, qui efface la NVS, fait repartir le hub à 1. Le plafond n’est pas
+atteignable en usage normal; s’il l’était, le hub devrait être reprovisionné.
+`connectionId` (§15) identifie une connexion MQTT à l’intérieur d’un démarrage.
 
 Le hub ne publie rien tant que le nouveau `bootCount` n’est pas écrit en NVS. Si
 l’écriture échoue durablement, il reste déconnecté plutôt que de réutiliser une valeur :
 le locker apparaît OFFLINE et demande une intervention.
-`connectionId` (§15) identifie une connexion MQTT à l’intérieur d’un démarrage.
+
+Le reprovisionnement est une procédure d’exploitation, hors API P0 : arrêter le hub;
+attendre que le backend, connecté, ait reçu les messages encore en file pour lui; effacer
+le statut retenu du locker sur le broker; enregistrer l’instant du provisionnement côté
+backend (`provisioned_at`, doc 08 §4.4); effacer la NVS et remettre le hub en service.
+Les règles du §15.3 ne considèrent que les faits reçus depuis `provisioned_at`; l’attente
+préalable évite qu’un message de l’ancien démarrage, livré tard, ne dépasse les nouveaux
+`bootCount`.
 
 ### 8.2 Commandes émises par le backend
 
@@ -747,8 +753,8 @@ grand `bootCount` parmi ses faits acceptés. L’ordre de réception ne compte p
 `DEVICE_RESTARTED`, un heartbeat ou une disponibilité d’un `bootCount` inférieur est
 enregistré sans effet sur la projection, même reçu en dernier. Un fait d’un
 `bootCount` supérieur fait de son démarrage la session courante, même avant l’arrivée
-de son `DEVICE_RESTARTED`; le locker reste OFFLINE tant qu’aucun heartbeat valide de
-cette session n’est reçu. Deux `deviceSessionId` différents pour le même `bootCount`
+de son `DEVICE_RESTARTED`; le heartbeat de référence de l’ancienne session est écarté et
+le locker reste OFFLINE tant qu’aucun heartbeat valide de cette session n’est reçu. Deux `deviceSessionId` différents pour le même `bootCount`
 révèlent un compteur non conforme : les faits sont enregistrés, la projection ne
 change pas et le backend signale une anomalie technique. Le démarrage suivant, d’un
 `bootCount` supérieur, rétablit une session courante normale.
@@ -1102,7 +1108,7 @@ broker, comme le ferait un Will réellement tardif :
 
 5. Un ancien Will livré après une reconnexion et un heartbeat de la nouvelle connexion
    est enregistré; le locker reste ONLINE.
-6. Le Will de la connexion courante rend le locker OFFLINE immédiatement, malgré une
+6. Le Will de la connexion du heartbeat de référence rend le locker OFFLINE immédiatement, malgré une
    `sequence` inférieure à son ONLINE; un heartbeat retardé de cette connexion ne
    rétablit pas ONLINE.
 7. Un ONLINE retenu rejoué à l’abonnement, sans heartbeat frais, ne rend pas le locker
@@ -1174,7 +1180,7 @@ Le contrat est respecté si :
 6. le hub déduplique avant l’actionnement;
 7. le backend déduplique avant tout effet;
 8. le heartbeat est émis toutes les 10 secondes;
-9. OFFLINE est dérivé après plus de 30 secondes sans heartbeat valide, ou dès l’OFFLINE de la connexion courante; ONLINE n’est dérivé que d’un heartbeat valide d’une connexion non fermée de la session courante (§15.3);
+9. ONLINE n’est dérivé que du heartbeat de référence (valide, de plus grande `sequence` de la session courante), reçu depuis 30 secondes ou moins et dont la connexion n’est pas fermée; OFFLINE est dérivé sinon, en particulier après plus de 30 secondes sans heartbeat valide ou dès l’OFFLINE de cette connexion (§15.3);
 10. un fait ancien est enregistré sans faire régresser la projection;
 11. les cellules n’utilisent jamais MQTT;
 12. aucune observation ne décide seule d’un prêt;
