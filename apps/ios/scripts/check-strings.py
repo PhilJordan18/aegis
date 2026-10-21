@@ -6,7 +6,7 @@ the code is missing from the catalog, when a catalog key is no longer used,
 when an English translation is missing or empty, or when placeholders differ
 between the French key and its English value.
 
-usage: check-strings.py [derived-data] [catalog]
+usage: check-strings.py [derived-data] [catalog]   (paths inside apps/ios)
 """
 
 import glob
@@ -60,10 +60,18 @@ def translations(entry, language):
     return units
 
 
+def inside(root, path):
+    """Resolves a command-line path and refuses anything outside apps/ios."""
+    resolved = os.path.realpath(os.path.join(root, path))
+    if os.path.commonpath([root, resolved]) != root:
+        sys.exit(f"error: {path} is outside {root}")
+    return resolved
+
+
 def main():
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    derived_data = sys.argv[1] if len(sys.argv) > 1 else os.path.join(root, "build/DerivedData")
-    catalog_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(root, "AegisMobile/Localizable.xcstrings")
+    root = os.path.realpath(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    derived_data = inside(root, sys.argv[1] if len(sys.argv) > 1 else "build/DerivedData")
+    catalog_path = inside(root, sys.argv[2] if len(sys.argv) > 2 else "AegisMobile/Localizable.xcstrings")
 
     with open(catalog_path, encoding="utf-8") as handle:
         catalog = json.load(handle)
