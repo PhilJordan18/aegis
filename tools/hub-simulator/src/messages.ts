@@ -1,4 +1,6 @@
 import {
+  BOOT_COUNT_MAX,
+  BOOT_COUNT_MIN,
   CHANNEL_BY_TYPE,
   DELIVERY,
   MAX_PAYLOAD_BYTES,
@@ -15,6 +17,7 @@ import {
   type ReaderStatus,
   type ResetReason,
 } from './contract.ts';
+import { isValidBootCount } from './boot-counter.ts';
 
 /** Doc 10 §8.1 common envelope of every hub message (schema 2.0). */
 export interface HubEnvelope {
@@ -84,8 +87,8 @@ export class DeviceSession {
   #nextSequence = 0;
 
   constructor(deviceSessionId: string, bootCount: number, bootEpochMs: number) {
-    if (!Number.isSafeInteger(bootCount) || bootCount < 1) {
-      throw new RangeError(`bootCount must be an integer >= 1, got ${bootCount}`);
+    if (!isValidBootCount(bootCount)) {
+      throw new RangeError(`bootCount must be an integer from ${BOOT_COUNT_MIN} to ${BOOT_COUNT_MAX}, got ${bootCount}`);
     }
     this.deviceSessionId = deviceSessionId;
     this.bootCount = bootCount;

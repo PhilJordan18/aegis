@@ -154,8 +154,13 @@ describe('envelope rules (doc 10 §8.1, §16.3, §20)', () => {
     expect(SCHEMA_VERSION).toBe('2.0');
   });
 
-  it.each([0, -1, 1.5, Number.NaN])('refuses bootCount %s', (bootCount) => {
+  it.each([0, -1, 1.5, Number.NaN, 4_294_967_296])('refuses bootCount %s', (bootCount) => {
     expect(() => new DeviceSession(SESSION, bootCount, BOOT)).toThrow('bootCount');
+  });
+
+  it('accepts the uint32 bounds of bootCount (doc 10 §8.1)', () => {
+    expect(new DeviceSession(SESSION, 1, BOOT).bootCount).toBe(1);
+    expect(new DeviceSession(SESSION, 4_294_967_295, BOOT).bootCount).toBe(4_294_967_295);
   });
 
   it('never publishes a heartbeat or availability on events, nor a device fact on status', () => {

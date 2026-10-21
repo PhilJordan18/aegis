@@ -8,6 +8,10 @@
  */
 export const SCHEMA_VERSION = '2.0';
 
+/** Doc 10 §8.1: bootCount is an unsigned 32-bit integer from 1, as the firmware stores it in NVS. */
+export const BOOT_COUNT_MIN = 1;
+export const BOOT_COUNT_MAX = 4_294_967_295;
+
 /** Doc 10 §3.1: MQTT 3.1.1 is protocol level 4. */
 export const MQTT_PROTOCOL_VERSION = 4;
 

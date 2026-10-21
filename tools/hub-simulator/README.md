@@ -36,7 +36,7 @@ l'ingestion backend (PHY-01, §15.3 et §23.5 points 5 à 12).
 | `schemaVersion` | tous | `"2.0"`; le segment `v1` des topics versionne l'arborescence et les ACL, pas le payload |
 | `messageId` | tous | UUID neuf pour chaque fait; un rejeu le conserve |
 | `deviceSessionId` | tous | UUID neuf à chaque démarrage |
-| `bootCount` | tous | Entier >= 1, +1 à chaque démarrage, identique pour tous les messages d'un démarrage (voir ci-dessous) |
+| `bootCount` | tous | Entier de 1 à 4 294 967 295 (32 bits non signé), +1 à chaque démarrage, identique pour tous les messages d'un démarrage (voir ci-dessous) |
 | `sequence` | tous | Croissante dans le démarrage sur tous les messages *préparés*, Last Will compris : le Will de la première connexion prend 0, son `ONLINE` 1 |
 | `connectionId` | `DEVICE_AVAILABILITY`, `HEARTBEAT` | UUID neuf par connexion MQTT, partagé par son Will, son `ONLINE`, ses heartbeats et son `SHUTDOWN` |
 | `timestamp` | tous | RFC 3339 UTC en secondes entières, terminé par `Z`; celui du Will est l'instant de sa préparation |

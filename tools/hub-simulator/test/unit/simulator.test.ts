@@ -411,7 +411,8 @@ describe('bootCount persistence (doc 10 §8.1, NVS equivalent)', () => {
   });
 
   it('rejects an invalid first boot count', () => {
-    expect(() => new FileBootCounter(join(dir, 'x.json'), 'k', 0)).toThrow('>= 1');
+    expect(() => new FileBootCounter(join(dir, 'x.json'), 'k', 0)).toThrow('from 1 to 4294967295');
+    expect(() => new FileBootCounter(join(dir, 'x.json'), 'k', 4_294_967_296)).toThrow('from 1 to 4294967295');
     expect(() => defineConfig({ password: 'x', firstBootCount: 0 })).toThrow('bootCount');
     expect(() => defineConfig({ password: 'x', bootCountFile: 'relative.json' })).toThrow('absolute');
   });

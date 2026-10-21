@@ -2,6 +2,8 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
+import { BOOT_COUNT_MAX, BOOT_COUNT_MIN } from './contract.ts';
+
 /**
  * Source of the `bootCount` of each boot (doc 10 §8.1, schema 2.0). The firmware
  * keeps it in NVS; the simulator keeps it in a state file outside the repository,
@@ -23,7 +25,7 @@ export function defaultBootCountFile(env: NodeJS.ProcessEnv = process.env): stri
 }
 
 export function isValidBootCount(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1;
+  return typeof value === 'number' && Number.isInteger(value) && value >= BOOT_COUNT_MIN && value <= BOOT_COUNT_MAX;
 }
 
 interface BootCountFile {
@@ -46,7 +48,7 @@ export class FileBootCounter implements BootCounter {
 
   constructor(path: string, deviceKey: string, firstBootCount?: number) {
     if (firstBootCount !== undefined && !isValidBootCount(firstBootCount)) {
-      throw new BootCounterError(`first bootCount must be an integer >= 1, got ${firstBootCount}`);
+      throw new BootCounterError(`first bootCount must be an integer from ${BOOT_COUNT_MIN} to ${BOOT_COUNT_MAX}, got ${firstBootCount}`);
     }
     this.path = path;
     this.deviceKey = deviceKey;
