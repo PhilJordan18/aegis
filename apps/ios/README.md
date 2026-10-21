@@ -32,13 +32,13 @@ l'ouvrir.
 **Cible minimale : iOS 17.0** (`Config/Shared.xcconfig`), à ne pas confondre
 avec les versions réellement testées :
 
-| Configuration | Recette | Résultat (21 octobre 2026) |
+| Configuration | Recette | Résultat (21 octobre 2026, avec FR/EN) |
 |---|---|---|
-| iPhone 17, iOS 26.3.1 (simulateur) | `standalone` | 24 réussis, 0 ignoré |
+| iPhone 17, iOS 26.3.1 (simulateur) | `standalone` | 28 réussis, 0 ignoré; catalogue cohérent (21 clés) |
 | iPhone 17, iOS 26.3.1 (simulateur) | `live`, API locale issue de `dev` | 2 réussis, 0 ignoré |
-| iPhone SE (3e génération), iOS 17.5 (simulateur) | `standalone` | 24 réussis, 0 ignoré |
+| iPhone SE (3e génération), iOS 17.5 (simulateur) | `standalone` | 28 réussis, 0 ignoré; catalogue cohérent |
 | iOS 17.0 exact, iOS 18.x, iOS 26.0 | — | non testés (pas de runtime 17.0; autres runtimes non exécutés) |
-| iPhone physique | — | non testé : aucun appareil disponible |
+| iPhone 11 (Philippe), iPhone 15 Plus (Jimmy) | — | non testés; versions iOS installées à relever |
 
 Justification de la cible :
 
@@ -51,7 +51,8 @@ Justification de la cible :
   qu'aucune fonctionnalité nécessaire au P0 n'exige plus. Une API plus récente
   ne sera proposée qu'avec son besoin, son comportement de repli et son coût.
 
-**À confirmer :** modèle et version iOS de l'iPhone de démonstration.
+Appareils disponibles : iPhone 11 et iPhone 15 Plus, tous deux compatibles
+avec iOS 17 à 26. **À relever :** leur version iOS installée.
 
 ## Ouvrir et lancer dans Xcode
 
@@ -74,7 +75,9 @@ Justification de la cible :
 scripts/ios-test.sh standalone
 ```
 
-- Tests unitaires et test UI « service injoignable », sans backend.
+- Tests unitaires et tests UI « service injoignable » en français et en
+  anglais, sans backend, puis contrôle du String Catalog
+  (`scripts/check-strings.py`).
 - Les tests d'intégration sont **exclus**, pas ignorés; la recette échoue si
   un test est ignoré, échoue ou si aucun test ne s'exécute.
 
@@ -116,6 +119,31 @@ xcrun simctl install booted build/DerivedData/Build/Products/Debug-iphonesimulat
 xcrun simctl launch booted com.example.aegis.mobile
 ```
 
+## Français et anglais
+
+Convention commune Web et iOS : `docs/localisation/` (#78, tenue par la
+session API/Web, avec le glossaire). Pour iOS :
+
+- String Catalog `AegisMobile/Localizable.xcstrings`; le français est la
+  langue de développement et de repli (`developmentRegion = fr`), l'anglais
+  est traduit;
+- la langue suit le système ou le choix fait pour l'application dans
+  Réglages, qui apparaît dès que deux langues existent; aucune préférence
+  n'est envoyée au serveur;
+- formats natifs (`FormatStyle`) avec `Locale.current` : langue de l'app,
+  région et réglage 12/24 h du système;
+- seule la présentation est traduite : jamais les codes, les identifiants,
+  le `traceId` ni les données du serveur.
+
+Le contrôle `scripts/check-strings.py` compare les clés extraites par le
+compilateur au catalogue. Il échoue si une clé manque au catalogue, si une
+clé n'est plus utilisée, si une traduction anglaise manque ou est vide, ou si
+les marqueurs (`%@`, `%lld`) diffèrent. Les tests UI vérifient l'écran dans
+les deux langues avec `-AppleLanguages` et `-AppleLocale`.
+
+Ajouter un texte : l'écrire en français dans le code (`Text("…")`), compiler,
+puis ajouter sa traduction anglaise au catalogue, dans Xcode ou dans le JSON.
+
 ## Configuration et règles réseau
 
 | Fichier | Rôle | Versionné |
@@ -147,9 +175,12 @@ AegisMobile/
   Networking/   APIConfiguration, APIClient (URLSession), SystemHealth
   Health/       HealthViewModel (@MainActor, @Observable) et HealthView
   Assets.xcassets  couleurs du traitement A (valeurs du prototype, non définitives)
-AegisMobileTests/    Swift Testing : configuration, client, états de l'écran, API réelle
-AegisMobileUITests/  XCUITest : erreur réseau et nouvelle tentative, service réel
-scripts/ios-test.sh  recettes standalone et live
+  Localizable.xcstrings  textes français et anglais
+AegisMobileTests/    Swift Testing : configuration, client, états de l'écran,
+                     traductions compilées, API réelle
+AegisMobileUITests/  XCUITest : erreur réseau et nouvelle tentative (FR, EN), service réel
+scripts/ios-test.sh      recettes standalone et live
+scripts/check-strings.py contrôle du String Catalog
 ```
 
 Grâce aux groupes synchronisés, un fichier ajouté dans un de ces dossiers est
@@ -164,7 +195,7 @@ des propositions de prototype, non des jetons approuvés.
 Le simulateur ne valide ni la caméra, ni le scan du QR, ni le réseau du
 laboratoire. Avant le premier essai :
 
-1. Modèle et version iOS de l'iPhone de démonstration (≥ iOS 17).
+1. Version iOS installée sur l'iPhone 11 et l'iPhone 15 Plus (≥ iOS 17 requis).
 2. Compte Apple Developer et équipe de signature sur le Mac qui compile
    (`DEVELOPMENT_TEAM` dans `Local.xcconfig`), mode développeur activé sur
    l'iPhone, échéance du profil connue.
@@ -189,4 +220,6 @@ et les mêmes runtimes que ci-dessus :
 - `health-unreachable-iphone17-ios26.3.png` : port fermé, erreur réseau et
   bouton « Réessayer » (capture du test UI);
 - `health-live-iphonese-ios17.5-dark-ax.png` : cible minimale, thème sombre,
-  texte d'accessibilité très grand.
+  texte d'accessibilité très grand;
+- `health-unreachable-en-iphone17-ios26.3.png` (21 octobre 2026) : même état
+  en anglais (capture du test UI).
