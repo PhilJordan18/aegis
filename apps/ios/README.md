@@ -38,7 +38,7 @@ avec les versions réellement testées :
 | iPhone 17, iOS 26.3.1 (simulateur) | `live`, API locale issue de `dev` | 2 réussis, 0 ignoré |
 | iPhone SE (3e génération), iOS 17.5 (simulateur) | `standalone` | 28 réussis, 0 ignoré; catalogue cohérent |
 | iOS 17.0 exact, iOS 18.x, iOS 26.0 | — | non testés (pas de runtime 17.0; autres runtimes non exécutés) |
-| iPhone 11 (Philippe), iPhone 15 Plus (Jimmy) | — | non testés; versions iOS installées à relever |
+| iPhone 12 (Philippe), iPhone 15 Plus (Jimmy) | — | non testés; versions déclarées non confirmées (voir plus bas) |
 
 Justification de la cible :
 
@@ -51,8 +51,18 @@ Justification de la cible :
   qu'aucune fonctionnalité nécessaire au P0 n'exige plus. Une API plus récente
   ne sera proposée qu'avec son besoin, son comportement de repli et son coût.
 
-Appareils disponibles : iPhone 11 et iPhone 15 Plus, tous deux compatibles
-avec iOS 17 à 26. **À relever :** leur version iOS installée.
+Appareils disponibles (déclarés le 21 octobre 2026, **non vérifiés**) :
+
+| Appareil | Version annoncée | À confirmer |
+|---|---|---|
+| iPhone 12 (Philippe) | iOS 26.5 | Réglages › Général › Informations : version et numéro de build |
+| iPhone 15 Plus (Jimmy) | iOS 27.0.1 | Idem |
+
+Ces versions ne justifient pas de relever la cible. Elles dépassent en
+revanche le SDK iOS 26.2 de Xcode 26.3 : installer sur un appareil plus récent
+que le SDK peut demander les fichiers de prise en charge de l'appareil ou un
+Xcode plus récent, en particulier pour iOS 27. À vérifier au premier essai,
+sans changer la cible.
 
 ## Ouvrir et lancer dans Xcode
 
@@ -195,7 +205,8 @@ des propositions de prototype, non des jetons approuvés.
 Le simulateur ne valide ni la caméra, ni le scan du QR, ni le réseau du
 laboratoire. Avant le premier essai :
 
-1. Version iOS installée sur l'iPhone 11 et l'iPhone 15 Plus (≥ iOS 17 requis).
+1. Version et build iOS confirmés sur l'iPhone 12 et l'iPhone 15 Plus, et
+   capacité de Xcode 26.3 à installer sur ces versions.
 2. Compte Apple Developer et équipe de signature sur le Mac qui compile
    (`DEVELOPMENT_TEAM` dans `Local.xcconfig`), mode développeur activé sur
    l'iPhone, échéance du profil connue.
