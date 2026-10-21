@@ -19,8 +19,9 @@ pour le Web, `docs/design/mobile-*` pour iOS.
 | `assets/aegis-core-logo.svg` | Signature complète pour fond clair (400 × 100) |
 | `assets/aegis-core-logo-dark.svg` | Signature complète pour fond sombre (400 × 100) |
 | `assets/aegis-core-mark.svg` | Symbole seul (64 × 64) |
+| `assets/aegis-core-mark-dark.svg` | Symbole seul pour fond sombre (64 × 64), extrait sans modification du groupe de `aegis-core-logo-dark.svg` par la session iOS |
 
-Les fichiers sont conservés tels que fournis. La maquette mobile est une
+Les fichiers fournis sont conservés tels quels; le symbole sombre en est extrait sans autre changement. La maquette mobile est une
 référence d'identité : ni du code à reproduire au pixel près, ni une mise en page
 à agrandir pour le Web.
 
