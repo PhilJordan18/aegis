@@ -966,7 +966,7 @@ CREATE TABLE inbound_device_messages (
     CONSTRAINT ck_inbound_messages_availability_status
         CHECK (
             (message_type = 'DEVICE_AVAILABILITY'
-                AND (availability_status IN ('ONLINE', 'OFFLINE')
+                AND ((availability_status IS NOT NULL AND availability_status IN ('ONLINE', 'OFFLINE'))
                     OR (availability_status IS NULL AND processing_status = 'REJECTED')))
             OR (message_type <> 'DEVICE_AVAILABILITY' AND availability_status IS NULL)
         )
