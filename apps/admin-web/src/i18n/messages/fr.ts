@@ -121,12 +121,12 @@ export const fr = {
     passwordLabel: 'Mot de passe',
     /** [A] */
     submit: 'Se connecter',
-    /** [P] Eyebrow above the title, from the v3 mock. */
+    /** [A] Eyebrow above the title, from the v3 mock. */
     role: 'Espace administrateur',
-    /** [P] */
+    /** [A] */
     subtitle: 'Accédez à Aegis Manager.',
     home: 'Accueil',
-    /** [P] */
+    /** [A] */
     footerProduct: 'Aegis Manager · Administration',
     footerTechnician: `Technicien${NBSP}? Utilisez Aegis Mobile sur iPhone.`,
     fieldError: {

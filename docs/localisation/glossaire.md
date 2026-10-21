@@ -100,6 +100,17 @@ plus utilisé : la signature temporaire est le symbole suivi de « aegis ».
 | Réessayer | Try again | proposé |
 | Actualiser | Refresh | proposé |
 
+## Aegis Manager
+
+Textes de l'entrée du Manager, l'application Web d'administration. Décision de
+Philippe du 21 octobre 2026.
+
+| Français | English | Statut |
+|---|---|---|
+| Espace administrateur | Administrator workspace | établi |
+| Accédez à Aegis Manager. | Access Aegis Manager. | établi |
+| Aegis Manager · Administration (pied de page) | Aegis Manager · Administration | établi; nom de produit, non traduit |
+
 ## Signatures de marque
 
 Décisions de Philippe du 21 octobre 2026; le nom et le logo ne se traduisent pas.

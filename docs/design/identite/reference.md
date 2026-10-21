@@ -79,6 +79,12 @@ succès, d'avertissement et d'erreur, sans teinte indigo (décision de Philippe,
 21 octobre 2026). Le cyan du noyau est
 décoratif : il ne signifie jamais « disponible », « connecté » ni « sécurisé ».
 
+**Application Web (#79).** `apps/admin-web/src/styles/tokens.css` reprend les
+palettes et les rôles adoptés de cette référence, qui prévaut en cas d'écart; les
+valeurs ne viennent pas de la maquette Web. Le symbole y est copié à l'identique
+dans `apps/admin-web/src/assets/brand/`; une version finale remplace les deux
+copies et les originaux de `assets/` dans le même changement.
+
 ## Règles d'usage du logo
 
 - Utiliser les fichiers fournis, sans les redessiner, les recolorer, les étirer

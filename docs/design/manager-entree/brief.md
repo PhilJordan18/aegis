@@ -152,7 +152,7 @@ Principes seulement : aucun actif, marque, mise en page ni texte n'est repris.
 | `states.md` | Parcours et matrice des états de connexion, avec les textes |
 | `typographie/typographie.md` et `typographie/specimen*.{html,png}` | Comparaison Geist / Inter et choix |
 | `wireframes/*.png` et `wireframes/wireframes.html` | Filaires basse fidélité |
-| `tokens.css` | Jetons proposés (source unique) |
+| `tokens.css` | Jetons proposés (source unique jusqu'à #79; historique depuis, remplacés par `../identite/reference.md`) |
 | `reference/reference.html` et `reference/renders/*.png` | Rendu de référence des jetons, non normatif |
 | `handoff.md` | Spécification d'implémentation |
 | `proposition-inscription.md` | Proposition d'inscription (décision en attente, hors implémentation) |

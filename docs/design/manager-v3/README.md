@@ -47,9 +47,9 @@ Philippe qui ferment les « Décisions ouvertes » ci-dessous :
 Preuves : captures dans `captures-integration/` (14, à 1×,
 `<écran>-<état>-<langue>-<apparence>-<taille>.png`), mesures du rendu avec
 `npm run test:identity` (saut de mise en page, contrastes peints, focus, texte
-coupé), matrice axe avec `npm run test:a11y`. Les textes marqués [P] des
-catalogues (« Espace administrateur », « Accédez à Aegis Manager. », pied
-« Aegis Manager · Administration ») restent à valider.
+coupé), matrice axe avec `npm run test:a11y`. Les textes repris de la maquette
+(« Espace administrateur », « Accédez à Aegis Manager. », pied
+« Aegis Manager · Administration ») sont validés par Philippe le 21 octobre 2026.
 
 Références : `../identite/reference.md` (identité commune, décisions de
 Philippe), `../identite/v3/web/aegis-web-v3.html` (maquette Web de Philippe),
@@ -178,6 +178,9 @@ panneau plein côté, la signature `aegis | CORE` sur l'écran de connexion
 **Conflits ou choix pour Philippe :** voir 2, 3, 5 et 6 ci-dessous.
 
 ## Décisions ouvertes
+
+Toutes tranchées par Philippe le 21 octobre 2026 (voir `../identite/reference.md`
+et l'intégration ci-dessus); la liste est conservée telle qu'elle a été présentée.
 
 1. **Marque (option A) :** décidée par Philippe (symbole + « aegis » sans
    « CORE », noms d'application conservés). À confirmer : le mot s'écrit
