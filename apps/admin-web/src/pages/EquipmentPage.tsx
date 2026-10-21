@@ -5,13 +5,9 @@ import { ManagerShell } from '../app/shell/ManagerShell'
 import type { UserProfile } from '../features/auth/contract'
 import { useSessionStore } from '../features/auth/session'
 import { useCurrentAdminProfile } from '../features/auth/useCurrentAdminProfile'
+import { useI18n } from '../i18n/useI18n'
 import { Alert } from '../ui/Alert'
 import '../app/page.css'
-
-/** [P] Awaiting design approval; follows the preview bar wording « La liste réelle arrive avec CAT-01. » (states.md §4). */
-const equipmentPageCopy = {
-  pendingTitle: 'La liste des équipements arrive avec CAT-01.',
-} as const
 
 /**
  * First protected Manager page, reached after a real sign-in. It reads only
@@ -19,6 +15,7 @@ const equipmentPageCopy = {
  * stale states belong to CAT-01 and RDY-02.
  */
 export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: UserProfile }) {
+  const { m } = useI18n()
   const sessionStore = useSessionStore()
   const router = useRouter()
   const currentProfile = useCurrentAdminProfile()
@@ -35,10 +32,10 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
       <main id="contenu" className="ag-page" tabIndex={-1}>
         <header className="ag-page__head">
           <div className="ag-page__titles">
-            <PageHeading className="ag-page__title">Équipements</PageHeading>
+            <PageHeading className="ag-page__title">{m.equipment.heading}</PageHeading>
           </div>
         </header>
-        <Alert kind="info" icon="status-info" title={equipmentPageCopy.pendingTitle} />
+        <Alert kind="info" icon="status-info" title={m.equipment.pendingTitle} />
       </main>
     </ManagerShell>
   )

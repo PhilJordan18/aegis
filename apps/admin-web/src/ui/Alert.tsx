@@ -12,17 +12,25 @@ interface AlertProps {
   readonly children?: ReactNode
   /** Machine code (traceId) in Geist Mono, selectable. */
   readonly code?: string
+  /** Visible label read before the code, e.g. « Identifiant de suivi : ». */
+  readonly codeLabel?: string
 }
 
 /** Errors and warnings use role="alert"; information uses role="status" (states.md §2). */
-export function Alert({ id, kind, icon, title, children, code }: AlertProps) {
+export function Alert({ id, kind, icon, title, children, code, codeLabel }: AlertProps) {
   return (
     <div id={id} className={`ag-alert ag-alert--${kind}`} role={kind === 'info' ? 'status' : 'alert'}>
       <Icon name={icon} />
       <div className="ag-alert__content">
         <p className="ag-alert__title">{title}</p>
         {children && <div className="ag-alert__body">{children}</div>}
-        {code && <code className="ag-alert__code">{code}</code>}
+        {code && codeLabel && (
+          <p className="ag-alert__code-row">
+            <span className="ag-alert__code-label">{codeLabel}</span>{' '}
+            <code className="ag-alert__code">{code}</code>
+          </p>
+        )}
+        {code && !codeLabel && <code className="ag-alert__code">{code}</code>}
       </div>
     </div>
   )
