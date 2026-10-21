@@ -336,12 +336,24 @@ CREATE TABLE compartments (
 
 Un seul device actif commande un locker en P0. Les anciens devices sont désactivés, jamais réaffectés silencieusement.
 
+`device_session_id`, `boot_count`, `heartbeat_connection_id` et `last_valid_heartbeat_at`
+persistent la projection de disponibilité du doc 10 §15.3 (#63, schéma MQTT 2.0) : la
+session courante, choisie par le plus grand `boot_count`, et le dernier heartbeat valide
+pris en compte, avec sa connexion et son `receivedAt`. Ils sont mis à jour dans la
+transaction qui enregistre le message. `connection_status` n’en est qu’un cache : à la
+lecture, ONLINE exige un `last_valid_heartbeat_at` d’au plus 30 secondes. Après un
+redémarrage du backend, ces colonnes sont relues telles quelles, et un rejeu des faits
+de `inbound_device_messages` doit redonner les mêmes valeurs.
+
 ```sql
 CREATE TABLE locker_devices (
     id                 uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
     locker_id          uuid NOT NULL,
     device_key         text NOT NULL,
     device_session_id  uuid NULL,
+    boot_count         bigint NULL,
+    heartbeat_connection_id uuid NULL,
+    last_valid_heartbeat_at timestamptz NULL,
     firmware_version   text NOT NULL,
     connection_status  text NOT NULL DEFAULT 'UNKNOWN',
     last_seen_at       timestamptz NULL,
@@ -357,7 +369,11 @@ CREATE TABLE locker_devices (
     CONSTRAINT ck_locker_devices_firmware_non_blank
         CHECK (btrim(firmware_version) <> ''),
     CONSTRAINT ck_locker_devices_connection_status
-        CHECK (connection_status IN ('ONLINE', 'OFFLINE', 'UNKNOWN'))
+        CHECK (connection_status IN ('ONLINE', 'OFFLINE', 'UNKNOWN')),
+    CONSTRAINT ck_locker_devices_boot_count
+        CHECK (boot_count IS NULL OR boot_count >= 1),
+    CONSTRAINT ck_locker_devices_session_pair
+        CHECK ((device_session_id IS NULL) = (boot_count IS NULL))
 );
 ```
 
@@ -830,6 +846,12 @@ CREATE TABLE command_outbox (
 
 Une seule ligne canonique est conservée par paire `(locker_device_id, message_id)`. Un doublon n’est donc pas réinséré; il produit au besoin un `AuditEvent` `MQTT_MESSAGE_DUPLICATE_IGNORED`.
 
+`device_session_id`, `boot_count`, `connection_id` et `availability_status` sont extraits
+du payload accepté (schéma MQTT 2.0, #63). Ils portent les règles du doc 10 §15.3 : un
+fait d’un `boot_count` inférieur à celui du device est conservé sans effet, et une
+connexion est fermée dès qu’un `DEVICE_AVAILABILITY` OFFLINE accepté porte son
+`connection_id`. Ils restent nuls pour un message rejeté avant leur extraction.
+
 ```sql
 CREATE TABLE inbound_device_messages (
     id                uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
@@ -841,6 +863,10 @@ CREATE TABLE inbound_device_messages (
     command_message_id uuid NULL,
     display_message_id uuid NULL,
     schema_version    text NOT NULL,
+    device_session_id uuid NULL,
+    boot_count        bigint NULL,
+    connection_id     uuid NULL,
+    availability_status text NULL,
     occurred_at       timestamptz NOT NULL,
     received_at       timestamptz NOT NULL DEFAULT now(),
     raw_payload       bytea NOT NULL,
@@ -892,7 +918,16 @@ CREATE TABLE inbound_device_messages (
                 AND command_message_id IS NULL)
         ),
     CONSTRAINT ck_inbound_messages_error
-        CHECK (processing_status <> 'REJECTED' OR processing_error IS NOT NULL)
+        CHECK (processing_status <> 'REJECTED' OR processing_error IS NOT NULL),
+    CONSTRAINT ck_inbound_messages_boot_count
+        CHECK (boot_count IS NULL OR boot_count >= 1),
+    CONSTRAINT ck_inbound_messages_connection
+        CHECK (connection_id IS NULL OR message_type IN ('HEARTBEAT', 'DEVICE_AVAILABILITY')),
+    CONSTRAINT ck_inbound_messages_availability_status
+        CHECK (
+            availability_status IS NULL
+            OR (message_type = 'DEVICE_AVAILABILITY' AND availability_status IN ('ONLINE', 'OFFLINE'))
+        )
 );
 ```
 
@@ -1334,6 +1369,12 @@ CREATE INDEX ix_inbound_messages_operation_received
 CREATE INDEX ix_inbound_messages_command_message
     ON inbound_device_messages (command_message_id, received_at)
     WHERE command_message_id IS NOT NULL;
+
+CREATE INDEX ix_inbound_messages_closed_connections
+    ON inbound_device_messages (locker_device_id, boot_count, connection_id)
+    WHERE message_type = 'DEVICE_AVAILABILITY'
+      AND availability_status = 'OFFLINE'
+      AND processing_status <> 'REJECTED';
 
 CREATE INDEX ix_physical_observations_operation_time
     ON physical_observations (operation_id, observed_at)
