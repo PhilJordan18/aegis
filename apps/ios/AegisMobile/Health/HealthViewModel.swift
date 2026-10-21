@@ -15,7 +15,7 @@ enum HealthFailure: Equatable, Sendable {
         switch error {
         case .unreachable, .cancelled:
             self = .unreachable
-        case let .http(status, problem):
+        case let .http(status, problem, _):
             self = .unavailable(status: status, traceId: problem?.traceId)
         case .invalidResponse:
             self = .unexpectedResponse

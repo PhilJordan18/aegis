@@ -19,21 +19,29 @@ struct URLSessionTransport: HTTPTransport {
 }
 
 /// `application/problem+json` body defined by doc 09 §7. Only the fields the
-/// client reacts to are decoded; unknown fields are tolerated.
+/// client reacts to are decoded; unknown fields are tolerated. `title`,
+/// `detail` and violation messages are never shown to the user.
 struct APIProblem: Decodable, Equatable, Sendable {
+    struct Violation: Decodable, Equatable, Sendable {
+        let field: String
+        let code: String
+    }
+
     let status: Int
     let code: String
     let title: String
     let detail: String
     let traceId: String?
+    var violations: [Violation]? = nil
 }
 
 enum APIError: Error, Equatable {
     /// The request never produced an HTTP response (offline, refused, timed out,
     /// transport security rejection...).
     case unreachable(URLError.Code)
-    /// The server answered with a non-2xx status.
-    case http(status: Int, problem: APIProblem?)
+    /// The server answered with a non-2xx status. `retryAfter` carries a valid
+    /// `Retry-After` delay in whole seconds, nil when absent or unusable.
+    case http(status: Int, problem: APIProblem?, retryAfter: Duration? = nil)
     /// The response could not be understood: not HTTP, wrong media type or body.
     case invalidResponse
     case cancelled
@@ -44,6 +52,12 @@ struct Endpoint<Response: Decodable & Sendable>: Sendable {
     let method: String
     /// Path relative to `/api/v1`, without a leading slash.
     let path: String
+    var body: Data? = nil
+
+    static func json(method: String, path: String, body: some Encodable) -> Endpoint {
+        // Encoding a plain request DTO cannot fail.
+        Endpoint(method: method, path: path, body: try! JSONEncoder().encode(body))
+    }
 }
 
 struct APIClient: Sendable {
@@ -57,7 +71,7 @@ struct APIClient: Sendable {
         self.transport = transport
     }
 
-    func makeRequest<Response>(for endpoint: Endpoint<Response>) -> URLRequest {
+    func makeRequest<Response>(for endpoint: Endpoint<Response>, bearer token: String? = nil) -> URLRequest {
         var request = URLRequest(
             url: configuration.baseURL.appending(path: endpoint.path),
             cachePolicy: .reloadIgnoringLocalCacheData,
@@ -65,14 +79,21 @@ struct APIClient: Sendable {
         )
         request.httpMethod = endpoint.method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let body = endpoint.body {
+            request.httpBody = body
+            request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        }
+        if let token {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         return request
     }
 
-    func send<Response>(_ endpoint: Endpoint<Response>) async throws(APIError) -> Response {
+    func send<Response>(_ endpoint: Endpoint<Response>, bearer token: String? = nil) async throws(APIError) -> Response {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await transport.data(for: makeRequest(for: endpoint))
+            (data, response) = try await transport.data(for: makeRequest(for: endpoint, bearer: token))
         } catch let error as URLError where error.code == .cancelled {
             throw .cancelled
         } catch let error as URLError {
@@ -85,7 +106,8 @@ struct APIClient: Sendable {
 
         guard let http = response as? HTTPURLResponse else { throw .invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
-            throw .http(status: http.statusCode, problem: Self.decodeProblem(data, from: http))
+            throw .http(status: http.statusCode, problem: Self.decodeProblem(data, from: http),
+                        retryAfter: Self.retryAfter(from: http))
         }
         guard http.mimeType == "application/json" else { throw .invalidResponse }
         do {
@@ -93,6 +115,15 @@ struct APIClient: Sendable {
         } catch {
             throw .invalidResponse
         }
+    }
+
+    /// Accepts delta-seconds only, 1 to 3600: the API sends 1 to 60 for the
+    /// sign-in limiter. Anything else is ignored rather than guessed.
+    static func retryAfter(from response: HTTPURLResponse) -> Duration? {
+        guard let value = response.value(forHTTPHeaderField: "Retry-After"),
+              let seconds = Int(value.trimmingCharacters(in: .whitespaces)),
+              (1...3600).contains(seconds) else { return nil }
+        return .seconds(seconds)
     }
 
     private static func decodeProblem(_ data: Data, from response: HTTPURLResponse) -> APIProblem? {

@@ -4,7 +4,7 @@ import Foundation
 /// Explicit network double: records requests and replays a scripted outcome.
 final class StubTransport: HTTPTransport, @unchecked Sendable {
     enum Outcome {
-        case response(status: Int, contentType: String?, body: String)
+        case response(status: Int, contentType: String?, body: String, headers: [String: String] = [:])
         case failure(any Error)
     }
 
@@ -25,8 +25,9 @@ final class StubTransport: HTTPTransport, @unchecked Sendable {
         switch outcome {
         case let .failure(error):
             throw error
-        case let .response(status, contentType, body):
-            let headers = contentType.map { ["Content-Type": $0] } ?? [:]
+        case let .response(status, contentType, body, extraHeaders):
+            var headers = extraHeaders
+            headers["Content-Type"] = contentType
             let response = HTTPURLResponse(
                 url: request.url!, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!
             return (Data(body.utf8), response)
