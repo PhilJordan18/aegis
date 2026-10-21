@@ -1,6 +1,7 @@
 // Runs against the local Mosquitto of infra/docker/compose.yaml. Credentials come from
 // the environment, e.g. `set -a; . ../../infra/docker/.env.example; set +a`.
 import { spawn, type ChildProcess } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { once } from 'node:events';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +13,8 @@ import { HubSimulator } from '../../src/simulator.ts';
 const BROKER = process.env.AEGIS_MQTT_URL ?? 'mqtt://127.0.0.1:1883';
 const DEVICE_PASSWORD = process.env.AEGIS_MQTT_DEVICE_PASSWORD;
 const API_PASSWORD = process.env.AEGIS_MQTT_API_PASSWORD;
+// Set with an mqtts: AEGIS_MQTT_URL to run the same checks over the TLS listener.
+const CA_FILE = process.env.AEGIS_MQTT_CA_FILE;
 const STATUS = `aegis/v1/lockers/${DEFAULT_LOCKER_ID}/status`;
 const EVENTS = `aegis/v1/lockers/${DEFAULT_LOCKER_ID}/events`;
 const CLI = fileURLToPath(new URL('../../src/cli.ts', import.meta.url));
@@ -33,6 +36,7 @@ async function observe(): Promise<{ client: MqttClient; live: Received[]; retain
     password: API_PASSWORD!,
     clean: true,
     reconnectPeriod: 0,
+    ...(CA_FILE ? { ca: readFileSync(CA_FILE), rejectUnauthorized: true } : {}),
   });
   const live: Received[] = [];
   const retained: Received[] = [];
@@ -74,7 +78,12 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
     clients.push(observer.client);
 
     const child = spawn(process.execPath, [CLI], {
-      env: { PATH: process.env.PATH, AEGIS_MQTT_URL: BROKER, AEGIS_MQTT_DEVICE_PASSWORD: DEVICE_PASSWORD },
+      env: {
+        PATH: process.env.PATH,
+        AEGIS_MQTT_URL: BROKER,
+        AEGIS_MQTT_DEVICE_PASSWORD: DEVICE_PASSWORD,
+        ...(CA_FILE ? { AEGIS_MQTT_CA_FILE: CA_FILE } : {}),
+      },
       stdio: ['ignore', 'pipe', 'inherit'],
     });
     children.push(child);
@@ -132,7 +141,7 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
   it('API: a network loss fires the Will, then the same session reconnects without DEVICE_RESTARTED', { timeout: 30_000 }, async () => {
     const observer = await observe();
     clients.push(observer.client);
-    const sim = new HubSimulator(defineConfig({ brokerUrl: BROKER, password: DEVICE_PASSWORD! }));
+    const sim = new HubSimulator(defineConfig({ brokerUrl: BROKER, password: DEVICE_PASSWORD!, ...(CA_FILE ? { caFile: CA_FILE } : {}) }));
     const wills: string[] = [];
     sim.on('willPrepared', (m) => wills.push(m.payload.messageId));
     try {
@@ -176,7 +185,7 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
   });
 
   it('refuses a wrong device secret', { timeout: 15_000 }, async () => {
-    const sim = new HubSimulator(defineConfig({ brokerUrl: BROKER, password: 'definitely-wrong' }));
+    const sim = new HubSimulator(defineConfig({ brokerUrl: BROKER, password: 'definitely-wrong', ...(CA_FILE ? { caFile: CA_FILE } : {}) }));
     const errors: string[] = [];
     sim.on('transportError', (e) => errors.push(e.message));
     try {
