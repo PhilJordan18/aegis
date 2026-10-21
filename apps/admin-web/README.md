@@ -92,10 +92,21 @@ une trace. Les parcours (`flow:`) vérifient en outre :
 - l'écran de mauvais rôle, sans aucune requête;
 - le sélecteur d'aperçu;
 - l'apparence appliquée avant le premier affichage;
-- le stockage, qui ne contient que la préférence;
+- le stockage, qui ne contient que les préférences d'interface (apparence,
+  langue) et seulement après un choix explicite;
 - les polices servies par le bundle, sans CDN;
 - la transparence réduite (émulée par CDP) et le mouvement réduit;
 - le tiroir modal et le lien d'évitement.
+
+`e2e/entry.spec.ts` tourne en français (la langue du navigateur est `fr-CA`
+dans la configuration). `e2e/language.spec.ts` refait la matrice en anglais
+(`en-CA`; 5 tailles, thèmes clair et sombre, tous les états de connexion, le
+shell et la page introuvable : axe, défilement horizontal, `lang`, titre, aucun
+chemin de clé visible, aucun texte français hors aperçu) et vérifie les parcours
+de langue : préférence du navigateur, repli, choix mémorisé qui l'emporte,
+changement au clavier, rechargement, menu du compte, tiroir et lien
+d'évitement en anglais. `npm run test:a11y` et `npm run capture` incluent les
+deux fichiers.
 
 ## Dépendances
 
@@ -115,6 +126,14 @@ une trace. Les parcours (`flow:`) vérifient en outre :
 
 Aucun kit d'interface, aucun framework CSS, aucune bibliothèque d'icônes,
 aucun client HTTP : `fetch` suffit.
+
+Aucune dépendance n'a été ajoutée pour la localisation (#78) : `Intl`
+(`PluralRules`, `NumberFormat`, `DateTimeFormat`), présent dans tous les
+navigateurs ciblés, couvre les pluriels, les unités et les dates en `fr-CA` et
+`en-CA`. Une bibliothèque (`react-intl`, `i18next`) n'aurait ajouté que du
+poids et un format de message à apprendre pour deux langues et une quarantaine
+de messages; le typage TypeScript des catalogues apporte déjà la vérification
+des clés et des paramètres.
 
 ## Couche visuelle
 
@@ -193,11 +212,69 @@ sera remplacée par le routeur choisi à l'intégration.
 | `/apercu/equipements` | Aperçu seulement; « Page introuvable » ailleurs |
 | autre | Page introuvable |
 
-- `<html lang="fr-CA">` (handoff §7) et un titre par route.
+- `<html lang>` (`fr-CA` ou `en-CA`, handoff §7) et un titre par route, tous
+  deux dans la langue choisie (voir « Langue »). Les chemins (`/connexion`,
+  `/equipements`) restent français dans les deux langues : ce sont des adresses
+  stables, pas des textes.
 - Lien d'évitement vers `#contenu` en tête du shell.
 - Après une navigation, le focus passe au `h1` de la page; au premier
   chargement, il n'est pas déplacé.
 - La connexion suit ses propres règles de focus (`states.md` §3).
+
+## Langue
+
+Français et anglais (#78), selon `docs/localisation/convention.md` et
+`docs/localisation/glossaire.md`. Le français est la langue de référence et de
+repli; les textes anglais sont des propositions à valider.
+
+- **Résolution** (`src/i18n/locale.ts`), dans l'ordre : le choix explicite
+  gardé dans `localStorage` sous `aegis.manager.language` (`fr` ou `en`, rien
+  d'autre); sinon la première langue de `navigator.languages` dont la langue
+  principale est `fr` ou `en` (`fr-FR` donne le français, `fil` rien); sinon le
+  français. Le stockage est lu et écrit prudemment, comme l'apparence : une
+  erreur est tolérée et le choix s'applique alors pour la page. Rien n'est
+  écrit tant que l'utilisateur ne choisit pas, et rien n'est envoyé au serveur.
+- **Format** : `fr-CA` ou `en-CA` (`FORMAT_LOCALE`), quel que soit la variante
+  du navigateur. `<html lang>` prend la même valeur, à la création du
+  contrôleur (avant le premier rendu) puis à chaque changement; le titre du
+  document suit la route et la langue (`pageTitle`).
+- **Sélecteur** « Français / English » (`features/language/LanguageSwitch.tsx`) :
+  groupe de boutons radio natifs, même contrôle segmenté que l'apparence,
+  appliqué aussitôt. Chaque option est écrite dans sa langue avec son attribut
+  `lang`, sans drapeau. Version compacte (légende masquée visuellement, qui
+  reste le nom accessible du groupe) dans l'en-tête de l'accueil, de la
+  connexion et de la page introuvable; version complète dans le menu du compte
+  et le tiroir du shell.
+- **Catalogues** (`src/i18n/messages/`) : `fr.ts` fixe la forme; `en.ts` est
+  typé `Messages = typeof fr`, donc une clé manquante, en trop ou un paramètre
+  différent échoue à `tsc`. Un message est une chaîne ou une fonction à
+  paramètres nommés (`rateLimitedBody({ duration })`), une phrase complète à la
+  fois, jamais assemblée; les valeurs (durée, date) sont formatées avant
+  d'être insérées. Les pluriels passent par `createPluralSelector`
+  (`Intl.PluralRules`, `i18n/plural.ts`) et les durées, horloges et dates par
+  `i18n/format.ts` (`Intl.NumberFormat` avec l'unité `second`,
+  `Intl.DateTimeFormat` avec un fuseau explicite). Les composants lisent
+  `const { m, format } = useI18n()`.
+- **Erreurs** : l'affichage vient du code (outcome de connexion, code de
+  violation), jamais du `title` ni du `detail` du serveur. Les erreurs de champ
+  et les annonces de la zone `status` sont gardées comme des codes et traduites
+  au rendu : changer de langue les met à jour sur place. Un code inconnu donne le
+  message générique et le `traceId`, affiché tel quel après sa phrase
+  d'introduction (qui lui sert de libellé).
+- **Ce qui n'est pas traduit** : les noms de produits (Aegis, Aegis Manager),
+  les codes, les identifiants (`traceId`), le contenu de démonstration de
+  l'accueil (« Multimètre 2 », `MM-002`, donnée saisie) et les chemins d'URL.
+- **Couverture** : accueil, connexion et tous ses états, shell (navigation,
+  menu du compte, tiroir, lien d'évitement), sélecteur d'apparence, page
+  `/equipements` protégée et page introuvable. L'**aperçu de conception**
+  (`src/preview/**`, hors build de production) reste en français : sa bande
+  « Mode aperçu » et le contenu de l'écran Équipements d'aperçu ne sont pas
+  traduits, seul le shell qui les entoure suit la langue. Il n'est donc pas
+  bilingue.
+- **Nouvel écran** : ajouter les textes dans `fr.ts` et `en.ts` dans le même
+  changement; un nouveau terme métier passe d'abord par le glossaire. Le test
+  `src/i18n/messages/catalog.test.ts` vérifie les mêmes clés, les mêmes
+  paramètres, l'absence de texte vide ou qui ressemble à un chemin de clé.
 
 ## Apparence
 
@@ -290,9 +367,10 @@ Content-Security-Policy devra l'autoriser par empreinte.
   - validation client sans requête;
   - le `title` et le `detail` du serveur ne sont jamais affichés : seuls le
     `code`, `violations[].field` et le `traceId` servent.
-- Textes : `features/auth/signInCopy.ts` sépare les libellés approuvés [A]
-  des libellés proposés [P] (`states.md`). La validation est dans
-  `signInValidation.ts`.
+- Textes : le groupe `signIn` des catalogues (`src/i18n/messages/`, voir
+  « Langue ») marque en commentaire les libellés approuvés [A]; les autres sont
+  proposés [P] (`states.md`). La validation (`signInValidation.ts`) renvoie des
+  codes d'erreur de champ, que la page traduit au rendu.
 - `features/auth/session.ts` garde aussi en mémoire le courriel d'une
   session terminée par un 401, pour préremplir le formulaire.
 

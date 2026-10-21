@@ -1,0 +1,16 @@
+#include "Shared.xcconfig"
+
+// Local simulator API (Docker Compose stack, services/api). Loopback HTTP is the
+// only cleartext address the app accepts; any other host must use HTTPS.
+AEGIS_API_BASE_URL = http:/$()/localhost:8080/api/v1
+
+DEBUG_INFORMATION_FORMAT = dwarf
+ENABLE_TESTABILITY = YES
+GCC_OPTIMIZATION_LEVEL = 0
+GCC_PREPROCESSOR_DEFINITIONS = DEBUG=1 $(inherited)
+MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE
+ONLY_ACTIVE_ARCH = YES
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG $(inherited)
+SWIFT_OPTIMIZATION_LEVEL = -Onone
+
+#include? "Local.xcconfig"
