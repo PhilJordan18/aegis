@@ -19,9 +19,10 @@ export class FakeTransport implements Transport {
   destroys = 0;
   /** false: the broker never acknowledges a QoS 1 publish (lost PUBACK). */
   acknowledge = true;
-  /** true: DISCONNECT never completes, whatever is in flight. */
+  /** true: the broker reads DISCONNECT but keeps the socket half-open. */
   hangDisconnect = false;
-  readonly disconnectOptions: Array<{ readonly abandonInFlight?: boolean } | undefined> = [];
+  /** Socket state as the broker sees it. */
+  socketOpen = false;
   #inFlight = 0;
   readonly #listeners: { [E in keyof TransportEvents]: TransportEvents[E][] } = { connect: [], close: [], error: [] };
 
@@ -56,25 +57,31 @@ export class FakeTransport implements Transport {
     this.brokerClose();
   }
 
-  /** Like mqtt.js, waits for in-flight QoS 1 messages unless told to abandon them. */
-  disconnect(options?: { readonly abandonInFlight?: boolean }): Promise<void> {
-    this.disconnectOptions.push(options);
-    if (options?.abandonInFlight) this.#inFlight = 0;
-    if (this.hangDisconnect || this.#inFlight > 0) return new Promise(() => {});
+  get inFlight(): number {
+    return this.#inFlight;
+  }
+
+  /** Abandons in-flight QoS 1 messages and writes DISCONNECT, like the mqtt transport. */
+  disconnect(): Promise<void> {
+    this.#inFlight = 0;
     this.disconnects++;
     this.connected = false;
+    if (this.hangDisconnect) return new Promise(() => {});
+    this.socketOpen = false;
     return Promise.resolve();
   }
 
   destroy(): Promise<void> {
     this.destroys++;
     this.connected = false;
+    this.socketOpen = false;
     return Promise.resolve();
   }
 
   /** The broker accepts the CONNECT. */
   brokerAccept(): void {
     this.connected = true;
+    this.socketOpen = true;
     for (const l of this.#listeners.connect) l(false);
   }
 

@@ -285,13 +285,14 @@ describe('shutdown and restart (doc 10 §13.1, §15.2)', () => {
     await vi.advanceTimersByTimeAsync(1);
     await stopping;
     expect(failures).toEqual(['DEVICE_AVAILABILITY: SHUTDOWN not acknowledged within 5000 ms']);
-    expect(t.disconnectOptions).toEqual([{ abandonInFlight: true }]);
     expect(t.disconnects).toBe(1);
+    expect(t.inFlight).toBe(0);
     expect(t.destroys).toBe(0);
+    expect(t.socketOpen).toBe(false);
     expect(sim.state).toBe('stopped');
   });
 
-  it('falls back to closing the socket when DISCONNECT never completes, so stop() always resolves', async () => {
+  it('destroys a socket the broker keeps half-open after DISCONNECT, so stop() always resolves', async () => {
     const { sim, transport } = setup();
     sim.start();
     const t = transport();
@@ -302,9 +303,11 @@ describe('shutdown and restart (doc 10 §13.1, §15.2)', () => {
     const stopping = sim.stop();
     await vi.advanceTimersByTimeAsync(5_000);
     await stopping;
-    expect(t.disconnectOptions).toEqual([{ abandonInFlight: false }]);
-    expect(errors).toEqual(['DISCONNECT not completed within 5000 ms']);
+    // DISCONNECT was written first: the Will is discarded, the socket then released.
+    expect(t.disconnects).toBe(1);
+    expect(errors).toEqual(['socket not closed after DISCONNECT within 5000 ms']);
     expect(t.destroys).toBe(1);
+    expect(t.socketOpen).toBe(false);
     expect(sim.state).toBe('stopped');
   });
 

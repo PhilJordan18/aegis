@@ -38,12 +38,15 @@ export interface Transport {
   /** Simulates a network loss: the socket closes without DISCONNECT and the client stays usable. */
   dropSocket(): void;
   /**
-   * Sends DISCONNECT, so the broker discards the Last Will. By default it first waits
-   * for unacknowledged QoS 1 messages; `abandonInFlight` drops them and sends
-   * DISCONNECT at once, for a PUBACK that will never come.
+   * Abandons unacknowledged QoS 1 messages and writes DISCONNECT at once, so the
+   * broker discards the Last Will. Resolves once the socket has closed, which a
+   * broker that keeps half-open sockets may never do.
    */
-  disconnect(options?: { readonly abandonInFlight?: boolean }): Promise<void>;
-  /** Closes the socket without DISCONNECT, so the broker publishes the Last Will. */
+  disconnect(): Promise<void>;
+  /**
+   * Closes the socket now. Without a prior DISCONNECT the broker publishes the Last
+   * Will; after one, it only releases a socket the broker left half-open.
+   */
   destroy(): Promise<void>;
 }
 
@@ -98,15 +101,20 @@ export const mqttTransportFactory: TransportFactory = (options) => {
     dropSocket() {
       client.stream.destroy();
     },
-    disconnect(options) {
-      if (options?.abandonInFlight) {
-        // mqtt.js would otherwise wait for `outgoingEmpty` forever before DISCONNECT.
-        for (const id of Object.keys(client.outgoing)) client.removeOutgoingMessage(Number(id));
-      }
+    disconnect() {
+      // mqtt.js would otherwise wait for `outgoingEmpty`, forever if a PUBACK is lost.
+      for (const id of Object.keys(client.outgoing)) client.removeOutgoingMessage(Number(id));
       return client.endAsync(false);
     },
     destroy() {
-      return client.endAsync(true);
+      if (!client.disconnecting) return client.endAsync(true);
+      // end() is a no-op once a DISCONNECT is under way, so the socket would stay
+      // open while waiting for the broker's FIN: destroy it directly.
+      const stream = client.stream;
+      if (stream.destroyed) return Promise.resolve();
+      const closed = new Promise<void>((resolve) => stream.once('close', () => resolve()));
+      stream.destroy();
+      return closed;
     },
   };
 };

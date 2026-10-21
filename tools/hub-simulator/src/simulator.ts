@@ -189,8 +189,9 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
    * Clean shutdown (doc 10 §15.2): publish OFFLINE `SHUTDOWN` on the current
    * connection, then DISCONNECT so the broker discards the Last Will. Nothing else is
    * published on the connection after SHUTDOWN. Always resolves: a PUBACK that never
-   * comes is abandoned after 5 s, and a DISCONNECT that does not complete within 5 s
-   * falls back to closing the socket, in which case the broker publishes the Will.
+   * comes is abandoned after 5 s, then DISCONNECT is written at once; if the socket
+   * has not closed 5 s later (a broker keeping it half-open), it is destroyed. The
+   * DISCONNECT was already written, so the broker that reads it discards the Will.
    */
   async stop(): Promise<void> {
     const transport = this.#transport;
@@ -203,17 +204,15 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
       const offline = buildOffline(this.#context(), this.#currentConnectionId(), 'SHUTDOWN');
       this.#emitted.record(offline);
       this.emit('sent', offline);
-      let acknowledged = false;
       try {
         await withTimeout(transport.publish(offline.topic, offline.body, offline.delivery), STOP_STEP_TIMEOUT_MS, 'SHUTDOWN not acknowledged');
-        acknowledged = true;
         this.emit('delivered', offline);
       } catch (error) {
         // The heartbeat timeout remains the backend's reference (doc 10 §15.2).
         this.emit('publishFailed', offline, error as Error);
       }
       try {
-        await withTimeout(transport.disconnect({ abandonInFlight: !acknowledged }), STOP_STEP_TIMEOUT_MS, 'DISCONNECT not completed');
+        await withTimeout(transport.disconnect(), STOP_STEP_TIMEOUT_MS, 'socket not closed after DISCONNECT');
       } catch (error) {
         this.emit('transportError', error as Error);
         await withTimeout(transport.destroy(), STOP_STEP_TIMEOUT_MS, 'socket not closed').catch(() => undefined);
