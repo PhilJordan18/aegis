@@ -73,7 +73,7 @@ docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml
 | `AEGIS_MQTT_URL` | `mqtt://127.0.0.1:1883` | Broker; `mqtt:` est refusé hors boucle locale |
 | `AEGIS_MQTT_DEVICE_USERNAME` | le `lockerId` | Utilisateur MQTT du device |
 | `AEGIS_MQTT_CA_FILE` | aucun | CA à valider pour `mqtts:` |
-| `AEGIS_SIM_LOCKER_ID` | `d46a74ae-39dc-460b-8af0-38fc791b376a` | Locker fictif de `infra/mqtt/acl` |
+| `AEGIS_SIM_LOCKER_ID` | `d46a74ae-39dc-460b-8af0-38fc791b376a` | Locker fictif dont le compte est créé par `mqtt-auth-init` |
 | `AEGIS_SIM_DEVICE_KEY` | `sim-<lockerId>` | `clientId` = `aegis-locker-<deviceKey>` |
 | `AEGIS_SIM_COMPARTMENTS` | `A1:1ae77ae3-…:1,A2:5c1d0b7e-…:2` | `code:compartmentId:cellAddress`, séparés par des virgules |
 | `AEGIS_SIM_FIRMWARE_VERSION` | `0.1.0-sim` | `firmwareVersion` déclaré |
@@ -134,7 +134,9 @@ le broker local : il lance le CLI, observe `ONLINE`, `DEVICE_RESTARTED` et trois
 heartbeats espacés de 10 s comme `aegis_api`, tue le processus avec `SIGKILL`
 et vérifie le Last Will `OFFLINE` retenu; il vérifie aussi la reconnexion
 après perte réseau et le refus d'un mauvais secret. Sans les deux mots de passe
-dans l'environnement, ces tests sont ignorés.
+dans l'environnement, ces tests sont ignorés. Avec
+`AEGIS_MQTT_URL=mqtts://localhost:8883` et `AEGIS_MQTT_CA_FILE`, les mêmes tests
+passent par l'écouteur TLS (voir [le guide du broker](../../infra/mqtt/README.md)).
 
 ## Points de contrat à confirmer
 

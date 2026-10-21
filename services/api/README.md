@@ -208,8 +208,8 @@ déjà appliquée. Les tables métier sont dans le schéma `aegis`.
 
 PostgreSQL et Mosquitto sont publiés uniquement sur `127.0.0.1`. Le broker
 non chiffré est réservé au simulateur local isolé. Un hub réel, même au labo,
-exigera TLS avec certificat vérifié et ses propres identifiants. Les ACL de
-cette étape autorisent seulement l'identité fictive du contrat MQTT.
+utilise l'écouteur TLS 8883 avec certificat vérifié et ses propres
+identifiants : voir le [guide du broker](../../infra/mqtt/README.md).
 
 ## Limites connues de cette étape
 

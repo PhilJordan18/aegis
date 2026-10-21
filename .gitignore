@@ -779,3 +779,11 @@ infra/docker/.env
 
 # JetBrains project files (local IDE state)
 .idea/
+
+# MQTT lab PKI and keys (infra/mqtt/certs/generate-lab-certs.sh). Only the public
+# lab CA is ever distributed, and never through Git.
+infra/mqtt/certs/lab/
+infra/mqtt/**/*.key
+infra/mqtt/**/*.crt
+infra/mqtt/**/*.csr
+infra/mqtt/**/*.srl

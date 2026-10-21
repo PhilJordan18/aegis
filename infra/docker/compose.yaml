@@ -21,6 +21,8 @@ services:
   mqtt-auth-init:
     image: eclipse-mosquitto:2@sha256:38c0da4f2ef84284d47b3b3eeea1cb3bdeabe81ee10caf0cd5c5ff61ee3ea408
     entrypoint: ["sh", "-ec"]
+    # Adds or updates these two accounts only: devices provisioned with
+    # infra/mqtt/provision-device.sh survive a re-run.
     command:
       - |
         if [ -f /mosquitto/data/passwords ]; then
@@ -46,10 +48,13 @@ services:
       mqtt-auth-init:
         condition: service_completed_successfully
     ports:
+      # Plaintext: loopback only, never the LAN. The real hub uses 8883 (compose.tls.yaml).
       - "127.0.0.1:${AEGIS_MQTT_PORT:-1883}:1883"
     volumes:
       - ../mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - ../mqtt/acl:/mosquitto/config/acl:ro
+      # Replaced by ../mqtt/tls in compose.tls.yaml to add the TLS listener.
+      - ../mqtt/no-tls:/mosquitto/config/conf.d:ro
       - mqtt_auth:/mosquitto/auth:ro
     restart: unless-stopped
 
