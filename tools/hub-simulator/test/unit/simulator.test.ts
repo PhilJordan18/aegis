@@ -308,6 +308,36 @@ describe('shutdown and restart (doc 10 §13.1, §15.2)', () => {
     expect(sim.state).toBe('stopped');
   });
 
+  it('publishes nothing after SHUTDOWN on that connection, even while its PUBACK is pending', async () => {
+    const { sim, transport } = setup({ password: 'test-only', heartbeatIntervalMs: 1_000 });
+    sim.start();
+    const t = transport();
+    t.brokerAccept();
+    await vi.advanceTimersByTimeAsync(2_000);
+    t.acknowledge = false;
+    const wills: string[] = [];
+    sim.on('willPrepared', (m) => wills.push(m.payload.messageId));
+    const stopping = sim.stop();
+    const shutdownAt = t.published.length - 1;
+    expect(t.published[shutdownAt]!.payload).toMatchObject({ status: 'OFFLINE', reason: 'SHUTDOWN' });
+
+    // Between SHUTDOWN and DISCONNECT: heartbeat ticks, explicit heartbeats and replays.
+    await vi.advanceTimersByTimeAsync(2_500);
+    sim.publishHeartbeat();
+    await expect(sim.replay({ type: 'HEARTBEAT' })).rejects.toThrow('cannot replay from state stopping');
+    await vi.advanceTimersByTimeAsync(2_500);
+    await stopping;
+    // The socket closing afterwards prepares no Will and schedules no reconnection.
+    t.brokerClose();
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(t.published).toHaveLength(shutdownAt + 1);
+    expect(t.disconnects).toBe(1);
+    expect(t.reconnects).toBe(0);
+    expect(wills).toEqual([]);
+    expect(sim.state).toBe('stopped');
+  });
+
   it('a crash closes the socket without DISCONNECT and publishes nothing itself', async () => {
     const { sim, transport } = setup();
     sim.start();

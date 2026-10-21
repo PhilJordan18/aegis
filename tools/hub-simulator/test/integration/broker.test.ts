@@ -223,6 +223,8 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
       await new Promise((r) => setTimeout(r, 500));
       expect(mine().filter((m) => m.payload.messageId === wills[1])).toHaveLength(0);
       expect(mine().filter((m) => m.payload.reason === 'CONNECTION_LOST')).toHaveLength(1);
+      // Nothing follows SHUTDOWN on that connection.
+      expect(mine().at(-1)!.payload.messageId).toBe(graceful.payload.messageId);
 
       const afterStop = await observe();
       clients.push(afterStop.client);
