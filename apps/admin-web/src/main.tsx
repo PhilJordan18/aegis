@@ -14,11 +14,15 @@ import type { AuthGateway } from './features/auth/authGateway'
 import { AuthGatewayContext } from './features/auth/AuthGatewayContext'
 import { createHttpAuthGateway } from './features/auth/httpAuthGateway'
 import { createSessionStore, SessionContext } from './features/auth/session'
+import { createLocaleController } from './i18n/locale'
+import { LocaleContext } from './i18n/useI18n'
 import { PreviewContext, type PreviewControls } from './preview/PreviewContext'
 
 const router = createHistoryRouter(window)
 const session = createSessionStore()
 const appearance = createAppearanceController(window)
+// Applies <html lang> before the first render; the explicit choice wins over the browser's languages.
+const locale = createLocaleController(window)
 const queryClient = createQueryClient()
 clearCacheOnSessionChange(queryClient, session)
 
@@ -40,13 +44,15 @@ createRoot(container).render(
     <QueryClientProvider client={queryClient}>
       <RouterContext value={router}>
         <AppearanceContext value={appearance}>
-          <SessionContext value={session}>
-            <AuthGatewayContext value={gateway}>
-              <PreviewContext value={previewControls}>
-                <App />
-              </PreviewContext>
-            </AuthGatewayContext>
-          </SessionContext>
+          <LocaleContext value={locale}>
+            <SessionContext value={session}>
+              <AuthGatewayContext value={gateway}>
+                <PreviewContext value={previewControls}>
+                  <App />
+                </PreviewContext>
+              </AuthGatewayContext>
+            </SessionContext>
+          </LocaleContext>
         </AppearanceContext>
       </RouterContext>
     </QueryClientProvider>

@@ -8,19 +8,26 @@ import { Brand } from '../../ui/Brand'
 import { Button } from '../../ui/Button'
 import { Cells } from '../../ui/Cells'
 import { Icon } from '../../ui/Icon'
+import { LanguageSwitch } from '../language/LanguageSwitch'
+import { useI18n } from '../../i18n/useI18n'
+import type { Messages } from '../../i18n/messages'
+import type { Formatters } from '../../i18n/format'
 import { useAuthGateway } from './AuthGatewayContext'
 import type { UserRole } from './contract'
 import { useSession, useSessionStore } from './session'
-import { signInCopy } from './signInCopy'
 import { signInStateFromResult, type SignInArrivalReason, type SignInState } from './signInOutcome'
 import { errorsFromViolations, SIGN_IN_TIMEOUT_MS, validateSignIn, type FieldErrors } from './signInValidation'
 import './sign-in.css'
 
-const { approved, proposed } = signInCopy
+/** Live-region announcements are kept as keys, so a language switch re-renders them in the new language. */
+type StatusKey = 'submitting' | 'revealed' | 'concealed' | 'rateLimitedReady'
 
-function formatRemaining(seconds: number): string {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
-}
+const STATUS_MESSAGES = {
+  submitting: 'submittingStatus',
+  revealed: 'revealedStatus',
+  concealed: 'concealedStatus',
+  rateLimitedReady: 'rateLimitedReady',
+} as const satisfies Record<StatusKey, keyof Messages['signIn']>
 
 type FocusTarget = 'email' | 'password' | 'heading'
 
@@ -39,6 +46,8 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
   const sessionStore = useSessionStore()
   const session = useSession()
   const router = useRouter()
+  const { m, format } = useI18n()
+  const t = m.signIn
   const preview = usePreviewControls()
   const autoSubmitVersion = useSignInPreviewAutoSubmit()
 
@@ -52,7 +61,7 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
   const [attempted, setAttempted] = useState(false)
   const [lockDeadline, setLockDeadline] = useState<number | null>(null)
   const [now, setNow] = useState(() => Date.now())
-  const [statusMessage, setStatusMessage] = useState('')
+  const [statusKey, setStatusKey] = useState<StatusKey | null>(null)
   const [roleScreen, setRoleScreen] = useState<RoleScreen | null>(null)
 
   const inFlight = useRef<AbortController | null>(null)
@@ -102,7 +111,7 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
         // Back to idle: the stale « Réessayez dans N secondes. » alert goes away (review R4).
         setLockDeadline(null)
         setOutcome({ kind: 'idle' })
-        setStatusMessage(proposed.rateLimitedReady)
+        setStatusKey('rateLimitedReady')
       }
     }, 1000)
     return () => clearInterval(timer)
@@ -138,13 +147,13 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
       controller.abort()
     }, SIGN_IN_TIMEOUT_MS)
     setOutcome({ kind: 'submitting' })
-    setStatusMessage(proposed.submittingStatus)
+    setStatusKey('submitting')
 
     try {
       const result = await gateway.signIn({ email: values.email.trim(), password: values.password }, controller.signal)
       if (!mounted.current) return
       const next: SignInState = timedOut ? { kind: 'unreachable' } : signInStateFromResult(result)
-      setStatusMessage('')
+      setStatusKey(null)
       switch (next.kind) {
         case 'signedIn':
           sessionStore.start({ accessToken: next.accessToken, expiresAt: next.expiresAt, expiresIn: next.expiresIn, profile: next.profile })
@@ -181,7 +190,7 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
       setOutcome(next)
     } catch {
       if (mounted.current) {
-        setStatusMessage('')
+        setStatusKey(null)
         setOutcome({ kind: 'unreachable' })
       }
     } finally {
@@ -223,7 +232,7 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
   }
 
   function toggleReveal() {
-    setStatusMessage(revealed ? proposed.concealedStatus : proposed.revealedStatus)
+    setStatusKey(revealed ? 'concealed' : 'revealed')
     setRevealed(!revealed)
   }
 
@@ -236,7 +245,7 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
   }
 
   const arrival = outcome.kind === 'idle' && session.status === 'anonymous' ? session.arrivalReason : null
-  const alert = renderAlert({ id: ids.alert, outcome, arrival, unknownViolation })
+  const alert = renderAlert({ id: ids.alert, outcome, arrival, unknownViolation, t, format })
   const alertDescribesPassword =
     outcome.kind === 'invalidCredentials' || arrival === 'sessionExpired' || arrival === 'sessionInvalid'
   const remaining = lockDeadline === null ? 0 : Math.max(0, Math.ceil((lockDeadline - now) / 1000))
@@ -248,27 +257,28 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
       <header className="ag-signin__top">
         <Link className="ag-signin__home" to={pathOf('landing')}>
           <Icon name="back" />
-          {proposed.home}
+          {t.home}
         </Link>
+        <LanguageSwitch compact />
       </header>
 
       <main id="contenu" className="ag-signin__center">
         <div className="ag-signin__panel">
           <Brand />
           <h1 ref={headingRef} className="ag-signin__title" tabIndex={-1}>
-            {roleScreen ? proposed.roleHeading : approved.heading}
+            {roleScreen ? t.roleHeading : t.heading}
           </h1>
 
           {roleScreen ? (
             <div className="ag-signin__body">
-              <Alert kind="warning" icon="status-person" title={roleScreen.role === 'TECHNICIAN' ? approved.technicianAccount : proposed.roleUnknownTitle}>
-                <p>{proposed.roleBody}</p>
+              <Alert kind="warning" icon="status-person" title={roleScreen.role === 'TECHNICIAN' ? t.technicianAccount : t.roleUnknownTitle}>
+                <p>{t.roleBody}</p>
               </Alert>
               <p className="ag-signin__who">
-                {proposed.roleAccountUsed} <span className="ag-tnum">{roleScreen.email}</span>
+                {t.roleAccountUsed} <span className="ag-tnum">{roleScreen.email}</span>
               </p>
               <Button variant="primary" size="lg" block onClick={retryWithAnotherAccount}>
-                {proposed.roleRetry}
+                {t.roleRetry}
               </Button>
             </div>
           ) : (
@@ -277,8 +287,8 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
               <Field
                 id={ids.email}
                 errorId={ids.emailError}
-                label={approved.emailLabel}
-                error={fieldErrors.email}
+                label={t.emailLabel}
+                error={fieldErrors.email && t.fieldError[fieldErrors.email]}
                 readOnly={submitting}
               >
                 <input
@@ -299,8 +309,8 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
               <Field
                 id={ids.password}
                 errorId={ids.passwordError}
-                label={approved.passwordLabel}
-                error={fieldErrors.password}
+                label={t.passwordLabel}
+                error={fieldErrors.password && t.fieldError[fieldErrors.password]}
                 readOnly={submitting}
               >
                 <input
@@ -322,10 +332,10 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
                   type="button"
                   className="ag-field__reveal"
                   aria-controls={ids.password}
-                  aria-label={revealed ? proposed.concealLabel : proposed.revealLabel}
+                  aria-label={revealed ? t.concealLabel : t.revealLabel}
                   onClick={toggleReveal}
                 >
-                  {revealed ? proposed.conceal : proposed.reveal}
+                  {revealed ? t.conceal : t.reveal}
                 </button>
               </Field>
 
@@ -339,28 +349,28 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
                   inert={locked}
                   aria-describedby={locked ? `${ids.alert} ${ids.hint}` : undefined}
                 >
-                  {submitting ? proposed.submitting : approved.submit}
+                  {submitting ? t.submitting : t.submit}
                 </Button>
                 {locked && (
                   <p id={ids.hint} className="ag-signin__hint ag-tnum">
-                    {proposed.rateLimitedHint(formatRemaining(remaining))}
+                    {t.rateLimitedHint({ remaining: format.clock(remaining) })}
                   </p>
                 )}
               </div>
               <p className="ag-signin__mention">
                 <Icon name="info" />
-                {approved.accountNote}
+                {t.accountNote}
               </p>
             </form>
           )}
           <p className="ag-sr-only" role="status">
-            {statusMessage}
+            {statusKey && t[STATUS_MESSAGES[statusKey]]}
           </p>
         </div>
       </main>
 
       <footer className="ag-signin__foot">
-        <p>{proposed.technicianFooter}</p>
+        <p>{t.footerTechnician}</p>
       </footer>
     </div>
   )
@@ -404,59 +414,63 @@ function renderAlert({
   outcome,
   arrival,
   unknownViolation,
+  t,
+  format,
 }: {
   id: string
   outcome: SignInState
   arrival: SignInArrivalReason | null
   unknownViolation: boolean
+  t: Messages['signIn']
+  format: Formatters
 }): ReactNode {
   switch (outcome.kind) {
     case 'invalidCredentials':
       return (
-        <Alert id={id} kind="error" icon="status-error" title={approved.invalidCredentialsTitle}>
-          <p>{proposed.invalidCredentialsBody}</p>
+        <Alert id={id} kind="error" icon="status-error" title={t.invalidCredentialsTitle}>
+          <p>{t.invalidCredentialsBody}</p>
         </Alert>
       )
     case 'rateLimited':
       return (
-        <Alert id={id} kind="warning" icon="status-clock" title={approved.rateLimitedTitle}>
+        <Alert id={id} kind="warning" icon="status-clock" title={t.rateLimitedTitle}>
           <p className="ag-tnum">
             {outcome.retryAfterSeconds !== null && outcome.retryAfterSeconds > 0
-              ? proposed.rateLimitedBody(outcome.retryAfterSeconds)
-              : approved.rateLimitedFallback}
+              ? t.rateLimitedBody({ duration: format.seconds(outcome.retryAfterSeconds) })
+              : t.rateLimitedFallback}
           </p>
         </Alert>
       )
     case 'unreachable':
       return (
-        <Alert id={id} kind="warning" icon="status-offline" title={approved.unreachableTitle}>
-          <p>{proposed.unreachableBody}</p>
+        <Alert id={id} kind="warning" icon="status-offline" title={t.unreachableTitle}>
+          <p>{t.unreachableBody}</p>
         </Alert>
       )
     case 'serviceError':
       return (
-        <Alert id={id} kind="error" icon="status-error" title={proposed.serviceErrorTitle} code={outcome.traceId ?? undefined}>
-          <p>{outcome.traceId ? proposed.serviceErrorBody : proposed.serviceErrorBodyWithoutCode}</p>
+        <Alert id={id} kind="error" icon="status-error" title={t.serviceErrorTitle} code={outcome.traceId ?? undefined} codeLabel={t.traceIdLabel}>
+          <p>{outcome.traceId ? t.serviceErrorBody : t.serviceErrorBodyWithoutCode}</p>
         </Alert>
       )
     case 'validation':
-      return unknownViolation ? <Alert id={id} kind="error" icon="status-error" title={proposed.validationUnknown} /> : null
+      return unknownViolation ? <Alert id={id} kind="error" icon="status-error" title={t.validationUnknown} /> : null
     case 'idle':
       switch (arrival) {
         case 'sessionExpired':
           return (
-            <Alert id={id} kind="info" icon="status-clock" title={approved.sessionExpiredTitle}>
-              <p>{proposed.sessionExpiredBody}</p>
+            <Alert id={id} kind="info" icon="status-clock" title={t.sessionExpiredTitle}>
+              <p>{t.sessionExpiredBody}</p>
             </Alert>
           )
         case 'sessionInvalid':
           return (
-            <Alert id={id} kind="info" icon="status-info" title={proposed.sessionInvalidTitle}>
-              <p>{proposed.sessionInvalidBody}</p>
+            <Alert id={id} kind="info" icon="status-info" title={t.sessionInvalidTitle}>
+              <p>{t.sessionInvalidBody}</p>
             </Alert>
           )
         case 'signedOut':
-          return <Alert id={id} kind="info" icon="status-info" title={proposed.signedOutTitle} />
+          return <Alert id={id} kind="info" icon="status-info" title={t.signedOutTitle} />
         case null:
           return null
       }
