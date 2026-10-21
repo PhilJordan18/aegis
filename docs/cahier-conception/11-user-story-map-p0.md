@@ -7,6 +7,7 @@
 **Version :** 2.0 — backlog d’exécution, responsabilités et tickets initiaux  
 **Mise à jour ciblée :** 23 septembre 2026 — IAM-01 alignée sur l’ADR-007; POC-02 conserve le choix de connecteur ouvert.  
 **Mise à jour ciblée :** 5 octobre 2026 — le backlog opérationnel est suivi dans GitHub Issues au lieu de Linear.  
+**Mise à jour ciblée :** 21 octobre 2026 — FND-02B ne dépend plus d’un Mac de l’école : Xcode est installé sur le Mac de développement (ADR-012).  
 **Références :** [scope](02-scope.md), documents 03–10 et [plan d’itérations](14-plan-iterations-semaines-4-a-15.md).
 
 ---
@@ -286,7 +287,7 @@ Ces tickets sont prêts à être discutés et saisis. Leur budget est une **time
 | 4 | POC-03 — Caractériser le verrou sur banc | Jimmy | J : 2 h | Verrou disponible, fiche et banc adapté |
 | 5 | FND-01 — Démarrer PostgreSQL et le broker | Philippe | P : 3 h | Environnement local utilisable |
 | 6 | FND-02A — Démarrer l’API et appliquer une migration | Philippe | P : 2 h | FND-01 |
-| 7 | FND-02B — Compiler le client iOS minimal à l’école | Philippe | P : 1,5 h | Mac/Xcode disponibles; API accessible pour l’essai réseau |
+| 7 | FND-02B — Compiler le client iOS minimal | Philippe | P : 1,5 h | Xcode sur le Mac de développement; API accessible pour l’essai réseau |
 | 8 | POC-04 — Vérifier le QR écran–caméra | Jimmy puis essai commun | J : 1,5 h; P : 0,5 h | Écran et iPhone réels disponibles |
 
 Ces huit tickets ne sont pas huit engagements pour la première semaine. DOC-01 et HW-01 précèdent les engagements d’intégration; les autres sont tirés selon la capacité restante. Toute prolongation est notée avant de consommer la réserve. Une timebox écoulée avec un échec donne une preuve de blocage, pas le statut Terminé.
@@ -348,9 +349,9 @@ La première timebox peut produire un brouillon complet; le ticket reste ouvert 
 - Ne pas exposer de secret ou d’état interne détaillé dans la réponse publique de santé.
 - Reporter ingestion heartbeat et lecture métier authentifiée dans les sous-tâches suivantes de FND-02.
 
-### FND-02B — Client iOS exécutable à l’école
+### FND-02B — Client iOS exécutable
 
-**Résultat :** le projet SwiftUI compile sur un Mac de l’école et une vue appelle l’API par HTTPS lorsque celle-ci est disponible.
+**Résultat :** le projet SwiftUI compile sur le Mac de développement, où Xcode est installé (ADR-012), et une vue appelle l’API par HTTPS lorsque celle-ci est disponible.
 
 - Noter version Xcode, cible iOS, procédure d’ouverture et commande ou action de compilation.
 - Tester chargement, résultat et erreur réseau sur une vue minimale.
