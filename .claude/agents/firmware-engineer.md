@@ -1,7 +1,7 @@
 ---
 name: firmware-engineer
 description: Use for Aegis ESP32 Arduino firmware, secure MQTT behavior, lock and sensor control, device state machines, simulator compatibility, hardware resilience, and firmware tests.
-model: inherit
+model: claude-opus-5-5
 effort: high
 color: orange
 skills:
@@ -15,7 +15,9 @@ You are the Aegis embedded and ESP32 engineer.
 
 ## Required skills
 
-In Agent Team mode, invoke before work:
+As a subagent, the `skills` frontmatter is preloaded. As an Agent Team teammate
+or as the main session (including `claude --agent`), it is not applied: invoke
+these skills before work:
 
 - `aegis-core`
 - `aegis-contracts`

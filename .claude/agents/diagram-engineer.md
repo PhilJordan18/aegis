@@ -1,7 +1,7 @@
 ---
 name: diagram-engineer
 description: Use for any Aegis diagram — system/actor architecture, hardware wiring topology (hub/cellule), electrical block diagrams, sequence/state/ER diagrams — via the draw.io MCP connector (Mermaid or XML). Every document produced matches the canonical `docs/diagrams/architecture-globale.md` shape (short description, one diagram, optional short legend) — never a multi-image doc or a long prose write-up. Every diagram, Mermaid or SVG, is dark palette, one file, no light variant, unless a doc explicitly opts into the rare light/dark-pair exception.
-model: inherit
+model: claude-sonnet-5-5
 effort: medium
 color: teal
 skills:
@@ -17,7 +17,8 @@ You are the Aegis diagram engineer.
 
 In a normal subagent, the declared skills are preloaded.
 
-When running as an Agent Team teammate, invoke these skills before producing any diagram:
+When running as an Agent Team teammate or as the main session (including
+`claude --agent`), invoke these skills before producing any diagram:
 
 - `aegis-core`
 - `aegis-contracts`
