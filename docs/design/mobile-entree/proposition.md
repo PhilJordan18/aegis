@@ -19,7 +19,7 @@ modifié.
 | Zone | Référence v3 | Adaptation iOS |
 |---|---|---|
 | En-tête | Marque, puis signature sur trois lignes, halo bleu localisé | Identique. **Compacté** (marque seule) dès qu'un champ a le focus ou en taille de texte d'accessibilité |
-| Marque | « A » abstrait avec noyau, `aegis`, filet, `CORE` | Monogramme en asset vectoriel `AegisMark` (clair et sombre); `aegis` et `CORE` en texte SwiftUI. VoiceOver lit « Aegis », en en-tête |
+| Marque | « A » abstrait avec noyau, `aegis`, filet, `CORE` | Monogramme en asset vectoriel `AegisMark` (clair et sombre), suivi de `aegis` en police système; **sans `CORE`** (décision du 21 octobre 2026). VoiceOver lit « Aegis », en en-tête |
 | Panneau | Coins supérieurs de 27 pt, filet supérieur | Identique; le fond continue jusqu'en bas de l'écran |
 | Titre | Surtitre, « Connexion », sous-titre | Styles Dynamic Type (`caption2`, `title`, `subheadline`) |
 | Champs | Groupe à fond distinct, libellés persistants | `TextField` (`.username`, clavier courriel) et `SecureField` (`.password`, action Aller); bouton œil de 44 × 44 pt. Aucun placeholder pour le mot de passe : le libellé suffit |
@@ -86,10 +86,11 @@ dans `09` §10.2 est suivie par la session API dans #80.
   vecteur conservé. Il est rendu correctement à 34 pt dans les deux
   apparences (captures).
 - Les logos complets portent `aegis` et `CORE` en `<text>` avec la police
-  Inter, ni embarquée ni vectorisée. Xcode ne garantit pas le rendu de ce
-  texte. **Conversion retenue :** monogramme en asset, mots en texte SwiftUI
-  (police système). Une version vectorisée du logotype par le designer
-  rendrait cette substitution inutile.
+  Inter, ni embarquée ni vectorisée; Xcode ne garantit pas le rendu de ce
+  texte. Ils ne sont **pas utilisés** dans l'app : selon la décision de
+  Philippe du 21 octobre 2026 (consignée dans
+  `docs/design/identite/reference.md`, #79), l'écran d'entrée affiche le
+  monogramme suivi de « aegis » en police système, sans « CORE ».
 - Remplacement : changer les deux fichiers de `AegisMark.imageset` suffit; le
   nom du projet, du bundle et des modules reste « Aegis Mobile ».
 - Nommage : d'accord avec l'option A de #79 (marque commune « Aegis » portée

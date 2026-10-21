@@ -113,8 +113,8 @@ private struct Hero: View {
     }
 }
 
-/// Provisional "Aegis Core" lockup. The mark is the replaceable `AegisMark`
-/// vector asset; the words are text so they render without the SVG font.
+/// Temporary logo (decision of 21 October 2026): the replaceable `AegisMark`
+/// vector asset followed by "aegis" in the system font, without "CORE".
 private struct BrandLockup: View {
     var body: some View {
         HStack(spacing: 10) {
@@ -124,15 +124,6 @@ private struct BrandLockup: View {
             Text(verbatim: "aegis")
                 .font(.system(size: 29, weight: .semibold))
                 .tracking(-1.3)
-            Text(verbatim: "CORE")
-                .font(.system(size: 10, weight: .medium))
-                .tracking(2.1)
-                .foregroundStyle(Palette.muted)
-                .padding(.leading, 11)
-                .overlay(alignment: .leading) {
-                    Rectangle().fill(Palette.border).frame(width: 1, height: 22)
-                }
-                .padding(.leading, 3)
         }
         .foregroundStyle(Palette.text)
         .accessibilityElement(children: .ignore)
