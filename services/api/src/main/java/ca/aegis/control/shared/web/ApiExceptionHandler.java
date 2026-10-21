@@ -21,6 +21,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import tools.jackson.core.JacksonException;
+import tools.jackson.databind.exc.MismatchedInputException;
 import tools.jackson.databind.exc.UnrecognizedPropertyException;
 
 /**
@@ -72,6 +73,9 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemResponse.Violation violation = switch (jacksonCause(ex)) {
             case UnrecognizedPropertyException unknown -> new ProblemResponse.Violation(unknown.getPropertyName(),
                     "UNKNOWN_FIELD", "Ce champ n'est pas reconnu.");
+            case MismatchedInputException missing when isMissingRequiredProperty(missing) && fieldName(missing) != null ->
+                    new ProblemResponse.Violation(fieldName(missing), "REQUIRED",
+                            "Ce champ doit être présent; utilisez null pour le laisser vide.");
             case JacksonException invalid when fieldName(invalid) != null -> new ProblemResponse.Violation(
                     fieldName(invalid), "INVALID_VALUE", "La valeur de ce champ n'a pas le type attendu.");
             default -> new ProblemResponse.Violation("body", "MALFORMED_BODY",
@@ -114,6 +118,15 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             }
         }
         return ex.getMostSpecificCause();
+    }
+
+    /**
+     * A property marked {@code @JsonProperty(required = true)} and absent from the body. Jackson has no dedicated
+     * exception type for it; its message prefix has been stable since 2.6 and the catalog tests pin it.
+     */
+    private static boolean isMissingRequiredProperty(MismatchedInputException exception) {
+        String message = exception.getOriginalMessage();
+        return message != null && message.startsWith("Missing required creator property");
     }
 
     private static String fieldName(JacksonException exception) {

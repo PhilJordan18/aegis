@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -22,6 +24,7 @@ record AssetRequest(
         @Size(max = 64, message = "Le code d'actif dépasse 64 caractères.")
         String assetCode,
 
+        @JsonProperty(required = true)
         @Size(max = 120, message = "Le numéro de série dépasse 120 caractères.")
         String serialNumber,
 
@@ -34,6 +37,7 @@ record AssetRequest(
         @NotNull(message = "L'exigence de calibration est requise.")
         Boolean calibrationRequired,
 
+        @JsonProperty(required = true)
         Instant calibrationDueAt) {
 
     AssetRequest {

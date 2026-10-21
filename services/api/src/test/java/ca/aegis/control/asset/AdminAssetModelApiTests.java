@@ -46,7 +46,7 @@ class AdminAssetModelApiTests extends CatalogApiTest {
 
         Map<String, Object> edited = modelBody("  Multimètre Pro " + suffix + "  ");
         edited.put("manufacturer", "   ");
-        edited.remove("modelNumber");
+        edited.put("modelNumber", null);
         edited.put("defaultCalibrationRequired", false);
         putModel(id, edited)
                 .andExpect(status().isOk())

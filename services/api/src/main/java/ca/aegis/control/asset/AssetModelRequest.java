@@ -1,5 +1,7 @@
 package ca.aegis.control.asset;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -13,12 +15,15 @@ record AssetModelRequest(
         @Size(max = 160, message = "Le nom dépasse 160 caractères.")
         String name,
 
+        @JsonProperty(required = true)
         @Size(max = 120, message = "Le fabricant dépasse 120 caractères.")
         String manufacturer,
 
+        @JsonProperty(required = true)
         @Size(max = 120, message = "Le numéro de modèle dépasse 120 caractères.")
         String modelNumber,
 
+        @JsonProperty(required = true)
         @Size(max = 2000, message = "La description dépasse 2000 caractères.")
         String description,
 
