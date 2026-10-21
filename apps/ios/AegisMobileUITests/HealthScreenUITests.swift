@@ -3,20 +3,23 @@ import XCTest
 /// Drives the real app in French and English. The unreachable case points the
 /// Debug build at a closed loopback port; the live case needs a running API and
 /// is skipped without one, so only `scripts/ios-test.sh live` proves the
-/// integration.
+/// integration. XCUIAutomation is main-actor isolated, hence the annotations.
 final class HealthScreenUITests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
     }
 
+    @MainActor
     func testUnreachableServiceShowsErrorAndRetryInFrench() {
         assertUnreachableFlow(language: .french)
     }
 
+    @MainActor
     func testUnreachableServiceShowsErrorAndRetryInEnglish() {
         assertUnreachableFlow(language: .english)
     }
 
+    @MainActor
     func testLiveServiceShowsHealth() throws {
         guard let address = ProcessInfo.processInfo.environment["AEGIS_LIVE_API_BASE_URL"] else {
             throw XCTSkip("Set TEST_RUNNER_AEGIS_LIVE_API_BASE_URL to a running API (scripts/ios-test.sh live).")
@@ -45,12 +48,14 @@ final class HealthScreenUITests: XCTestCase {
             code: "en", locale: "en_CA", unreachableTitle: "Service unreachable", retry: "Try again")
     }
 
+    @MainActor
     private func makeApp(language: Language) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += ["-AppleLanguages", "(\(language.code))", "-AppleLocale", language.locale]
         return app
     }
 
+    @MainActor
     private func assertUnreachableFlow(language: Language) {
         let app = makeApp(language: language)
         // Port 9 (discard) is closed on the host: the connection is refused.
@@ -72,6 +77,7 @@ final class HealthScreenUITests: XCTestCase {
         attachScreenshot(app, named: "health-unreachable-\(language.code)")
     }
 
+    @MainActor
     private func attachScreenshot(_ app: XCUIApplication, named name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name
