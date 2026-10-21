@@ -147,7 +147,7 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
       setStatusMessage('')
       switch (next.kind) {
         case 'signedIn':
-          sessionStore.start({ accessToken: next.accessToken, expiresAt: next.expiresAt, profile: next.profile })
+          sessionStore.start({ accessToken: next.accessToken, expiresAt: next.expiresAt, expiresIn: next.expiresIn, profile: next.profile })
           router.navigate(afterSignInPath)
           return
         case 'unauthorizedRole':

@@ -20,7 +20,14 @@ export type SignInState =
    * problem body, 403, unexpected code). Keeps the trace for support.
    */
   | { readonly kind: 'serviceError'; readonly status: number; readonly code: string | null; readonly traceId: string | null }
-  | { readonly kind: 'signedIn'; readonly accessToken: string; readonly expiresAt: string; readonly profile: UserProfile }
+  | {
+      readonly kind: 'signedIn'
+      readonly accessToken: string
+      readonly expiresAt: string
+      /** Token lifetime in seconds (09 §10.2), measured from receipt so that clock skew does not matter. */
+      readonly expiresIn: number
+      readonly profile: UserProfile
+    }
 
 export type SignInStateKind = SignInState['kind']
 
@@ -51,14 +58,16 @@ export function parseRetryAfterSeconds(header: string | null, now: Date = new Da
 export function signInStateFromResult(result: GatewayResult<LoginResponse>, now: Date = new Date()): SignInState {
   switch (result.kind) {
     case 'ok': {
-      const { user, accessToken, expiresAt } = result.value
-      if (user.role === 'ADMIN') return { kind: 'signedIn', accessToken, expiresAt, profile: user }
+      const { user, accessToken, expiresAt, expiresIn } = result.value
+      if (user.role === 'ADMIN') return { kind: 'signedIn', accessToken, expiresAt, expiresIn, profile: user }
       return { kind: 'unauthorizedRole', role: user.role === 'TECHNICIAN' ? 'TECHNICIAN' : null }
     }
     case 'aborted':
       return { kind: 'idle' }
     case 'network':
       return { kind: 'unreachable' }
+    case 'invalidResponse':
+      return { kind: 'serviceError', status: result.status, code: null, traceId: result.requestId }
     case 'httpProblem': {
       const { status, problem } = result
       const code = problem?.code ?? null

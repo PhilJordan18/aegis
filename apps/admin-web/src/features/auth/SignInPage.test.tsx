@@ -5,6 +5,7 @@ import { installMatchMedia } from '../../test/matchMedia'
 import { renderWithProviders } from '../../test/renderApp'
 import type { AuthGateway, GatewayResult } from './authGateway'
 import type { LoginResponse, UserProfile } from './contract'
+import { createHttpAuthGateway } from './httpAuthGateway'
 import { createSessionStore } from './session'
 import { signInCopy } from './signInCopy'
 import { SignInPage } from './SignInPage'
@@ -325,5 +326,39 @@ describe('SignInPage — password visibility', () => {
 
     await fillAndSubmit(user)
     expect(passwordField().type).toBe('password')
+  })
+})
+
+describe('SignInPage with the production HTTP gateway (fetch mocked)', () => {
+  function httpGateway(response: Response) {
+    const fetchMock = vi.fn<typeof fetch>(async () => response)
+    return { gateway: createHttpAuthGateway({ fetch: fetchMock }), fetchMock }
+  }
+
+  it('starts an in-memory session from a real login response and leaves the page', async () => {
+    const body = { accessToken: 'opaque', tokenType: 'Bearer', expiresIn: 3600, expiresAt: '2026-09-30T15:30:00Z', user: adminProfile }
+    const { gateway, fetchMock } = httpGateway(new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    const session = createSessionStore()
+    renderWithProviders(<SignInPage afterSignInPath="/equipements" />, { gateway, session })
+    await fillAndSubmit()
+    await waitFor(() => expect(window.location.pathname).toBe('/equipements'))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/v1/auth/login')
+    expect(session.getAccessToken()).toBe('opaque')
+    expect(session.getSnapshot()).toMatchObject({ status: 'authenticated', profile: adminProfile })
+  })
+
+  it('shows the 429 delay from the real Retry-After header, never the server text', async () => {
+    const problem = problemBody(429, 'RATE_LIMITED', { detail: SERVER_TEXT })
+    const { gateway } = httpGateway(
+      new Response(JSON.stringify(problem), { status: 429, headers: { 'Content-Type': 'application/problem+json', 'Retry-After': '42' } }),
+    )
+    renderWithProviders(<SignInPage afterSignInPath="/equipements" />, { gateway })
+    await fillAndSubmit()
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain(approved.rateLimitedTitle)
+    expect(alert.textContent).toContain(proposed.rateLimitedBody(42))
+    expect(document.body.textContent).not.toContain(SERVER_TEXT)
+    expect(submitButton().getAttribute('aria-disabled')).toBe('true')
   })
 })

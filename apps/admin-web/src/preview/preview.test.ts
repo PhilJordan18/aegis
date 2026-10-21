@@ -3,8 +3,10 @@ import { isPreviewEnabled } from './previewFlag'
 import { parseSignInPreviewScenario, withPreviewScenario } from './previewScenarios'
 
 describe('isPreviewEnabled', () => {
-  it('is enabled on the dev server', () => {
+  it('is enabled on the dev server unless explicitly disabled to reach the API', () => {
     expect(isPreviewEnabled({ command: 'serve', previewVariable: undefined })).toBe(true)
+    expect(isPreviewEnabled({ command: 'serve', previewVariable: 'true' })).toBe(true)
+    expect(isPreviewEnabled({ command: 'serve', previewVariable: 'false' })).toBe(false)
   })
 
   it('is disabled for a production build unless explicitly requested', () => {

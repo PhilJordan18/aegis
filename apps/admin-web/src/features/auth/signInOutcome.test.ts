@@ -11,6 +11,7 @@ describe('signInStateFromResult — successful login', () => {
       kind: 'signedIn',
       accessToken: 'opaque',
       expiresAt: '2026-09-30T15:30:00Z',
+      expiresIn: 3600,
       profile: adminProfile,
     })
   })
@@ -24,6 +25,17 @@ describe('signInStateFromResult — successful login', () => {
   it('refuses an unknown role instead of guessing (09 §3)', () => {
     const unknown = { ...adminProfile, role: 'AUDITOR' } as unknown as UserProfile
     expect(signInStateFromResult(loginOk(unknown))).toEqual({ kind: 'unauthorizedRole', role: null })
+  })
+})
+
+describe('signInStateFromResult — malformed success', () => {
+  it('reports a 2xx body outside the contract as a service error with the request id', () => {
+    expect(signInStateFromResult({ kind: 'invalidResponse', status: 200, requestId: 'req-9' })).toEqual({
+      kind: 'serviceError',
+      status: 200,
+      code: null,
+      traceId: 'req-9',
+    })
   })
 })
 

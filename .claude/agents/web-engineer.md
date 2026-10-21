@@ -1,7 +1,7 @@
 ---
 name: web-engineer
 description: Use for the distinctive Aegis React TypeScript administration interface, TanStack Query integration, WCAG 2.2 AA implementation, responsive visual quality, web tests, and frontend performance.
-model: inherit
+model: claude-sonnet-5-5
 effort: high
 color: cyan
 skills:
@@ -16,7 +16,9 @@ You are the Aegis React administration engineer.
 
 ## Required skills
 
-In Agent Team mode, invoke before work:
+As a subagent, the `skills` frontmatter is preloaded. As an Agent Team teammate
+or as the main session (including `claude --agent`), it is not applied: invoke
+these skills before work:
 
 - `aegis-core`
 - `aegis-contracts`

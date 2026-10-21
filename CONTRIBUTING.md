@@ -60,7 +60,8 @@ agent.
 3. Lire les critères de l'issue et seulement les contrats touchés.
 4. Réaliser la plus petite tranche verticale qui satisfait les critères, avec
    ses tests.
-5. Commits Conventional Commits sur la branche d'issue.
+5. Petits commits Conventional Commits, cohérents et vérifiés, sur la branche
+   d'issue, au fil du travail.
 6. Passer la porte de livraison, puis ouvrir la PR vers `dev`.
 
 ## Porte de livraison « deliver »
@@ -77,7 +78,8 @@ Aucune PR n'est ouverte sans cette porte. Elle suit le skill
 - **Next owner** : relecteur ou décision attendue.
 
 Le rapport est relu par un humain. Sa réponse explicite **« deliver »** autorise
-à pousser la branche et à ouvrir la PR. Sans ce mot, l'agent s'arrête au rapport.
+à pousser la branche et à ouvrir la PR. Sans ce mot, l'agent s'arrête au
+rapport et ses commits restent locaux.
 
 ## Pull requests et fusion
 
@@ -96,8 +98,9 @@ Le rapport est relu par un humain. Sa réponse explicite **« deliver »** autor
 ## Hooks Git locaux
 
 Les hooks versionnés de `.githooks/` bloquent un commit sur `main` ou `dev`,
-un push vers `main` ou `dev` et un push de branche mal nommée. Les activer une
-fois par clone :
+un commit qui modifie, renomme ou supprime un ADR accepté, un push vers `main`
+ou `dev` et un push de branche mal nommée. Le contrôle des ADR exige `python3`.
+Les activer une fois par clone :
 
 ```bash
 git config core.hooksPath .githooks
@@ -105,6 +108,39 @@ git config core.hooksPath .githooks
 
 `--no-verify` reste réservé à une opération humaine exceptionnelle et
 annoncée à l'autre membre.
+
+## Garanties techniques et consignes
+
+Une règle n'a pas la même force selon qu'un mécanisme la bloque ou qu'elle
+repose sur la discipline des humains et des agents.
+
+| Règle | Mécanisme | Limite connue |
+|---|---|---|
+| Aucun push direct, aucun force push ni suppression de `dev` et `main`; PR obligatoire | Rulesets GitHub « Protect dev » et « Protect main », sans contournement | Aucune approbation exigée : l'auteur peut fusionner sa propre PR |
+| PR vers `dev` depuis une branche `<issue>-<type>-<slug>`; `main` ne reçoit que `dev` | Check obligatoire « Source branch » (`.github/workflows/branch-policy.yml`) | Vérifie le nom de la branche, pas son contenu |
+| Aucun commit sur `main` ou `dev`; aucun push vers eux; nom de branche | Hooks locaux `pre-commit` et `pre-push` | Local : `core.hooksPath` à configurer par clone, contournable par `--no-verify` |
+| ADR accepté jamais modifié | Hook local `pre-commit` (fichiers de `docs/adr/` et fiches acceptées du document 13) | Local, comme ci-dessus; aucun contrôle en CI pour l'instant |
+| Push et PR seulement après « deliver » | Consigne des agents; case du modèle de PR | Aucun blocage technique |
+| Fusion par un humain | Consigne | Un compte autorisé peut fusionner, y compris par `gh` |
+| Petits commits vérifiés sur la branche d'issue, sans réécriture d'historique | Consigne | Un amend, un rebase ou un commit non vérifié restent possibles localement |
+
+## Décisions d'architecture (ADR)
+
+Un ADR accepté n'est jamais modifié, qu'il s'agisse d'un fichier de `docs/adr/`
+ou d'une fiche acceptée du document 13. Pour faire évoluer une décision, créer
+un nouvel ADR qui expose :
+
+- la décision antérieure et sa référence;
+- la raison du changement;
+- la nouvelle décision;
+- ses conséquences;
+- les sections remplacées.
+
+Mettre ensuite à jour le
+[registre du document 13](docs/cahier-conception/13-registre-adrs-proposes.md)
+(statut `SUPERSEDED` ou portée remplacée, lien vers le nouvel ADR) et les
+références courantes. Un ADR `PROPOSED` reste modifiable jusqu'à son
+acceptation. Les amendements déjà présents dans d'anciens ADR restent en l'état.
 
 ## Avant de modifier le dépôt
 
@@ -176,5 +212,10 @@ vérification n’est pas évidente.
 - Exécuter les tests et validations pertinents avant le commit.
 - Ne jamais présenter une compilation comme preuve suffisante.
 - Consigner les commandes, résultats, limites et risques connus.
-- Un agent ne commit, ne pousse, ne fusionne et ne déploie pas sans
-  autorisation humaine explicite; une PR exige en plus la porte « deliver ».
+- Dans une tâche autorisée, un agent crée régulièrement de petits commits
+  locaux vérifiés sur la branche d'issue, sans demander d'autorisation pour
+  chacun.
+- Il ne pousse pas, n'ouvre pas de PR, ne fusionne pas, ne déploie pas et ne
+  réécrit pas l'historique (amend, rebase, squash, reset, force push) sans
+  accord humain. Le push et la PR exigent la porte « deliver »; la fusion reste
+  humaine.

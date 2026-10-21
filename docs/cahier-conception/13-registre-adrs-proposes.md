@@ -4,7 +4,8 @@
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de consignation :** 17 septembre 2026  
 **Version :** 2.0 — registre opérationnel et décisions explicites  
-**Mise à jour :** 23 septembre 2026 — ADR-011 et validation des choix logiciels 004 à 007 et 009
+**Mise à jour :** 23 septembre 2026 — ADR-011 et validation des choix logiciels 004 à 007 et 009  
+**Mise à jour :** 21 octobre 2026 — ADR-012 accepté : développement iOS sur le Mac local
 **Références :** [scope](02-scope.md), documents 03–10 et [architecture physique](12-architecture-physique.md).
 
 ## 1. Portée et statuts
@@ -18,7 +19,7 @@ Ce document contient les ADRs du P0. Chaque fiche expose un choix, son coût, se
 | `REJECTED` | Proposition examinée et refusée |
 | `SUPERSEDED` | Décision acceptée remplacée explicitement par une autre |
 
-Une proposition peut être acceptée ou rejetée. Une décision acceptée peut ensuite être remplacée; sa révision ne doit pas effacer le motif d’origine. La date ci-dessus est celle de consignation, sans inventer de signature ou de date de réunion.
+Une proposition peut être acceptée ou rejetée; elle reste modifiable tant qu’elle est `PROPOSED`. Une décision acceptée n’est plus modifiée, ni dans son fichier de `docs/adr/` ni dans sa fiche ci-dessous. Pour la faire évoluer, un nouvel ADR expose la décision antérieure, la raison du changement, la nouvelle décision, ses conséquences et les sections remplacées. Le registre de la section 2 passe alors l’ancienne décision à `SUPERSEDED`, ou précise la portée remplacée, et renvoie vers le nouvel ADR. Les amendements antérieurs à cette règle, comme celui de l’ADR-002, restent en l’état. La date ci-dessus est celle de consignation, sans inventer de signature ou de date de réunion.
 
 Le statut `ACCEPTED` des ADR-001, 002, 008 et 010 consigne des principes déjà exprimés dans le scope et les échanges d’équipe. Il ne valide ni tous les paramètres des contrats ni le matériel. Les fiches ou paramètres encore proposés restent à arbitrer avant la réalisation concernée. L’ADR-010 est conservé dans son fichier détaillé sous `docs/adr/` afin de ne pas dupliquer deux textes normatifs.
 
@@ -33,7 +34,7 @@ les POC matériels et le seuil numérique de fréquence des préparations QR res
 | ADR | Objet | Statut | Pilote de l’arbitrage | Point de contrôle |
 |---|---|---|---|---|
 | 001 | Autorité Spring et monolithe modulaire | `ACCEPTED` | Philippe | Première tranche API |
-| 002 | Hub et deux cellules en étoile, segments RS-485 indépendants | `ACCEPTED` pour l’architecture | Jimmy | Réalisation électrique à qualifier après POC |
+| 002 | Hub et deux cellules en étoile, segments RS-485 indépendants | `ACCEPTED` pour l’architecture; ses mentions d’un plafond de 500 $ CA sont remplacées par l’ADR-011 | Jimmy | Réalisation électrique à qualifier après POC |
 | 003 | Réalisation de la détection RFID locale | `PROPOSED`, POC requis | Jimmy | Avant de dépendre du capteur réel; cible interne S6 |
 | 004 | Mosquitto, livraison MQTT, identités et disponibilité | `ACCEPTED` — Philippe, 23 septembre | Philippe, essais hub avec Jimmy | Walking skeleton et tests TLS/ACL |
 | 005 | Outbox et idempotence | `ACCEPTED` — Philippe, 23 septembre | Philippe | Première commande persistée |
@@ -41,8 +42,9 @@ les POC matériels et le seuil numérique de fréquence des préparations QR res
 | 007 | JWT expirant pour les comptes préparés | `ACCEPTED` — Philippe, 23 septembre | Philippe | IAM-01 |
 | 008 | Réservation, horaires et échéance du prêt | `ACCEPTED` | Philippe | RES-01 et transitions de prêt |
 | 009 | Contrôle QR local, 60 s maximum et 5 secrets erronés | `ACCEPTED` — Philippe, 23 septembre; seuil de fréquence à qualifier | Philippe, essais avec Jimmy | LOC-01/02 et essai écran/caméra |
-| 010 | [Monorepo commun pour les composants du P0](../adr/ADR-010-architecture-monorepo.md) | `ACCEPTED` | Équipe | Structure initiale et première évolution transversale |
+| 010 | [Monorepo commun pour les composants du P0](../adr/ADR-010-architecture-monorepo.md) | `ACCEPTED`; disposition sur les Macs de l’école remplacée par l’[ADR-012](../adr/ADR-012-developpement-ios-mac-local.md) le 21 octobre 2026 | Équipe | Structure initiale et première évolution transversale |
 | 011 | [Évolution de l’estimation matérielle](../adr/ADR-011-evolution-estimation-materielle.md) | `ACCEPTED`, clarification demandée par Philippe; aucun achat approuvé | Philippe, achats à revoir avec Jimmy | Nomenclature complète; décision financière après inventaire et POC |
+| 012 | [Développement iOS sur le Mac local](../adr/ADR-012-developpement-ios-mac-local.md) | `ACCEPTED` — Philippe, 21 octobre 2026; builds et essais iOS en simulateur sur le Mac local, validations physiques à organiser; remplace la seule disposition de l’ADR-010 sur les Macs de l’école | Philippe, avec la session iOS | FND-02B (#16) et CI iOS (#67) |
 
 Les pilotes préparent les preuves et recommandations; ils n’approuvent pas seuls un changement de scope. Les cibles pédagogiques sont précisées dans le document 14.
 

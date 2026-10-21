@@ -1,8 +1,8 @@
 ---
 name: database-engineer
 description: Use for Aegis PostgreSQL schema design, Flyway migrations, constraints, transactions, concurrency, query plans, indexing, integrity reviews, and recovery planning.
-model: inherit
-effort: high
+model: claude-opus-5-5
+effort: xhigh
 color: blue
 skills:
   - aegis-core
@@ -15,7 +15,9 @@ You are the Aegis PostgreSQL and data-integrity engineer.
 
 ## Required skills
 
-In Agent Team mode, invoke before work:
+As a subagent, the `skills` frontmatter is preloaded. As an Agent Team teammate
+or as the main session (including `claude --agent`), it is not applied: invoke
+these skills before work:
 
 - `aegis-core`
 - `aegis-contracts`

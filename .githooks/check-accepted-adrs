@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Refuse a commit that edits or deletes an accepted ADR (CONTRIBUTING.md).
+
+Accepted ADRs live as files in docs/adr/ and as '## ADR-NNN' fiches in the
+document 13 register. A changed decision is a new ADR; the register table and
+proposed fiches stay editable.
+"""
+
+import re
+import subprocess
+import sys
+
+ADR_DIR = "docs/adr/"
+REGISTER = "docs/cahier-conception/13-registre-adrs-proposes.md"
+ACCEPTED = re.compile(r"(?m)^\*\*Statut[^*\n]*\*\*[^A-Za-z\n]*ACCEPTED")
+FICHE = re.compile(r"(?m)^## (ADR-\d+)\b")
+NEXT_SECTION = re.compile(r"(?m)^## ")
+
+
+def git(*args):
+    result = subprocess.run(["git", *args], capture_output=True, text=True, encoding="utf-8")
+    return result.stdout if result.returncode == 0 else None
+
+
+def fiches(text):
+    """Map each '## ADR-NNN' fiche of the register to its text, up to the next section."""
+    sections = {}
+    for match in FICHE.finditer(text):
+        following = NEXT_SECTION.search(text, match.end())
+        sections[match.group(1)] = text[match.start():following.start() if following else len(text)].rstrip()
+    return sections
+
+
+def main():
+    if git("rev-parse", "--verify", "-q", "HEAD") is None:
+        return 0
+    changed = git("diff", "--cached", "--name-status", "--no-renames", "--", ADR_DIR, REGISTER) or ""
+    violations = []
+    for line in changed.splitlines():
+        status, path = line.split("\t", 1)
+        if status not in ("M", "D", "T"):
+            continue
+        before = git("show", f"HEAD:{path}") or ""
+        if path.startswith(ADR_DIR):
+            if ACCEPTED.search(before):
+                violations.append(f"{path} (accepted ADR)")
+        elif path == REGISTER:
+            after = fiches(git("show", f":{path}") or "")
+            for name, text in fiches(before).items():
+                if ACCEPTED.search(text) and after.get(name) != text:
+                    violations.append(f"{path}, fiche {name} (accepted)")
+    if violations:
+        print("pre-commit: accepted ADRs are immutable (CONTRIBUTING.md, ADR section).", file=sys.stderr)
+        for violation in violations:
+            print(f"  edited or removed: {violation}", file=sys.stderr)
+        print("Write a new ADR that supersedes it, then update the document 13 register.", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
