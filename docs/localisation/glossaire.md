@@ -10,7 +10,9 @@ traductions anglaises sont proposées.
 
 ## Produits
 
-Aegis, Aegis Manager, Aegis Mobile et Aegis Control ne se traduisent pas.
+Aegis Studio (le collectif de Jimmy et Philippe), Aegis (le produit), Aegis
+Manager, Aegis Mobile et Aegis Control ne se traduisent pas. « Aegis Core » n'est
+plus utilisé : la signature temporaire est le symbole suivi de « aegis ».
 
 ## Domaine
 
@@ -84,7 +86,7 @@ Aegis, Aegis Manager, Aegis Mobile et Aegis Control ne se traduisent pas.
 | Adresse courriel | Email address | établi (FR) |
 | Mot de passe | Password | établi (FR) |
 | Session expirée | Session expired | établi (FR) |
-| Identifiant de suivi (libellé du `traceId`) | Trace ID | proposé; le Web l'introduit aujourd'hui par une phrase (voir la convention) |
+| Identifiant de suivi (libellé du `traceId`) | Trace ID | établi (décision de Philippe, 21 octobre 2026) |
 | Espace technicien | Technician access | proposé (iOS) |
 | Accès réservé aux techniciens | Technicians only | proposé (iOS) |
 
@@ -100,9 +102,13 @@ Aegis, Aegis Manager, Aegis Mobile et Aegis Control ne se traduisent pas.
 
 ## Signatures de marque
 
-Textes à valider par Philippe; le nom et le logo ne se traduisent pas.
+Décisions de Philippe du 21 octobre 2026; le nom et le logo ne se traduisent pas.
 
-| Français | English | Statut |
-|---|---|---|
-| Prêt. Autorisé. Prouvé. | Ready. Authorized. Proven. | proposé (v3; « Prêt » au sens de `READY`) |
-| Autorisé. Observé. Tracé. | Authorized. Observed. Traced. | en place sur l'accueil Web actuel, à concilier avec la signature v3 (#79) |
+| Rôle | Français | English | Statut |
+|---|---|---|---|
+| Signature commune | Prêt. Autorisé. Prouvé. | Ready. Authorized. Proven. | établi; « Prêt » au sens de `READY` |
+| Accroche secondaire | L’essentiel, sous contrôle. | What matters, under control. | établi |
+| Description | Disponibilité, conformité et traçabilité de vos équipements. | Equipment availability, compliance and traceability. | établi |
+
+L'ancienne accroche de l'accueil Web, « Autorisé. Observé. Tracé. », est remplacée
+par la signature commune avec l'intégration de #79.

@@ -110,10 +110,9 @@ Elles diffèrent : en français, 0 et 1 sont au singulier (« 0 seconde »,
   champ, du code de violation; il est rédigé dans les deux langues.
 - Le texte `detail` ou `message` renvoyé par le serveur n'est jamais affiché tel
   quel.
-- Le `traceId` s'affiche tel quel, sans traduction, introduit par un libellé ou
-  une phrase traduits. Le Web utilise aujourd'hui la phrase « transmettez ce code
-  au support : » / « give this code to support: »; un libellé visible commun
-  (« Identifiant de suivi » / « Trace ID ») reste une **décision ouverte**.
+- Le `traceId` s'affiche tel quel, sans traduction, après le libellé visible
+  commun au Web et à iOS : « Identifiant de suivi : » / « Trace ID: » (décision
+  de Philippe, 21 octobre 2026).
 - Après `429 RATE_LIMITED`, le délai s'affiche une seule fois et seulement à partir
   d'une valeur `Retry-After` valide : un entier de secondes. Le serveur envoie
   une valeur de 1 à 60; iOS refuse toute valeur hors de 1 à 3600. Sans valeur
