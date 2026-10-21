@@ -104,20 +104,35 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
   // The delay is shown once, in the alert, fixed when the 429 arrives: no per-second state, one timer to the deadline.
   useEffect(() => {
     if (lockDeadline === null) return
-    const timer = setTimeout(() => {
+    const release = () => {
       // Back to idle: the stale « Réessayez dans N secondes. » alert goes away (review R4).
       setLockDeadline(null)
       setOutcome({ kind: 'idle' })
       setStatusKey('rateLimitedReady')
-    }, Math.max(0, lockDeadline - Date.now()))
-    return () => clearTimeout(timer)
+    }
+    const timer = setTimeout(release, Math.max(0, lockDeadline - Date.now()))
+    // A timeout does not count system sleep: re-read the clock when the page comes back.
+    const recheck = () => {
+      if (Date.now() >= lockDeadline) release()
+    }
+    window.addEventListener('focus', recheck)
+    document.addEventListener('visibilitychange', recheck)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('focus', recheck)
+      document.removeEventListener('visibilitychange', recheck)
+    }
   }, [lockDeadline])
 
-  // The error sits below the button: at a high zoom or on a short screen, bring it into view without moving focus.
+  const arrivalReason = session.status === 'anonymous' ? session.arrivalReason : null
+
+  // The alert zone sits below the button: at a high zoom or on a short screen, bring an error or an
+  // arrival notice (session expired, signed out) into view without moving focus.
   useEffect(() => {
-    if (outcome.kind === 'idle' || outcome.kind === 'submitting') return
+    if (outcome.kind === 'submitting') return
+    if (outcome.kind === 'idle' && arrivalReason === null) return
     alertZoneRef.current?.scrollIntoView?.({ block: 'nearest' })
-  }, [outcome])
+  }, [outcome, arrivalReason])
 
   const locked = lockDeadline !== null
   const submitting = outcome.kind === 'submitting'
@@ -244,7 +259,7 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
     pendingFocus.current = 'email'
   }
 
-  const arrival = outcome.kind === 'idle' && session.status === 'anonymous' ? session.arrivalReason : null
+  const arrival = outcome.kind === 'idle' ? arrivalReason : null
   const alert = renderAlert({ id: ids.alert, outcome, arrival, unknownViolation, t, format })
   const alertDescribesPassword =
     outcome.kind === 'invalidCredentials' || arrival === 'sessionExpired' || arrival === 'sessionInvalid'

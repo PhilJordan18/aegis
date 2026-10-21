@@ -286,6 +286,22 @@ describe('SignInPage — rate limit', () => {
     expect(screen.getByText(t.rateLimitedReady).getAttribute('role')).toBe('status')
   })
 
+  it('unlocks when the page comes back after the deadline passed while its timer was suspended', async () => {
+    vi.useFakeTimers()
+    const { gateway } = gatewayReturning(httpProblem(429, problemBody(429, 'RATE_LIMITED'), '3'))
+    renderWithProviders(<SignInPage afterSignInPath="/" />, { gateway })
+    fireEvent.change(emailField(), { target: { value: 'admin@aegis.test' } })
+    fireEvent.change(passwordField(), { target: { value: 'x' } })
+    await act(async () => fireEvent.click(submitButton()))
+    expect(submitButton().getAttribute('aria-disabled')).toBe('true')
+
+    // System sleep: the wall clock passes the deadline, the suspended timeout has not fired.
+    vi.setSystemTime(Date.now() + 10_000)
+    await act(async () => document.dispatchEvent(new Event('visibilitychange')))
+    expect(submitButton().hasAttribute('aria-disabled')).toBe(false)
+    expect(screen.getByText(t.rateLimitedReady).getAttribute('role')).toBe('status')
+  })
+
   it('falls back to the approved copy and does not lock without Retry-After', async () => {
     const { gateway } = gatewayReturning(httpProblem(429, null))
     renderWithProviders(<SignInPage afterSignInPath="/" />, { gateway })
@@ -334,6 +350,24 @@ describe('SignInPage — role and session', () => {
     await fillAndSubmit()
     await waitFor(() => expect(window.location.pathname).toBe('/apres'))
     expect(session.getAccessToken()).toBe('admin-token')
+  })
+
+  it('after an expired session, brings the notice below the button into view without moving focus', async () => {
+    const scrollIntoView = vi.fn()
+    const original = HTMLElement.prototype.scrollIntoView
+    HTMLElement.prototype.scrollIntoView = scrollIntoView
+    try {
+      const session = createSessionStore()
+      session.end('sessionExpired', 'admin@aegis.demo')
+      renderWithProviders(<SignInPage afterSignInPath="/" />, { session })
+
+      const zone = scrollIntoView.mock.contexts.at(-1) as HTMLElement | undefined
+      expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'nearest' })
+      expect(zone?.textContent).toContain(t.sessionExpiredTitle)
+      expect(document.activeElement).toBe(passwordField())
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original
+    }
   })
 
   it('after an expired session: info status, email prefilled, password focused and described by the alert', async () => {
