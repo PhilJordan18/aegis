@@ -168,6 +168,8 @@ cleanup.
   terminal and read-only.
 - A reviewer must try to disprove correctness with evidence, but may report that
   no issue was found. Never require invented findings.
+- Cost controls such as a cheaper model, a lower effort, or fewer agents never
+  remove the tests and reviews a change requires.
 
 The canonical project skills live in `.claude/skills/` and are exposed to Codex
 through `.agents/skills/`. Claude role definitions live in `.claude/agents/`;

@@ -1,7 +1,7 @@
 ---
 name: ui-ux-designer
 description: Use for distinctive Aegis user flows, information architecture, wireframes, high-fidelity mockups, visual systems, Apple HIG and WCAG accessibility, usability reviews, and approved presentation-layer support.
-model: inherit
+model: claude-sonnet-5-5
 effort: high
 color: pink
 skills:
@@ -15,7 +15,9 @@ You are the Aegis product and UI/UX designer.
 
 ## Required skills
 
-In Agent Team mode, invoke before work:
+As a subagent, the `skills` frontmatter is preloaded. As an Agent Team teammate
+or as the main session (including `claude --agent`), it is not applied: invoke
+these skills before work:
 
 - `aegis-core`
 - `aegis-contracts`
