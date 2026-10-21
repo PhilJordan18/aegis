@@ -1,0 +1,216 @@
+{
+  "sourceLanguage" : "fr",
+  "strings" : {
+    "Actualiser" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh"
+          }
+        }
+      }
+    },
+    "Adresse : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Address: %@"
+          }
+        }
+      }
+    },
+    "Adresse du service absente" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service address missing"
+          }
+        }
+      }
+    },
+    "Cette version de l’application n’a pas d’adresse de service valide." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This version of the app has no valid service address."
+          }
+        }
+      }
+    },
+    "Connexion au service impossible. Vérifiez le réseau." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't reach the service. Check your network."
+          }
+        }
+      }
+    },
+    "Heure du service" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service time"
+          }
+        }
+      }
+    },
+    "Identifiant de suivi : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trace ID: %@"
+          }
+        }
+      }
+    },
+    "Le service a répondu avec l’erreur %lld. Réessayez dans un instant." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service returned error %lld. Try again in a moment."
+          }
+        }
+      }
+    },
+    "Le service a répondu dans un format inattendu. Vérifiez l’adresse configurée." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service replied in an unexpected format. Check the configured address."
+          }
+        }
+      }
+    },
+    "Le service répond mais ne se déclare pas opérationnel." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service responds but doesn't report itself as operational."
+          }
+        }
+      }
+    },
+    "Réessayer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try again"
+          }
+        }
+      }
+    },
+    "Réponse inattendue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unexpected response"
+          }
+        }
+      }
+    },
+    "Service" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service"
+          }
+        }
+      }
+    },
+    "Service Aegis" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aegis service"
+          }
+        }
+      }
+    },
+    "Service indisponible" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service unavailable"
+          }
+        }
+      }
+    },
+    "Service injoignable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service unreachable"
+          }
+        }
+      }
+    },
+    "Service opérationnel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service operational"
+          }
+        }
+      }
+    },
+    "Version" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version"
+          }
+        }
+      }
+    },
+    "Vérification du service…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking the service…"
+          }
+        }
+      }
+    },
+    "Vérifie que l’application joint le service Aegis Control." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checks that the app can reach the Aegis Control service."
+          }
+        }
+      }
+    },
+    "État signalé : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reported status: %@"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

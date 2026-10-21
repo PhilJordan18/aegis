@@ -1,0 +1,34 @@
+// Settings shared by every configuration and target.
+// Machine-specific values (signing team, bundle prefix, API address) belong in
+// the untracked Local.xcconfig; see Local.xcconfig.example.
+
+// iOS 17 is the oldest release offering the Observation framework used by the
+// presentation layer; it runs on the same iPhone models as iOS 18 (XS/XR and
+// later). Revisit once the demonstration iPhone model and version are known.
+IPHONEOS_DEPLOYMENT_TARGET = 17.0
+SDKROOT = iphoneos
+TARGETED_DEVICE_FAMILY = 1
+SWIFT_VERSION = 6.0
+
+MARKETING_VERSION = 0.1.0
+CURRENT_PROJECT_VERSION = 1
+
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM =
+AEGIS_BUNDLE_ID_PREFIX = com.example.aegis
+
+ALWAYS_SEARCH_USER_PATHS = NO
+ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES
+ENABLE_USER_SCRIPT_SANDBOXING = YES
+LOCALIZATION_PREFERS_STRING_CATALOGS = YES
+CLANG_ENABLE_MODULES = YES
+CLANG_ENABLE_OBJC_ARC = YES
+COPY_PHASE_STRIP = NO
+ENABLE_STRICT_OBJC_MSGSEND = YES
+GCC_C_LANGUAGE_STANDARD = gnu17
+GCC_NO_COMMON_BLOCKS = YES
+CLANG_WARN_DOCUMENTATION_COMMENTS = YES
+CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE
+GCC_WARN_UNUSED_VARIABLE = YES
+GCC_WARN_UNDECLARED_SELECTOR = YES
+STRING_CATALOG_GENERATE_SYMBOLS = YES
