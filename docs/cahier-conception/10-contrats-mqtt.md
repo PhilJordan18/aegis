@@ -262,7 +262,7 @@ Seuls les messages DEVICE_AVAILABILITY sont retenus : ONLINE, OFFLINE `SHUTDOWN`
 | lockerId | UUID | oui | Concorde avec identité et topic |
 | timestamp | instant UTC | oui | Horloge device synchronisée |
 | deviceSessionId | UUID | oui | Nouveau à chaque démarrage |
-| bootCount | entier >= 1 | oui | Augmente de 1 à chaque démarrage; identique pour tous les messages d’un démarrage |
+| bootCount | entier de 1 à 4 294 967 295 | oui | Augmente de 1 à chaque démarrage; identique pour tous les messages d’un démarrage |
 | sequence | entier >= 0 | oui | Croissant dans la session, attribué à la préparation du message, Last Will compris |
 | operationId | UUID | selon type | Requis pour un événement opérationnel |
 | compartmentId | UUID | selon type | Requis pour une cellule précise |
@@ -270,10 +270,14 @@ Seuls les messages DEVICE_AVAILABILITY sont retenus : ONLINE, OFFLINE `SHUTDOWN`
 messageId est l’identité idempotente. sequence aide au diagnostic et à l’ordre local, mais ne remplace jamais messageId.
 
 `deviceSessionId` identifie un démarrage; `bootCount` ordonne les démarrages d’un même
-hub. Le firmware conserve `bootCount` en mémoire non volatile (NVS) et l’incrémente au
-démarrage, avant tout message; deux démarrages ne partagent jamais la même valeur. Un
-nouveau provisionnement, qui efface la NVS, fait repartir le hub à 1 : la même
-procédure remet à zéro la référence de démarrage du backend pour ce device.
+hub. Le firmware conserve `bootCount` en mémoire non volatile (NVS), sur un entier non
+signé de 32 bits, et l’incrémente au démarrage, avant tout message; deux démarrages ne
+partagent jamais la même valeur. Le compteur appartient à l’identité du hub
+(`deviceKey`, §4.1) : un autre `deviceKey` est un autre device (`locker_devices`,
+doc 08), dont le compteur et la référence backend partent de zéro. Un nouveau
+provisionnement, qui efface la NVS, fait repartir le hub à 1 : la même procédure remet
+à zéro la référence de démarrage du backend pour ce device. Le plafond n’est pas
+atteignable en usage normal; s’il l’était, le hub devrait être reprovisionné.
 `connectionId` (§15) identifie une connexion MQTT à l’intérieur d’un démarrage.
 
 ### 8.2 Commandes émises par le backend
@@ -669,8 +673,9 @@ Un Last Will est préparé avant chaque connexion MQTT, pas seulement au démarr
 même topic, avec QoS 1 et retain=true. Il porte un nouveau `connectionId`, que
 partagent le ONLINE et les heartbeats publiés sur cette connexion. Dès qu’un Will a pu
 être consommé par le broker, c’est-à-dire dès qu’une connexion a été établie, le
-suivant reçoit un nouveau `messageId` et un nouveau `connectionId`; une tentative
-refusée avant CONNACK peut réutiliser le Will préparé.
+suivant reçoit un nouveau `messageId` et un nouveau `connectionId`. Une tentative sans
+CONNACK accepté, refusée ou interrompue, peut réutiliser le Will préparé : le broker ne
+l’a jamais armé.
 
 Sa `sequence` et son `timestamp` sont attribués à la préparation : ils peuvent être
 inférieurs à ceux de messages livrés avant lui, car le broker ne le publie qu’à la
@@ -1071,7 +1076,9 @@ Côté hub (vérifiables avec le simulateur) :
 4. La reconnexion republie ONLINE et un heartbeat courant; `bootCount` augmente de 1 à
    chaque démarrage et reste constant dans un démarrage.
 
-Côté backend (ingestion PHY-01) :
+Côté backend (ingestion PHY-01). Pour rejouer un message ancien, le simulateur
+republie son corps exact; rejouer un Will retenu remplace aussi le statut retenu du
+broker, comme le ferait un Will réellement tardif :
 
 5. Un ancien Will livré après une reconnexion et un heartbeat de la nouvelle connexion
    est enregistré; le locker reste ONLINE.
