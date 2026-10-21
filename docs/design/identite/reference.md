@@ -5,7 +5,7 @@ retenue par Philippe le 21 octobre 2026, avec le logo provisoire Aegis Core. Les
 versions finales du logo viendront du designer de Philippe. Issue : #79.
 
 **Propriété.** Cette référence et le dossier `assets/` appartiennent à la
-session API/Web, pour Philippe, comme le glossaire de la localisation (`docs/localisation/glossaire.md`, issue #78).
+session API/Web, pour Philippe, comme le [glossaire](../../localisation/glossaire.md) de la localisation.
 La session iOS propose ses ajouts ou corrections par message ou dans l'issue
 concernée. Chaque plateforme garde ses propres maquettes : `docs/design/manager-*`
 pour le Web, `docs/design/mobile-*` pour iOS.
@@ -57,13 +57,26 @@ sont pas concernés.
 | Anneau de focus | `#70A7FF30` | `#5B81C32B` |
 | Erreur : fond, texte | `#3B2024`, `#FFC9CB` | `#FFF0F1`, `#9E2837` |
 
-Ces valeurs viennent de la maquette et restent à vérifier en contraste sur
-chaque plateforme. Les anneaux de focus de la maquette sont translucides : chaque
-plateforme garantit un indicateur de focus conforme (WCAG 2.2 AA).
+Ces valeurs viennent de la maquette. Mesurées sur les rendus Web, la bordure des
+champs (1,60 / 1,39:1) et l'anneau de focus translucide (1,39 / 1,21:1) n'atteignent
+pas le contraste de 3:1 exigé pour les composants (WCAG 2.2, 1.4.11). Philippe a
+adopté, le 21 octobre 2026, les corrections suivantes :
+
+| Rôle ajouté | Sombre profond | Clair minéral | Mesure |
+|---|---|---|---|
+| Bordure des contrôles | `#5B6F88` | `#7A8BA1` | 3,53 / 3,48:1 |
+| Focus : anneau plein de 2 px, décalé de 2 px | `#8CAEFF` | `#234BCE` | 6,29 à 8,98:1 sur les rendus |
+| Élément sélectionné ou survolé | `#13213A` | `#E8EEFC` | Navigation |
+| Contrôle désactivé : fond, texte | `#1A2437`, `#8A99AF` | `#E3E8F1`, `#52627A` | Bouton verrouillé après 429 |
+
+Le halo translucide peut accompagner le focus, jamais le remplacer. Sur iOS, la
+bordure passe à la couleur de texte secondaire avec « Augmenter le contraste ».
 
 **Couleurs métier.** Les statuts (prêt, bloqué, à vérifier, en cours, anomalie)
-gardent leur sens et leurs rôles de chaque plateforme; ils ne sont pas définis par
-la v3 et doivent être revérifiés sur les nouveaux fonds. Le cyan du noyau est
+gardent leur sens et leurs rôles de chaque plateforme; ils sont revérifiés sur les
+nouveaux fonds. L'information utilise un bleu lisible, distinct des états de
+succès, d'avertissement et d'erreur, sans teinte indigo (décision de Philippe,
+21 octobre 2026). Le cyan du noyau est
 décoratif : il ne signifie jamais « disponible », « connecté » ni « sécurisé ».
 
 ## Règles d'usage du logo
@@ -81,13 +94,18 @@ décoratif : il ne signifie jamais « disponible », « connecté » ni « sécu
   SVG en police Inter (Arial à défaut). Leur rendu varie selon l'appareil tant
   que le designer n'a pas converti ce texte en tracés. Le symbole seul, sans
   texte, n'a pas cette limite.
-- Lisibilité (en-tête, deux fonds, petites tailles) et taille minimale : à
-  mesurer dans les rendus de chaque plateforme avant d'être fixées ici.
+- Tailles mesurées sur les rendus Web : le A reste lisible dès 16 px et le noyau
+  se lit comme un losange dès 20 px; 24 px est la taille minimale recommandée du
+  symbole (iOS fait la même recommandation, rendu vérifié à 34 pt). Dans l'en-tête
+  Web, le symbole mesure 28 px, 24 px en format compact.
 - Le nom et le logo ne se traduisent pas.
 
 ## Marque commune et noms d'application
 
-**Décision de Philippe, 21 octobre 2026.** La marque commune est « Aegis »,
+**Décisions de Philippe, 21 octobre 2026.** Aegis Studio est le collectif de
+Jimmy et Philippe; Aegis est le produit. L'harmonisation des crédits « Aegis
+Studio » est reportée à une tâche ultérieure, qui conserve les auteurs identifiés
+et les ADR acceptés. La marque commune est « Aegis »,
 portée par le symbole. Chaque application garde son nom : Aegis Manager (Web),
 Aegis Mobile (iOS), Aegis Control (API). Sur les écrans d'entrée des deux
 plateformes, la signature temporaire est le symbole suivi de « aegis » seul,
@@ -136,15 +154,21 @@ complètes (`aegis-core-logo*.svg`) ne sont pas utilisées dans les applications
 
 ## Vocabulaire
 
-Les termes métier suivent le glossaire de la localisation (`docs/localisation/glossaire.md`, issue #78). Textes
-proposés, à valider par Philippe :
+Les termes métier suivent le [glossaire](../../localisation/glossaire.md).
+Textes de marque retenus par Philippe le 21 octobre 2026 :
 
-- signature « Prêt. Autorisé. Prouvé. » / « Ready. Authorized. Proven. »
+- signature commune « Prêt. Autorisé. Prouvé. » / « Ready. Authorized. Proven. »
   (« Prêt » au sens de `READY`);
-- « Espace technicien » / « Technician access » (iOS).
+- accroche secondaire « L’essentiel, sous contrôle. » / « What matters, under
+  control. »;
+- description « Disponibilité, conformité et traçabilité de vos équipements. » /
+  « Equipment availability, compliance and traceability. ».
+
+« Espace technicien » / « Technician access » reste une proposition d'iOS.
 
 ## Décisions ouvertes
 
-- Conversion en tracés du texte des signatures par le designer.
-- Tailles minimales du logo, après mesure dans les rendus.
-- Validation des textes de signature en français et en anglais.
+- Versions finales du logo par le designer (attendues sous deux à sept jours) :
+  signatures vectorisées, versions mono, claire et sombre, petite taille et
+  règles d'espacement.
+- Imposer ou non les formats `fr-CA` et `en-CA` sur iOS.
