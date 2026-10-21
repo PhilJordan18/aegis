@@ -1,6 +1,9 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { AppearanceSwitch } from '../../features/appearance/AppearanceSwitch'
 import type { UserProfile } from '../../features/auth/contract'
+import { LanguageSwitch } from '../../features/language/LanguageSwitch'
+import type { Messages } from '../../i18n/messages'
+import { useI18n } from '../../i18n/useI18n'
 import { Brand } from '../../ui/Brand'
 import { Icon, type IconName } from '../../ui/Icon'
 import { Link } from '../Link'
@@ -11,23 +14,23 @@ import './shell.css'
  * Order imposed by sections.md §5 and handoff §6 SidebarNav. Only Équipements exists in this slice:
  * the static preview in design-review builds, the protected page otherwise.
  */
-const SECTIONS: readonly { label: string; icon: IconName; path: string | null }[] = [
-  { label: "Vue d'ensemble", icon: 'grid', path: null },
-  { label: 'Équipements', icon: 'box', path: pathOf(__AEGIS_PREVIEW__ ? 'equipmentPreview' : 'equipment') },
-  { label: 'Réservations et prêts', icon: 'calendar', path: null },
-  { label: 'Casiers', icon: 'locker', path: null },
-  { label: 'Anomalies', icon: 'alert', path: null },
-  { label: 'Audit', icon: 'list', path: null },
+const SECTIONS: readonly { id: keyof Messages['shell']['sections']; icon: IconName; path: string | null }[] = [
+  { id: 'overview', icon: 'grid', path: null },
+  { id: 'equipment', icon: 'box', path: pathOf(__AEGIS_PREVIEW__ ? 'equipmentPreview' : 'equipment') },
+  { id: 'reservationsLoans', icon: 'calendar', path: null },
+  { id: 'lockers', icon: 'locker', path: null },
+  { id: 'anomalies', icon: 'alert', path: null },
+  { id: 'audit', icon: 'list', path: null },
 ]
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
-function initials(displayName: string): string {
+function initials(displayName: string, upperCase: (value: string) => string): string {
   return displayName
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
-    .map((part) => part[0]?.toLocaleUpperCase('fr-CA') ?? '')
+    .map((part) => upperCase(part[0] ?? ''))
     .join('')
 }
 
@@ -39,13 +42,14 @@ interface ShellProps {
 }
 
 export function ManagerShell({ currentPath, profile, onSignOut, children }: ShellProps) {
+  const { m } = useI18n()
   return (
     <div className="ag-shell">
       <div className="ag-shell__bg ag-decor" aria-hidden="true" />
       <a className="ag-skip" href="#contenu">
-        Aller au contenu principal
+        {m.shell.skipLink}
       </a>
-      <nav className="ag-side ag-glass" aria-label="Sections">
+      <nav className="ag-side ag-glass" aria-label={m.shell.sectionsLabel}>
         <div className="ag-side__brand">
           <Brand />
         </div>
@@ -61,21 +65,22 @@ export function ManagerShell({ currentPath, profile, onSignOut, children }: Shel
 }
 
 function SectionList({ currentPath }: { readonly currentPath: string }) {
+  const { m } = useI18n()
   return (
     <>
       <ul className="ag-nav">
         {SECTIONS.map((section) => (
-          <li key={section.label}>
+          <li key={section.id}>
             {section.path !== null ? (
               <Link className="ag-nav__item" to={section.path} aria-current={section.path === currentPath ? 'page' : undefined}>
                 <Icon name={section.icon} />
-                {section.label}
+                {m.shell.sections[section.id]}
               </Link>
             ) : (
               <span className="ag-nav__item ag-nav__item--soon" aria-disabled="true">
                 <Icon name={section.icon} />
-                {section.label}
-                <span className="ag-sr-only">, à venir</span>
+                {m.shell.sections[section.id]}
+                <span className="ag-sr-only">{m.shell.soonSuffix}</span>
                 <span className="ag-soon" aria-hidden="true" />
               </span>
             )}
@@ -84,13 +89,14 @@ function SectionList({ currentPath }: { readonly currentPath: string }) {
       </ul>
       <p className="ag-nav__legend" aria-hidden="true">
         <span className="ag-soon" />
-        Section à venir
+        {m.shell.soonLegend}
       </p>
     </>
   )
 }
 
 function AccountDetails({ profile, onSignOut }: { readonly profile: UserProfile; readonly onSignOut: () => void }) {
+  const { m } = useI18n()
   return (
     <>
       <div className="ag-menu__id">
@@ -100,9 +106,11 @@ function AccountDetails({ profile, onSignOut }: { readonly profile: UserProfile;
       <div className="ag-menu__sep" />
       <AppearanceSwitch />
       <div className="ag-menu__sep" />
+      <LanguageSwitch />
+      <div className="ag-menu__sep" />
       <button type="button" className="ag-menu__item" onClick={onSignOut}>
         <Icon name="logout" />
-        Se déconnecter
+        {m.shell.signOut}
       </button>
     </>
   )
@@ -110,6 +118,7 @@ function AccountDetails({ profile, onSignOut }: { readonly profile: UserProfile;
 
 /** Disclosure, not role="menu": Tab moves through it, Escape and an outside click close it (handoff §6). */
 function AccountMenu({ profile, onSignOut }: { readonly profile: UserProfile; readonly onSignOut: () => void }) {
+  const { m, format } = useI18n()
   const [open, setOpen] = useState(false)
   const panelId = useId()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -142,15 +151,15 @@ function AccountMenu({ profile, onSignOut }: { readonly profile: UserProfile; re
         onClick={() => setOpen((current) => !current)}
       >
         <span className="ag-avatar" aria-hidden="true">
-          {initials(profile.displayName)}
+          {initials(profile.displayName, format.upperCase)}
         </span>
         <span className="ag-account__who">
           <span className="ag-account__name">{profile.displayName}</span>
-          <span className="ag-account__role">Administrateur</span>
+          <span className="ag-account__role">{m.shell.administratorRole}</span>
         </span>
         <Icon name="updown" className="ag-account__chevron" />
       </button>
-      <div id={panelId} className="ag-menu" role="group" aria-label="Compte" hidden={!open}>
+      <div id={panelId} className="ag-menu" role="group" aria-label={m.shell.accountLabel} hidden={!open}>
         <AccountDetails profile={profile} onSignOut={onSignOut} />
       </div>
     </div>
@@ -159,6 +168,7 @@ function AccountMenu({ profile, onSignOut }: { readonly profile: UserProfile; re
 
 /** Below 1024 px: glass top bar and a modal drawer (native <dialog>: focus trapped, Escape, focus returned). */
 function CompactNav({ currentPath, profile, onSignOut }: Omit<ShellProps, 'children'>) {
+  const { m } = useI18n()
   const dialogRef = useRef<HTMLDialogElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const titleId = useId()
@@ -191,7 +201,7 @@ function CompactNav({ currentPath, profile, onSignOut }: Omit<ShellProps, 'child
           ref={triggerRef}
           type="button"
           className="ag-icon-button"
-          aria-label="Ouvrir le menu"
+          aria-label={m.shell.openMenu}
           aria-haspopup="dialog"
           onClick={() => dialogRef.current?.showModal()}
         >
@@ -212,16 +222,16 @@ function CompactNav({ currentPath, profile, onSignOut }: Omit<ShellProps, 'child
         <div className="ag-drawer__panel">
           <div className="ag-drawer__head">
             <h2 id={titleId} className="ag-drawer__title">
-              Menu
+              {m.shell.menuTitle}
             </h2>
-            <button type="button" className="ag-icon-button" aria-label="Fermer le menu" onClick={close}>
+            <button type="button" className="ag-icon-button" aria-label={m.shell.closeMenu} onClick={close}>
               <Icon name="close" />
             </button>
           </div>
-          <nav aria-label="Sections">
+          <nav aria-label={m.shell.sectionsLabel}>
             <SectionList currentPath={currentPath} />
           </nav>
-          <div className="ag-drawer__account" role="group" aria-label="Compte">
+          <div className="ag-drawer__account" role="group" aria-label={m.shell.accountLabel}>
             <AccountDetails profile={profile} onSignOut={onSignOut} />
           </div>
         </div>

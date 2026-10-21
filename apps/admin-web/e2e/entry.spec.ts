@@ -78,10 +78,13 @@ test.describe('flow:', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Équipements' })).toBeFocused()
   })
 
-  test('flow: sign-in tab order starts at « Accueil », then the brand, then the email field', async ({ page }) => {
+  test('flow: sign-in tab order starts at « Accueil », then the language switch, the brand, then the email field', async ({ page }) => {
     await page.goto('/connexion')
     await settle(page)
     await page.getByRole('link', { name: 'Accueil', exact: true }).focus()
+    await page.keyboard.press('Tab')
+    // One tab stop for the whole radio group: the checked option (French here, from the browser language).
+    await expect(page.getByRole('radio', { name: 'Français' })).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(page.getByRole('link', { name: 'Aegis Manager, accueil' })).toBeFocused()
     await page.keyboard.press('Tab')
