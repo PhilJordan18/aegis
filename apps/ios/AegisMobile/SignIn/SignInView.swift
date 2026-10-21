@@ -6,6 +6,9 @@ struct SignInView: View {
     var initialFocus: SessionModel.Field?
 
     @FocusState private var focus: SessionModel.Field?
+    /// VoiceOver focus follows the first invalid field; the keyboard focus alone
+    /// does not move the VoiceOver cursor.
+    @AccessibilityFocusState private var voiceOverFocus: SessionModel.Field?
     @State private var revealsPassword = false
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -34,6 +37,11 @@ struct SignInView: View {
         }
         .onAppear {
             if let initialFocus { focus = initialFocus }
+            // Expiry, invalid session and sign-out set the notice before this
+            // screen appears; onChange would not see it.
+            if let notice = session.notice {
+                AccessibilityNotification.Announcement(SignInText.message(for: notice)).post()
+            }
         }
         .onChange(of: session.notice) { _, notice in
             guard let notice else { return }
@@ -88,6 +96,7 @@ struct SignInView: View {
                     .onSubmit { focus = .password }
                     .frame(minHeight: 30)
                     .accessibilityLabel(Text("Adresse courriel"))
+                    .accessibilityFocused($voiceOverFocus, equals: .email)
                     .accessibilityIdentifier("signin.email")
             }
             Rectangle().fill(Color.fieldEdge).frame(height: 1).accessibilityHidden(true)
@@ -110,6 +119,7 @@ struct SignInView: View {
                     .frame(minHeight: 30)
                     // An empty prompt would otherwise leave the field unnamed.
                     .accessibilityLabel(Text("Mot de passe"))
+                    .accessibilityFocused($voiceOverFocus, equals: .password)
                     .accessibilityIdentifier("signin.password")
 
                     Button {
@@ -151,8 +161,10 @@ struct SignInView: View {
             await session.signIn()
             if session.emailError != nil {
                 focus = .email
+                voiceOverFocus = .email
             } else if session.passwordError != nil || session.notice == .rejected {
                 focus = .password
+                voiceOverFocus = .password
             }
         }
     }

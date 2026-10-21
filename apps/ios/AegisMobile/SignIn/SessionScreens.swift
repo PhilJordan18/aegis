@@ -65,6 +65,7 @@ struct OfflineResumeView: View {
 struct WrongRoleView: View {
     let session: SessionModel
     let email: String
+    let isAdministrator: Bool
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
@@ -76,7 +77,9 @@ struct WrongRoleView: View {
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("wrongRole.title")
             NoticeBanner(
-                message: String(localized: "Ce compte administrateur s’utilise dans Aegis Manager sur le Web. Aucune donnée n’a été chargée."),
+                message: isAdministrator
+                    ? String(localized: "Ce compte administrateur s’utilise dans Aegis Manager sur le Web. Aucune donnée n’a été chargée.")
+                    : String(localized: "Ce compte n’a pas accès à l’application Aegis. Aucune donnée n’a été chargée."),
                 isError: true)
                 .padding(.top, 14)
             VStack(alignment: .leading, spacing: 2) {

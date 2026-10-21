@@ -91,6 +91,16 @@
         }
       }
     },
+    "Ce compte n’a pas accès à l’application Aegis. Aucune donnée n’a été chargée." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This account can't use the Aegis app. No data was loaded."
+          }
+        }
+      }
+    },
     "Cette version de l’application n’a pas d’adresse de service valide." : {
       "localizations" : {
         "en" : {

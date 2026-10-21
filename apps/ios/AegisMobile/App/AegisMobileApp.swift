@@ -73,8 +73,8 @@ struct SessionRootView: View {
                 OfflineResumeView(session: session)
             case let .signedIn(profile):
                 AccountView(session: session, profile: profile, health: health)
-            case let .wrongRole(email):
-                WrongRoleView(session: session, email: email)
+            case let .wrongRole(email, isAdministrator):
+                WrongRoleView(session: session, email: email, isAdministrator: isAdministrator)
             }
         }
         .task { await session.start() }

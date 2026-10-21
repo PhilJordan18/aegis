@@ -3,13 +3,18 @@ import Security
 
 /// What survives a relaunch: the opaque token, its expiry and the account
 /// address used to prefill the form after expiry. Never logged.
-struct StoredSession: Codable, Equatable, Sendable, CustomDebugStringConvertible {
+struct StoredSession: Codable, Equatable, Sendable, CustomDebugStringConvertible, CustomReflectable {
     let accessToken: String
     let expiresAt: Date
     let email: String
 
     var debugDescription: String {
         "StoredSession(accessToken: <redacted>, expiresAt: \(expiresAt))"
+    }
+
+    /// `dump` and `Mirror` see no token either.
+    var customMirror: Mirror {
+        Mirror(self, children: ["expiresAt": expiresAt], displayStyle: .struct)
     }
 }
 

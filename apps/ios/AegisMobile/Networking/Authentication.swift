@@ -2,13 +2,17 @@ import Foundation
 
 /// `POST /auth/login` body (doc 09 §10.2). Unknown request fields are rejected
 /// by the API, so nothing else is sent.
-struct LoginRequest: Encodable, Sendable {
+struct LoginRequest: Encodable, Sendable, CustomReflectable {
     let email: String
     let password: String
+
+    var customMirror: Mirror {
+        Mirror(self, children: ["email": email], displayStyle: .struct)
+    }
 }
 
 /// `POST /auth/login` response. The token is opaque to the client.
-struct LoginResponse: Decodable, Equatable, Sendable, CustomDebugStringConvertible {
+struct LoginResponse: Decodable, Equatable, Sendable, CustomDebugStringConvertible, CustomReflectable {
     let accessToken: String
     let tokenType: String
     let expiresIn: Int
@@ -17,6 +21,10 @@ struct LoginResponse: Decodable, Equatable, Sendable, CustomDebugStringConvertib
 
     var debugDescription: String {
         "LoginResponse(accessToken: <redacted>, expiresAt: \(expiresAt), user: \(user.id))"
+    }
+
+    var customMirror: Mirror {
+        Mirror(self, children: ["expiresAt": expiresAt, "user": user], displayStyle: .struct)
     }
 }
 

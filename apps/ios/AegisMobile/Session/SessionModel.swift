@@ -40,7 +40,8 @@ final class SessionModel {
         case resumeOffline
         case signedIn(UserProfile)
         /// A non-technician account signed in; its token was discarded (U6).
-        case wrongRole(email: String)
+        /// Unknown roles are refused too, with a neutral message.
+        case wrongRole(email: String, isAdministrator: Bool)
     }
 
     static let maximumEmailLength = 320
@@ -63,6 +64,9 @@ final class SessionModel {
     private let sleep: @Sendable (Duration) async throws -> Void
     private var expiryTask: Task<Void, Never>?
     private var unlockTask: Task<Void, Never>?
+    /// Bumped by every transition that supersedes an in-flight request, so a
+    /// late answer (a resume after sign-out, for example) is dropped.
+    private var generation = 0
 
     init(auth: any AuthenticationService,
          store: any SessionStore,
@@ -98,15 +102,23 @@ final class SessionModel {
 
     private func resumeStoredSession() async {
         let stored: StoredSession?
-        do {
+        do throws(SessionStoreError) {
             stored = try store.load()
-        } catch {
+        } catch .corrupted {
             // An unreadable item is useless; start over without a session.
-            try? store.delete()
+            removeStoredSession()
+            showSignIn(notice: nil)
+            return
+        } catch {
+            // A Keychain refusal can be transient (device locked): keep the item;
+            // a new sign-in replaces it.
             showSignIn(notice: nil)
             return
         }
-        guard let stored else {
+        // An empty token is the tombstone written when a sign-out could not
+        // delete the item: there is no session.
+        guard let stored, !stored.accessToken.isEmpty else {
+            if stored != nil { removeStoredSession() }
             showSignIn(notice: nil)
             return
         }
@@ -114,12 +126,19 @@ final class SessionModel {
             discardSession(prefill: stored.email, notice: .expired)
             return
         }
+        let request = advanceGeneration()
         do throws(APIError) {
             let profile = try await auth.currentProfile(bearer: stored.accessToken)
-            accept(profile, expiresAt: stored.expiresAt)
+            guard request == generation else { return }
+            accept(profile, deadline: stored.expiresAt)
         } catch let .http(status, problem, _) where status == 401 || status == 403 {
+            guard request == generation else { return }
+            // `/auth/me` only checks the caller's own account: a 403 there means
+            // the account may not use the app (doc 09 leaves disabled accounts
+            // open between 401 and 403), unlike a business 403.
             discardSession(prefill: stored.email, notice: Self.notice(forUnauthorized: problem?.code))
         } catch {
+            guard request == generation else { return }
             phase = .resumeOffline
         }
     }
@@ -140,30 +159,38 @@ final class SessionModel {
         isSubmitting = true
         notice = nil
         defer { isSubmitting = false }
+        let request = advanceGeneration()
         do throws(APIError) {
             let response = try await auth.login(email: address, password: password)
+            guard request == generation else { return }
             password = ""
             guard response.user.role == .technician else {
                 // U6: no data is loaded and the token is not kept.
-                showWrongRole(email: response.user.email)
+                showWrongRole(response.user)
                 return
             }
+            // The deadline follows the device clock from `expiresIn`, so a
+            // skewed device clock neither expires nor extends the session early.
+            let deadline = now().addingTimeInterval(TimeInterval(response.expiresIn))
             let session = StoredSession(accessToken: response.accessToken,
-                                        expiresAt: response.expiresAt, email: response.user.email)
+                                        expiresAt: deadline, email: response.user.email)
             do {
                 try store.save(session)
             } catch {
                 notice = .storageFailed
                 return
             }
-            accept(response.user, expiresAt: response.expiresAt)
+            accept(response.user, deadline: deadline)
         } catch .cancelled {
             return
         } catch let .http(status, problem, retryAfter) {
+            guard request == generation else { return }
             handleSignInFailure(status: status, problem: problem, retryAfter: retryAfter)
         } catch .unreachable {
+            guard request == generation else { return }
             notice = .unreachable
         } catch {
+            guard request == generation else { return }
             notice = .serviceError(traceId: nil)
         }
     }
@@ -192,7 +219,7 @@ final class SessionModel {
             if fields.contains("password") { passwordError = .passwordRejected }
             if emailError == nil, passwordError == nil { notice = .invalidFields }
         default:
-            notice = .serviceError(traceId: problem?.traceId)
+            notice = .serviceError(traceId: problem?.traceId.flatMap(Self.displayableTraceId))
         }
     }
 
@@ -215,7 +242,8 @@ final class SessionModel {
 
     /// Ends the session locally; no server route exists (doc 09 §4.2).
     func signOut() {
-        try? store.delete()
+        advanceGeneration()
+        removeStoredSession()
         expiryTask?.cancel()
         expiresAt = nil
         email = ""
@@ -224,12 +252,14 @@ final class SessionModel {
     }
 
     func useAnotherAccount() {
+        advanceGeneration()
         email = ""
         password = ""
         showSignIn(notice: nil)
     }
 
-    /// Called by any authenticated request that receives 401 or 403.
+    /// Called by an authenticated request that receives 401. A 403 is a
+    /// refusal of that action (doc 09 §4.3) and keeps the session.
     func handleUnauthorized(code: String?) {
         guard case let .signedIn(profile) = phase else { return }
         discardSession(prefill: profile.email, notice: Self.notice(forUnauthorized: code))
@@ -241,37 +271,46 @@ final class SessionModel {
         discardSession(prefill: profile.email, notice: .expired)
     }
 
-    private func accept(_ profile: UserProfile, expiresAt: Date) {
+    private func accept(_ profile: UserProfile, deadline: Date) {
         guard profile.role == .technician else {
-            showWrongRole(email: profile.email)
+            showWrongRole(profile)
             return
         }
-        self.expiresAt = expiresAt
+        advanceGeneration()
+        expiresAt = deadline
         email = ""
         password = ""
         notice = nil
         phase = .signedIn(profile)
-        scheduleExpiry(at: expiresAt)
+        scheduleExpiry(at: deadline)
     }
 
-    private func scheduleExpiry(at date: Date) {
+    /// Sleeps until the deadline, re-checking after each wake: the wall clock
+    /// may have moved while the app slept.
+    private func scheduleExpiry(at deadline: Date) {
         expiryTask?.cancel()
-        let delay = Duration.seconds(max(0, date.timeIntervalSince(now())))
-        expiryTask = Task { [weak self, sleep] in
-            try? await sleep(delay)
-            guard !Task.isCancelled else { return }
-            self?.checkExpiry()
+        expiryTask = Task { [weak self, sleep, now] in
+            while !Task.isCancelled {
+                let remaining = deadline.timeIntervalSince(now())
+                if remaining <= 0 {
+                    self?.checkExpiry()
+                    return
+                }
+                try? await sleep(.seconds(remaining))
+            }
         }
     }
 
-    private func showWrongRole(email: String) {
-        try? store.delete()
+    private func showWrongRole(_ profile: UserProfile) {
+        advanceGeneration()
+        removeStoredSession()
         password = ""
-        phase = .wrongRole(email: email)
+        phase = .wrongRole(email: profile.email, isAdministrator: profile.role == .admin)
     }
 
     private func discardSession(prefill email: String, notice: SignInNotice) {
-        try? store.delete()
+        advanceGeneration()
+        removeStoredSession()
         expiryTask?.cancel()
         expiresAt = nil
         self.email = email
@@ -286,7 +325,32 @@ final class SessionModel {
         phase = .signIn
     }
 
+    @discardableResult
+    private func advanceGeneration() -> Int {
+        generation += 1
+        return generation
+    }
+
+    /// The token must not survive a sign-out (doc 09 §4.2): if the item cannot
+    /// be deleted, it is overwritten with an expired, empty session.
+    private func removeStoredSession() {
+        do {
+            try store.delete()
+        } catch {
+            try? store.save(StoredSession(accessToken: "", expiresAt: .distantPast, email: ""))
+        }
+    }
+
     // MARK: Rules
+
+    /// Trace identifiers are shown verbatim; anything else a proxy might send
+    /// is dropped rather than displayed.
+    static func displayableTraceId(_ value: String) -> String? {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-"))
+        guard (1...64).contains(value.count), value.unicodeScalars.allSatisfy(allowed.contains),
+              value.allSatisfy(\.isASCII) else { return nil }
+        return value
+    }
 
     private static func notice(forUnauthorized code: String?) -> SignInNotice {
         code == "AUTH_TOKEN_EXPIRED" ? .expired : .invalidSession
