@@ -60,7 +60,8 @@ agent.
 3. Lire les critères de l'issue et seulement les contrats touchés.
 4. Réaliser la plus petite tranche verticale qui satisfait les critères, avec
    ses tests.
-5. Commits Conventional Commits sur la branche d'issue.
+5. Petits commits Conventional Commits, cohérents et vérifiés, sur la branche
+   d'issue, au fil du travail.
 6. Passer la porte de livraison, puis ouvrir la PR vers `dev`.
 
 ## Porte de livraison « deliver »
@@ -77,7 +78,8 @@ Aucune PR n'est ouverte sans cette porte. Elle suit le skill
 - **Next owner** : relecteur ou décision attendue.
 
 Le rapport est relu par un humain. Sa réponse explicite **« deliver »** autorise
-à pousser la branche et à ouvrir la PR. Sans ce mot, l'agent s'arrête au rapport.
+à pousser la branche et à ouvrir la PR. Sans ce mot, l'agent s'arrête au
+rapport et ses commits restent locaux.
 
 ## Pull requests et fusion
 
@@ -176,5 +178,10 @@ vérification n’est pas évidente.
 - Exécuter les tests et validations pertinents avant le commit.
 - Ne jamais présenter une compilation comme preuve suffisante.
 - Consigner les commandes, résultats, limites et risques connus.
-- Un agent ne commit, ne pousse, ne fusionne et ne déploie pas sans
-  autorisation humaine explicite; une PR exige en plus la porte « deliver ».
+- Dans une tâche autorisée, un agent crée régulièrement de petits commits
+  locaux vérifiés sur la branche d'issue, sans demander d'autorisation pour
+  chacun.
+- Il ne pousse pas, n'ouvre pas de PR, ne fusionne pas, ne déploie pas et ne
+  réécrit pas l'historique (amend, rebase, squash, reset, force push) sans
+  accord humain. Le push et la PR exigent la porte « deliver »; la fusion reste
+  humaine.

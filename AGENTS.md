@@ -108,8 +108,11 @@ infra/docker/compose.yaml up -d --wait` from the repository root and
 `services/api/`. The example credentials are for an isolated local simulator
 only. Do not invent commands for components that are not initialized yet.
 
-Do not commit, push, merge, release, deploy, perform destructive migrations, or
-alter Git history without explicit human authorization.
+Within an authorized task, commit small, coherent, verified changes locally on
+the issue branch without asking for each commit. Do not push, open a pull
+request, merge, release, deploy, perform destructive migrations, or rewrite Git
+history without explicit human authorization; pushing and opening the pull
+request require the delivery gate below.
 
 ## Git workflow
 
@@ -123,6 +126,10 @@ holds the full workflow.
 - Work on one issue per branch, created from an up-to-date `dev` and named
   `<issue>-<type>-<slug>` with a Conventional Commit type, for example
   `25-feat-asset-catalog`. Ask for the issue number when it is unknown.
+- Commit regularly on the issue branch: each commit is one coherent step whose
+  relevant verification passed. Do not amend, rebase, squash, reset, or
+  force-push existing commits without human agreement; correct a mistake with a
+  new commit.
 - Before any pull request, pass the delivery gate of the `aegis-delivery`
   skill: produce the delivery report and stop. Push the branch and open the
   pull request into `dev` only after the human answers "deliver".
@@ -131,7 +138,7 @@ holds the full workflow.
 
 ## Commit convention
 
-When a human authorizes a commit, use Conventional Commits:
+Every commit uses Conventional Commits:
 
 ```text
 type(optional-scope): short imperative description
