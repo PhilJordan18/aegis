@@ -1,13 +1,18 @@
 import { useId } from 'react'
 import { Link } from '../app/Link'
 import { pathOf } from '../app/routes'
+import { useI18n } from '../i18n/useI18n'
 import './brand.css'
 
-/** Provisional wordmark (handoff §6, Q6): no approved logo yet. */
+/**
+ * Provisional wordmark (handoff §6, Q6): no approved logo yet. The mark and the
+ * product name « Aegis Manager » are never translated; only the link's accessible name is.
+ */
 export function Brand() {
   const gradient = useId()
+  const { m } = useI18n()
   return (
-    <Link className="ag-brand" to={pathOf('landing')} aria-label="Aegis Manager, accueil">
+    <Link className="ag-brand" to={pathOf('landing')} aria-label={m.brand.homeLabel}>
       <svg className="ag-brand__mark" viewBox="0 0 26 26" aria-hidden="true" focusable="false">
         <defs>
           <linearGradient id={gradient} x1="0" y1="0" x2="1" y2="1">

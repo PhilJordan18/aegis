@@ -1,5 +1,7 @@
 import { PageHeading, PAGE_HEADING_ID } from '../app/PageHeading'
 import { pathOf } from '../app/routes'
+import { LanguageSwitch } from '../features/language/LanguageSwitch'
+import { useI18n } from '../i18n/useI18n'
 import { Brand } from '../ui/Brand'
 import { ButtonLink } from '../ui/Button'
 import { Cells } from '../ui/Cells'
@@ -7,51 +9,51 @@ import { Icon } from '../ui/Icon'
 import { StatusChip } from '../ui/StatusChip'
 import './landing.css'
 
-/** Copy: handoff §7, all [P] except the account note [A]. No data, no request. */
-const GUARANTEES: readonly [title: string, text: string][] = [
-  ['Disponibilité réelle', "Chaque équipement indique s'il peut servir; sinon, la raison précise : calibration expirée, maintenance, absence de sa cellule."],
-  ['Retrait conforme', "Le serveur refuse un retrait non autorisé ou non conforme; l'interface l'explique, elle ne le décide pas."],
-  ['Bonne cellule', "Seule la cellule attendue s'ouvre, après une autorisation valide. Une réservation ou un code affiché n'ouvre rien."],
-  ['Preuve physique', 'Retrait et retour sont confirmés par des observations cohérentes du casier, jamais par un simple clic.'],
-  ['Chaîne de possession', "Chaque action et chaque observation restent consultables dans l'audit, sans effacement."],
-]
+/** Illustrative calibration expiry of the mock unit: a calendar date, shown at noon UTC so no zone can shift its day. */
+const MOCK_EXPIRY = new Date('2026-09-08T12:00:00Z')
+const GUARANTEE_IDS = ['readiness', 'checkout', 'compartment', 'proof', 'custody'] as const
 
 export function LandingPage() {
+  const { m, format } = useI18n()
+  const t = m.landing
   const signIn = pathOf('signIn')
   return (
     <div className="ag-landing">
       <header className="ag-landing__head">
         <Brand />
-        <ButtonLink to={signIn} variant="secondary" size="sm">
-          Se connecter
-        </ButtonLink>
+        <div className="ag-landing__tools">
+          <LanguageSwitch compact />
+          <ButtonLink to={signIn} variant="secondary" size="sm">
+            {t.signIn}
+          </ButtonLink>
+        </div>
       </header>
 
       <main id="contenu" tabIndex={-1}>
         <section className="ag-hero" aria-labelledby={PAGE_HEADING_ID}>
           <div className="ag-hero__copy">
-            <p className="ag-overline">Aegis Manager · console d'administration</p>
+            <p className="ag-overline">{t.overline}</p>
             <PageHeading className="ag-display">
-              Autorisé<span className="ag-display__dot">.</span>
-              <br /> Observé<span className="ag-display__dot">.</span>
-              <br /> Tracé<span className="ag-display__dot">.</span>
+              {t.heroLine1}
+              <span className="ag-display__dot">.</span>
+              <br /> {t.heroLine2}
+              <span className="ag-display__dot">.</span>
+              <br /> {t.heroLine3}
+              <span className="ag-display__dot">.</span>
             </PageHeading>
-            <p className="ag-hero__lead">
-              Aegis montre si chaque équipement critique peut servir, n'ouvre que la cellule attendue et conserve une chaîne de possession
-              complète, du retrait au retour.
-            </p>
+            <p className="ag-hero__lead">{t.lead}</p>
             <div className="ag-hero__cta">
               <ButtonLink to={signIn} variant="primary" size="lg" className="ag-hero__primary">
-                Se connecter
+                {t.signIn}
                 <Icon name="arrow" />
               </ButtonLink>
               <a className="ag-link" href="#garanties">
-                Voir les cinq garanties
+                {t.seeGuarantees}
               </a>
             </div>
             <p className="ag-hero__mention">
               <Icon name="info" />
-              Compte fourni par votre administrateur.
+              {t.accountNote}
             </p>
           </div>
 
@@ -59,15 +61,15 @@ export function LandingPage() {
             <Cells count={42} lit={15} litCompact={9} className="ag-atmos__cells" />
             <figure className="ag-atmos__figure">
               <figcaption>
-                <span className="ag-overline">Diagnostic d'un exemplaire</span>
-                <span className="ag-mock">Exemple illustratif</span>
+                <span className="ag-overline">{t.mockCaption}</span>
+                <span className="ag-mock">{t.mockBadge}</span>
               </figcaption>
               <div className="ag-mini">
                 <StatusChip role="blocked" icon="status-blocked">
-                  1 empêchement
+                  {t.blockers({ count: 1 })}
                 </StatusChip>
                 <p className="ag-mini__reason">
-                  Calibration expirée depuis le <span className="ag-nowrap">8 sept. 2026</span>
+                  {t.calibrationExpired({ date: format.date(MOCK_EXPIRY, 'UTC') })}
                 </p>
                 <p className="ag-mini__name">
                   Multimètre 2<span className="ag-mini__code">MM-002</span>
@@ -75,7 +77,7 @@ export function LandingPage() {
               </div>
               <div className="ag-mini">
                 <StatusChip role="neutral" icon="status-info">
-                  Aucun empêchement détecté
+                  {t.noBlockers}
                 </StatusChip>
                 <p className="ag-mini__name">
                   Multimètre 1<span className="ag-mini__code">MM-001</span>
@@ -85,15 +87,15 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section id="garanties" className="ag-guarantees" aria-label="Cinq garanties du P0" tabIndex={-1}>
+        <section id="garanties" className="ag-guarantees" aria-label={t.guaranteesLabel} tabIndex={-1}>
           <ol>
-            {GUARANTEES.map(([title, text], index) => (
-              <li key={title}>
+            {GUARANTEE_IDS.map((id, index) => (
+              <li key={id}>
                 <p className="ag-guarantees__num" aria-hidden="true">
                   0{index + 1}
                 </p>
-                <h2 className="ag-guarantees__title">{title}</h2>
-                <p className="ag-guarantees__text">{text}</p>
+                <h2 className="ag-guarantees__title">{t.guarantees[id].title}</h2>
+                <p className="ag-guarantees__text">{t.guarantees[id].text}</p>
               </li>
             ))}
           </ol>
@@ -101,8 +103,8 @@ export function LandingPage() {
       </main>
 
       <footer className="ag-landing__foot">
-        <p>Prototype académique en cours de validation en laboratoire, conçu pour les équipes de maintenance et d'inspection.</p>
-        <p>Technicien&nbsp;? Utilisez l'application Aegis sur iPhone.</p>
+        <p>{t.footerPrototype}</p>
+        <p>{t.footerTechnician}</p>
       </footer>
     </div>
   )

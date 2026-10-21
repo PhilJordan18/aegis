@@ -1,5 +1,6 @@
 /**
- * Typed route map. Paths are French because they are visible to users; ids stay English.
+ * Typed route map. Paths are French in both languages (stable, bookmarkable addresses); ids stay English.
+ * Page titles are translated: catalog `pageTitle`, keyed by route id.
  * Preview-only routes resolve to `notFound` when the preview is disabled.
  * `equipment` requires an administrator session (see RequireAdminSession).
  */
@@ -7,16 +8,15 @@ export type RouteId = 'landing' | 'signIn' | 'equipment' | 'equipmentPreview' | 
 
 export interface RouteDefinition {
   readonly path: string | null
-  readonly title: string
   readonly previewOnly: boolean
 }
 
 export const ROUTES: Readonly<Record<RouteId, RouteDefinition>> = {
-  landing: { path: '/', title: 'Aegis Manager', previewOnly: false },
-  signIn: { path: '/connexion', title: 'Connexion — Aegis Manager', previewOnly: false },
-  equipment: { path: '/equipements', title: 'Équipements — Aegis Manager', previewOnly: false },
-  equipmentPreview: { path: '/apercu/equipements', title: 'Équipements — Aegis Manager', previewOnly: true },
-  notFound: { path: null, title: 'Page introuvable — Aegis Manager', previewOnly: false },
+  landing: { path: '/', previewOnly: false },
+  signIn: { path: '/connexion', previewOnly: false },
+  equipment: { path: '/equipements', previewOnly: false },
+  equipmentPreview: { path: '/apercu/equipements', previewOnly: true },
+  notFound: { path: null, previewOnly: false },
 }
 
 export function pathOf(id: Exclude<RouteId, 'notFound'>): string {

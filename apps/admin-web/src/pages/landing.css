@@ -1,6 +1,7 @@
 /* Landing (handoff §5, §7; reference accueil-*.png). */
 .ag-landing { width: 100%; max-width: 1440px; margin: 0 auto; padding: 0 var(--ag-gutter); }
-.ag-landing__head { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 76px; }
+.ag-landing__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; min-height: 76px; }
+.ag-landing__tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; margin-left: auto; }
 .ag-hero {
   display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--ag-space-7); align-items: stretch;
   border-top: 1px solid var(--ag-separator); padding-top: var(--ag-space-7);
