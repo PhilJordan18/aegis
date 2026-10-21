@@ -24,9 +24,14 @@ textes d'accessibilité.
 Elle ne change jamais :
 
 - les règles métier, la readiness et les autorisations;
-- le fuseau d'exploitation du casier : une heure métier s'affiche dans ce
-  fuseau (`America/Toronto` au laboratoire, fourni par l'API lorsqu'il le sera),
-  quelle que soit la langue;
+- les fuseaux horaires, quelle que soit la langue :
+  - une heure métier (réservation, échéance, horaire) s'affiche dans le fuseau du
+    casier fourni par l'API, jamais dans celui de l'appareil ou du navigateur;
+  - un instant purement technique, comme l'heure renvoyée par la vérification de
+    santé, s'affiche dans le fuseau de l'appareil;
+  - en attendant que l'API expose le fuseau du casier, iOS n'affiche aucune heure
+    métier, et le Web n'en affiche que dans l'exemple illustratif de l'accueil,
+    avec le fuseau `America/Toronto` du laboratoire rendu explicite;
 - les contrats : codes REST et MQTT, états techniques, identifiants (UUID,
   `assetCode`, `traceId`) et données saisies (noms, descriptions, numéros de
   série). On traduit la présentation d'un code, jamais le code.
@@ -47,14 +52,31 @@ drapeau; chaque option est écrite dans sa propre langue et porte son attribut
 `lang`. L'attribut `lang` du document et le titre de la page suivent la langue.
 Aucune préférence n'est envoyée au serveur.
 
-**iOS.** Localisation native : la langue du système ou la langue choisie pour
-l'application dans Réglages. Le français est la langue de développement et de
-repli. Aucune préférence serveur ni nouvelle route.
+**iOS.** Localisation native, avec un String Catalog (`.xcstrings`) dans
+`apps/ios` : langue de développement `fr` (la `developmentRegion` du projet),
+localisations `fr` et `en`. Le choix de langue propre à l'application apparaît
+dans Réglages dès que deux localisations existent. Si ni le français ni
+l'anglais ne figure parmi les langues préférées, iOS revient à la langue de
+développement, le français. Aucune préférence serveur ni nouvelle route.
+
+**En-tête `Accept-Language`.** iOS l'envoie automatiquement à partir des langues
+préférées. L'API ne change ni son comportement, ni ses codes, ni sa validation
+selon cet en-tête; les clients n'affichent jamais le `detail` du serveur. Ce point
+est vérifié dans le code de l'API et sera fixé par un test (#80).
 
 ## Formats
 
 Toujours produits par les API de la plateforme (`Intl` sur le Web, `Formatter`
 et `FormatStyle` sur iOS), jamais assemblés à la main.
+
+- **Web :** formats `fr-CA` ou `en-CA` selon la langue choisie, y compris pour une
+  préférence `fr-FR` ou `en-US`.
+- **iOS :** formats de `Locale.current`, qui combine la langue de l'application,
+  la région du système et le choix 12 h / 24 h de l'utilisateur. Un appareil en
+  anglais avec la région France donne `en_FR`, pas `en-CA`. Avec les iPhone de
+  démonstration réglés sur la région Canada, on obtient les formats du tableau.
+  Imposer `fr-CA` et `en-CA` sur iOS, au détriment des réglages de l'utilisateur,
+  est une **décision ouverte** pour Philippe.
 
 | Élément | `fr-CA` | `en-CA` |
 |---|---|---|
@@ -88,7 +110,15 @@ Elles diffèrent : en français, 0 et 1 sont au singulier (« 0 seconde »,
   champ, du code de violation; il est rédigé dans les deux langues.
 - Le texte `detail` ou `message` renvoyé par le serveur n'est jamais affiché tel
   quel.
-- Le `traceId` s'affiche tel quel, sans traduction, avec un libellé traduit.
+- Le `traceId` s'affiche tel quel, sans traduction, introduit par un libellé ou
+  une phrase traduits. Le Web utilise aujourd'hui la phrase « transmettez ce code
+  au support : » / « give this code to support: »; un libellé visible commun
+  (« Identifiant de suivi » / « Trace ID ») reste une **décision ouverte**.
+- Après `429 RATE_LIMITED`, le délai s'affiche une seule fois et seulement à partir
+  d'une valeur `Retry-After` valide : un entier de secondes. Le serveur envoie
+  une valeur de 1 à 60; iOS refuse toute valeur hors de 1 à 3600. Sans valeur
+  valide, le message dit seulement qu'il y a eu trop de tentatives. La
+  documentation au doc 09 §10.2 est suivie dans #80.
 - Un code inconnu affiche un message générique contrôlé et le `traceId`.
 
 ## Accessibilité

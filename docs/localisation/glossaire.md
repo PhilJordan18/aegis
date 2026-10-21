@@ -30,6 +30,10 @@ Aegis, Aegis Manager, Aegis Mobile et Aegis Control ne se traduisent pas.
 | Disponibilité opérationnelle | Readiness | établi | Scope §3.1 |
 | Diagnostic opérationnel | Operational diagnostic | établi | Vue administrateur, sans readiness |
 | Technicien | Technician | établi | Rôle `TECHNICIAN` |
+| Diagnostic d'un exemplaire | Unit diagnostic | proposé | Vue administrateur |
+| Empêchement, empêchements | Blocker, blockers | proposé | Raison non personnelle qui bloque un actif |
+| Vue d'ensemble | Overview | proposé | Navigation du Manager |
+| À venir | Coming soon | proposé | Section non encore livrée |
 | Administrateur | Administrator | établi | Rôle `ADMIN` |
 
 ## Readiness (`ReadinessStatus`)
@@ -80,4 +84,25 @@ Aegis, Aegis Manager, Aegis Mobile et Aegis Control ne se traduisent pas.
 | Adresse courriel | Email address | établi (FR) |
 | Mot de passe | Password | établi (FR) |
 | Session expirée | Session expired | établi (FR) |
-| Identifiant de suivi (libellé du `traceId`) | Trace ID | proposé |
+| Identifiant de suivi (libellé du `traceId`) | Trace ID | proposé; le Web l'introduit aujourd'hui par une phrase (voir la convention) |
+| Espace technicien | Technician access | proposé (iOS) |
+| Accès réservé aux techniciens | Technicians only | proposé (iOS) |
+
+## Technique
+
+| Français | English | Statut |
+|---|---|---|
+| Service opérationnel | Service operational | proposé |
+| Service injoignable | Service unreachable | proposé |
+| Service indisponible | Service unavailable | proposé |
+| Réessayer | Try again | proposé |
+| Actualiser | Refresh | proposé |
+
+## Signatures de marque
+
+Textes à valider par Philippe; le nom et le logo ne se traduisent pas.
+
+| Français | English | Statut |
+|---|---|---|
+| Prêt. Autorisé. Prouvé. | Ready. Authorized. Proven. | proposé (v3; « Prêt » au sens de `READY`) |
+| Autorisé. Observé. Tracé. | Authorized. Observed. Traced. | en place sur l'accueil Web actuel, à concilier avec la signature v3 (#79) |
