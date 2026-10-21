@@ -18,7 +18,7 @@ Ce document contient les ADRs du P0. Chaque fiche expose un choix, son coût, se
 | `REJECTED` | Proposition examinée et refusée |
 | `SUPERSEDED` | Décision acceptée remplacée explicitement par une autre |
 
-Une proposition peut être acceptée ou rejetée. Une décision acceptée peut ensuite être remplacée; sa révision ne doit pas effacer le motif d’origine. La date ci-dessus est celle de consignation, sans inventer de signature ou de date de réunion.
+Une proposition peut être acceptée ou rejetée; elle reste modifiable tant qu’elle est `PROPOSED`. Une décision acceptée n’est plus modifiée, ni dans son fichier de `docs/adr/` ni dans sa fiche ci-dessous. Pour la faire évoluer, un nouvel ADR expose la décision antérieure, la raison du changement, la nouvelle décision, ses conséquences et les sections remplacées. Le registre de la section 2 passe alors l’ancienne décision à `SUPERSEDED`, ou précise la portée remplacée, et renvoie vers le nouvel ADR. Les amendements antérieurs à cette règle, comme celui de l’ADR-002, restent en l’état. La date ci-dessus est celle de consignation, sans inventer de signature ou de date de réunion.
 
 Le statut `ACCEPTED` des ADR-001, 002, 008 et 010 consigne des principes déjà exprimés dans le scope et les échanges d’équipe. Il ne valide ni tous les paramètres des contrats ni le matériel. Les fiches ou paramètres encore proposés restent à arbitrer avant la réalisation concernée. L’ADR-010 est conservé dans son fichier détaillé sous `docs/adr/` afin de ne pas dupliquer deux textes normatifs.
 

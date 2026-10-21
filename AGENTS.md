@@ -25,14 +25,18 @@ Write course and product documentation in French unless the task says otherwise.
 Use this order when sources disagree:
 
 1. `docs/cahier-conception/02-scope.md`
-2. Accepted ADRs in `docs/adr/`
+2. Accepted ADRs, as files in `docs/adr/` or accepted fiches of document 13; an
+   ADR that explicitly supersedes another prevails over it
 3. Approved normative documents 03-10 in `docs/cahier-conception/`
 4. `README.md`
 5. The current issue or task
 6. Informal assumptions
 
 Document 13 is an ADR register; a proposed entry is not accepted merely because
-it appears there. Never silently override the approved scope or invent a missing
+it appears there. Accepted ADRs are never edited. To change a decision, write a
+new ADR that states the earlier decision, the reason for the change, the new
+decision, its consequences, and the sections it supersedes; then update the
+register and the current references, and leave the earlier ADR text unchanged. Never silently override the approved scope or invent a missing
 contract. If a reference is empty, duplicated, wrongly titled, or contradictory,
 report the documentation defect before relying on it.
 
@@ -108,8 +112,11 @@ infra/docker/compose.yaml up -d --wait` from the repository root and
 `services/api/`. The example credentials are for an isolated local simulator
 only. Do not invent commands for components that are not initialized yet.
 
-Do not commit, push, merge, release, deploy, perform destructive migrations, or
-alter Git history without explicit human authorization.
+Within an authorized task, commit small, coherent, verified changes locally on
+the issue branch without asking for each commit. Do not push, open a pull
+request, merge, release, deploy, perform destructive migrations, or rewrite Git
+history without explicit human authorization; pushing and opening the pull
+request require the delivery gate below.
 
 ## Git workflow
 
@@ -123,6 +130,10 @@ holds the full workflow.
 - Work on one issue per branch, created from an up-to-date `dev` and named
   `<issue>-<type>-<slug>` with a Conventional Commit type, for example
   `25-feat-asset-catalog`. Ask for the issue number when it is unknown.
+- Commit regularly on the issue branch: each commit is one coherent step whose
+  relevant verification passed. Do not amend, rebase, squash, reset, or
+  force-push existing commits without human agreement; correct a mistake with a
+  new commit.
 - Before any pull request, pass the delivery gate of the `aegis-delivery`
   skill: produce the delivery report and stop. Push the branch and open the
   pull request into `dev` only after the human answers "deliver".
@@ -131,7 +142,7 @@ holds the full workflow.
 
 ## Commit convention
 
-When a human authorizes a commit, use Conventional Commits:
+Every commit uses Conventional Commits:
 
 ```text
 type(optional-scope): short imperative description
@@ -168,6 +179,8 @@ cleanup.
   terminal and read-only.
 - A reviewer must try to disprove correctness with evidence, but may report that
   no issue was found. Never require invented findings.
+- Cost controls such as a cheaper model, a lower effort, or fewer agents never
+  remove the tests and reviews a change requires.
 
 The canonical project skills live in `.claude/skills/` and are exposed to Codex
 through `.agents/skills/`. Claude role definitions live in `.claude/agents/`;
