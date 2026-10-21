@@ -34,5 +34,5 @@
 
 @media (forced-colors: active) {
   .ag-btn { border-color: ButtonText; }
-  .ag-btn:disabled, .ag-btn.is-inert { color: GrayText; border-color: GrayText; }
+  .ag-btn:disabled, .ag-btn:disabled:hover, .ag-btn.is-inert, .ag-btn.is-inert:hover { color: GrayText; border-color: GrayText; }
 }

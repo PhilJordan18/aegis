@@ -30,7 +30,7 @@
   border-radius: var(--ag-r-control); font-size: 0.9375rem; font-weight: 500; color: var(--ag-text); text-decoration: none;
 }
 .ag-nav__item .ag-icon { color: var(--ag-text-2); }
-a.ag-nav__item:hover { background: var(--ag-field); }
+a.ag-nav__item:hover { background: var(--ag-surface-selected); }
 .ag-nav__item[aria-current='page'] { background: var(--ag-surface-selected); color: var(--ag-accent-text); font-weight: 600; }
 .ag-nav__item[aria-current='page'] .ag-icon { color: var(--ag-accent-text); }
 .ag-nav__item[aria-current='page']::before {
