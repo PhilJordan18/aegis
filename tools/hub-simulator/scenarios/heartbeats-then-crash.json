@@ -1,0 +1,7 @@
+{
+  "steps": [
+    { "do": "waitOnline", "timeoutMs": 10000 },
+    { "wait": 21000 },
+    { "do": "crash" }
+  ]
+}

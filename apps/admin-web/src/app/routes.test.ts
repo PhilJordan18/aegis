@@ -8,6 +8,11 @@ describe('matchRoute', () => {
     expect(matchRoute('/connexion/', false)).toBe('signIn')
   })
 
+  it('serves the protected equipment route in every build', () => {
+    expect(matchRoute('/equipements', false)).toBe('equipment')
+    expect(matchRoute('/equipements', true)).toBe('equipment')
+  })
+
   it('serves preview routes only when the preview is enabled', () => {
     expect(matchRoute('/apercu/equipements', true)).toBe('equipmentPreview')
     expect(matchRoute('/apercu/equipements', false)).toBe('notFound')
