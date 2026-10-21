@@ -71,8 +71,10 @@ décoratif : il ne signifie jamais « disponible », « connecté » ni « sécu
 - Utiliser les fichiers fournis, sans les redessiner, les recolorer, les étirer
   ni leur ajouter ombre, halo ou contour. Garder les proportions (signature
   4 : 1, symbole 1 : 1).
-- Signature claire sur fond clair, signature sombre sur fond sombre; symbole seul
-  quand la place manque.
+- Dans les applications : symbole clair (`aegis-core-mark.svg`) sur fond clair,
+  symbole sombre (`aegis-core-mark-dark.svg`) sur fond sombre, suivi du mot
+  « aegis » en texte; le symbole seul quand la place manque. Les signatures
+  complètes restent des références de présentation.
 - Rendre l'asset remplaçable : un seul composant ou une seule ressource par
   plateforme, sans copie du tracé dans le code.
 - Limite connue : dans les deux signatures, « aegis » et « CORE » sont du texte
@@ -83,21 +85,15 @@ décoratif : il ne signifie jamais « disponible », « connecté » ni « sécu
   mesurer dans les rendus de chaque plateforme avant d'être fixées ici.
 - Le nom et le logo ne se traduisent pas.
 
-## Marque commune et noms d'application (proposition)
+## Marque commune et noms d'application
 
-« Aegis Core » est une proposition de signature graphique; rien n'est renommé
-sans décision de Philippe.
-
-- **Option A, recommandée pour le P0 :** la marque commune est « Aegis », portée
-  par le symbole. Chaque application garde son nom : Aegis Manager (Web), Aegis
-  Mobile (iOS), Aegis Control (API). L'en-tête d'une application montre le
-  symbole suivi du nom de l'application en texte. La signature complète
-  « aegis | CORE » ne s'affiche que là où la marque commune se présente seule,
-  par exemple un écran d'entrée ou un document.
-- **Option B :** « Aegis Core » devient le nom de la plateforme, et les
-  applications des modules (« Aegis Core · Manager »). Cette option renomme des
-  textes visibles, de la documentation et peut-être des identifiants : elle
-  demande une décision explicite avant toute modification.
+**Décision de Philippe, 21 octobre 2026.** La marque commune est « Aegis »,
+portée par le symbole. Chaque application garde son nom : Aegis Manager (Web),
+Aegis Mobile (iOS), Aegis Control (API). Sur les écrans d'entrée des deux
+plateformes, la signature temporaire est le symbole suivi de « aegis » seul,
+**sans « CORE »**, écrit dans la police de la plateforme. « Aegis Core » ne
+renomme ni les applications, ni les modules, ni les routes. Les signatures SVG
+complètes (`aegis-core-logo*.svg`) ne sont pas utilisées dans les applications.
 
 ## Typographie et logo sur le Web (décision de Philippe, 21 octobre 2026)
 
@@ -149,9 +145,6 @@ proposés, à valider par Philippe :
 
 ## Décisions ouvertes
 
-- Articulation de la marque : l'option A est retenue par la session iOS et par le
-  brief Web du 21 octobre 2026 (les noms Aegis Manager, Aegis Mobile et Aegis
-  Control sont conservés); reste à la consigner comme décision de Philippe.
 - Conversion en tracés du texte des signatures par le designer.
 - Tailles minimales du logo, après mesure dans les rendus.
 - Validation des textes de signature en français et en anglais.
