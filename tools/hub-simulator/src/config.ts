@@ -1,12 +1,17 @@
+import { isAbsolute, resolve } from 'node:path';
+import { defaultBootCountFile, isValidBootCount } from './boot-counter.ts';
 import {
   CANONICAL_UUID,
   CELL_ADDRESS_MAX,
   CELL_ADDRESS_MIN,
   HEARTBEAT_INTERVAL_MS,
+  RESET_REASONS,
+  isResetReason,
   type CellConnectionStatus,
   type DoorState,
   type LockState,
   type ReaderStatus,
+  type ResetReason,
 } from './contract.ts';
 
 /**
@@ -22,8 +27,8 @@ export const DEFAULT_COMPARTMENTS: readonly CompartmentConfig[] = [
 ];
 export const DEFAULT_BROKER_URL = 'mqtt://127.0.0.1:1883';
 export const DEFAULT_FIRMWARE_VERSION = '0.1.0-sim';
-/** Not a contract-controlled value: doc 10 §13.1 only shows WATCHDOG. */
-export const DEFAULT_RESET_REASON = 'POWER_ON';
+/** A simulated process start is a cold boot. */
+export const DEFAULT_RESET_REASON: ResetReason = 'POWER_ON';
 export const DEFAULT_RSSI_DBM = -55;
 
 export interface CompartmentConfig {
@@ -45,12 +50,16 @@ export interface SimulatorConfig {
   readonly deviceKey: string;
   readonly compartments: readonly CompartmentConfig[];
   readonly firmwareVersion: string;
-  readonly resetReason: string;
+  readonly resetReason: ResetReason;
   readonly rssiDbm: number;
   readonly heartbeatIntervalMs: number;
   /** Allows plaintext MQTT to a non-loopback host, e.g. a private Docker network. */
   readonly allowInsecureRemote: boolean;
   readonly caFile?: string;
+  /** State file holding the last bootCount per deviceKey, the simulator's NVS. */
+  readonly bootCountFile: string;
+  /** Overrides the bootCount of the first boot only (tests, deliberate reset). */
+  readonly firstBootCount?: number;
 }
 
 export class ConfigError extends Error {
@@ -115,8 +124,16 @@ export function validateConfig(config: SimulatorConfig): SimulatorConfig {
     ids.add(c.compartmentId);
     addresses.add(c.cellAddress);
   }
-  if (!/^[A-Z][A-Z0-9_]{0,63}$/.test(config.resetReason)) {
-    throw new ConfigError('resetReason must be an UPPER_SNAKE_CASE value');
+  // A producer emits only controlled values (decision D1); normalising an unknown
+  // cause to UNKNOWN is the consumer's tolerance rule, not the simulator's.
+  if (!isResetReason(config.resetReason)) {
+    throw new ConfigError(`resetReason must be one of ${RESET_REASONS.join(', ')}`);
+  }
+  if (config.bootCountFile.length === 0 || !isAbsolute(config.bootCountFile)) {
+    throw new ConfigError('bootCountFile must be an absolute path');
+  }
+  if (config.firstBootCount !== undefined && !isValidBootCount(config.firstBootCount)) {
+    throw new ConfigError('the first bootCount must be an integer >= 1');
   }
   if (config.firmwareVersion.length === 0 || config.firmwareVersion.length > 32) {
     throw new ConfigError('firmwareVersion must be 1-32 characters');
@@ -162,6 +179,7 @@ function parseInteger(name: string, raw: string): number {
 export function configFromEnv(env: NodeJS.ProcessEnv): SimulatorConfig {
   const lockerId = env.AEGIS_SIM_LOCKER_ID ?? DEFAULT_LOCKER_ID;
   const caFile = env.AEGIS_MQTT_CA_FILE;
+  const bootCount = env.AEGIS_SIM_BOOT_COUNT;
   return validateConfig({
     brokerUrl: env.AEGIS_MQTT_URL ?? DEFAULT_BROKER_URL,
     // The local broker authenticates the hub with its lockerId as username.
@@ -171,11 +189,13 @@ export function configFromEnv(env: NodeJS.ProcessEnv): SimulatorConfig {
     deviceKey: env.AEGIS_SIM_DEVICE_KEY ?? `sim-${lockerId}`,
     compartments: env.AEGIS_SIM_COMPARTMENTS ? parseCompartments(env.AEGIS_SIM_COMPARTMENTS) : DEFAULT_COMPARTMENTS,
     firmwareVersion: env.AEGIS_SIM_FIRMWARE_VERSION ?? DEFAULT_FIRMWARE_VERSION,
-    resetReason: env.AEGIS_SIM_RESET_REASON ?? DEFAULT_RESET_REASON,
+    resetReason: (env.AEGIS_SIM_RESET_REASON ?? DEFAULT_RESET_REASON) as ResetReason,
     rssiDbm: env.AEGIS_SIM_RSSI_DBM ? parseInteger('AEGIS_SIM_RSSI_DBM', env.AEGIS_SIM_RSSI_DBM) : DEFAULT_RSSI_DBM,
     heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
     allowInsecureRemote: env.AEGIS_SIM_ALLOW_INSECURE_REMOTE === 'true',
     ...(caFile ? { caFile } : {}),
+    bootCountFile: env.AEGIS_SIM_BOOT_COUNT_FILE ? resolve(env.AEGIS_SIM_BOOT_COUNT_FILE) : defaultBootCountFile(env),
+    ...(bootCount ? { firstBootCount: parseInteger('AEGIS_SIM_BOOT_COUNT', bootCount) } : {}),
   });
 }
 
@@ -193,6 +213,7 @@ export function defineConfig(overrides: Partial<SimulatorConfig> & Pick<Simulato
     rssiDbm: DEFAULT_RSSI_DBM,
     heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
     allowInsecureRemote: false,
+    bootCountFile: defaultBootCountFile(),
     ...overrides,
   });
 }

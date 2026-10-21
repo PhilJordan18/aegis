@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
+import { BootCounterError } from './boot-counter.ts';
 import { ConfigError, configFromEnv } from './config.ts';
 import type { OutboundMessage } from './messages.ts';
 import { ScenarioError, parseScenario, runScenario, type Scenario } from './scenario.ts';
@@ -20,7 +21,11 @@ Environment (credentials are never accepted as arguments):
   AEGIS_SIM_DEVICE_KEY         default sim-<lockerId>; clientId is aegis-locker-<deviceKey>
   AEGIS_SIM_COMPARTMENTS       default A1:1ae77ae3-8490-4f09-9412-a7816b77bff9:1,A2:5c1d0b7e-2f4a-4d3b-9a61-0e8b7c2d4f10:2
   AEGIS_SIM_FIRMWARE_VERSION   default 0.1.0-sim
-  AEGIS_SIM_RESET_REASON       default POWER_ON
+  AEGIS_SIM_RESET_REASON       default POWER_ON; one of POWER_ON, EXTERNAL_RESET, SOFTWARE_RESET,
+                               WATCHDOG, PANIC, BROWNOUT, UNKNOWN
+  AEGIS_SIM_BOOT_COUNT_FILE    default $XDG_STATE_HOME/aegis/hub-simulator/boot-counts.json
+                               (~/.local/state/... without XDG_STATE_HOME); keep it outside the repository
+  AEGIS_SIM_BOOT_COUNT         optional bootCount of the first boot (tests, deliberate reset)
   AEGIS_SIM_RSSI_DBM           default -55
   AEGIS_SIM_ALLOW_INSECURE_REMOTE  "true" to allow mqtt: to a non-loopback host on an isolated network
 `;
@@ -39,7 +44,9 @@ function describe(message: OutboundMessage, withPayload: boolean): Record<string
     messageId: p.messageId,
     sequence: p.sequence,
     deviceSessionId: p.deviceSessionId,
-    ...(p.type === 'DEVICE_AVAILABILITY' ? { status: p.status } : {}),
+    bootCount: p.bootCount,
+    ...(p.type === 'DEVICE_RESTARTED' ? {} : { connectionId: p.connectionId }),
+    ...(p.type === 'DEVICE_AVAILABILITY' ? { status: p.status, reason: p.reason } : {}),
     ...(withPayload ? { payload: p } : {}),
   };
 }
@@ -66,8 +73,9 @@ async function main(): Promise<number> {
 
   const simulator = new HubSimulator(config);
   simulator.on('state', (state) => log('state', { state }));
-  simulator.on('sessionStarted', (deviceSessionId) => log('session_started', { deviceSessionId }));
+  simulator.on('sessionStarted', (deviceSessionId, bootCount) => log('session_started', { deviceSessionId, bootCount }));
   simulator.on('willPrepared', (m) => log('will_prepared', describe(m, withPayload)));
+  simulator.on('replayed', (m) => log('replayed', describe(m, withPayload)));
   simulator.on('delivered', (m) => log('delivered', describe(m, withPayload)));
   simulator.on('publishFailed', (m, error) => log('publish_failed', { ...describe(m, false), error: error.message }));
   simulator.on('reconnectScheduled', (delayMs, attempt) => log('reconnect_scheduled', { delayMs, attempt }));
@@ -79,6 +87,7 @@ async function main(): Promise<number> {
     username: config.username,
     lockerId: config.lockerId,
     compartments: config.compartments.map((c) => c.code),
+    bootCountFile: config.bootCountFile,
   });
 
   let shuttingDown = false;
@@ -93,7 +102,8 @@ async function main(): Promise<number> {
       );
     };
     process.on('SIGINT', () => shutdown('SIGINT'));
-    process.on('SIGTERM', () => shutdown('SIGTERM'));  });
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+  });
 
   simulator.start();
   if (scenario) {
@@ -113,7 +123,12 @@ async function main(): Promise<number> {
 main().then(
   (code) => process.exit(code),
   (error: unknown) => {
-    if (error instanceof ConfigError || error instanceof ScenarioError || error instanceof SyntaxError) {
+    if (
+      error instanceof ConfigError ||
+      error instanceof ScenarioError ||
+      error instanceof BootCounterError ||
+      error instanceof SyntaxError
+    ) {
       process.stderr.write(`hub-simulator: ${error.message}\n`);
       process.exit(2);
     }

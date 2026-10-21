@@ -1,3 +1,5 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { reconnectDelayMs } from '../../src/backoff.ts';
 import { ConfigError, DEFAULT_LOCKER_ID, assertTransportAllowed, configFromEnv, parseCompartments } from '../../src/config.ts';
@@ -42,8 +44,36 @@ describe('configuration from environment', () => {
     [{ AEGIS_SIM_COMPARTMENTS: 'A1:not-a-uuid:1' }, 'canonical lowercase UUID'],
     [{ AEGIS_SIM_RSSI_DBM: '12' }, 'rssiDbm'],
     [{ AEGIS_SIM_RESET_REASON: 'power on' }, 'resetReason'],
+    [{ AEGIS_SIM_RESET_REASON: 'DEEP_SLEEP' }, 'resetReason must be one of POWER_ON, EXTERNAL_RESET'],
+    [{ AEGIS_SIM_BOOT_COUNT: '0' }, 'bootCount'],
+    [{ AEGIS_SIM_BOOT_COUNT: 'one' }, 'AEGIS_SIM_BOOT_COUNT must be an integer'],
   ])('rejects %o', (env, message) => {
     expect(() => configFromEnv({ AEGIS_MQTT_DEVICE_PASSWORD: 'x', ...env })).toThrow(message);
+  });
+
+  it.each(['POWER_ON', 'EXTERNAL_RESET', 'SOFTWARE_RESET', 'WATCHDOG', 'PANIC', 'BROWNOUT', 'UNKNOWN'])(
+    'accepts the controlled resetReason %s (D1)',
+    (reason) => {
+      expect(configFromEnv({ AEGIS_MQTT_DEVICE_PASSWORD: 'x', AEGIS_SIM_RESET_REASON: reason }).resetReason).toBe(reason);
+    },
+  );
+
+  it('keeps the boot count state outside the repository by default', () => {
+    const config = configFromEnv({ AEGIS_MQTT_DEVICE_PASSWORD: 'x', XDG_STATE_HOME: '/var/tmp/xdg-state' });
+    expect(config.bootCountFile).toBe('/var/tmp/xdg-state/aegis/hub-simulator/boot-counts.json');
+    expect(config).not.toHaveProperty('firstBootCount');
+    const home = configFromEnv({ AEGIS_MQTT_DEVICE_PASSWORD: 'x' });
+    expect(home.bootCountFile).toBe(join(homedir(), '.local', 'state', 'aegis', 'hub-simulator', 'boot-counts.json'));
+  });
+
+  it('reads the boot count file and the first boot count', () => {
+    const config = configFromEnv({
+      AEGIS_MQTT_DEVICE_PASSWORD: 'x',
+      AEGIS_SIM_BOOT_COUNT_FILE: '/var/tmp/aegis-sim/counts.json',
+      AEGIS_SIM_BOOT_COUNT: '12',
+    });
+    expect(config.bootCountFile).toBe('/var/tmp/aegis-sim/counts.json');
+    expect(config.firstBootCount).toBe(12);
   });
 
   it('parses the compartment specification', () => {
