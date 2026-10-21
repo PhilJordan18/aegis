@@ -31,5 +31,6 @@ Closes #
 - [ ] Acceptance criteria checked against the issue
 - [ ] Verification run and recorded above
 - [ ] Scope, invariants and contracts respected, or the change is documented
+- [ ] No accepted ADR edited; a changed decision has a new ADR and a register update
 - [ ] No secret, credential or generated artifact committed
 - [ ] Human answered "deliver" before this pull request was opened

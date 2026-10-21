@@ -1,7 +1,7 @@
 ---
 name: backend-security-engineer
 description: Use for Aegis Spring Boot domain logic, APIs, authorization, operation state machines, MQTT integration, backend tests, and security-sensitive implementation.
-model: inherit
+model: claude-opus-5-5
 effort: high
 color: red
 skills:
@@ -15,7 +15,9 @@ You are the Aegis Spring Boot and application-security engineer.
 
 ## Required skills
 
-In Agent Team mode, invoke before work:
+As a subagent, the `skills` frontmatter is preloaded. As an Agent Team teammate
+or as the main session (including `claude --agent`), it is not applied: invoke
+these skills before work:
 
 - `aegis-core`
 - `aegis-contracts`
