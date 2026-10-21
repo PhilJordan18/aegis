@@ -47,21 +47,23 @@ import org.springframework.web.bind.annotation.RestController;
 
 import tools.jackson.databind.JsonNode;
 
+import ca.aegis.control.identity.IdempotencyProbeSecurity;
 import ca.aegis.control.shared.web.ApiError;
 import ca.aegis.control.shared.web.ApiException;
 import ca.aegis.control.support.ApiIntegrationTest;
 import ca.aegis.control.support.TestAccounts.TestAccount;
 
 /**
- * The idempotency service end to end: real security filter, real transaction and real business inserts in
- * {@code aegis.asset_models}. The catalog controllers are not part of this slice, so {@link CatalogProbe}, loaded
- * only by this test, answers two documented administration routes of document 09, section 20.1. Once the real
- * catalog controllers exist, this probe must be removed: both would map the same routes.
+ * The idempotency service end to end: real transaction and real business inserts in {@code aegis.asset_models}.
+ * {@link CatalogProbe}, loaded only by this test, opts in exactly as a catalog controller of document 09, section
+ * 20.1, would, on dedicated test paths so it never competes with the real catalog routes. Those paths are guarded
+ * by {@link IdempotencyProbeSecurity}, the administrator rule built from the application's security components.
  */
-@Import(IdempotencyApiTests.CatalogProbe.class)
+@Import({IdempotencyApiTests.CatalogProbe.class, IdempotencyProbeSecurity.class})
 class IdempotencyApiTests extends ApiIntegrationTest {
 
-    static final String MODELS = "/api/v1/admin/asset-models";
+    static final String MODELS = "/api/v1/admin/idempotency-probe/models";
+    static final String MODEL_LOCATIONS = "/api/v1/admin/asset-models/";
     static final String REFUSED_PREFIX = "refused-";
     static final AtomicInteger executions = new AtomicInteger();
     static final Gate gate = new Gate();
@@ -110,7 +112,7 @@ class IdempotencyApiTests extends ApiIntegrationTest {
 
         assertEquals(201, first.getStatus());
         String id = json(first).get("id").asString();
-        assertEquals(MODELS + "/" + id, first.getHeader(HttpHeaders.LOCATION));
+        assertEquals(MODEL_LOCATIONS + id, first.getHeader(HttpHeaders.LOCATION));
         assertEquals(MediaType.APPLICATION_JSON_VALUE, first.getContentType());
         assertNull(first.getHeader(IdempotencyService.REPLAYED_HEADER));
         assertEquals(firstId, first.getHeader("X-Request-Id"));
@@ -128,7 +130,7 @@ class IdempotencyApiTests extends ApiIntegrationTest {
                 SELECT endpoint, status, response_status, resource_type, resource_id::text AS resource_id
                 FROM aegis.rest_idempotency_keys WHERE actor_user_id = :actor AND idempotency_key = :key
                 """).param("actor", admin.id()).param("key", key).query().singleRow();
-        assertEquals(Map.of("endpoint", "POST /admin/asset-models", "status", "COMPLETED", "response_status", 201,
+        assertEquals(Map.of("endpoint", "POST /admin/idempotency-probe/models", "status", "COMPLETED", "response_status", 201,
                 "resource_type", "ASSET_MODEL", "resource_id", id), Map.copyOf(stored));
     }
 
@@ -174,6 +176,12 @@ class IdempotencyApiTests extends ApiIntegrationTest {
         assertTrue(jdbc.sql("SELECT archived_at IS NULL FROM aegis.asset_models WHERE id = :id")
                 .param("id", UUID.fromString(other)).query(Boolean.class).single());
         assertEquals(4, executions.get());
+    }
+
+    @Test
+    void theProbeIsReachableOnlyThroughItsTestSecurity() {
+        assertFalse(IdempotencyProbeSecurity.documented("POST", MODELS));
+        assertFalse(IdempotencyProbeSecurity.documented("POST", MODELS + "/" + UUID.randomUUID() + "/archive"));
     }
 
     @Test
@@ -539,7 +547,7 @@ class IdempotencyApiTests extends ApiIntegrationTest {
         }
     }
 
-    /** Test-only handlers on two routes of section 20.1, opted in exactly as a production controller would. */
+    /** Test-only handlers that create and archive asset models, opted in exactly as a production controller would. */
     @RestController
     static class CatalogProbe {
 
