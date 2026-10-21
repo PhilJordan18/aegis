@@ -10,7 +10,7 @@
 # Environment:
 #   IOS_DESTINATION          xcodebuild destination
 #                            (default: platform=iOS Simulator,name=iPhone 17,OS=latest)
-#   IOS_DERIVED_DATA         derived data path inside apps/ios (default: build/DerivedData)
+#   IOS_DERIVED_DATA         derived data under apps/ios/build (default: build/DerivedData)
 #   IOS_RESULTS_DIR          result bundles (default: build/results)
 #   AEGIS_LIVE_API_BASE_URL  live only, e.g. http://localhost:8080/api/v1
 set -euo pipefail
