@@ -1,9 +1,55 @@
 # Aegis Manager — identité « Lumière du hub » v3 (issue #79, premier livrable)
 
-Mode : Prototype. Date : 21 octobre 2026. Plateforme : Web. Statut : **rendus à
-faire approuver par Philippe avant toute modification de `apps/admin-web`**.
-Ce dossier ne touche ni au code applicatif, ni aux contrats, ni à
+Mode : Prototype. Date : 21 octobre 2026. Plateforme : Web. Statut : **rendus approuvés par Philippe; intégrés à `apps/admin-web` (voir ci-dessous)**.
+Le prototype lui-même ne touche ni au code applicatif, ni aux contrats, ni à
 l'authentification. Un prototype statique n'est pas une implémentation.
+
+## Intégration dans `apps/admin-web` (issue #79, 21 octobre 2026)
+
+Les rendus ont été approuvés par Philippe et l'identité est intégrée à
+l'application (`apps/admin-web`, branche `79-feat-web-brand-v3`). Les décisions de
+Philippe qui ferment les « Décisions ouvertes » ci-dessous :
+
+1. L'erreur globale de connexion s'affiche **sous le bouton**, dans une zone
+   annoncée (`role="alert"`, `role="status"` pour l'information) : 0 px de saut
+   des champs et du bouton, mesuré à 1440, 390, 320 et 640×400 px pour les quatre
+   erreurs globales. Une erreur de champ reste sous son champ.
+2. Signature commune « Prêt. Autorisé. Prouvé. » / « Ready. Authorized. Proven. »
+   et accroche « L'essentiel, sous contrôle. » / « What matters, under control. »;
+   l'ancien « Autorisé. Observé. Tracé. » disparaît de l'accueil.
+3. Description « Disponibilité, conformité et traçabilité de vos équipements. »
+   / « Equipment availability, compliance and traceability. ».
+4. Le lien « Accueil » est conservé (l'accueil existe), masqué sous 480 px où la
+   marque mène déjà à l'accueil; pied de page « Aegis Mobile ».
+5. Champs sans texte indicatif, libellés persistants.
+6. « Manager » reste visible sur petit écran, sur une seconde ligne sous
+   « aegis » (sous 480 px); le symbole passe à 24 px.
+7. Bordure des contrôles, anneau de focus plein de 2 px décalé de 2 px, sélection
+   et désactivé repris dans `src/styles/tokens.css`; l'information est un bleu
+   azur (teinte entre 195° et 220°), sans indigo.
+8. Le choix de langue affiche « Français / English »; le délai `Retry-After` n'est
+   affiché qu'une fois, dans l'alerte (la légende « Disponible dans 0:55 » sous
+   le bouton est supprimée, le bouton verrouillé est décrit par l'alerte).
+9. Le libellé visible « Identifiant de suivi : » / « Trace ID: » est conservé.
+
+Écarts assumés par rapport au prototype statique :
+
+- palettes de `identite/reference.md` (fond clair `#F5F7FB`, surface sombre
+  `#0D1520`, champ `#141F2D`) plutôt que celles de la maquette Web;
+- le prototype n'avait ni accueil ni page introuvable : l'accueil reprend la même
+  hiérarchie (signature, une action) avec l'exemple illustratif de diagnostic sur
+  une carte opaque, sans cellule ni halo autour de la carte;
+- la flèche du bouton principal est conservée, remplacée par l'indicateur
+  d'occupation pendant l'envoi;
+- le shell garde son architecture : barre latérale opaque pleine hauteur
+  (280 px), barre supérieure plate et tiroir modal sous 1024 px.
+
+Preuves : captures dans `captures-integration/` (14, à 1×,
+`<écran>-<état>-<langue>-<apparence>-<taille>.png`), mesures du rendu avec
+`npm run test:identity` (saut de mise en page, contrastes peints, focus, texte
+coupé), matrice axe avec `npm run test:a11y`. Les textes marqués [P] des
+catalogues (« Espace administrateur », « Accédez à Aegis Manager. », pied
+« Aegis Manager · Administration ») restent à valider.
 
 Références : `../identite/reference.md` (identité commune, décisions de
 Philippe), `../identite/v3/web/aegis-web-v3.html` (maquette Web de Philippe),
