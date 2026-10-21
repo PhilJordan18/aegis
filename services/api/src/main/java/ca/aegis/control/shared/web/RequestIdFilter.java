@@ -24,7 +24,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class RequestIdFilter extends OncePerRequestFilter {
 
     public static final String HEADER = "X-Request-Id";
-    static final String MDC_KEY = "requestId";
+    public static final String MDC_KEY = "requestId";
     private static final String ATTRIBUTE = RequestIdFilter.class.getName() + ".requestId";
     private static final Pattern UUID_FORMAT =
             Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");

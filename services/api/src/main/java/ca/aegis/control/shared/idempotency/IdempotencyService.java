@@ -12,6 +12,7 @@ import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -26,6 +27,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import ca.aegis.control.shared.idempotency.IdempotencyKeyStore.StoredKey;
+import ca.aegis.control.shared.web.RequestIdFilter;
 
 /**
  * Durable REST idempotency (document 08, section 8.1; document 09, sections 6.2 and 20).
@@ -42,8 +44,11 @@ import ca.aegis.control.shared.idempotency.IdempotencyKeyStore.StoredKey;
  * <li>a refusal thrown by the mutation rolls everything back, key included, so a retry runs it again against the
  * business state of that moment.</li>
  * </ol>
- * The key row is always the first row this transaction locks, before any business aggregate (document 08,
- * section 7.1). Authorization is decided by the security filter before the controller, so an actor never reaches
+ * The key row is the first row the flow locks explicitly, before any business aggregate (document 08, sections 7.1
+ * and 8.1). Inserting it also takes a {@code KEY SHARE} lock on the actor's {@code aegis.users} row through
+ * {@code fk_rest_idempotency_actor}; business guards therefore lock that row with {@code FOR NO KEY UPDATE}, which
+ * does not conflict with it, never with {@code FOR UPDATE}, which would deadlock two concurrent requests of the
+ * same actor. Authorization is decided by the security filter before the controller, so an actor never reaches
  * this service, or another actor's response, on a route it may not call.
  */
 @Service
@@ -98,11 +103,14 @@ public class IdempotencyService {
         Acquisition acquisition = acquire(request, requestHash, now);
         if (acquisition.replay() != null) {
             StoredKey stored = acquisition.replay();
-            log.info("Replaying idempotent response of key {} on {}", stored.id(), request.endpoint());
+            log.info("Request {} replays the response of idempotency row {} on {}", MDC.get(RequestIdFilter.MDC_KEY),
+                    stored.id(), request.endpoint());
             return new Response(HttpStatus.valueOf(stored.responseStatus()), jsonMapper.readTree(stored.responseBody()),
                     stored.resource(), stored.resourceId(), true);
         }
 
+        log.info("Request {} executes {} with idempotency row {}", MDC.get(RequestIdFilter.MDC_KEY),
+                request.endpoint(), acquisition.keyId());
         IdempotentResult result = mutation.get();
         JsonNode responseBody = jsonMapper.valueToTree(result.body());
         keys.complete(acquisition.keyId(), result.status().value(), jsonMapper.writeValueAsString(responseBody),
