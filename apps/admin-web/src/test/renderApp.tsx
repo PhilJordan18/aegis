@@ -8,7 +8,7 @@ import { AppearanceContext } from '../features/appearance/useAppearance'
 import { unconfiguredAuthGateway, type AuthGateway } from '../features/auth/authGateway'
 import { AuthGatewayContext } from '../features/auth/AuthGatewayContext'
 import { createSessionStore, SessionContext, type SessionStore } from '../features/auth/session'
-import { createLocaleController, type Locale } from '../i18n/locale'
+import { createLocaleController, type Locale, type LocaleController } from '../i18n/locale'
 import { LocaleContext } from '../i18n/useI18n'
 
 export function renderWithProviders(
@@ -19,11 +19,18 @@ export function renderWithProviders(
     router = createHistoryRouter(window),
     queryClient = createQueryClient(),
     locale = 'fr',
-  }: { gateway?: AuthGateway; session?: SessionStore; router?: Router; queryClient?: QueryClient; locale?: Locale } = {},
+    localeController = createLocaleController(window, { initial: locale }),
+  }: {
+    gateway?: AuthGateway
+    session?: SessionStore
+    router?: Router
+    queryClient?: QueryClient
+    locale?: Locale
+    /** Overrides `locale`, to exercise the real resolution (stored choice, browser languages). */
+    localeController?: LocaleController
+  } = {},
 ) {
   const appearance = createAppearanceController(window)
-  // Pinned, so a test never depends on the language of the jsdom navigator.
-  const localeController = createLocaleController(window, { initial: locale })
   const stopClearing = clearCacheOnSessionChange(queryClient, session)
   const result = render(
     <QueryClientProvider client={queryClient}>

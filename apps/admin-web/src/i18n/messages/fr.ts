@@ -13,7 +13,7 @@ import { createPluralSelector } from '../plural'
  * `createPluralSelector`, never a server `title`/`detail`. U+00A0 precedes
  * « : ? » and the narrow gaps the handoff requires.
  */
-const NBSP = ' '
+const NBSP = '\u00A0'
 const plural = createPluralSelector('fr')
 const count = new Intl.NumberFormat('fr-CA')
 

@@ -20,7 +20,12 @@ function createFormatters(locale: Locale): Formatters {
   const minutesDigits = new Intl.NumberFormat(tag)
   const secondsDigits = new Intl.NumberFormat(tag, { minimumIntegerDigits: 2 })
   return {
-    seconds: (value) => seconds.format(value),
+    // ICU puts a plain space between the number and its unit; a no-break space keeps « 42 secondes » on one line.
+    seconds: (value) =>
+      seconds
+        .formatToParts(value)
+        .map((part) => (part.type === 'literal' ? part.value.replace(/ /g, '\u00A0') : part.value))
+        .join(''),
     clock: (totalSeconds) => {
       const whole = Math.max(0, Math.floor(totalSeconds))
       return `${minutesDigits.format(Math.floor(whole / 60))}:${secondsDigits.format(whole % 60)}`
