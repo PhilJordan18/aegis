@@ -6,7 +6,7 @@ import './button.css'
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> &
   Look & {
-    /** Busy: spinner and `aria-disabled`, focus kept, clicks ignored by the caller (handoff §6). */
+    /** Busy: a trailing spinner (the slot of an arrow) and `aria-disabled`, focus kept, clicks ignored by the caller (handoff §6). */
     readonly busy?: boolean
     /** Inert but focusable (`aria-disabled`), styled as disabled; the caller ignores activation. */
     readonly inert?: boolean
@@ -38,8 +38,8 @@ export function Button({
       aria-disabled={unavailable || undefined}
       className={buttonClass({ variant, size, block }, [busy && 'is-busy', inert && 'is-inert', className].filter(Boolean).join(' '))}
     >
-      {busy && <Spinner />}
       {children}
+      {busy && <Spinner />}
     </button>
   )
 }

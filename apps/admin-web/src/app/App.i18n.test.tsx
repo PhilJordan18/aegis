@@ -131,7 +131,7 @@ describe('the Français / English switch', () => {
     await user.click(within(group).getByRole('radio', { name: 'English' }))
     expect(screen.getByRole('group', { name: 'Language' })).toBeDefined()
     expect(screen.getAllByRole('link', { name: 'Sign in' }).length).toBeGreaterThan(0)
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Authorized. Observed. Traced.')
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Ready. Authorized. Proven.')
   })
 
   it('is reachable by keyboard and changes with the arrow keys', async () => {
@@ -174,7 +174,10 @@ describe.each<Locale>(['fr', 'en'])('screens in %s', (locale) => {
   it('landing: every text comes from the catalog and no key path is visible', () => {
     renderWithProviders(<App />, { locale })
     expect(document.body.textContent).not.toMatch(KEY_PATH)
-    expect(screen.getByText(m.landing.lead)).toBeDefined()
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(Object.values(m.brand.signature).join(' '))
+    expect(screen.getByText(m.brand.tagline)).toBeDefined()
+    expect(screen.getByText(m.brand.description)).toBeDefined()
+    expect(screen.getByText(m.landing.footerTechnician.replace(/\u00A0/g, ' '))).toBeDefined()
     for (const guarantee of Object.values(m.landing.guarantees)) expect(screen.getByRole('heading', { level: 2, name: guarantee.title })).toBeDefined()
     expect(screen.getByRole('region', { name: m.landing.guaranteesLabel })).toBeDefined()
     expect(screen.getByText(m.landing.noBlockers)).toBeDefined()

@@ -14,6 +14,13 @@ const count = new Intl.NumberFormat('en-CA')
 export const en: Messages = {
   brand: {
     homeLabel: 'Aegis Manager, home',
+    signature: {
+      ready: 'Ready.',
+      authorized: 'Authorized.',
+      proven: 'Proven.',
+    },
+    tagline: 'What matters, under control.',
+    description: 'Equipment availability, compliance and traceability.',
   },
 
   language: {
@@ -58,11 +65,6 @@ export const en: Messages = {
 
   landing: {
     signIn: 'Sign in',
-    overline: 'Aegis Manager · administration console',
-    heroLine1: 'Authorized',
-    heroLine2: 'Observed',
-    heroLine3: 'Traced',
-    lead: 'Aegis shows whether each critical piece of equipment is ready for use, opens only the expected compartment and keeps a complete chain of custody, from checkout to return.',
     seeGuarantees: 'See the five guarantees',
     accountNote: 'Account provided by your administrator.',
     mockCaption: 'Unit diagnostic',
@@ -95,7 +97,7 @@ export const en: Messages = {
       },
     },
     footerPrototype: 'Academic prototype under validation in the laboratory, designed for maintenance and inspection teams.',
-    footerTechnician: 'Technician? Use the Aegis app on iPhone.',
+    footerTechnician: 'Technician? Use Aegis Mobile on iPhone.',
   },
 
   signIn: {
@@ -104,8 +106,11 @@ export const en: Messages = {
     emailLabel: 'Email address',
     passwordLabel: 'Password',
     submit: 'Sign in',
+    role: 'Administrator workspace',
+    subtitle: 'Access Aegis Manager.',
     home: 'Home',
-    footerTechnician: 'Technician? Use the Aegis app on iPhone.',
+    footerProduct: 'Aegis Manager · Administration',
+    footerTechnician: 'Technician? Use Aegis Mobile on iPhone.',
     fieldError: {
       emailRequired: 'Enter your email address.',
       emailInvalid: 'Enter a valid email address, for example name@example.com.',
@@ -127,7 +132,6 @@ export const en: Messages = {
     rateLimitedTitle: 'Too many attempts.',
     rateLimitedBody: ({ duration }) => `Try again in ${duration}.`,
     rateLimitedFallback: 'Try again in a minute.',
-    rateLimitedHint: ({ remaining }) => `Available in ${remaining}`,
     rateLimitedReady: 'You can try again.',
     unreachableTitle: 'Unable to reach the service.',
     unreachableBody: 'Check your network, then try again.',

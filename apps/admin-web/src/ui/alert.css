@@ -6,7 +6,7 @@
   animation: ag-alert-in var(--ag-motion-base) var(--ag-ease-out);
 }
 .ag-alert > .ag-icon { color: var(--ic); margin-top: 1px; }
-.ag-alert__title { color: var(--fg); font-weight: 650; }
+.ag-alert__title { color: var(--fg); font-weight: 600; }
 .ag-alert__body p + p { margin-top: 4px; }
 .ag-alert__code {
   display: block; margin-top: 6px; font-family: var(--ag-font-mono); font-size: var(--ag-type-code-size);

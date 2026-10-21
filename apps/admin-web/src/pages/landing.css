@@ -1,53 +1,53 @@
-/* Landing (handoff §5, §7; reference accueil-*.png). */
-.ag-landing { width: 100%; max-width: 1440px; margin: 0 auto; padding: 0 var(--ag-gutter); }
-.ag-landing__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; min-height: 76px; }
+/*
+ * Landing, v3 identity: the same hierarchy as the sign-in page (brand, then the typographic
+ * signature, then one action). No illustration and no decorative layer; the only light is
+ * one localized halo behind the signature. The example diagnostic is a labelled sample on an
+ * opaque card.
+ */
+.ag-landing { width: 100%; }
+.ag-landing__head {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+  padding: 16px clamp(20px, 3vw, 40px); border-bottom: 1px solid var(--ag-border);
+}
 .ag-landing__tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; margin-left: auto; }
-.ag-hero {
-  display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--ag-space-7); align-items: stretch;
-  border-top: 1px solid var(--ag-separator); padding-top: var(--ag-space-7);
-}
-.ag-hero__copy { display: flex; flex-direction: column; justify-content: center; padding: 8px 0 12px; min-width: 0; }
-.ag-display {
-  margin-top: 20px;
-  font-size: var(--ag-type-display-size); line-height: var(--ag-type-display-lh);
-  font-weight: var(--ag-type-display-weight); letter-spacing: var(--ag-type-display-track);
-}
-.ag-display__dot { color: var(--ag-accent-text); }
-.ag-hero__lead { margin-top: 24px; max-width: 38em; font-size: var(--ag-type-lead-size); line-height: var(--ag-type-lead-lh); color: var(--ag-text-2); }
-.ag-hero__cta { margin-top: 32px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
-.ag-hero__mention { display: flex; align-items: center; gap: 8px; margin-top: 18px; font-size: var(--ag-type-caption-size); line-height: var(--ag-type-caption-lh); color: var(--ag-text-2); }
-.ag-hero__mention .ag-icon { width: 16px; height: 16px; color: var(--ag-text-3); }
+/* The header sign-in button never wraps. */
+.ag-landing__head .ag-btn { white-space: nowrap; flex: none; }
 
-.ag-atmos {
-  position: relative; min-height: 540px; border-radius: var(--ag-r-atmos); overflow: hidden;
-  background: var(--ag-atmos-panel); isolation: isolate; box-shadow: var(--ag-shadow-panel);
+.ag-landing main { max-width: 1440px; margin: 0 auto; padding: 0 clamp(24px, 4.5vw, 72px); }
+.ag-landing main:focus { outline: none; }
+.ag-hero {
+  position: relative; display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: clamp(32px, 5vw, 72px);
+  align-items: start; padding: clamp(40px, 8vh, 88px) 0 var(--ag-space-8);
 }
-.ag-atmos__cells {
-  inset: -30px -30px auto auto; grid-template-columns: repeat(6, 64px); grid-auto-rows: 64px;
-  -webkit-mask-image: radial-gradient(75% 80% at 62% 30%, #000 30%, transparent 85%);
-  mask-image: radial-gradient(75% 80% at 62% 30%, #000 30%, transparent 85%);
+/* Localized light: it accompanies the signature and never reaches the sample or a message. */
+.ag-hero::before {
+  content: ''; position: absolute; pointer-events: none; left: -12%; top: -10%; width: 66%; height: 90%;
+  background: radial-gradient(ellipse at 38% 42%, var(--ag-halo), transparent 68%);
 }
-.ag-atmos__figure {
-  position: absolute; left: 24px; right: 24px; bottom: 24px; max-width: 420px;
-  background: var(--ag-surface); border: 1px solid var(--ag-border); border-radius: var(--ag-r-card);
-  box-shadow: var(--ag-shadow-float); padding: 16px 16px 12px;
+.ag-hero__copy { position: relative; min-width: 0; }
+.ag-hero__cta { margin-top: 32px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.ag-hero__mention { display: flex; align-items: flex-start; gap: 8px; margin-top: 18px; font-size: var(--ag-type-caption-size); line-height: var(--ag-type-caption-lh); color: var(--ag-text-2); }
+.ag-hero__mention .ag-icon { width: 16px; height: 16px; margin-top: 2px; color: var(--ag-text-3); }
+
+.ag-sample {
+  position: relative; justify-self: end; width: 100%; max-width: 420px; padding: 20px 20px 14px;
+  background: var(--ag-surface); border: 1px solid var(--ag-border); border-radius: var(--ag-r-card); box-shadow: var(--ag-shadow-float);
 }
-.ag-atmos__figure figcaption { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
-.ag-mini { padding: 10px 2px; display: grid; justify-items: start; gap: 4px; }
+.ag-sample figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+.ag-mini { padding: 12px 2px; display: grid; justify-items: start; gap: 4px; }
 .ag-mini + .ag-mini { border-top: 1px solid var(--ag-separator); }
 .ag-mini__reason { font-size: var(--ag-eq-reason-size); font-weight: 500; line-height: 1.35; }
-.ag-mini__name { font-size: 0.9375rem; font-weight: 600; letter-spacing: -0.01em; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.ag-mini__name { font-size: var(--ag-type-body-size); font-weight: 600; letter-spacing: -0.01em; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .ag-mini__code { font-size: var(--ag-eq-code-size); font-weight: 500; letter-spacing: 0; color: var(--ag-text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* Annotation marker for fictitious content (handoff §2.2 `mock`). */
 .ag-mock {
   display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 7px;
-  font-size: 11px; font-weight: 650; line-height: 1; letter-spacing: 0.01em; white-space: nowrap;
+  font-size: 11px; font-weight: 600; line-height: 1; letter-spacing: 0.01em; white-space: nowrap;
   color: var(--ag-mock-fg); background: var(--ag-mock-bg); border: 1px dashed var(--ag-mock-border); border-radius: 4px;
 }
 .ag-mock::before { content: ''; width: 5px; height: 5px; border: 1.3px solid currentColor; transform: rotate(45deg); flex: none; }
 
-.ag-guarantees { margin-top: var(--ag-space-8); }
 .ag-guarantees:focus { outline: none; }
 .ag-guarantees ol {
   display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -55,11 +55,12 @@
 }
 .ag-guarantees li { padding: 20px 20px 22px; min-width: 0; }
 .ag-guarantees li + li { border-left: 1px solid var(--ag-separator); }
-.ag-guarantees__num { font-family: var(--ag-font-mono); font-size: var(--ag-type-overline-size); font-weight: 500; color: var(--ag-accent-text); }
+.ag-guarantees__num { font-size: var(--ag-type-overline-size); font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ag-accent-text); }
 .ag-guarantees__title { margin-top: 10px; font-size: var(--ag-type-title-md-size); font-weight: 600; letter-spacing: var(--ag-type-title-md-track); line-height: var(--ag-type-title-md-lh); }
-.ag-guarantees__text { margin-top: 6px; font-size: 0.875rem; line-height: 1.5; color: var(--ag-text-2); }
+.ag-guarantees__text { margin-top: 6px; font-size: var(--ag-type-caption-size); line-height: 1.5; color: var(--ag-text-2); }
 .ag-landing__foot {
-  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; padding: 20px 0 28px;
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; margin-top: var(--ag-space-8);
+  padding: 20px clamp(20px, 3vw, 40px) 28px; border-top: 1px solid var(--ag-border);
   font-size: var(--ag-type-caption-size); line-height: var(--ag-type-caption-lh); color: var(--ag-text-2);
 }
 
@@ -69,43 +70,32 @@
   .ag-guarantees li:nth-child(n + 4) { border-top: 1px solid var(--ag-separator); }
 }
 @media (max-width: 1023px) {
-  .ag-hero { grid-template-columns: minmax(0, 1fr); }
-  .ag-atmos { min-height: 320px; }
+  .ag-hero { grid-template-columns: minmax(0, 1fr); gap: 32px; padding-top: 40px; }
+  .ag-sample { justify-self: start; max-width: 480px; }
   .ag-guarantees ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ag-guarantees li:nth-child(4) { border-left: 1px solid var(--ag-separator); }
   .ag-guarantees li:nth-child(odd) { border-left: 0; }
   .ag-guarantees li:nth-child(n + 3) { border-top: 1px solid var(--ag-separator); }
 }
 @media (max-width: 767px) {
-  .ag-landing__head { min-height: 64px; }
-  .ag-hero { padding-top: 24px; gap: 24px; }
-  .ag-display { margin-top: 14px; }
-  .ag-hero__lead { margin-top: 18px; font-size: 1rem; }
-  .ag-hero__cta { margin-top: 24px; }
+  .ag-landing__head { padding: 12px 20px; }
+  .ag-landing main { padding: 0 20px; }
+  .ag-hero { padding-top: 28px; gap: 28px; }
   .ag-hero__primary { width: 100%; }
-  .ag-atmos { border-radius: var(--ag-r-panel); }
-  .ag-atmos__cells { grid-template-columns: repeat(6, 48px); grid-auto-rows: 48px; gap: 10px; }
-  .ag-atmos__figure { left: 12px; right: 12px; bottom: 12px; }
-  .ag-guarantees { margin-top: 32px; }
   .ag-guarantees ol { grid-template-columns: minmax(0, 1fr); }
   .ag-guarantees li { padding: 16px 0; }
   .ag-guarantees li + li, .ag-guarantees li:nth-child(4) { border-left: 0; border-top: 1px solid var(--ag-separator); }
 }
-/* Below 768 px the figure flows under the cells, so it never covers the lit cell (review R1). */
-@media (max-width: 767px) {
-  .ag-atmos { min-height: 0; padding: 120px 12px 12px; }
-  .ag-atmos__figure { position: relative; left: auto; right: auto; bottom: auto; }
-  .ag-atmos__figure figcaption { flex-wrap: wrap; }
+@media (max-width: 479px) {
+  .ag-landing__tools { width: 100%; justify-content: space-between; }
 }
-/* The header sign-in button never wraps (review R2); « Manager » is repeated by the hero overline. */
-.ag-landing__head .ag-btn { white-space: nowrap; flex: none; }
-.ag-landing__head .ag-brand { min-width: 0; }
 @media (max-width: 359px) {
-  .ag-landing__head .ag-brand__sub { display: none; }
+  .ag-landing__head { padding: 12px; }
+  .ag-landing main { padding: 0 12px; }
 }
 
 @media (forced-colors: active) {
-  .ag-atmos { border: 1px solid CanvasText; }
-  .ag-atmos__figure { border-color: CanvasText; }
+  .ag-hero::before { display: none; }
+  .ag-sample { border-color: CanvasText; }
   .ag-mock { border-color: CanvasText; }
 }

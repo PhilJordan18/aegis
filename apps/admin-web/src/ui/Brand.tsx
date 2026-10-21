@@ -1,31 +1,29 @@
-import { useId } from 'react'
 import { Link } from '../app/Link'
 import { pathOf } from '../app/routes'
 import { useI18n } from '../i18n/useI18n'
+import markDark from '../assets/brand/aegis-core-mark-dark.svg'
+import markLight from '../assets/brand/aegis-core-mark.svg'
 import './brand.css'
 
 /**
- * Provisional wordmark (handoff §6, Q6): no approved logo yet. The mark and the
- * product name « Aegis Manager » are never translated; only the link's accessible name is.
+ * The single brand component and the swap point of the provisional Aegis Core
+ * identity: the symbol (src/assets/brand/, one file per appearance, chosen by
+ * `data-theme` in brand.css), the word « aegis » set in Geist and the application
+ * name « Manager » as text. Names are never translated; only the link's accessible
+ * name is. « Manager » stays visible on small screens, on a second line.
  */
 export function Brand() {
-  const gradient = useId()
   const { m } = useI18n()
   return (
     <Link className="ag-brand" to={pathOf('landing')} aria-label={m.brand.homeLabel}>
-      <svg className="ag-brand__mark" viewBox="0 0 26 26" aria-hidden="true" focusable="false">
-        <defs>
-          <linearGradient id={gradient} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#3366FF" />
-            <stop offset="1" stopColor="#4B3BD9" />
-          </linearGradient>
-        </defs>
-        <rect className="ag-brand__frame" x="1" y="1" width="24" height="24" rx="7" fill="none" stroke="currentColor" strokeWidth="1.6" />
-        <path className="ag-brand__cross" d="M13 1.8v22.4M1.8 13h22.4" stroke="currentColor" strokeWidth="1.2" />
-        <rect x="14.6" y="14.6" width="8.6" height="8.6" rx="3" fill={`url(#${gradient})`} />
-      </svg>
-      <span className="ag-brand__name">Aegis</span>
-      <span className="ag-brand__sub">Manager</span>
+      <span className="ag-brand__mark" aria-hidden="true">
+        <img className="ag-brand__img ag-brand__img--light" src={markLight} alt="" width="64" height="64" />
+        <img className="ag-brand__img ag-brand__img--dark" src={markDark} alt="" width="64" height="64" />
+      </span>
+      <span className="ag-brand__text">
+        <span className="ag-brand__word">aegis</span>
+        <span className="ag-brand__app">Manager</span>
+      </span>
     </Link>
   )
 }

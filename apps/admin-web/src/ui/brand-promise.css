@@ -1,0 +1,12 @@
+/* The signature is typography: no illustration, no decorative layer. */
+.ag-promise { position: relative; min-width: 0; }
+.ag-promise__tagline { margin-bottom: 22px; }
+.ag-promise__signature {
+  font-size: var(--ag-type-display-size); line-height: var(--ag-type-display-lh);
+  font-weight: var(--ag-type-display-weight); letter-spacing: var(--ag-type-display-track);
+  overflow-wrap: break-word;
+}
+.ag-promise__line { display: block; }
+.ag-promise__line--proof { color: var(--ag-accent-text); }
+.ag-promise__description { margin-top: 24px; max-width: 24rem; line-height: 1.6; color: var(--ag-text-2); }
+.ag-promise__rule { width: 38px; height: 2px; margin-top: 30px; background: var(--ag-accent-text); }

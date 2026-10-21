@@ -6,10 +6,12 @@ aperçu statique de l'écran Équipements (WEB-00). Depuis WEB-01, la connexion
 et la session passent par l'API (`POST /api/v1/auth/login`,
 `GET /api/v1/auth/me`) hors du mode aperçu.
 
-Le rendu applique le handoff de conception (`docs/design/manager-entree/` :
-`handoff.md`, `tokens.css`, `states.md`, `reference/`). Il n'invente aucune
-direction visuelle. Les textes [P] et les jetons restent **proposés** tant
-que Philippe n'a pas approuvé le rendu.
+Le rendu applique l'identité « Lumière du hub » v3 approuvée par Philippe
+(issue #79 : `docs/design/manager-v3/`, référence commune dans
+`docs/design/identite/reference.md`) sur les parcours, les états et les textes
+du handoff d'entrée (`docs/design/manager-entree/` : `handoff.md`, `states.md`).
+Il n'invente aucune direction visuelle. Les textes [P] restent **proposés** tant
+que Philippe ne les a pas approuvés.
 
 ## Commandes
 
@@ -29,6 +31,8 @@ npm run preview        # sert dist/
 npm run test:a11y      # Playwright : axe (WCAG 2.x A/AA), absence de défilement horizontal et parcours, sur toute la matrice
 npm run capture        # mêmes contrôles, et écrit la matrice complète dans test-results/captures/ (ignoré par Git)
 npm run capture:evidence  # 16 captures choisies, à 1×, dans docs/design/manager-entree/captures/
+npm run capture:integration  # 14 captures FR/EN de l'identité v3, à 1×, dans docs/design/manager-v3/captures-integration/
+npm run test:identity  # mesures sur le rendu : saut de mise en page, contrastes peints, focus, texte coupé
 npm run test:e2e:api   # recette Playwright contre l'API réelle (build de production); échoue sans API ou sans identifiants
 ```
 
@@ -88,14 +92,14 @@ nommés `<route>-<état>-<taille>-<thème>.png`.
 Une capture est prise avant les contrôles, pour qu'un état en échec laisse
 une trace. Les parcours (`flow:`) vérifient en outre :
 
-- l'ordre de tabulation et le focus après connexion;
+- l'ordre de tabulation (marque, « Accueil », langue, courriel) et le focus après connexion;
 - l'écran de mauvais rôle, sans aucune requête;
 - le sélecteur d'aperçu;
 - l'apparence appliquée avant le premier affichage;
 - le stockage, qui ne contient que les préférences d'interface (apparence,
   langue) et seulement après un choix explicite;
 - les polices servies par le bundle, sans CDN;
-- la transparence réduite (émulée par CDP) et le mouvement réduit;
+- l'absence de verre (aucun `backdrop-filter`) et le mouvement réduit;
 - le tiroir modal et le lien d'évitement.
 
 `e2e/entry.spec.ts` tourne en français (la langue du navigateur est `fr-CA`
@@ -137,25 +141,40 @@ des clés et des paramètres.
 
 ## Couche visuelle
 
-- `src/styles/tokens.css` reprend mot pour mot
-  `docs/design/manager-entree/tokens.css`. `src/styles/tokens.test.ts`
-  échoue si les deux fichiers divergent : modifier d'abord le fichier de
-  conception.
-- `src/styles/base.css` contient la réinitialisation, l'anneau de focus et
-  le verre avec ses trois replis opaques : absence de `backdrop-filter`,
-  `prefers-reduced-transparency` et `forced-colors`. Le décor y est masqué
-  dans ces cas, et toute transition est coupée en mouvement réduit.
+- `src/styles/tokens.css` porte les palettes sémantiques de la référence
+  d'identité (clair minéral, sombre profond) et les jetons adoptés par Philippe :
+  bordure des contrôles, anneau de focus plein de 2 px décalé de 2 px, élément
+  sélectionné, contrôle désactivé; l'information est un bleu azur distinct du
+  succès, de l'avertissement, de l'erreur et de l'accent. Il remplace pour
+  l'entrée les jetons « Verre lumineux » de `docs/design/manager-entree/tokens.css`
+  (conservé comme historique). `src/styles/tokens.test.ts` mesure le contraste de
+  chaque paire qui porte du texte, un contrôle ou le focus, dans les deux
+  apparences; `src/styles/identity.test.ts` échoue si du verre, des cellules, de
+  l'indigo ou un dégradé de surface reviennent dans les sources de production.
+- `src/styles/base.css` contient la réinitialisation, l'anneau de focus (le halo
+  translucide ne l'accompagne que sur un champ) et la coupure des transitions en
+  mouvement réduit. Aucune surface n'utilise `backdrop-filter`.
+- Marque : un composant unique, `src/ui/Brand.tsx`. Le symbole vient des deux
+  fichiers de `src/assets/brand/` (clair et sombre, copiés de
+  `docs/design/identite/assets/`, voir leur `README.md`), choisis par `data-theme`;
+  le mot « aegis » est composé en Geist et « Manager » est du texte, qui passe sur
+  une seconde ligne sous 480 px au lieu de disparaître. Remplacer les deux
+  fichiers suffit pour les assets définitifs. `src/ui/BrandPromise.tsx` porte la
+  signature commune, l'accroche et la description (catalogues, `brand.*`).
 - Chaque composant a sa feuille CSS simple, avec des classes `ag-*` et ses
   règles de couleurs forcées (handoff §9.5) :
-  - `src/ui/` : marque, bouton, alerte, pastille de statut, icônes SVG en
-    ligne, cellules;
+  - `src/ui/` : marque, promesse de marque, bouton, alerte, pastille de statut,
+    icônes SVG en ligne;
   - `src/app/shell/` : barre latérale, menu du compte, tiroir;
   - `src/app/page.css` : cadre et titre de page dans le shell, communs à
     l'Équipements protégé et à l'aperçu;
   - `src/pages/`;
   - `src/features/auth/sign-in.css`.
-- Le verre est réservé à la navigation : barre latérale, onglets, barre
-  compacte. Formulaires, alertes et données reposent sur `--ag-surface`.
+- Surfaces opaques et filets; la seule lumière est un halo radial localisé
+  derrière la promesse (accueil, connexion), jamais derrière la carte ou un
+  message. Les erreurs globales de connexion sont annoncées sous le bouton, dans
+  une zone réservée au bas du formulaire : elles ne déplacent ni un champ ni le
+  bouton.
 
 ## Ce qui relève de l'aperçu uniquement
 
