@@ -125,6 +125,7 @@ La cible finale est **10 retraits et 10 retours consécutifs**, sans interventio
 | `apps/ios/` | Application SwiftUI |
 | `services/api/` | API Spring Boot et migrations Flyway |
 | `firmware/locker-controller/` | Firmware du hub et des cellules |
+| `tools/hub-simulator/` | Simulateur MQTT du hub (Node/TypeScript) pour développer et tester sans le locker |
 | `infra/docker/`, `infra/mqtt/` | Environnement reproductible et broker |
 | `docs/cahier-conception/` | Documents 02–15 ci-dessous |
 | `docs/architecture/`, `docs/diagrams/`, `docs/research/` | Dessins, sources des diagrammes et résultats de POC |

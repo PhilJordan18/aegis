@@ -1,0 +1,123 @@
+#!/usr/bin/env node
+import { readFileSync } from 'node:fs';
+import { parseArgs } from 'node:util';
+import { ConfigError, configFromEnv } from './config.ts';
+import type { OutboundMessage } from './messages.ts';
+import { ScenarioError, parseScenario, runScenario, type Scenario } from './scenario.ts';
+import { HubSimulator } from './simulator.ts';
+
+const USAGE = `Usage: node src/cli.ts [--scenario <file.json>] [--log-payloads]
+
+Runs the Aegis hub simulator until SIGINT/SIGTERM (clean OFFLINE) or until a
+scenario ends with "stop" or "crash". Kill it with SIGKILL to trigger the Last Will.
+
+Environment (credentials are never accepted as arguments):
+  AEGIS_MQTT_DEVICE_PASSWORD   required, device secret (local: infra/docker/.env.example)
+  AEGIS_MQTT_URL               default mqtt://127.0.0.1:1883
+  AEGIS_MQTT_DEVICE_USERNAME   default the locker id
+  AEGIS_MQTT_CA_FILE           optional CA bundle for mqtts:
+  AEGIS_SIM_LOCKER_ID          default d46a74ae-39dc-460b-8af0-38fc791b376a
+  AEGIS_SIM_DEVICE_KEY         default sim-<lockerId>; clientId is aegis-locker-<deviceKey>
+  AEGIS_SIM_COMPARTMENTS       default A1:1ae77ae3-8490-4f09-9412-a7816b77bff9:1,A2:5c1d0b7e-2f4a-4d3b-9a61-0e8b7c2d4f10:2
+  AEGIS_SIM_FIRMWARE_VERSION   default 0.1.0-sim
+  AEGIS_SIM_RESET_REASON       default POWER_ON
+  AEGIS_SIM_RSSI_DBM           default -55
+  AEGIS_SIM_ALLOW_INSECURE_REMOTE  "true" to allow mqtt: to a non-loopback host on an isolated network
+`;
+
+function log(event: string, fields: Record<string, unknown> = {}): void {
+  process.stdout.write(`${JSON.stringify({ at: new Date().toISOString(), event, ...fields })}\n`);
+}
+
+function describe(message: OutboundMessage, withPayload: boolean): Record<string, unknown> {
+  const p = message.payload;
+  return {
+    type: p.type,
+    topic: message.topic,
+    qos: message.delivery.qos,
+    retain: message.delivery.retain,
+    messageId: p.messageId,
+    sequence: p.sequence,
+    deviceSessionId: p.deviceSessionId,
+    ...(p.type === 'DEVICE_AVAILABILITY' ? { status: p.status } : {}),
+    ...(withPayload ? { payload: p } : {}),
+  };
+}
+
+async function main(): Promise<number> {
+  const { values } = parseArgs({
+    options: {
+      scenario: { type: 'string' },
+      'log-payloads': { type: 'boolean', default: false },
+      help: { type: 'boolean', short: 'h', default: false },
+    },
+    strict: true,
+  });
+  if (values.help) {
+    process.stdout.write(USAGE);
+    return 0;
+  }
+
+  const config = configFromEnv(process.env);
+  const scenario: Scenario | undefined = values.scenario
+    ? parseScenario(JSON.parse(readFileSync(values.scenario, 'utf8')))
+    : undefined;
+  const withPayload = values['log-payloads'];
+
+  const simulator = new HubSimulator(config);
+  simulator.on('state', (state) => log('state', { state }));
+  simulator.on('sessionStarted', (deviceSessionId) => log('session_started', { deviceSessionId }));
+  simulator.on('willPrepared', (m) => log('will_prepared', describe(m, withPayload)));
+  simulator.on('delivered', (m) => log('delivered', describe(m, withPayload)));
+  simulator.on('publishFailed', (m, error) => log('publish_failed', { ...describe(m, false), error: error.message }));
+  simulator.on('reconnectScheduled', (delayMs, attempt) => log('reconnect_scheduled', { delayMs, attempt }));
+  simulator.on('transportError', (error) => log('transport_error', { error: error.message }));
+
+  log('starting', {
+    brokerUrl: config.brokerUrl,
+    clientId: simulator.clientId,
+    username: config.username,
+    lockerId: config.lockerId,
+    compartments: config.compartments.map((c) => c.code),
+  });
+
+  let shuttingDown = false;
+  const done = new Promise<number>((resolve) => {
+    const shutdown = (signal: string) => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      log('signal', { signal });
+      simulator.stop().then(
+        () => resolve(0),
+        () => resolve(1),
+      );
+    };
+    process.on('SIGINT', () => shutdown('SIGINT'));
+    process.on('SIGTERM', () => shutdown('SIGTERM'));  });
+
+  simulator.start();
+  if (scenario) {
+    try {
+      await runScenario(simulator, scenario);
+      log('scenario_completed');
+      if (simulator.state === 'stopped') return 0;
+    } catch (error) {
+      log('scenario_failed', { error: (error as Error).message });
+      await simulator.stop();
+      return 1;
+    }
+  }
+  return done;
+}
+
+main().then(
+  (code) => process.exit(code),
+  (error: unknown) => {
+    if (error instanceof ConfigError || error instanceof ScenarioError || error instanceof SyntaxError) {
+      process.stderr.write(`hub-simulator: ${error.message}\n`);
+      process.exit(2);
+    }
+    process.stderr.write(`hub-simulator: ${(error as Error).stack ?? String(error)}\n`);
+    process.exit(1);
+  },
+);
