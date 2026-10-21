@@ -342,6 +342,8 @@ dépendre silencieusement de la branche principale.
 2. Réaliser la plus petite tranche verticale démontrable.
 3. Tester les cas nominal, refus, doublon, expiration et concurrence pertinents.
 4. Mettre à jour le contrat normatif dans le même changement.
+5. Committer chaque étape vérifiée sur la branche d'issue, sans attendre une
+   autorisation par commit.
 
 ### Revue
 
@@ -356,8 +358,9 @@ Résumer le résultat, les fichiers, contrats, migrations, commandes exécutées
 résultats observés, limites, risques et prochain propriétaire.
 
 Ce rapport constitue la porte de livraison : l'agent s'arrête après l'avoir
-présenté. Seule la réponse humaine « deliver » autorise le push de la branche
-d'issue et l'ouverture de la PR vers `dev` (voir `CONTRIBUTING.md`).
+présenté, et ses commits restent locaux. Seule la réponse humaine « deliver »
+autorise le push de la branche d'issue et l'ouverture de la PR vers `dev` (voir
+`CONTRIBUTING.md`); la fusion reste humaine.
 
 ## 9. Exemple de bonne demande
 
@@ -367,7 +370,8 @@ Implémente RES-01 dans services/api.
 Lis la story RES-01, les sections réservation de 02, 06, 08 et 09, puis
 propose une courte tranche verticale. Préserve l'unicité d'une réservation
 active au niveau PostgreSQL. Teste le cas READY, le refus BLOCKED et deux
-créations concurrentes. Ne modifie pas MQTT. Ne commit pas.
+créations concurrentes. Ne modifie pas MQTT. Committe les étapes vérifiées;
+ne pousse pas.
 ```
 
 Cette demande borne le résultat, les sources, les invariants, les scénarios et

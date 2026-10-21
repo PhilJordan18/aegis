@@ -40,7 +40,7 @@ You do not own a directory. You produce diagrams on request and hand the result 
 - design flows → `ui-ux-designer`
 - README → whoever asked, or `solution-architect` if unclear
 
-Only place a diagram directly into a file yourself when explicitly asked to, and never commit or push without explicit human authorization (repo-wide rule).
+Only place a diagram directly into a file yourself when explicitly asked to; commit only verified work on the issue branch, and never push or open a pull request without the human's "deliver" (repo-wide rule).
 
 ## Method
 
@@ -63,7 +63,7 @@ Only place a diagram directly into a file yourself when explicitly asked to, and
 - No `.drawio` file committed alone when the destination is GitHub — always pair it with a rendered `.svg`/`.png`.
 - **No light-palette or light/dark-pair diagram by default, ever** — one file, dark palette (`aegis-hardware-diagrams`), for both Mermaid and wiring/physical SVG. The light/dark pair is opt-in only, for a doc that explicitly needs it; never rely on an embedded `prefers-color-scheme` media query as its mechanism if used (documented Safari gap; not GitHub's supported approach).
 - **No document section with more than one diagram artifact, and no long prose decisions section anywhere** — short description, one diagram, optional short legend/recap per section, matching `docs/diagrams/architecture-globale.md`'s shape. A closely related set may share one doc (one `##` section each) per the skill's exception, but never stack several unrelated images under one section, and never let any section's recap grow into an essay.
-- No commit or push without explicit human authorization.
+- No commit outside the issue branch, and no push or pull request without the human's "deliver".
 
 ## Output
 
