@@ -20,37 +20,45 @@ export type GatewayFailure =
       readonly requestId: string | null
     }
   | {
+      /**
+       * A 2xx response whose body does not match the contract. Reported as a
+       * service error rather than guessing a profile or a token.
+       */
+      readonly kind: 'invalidResponse'
+      readonly status: number
+      readonly requestId: string | null
+    }
+  | {
       readonly kind: 'network'
       /**
-       * `notConfigured`: this build has no HTTP adapter yet. Reported as
-       * unreachable rather than pretending that a sign-in happened.
+       * `notConfigured`: no adapter was provided (context default). Reported
+       * as unreachable rather than pretending that a sign-in happened.
        */
       readonly reason: 'offline' | 'timeout' | 'notConfigured'
     }
   | { readonly kind: 'aborted' }
 
 /**
- * Boundary between the Manager UI and the Aegis Control API.
+ * Boundary between the Manager UI and the Aegis Control API. The production
+ * adapter is `httpAuthGateway.ts`; the design-review preview has its own.
  *
- * Future HTTP adapter (integration slice, not implemented here). It must:
- * - send `POST /api/v1/auth/login` with a JSON `LoginRequest`
- *   (`Content-Type: application/json`) and read a `LoginResponse` (09 §10.2);
+ * Every adapter must:
+ * - send `POST /api/v1/auth/login` with a JSON `LoginRequest` and read a
+ *   `LoginResponse` (09 §10.2);
  * - send `GET /api/v1/auth/me` with `Authorization: Bearer <token>` (09 §4.3, §10.3);
  * - parse `application/problem+json` bodies into `ProblemResponse` (09 §7), and
  *   return `problem: null` when a body is missing or malformed instead of guessing;
  * - pass the raw `Retry-After` header of a 429 (09 §23.4);
- * - send an `X-Request-Id` and return the response's `X-Request-Id`; with the
- *   problem `traceId`, it identifies the request for support (09 §6.1);
+ * - send an `X-Request-Id` and return the response's `X-Request-Id` (09 §6.1);
  * - apply a timeout and honour `signal`, mapping to `network`/`aborted`;
- * - never log, persist or echo the password or the access token;
- * - rely on an exact-origin CORS configuration on the API (09 §23.1, not configured yet).
+ * - never log, persist or echo the password or the access token.
  */
 export interface AuthGateway {
   signIn(request: LoginRequest, signal?: AbortSignal): Promise<GatewayResult<LoginResponse>>
   currentProfile(accessToken: string, signal?: AbortSignal): Promise<GatewayResult<UserProfile>>
 }
 
-/** Used by builds without an HTTP adapter: every call honestly fails as unreachable. */
+/** Context default when no adapter is provided: every call honestly fails as unreachable. */
 export const unconfiguredAuthGateway: AuthGateway = {
   signIn: async () => ({ kind: 'network', reason: 'notConfigured' }),
   currentProfile: async () => ({ kind: 'network', reason: 'notConfigured' }),

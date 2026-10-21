@@ -7,10 +7,13 @@ import { Link } from '../Link'
 import { pathOf } from '../routes'
 import './shell.css'
 
-/** Order imposed by sections.md §5 and handoff §6 SidebarNav. Only Équipements exists in this slice. */
+/**
+ * Order imposed by sections.md §5 and handoff §6 SidebarNav. Only Équipements exists in this slice:
+ * the static preview in design-review builds, the protected page otherwise.
+ */
 const SECTIONS: readonly { label: string; icon: IconName; path: string | null }[] = [
   { label: "Vue d'ensemble", icon: 'grid', path: null },
-  { label: 'Équipements', icon: 'box', path: pathOf('equipmentPreview') },
+  { label: 'Équipements', icon: 'box', path: pathOf(__AEGIS_PREVIEW__ ? 'equipmentPreview' : 'equipment') },
   { label: 'Réservations et prêts', icon: 'calendar', path: null },
   { label: 'Casiers', icon: 'locker', path: null },
   { label: 'Anomalies', icon: 'alert', path: null },
