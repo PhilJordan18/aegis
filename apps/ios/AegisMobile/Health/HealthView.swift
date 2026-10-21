@@ -121,9 +121,9 @@ private struct HealthStatusCard: View {
                 Text("Connexion au service impossible. Vérifiez le réseau.")
             case .unavailable(let status, let traceId):
                 StatusHeadline(title: "Service indisponible", symbol: "exclamationmark.triangle.fill", tint: .blockedIcon)
-                Text("Le service a répondu avec l’erreur \(status, format: .number.grouping(.never)). Réessayez dans un instant.")
+                Text("Le service a répondu avec l’erreur \(status). Réessayez dans un instant.")
                 if let traceId {
-                    Text("Référence : \(traceId)")
+                    Text("Identifiant de suivi : \(traceId)")
                         .font(.footnote.monospaced())
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
@@ -164,7 +164,7 @@ private struct Fact: View {
 }
 
 private struct StatusHeadline: View {
-    let title: String
+    let title: LocalizedStringKey
     let symbol: String
     let tint: Color
 

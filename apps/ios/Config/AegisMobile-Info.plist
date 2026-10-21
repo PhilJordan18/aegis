@@ -4,5 +4,10 @@
 <dict>
 	<key>AegisAPIBaseURL</key>
 	<string>$(AEGIS_API_BASE_URL)</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>fr</string>
+		<string>en</string>
+	</array>
 </dict>
 </plist>
