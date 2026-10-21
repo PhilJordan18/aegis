@@ -1,0 +1,118 @@
+sign-in nominal fr dark 1440                          21 textes ok | pire Se connecter 5.39
+sign-in sending fr dark 1440                          23 textes ok | pire Connexion… 5.39
+sign-in invalid-credentials fr dark 1440              24 textes ok | pire Se connecter 5.39
+sign-in validation fr dark 1440                       24 textes ok | pire Se connecter 5.39
+sign-in rate-limited fr dark 1440                     25 textes ok | pire Se connecter 5.37
+sign-in unreachable fr dark 1440                      25 textes ok | pire Se connecter 5.39
+sign-in service-error fr dark 1440                    27 textes ok | pire Se connecter 5.39
+sign-in session-expired fr dark 1440                  24 textes ok | pire Se connecter 5.39
+sign-in role-unauthorized fr dark 1440                20 textes ok | pire Se connecter avec un autre compte 5.39
+sign-in nominal fr dark 390                           14 textes ok | pire Se connecter 5.39
+sign-in nominal+brand=mark fr dark 1440               21 textes ok | pire Se connecter 5.39
+shell fr dark 1440                                    34 textes ok | pire AD 5.39
+shell fr dark 390                                     25 textes ok | pire MM-002 7.98
+shell drawer fr dark 390                              12 textes ok | pire AD 5.39
+sign-in nominal en dark 1440                          21 textes ok | pire Sign in 5.39
+sign-in sending en dark 1440                          23 textes ok | pire Signing in… 5.39
+sign-in invalid-credentials en dark 1440              24 textes ok | pire Sign in 5.39
+sign-in validation en dark 1440                       24 textes ok | pire Sign in 5.39
+sign-in rate-limited en dark 1440                     25 textes ok | pire Sign in 5.37
+sign-in unreachable en dark 1440                      25 textes ok | pire Sign in 5.39
+sign-in service-error en dark 1440                    27 textes ok | pire Sign in 5.39
+sign-in session-expired en dark 1440                  24 textes ok | pire Sign in 5.39
+sign-in role-unauthorized en dark 1440                20 textes ok | pire Sign in with another account 5.39
+sign-in nominal en dark 390                           14 textes ok | pire Sign in 5.39
+sign-in nominal+brand=mark en dark 1440               21 textes ok | pire Sign in 5.39
+shell en dark 1440                                    34 textes ok | pire AD 5.39
+shell en dark 390                                     25 textes ok | pire MM-002 7.98
+shell drawer en dark 390                              12 textes ok | pire AD 5.39
+sign-in nominal fr light 1440                         21 textes ok | pire L’essentiel, sous contrôle. 5.28
+sign-in sending fr light 1440                         23 textes ok | pire L’essentiel, sous contrôle. 5.28
+sign-in invalid-credentials fr light 1440             24 textes ok | pire L’essentiel, sous contrôle. 5.28
+sign-in validation fr light 1440                      24 textes ok | pire L’essentiel, sous contrôle. 5.28
+sign-in rate-limited fr light 1440                    25 textes ok | pire Se connecter 5.04
+sign-in unreachable fr light 1440                     25 textes ok | pire L’essentiel, sous contrôle. 5.28
+sign-in service-error fr light 1440                   27 textes ok | pire Disponibilité, conformité et traçabilité de vos  5.25
+sign-in session-expired fr light 1440                 24 textes ok | pire L’essentiel, sous contrôle. 5.28
+sign-in role-unauthorized fr light 1440               20 textes ok | pire L’essentiel, sous contrôle. 5.28
+sign-in nominal fr light 390                          14 textes ok | pire Manager 5.59
+sign-in nominal+brand=mark fr light 1440              21 textes ok | pire L’essentiel, sous contrôle. 5.28
+shell fr light 1440                                   34 textes ok | pire MM-002 5.2
+shell fr light 390                                    25 textes ok | pire MM-002 5.2
+shell drawer fr light 390                             12 textes ok | pire Administrateur 5.69
+sign-in nominal en light 1440                         21 textes ok | pire Clarity. Control. Confidence. 5.25
+sign-in sending en light 1440                         23 textes ok | pire Clarity. Control. Confidence. 5.25
+sign-in invalid-credentials en light 1440             24 textes ok | pire Clarity. Control. Confidence. 5.25
+sign-in validation en light 1440                      24 textes ok | pire Clarity. Control. Confidence. 5.25
+sign-in rate-limited en light 1440                    25 textes ok | pire Sign in 5.04
+sign-in unreachable en light 1440                     25 textes ok | pire Clarity. Control. Confidence. 5.25
+sign-in service-error en light 1440                   27 textes ok | pire Clarity. Control. Confidence. 5.25
+sign-in session-expired en light 1440                 24 textes ok | pire Clarity. Control. Confidence. 5.25
+sign-in role-unauthorized en light 1440               20 textes ok | pire Clarity. Control. Confidence. 5.25
+sign-in nominal en light 390                          14 textes ok | pire Manager 5.59
+sign-in nominal+brand=mark en light 1440              21 textes ok | pire Clarity. Control. Confidence. 5.25
+shell en light 1440                                   34 textes ok | pire MM-002 5.2
+shell en light 390                                    25 textes ok | pire MM-002 5.2
+shell drawer en light 390                             12 textes ok | pire Administrator 5.69
+
+== jetons dark
+   1.6 bordure de champ v3 (--border) / panneau (échoue 1.4.11)
+  1.49 bordure de champ v3 (--border) / champ (échoue 1.4.11)
+  3.53 bordure de champ retenue (--control-border) / panneau
+   3.3 bordure de champ retenue / champ
+  8.32 focus (plein) / panneau
+  7.79 focus / champ
+  8.98 focus / bandeau (top)
+  8.98 focus / fond (bg)
+  7.36 focus / élément sélectionné
+  1.39 bague translucide v3 seule (--ring sur panneau) / panneau (non utilisée seule)
+  3.37 bouton principal / panneau (limite visuelle)
+  5.39 texte du bouton / bouton
+ 12.48 bordure d'erreur (error-text) / panneau
+ 11.68 bordure d'erreur / champ
+ 10.32 icône d'erreur (error-text) / fond d'erreur
+ 10.17 icône d'avertissement / fond
+  8.79 icône d'information / fond
+  7.67 icône « prêt » / fond de pastille
+  8.98 symbole du logo (accent, A) / bandeau
+  8.32 symbole du logo (accent, A) / panneau
+ 11.73 noyau du logo (core) / bandeau
+ 10.38 noyau du logo (core) / bandeau sous le halo
+ 10.87 noyau du logo (core) / panneau
+  8.61 texte secondaire / bandeau sous le halo
+ 15.74 texte / bandeau sous le halo
+  7.94 accent (« Prouvé. ») / bandeau sous le halo
+  5.37 bouton verrouillé : texte / fond (indicatif, état désactivé exempté)
+  1.17 bouton verrouillé : fond / panneau (limite visuelle)
+
+== jetons light
+  1.39 bordure de champ v3 (--border) / panneau (échoue 1.4.11)
+   1.3 bordure de champ v3 (--border) / champ (échoue 1.4.11)
+  3.48 bordure de champ retenue (--control-border) / panneau
+  3.27 bordure de champ retenue / champ
+  7.07 focus (plein) / panneau
+  6.65 focus / champ
+  6.54 focus / bandeau (top)
+  6.54 focus / fond (bg)
+  6.08 focus / élément sélectionné
+  1.21 bague translucide v3 seule (--ring sur panneau) / panneau (non utilisée seule)
+  7.07 bouton principal / panneau (limite visuelle)
+  7.07 texte du bouton / bouton
+  7.47 bordure d'erreur (error-text) / panneau
+  7.02 bordure d'erreur / champ
+  6.75 icône d'erreur (error-text) / fond d'erreur
+  6.58 icône d'avertissement / fond
+  6.83 icône d'information / fond
+  4.24 icône « prêt » / fond de pastille
+  6.54 symbole du logo (accent, A) / bandeau
+  7.07 symbole du logo (accent, A) / panneau
+  4.55 noyau du logo (core) / bandeau
+  4.15 noyau du logo (core) / bandeau sous le halo
+  4.92 noyau du logo (core) / panneau
+   5.1 texte secondaire / bandeau sous le halo
+ 13.04 texte / bandeau sous le halo
+  5.96 accent (« Prouvé. ») / bandeau sous le halo
+  5.04 bouton verrouillé : texte / fond (indicatif, état désactivé exempté)
+  1.23 bouton verrouillé : fond / panneau (limite visuelle)
+
+symbole clair sur fond sombre : A 2.75 noyau 3.96
