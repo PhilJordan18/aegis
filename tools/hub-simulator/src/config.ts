@@ -56,7 +56,7 @@ export interface SimulatorConfig {
   /** Allows plaintext MQTT to a non-loopback host, e.g. a private Docker network. */
   readonly allowInsecureRemote: boolean;
   readonly caFile?: string;
-  /** State file holding the last bootCount per deviceKey, the simulator's NVS. */
+  /** State file holding the last bootCount of this deviceKey, the simulator's NVS. */
   readonly bootCountFile: string;
   /** Overrides the bootCount of the first boot only (tests, deliberate reset). */
   readonly firstBootCount?: number;
@@ -180,13 +180,14 @@ export function configFromEnv(env: NodeJS.ProcessEnv): SimulatorConfig {
   const lockerId = env.AEGIS_SIM_LOCKER_ID ?? DEFAULT_LOCKER_ID;
   const caFile = env.AEGIS_MQTT_CA_FILE;
   const bootCount = env.AEGIS_SIM_BOOT_COUNT;
+  const deviceKey = env.AEGIS_SIM_DEVICE_KEY ?? `sim-${lockerId}`;
   return validateConfig({
     brokerUrl: env.AEGIS_MQTT_URL ?? DEFAULT_BROKER_URL,
     // The local broker authenticates the hub with its lockerId as username.
     username: env.AEGIS_MQTT_DEVICE_USERNAME ?? lockerId,
     password: env.AEGIS_MQTT_DEVICE_PASSWORD ?? '',
     lockerId,
-    deviceKey: env.AEGIS_SIM_DEVICE_KEY ?? `sim-${lockerId}`,
+    deviceKey,
     compartments: env.AEGIS_SIM_COMPARTMENTS ? parseCompartments(env.AEGIS_SIM_COMPARTMENTS) : DEFAULT_COMPARTMENTS,
     firmwareVersion: env.AEGIS_SIM_FIRMWARE_VERSION ?? DEFAULT_FIRMWARE_VERSION,
     resetReason: (env.AEGIS_SIM_RESET_REASON ?? DEFAULT_RESET_REASON) as ResetReason,
@@ -194,7 +195,9 @@ export function configFromEnv(env: NodeJS.ProcessEnv): SimulatorConfig {
     heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
     allowInsecureRemote: env.AEGIS_SIM_ALLOW_INSECURE_REMOTE === 'true',
     ...(caFile ? { caFile } : {}),
-    bootCountFile: env.AEGIS_SIM_BOOT_COUNT_FILE ? resolve(env.AEGIS_SIM_BOOT_COUNT_FILE) : defaultBootCountFile(env),
+    bootCountFile: env.AEGIS_SIM_BOOT_COUNT_FILE
+      ? resolve(env.AEGIS_SIM_BOOT_COUNT_FILE)
+      : defaultBootCountFile(deviceKey, env),
     ...(bootCount ? { firstBootCount: parseInteger('AEGIS_SIM_BOOT_COUNT', bootCount) } : {}),
   });
 }
@@ -202,18 +205,19 @@ export function configFromEnv(env: NodeJS.ProcessEnv): SimulatorConfig {
 /** Defaults for programmatic use; the password must still be supplied by the caller. */
 export function defineConfig(overrides: Partial<SimulatorConfig> & Pick<SimulatorConfig, 'password'>): SimulatorConfig {
   const lockerId = overrides.lockerId ?? DEFAULT_LOCKER_ID;
+  const deviceKey = overrides.deviceKey ?? `sim-${lockerId}`;
   return validateConfig({
     brokerUrl: DEFAULT_BROKER_URL,
     username: lockerId,
     lockerId,
-    deviceKey: `sim-${lockerId}`,
+    deviceKey,
     compartments: DEFAULT_COMPARTMENTS,
     firmwareVersion: DEFAULT_FIRMWARE_VERSION,
     resetReason: DEFAULT_RESET_REASON,
     rssiDbm: DEFAULT_RSSI_DBM,
     heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
     allowInsecureRemote: false,
-    bootCountFile: defaultBootCountFile(),
+    bootCountFile: defaultBootCountFile(deviceKey),
     ...overrides,
   });
 }

@@ -62,12 +62,18 @@ Le firmware conserve `bootCount` en NVS et l'incrémente au démarrage, avant to
 message. Le simulateur fait de même dans un fichier d'état **hors du dépôt**,
 qui tient lieu de NVS :
 
-- chemin par défaut : `$XDG_STATE_HOME/aegis/hub-simulator/boot-counts.json`,
-  soit `~/.local/state/aegis/hub-simulator/boot-counts.json` sans
-  `XDG_STATE_HOME`; `AEGIS_SIM_BOOT_COUNT_FILE` le remplace;
-- une valeur par `deviceKey`, réservée et écrite (écriture puis renommage) à
-  chaque `start()`, donc aussi à chaque `restart()` et à chaque relance du
-  processus; un fichier absent fait partir de 1;
+- chemin par défaut, **un fichier par `deviceKey`** :
+  `$XDG_STATE_HOME/aegis/hub-simulator/boot-count-<deviceKey>.json`, soit
+  `~/.local/state/aegis/hub-simulator/boot-count-<deviceKey>.json` sans
+  `XDG_STATE_HOME`. Des simulateurs de hubs différents n'écrivent donc jamais
+  le même fichier : sans verrou, un fichier partagé pourrait perdre une mise à
+  jour;
+- `AEGIS_SIM_BOOT_COUNT_FILE` impose un fichier explicite. Il peut contenir
+  plusieurs `deviceKey`, mais deux processus qui le partagent en même temps
+  peuvent perdre une mise à jour : réservez-le à un seul processus à la fois;
+- la valeur est réservée et écrite (écriture puis renommage) à chaque `start()`,
+  donc aussi à chaque `restart()` et à chaque relance du processus; un fichier
+  absent fait partir de 1;
 - un fichier illisible ou mal formé arrête le simulateur au lieu de repartir à
   1, ce qu'un backend classerait comme un démarrage plus ancien;
 - `AEGIS_SIM_BOOT_COUNT` (ou `firstBootCount` en API) impose la valeur du premier
@@ -82,7 +88,7 @@ compteur est indexé par `deviceKey` : changer `AEGIS_SIM_DEVICE_KEY` pour un m�
 locker équivaut à un nouveau device et repart à 1. Deux processus ne doivent pas
 simuler le même `deviceKey` en même temps (ils partageraient aussi le `clientId`).
 
-Le `.gitignore` du simulateur exclut `boot-counts*.json` au cas où un chemin
+Le `.gitignore` du simulateur exclut `boot-count*.json` au cas où un chemin
 relatif viserait le dépôt; les tests écrivent dans un répertoire temporaire.
 
 Hors périmètre, prévus par SIM-02 (#39) : commandes `UNLOCK_COMPARTMENT`,
@@ -144,7 +150,7 @@ docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml
 | `AEGIS_SIM_COMPARTMENTS` | `A1:1ae77ae3-…:1,A2:5c1d0b7e-…:2` | `code:compartmentId:cellAddress`, séparés par des virgules |
 | `AEGIS_SIM_FIRMWARE_VERSION` | `0.1.0-sim` | `firmwareVersion` déclaré |
 | `AEGIS_SIM_RESET_REASON` | `POWER_ON` | `resetReason` du premier `DEVICE_RESTARTED`, dans la liste contrôlée |
-| `AEGIS_SIM_BOOT_COUNT_FILE` | `$XDG_STATE_HOME/aegis/hub-simulator/boot-counts.json` | Fichier d'état de `bootCount`, hors du dépôt |
+| `AEGIS_SIM_BOOT_COUNT_FILE` | `$XDG_STATE_HOME/aegis/hub-simulator/boot-count-<deviceKey>.json` | Fichier d'état de `bootCount`, hors du dépôt |
 | `AEGIS_SIM_BOOT_COUNT` | aucun | `bootCount` imposé au premier démarrage (tests, remise à zéro délibérée) |
 | `AEGIS_SIM_RSSI_DBM` | `-55` | `network.rssiDbm` du heartbeat |
 | `AEGIS_SIM_ALLOW_INSECURE_REMOTE` | `false` | `true` autorise `mqtt:` vers un hôte non local, sur un réseau Docker isolé seulement (§4.2) |

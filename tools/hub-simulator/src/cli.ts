@@ -23,7 +23,7 @@ Environment (credentials are never accepted as arguments):
   AEGIS_SIM_FIRMWARE_VERSION   default 0.1.0-sim
   AEGIS_SIM_RESET_REASON       default POWER_ON; one of POWER_ON, EXTERNAL_RESET, SOFTWARE_RESET,
                                WATCHDOG, PANIC, BROWNOUT, UNKNOWN
-  AEGIS_SIM_BOOT_COUNT_FILE    default $XDG_STATE_HOME/aegis/hub-simulator/boot-counts.json
+  AEGIS_SIM_BOOT_COUNT_FILE    default $XDG_STATE_HOME/aegis/hub-simulator/boot-count-<deviceKey>.json
                                (~/.local/state/... without XDG_STATE_HOME); keep it outside the repository
   AEGIS_SIM_BOOT_COUNT         optional bootCount of the first boot (tests, deliberate reset)
   AEGIS_SIM_RSSI_DBM           default -55

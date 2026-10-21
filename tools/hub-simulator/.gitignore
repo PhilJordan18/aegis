@@ -1,5 +1,5 @@
 # Boot count state, the simulator's NVS: it belongs outside the repository
 # (default $XDG_STATE_HOME/aegis/hub-simulator/). Guard against a relative
 # AEGIS_SIM_BOOT_COUNT_FILE pointing here.
-boot-counts*.json
+boot-count*.json
 *.json.*.tmp

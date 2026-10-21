@@ -2,7 +2,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { reconnectDelayMs } from '../../src/backoff.ts';
-import { ConfigError, DEFAULT_LOCKER_ID, assertTransportAllowed, configFromEnv, parseCompartments } from '../../src/config.ts';
+import { ConfigError, DEFAULT_LOCKER_ID, assertTransportAllowed, configFromEnv, defineConfig, parseCompartments } from '../../src/config.ts';
 
 describe('configuration from environment', () => {
   it('defaults to the fictitious locker of infra/mqtt/acl with A1 and A2', () => {
@@ -60,10 +60,27 @@ describe('configuration from environment', () => {
 
   it('keeps the boot count state outside the repository by default', () => {
     const config = configFromEnv({ AEGIS_MQTT_DEVICE_PASSWORD: 'x', XDG_STATE_HOME: '/var/tmp/xdg-state' });
-    expect(config.bootCountFile).toBe('/var/tmp/xdg-state/aegis/hub-simulator/boot-counts.json');
+    expect(config.bootCountFile).toBe(
+      '/var/tmp/xdg-state/aegis/hub-simulator/boot-count-sim-d46a74ae-39dc-460b-8af0-38fc791b376a.json',
+    );
     expect(config).not.toHaveProperty('firstBootCount');
     const home = configFromEnv({ AEGIS_MQTT_DEVICE_PASSWORD: 'x' });
-    expect(home.bootCountFile).toBe(join(homedir(), '.local', 'state', 'aegis', 'hub-simulator', 'boot-counts.json'));
+    expect(home.bootCountFile).toBe(
+      join(homedir(), '.local', 'state', 'aegis', 'hub-simulator', 'boot-count-sim-d46a74ae-39dc-460b-8af0-38fc791b376a.json'),
+    );
+  });
+
+  it('gives each deviceKey its own default state file, so two hubs never share one', () => {
+    const env = { AEGIS_MQTT_DEVICE_PASSWORD: 'x', XDG_STATE_HOME: '/var/tmp/xdg-state' };
+    const a = configFromEnv({ ...env, AEGIS_SIM_DEVICE_KEY: 'bench-a' });
+    const b = configFromEnv({ ...env, AEGIS_SIM_DEVICE_KEY: 'bench-b' });
+    expect(a.bootCountFile).toBe('/var/tmp/xdg-state/aegis/hub-simulator/boot-count-bench-a.json');
+    expect(b.bootCountFile).toBe('/var/tmp/xdg-state/aegis/hub-simulator/boot-count-bench-b.json');
+    expect(defineConfig({ password: 'x', deviceKey: 'bench-c' }).bootCountFile).toMatch(/\/boot-count-bench-c\.json$/);
+    // An explicit file still wins.
+    expect(configFromEnv({ ...env, AEGIS_SIM_DEVICE_KEY: 'bench-a', AEGIS_SIM_BOOT_COUNT_FILE: '/var/tmp/shared.json' }).bootCountFile).toBe(
+      '/var/tmp/shared.json',
+    );
   });
 
   it('reads the boot count file and the first boot count', () => {

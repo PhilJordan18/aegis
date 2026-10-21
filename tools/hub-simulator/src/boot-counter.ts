@@ -18,10 +18,15 @@ export class BootCounterError extends Error {
   override name = 'BootCounterError';
 }
 
-/** Default state file: `$XDG_STATE_HOME/aegis/hub-simulator/boot-counts.json`. */
-export function defaultBootCountFile(env: NodeJS.ProcessEnv = process.env): string {
+/**
+ * Default state file of one hub identity:
+ * `$XDG_STATE_HOME/aegis/hub-simulator/boot-count-<deviceKey>.json`. One file per
+ * deviceKey, so that simulators of different hubs never rewrite the same file and
+ * cannot lose each other's update (there is no file lock).
+ */
+export function defaultBootCountFile(deviceKey: string, env: NodeJS.ProcessEnv = process.env): string {
   const stateHome = env.XDG_STATE_HOME && env.XDG_STATE_HOME.length > 0 ? env.XDG_STATE_HOME : join(homedir(), '.local', 'state');
-  return join(stateHome, 'aegis', 'hub-simulator', 'boot-counts.json');
+  return join(stateHome, 'aegis', 'hub-simulator', `boot-count-${deviceKey}.json`);
 }
 
 export function isValidBootCount(value: unknown): value is number {
