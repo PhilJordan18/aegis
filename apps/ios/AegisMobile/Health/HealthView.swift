@@ -2,35 +2,34 @@ import SwiftUI
 
 /// Technical connectivity check of FND-02B. It is not one of the approved
 /// business sections; it only proves that the app reaches Aegis Control.
+/// The caller provides the navigation container.
 struct HealthView: View {
     let model: HealthViewModel
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    Text("Vérifie que l’application joint le service Aegis Control.")
-                        .font(.subheadline)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("Vérifie que l’application joint le service Aegis Control.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                HealthStatusCard(state: model.state)
+
+                actionButton
+
+                if let host = model.serviceHost {
+                    Label("Adresse : \(host)", systemImage: "server.rack")
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
-
-                    HealthStatusCard(state: model.state)
-
-                    actionButton
-
-                    if let host = model.serviceHost {
-                        Label("Adresse : \(host)", systemImage: "server.rack")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .accessibilityIdentifier("health.host")
-                    }
+                        .accessibilityIdentifier("health.host")
                 }
-                .padding(20)
-                .frame(maxWidth: 560, alignment: .leading)
-                .frame(maxWidth: .infinity)
             }
-            .background { BrandBackground() }
-            .navigationTitle("Service Aegis")
+            .padding(20)
+            .frame(maxWidth: 560, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
+        .background { BrandBackground() }
+        .navigationTitle("Service Aegis")
         .task { await model.load() }
     }
 
@@ -200,19 +199,26 @@ private struct BrandBackground: View {
 }
 
 #Preview("Chargement") {
-    HealthView(model: HealthViewModel(checker: PreviewHealthChecker(result: nil), serviceHost: "localhost"))
+    NavigationStack {
+        HealthView(model: HealthViewModel(checker: PreviewHealthChecker(result: nil), serviceHost: "localhost"))
+    }
 }
 
 #Preview("Erreur réseau") {
-    HealthView(model: HealthViewModel(checker: PreviewHealthChecker(result: .failure(.unreachable(.cannotConnectToHost))),
-                                      serviceHost: "localhost"))
+    NavigationStack {
+        HealthView(model: HealthViewModel(
+            checker: PreviewHealthChecker(result: .failure(.unreachable(.cannotConnectToHost))),
+            serviceHost: "localhost"))
+    }
 }
 
 #Preview("Opérationnel") {
-    HealthView(model: HealthViewModel(
-        checker: PreviewHealthChecker(result: .success(SystemHealth(
-            status: .up, service: "aegis-control", version: "0.1.0", timestamp: .now))),
-        serviceHost: "localhost"))
+    NavigationStack {
+        HealthView(model: HealthViewModel(
+            checker: PreviewHealthChecker(result: .success(SystemHealth(
+                status: .up, service: "aegis-control", version: "0.1.0", timestamp: .now))),
+            serviceHost: "localhost"))
+    }
 }
 
 /// Preview double; `nil` keeps the request pending to show the loading state.
