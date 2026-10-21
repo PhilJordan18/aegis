@@ -1054,7 +1054,7 @@ L’authentification et l’autorisation de la route sont vérifiées avant tout
 
 Pour les routes du catalogue de cette liste, une erreur métier n’est pas enregistrée : une nouvelle tentative avec la même clé réexécute la requête contre l’état courant et peut obtenir un autre résultat si cet état a changé. D’autres routes peuvent fixer une règle différente, par exemple l’autorisation locale (§15.5); voir le document 08, §8.1.
 
-La canonicalisation du hash inclut la méthode, la route logique, les paramètres de chemin et le corps JSON normalisé. Elle exclut X-Request-Id.
+La canonicalisation du hash inclut la méthode, la route logique, les paramètres de chemin et le corps JSON normalisé. Elle exclut X-Request-Id. Les routes du §20.1 ne prennent aucun paramètre de requête; une future route idempotente qui en accepterait devra les inclure dans le hash.
 
 Les PUT sont idempotents par définition. Une répétition identique ne crée pas un second effet métier ou audit inutile.
 
