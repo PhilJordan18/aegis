@@ -7,7 +7,7 @@
 **Version :** 2.0 — backlog d’exécution, responsabilités et tickets initiaux  
 **Mise à jour ciblée :** 23 septembre 2026 — IAM-01 alignée sur l’ADR-007; POC-02 conserve le choix de connecteur ouvert.  
 **Mise à jour ciblée :** 5 octobre 2026 — le backlog opérationnel est suivi dans GitHub Issues au lieu de Linear.  
-**Mise à jour ciblée :** 21 octobre 2026 — FND-02B ne dépend plus d’un Mac de l’école : Xcode est installé sur le Mac de développement (ADR-012, proposé).  
+**Mise à jour ciblée :** 21 octobre 2026 — FND-02B ne dépend plus d’un Mac de l’école : Xcode est installé sur le Mac de développement (ADR-012).  
 **Références :** [scope](02-scope.md), documents 03–10 et [plan d’itérations](14-plan-iterations-semaines-4-a-15.md).
 
 ---

@@ -1,10 +1,12 @@
 # ADR-012 — Développement iOS sur le Mac local
 
-**Statut :** PROPOSED — à accepter par Philippe
+**Statut :** ACCEPTED — Philippe Jordan Monfouayi Mba, le 21 octobre 2026, dans le périmètre proposé : le Mac local permet les builds et les essais iOS en simulateur; les validations physiques restent à organiser.
 
 **Date de consignation :** 21 octobre 2026
 
-**Remplace, une fois acceptée :** dans l’[ADR-010](ADR-010-architecture-monorepo.md), section « Validation et accès aux Macs de l’école », uniquement la phrase qui planifie les builds iOS, les tests caméra et les essais nécessitant Xcode sur les Macs de l’école. Le monorepo commun, l’organisation des dossiers, les validations adaptées au composant et le reste de l’ADR-010 demeurent acceptés. Le fichier de l’ADR-010 n’est pas modifié.
+**Date d’acceptation :** 21 octobre 2026
+
+**Remplace :** dans l’[ADR-010](ADR-010-architecture-monorepo.md), section « Validation et accès aux Macs de l’école », uniquement la phrase qui planifie les builds iOS, les tests caméra et les essais nécessitant Xcode sur les Macs de l’école. Le monorepo commun, l’organisation des dossiers, les validations adaptées au composant et le reste de l’ADR-010 demeurent acceptés. Le fichier de l’ADR-010 n’est pas modifié.
 
 ## Décision antérieure
 
