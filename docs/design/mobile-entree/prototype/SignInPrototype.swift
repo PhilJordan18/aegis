@@ -185,9 +185,8 @@ private struct SignInForm: View {
     @State private var revealed = false
     @Environment(\.colorSchemeContrast) private var contrast
 
-    /// The v3 border (1.3–1.6:1) is decorative; Increase Contrast gets an
-    /// edge that meets 3:1 for the input boundary.
-    private var fieldEdge: Color { contrast == .increased ? Palette.muted : Palette.border }
+    /// Field edges meet 3:1 in the normal mode; Increase Contrast goes further.
+    private var fieldEdge: Color { contrast == .increased ? Palette.muted : Palette.fieldEdge }
 
     init(state: ProtoState, text: Copy, focus: FocusState<SignInPrototypeScreen.Field?>.Binding) {
         self.state = state
@@ -463,6 +462,7 @@ enum Palette {
     static let text = dynamic(light: 0x122339, dark: 0xF1F5FC)
     static let muted = dynamic(light: 0x53647B, dark: 0xABB9CD)
     static let border = dynamic(light: 0xD7DFE9, dark: 0x2B3B50)
+    static let fieldEdge = dynamic(light: 0x7D8A9C, dark: 0x62748C)
     static let accent = dynamic(light: 0x234BCE, dark: 0x8CAEFF)
     static let button = dynamic(light: 0x234BCE, dark: 0x315EE8)
     static let buttonEdge = Color(red: 0x7D / 255, green: 0x9B / 255, blue: 1, opacity: 0.4)

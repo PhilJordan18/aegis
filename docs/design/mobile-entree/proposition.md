@@ -1,14 +1,26 @@
 # Aegis Mobile — connexion native, direction « Lumière du hub » v3
 
-Mode : Prototype. Mise à jour du 21 octobre 2026. Issues : #35 (DES-01),
-préalable à #36 (IOS-01); localisation coordonnée avec #78.
+Handoff pour #36 (IOS-01). Issue : #35 (DES-01); localisation coordonnée avec
+#78, identité avec #79. Mise à jour du 21 octobre 2026.
 
-**Statut.** Philippe a sélectionné la direction « Lumière du hub », révision
-v3 sans illustration (brief du 21 octobre 2026; référence
-`aegis-lumiere-du-hub-v3.html`). Cette page présente son **adaptation native**
-et les **nouveaux textes**. Elle doit être validée avant l'intégration dans
-#36. La version précédente (« Verre lumineux », 23 septembre) est remplacée;
-ses captures ont été retirées.
+**Statut : approuvé le 21 octobre 2026 par Philippe**, pour la direction
+« Lumière du hub » v3 sans illustration (référence
+`aegis-lumiere-du-hub-v3.html`), l'adaptation native ci-dessous et les
+décisions de finition :
+
+- bordures des champs renforcées dès le mode normal (≥ 3:1), et davantage avec
+  « Augmenter le contraste »;
+- libellés persistants, sans placeholder redondant;
+- délai `Retry-After` affiché une seule fois;
+- reprise hors ligne validée;
+- signature « Prêt. Autorisé. Prouvé. » / « Ready. Authorized. Proven. »;
+- « Identifiant de suivi » / « Trace ID »;
+- logo provisoire : monogramme et « aegis », sans « CORE »; le designer
+  livrera la version finale.
+
+Les autres textes suivent le glossaire partagé (`docs/localisation/`, #78), en
+formulations courtes et équivalentes en français et en anglais. La version
+précédente (« Verre lumineux », 23 septembre) est remplacée.
 
 Les captures viennent d'un prototype SwiftUI statique, compilé avec le SDK iOS
 dans une copie temporaire de `apps/ios`. Le code de l'application n'est pas
@@ -22,7 +34,7 @@ modifié.
 | Marque | « A » abstrait avec noyau, `aegis`, filet, `CORE` | Monogramme en asset vectoriel `AegisMark` (clair et sombre), suivi de `aegis` en police système; **sans `CORE`** (décision du 21 octobre 2026). VoiceOver lit « Aegis », en en-tête |
 | Panneau | Coins supérieurs de 27 pt, filet supérieur | Identique; le fond continue jusqu'en bas de l'écran |
 | Titre | Surtitre, « Connexion », sous-titre | Styles Dynamic Type (`caption2`, `title`, `subheadline`) |
-| Champs | Groupe à fond distinct, libellés persistants | `TextField` (`.username`, clavier courriel) et `SecureField` (`.password`, action Aller); bouton œil de 44 × 44 pt. Aucun placeholder pour le mot de passe : le libellé suffit |
+| Champs | Groupe à fond distinct, libellés persistants | `TextField` (`.username`, clavier courriel, action Suivant) et `SecureField` (`.password`, action Aller); bouton œil de 44 × 44 pt. Bordure et séparateur `fieldEdge` (≥ 3:1). Aucun placeholder pour le mot de passe : le libellé suffit; l'exemple de courriel reste |
 | Bouton | Plein, coins de 14 pt, flèche à droite, 54 pt de haut | Bouton natif avec style personnalisé. Pendant l'envoi : indicateur et « Connexion… », appuis ignorés, VoiceOver lit « Connexion en cours » |
 | Erreur | Bandeau teinté, une phrase | Une phrase courte, avec symbole; le délai `Retry-After` n'apparaît qu'ici |
 | Apparence | Sombre profond, Clair minéral | Apparence système; aucun sélecteur ajouté |
@@ -30,31 +42,32 @@ modifié.
 Aucune illustration, aucun casier ni indicateur « connecté » ou « sécurisé »
 avant l'authentification.
 
-## Textes (FR de référence, EN proposé)
+## Textes (FR de référence, EN)
 
-Tous les textes nouveaux ou raccourcis sont **à valider**.
+Validés le 21 octobre 2026 avec la consigne « formulations courtes et
+équivalentes ». Les textes de l'application vivent dans son String Catalog.
 
 | Clé | Français | English | Statut |
 |---|---|---|---|
-| Signature | Prêt. Autorisé. Prouvé. | Ready. Authorized. Proven. | à valider (brief) |
-| Surtitre | Espace technicien | Technician access | proposé (v3 / EN) |
-| Titre | Connexion | Sign in | approuvé (FR) |
-| Sous-titre | Vos équipements. Votre activité. | Your equipment. Your activity. | proposé (v3 / EN) |
-| Exemple de courriel | nom@entreprise.ca | name@company.ca | proposé |
-| Action | Se connecter | Sign in | approuvé (FR) |
-| Envoi | Connexion… (lu : « Connexion en cours ») | Signing in… (« Signing in ») | proposé |
-| Mention | Compte fourni par votre administrateur. | Account provided by your administrator. | approuvé (FR) |
-| Courriel invalide | Saisissez une adresse courriel valide. | Enter a valid email address. | proposé, raccourci |
-| Mot de passe vide | Saisissez votre mot de passe. | Enter your password. | proposé |
-| 401 identifiants | Adresse courriel ou mot de passe incorrect. | Incorrect email address or password. | approuvé (FR); corps supprimé |
-| 429 avec délai valide | Trop de tentatives. Réessayez dans 55 secondes. | Too many attempts. Try again in 55 seconds. | proposé (T1) |
-| 429 sans délai valide | Trop de tentatives. Réessayez plus tard. | Too many attempts. Try again later. | proposé |
-| Réseau | Connexion au service impossible. Vérifiez le réseau. | Can't reach the service. Check your network. | approuvé (FR) |
-| Session expirée | Votre session a expiré. Vos réservations et prêts sont conservés. | Your session has expired. Your reservations and loans are kept. | approuvé, raccourci (« Reconnectez-vous. » retiré : le formulaire le dit) |
-| Reprise hors ligne, titre | Connexion au service impossible | Can't reach the service | proposé |
-| Reprise hors ligne, corps | Votre session est conservée, mais elle n'a pas pu être vérifiée. Aucune action n'est possible hors ligne. | Your session is kept but couldn't be verified. No action is available offline. | proposé |
-| Reprise hors ligne, actions | Réessayer · Se déconnecter | Try again · Sign out | proposé |
-| Libellé du `traceId` | Identifiant de suivi | Trace ID | glossaire #78 |
+| Signature | Prêt. Autorisé. Prouvé. | Ready. Authorized. Proven. | validé |
+| Surtitre | Espace technicien | Technician access | validé |
+| Titre | Connexion | Sign in | validé |
+| Sous-titre | Vos équipements. Votre activité. | Your equipment. Your activity. | validé |
+| Exemple de courriel | nom@entreprise.ca | name@company.ca | validé |
+| Action | Se connecter | Sign in | validé |
+| Envoi | Connexion… (lu : « Connexion en cours ») | Signing in… (« Signing in ») | validé |
+| Mention | Compte fourni par votre administrateur. | Account provided by your administrator. | validé |
+| Courriel invalide | Saisissez une adresse courriel valide. | Enter a valid email address. | validé |
+| Mot de passe vide | Saisissez votre mot de passe. | Enter your password. | validé |
+| 401 identifiants | Adresse courriel ou mot de passe incorrect. | Incorrect email address or password. | validé |
+| 429 avec délai valide | Trop de tentatives. Réessayez dans 55 secondes. | Too many attempts. Try again in 55 seconds. | validé |
+| 429 sans délai valide | Trop de tentatives. Réessayez plus tard. | Too many attempts. Try again later. | validé |
+| Réseau | Connexion au service impossible. Vérifiez le réseau. | Can't reach the service. Check your network. | validé |
+| Session expirée | Votre session a expiré. Vos réservations et prêts sont conservés. | Your session has expired. Your reservations and loans are kept. | validé |
+| Reprise hors ligne, titre | Connexion au service impossible | Can't reach the service | validé |
+| Reprise hors ligne, corps | Votre session est conservée, mais elle n'a pas pu être vérifiée. Aucune action n'est possible hors ligne. | Your session is kept but couldn't be verified. No action is available offline. | validé |
+| Reprise hors ligne, actions | Réessayer · Se déconnecter | Try again · Sign out | validé |
+| Libellé du `traceId` | Identifiant de suivi | Trace ID | validé |
 
 Les autres états de la matrice précédente (erreur du service avec
 `traceId`, session invalide, déconnecté, mauvais rôle) gardent leur logique,
@@ -108,12 +121,13 @@ dans `09` §10.2 est suivie par la session API dans #80.
 | Erreur / fond d'erreur | 10,2 | 6,8 |
 | Monogramme « A » / en-tête | 8,9 | 6,3 |
 | Noyau du monogramme / en-tête | 11,6 | 4,4 |
-| **Bordure des champs / panneau** | **1,6** | **1,3** |
+| Bordure des champs `#62748C` / `#7D8A9C`, sur le champ | 3,5 | 3,2 |
+| Même bordure, sur le panneau | 3,8 | 3,5 |
+| Bordure en « Augmenter le contraste » (texte secondaire), sur le champ | 8,4 | 5,5 |
 
-Tout le texte dépasse 4,5:1. La bordure des champs n'atteint pas 3:1 :
-le libellé persistant identifie chaque champ. Avec « Augmenter le
-contraste », la bordure prend la couleur du texte secondaire (≥ 5,5:1), comme
-le montre `fr-inactif-light-contrast.png`.
+Tout le texte dépasse 4,5:1 et les bordures des champs atteignent 3:1 dès le
+mode normal. Le filet décoratif du panneau (`border`, 1,3 à 1,6:1) ne
+délimite pas de contrôle.
 
 Taille minimale du monogramme : **24 pt recommandés** (taille du petit
 spécimen v3, noyau de 6 pt). Seul le rendu à 34 pt a été vérifié.
@@ -149,12 +163,15 @@ IOS_APP_DIR=<chemin vers apps/ios> docs/design/mobile-entree/prototype/render.sh
 | VoiceOver (ordre, libellés, annonce d'envoi) | **non exécuté**; libellés présents dans le code |
 | Réduire les animations | **non vérifié en rendu**; l'animation de compactage est supprimée dans le code |
 | Clavier français | le simulateur affiche son clavier système anglais |
-| iPhone 11 et iPhone 15 Plus | **non testés**; versions iOS à relever |
+| iPhone 12 (Philippe) et iPhone 15 Plus (Jimmy) | **non testés**; versions iOS déclarées, à confirmer dans Réglages |
 
-## Décisions à valider
+## Pour l'implémentation (#36)
 
-1. L'adaptation native ci-dessus et les textes marqués « proposé » ou
-   « raccourci ».
-2. La signature FR/EN, que le brief garde à valider.
-3. Le renforcement de la bordure des champs limité au mode « Augmenter le
-   contraste », plutôt qu'une bordure plus foncée par défaut.
+- Couleurs : jetons v3 ci-dessus en catalogue d'assets, avec une variante
+  « High Contrast » pour `fieldEdge`.
+- Monogramme : `AegisMark.imageset` (SVG clair et sombre, vecteur conservé).
+- Textes : String Catalog, clés françaises, traduction anglaise complète.
+- États : matrice ci-dessus, plus « mauvais rôle » (U6), « session invalide »
+  et « déconnecté », en une phrase chacun.
+- Le prototype de `prototype/` reste la référence de rendu; il n'est pas
+  copié tel quel dans l'application.
