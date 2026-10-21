@@ -34,7 +34,7 @@ les POC matériels et le seuil numérique de fréquence des préparations QR res
 | ADR | Objet | Statut | Pilote de l’arbitrage | Point de contrôle |
 |---|---|---|---|---|
 | 001 | Autorité Spring et monolithe modulaire | `ACCEPTED` | Philippe | Première tranche API |
-| 002 | Hub et deux cellules en étoile, segments RS-485 indépendants | `ACCEPTED` pour l’architecture | Jimmy | Réalisation électrique à qualifier après POC |
+| 002 | Hub et deux cellules en étoile, segments RS-485 indépendants | `ACCEPTED` pour l’architecture; ses mentions d’un plafond de 500 $ CA sont remplacées par l’ADR-011 | Jimmy | Réalisation électrique à qualifier après POC |
 | 003 | Réalisation de la détection RFID locale | `PROPOSED`, POC requis | Jimmy | Avant de dépendre du capteur réel; cible interne S6 |
 | 004 | Mosquitto, livraison MQTT, identités et disponibilité | `ACCEPTED` — Philippe, 23 septembre | Philippe, essais hub avec Jimmy | Walking skeleton et tests TLS/ACL |
 | 005 | Outbox et idempotence | `ACCEPTED` — Philippe, 23 septembre | Philippe | Première commande persistée |
