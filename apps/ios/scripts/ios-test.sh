@@ -11,7 +11,7 @@
 # Environment:
 #   IOS_DESTINATION          xcodebuild destination
 #                            (default: platform=iOS Simulator,name=iPhone 17,OS=latest)
-#   IOS_DERIVED_DATA         derived data path (default: build/DerivedData)
+#   IOS_DERIVED_DATA         derived data path inside apps/ios (default: build/DerivedData)
 #   IOS_RESULTS_DIR          result bundles (default: build/results)
 #   AEGIS_LIVE_API_BASE_URL         live only, e.g. http://localhost:8080/api/v1
 #   AEGIS_LIVE_TECHNICIAN_PASSWORD  live only, demo technician password
@@ -56,7 +56,7 @@ run_tests() {
         -parallel-testing-enabled NO \
         -quiet \
         "$@" || status=$?
-    if [ ! -d "$bundle" ]; then
+    if [[ ! -d "$bundle" ]]; then
         echo "error: xcodebuild produced no result bundle (exit $status)" >&2
         exit 1
     fi
@@ -99,7 +99,7 @@ standalone() {
 live() {
     local name
     for name in AEGIS_LIVE_API_BASE_URL AEGIS_LIVE_TECHNICIAN_PASSWORD AEGIS_LIVE_ADMIN_PASSWORD; do
-        if [ -z "${!name:-}" ]; then
+        if [[ -z "${!name:-}" ]]; then
             echo "error: $name is required for the live recipe" >&2
             exit 1
         fi
