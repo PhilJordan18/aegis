@@ -4,7 +4,8 @@
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de consignation :** 17 septembre 2026  
 **Version :** 2.0 — registre opérationnel et décisions explicites  
-**Mise à jour :** 23 septembre 2026 — ADR-011 et validation des choix logiciels 004 à 007 et 009
+**Mise à jour :** 23 septembre 2026 — ADR-011 et validation des choix logiciels 004 à 007 et 009  
+**Mise à jour :** 21 octobre 2026 — ADR-012 proposé : développement iOS sur le Mac local
 **Références :** [scope](02-scope.md), documents 03–10 et [architecture physique](12-architecture-physique.md).
 
 ## 1. Portée et statuts
@@ -41,8 +42,9 @@ les POC matériels et le seuil numérique de fréquence des préparations QR res
 | 007 | JWT expirant pour les comptes préparés | `ACCEPTED` — Philippe, 23 septembre | Philippe | IAM-01 |
 | 008 | Réservation, horaires et échéance du prêt | `ACCEPTED` | Philippe | RES-01 et transitions de prêt |
 | 009 | Contrôle QR local, 60 s maximum et 5 secrets erronés | `ACCEPTED` — Philippe, 23 septembre; seuil de fréquence à qualifier | Philippe, essais avec Jimmy | LOC-01/02 et essai écran/caméra |
-| 010 | [Monorepo commun pour les composants du P0](../adr/ADR-010-architecture-monorepo.md) | `ACCEPTED` | Équipe | Structure initiale et première évolution transversale |
+| 010 | [Monorepo commun pour les composants du P0](../adr/ADR-010-architecture-monorepo.md) | `ACCEPTED`; la disposition sur les Macs de l’école serait remplacée par l’ADR-012 une fois accepté | Équipe | Structure initiale et première évolution transversale |
 | 011 | [Évolution de l’estimation matérielle](../adr/ADR-011-evolution-estimation-materielle.md) | `ACCEPTED`, clarification demandée par Philippe; aucun achat approuvé | Philippe, achats à revoir avec Jimmy | Nomenclature complète; décision financière après inventaire et POC |
+| 012 | [Développement iOS sur le Mac local](../adr/ADR-012-developpement-ios-mac-local.md) | `PROPOSED` — à accepter par Philippe; remplace la seule disposition de l’ADR-010 sur les Macs de l’école | Philippe, avec la session iOS | FND-02B (#16) et CI iOS (#67) |
 
 Les pilotes préparent les preuves et recommandations; ils n’approuvent pas seuls un changement de scope. Les cibles pédagogiques sont précisées dans le document 14.
 
