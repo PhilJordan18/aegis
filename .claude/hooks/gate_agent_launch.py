@@ -27,8 +27,8 @@ NESTED_WORKFLOW = re.compile(r"\bworkflow\s*\(")
 # Comments and string literals, scanned left to right so each wins where it starts.
 COMMENT_OR_STRING = re.compile(
     r"""//[^\n]*|/\*.*?\*/|'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`""", re.DOTALL)
-# A bare token in args (no spaces) can be an agentType or model value; prose cannot.
-TOKEN = re.compile(r"^[A-Za-z0-9._:\[\]-]+$")
+# A quoted bare token (no spaces) can be an agentType or model value; prose cannot.
+QUOTED_TOKEN = re.compile(r"""(['"`])([A-Za-z0-9._:\[\]-]+)\\?\1""")
 
 
 def definition(name: str) -> dict[str, str] | None:
@@ -101,8 +101,14 @@ def code_only(text: str) -> str:
 
 
 def workflow_reason(data: dict) -> str | None:
-    text, unreadable = workflow_source(data)
-    text = code_only(text)
+    raw, unreadable = workflow_source(data)
+    # Checked on the raw text: the blanking below does not parse regex literals,
+    # so an odd quote or backtick in one could otherwise hide a literal Fable value.
+    for _, value in QUOTED_TOKEN.findall(raw + "\n" + json.dumps(data.get("args"))):
+        if bills_fable(value):
+            return (f"Workflow names Fable or a Fable-only role ({value!r}), which bills extra usage. "
+                    "Approve only if you explicitly asked for it and accept the cost.")
+    text = code_only(raw)
     if unreadable:
         return f"Agent launch gate: {unreadable}; it may launch a Fable role. Approve only if you know it does not, or accept the cost."
     if NESTED_WORKFLOW.search(text):
@@ -113,7 +119,7 @@ def workflow_reason(data: dict) -> str | None:
         return (f"Workflow passes {shorthand.group(1)!r} from a variable; the gate cannot rule out Fable. "
                 "Approve only if you asked for this run and accept any Fable cost.")
     for match in LAUNCH_KEY.finditer(text):
-        if text[match.end():].lstrip()[:1] in ("{", "["):
+        if match.group(1) == "model" and text[match.end():].lstrip()[:1] in ("{", "["):
             continue  # a JSON-schema property named model, not a launch option
         literal = LITERAL.match(text, match.end())
         snippet = text[match.start():match.end() + 40].split("\n")[0]
@@ -123,11 +129,6 @@ def workflow_reason(data: dict) -> str | None:
         if bills_fable(literal.group(2)):
             return (f"Workflow launches Fable ({snippet!r}), which bills extra usage. Approve only if you "
                     "explicitly asked for it and accept the cost.")
-
-    values = re.findall(r'"([^"\\]*)"', json.dumps(data.get("args")))
-    if any(TOKEN.match(value) and bills_fable(value) for value in values):
-        return ("Workflow args name Fable or a Fable-only role, which bills extra usage. Approve only if "
-                "you explicitly asked for it and accept the cost.")
     return None
 
 

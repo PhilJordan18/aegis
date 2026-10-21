@@ -194,17 +194,19 @@ sécurité rare et approfondie. Il tourne sur Fable 5.1, facturé en plus.
   la facturation Fable. Jamais par défaut, dans un workflow ou dans une Agent
   Team.
 - Le hook `.claude/hooks/gate_agent_launch.py` répond `ask` avant un lancement
-  de ce rôle par l'outil Agent, un paramètre `model` Fable, ou un workflow dont
-  `agentType`, `model` ou `args` désignent Fable, dont ces valeurs sont
-  calculées, ou qu'il ne peut pas lire (workflow nommé ou imbriqué). Constaté :
+  de ce rôle par l'outil Agent, un paramètre `model` Fable, ou un workflow qui
+  cite entre guillemets un nom Fable (dans son script ou ses `args`), dont
+  `agentType` ou `model` sont calculés, ou qu'il ne peut pas lire (workflow nommé
+  ou imbriqué). Constaté :
   en mode `-p`, ce `ask` devient un refus (essai du 2026-10-14, sans appel
   Fable). Attendu selon la documentation, non observé : une demande de
   confirmation dans l'onglet Code. Une règle `ask` sur `Agent(<nom>)` n'a pas
   bloqué le lancement lors de l'essai; elle ne remplace pas le hook.
-- Le hook ignore les commentaires et la prose des prompts. Il ne voit pas les
-  agents de plugins, les skills d'utilisateur, ni des options d'agent étalées
-  depuis un objet calculé ailleurs que dans `args`. Le validateur refuse un skill
-  du projet qui bifurque vers ce rôle.
+- Le hook ignore la prose des prompts et des commentaires. Il peut demander à
+  tort, par exemple pour `const { model } = ...`. Il ne voit pas les agents de
+  plugins, les skills d'utilisateur, ni un nom Fable assemblé à l'exécution puis
+  transmis par un objet calculé. Le validateur refuse un skill du projet qui
+  bifurque vers ce rôle.
 - Ses outils excluent l'édition. Bash n'est pas une garantie de lecture seule :
   ses tests se lancent dans un worktree ou un environnement jetable désigné. La
   même règle vaut pour `qa-reliability-engineer`.

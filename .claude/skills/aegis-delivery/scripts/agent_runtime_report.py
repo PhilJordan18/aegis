@@ -50,6 +50,8 @@ def summarize(path: Path) -> dict:
             entry = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if not isinstance(entry, dict):
+            continue
         message = entry.get("message") or {}
         content = message.get("content")
         parts = content if isinstance(content, list) else [{"type": "text", "text": content or ""}]

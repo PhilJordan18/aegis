@@ -294,8 +294,18 @@ def validate_launch_gate() -> None:
     must_ask.update({
         "a per-call Fable model override": {
             "tool_name": "Agent", "tool_input": {"subagent_type": "general-purpose", "model": "fable"}},
+        "a Fable launch after a regex literal with a backtick": {"tool_name": "Workflow", "tool_input": {
+            "script": "const strip = (s) => s.split(/```/)[1] ?? s;\n"
+                      "await agent('Review the diff', {agentType: 'security-deep-reviewer'});\n"
+                      "log(`done: ${strip(r)}`);"}},
+        "a Fable value inside a JSON string": {"tool_name": "Workflow", "tool_input": {
+            "script": "agent('x', JSON.parse('{\"model\": \"fable\"}'))"}},
+        "a Fable value inside an escaped JSON string": {"tool_name": "Workflow", "tool_input": {
+            "script": "agent('x', JSON.parse(\"{\\\"model\\\": \\\"fable\\\"}\"))"}},
         "a workflow computing agentType": {
             "tool_name": "Workflow", "tool_input": {"script": "agent('x', {agentType: pick()})"}},
+        "a workflow computing agentType from an array": {
+            "tool_name": "Workflow", "tool_input": {"script": "agent('x', {agentType: [role][0]})"}},
         "a workflow passing agentType by shorthand": {
             "tool_name": "Workflow", "tool_input": {"script": "agent('x', {agentType})"}},
         "a nested workflow it cannot inspect": {
