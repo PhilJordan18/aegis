@@ -175,8 +175,8 @@ export const fr = {
     signedOutTitle: 'Vous êtes déconnecté.',
     roleHeading: 'Accès réservé aux administrateurs',
     roleBody: "Aegis Manager est réservé aux comptes administrateur. Aucune donnée n'a été chargée et la session a été fermée.",
-    /** [A] */
-    technicianAccount: "Ce compte technicien s'utilise dans l'application Aegis.",
+    /** [A] Names the mobile app as the footers do (Aegis Mobile). */
+    technicianAccount: "Ce compte technicien s'utilise dans Aegis Mobile.",
     roleUnknownTitle: 'Ce compte ne peut pas utiliser Aegis Manager.',
     roleAccountUsed: `Compte utilisé${NBSP}:`,
     roleRetry: 'Se connecter avec un autre compte',

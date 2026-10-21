@@ -146,7 +146,7 @@ export const en: Messages = {
     signedOutTitle: 'You are signed out.',
     roleHeading: 'Access reserved for administrators',
     roleBody: 'Aegis Manager is reserved for administrator accounts. No data was loaded and the session was closed.',
-    technicianAccount: 'This technician account is used in the Aegis app.',
+    technicianAccount: 'This technician account is used in Aegis Mobile.',
     roleUnknownTitle: 'This account cannot use Aegis Manager.',
     roleAccountUsed: 'Account used:',
     roleRetry: 'Sign in with another account',

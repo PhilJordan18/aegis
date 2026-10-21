@@ -132,7 +132,7 @@ describe('SignInPage — English wording (explicit strings, not read back from t
     renderWithProviders(<SignInPage afterSignInPath="/" />, { locale: 'en', gateway: gatewayReturning(loginOk(technicianProfile)) })
     await fillAndSubmit('en')
     expect(await screen.findByRole('heading', { level: 1, name: 'Access reserved for administrators' })).toBeDefined()
-    expect(screen.getByRole('alert').textContent).toContain('This technician account is used in the Aegis app.')
+    expect(screen.getByRole('alert').textContent).toContain('This technician account is used in Aegis Mobile.')
     expect(screen.getByText('Account used:')).toBeDefined()
     expect(screen.getByRole('button', { name: 'Sign in with another account' })).toBeDefined()
   })
