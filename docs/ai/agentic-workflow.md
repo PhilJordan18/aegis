@@ -36,6 +36,8 @@ décrivent donc une relation, pas deux catégories de logiciels.
 | Règles durables communes à Claude et Codex | `AGENTS.md` |
 | Routage propre à Claude Code | `CLAUDE.md` |
 | Rôles Claude spécialisés | `.claude/agents/` |
+| Modèle et effort approuvés de chaque rôle Claude | frontmatter des rôles, vérifié par `validate_agent_setup.py` |
+| Décision `ask` avant un lancement Fable détectable ou une substitution par l'outil Agent | `.claude/hooks/gate_agent_launch.py` |
 | Rôles Codex équivalents | `.codex/agents/` |
 | Procédures et expertise du projet | `.claude/skills/` |
 | Découverte des mêmes skills par Codex | `.agents/skills/` |
@@ -79,7 +81,7 @@ Exemples:
 |---|---|
 | Toujours garder Spring comme autorité métier | `AGENTS.md` + tests d'architecture |
 | Concevoir une migration Flyway | `aegis-postgres` |
-| Faire relire un diff sans influencer le reviewer | sous-agent QA en lecture seule |
+| Faire relire un diff sans influencer le reviewer | sous-agent QA sans outil d'édition |
 | Vérifier la syntaxe JSON/TOML et les liens locaux | script de validation |
 | Interdire un push automatique | permission + instruction durable |
 | Corriger une faute dans une page précise | demande courante, sans nouvel agent |
@@ -97,10 +99,126 @@ Exemples:
 | `ui-ux-designer` | Parcours, états, accessibilité, handoff | Modifier la logique métier |
 | `diagram-engineer` | Diagrammes ciblés et sources éditables | Présenter un choix POC comme déjà validé |
 | `qa-reliability-engineer` | Revue indépendante et preuves | Corriger silencieusement le code évalué |
+| `security-deep-reviewer` | Revue de sécurité approfondie, sur demande explicite | Être lancé par défaut ou modifier le code |
 
 L'agent principal reste l'orchestrateur. Il n'est généralement pas utile de
 créer un autre rôle « expert général » qui orchestre les mêmes spécialistes:
 cela ajoute une couche et des tokens sans clarifier la responsabilité.
+
+### Modèle et effort par rôle
+
+Chaque définition `.claude/agents/` fixe son modèle par identifiant complet et
+son effort. La politique approuvée (issue #65) est aussi codée dans
+`validate_agent_setup.py`, qui refuse toute dérive.
+
+| Rôle | Modèle | Effort |
+|---|---|---|
+| Session principale, choisie dans l'application | Opus 5.5 | high |
+| `solution-architect`, `database-engineer` | Opus 5.5 | xhigh |
+| `backend-security-engineer`, `ios-engineer`, `firmware-engineer`, `qa-reliability-engineer` | Opus 5.5 | high |
+| `web-engineer`, `ui-ux-designer` | Sonnet 5.5 | high |
+| `diagram-engineer` | Sonnet 5.5 | medium |
+| `security-deep-reviewer`, sur demande seulement | Fable 5.1 | high |
+
+Règles :
+
+- Les identifiants complets (`claude-opus-5-5`, `claude-sonnet-5-5`,
+  `claude-fable-5-1`) évitent qu'un alias change de version en silence.
+- Sonnet 5.5 exige Claude Code 2.1.284 ou plus récent. Un binaire plus ancien
+  transmet l'identifiant sans le reconnaître : la fenêtre de contexte et le coût
+  affichés sont faux. Mettre Claude Code à jour, ou décider explicitement de
+  garder ces rôles sur Opus 5.5; ne jamais les remplacer en silence (voir
+  « Version de Claude Code » ci-dessous).
+- L'orchestrateur ne passe ni `model` ni `effort` au lancement d'un rôle, par
+  l'outil Agent ou dans un workflow : ces paramètres remplacent la définition.
+  Le hook de lancement demande confirmation pour un tel paramètre passé à
+  l'outil Agent; dans un workflow, seul un lancement Fable est intercepté et les
+  autres écarts n'apparaissent qu'ensuite dans le rapport de la section 12.
+- Claude ne change pas le modèle ou l'effort d'une session par les outils de
+  l'application sans demande humaine : les réglages du projet placent
+  `set_session_model` et `set_session_effort` en `ask`.
+- Un rôle qui déclare `effort` l'impose pendant son exécution, sauf paramètre
+  `effort` passé au lancement ou variable `CLAUDE_CODE_EFFORT_LEVEL`; un agent
+  qui n'en déclare pas hérite de l'effort de la session.
+- Aucun effort `max`, Ultracode ou forçage de modèle (`CLAUDE_CODE_EFFORT_LEVEL`,
+  `CLAUDE_CODE_SUBAGENT_MODEL`) n'est enregistré dans les réglages partagés. Ces
+  choix se font par demande, pour une raison explicite.
+- Ne pas lancer tous les spécialistes par principe; la règle de deux ou trois
+  sous-agents au plus reste valable.
+- Un modèle moins cher, un effort plus bas ou moins d'agents ne suppriment
+  jamais un test ou une revue requis.
+- Les adaptateurs Codex ne reçoivent aucun modèle Claude; Codex ignore les champs
+  `model` et `effort` du frontmatter Claude.
+- Substitution possible : après un signalement du classifieur de sécurité, Claude
+  Code relance une requête de sous-agent sur un autre modèle sans demander (par
+  exemple Opus 4.8 pour la cybersécurité). Seul le transcript le montre; voir la
+  section 12.
+
+#### Version de Claude Code
+
+L'onglet Code de l'application embarque sa propre copie de Claude Code (2.1.295
+le 2026-10-14) et se met à jour par Claude > Check for Updates. La commande
+`claude` du terminal est une installation séparée; sur le poste de Philippe,
+c'est une installation npm sous nvm, en 2.1.280 le 2026-10-14, donc trop ancienne
+pour Sonnet 5.5; elle est constatée en 2.1.295 le 2026-10-21. Le validateur
+signale toute version antérieure à 2.1.284.
+
+- Mise à jour : `npm install -g @anthropic-ai/claude-code@2.1.295` (la version
+  vérifiée dans l'onglet Code), puis `claude --version`.
+- Moment : quand aucune session `claude` du terminal n'est ouverte; les sessions
+  de l'onglet Code ne sont pas touchées. Jimmy vérifie sa propre installation.
+- En attendant : lancer `web-engineer`, `ui-ux-designer` et `diagram-engineer`
+  depuis l'onglet Code. Si le terminal doit les lancer avant la mise à jour,
+  passer explicitement ces trois rôles à `claude-opus-5-5` dans une modification
+  séparée qui met aussi `AGENT_POLICY` à jour, puis revenir à Sonnet 5.5 après
+  la mise à jour.
+
+### Skills : préchargement ou invocation
+
+| Contexte | Skills listés dans le frontmatter du rôle |
+|---|---|
+| Sous-agent lancé par l'outil Agent | Préchargés au démarrage (essai du 2026-10-14, Claude Code 2.1.295) |
+| Session principale, y compris `claude --agent` | Non préchargés (même essai) : invoquer les skills de la section « Required skills » |
+| Coéquipier d'une Agent Team | Non appliqués selon la documentation Claude Code : invoquer les skills |
+
+Les listes de skills restent dans les rôles. Les skills restent neutres : aucun
+`SKILL.md` ne déclare `model` ou `effort`, car ces champs changeraient le modèle
+ou l'effort du tour en cours.
+
+### Revue de sécurité approfondie (Fable, sur demande)
+
+`security-deep-reviewer` complète `qa-reliability-engineer` pour une revue de
+sécurité rare et approfondie. Il tourne sur Fable 5.1, facturé en plus.
+
+- Il n'est lancé que si un humain le nomme dans la demande courante et accepte
+  la facturation Fable. Jamais par défaut, dans un workflow ou dans une Agent
+  Team.
+- Le hook `.claude/hooks/gate_agent_launch.py` répond `ask` avant un lancement
+  de ce rôle par l'outil Agent, un paramètre `model` Fable, ou un workflow dont
+  `agentType`, `model` ou `args` désignent Fable, dont ces valeurs sont
+  calculées, ou qu'il ne peut pas lire (workflow nommé ou imbriqué). Constaté :
+  en mode `-p`, ce `ask` devient un refus (essai du 2026-10-14, sans appel
+  Fable). Attendu selon la documentation, non observé : une demande de
+  confirmation dans l'onglet Code. Une règle `ask` sur `Agent(<nom>)` n'a pas
+  bloqué le lancement lors de l'essai; elle ne remplace pas le hook.
+- Le hook ignore les commentaires et la prose des prompts. Il ne voit pas les
+  agents de plugins, les skills d'utilisateur, ni des options d'agent étalées
+  depuis un objet calculé ailleurs que dans `args`. Le validateur refuse un skill
+  du projet qui bifurque vers ce rôle.
+- Ses outils excluent l'édition. Bash n'est pas une garantie de lecture seule :
+  ses tests se lancent dans un worktree ou un environnement jetable désigné. La
+  même règle vaut pour `qa-reliability-engineer`.
+- Son rapport commence par son modèle et son effort auto-déclarés. Une
+  auto-déclaration ne voit pas un repli silencieux du classifieur : après chaque
+  revue, la session qui l'a lancé exécute `agent_runtime_report.py` et place ses
+  lignes demandé/constaté avant les constats.
+- Aucun appel Fable ne sert à « tester » la configuration : le validateur et un
+  rôle Opus ou Sonnet suffisent.
+
+```text
+Lance security-deep-reviewer sur la branche <branche>. J'accepte la facturation
+Fable pour cette revue. Les tests se font dans un worktree jetable.
+```
 
 ### Chaîne UI recommandée
 
@@ -293,9 +411,74 @@ python3 .claude/skills/aegis-delivery/scripts/validate_agent_setup.py
 ```
 
 Le script vérifie les formats JSON/TOML, l'identité des skills, les références
-des rôles, l'exposition des skills à Codex et les liens Markdown locaux. Les
-avertissements sur le cahier de conception nécessitent une décision humaine;
-ils n'autorisent pas une restauration automatique de contenu.
+des rôles, l'exposition des skills à Codex et les liens Markdown locaux. Il
+vérifie aussi le modèle et l'effort de chaque rôle contre la politique, les
+skills que chaque rôle doit précharger, l'absence d'outil d'édition chez les
+reviewers, la cohérence entre le frontmatter `skills` et la section « Required
+skills », la neutralité des skills et des adaptateurs Codex, l'absence de réglage
+partagé `max`, de forçage de modèle ou de désactivation des hooks, et les règles
+`ask` des outils de session. Il exécute la commande du hook telle qu'elle est
+enregistrée sur des appels fictifs, sans appel de modèle. Il avertit si un
+runtime Claude Code trouvé est antérieur à 2.1.284. Les avertissements sur le cahier de conception nécessitent une décision
+humaine; ils n'autorisent pas une restauration automatique de contenu.
+
+Le validateur ne prouve pas que Claude Code reconnaît les définitions ni quel
+modèle a réellement servi. Après un changement de runtime ou de rôle, faire un
+essai réel puis lire le transcript :
+
+```bash
+python3 .claude/skills/aegis-delivery/scripts/agent_runtime_report.py
+```
+
+Pour la session courante (`CLAUDE_CODE_SESSION_ID`), sinon la plus récente du
+checkout, ou celle donnée par `--session <id>`, le rapport compare la politique, le modèle demandé, le modèle réellement servi,
+l'effort, la version de Claude Code et les skills préchargés ou invoqués de la
+session principale et de chaque sous-agent. Il lit les transcripts locaux de
+`~/.claude/projects/` sans afficher leur contenu. Leur format est interne à
+Claude Code : un champ manquant apparaît comme `unknown`.
+
+### Lancer la session iOS (application Claude, onglet Code)
+
+L'onglet Code utilise sa propre copie de Claude Code (2.1.295 constatée le
+2026-10-14), distincte de la commande `claude` du terminal; `/status` affiche sa
+version. Agent Teams et `claude --agent` n'y servent pas : la session principale
+orchestre et délègue au sous-agent `ios-engineer`.
+
+1. Prérequis : la configuration de l'issue #65 est fusionnée dans `dev`. Sinon,
+   une branche créée depuis `dev` garde `model: inherit` et n'a ni le hook ni le
+   script de rapport.
+2. Choisir l'issue iOS. Une nouvelle direction d'interface passe d'abord par
+   `ui-ux-designer` (DES-01, #35); une tranche déjà conçue va à `ios-engineer`.
+   Ouvrir une nouvelle session sur le dépôt Aegis, dans un worktree de la branche
+   `<issue>-<type>-<slug>` créée depuis `dev`.
+3. Avant le premier message, choisir Opus 5.5 dans le sélecteur de modèle à côté
+   du bouton d'envoi, puis l'effort High (menu d'effort : Cmd+Shift+E). Le
+   2026-10-14, l'application lançait les sessions en xhigh : ce choix est donc
+   nécessaire.
+4. Envoyer un premier message de ce type :
+
+   ```text
+   Session iOS pour l'issue #<n>. Avant tout travail :
+   1. exécute echo "$CLAUDE_EFFORT" et indique le modèle de la session;
+   2. délègue à ios-engineer, sans paramètre model ni effort, une vérification
+      courte : il exécute echo "$CLAUDE_EFFORT" et rapporte son modèle, son
+      effort et ses skills préchargés, sans lire ni modifier de fichier;
+   3. lance python3 .claude/skills/aegis-delivery/scripts/agent_runtime_report.py
+      et signale tout écart entre la politique, la demande et le constat.
+   Ensuite seulement, cadre l'issue selon aegis-delivery.
+   ```
+
+5. Résultat attendu : session `claude-opus-5-5` / `high`; `ios-engineer` sur
+   `claude-opus-5-5` / `high` avec `aegis-core`, `aegis-contracts`,
+   `aegis-delivery`, `aegis-product-design` et `aegis-swiftui` préchargés. Le
+   rapport fait foi; les réponses des agents ne sont que des auto-déclarations.
+   La vérification par `ios-engineer` a coûté environ 0,20 $ US lors de l'essai
+   (orchestrateur Haiku; un peu plus avec une session principale Opus).
+6. Si la session principale travaille elle-même sur iOS au lieu de déléguer, elle
+   invoque d'abord ces cinq skills : ils ne sont pas préchargés dans une session
+   principale.
+7. Tout écart (modèle substitué, effort différent, skill absent) est signalé
+   avant de continuer et n'est jamais corrigé en silence.
 
 ## 13. Références officielles
 

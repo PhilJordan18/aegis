@@ -28,12 +28,36 @@ Use:
 - `web-engineer` for the React administration application;
 - `ios-engineer` for SwiftUI technician workflows;
 - `firmware-engineer` for ESP32, sensors, locks, and MQTT device behavior;
-- `qa-reliability-engineer` as an independent read-only quality gate;
-- `diagram-engineer` for architecture, wiring, sequence, state, or ER diagrams.
+- `qa-reliability-engineer` as an independent, non-editing quality gate;
+- `diagram-engineer` for architecture, wiring, sequence, state, or ER diagrams;
+- `security-deep-reviewer` only when the human explicitly names it in the
+  current request and accepts the extra Fable billing; never as a default
+  reviewer, in a workflow fan-out, or in an Agent Team.
 
 Do not invoke all agents for every task. The main Claude session is the
 orchestrator; create a specialist only when isolation, independent review, or
 parallel work provides a concrete benefit.
+
+## Model and effort policy
+
+Each agent definition pins its model and effort. The approved policy lives in
+`validate_agent_setup.py`; `docs/ai/agentic-workflow.md` explains it. The main
+session should run Opus 5.5 at high effort; the human selects it in the app,
+which launched sessions at xhigh on 2026-10-14.
+
+- Do not pass `model` or `effort` when launching a project agent, through the
+  Agent tool or a workflow; a per-call value overrides the definition. The launch
+  gate hook returns `ask` for Agent tool overrides and for the Fable launches it
+  can detect (observed as a denial in `-p`; the app prompt is expected, not yet
+  observed). Other workflow overrides are visible only afterwards in the runtime
+  report.
+- Do not change a session's model or effort through the app's session tools
+  without an explicit human request; project settings make them ask.
+- Do not store `max` effort, Ultracode, or subagent model overrides in shared
+  settings; choose them per request only.
+- When requested and observed model or effort differ, report it; use
+  `agent_runtime_report.py` for evidence.
+- A cheaper model or lower effort never removes a required test or review.
 
 ## UI delivery routing
 
