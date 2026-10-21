@@ -33,10 +33,10 @@ describe('createSessionStore', () => {
 
   it('keeps the token in memory only, through the whole lifecycle', () => {
     const store = createSessionStore()
-    store.start({ accessToken: TOKEN, expiresAt: '2026-09-30T15:30:00Z', profile: adminProfile })
+    store.start({ accessToken: TOKEN, expiresAt: '2026-09-30T15:30:00Z', expiresIn: 3600, profile: adminProfile })
     expect(store.getAccessToken()).toBe(TOKEN)
     store.end('sessionExpired')
-    store.start({ accessToken: TOKEN, expiresAt: '2026-09-30T15:30:00Z', profile: adminProfile })
+    store.start({ accessToken: TOKEN, expiresAt: '2026-09-30T15:30:00Z', expiresIn: 3600, profile: adminProfile })
     store.signOut()
 
     expect(writes).toEqual([])
@@ -47,14 +47,14 @@ describe('createSessionStore', () => {
 
   it('never exposes the token in the React snapshot', () => {
     const store = createSessionStore()
-    store.start({ accessToken: TOKEN, expiresAt: '2026-09-30T15:30:00Z', profile: adminProfile })
+    store.start({ accessToken: TOKEN, expiresAt: '2026-09-30T15:30:00Z', expiresIn: 3600, profile: adminProfile })
     expect(store.getSnapshot()).toEqual({ status: 'authenticated', profile: adminProfile, expiresAt: '2026-09-30T15:30:00Z' })
     expect(JSON.stringify(store.getSnapshot())).not.toContain(TOKEN)
   })
 
   it('refuses to keep a non-administrator session', () => {
     const store = createSessionStore()
-    expect(() => store.start({ accessToken: TOKEN, expiresAt: '2026-09-30T15:30:00Z', profile: technicianProfile })).toThrow()
+    expect(() => store.start({ accessToken: TOKEN, expiresAt: '2026-09-30T15:30:00Z', expiresIn: 3600, profile: technicianProfile })).toThrow()
     expect(store.getAccessToken()).toBeNull()
     expect(store.getSnapshot()).toEqual({ status: 'anonymous', arrivalReason: null, email: null })
   })
@@ -63,7 +63,7 @@ describe('createSessionStore', () => {
     const store = createSessionStore()
     const listener = vi.fn()
     store.subscribe(listener)
-    store.start({ accessToken: TOKEN, expiresAt: '2026-09-30T15:30:00Z', profile: adminProfile })
+    store.start({ accessToken: TOKEN, expiresAt: '2026-09-30T15:30:00Z', expiresIn: 3600, profile: adminProfile })
     store.end('sessionInvalid')
     expect(store.getAccessToken()).toBeNull()
     expect(store.getSnapshot()).toEqual({ status: 'anonymous', arrivalReason: 'sessionInvalid', email: adminProfile.email })
@@ -80,10 +80,62 @@ describe('createSessionStore', () => {
 
   it('signs out locally', () => {
     const store = createSessionStore()
-    store.start({ accessToken: TOKEN, expiresAt: '2026-09-30T15:30:00Z', profile: adminProfile })
+    store.start({ accessToken: TOKEN, expiresAt: '2026-09-30T15:30:00Z', expiresIn: 3600, profile: adminProfile })
     store.signOut()
     expect(store.getAccessToken()).toBeNull()
     expect(store.getSnapshot()).toEqual({ status: 'anonymous', arrivalReason: 'signedOut', email: null })
+  })
+
+  describe('expiry (09 §4.1: no refresh)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('ends the session as expired once the token lifetime has elapsed since receipt, keeping the email', () => {
+      const store = createSessionStore()
+      store.start({ accessToken: TOKEN, expiresAt: '2026-09-30T15:30:00Z', expiresIn: 3600, profile: adminProfile })
+      vi.advanceTimersByTime(3600 * 1000 - 1)
+      expect(store.getSnapshot().status).toBe('authenticated')
+      vi.advanceTimersByTime(1)
+      expect(store.getAccessToken()).toBeNull()
+      expect(store.getSnapshot()).toEqual({ status: 'anonymous', arrivalReason: 'sessionExpired', email: adminProfile.email })
+    })
+
+    it('ignores the browser clock: expiresAt in the past does not end a fresh session', () => {
+      vi.setSystemTime(new Date('2030-01-01T00:00:00Z'))
+      const store = createSessionStore()
+      store.start({ accessToken: TOKEN, expiresAt: '2026-09-30T15:30:00Z', expiresIn: 3600, profile: adminProfile })
+      vi.advanceTimersByTime(60_000)
+      expect(store.getSnapshot().status).toBe('authenticated')
+    })
+
+    it('cancels the expiry of a session that ended earlier or was replaced', () => {
+      const store = createSessionStore()
+      store.start({ accessToken: TOKEN, expiresAt: '2026-09-30T15:30:00Z', expiresIn: 60, profile: adminProfile })
+      store.signOut()
+      vi.advanceTimersByTime(120_000)
+      expect(store.getSnapshot()).toEqual({ status: 'anonymous', arrivalReason: 'signedOut', email: null })
+
+      store.start({ accessToken: 'first', expiresAt: '2026-09-30T15:30:00Z', expiresIn: 60, profile: adminProfile })
+      vi.advanceTimersByTime(30_000)
+      store.start({ accessToken: 'second', expiresAt: '2026-09-30T15:30:00Z', expiresIn: 60, profile: adminProfile })
+      vi.advanceTimersByTime(45_000)
+      expect(store.getAccessToken()).toBe('second')
+      vi.advanceTimersByTime(15_000)
+      expect(store.getAccessToken()).toBeNull()
+    })
+
+    it('refuses a session without a positive lifetime', () => {
+      const store = createSessionStore()
+      for (const expiresIn of [0, -1, Number.NaN]) {
+        expect(() => store.start({ accessToken: TOKEN, expiresAt: '2026-09-30T15:30:00Z', expiresIn, profile: adminProfile })).toThrow()
+      }
+      expect(store.getAccessToken()).toBeNull()
+    })
   })
 
   it('keeps snapshots stable between changes for useSyncExternalStore', () => {
