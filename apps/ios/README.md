@@ -4,10 +4,14 @@ Application SwiftUI du technicien. Elle communique uniquement avec l'API
 Spring Aegis Control (`/api/v1`) : jamais avec PostgreSQL, le courtier MQTT ou
 le casier.
 
-**État (FND-02B, #16) :** squelette exécutable. Un écran technique vérifie
-`GET /system/health` avec les états chargement, service opérationnel, erreur
-et nouvelle tentative. Ce n'est pas une section métier approuvée : il prouve
-seulement que l'application compile, se lance et joint l'API.
+**État :**
+
+- FND-02B (#16) : squelette exécutable et écran technique « Service Aegis »
+  (`GET /system/health`), atteignable depuis le compte.
+- IOS-01 (#36) : connexion du technicien selon le handoff approuvé
+  (`docs/design/mobile-entree/`, #35), session au Keychain, expiration,
+  401, 429, déconnexion, reprise hors ligne et refus du compte
+  administrateur, en français et en anglais.
 
 ## Environnement vérifié
 
@@ -32,11 +36,11 @@ l'ouvrir.
 **Cible minimale : iOS 17.0** (`Config/Shared.xcconfig`), à ne pas confondre
 avec les versions réellement testées :
 
-| Configuration | Recette | Résultat (21 octobre 2026, avec FR/EN) |
+| Configuration | Recette | Résultat (21 octobre 2026, branche #36) |
 |---|---|---|
-| iPhone 17, iOS 26.3.1 (simulateur) | `standalone` | 28 réussis, 0 ignoré; catalogue cohérent (21 clés) |
-| iPhone 17, iOS 26.3.1 (simulateur) | `live`, API locale issue de `dev` | 2 réussis, 0 ignoré |
-| iPhone SE (3e génération), iOS 17.5 (simulateur) | `standalone` | 28 réussis, 0 ignoré; catalogue cohérent |
+| iPhone 17, iOS 26.3.1 (simulateur) | `standalone` | 81 réussis, 0 ignoré; audits d'accessibilité réussis; catalogue cohérent (70 clés) |
+| iPhone 17, iOS 26.3.1 (simulateur) | `live`, API locale de `dev` (34c056c), comptes de démonstration | 8 réussis, 0 ignoré |
+| iPhone SE (3e génération), iOS 17.5 (simulateur) | `standalone` | 81 réussis, 0 ignoré; audits réussis; catalogue cohérent |
 | iOS 17.0 exact, iOS 18.x, iOS 26.0 | — | non testés (pas de runtime 17.0; autres runtimes non exécutés) |
 | iPhone 12 (Philippe), iPhone 15 Plus (Jimmy) | — | non testés; versions déclarées non confirmées (voir plus bas) |
 
@@ -85,22 +89,31 @@ sans changer la cible.
 scripts/ios-test.sh standalone
 ```
 
-- Tests unitaires et tests UI « service injoignable » en français et en
-  anglais, sans backend, puis contrôle du String Catalog
-  (`scripts/check-strings.py`).
+- Tests unitaires (client, Keychain réel du simulateur, modèle de session),
+  tests UI de la connexion et de l'écran de santé en français et en anglais
+  avec audits d'accessibilité de Xcode, sans backend, puis contrôle du
+  String Catalog (`scripts/check-strings.py`).
 - Les tests d'intégration sont **exclus**, pas ignorés; la recette échoue si
   un test est ignoré, échoue ou si aucun test ne s'exécute.
 
+La recette live demande l'API avec les comptes de démonstration activés
+(`services/api/README.md`). Les mots de passe viennent du fichier local non
+versionné utilisé pour démarrer l'API, sans être affichés :
+
 ```bash
-AEGIS_LIVE_API_BASE_URL=http://localhost:8080/api/v1 scripts/ios-test.sh live
+(set -a; . ~/.config/aegis/local-api.env; set +a; AEGIS_LIVE_API_BASE_URL=http://localhost:8080/api/v1 AEGIS_LIVE_TECHNICIAN_PASSWORD="$AEGIS_DEMO_TECHNICIAN_PASSWORD" AEGIS_LIVE_ADMIN_PASSWORD="$AEGIS_DEMO_ADMIN_PASSWORD" scripts/ios-test.sh live)
 ```
 
-- Appel réel par le client (`LiveAPIIntegrationTests`) et par l'application
-  lancée (`testLiveServiceShowsHealth`).
-- Échoue (code 1) si `AEGIS_LIVE_API_BASE_URL` manque, si
-  `/system/health` est injoignable, ou si les 2 tests ne réussissent pas
-  tous; un test ignoré est un échec. Ces deux refus ont été vérifiés le
+- Santé et authentification par le client (`LiveAPIIntegrationTests`,
+  `LiveAuthIntegrationTests`), puis par l'application lancée : santé,
+  connexion du technicien, reprise depuis le Keychain après relance,
+  déconnexion, refus du compte administrateur (`SignInLiveUITests`).
+- Échoue (code 1) si l'adresse ou un des deux mots de passe manque, si
+  `/system/health` est injoignable, ou si les 8 tests ne réussissent pas
+  tous; un test ignoré est un échec. Ces refus ont été vérifiés le
   21 octobre 2026.
+- `AEGIS_LIVE_TECHNICIAN_EMAIL` et `AEGIS_LIVE_ADMIN_EMAIL` remplacent les
+  adresses par défaut (`technician@aegis.demo`, `admin@aegis.demo`).
 
 Variables facultatives : `IOS_DESTINATION` (défaut
 `platform=iOS Simulator,name=iPhone 17,OS=latest`, à adapter aux simulateurs
@@ -128,6 +141,33 @@ xcrun simctl install booted build/DerivedData/Build/Products/Debug-iphonesimulat
 ```bash
 xcrun simctl launch booted com.example.aegis.mobile
 ```
+
+## Connexion et session (#36)
+
+| Situation | Comportement |
+|---|---|
+| Lancement sans session | Formulaire de connexion |
+| Session au Keychain, non expirée | « Reprise de la session… », puis `GET /auth/me`; le compte n'est affiché qu'après acceptation par le serveur |
+| `GET /auth/me` injoignable ou en erreur 5xx | Jeton conservé, écran « Connexion au service impossible » avec Réessayer et Se déconnecter; session non présentée comme vérifiée, aucune action métier |
+| Expiration (`expiresAt`, 60 min, sans refresh token) | Retour à la connexion, courriel prérempli, message d'expiration; vérifiée à l'échéance et au retour au premier plan |
+| 401 ou 403 sur une route protégée | Jeton supprimé; « session expirée » pour `AUTH_TOKEN_EXPIRED`, sinon « session n'est plus valide » |
+| 401 à la connexion | « Adresse courriel ou mot de passe incorrect. »; mot de passe effacé, courriel conservé |
+| 429 | Délai `Retry-After` affiché une seule fois s'il est valide (1 à 3600 s), bouton désactivé jusque-là; sinon « Réessayez plus tard. » sans verrou |
+| Compte administrateur | Jeton non conservé, aucune donnée chargée, écran « Accès réservé aux techniciens » |
+| Déconnexion | Confirmation, puis suppression locale du jeton (aucune route serveur) |
+
+- Le jeton, son échéance et l'adresse sont un seul élément Keychain
+  `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`; jamais `UserDefaults`,
+  jamais journalisés (descriptions de débogage masquées).
+- Le client ne lit jamais le contenu du jeton; le serveur reste l'autorité.
+- Un double envoi est ignoré pendant la requête; l'état d'envoi est annoncé
+  à VoiceOver.
+
+**Hooks de test (Debug uniquement, absents de Release)** : variables de
+lancement `AEGIS_UI_SCENARIO` (réponses d'API scriptées et session en
+mémoire, voir `App/UITestHooks.swift`), `AEGIS_RESET_SESSION=1`,
+`AEGIS_START_SCREEN=health` et `AEGIS_UI_FOCUS`. Ils servent aux tests UI et
+aux captures; seule la recette live prouve l'intégration.
 
 ## Français et anglais
 
@@ -222,6 +262,22 @@ laboratoire. Avant le premier essai :
 5. Caméra : `NSCameraUsageDescription` et le scan seront ajoutés avec CHK-01
    et validés seulement sur l'appareil.
 
+Essais de la connexion (#36) qui restent à faire sur un iPhone réel, aucun
+n'ayant été exécuté :
+
+- connexion, relance et reprise depuis le Keychain de l'appareil, y compris
+  après un verrouillage (élément lisible seulement appareil déverrouillé);
+- remplissage automatique des mots de passe avec un trousseau réel;
+- VoiceOver manuel : ordre de lecture, annonce « Connexion en cours »,
+  messages d'erreur et de limite, confirmation de déconnexion;
+- Taille du texte, Gras, Réduire les animations et Augmenter le contraste
+  réglés dans Réglages;
+- mode Avion au lancement avec une session valide (reprise hors ligne),
+  puis retour du réseau et Réessayer;
+- expiration réelle après 60 minutes, application en arrière-plan puis au
+  premier plan;
+- connexion en HTTPS vers l'hôte de démonstration (point 3).
+
 ## Preuves
 
 Captures dans `docs/evidence/`, prises le 14 octobre 2026 avec le même Xcode
@@ -234,3 +290,11 @@ et les mêmes runtimes que ci-dessus :
   texte d'accessibilité très grand;
 - `health-unreachable-en-iphone17-ios26.3.png` (21 octobre 2026) : même état
   en anglais (capture du test UI).
+
+`docs/evidence/sign-in/` (21 octobre 2026, iPhone 17, iOS 26.3.1, scénarios
+Debug) :
+
+- `scripts/capture-sign-in.sh` : connexion clair/sombre FR/EN, clavier,
+  très grand texte, reprise, reprise hors ligne, session expirée, compte;
+- tests UI : refus FR/EN, limite de tentatives, envoi, mauvais rôle,
+  erreurs de champ, très grand texte défilé, audit en sombre.
