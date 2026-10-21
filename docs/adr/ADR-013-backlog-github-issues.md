@@ -1,12 +1,14 @@
 # ADR-013 — Backlog suivi dans GitHub Issues
 
-**Statut :** PROPOSED — consigne une décision déjà prise par Philippe le 5 octobre 2026; à accepter pour cette consignation
+**Statut :** ACCEPTED — Philippe Jordan Monfouayi Mba, le 21 octobre 2026; consigne sa décision du 5 octobre 2026
 
 **Date de la décision :** 5 octobre 2026
 
 **Date de consignation :** 21 octobre 2026
 
-**Remplace, une fois acceptée :** dans l’[ADR-010](ADR-010-architecture-monorepo.md), section « Suivi du travail », le premier paragraphe, qui confie à Jimmy la mise en place de Linear et y place le suivi des tâches. Le monorepo et le reste de l’ADR-010 demeurent acceptés. Le fichier de l’ADR-010 n’est pas modifié.
+**Date d’acceptation :** 21 octobre 2026
+
+**Remplace :** dans l’[ADR-010](ADR-010-architecture-monorepo.md), section « Suivi du travail », le premier paragraphe, qui confie à Jimmy la mise en place de Linear et y place le suivi des tâches. Le monorepo et le reste de l’ADR-010 demeurent acceptés. Le fichier de l’ADR-010 n’est pas modifié.
 
 ## Décision antérieure
 
