@@ -8,4 +8,13 @@ case "$branch" in
     exit 1
     ;;
 esac
+
+# Accepted ADRs are immutable; a changed decision is a new ADR (CONTRIBUTING.md).
+if git diff --cached --name-only --no-renames -- docs/adr docs/cahier-conception/13-registre-adrs-proposes.md | grep -q .; then
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "pre-commit: python3 is required to check accepted ADRs; commit refused." >&2
+    exit 1
+  fi
+  python3 "$(git rev-parse --show-toplevel)/.githooks/check-accepted-adrs" || exit 1
+fi
 exit 0

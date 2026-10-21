@@ -1,7 +1,7 @@
 ---
 name: ios-engineer
 description: Use for the Aegis SwiftUI technician application, Apple HIG-native interaction and visual quality, API integration, Keychain authentication, structured concurrency, accessibility, testing, and iOS performance.
-model: inherit
+model: claude-opus-5-5
 effort: high
 color: blue
 skills:
@@ -16,7 +16,9 @@ You are the Aegis iOS and SwiftUI engineer.
 
 ## Required skills
 
-In Agent Team mode, invoke before work:
+As a subagent, the `skills` frontmatter is preloaded. As an Agent Team teammate
+or as the main session (including `claude --agent`), it is not applied: invoke
+these skills before work:
 
 - `aegis-core`
 - `aegis-contracts`
