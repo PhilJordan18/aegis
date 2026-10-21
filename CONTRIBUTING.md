@@ -98,8 +98,9 @@ rapport et ses commits restent locaux.
 ## Hooks Git locaux
 
 Les hooks versionnés de `.githooks/` bloquent un commit sur `main` ou `dev`,
-un push vers `main` ou `dev` et un push de branche mal nommée. Les activer une
-fois par clone :
+un commit qui modifie, renomme ou supprime un ADR accepté, un push vers `main`
+ou `dev` et un push de branche mal nommée. Le contrôle des ADR exige `python3`.
+Les activer une fois par clone :
 
 ```bash
 git config core.hooksPath .githooks
@@ -107,6 +108,21 @@ git config core.hooksPath .githooks
 
 `--no-verify` reste réservé à une opération humaine exceptionnelle et
 annoncée à l'autre membre.
+
+## Garanties techniques et consignes
+
+Une règle n'a pas la même force selon qu'un mécanisme la bloque ou qu'elle
+repose sur la discipline des humains et des agents.
+
+| Règle | Mécanisme | Limite connue |
+|---|---|---|
+| Aucun push direct, aucun force push ni suppression de `dev` et `main`; PR obligatoire | Rulesets GitHub « Protect dev » et « Protect main », sans contournement | Aucune approbation exigée : l'auteur peut fusionner sa propre PR |
+| PR vers `dev` depuis une branche `<issue>-<type>-<slug>`; `main` ne reçoit que `dev` | Check obligatoire « Source branch » (`.github/workflows/branch-policy.yml`) | Vérifie le nom de la branche, pas son contenu |
+| Aucun commit sur `main` ou `dev`; aucun push vers eux; nom de branche | Hooks locaux `pre-commit` et `pre-push` | Local : `core.hooksPath` à configurer par clone, contournable par `--no-verify` |
+| ADR accepté jamais modifié | Hook local `pre-commit` (fichiers de `docs/adr/` et fiches acceptées du document 13) | Local, comme ci-dessus; aucun contrôle en CI pour l'instant |
+| Push et PR seulement après « deliver » | Consigne des agents; case du modèle de PR | Aucun blocage technique |
+| Fusion par un humain | Consigne | Un compte autorisé peut fusionner, y compris par `gh` |
+| Petits commits vérifiés sur la branche d'issue, sans réécriture d'historique | Consigne | Un amend, un rebase ou un commit non vérifié restent possibles localement |
 
 ## Décisions d'architecture (ADR)
 
