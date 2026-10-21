@@ -552,6 +552,32 @@ describe('replay of an emitted message (late or duplicate delivery)', () => {
     expect(t.published.filter((p) => p.payload.messageId === beat.payload.messageId)).toHaveLength(2);
   });
 
+  it('counts only established connections, so failed attempts do not shift connectionsAgo', async () => {
+    const { sim, transport } = setup();
+    sim.start();
+    const t = transport();
+    t.brokerAccept();
+    const firstWill = t.will.body;
+    const firstConnection = sim.connectionId;
+    t.brokerClose();
+    // 40 attempts without CONNACK, more than the failed-attempt bound.
+    for (let i = 0; i < 40; i++) {
+      await vi.advanceTimersByTimeAsync(30_000);
+      t.brokerClose();
+    }
+    await vi.advanceTimersByTimeAsync(30_000);
+    t.brokerAccept();
+    expect(t.reconnects).toBe(41);
+
+    await sim.replay({ type: 'DEVICE_AVAILABILITY', reason: 'CONNECTION_LOST', connectionsAgo: 1 });
+    expect(t.published.at(-1)!.body).toBe(firstWill);
+    await sim.replay({ type: 'HEARTBEAT', connectionsAgo: 1 });
+    expect(t.published.at(-1)!.payload.connectionId).toBe(firstConnection);
+    await sim.replay({ type: 'HEARTBEAT', connectionsAgo: 0 });
+    expect(t.published.at(-1)!.payload.connectionId).toBe(sim.connectionId);
+    await expect(sim.replay({ type: 'HEARTBEAT', connectionsAgo: 2 })).rejects.toThrow('no emitted message');
+  });
+
   it('fails when nothing matches or the hub is offline', async () => {
     const { sim, transport } = setup();
     sim.start();

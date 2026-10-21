@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MemoryBootCounter } from '../../src/boot-counter.ts';
 import { defineConfig } from '../../src/config.ts';
 import { ScenarioError, parseScenario, runScenario } from '../../src/scenario.ts';
@@ -110,5 +110,63 @@ describe('scenario execution', () => {
     expect(second[3]!.body).toBe(firstWill);
     expect(second[4]!.body).toBe(firstRestart);
     expect(second[5]!.payload).toMatchObject({ reason: 'SHUTDOWN', bootCount: 2 });
+  });
+
+  it('runs late-messages-replay.json when each reconnection needs several attempts', async () => {
+    vi.useFakeTimers();
+    try {
+      const { factory, instances } = fakeTransportFactory();
+      // The broker accepts each CONNECT on the next tick, except the first two
+      // attempts of every reconnection, which close without CONNACK (backoff 1 s + 2 s
+      // + 4 s stays within the scenario's 10 s waitOnline).
+      const flaky: typeof factory = (options) => {
+        const t = factory(options) as FakeTransport;
+        let failures = 0;
+        t.reconnect = () => {
+          t.reconnects++;
+          setTimeout(() => (failures++ < 2 ? t.brokerClose() : ((failures = 0), t.brokerAccept())), 0);
+        };
+        setTimeout(() => t.brokerAccept(), 0);
+        return t;
+      };
+      const sim = new HubSimulator(defineConfig({ password: 'test-only' }), {
+        transportFactory: flaky,
+        random: () => 0.5,
+        bootCounter: new MemoryBootCounter(),
+      });
+      const replayed: Array<Record<string, unknown>> = [];
+      sim.on('replayed', (m) => replayed.push(m.payload as unknown as Record<string, unknown>));
+      const onlines: string[] = [];
+      sim.on('sent', (m) => {
+        if (m.payload.type === 'DEVICE_AVAILABILITY' && m.payload.status === 'ONLINE') onlines.push(m.payload.connectionId);
+      });
+      const raw = JSON.parse(readFileSync(new URL('../../scenarios/late-messages-replay.json', import.meta.url), 'utf8'));
+      sim.start();
+      let done = false;
+      let failure: unknown;
+      const fakeWait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+      runScenario(sim, parseScenario(raw), fakeWait).then(
+        () => (done = true),
+        (error: unknown) => ((failure = error), (done = true)),
+      );
+      for (let i = 0; i < 200 && !done; i++) await vi.advanceTimersByTimeAsync(1_000);
+      expect(failure).toBeUndefined();
+      expect(done).toBe(true);
+      expect(instances[0]!.reconnects).toBe(3);
+      // The Will and heartbeat replayed after the reconnection belong to the previous
+      // established connection, not to a failed attempt.
+      expect(replayed[0]).toMatchObject({ type: 'DEVICE_AVAILABILITY', reason: 'CONNECTION_LOST', connectionId: onlines[0] });
+      expect(replayed[1]).toMatchObject({ type: 'HEARTBEAT', connectionId: onlines[0] });
+      expect(replayed.map((r) => r.type)).toEqual([
+        'DEVICE_AVAILABILITY',
+        'HEARTBEAT',
+        'DEVICE_RESTARTED',
+        'HEARTBEAT',
+        'HEARTBEAT',
+      ]);
+      expect(sim.state).toBe('stopped');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

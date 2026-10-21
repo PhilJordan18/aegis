@@ -12,15 +12,23 @@ export interface ReplaySelector {
   /** 0 is the current boot, 1 the previous one. */
   readonly bootsAgo?: number;
   /**
-   * 0 is the connection prepared last, 1 the one before, counted over the whole run
-   * across boots; every connection attempt counts, established or not. Not applicable to DEVICE_RESTARTED, which carries no connectionId.
+   * Counts established connections only, those that published an ONLINE, over the
+   * whole run across boots: 0 is the last one (the current connection while online),
+   * 1 the one before. A failed attempt is never counted, so a reconnection that
+   * needed several attempts does not shift the index. Not applicable to
+   * DEVICE_RESTARTED, which carries no connectionId.
    */
   readonly connectionsAgo?: number;
 }
 
-/** Bounds of the log, so that a long run keeps a constant memory footprint. */
+/**
+ * Bounds of the log, so that a long run keeps a constant memory footprint. Established
+ * connections and failed attempts have separate bounds, so a long outage of failed
+ * attempts never evicts an established connection.
+ */
 export const MAX_TRACKED_BOOTS = 16;
 export const MAX_TRACKED_CONNECTIONS = 32;
+export const MAX_TRACKED_FAILED_ATTEMPTS = 32;
 
 interface Entry {
   readonly message: OutboundMessage;
@@ -36,12 +44,17 @@ function connectionOf(message: OutboundMessage): string | undefined {
 /**
  * Remembers what the simulator emitted, Last Wills included, so that a scenario can
  * replay a late or duplicate delivery. Per connection it keeps the Will, ONLINE,
- * SHUTDOWN and only the last heartbeat; per boot it keeps DEVICE_RESTARTED.
+ * SHUTDOWN and only the last heartbeat; per boot it keeps DEVICE_RESTARTED. The Wills
+ * of attempts that never published ONLINE are kept within their own bound but are not
+ * counted by `connectionsAgo`; a later Will is always a more recent match.
  */
 export class EmissionLog {
   #entries: Entry[] = [];
   readonly #boots: number[] = [];
-  readonly #connections: string[] = [];
+  /** Connections that published an ONLINE, oldest first. */
+  readonly #established: string[] = [];
+  /** Prepared connections without an ONLINE yet: the pending attempt and failed ones. */
+  readonly #attempts: string[] = [];
 
   /** Declares a new boot; older boots beyond the bound are forgotten. */
   beginBoot(bootCount: number): void {
@@ -52,17 +65,16 @@ export class EmissionLog {
     }
   }
 
-  /** Declares a newly prepared connection; older connections beyond the bound are forgotten. */
+  /** Declares a newly prepared connection attempt; it counts once it publishes ONLINE. */
   beginConnection(connectionId: string): void {
-    this.#connections.push(connectionId);
-    while (this.#connections.length > MAX_TRACKED_CONNECTIONS) {
-      const dropped = this.#connections.shift();
-      this.#entries = this.#entries.filter((e) => e.connectionId !== dropped);
-    }
+    this.#attempts.push(connectionId);
+    this.#forgetBeyond(this.#attempts, MAX_TRACKED_FAILED_ATTEMPTS + 1);
   }
 
   record(message: OutboundMessage): void {
     const entry: Entry = { message, bootCount: message.payload.bootCount, connectionId: connectionOf(message) };
+    const payload = message.payload;
+    if (payload.type === 'DEVICE_AVAILABILITY' && payload.status === 'ONLINE') this.#establish(payload.connectionId);
     if (message.payload.type === 'HEARTBEAT') {
       this.#entries = this.#entries.filter(
         (e) => !(e.message.payload.type === 'HEARTBEAT' && e.connectionId === entry.connectionId),
@@ -74,7 +86,7 @@ export class EmissionLog {
   find(selector: ReplaySelector): OutboundMessage | undefined {
     const boot = selector.bootsAgo === undefined ? undefined : this.#boots.at(-1 - selector.bootsAgo);
     const connection =
-      selector.connectionsAgo === undefined ? undefined : this.#connections.at(-1 - selector.connectionsAgo);
+      selector.connectionsAgo === undefined ? undefined : this.#established.at(-1 - selector.connectionsAgo);
     if (selector.bootsAgo !== undefined && boot === undefined) return undefined;
     if (selector.connectionsAgo !== undefined && connection === undefined) return undefined;
     for (let i = this.#entries.length - 1; i >= 0; i--) {
@@ -89,5 +101,20 @@ export class EmissionLog {
       return entry.message;
     }
     return undefined;
+  }
+
+  #establish(connectionId: string): void {
+    const index = this.#attempts.indexOf(connectionId);
+    if (index < 0) return;
+    this.#attempts.splice(index, 1);
+    this.#established.push(connectionId);
+    this.#forgetBeyond(this.#established, MAX_TRACKED_CONNECTIONS);
+  }
+
+  #forgetBeyond(connections: string[], max: number): void {
+    while (connections.length > max) {
+      const dropped = connections.shift();
+      this.#entries = this.#entries.filter((e) => e.connectionId !== dropped);
+    }
   }
 }

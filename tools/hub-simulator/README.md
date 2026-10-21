@@ -217,13 +217,16 @@ tardif, heartbeat retardé, ancien `DEVICE_RESTARTED`, doublon.
 | `type` | Requis : `HEARTBEAT`, `DEVICE_AVAILABILITY` ou `DEVICE_RESTARTED` |
 | `reason` | `DEVICE_AVAILABILITY` seulement; `CONNECTION_LOST` désigne un Last Will préparé |
 | `bootsAgo` | 0 = démarrage courant, 1 = précédent |
-| `connectionsAgo` | 0 = dernière connexion préparée, 1 = la précédente, comptées sur toute l'exécution, démarrages compris, chaque tentative comptant pour une connexion; interdit pour `DEVICE_RESTARTED`, qui n'a pas de `connectionId` |
+| `connectionsAgo` | Connexions établies seulement (celles qui ont publié `ONLINE`), comptées sur toute l'exécution, démarrages compris : 0 = la dernière (la connexion courante une fois connecté), 1 = la précédente. Une tentative échouée ne compte pas, même si la reconnexion en a demandé plusieurs. Interdit pour `DEVICE_RESTARTED`, qui n'a pas de `connectionId` |
 
 Sans `bootsAgo` ni `connectionsAgo`, le message le plus récent du type est
 choisi; les deux ensemble sont refusés. Le simulateur garde, par connexion, le
 Will, `ONLINE`, `SHUTDOWN` et le dernier heartbeat, et par démarrage
-`DEVICE_RESTARTED`, sur les 32 dernières connexions et les 16 derniers
-démarrages. Le rejeu exige d'être connecté et échoue si rien ne correspond.
+`DEVICE_RESTARTED`, sur les 32 dernières connexions établies et les 16 derniers
+démarrages. Les Wills des tentatives sans `ONLINE` sont gardés à part (32 au
+plus), si bien qu'une longue panne n'évince aucune connexion établie; ils ne
+sont pas désignables par `connectionsAgo`. Le rejeu exige d'être connecté et
+échoue si rien ne correspond.
 
 Exemples, dans `scenarios/late-messages-replay.json` :
 
