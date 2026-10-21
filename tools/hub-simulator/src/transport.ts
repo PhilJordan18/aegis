@@ -37,8 +37,12 @@ export interface Transport {
   reconnect(): void;
   /** Simulates a network loss: the socket closes without DISCONNECT and the client stays usable. */
   dropSocket(): void;
-  /** Sends DISCONNECT, so the broker discards the Last Will. */
-  disconnect(): Promise<void>;
+  /**
+   * Sends DISCONNECT, so the broker discards the Last Will. By default it first waits
+   * for unacknowledged QoS 1 messages; `abandonInFlight` drops them and sends
+   * DISCONNECT at once, for a PUBACK that will never come.
+   */
+  disconnect(options?: { readonly abandonInFlight?: boolean }): Promise<void>;
   /** Closes the socket without DISCONNECT, so the broker publishes the Last Will. */
   destroy(): Promise<void>;
 }
@@ -94,7 +98,11 @@ export const mqttTransportFactory: TransportFactory = (options) => {
     dropSocket() {
       client.stream.destroy();
     },
-    disconnect() {
+    disconnect(options) {
+      if (options?.abandonInFlight) {
+        // mqtt.js would otherwise wait for `outgoingEmpty` forever before DISCONNECT.
+        for (const id of Object.keys(client.outgoing)) client.removeOutgoingMessage(Number(id));
+      }
       return client.endAsync(false);
     },
     destroy() {

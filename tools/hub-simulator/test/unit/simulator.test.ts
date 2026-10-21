@@ -268,6 +268,46 @@ describe('shutdown and restart (doc 10 §13.1, §15.2)', () => {
     expect(sim.state).toBe('stopped');
   });
 
+  it('a SHUTDOWN never acknowledged is abandoned after 5 s and DISCONNECT is still sent', async () => {
+    const { sim, transport } = setup();
+    sim.start();
+    const t = transport();
+    t.brokerAccept();
+    t.acknowledge = false;
+    const failures: string[] = [];
+    sim.on('publishFailed', (m, error) => failures.push(`${String(m.payload.type)}: ${error.message}`));
+    let resolved = false;
+    const stopping = sim.stop().then(() => {
+      resolved = true;
+    });
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(resolved).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await stopping;
+    expect(failures).toEqual(['DEVICE_AVAILABILITY: SHUTDOWN not acknowledged within 5000 ms']);
+    expect(t.disconnectOptions).toEqual([{ abandonInFlight: true }]);
+    expect(t.disconnects).toBe(1);
+    expect(t.destroys).toBe(0);
+    expect(sim.state).toBe('stopped');
+  });
+
+  it('falls back to closing the socket when DISCONNECT never completes, so stop() always resolves', async () => {
+    const { sim, transport } = setup();
+    sim.start();
+    const t = transport();
+    t.brokerAccept();
+    t.hangDisconnect = true;
+    const errors: string[] = [];
+    sim.on('transportError', (error) => errors.push(error.message));
+    const stopping = sim.stop();
+    await vi.advanceTimersByTimeAsync(5_000);
+    await stopping;
+    expect(t.disconnectOptions).toEqual([{ abandonInFlight: false }]);
+    expect(errors).toEqual(['DISCONNECT not completed within 5000 ms']);
+    expect(t.destroys).toBe(1);
+    expect(sim.state).toBe('stopped');
+  });
+
   it('a crash closes the socket without DISCONNECT and publishes nothing itself', async () => {
     const { sim, transport } = setup();
     sim.start();

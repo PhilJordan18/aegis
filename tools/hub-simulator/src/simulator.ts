@@ -50,6 +50,21 @@ export interface SimulatorDependencies {
   readonly bootCounter?: BootCounter;
 }
 
+/** Bound of each shutdown step, so that stop() never waits on the broker forever. */
+export const STOP_STEP_TIMEOUT_MS = 5_000;
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} within ${ms} ms`)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Heartbeat-visible state of one cell. Door and lock events belong to SIM-02 (#39). */
 export type CompartmentPatch = Partial<{
   connectionStatus: CellConnectionStatus;
@@ -172,36 +187,39 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
 
   /**
    * Clean shutdown (doc 10 §15.2): publish OFFLINE `SHUTDOWN` on the current
-   * connection, then DISCONNECT so the broker discards the Last Will.
+   * connection, then DISCONNECT so the broker discards the Last Will. Nothing else is
+   * published on the connection after SHUTDOWN. Always resolves: a PUBACK that never
+   * comes is abandoned after 5 s, and a DISCONNECT that does not complete within 5 s
+   * falls back to closing the socket, in which case the broker publishes the Will.
    */
   async stop(): Promise<void> {
     const transport = this.#transport;
     if (!transport || this.#state === 'stopped' || this.#state === 'stopping') return;
     const wasOnline = this.#state === 'online';
+    // Leaving `online` first stops heartbeats, replays and reconnections.
     this.#setState('stopping');
     this.#clearTimers();
     if (wasOnline) {
       const offline = buildOffline(this.#context(), this.#currentConnectionId(), 'SHUTDOWN');
       this.#emitted.record(offline);
+      this.emit('sent', offline);
+      let acknowledged = false;
       try {
-        this.emit('sent', offline);
-        let timer: NodeJS.Timeout | undefined;
-        // A lost PUBACK must not block shutdown; the heartbeat timeout remains the reference.
-        const timeout = new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error('OFFLINE not acknowledged within 5 s')), 5_000);
-        });
-        try {
-          await Promise.race([transport.publish(offline.topic, offline.body, offline.delivery), timeout]);
-        } finally {
-          clearTimeout(timer);
-        }
+        await withTimeout(transport.publish(offline.topic, offline.body, offline.delivery), STOP_STEP_TIMEOUT_MS, 'SHUTDOWN not acknowledged');
+        acknowledged = true;
         this.emit('delivered', offline);
       } catch (error) {
+        // The heartbeat timeout remains the backend's reference (doc 10 §15.2).
         this.emit('publishFailed', offline, error as Error);
       }
-      await transport.disconnect();
+      try {
+        await withTimeout(transport.disconnect({ abandonInFlight: !acknowledged }), STOP_STEP_TIMEOUT_MS, 'DISCONNECT not completed');
+      } catch (error) {
+        this.emit('transportError', error as Error);
+        await withTimeout(transport.destroy(), STOP_STEP_TIMEOUT_MS, 'socket not closed').catch(() => undefined);
+      }
     } else {
-      await transport.destroy();
+      await withTimeout(transport.destroy(), STOP_STEP_TIMEOUT_MS, 'socket not closed').catch(() => undefined);
     }
     this.#transport = undefined;
     this.#setState('stopped');
