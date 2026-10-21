@@ -367,9 +367,10 @@ Content-Security-Policy devra l'autoriser par empreinte.
   - validation client sans requête;
   - le `title` et le `detail` du serveur ne sont jamais affichés : seuls le
     `code`, `violations[].field` et le `traceId` servent.
-- Textes : `features/auth/signInCopy.ts` sépare les libellés approuvés [A]
-  des libellés proposés [P] (`states.md`). La validation est dans
-  `signInValidation.ts`.
+- Textes : le groupe `signIn` des catalogues (`src/i18n/messages/`, voir
+  « Langue ») marque en commentaire les libellés approuvés [A]; les autres sont
+  proposés [P] (`states.md`). La validation (`signInValidation.ts`) renvoie des
+  codes d'erreur de champ, que la page traduit au rendu.
 - `features/auth/session.ts` garde aussi en mémoire le courriel d'une
   session terminée par un 401, pour préremplir le formulaire.
 
