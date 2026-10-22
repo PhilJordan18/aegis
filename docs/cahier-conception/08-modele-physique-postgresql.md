@@ -336,12 +336,38 @@ CREATE TABLE compartments (
 
 Un seul device actif commande un locker en P0. Les anciens devices sont désactivés, jamais réaffectés silencieusement.
 
+Les colonnes `provisioned_at`, `device_session_id`, `boot_count` et `heartbeat_*`
+persistent la projection de disponibilité du doc 10 §15.3 (#63, schéma MQTT 2.0) :
+l’instant du dernier provisionnement, la session courante choisie par le plus grand
+`boot_count`, et le heartbeat de référence (valide, de plus grande `sequence` dans la
+session) avec sa connexion, sa `sequence`, son `receivedAt` et la fermeture éventuelle
+de sa connexion. `first_valid_heartbeat_at` garde le premier heartbeat valide reçu
+depuis le provisionnement. Ces colonnes sont mises à jour dans la transaction qui
+enregistre le message. Une nouvelle session (`boot_count` supérieur) vide le heartbeat de
+référence sans toucher à `first_valid_heartbeat_at`. Un nouveau provisionnement (doc 10
+§8.1) met `provisioned_at` à l’instant courant et vide la session, le heartbeat de
+référence et `first_valid_heartbeat_at`; seuls les faits reçus ensuite comptent.
+
+`connection_status` n’est qu’un cache. À la lecture : UNKNOWN si
+`first_valid_heartbeat_at` est vide; sinon OFFLINE s’il n’y a pas de heartbeat de
+référence dans la session courante, si `heartbeat_connection_closed_at` est renseigné ou
+si `last_valid_heartbeat_at` date de plus de 30 secondes; ONLINE sinon. Après un redémarrage
+du backend, ces colonnes sont relues telles quelles, et un rejeu des faits acceptés de
+`inbound_device_messages` reçus depuis `provisioned_at` doit redonner les mêmes valeurs.
+
 ```sql
 CREATE TABLE locker_devices (
     id                 uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
     locker_id          uuid NOT NULL,
     device_key         text NOT NULL,
     device_session_id  uuid NULL,
+    boot_count         bigint NULL,
+    provisioned_at     timestamptz NOT NULL DEFAULT now(),
+    heartbeat_connection_id uuid NULL,
+    heartbeat_sequence bigint NULL,
+    last_valid_heartbeat_at timestamptz NULL,
+    heartbeat_connection_closed_at timestamptz NULL,
+    first_valid_heartbeat_at timestamptz NULL,
     firmware_version   text NOT NULL,
     connection_status  text NOT NULL DEFAULT 'UNKNOWN',
     last_seen_at       timestamptz NULL,
@@ -357,7 +383,25 @@ CREATE TABLE locker_devices (
     CONSTRAINT ck_locker_devices_firmware_non_blank
         CHECK (btrim(firmware_version) <> ''),
     CONSTRAINT ck_locker_devices_connection_status
-        CHECK (connection_status IN ('ONLINE', 'OFFLINE', 'UNKNOWN'))
+        CHECK (connection_status IN ('ONLINE', 'OFFLINE', 'UNKNOWN')),
+    CONSTRAINT ck_locker_devices_boot_count
+        CHECK (boot_count IS NULL OR boot_count BETWEEN 1 AND 4294967295),
+    CONSTRAINT ck_locker_devices_session_pair
+        CHECK ((device_session_id IS NULL) = (boot_count IS NULL)),
+    CONSTRAINT ck_locker_devices_heartbeat_reference
+        CHECK (
+            (heartbeat_connection_id IS NULL
+                AND heartbeat_sequence IS NULL
+                AND last_valid_heartbeat_at IS NULL
+                AND heartbeat_connection_closed_at IS NULL)
+            OR
+            (heartbeat_connection_id IS NOT NULL
+                AND heartbeat_sequence IS NOT NULL
+                AND heartbeat_sequence >= 0
+                AND last_valid_heartbeat_at IS NOT NULL
+                AND boot_count IS NOT NULL
+                AND first_valid_heartbeat_at IS NOT NULL)
+        )
 );
 ```
 
@@ -830,6 +874,12 @@ CREATE TABLE command_outbox (
 
 Une seule ligne canonique est conservée par paire `(locker_device_id, message_id)`. Un doublon n’est donc pas réinséré; il produit au besoin un `AuditEvent` `MQTT_MESSAGE_DUPLICATE_IGNORED`.
 
+`device_session_id`, `boot_count`, `sequence`, `connection_id` et `availability_status`
+sont extraits du payload accepté (schéma MQTT 2.0, #63). Ils portent les règles du doc 10 §15.3 : un
+fait d’un `boot_count` inférieur à celui du device est conservé sans effet, et une
+connexion est fermée dès qu’un `DEVICE_AVAILABILITY` OFFLINE accepté porte son
+`connection_id`. Ils restent nuls pour un message rejeté avant leur extraction.
+
 ```sql
 CREATE TABLE inbound_device_messages (
     id                uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
@@ -841,6 +891,11 @@ CREATE TABLE inbound_device_messages (
     command_message_id uuid NULL,
     display_message_id uuid NULL,
     schema_version    text NOT NULL,
+    device_session_id uuid NULL,
+    boot_count        bigint NULL,
+    sequence          bigint NULL,
+    connection_id     uuid NULL,
+    availability_status text NULL,
     occurred_at       timestamptz NOT NULL,
     received_at       timestamptz NOT NULL DEFAULT now(),
     raw_payload       bytea NOT NULL,
@@ -892,7 +947,29 @@ CREATE TABLE inbound_device_messages (
                 AND command_message_id IS NULL)
         ),
     CONSTRAINT ck_inbound_messages_error
-        CHECK (processing_status <> 'REJECTED' OR processing_error IS NOT NULL)
+        CHECK (processing_status <> 'REJECTED' OR processing_error IS NOT NULL),
+    CONSTRAINT ck_inbound_messages_boot_count
+        CHECK (boot_count IS NULL OR boot_count BETWEEN 1 AND 4294967295),
+    CONSTRAINT ck_inbound_messages_sequence
+        CHECK (sequence IS NULL OR sequence >= 0),
+    CONSTRAINT ck_inbound_messages_accepted_envelope
+        CHECK (
+            processing_status = 'REJECTED'
+            OR (device_session_id IS NOT NULL AND boot_count IS NOT NULL AND sequence IS NOT NULL)
+        ),
+    CONSTRAINT ck_inbound_messages_connection
+        CHECK (
+            (message_type IN ('HEARTBEAT', 'DEVICE_AVAILABILITY')
+                AND (connection_id IS NOT NULL OR processing_status = 'REJECTED'))
+            OR (message_type NOT IN ('HEARTBEAT', 'DEVICE_AVAILABILITY') AND connection_id IS NULL)
+        ),
+    CONSTRAINT ck_inbound_messages_availability_status
+        CHECK (
+            (message_type = 'DEVICE_AVAILABILITY'
+                AND ((availability_status IS NOT NULL AND availability_status IN ('ONLINE', 'OFFLINE'))
+                    OR (availability_status IS NULL AND processing_status = 'REJECTED')))
+            OR (message_type <> 'DEVICE_AVAILABILITY' AND availability_status IS NULL)
+        )
 );
 ```
 
@@ -1337,6 +1414,12 @@ CREATE INDEX ix_inbound_messages_command_message
     ON inbound_device_messages (command_message_id, received_at)
     WHERE command_message_id IS NOT NULL;
 
+CREATE INDEX ix_inbound_messages_closed_connections
+    ON inbound_device_messages (locker_device_id, boot_count, connection_id)
+    WHERE message_type = 'DEVICE_AVAILABILITY'
+      AND availability_status = 'OFFLINE'
+      AND processing_status <> 'REJECTED';
+
 CREATE INDEX ix_physical_observations_operation_time
     ON physical_observations (operation_id, observed_at)
     WHERE operation_id IS NOT NULL;
@@ -1513,10 +1596,10 @@ L’identité d’un message entrant est `(locker_device_id, message_id)`. Le `l
 Dans une transaction :
 
 1. authentifier le device et vérifier le topic autorisé;
-2. parser le minimum nécessaire pour obtenir `message_id`, `message_type`, la version et `command_message_id` pour un accusé de commande;
+2. parser le minimum nécessaire pour obtenir `message_id`, `message_type`, la version, `command_message_id` pour un accusé de commande et, en schéma MQTT 2.0, `device_session_id`, `boot_count`, `sequence`, `connection_id` et `availability_status` (doc 10 §15.3);
 3. insérer `inbound_device_messages`;
 4. si la contrainte `uq_inbound_messages_device_message` est en conflit, ne produire aucune observation ni transition et, si utile, ajouter `MQTT_MESSAGE_DUPLICATE_IGNORED`;
-5. pour un nouveau message, conserver `raw_payload`, normaliser les observations, mettre à jour la projection de santé et appliquer au plus une progression de machine à états;
+5. pour un nouveau message, conserver `raw_payload`, normaliser les observations, mettre à jour la projection de santé (règles du doc 10 §15.3) et appliquer au plus une progression de machine à états;
 6. marquer le message `PROCESSED` ou `REJECTED`;
 7. valider.
 

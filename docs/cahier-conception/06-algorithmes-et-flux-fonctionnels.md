@@ -636,8 +636,8 @@ function ingestDeviceMessage(deviceIdentity, topic, rawPayload):
         observations = normalize(envelope)
         persist observations
 
-        if envelope carries heartbeat:
-            update lastSeenAt
+        if envelope carries heartbeat or availability:
+            update lastSeenAt and the availability projection (doc 10 §15.3)
 
         if envelope references operation:
             lock operation and affected aggregates
@@ -1073,13 +1073,23 @@ Le retard ne déclenche aucune transition. Le prêt reste `ACTIVE` ou `RETURN_PE
 ### 14.4 État en ligne du locker
 
 ```text
-if no valid heartbeat has ever been received:
+reference = valid heartbeat with the highest sequence in the current session
+            (facts accepted since provisionedAt, doc 10 §15.3)
+
+if no valid heartbeat since provisionedAt:
     deviceStatus = UNKNOWN
-else if now - lastSeenAt > 30 seconds:
+else if reference is none:              # new session, no valid heartbeat yet
+    deviceStatus = OFFLINE
+else if reference.connection was closed by an OFFLINE availability:
+    deviceStatus = OFFLINE
+else if now - reference.receivedAt > 30 seconds:
     deviceStatus = OFFLINE
 else:
     deviceStatus = ONLINE
 ```
+
+La session courante est celle du plus grand `bootCount`; un `DEVICE_AVAILABILITY` ONLINE
+ne rend jamais le locker ONLINE à lui seul (doc 10 §15.3, schéma MQTT 2.0).
 
 Le hub publie un heartbeat toutes les 10 secondes. Un locker `OFFLINE` refuse toute nouvelle opération. Si la déconnexion survient après l’envoi d’une commande et que l’exécution est incertaine, l’opération passe à `ANOMALY`.
 

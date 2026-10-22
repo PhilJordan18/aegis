@@ -1,5 +1,18 @@
 import { setTimeout as sleep } from 'node:timers/promises';
-import { CELL_CONNECTION_STATUSES, DOOR_STATES, LOCK_STATES, READER_STATUSES } from './contract.ts';
+import {
+  AVAILABILITY_REASONS,
+  CELL_CONNECTION_STATUSES,
+  DOOR_STATES,
+  HUB_MESSAGE_TYPES,
+  LOCK_STATES,
+  READER_STATUSES,
+  RESET_REASONS,
+  isResetReason,
+  type AvailabilityReason,
+  type HubMessageType,
+  type ResetReason,
+} from './contract.ts';
+import { MAX_TRACKED_BOOTS, MAX_TRACKED_CONNECTIONS, type ReplaySelector } from './emission-log.ts';
 import type { CompartmentPatch, HubSimulator } from './simulator.ts';
 
 /**
@@ -12,8 +25,9 @@ export type ScenarioStep =
   | { readonly do: 'waitOnline'; readonly timeoutMs?: number }
   | { readonly do: 'publishHeartbeat' }
   | { readonly do: 'dropConnection' }
-  | { readonly do: 'restart'; readonly resetReason?: string }
+  | { readonly do: 'restart'; readonly resetReason?: ResetReason }
   | { readonly do: 'updateCompartment'; readonly code: string; readonly patch: CompartmentPatch }
+  | ({ readonly do: 'replay' } & ReplaySelector)
   | { readonly do: 'stop' }
   | { readonly do: 'crash' };
 
@@ -67,11 +81,11 @@ function parseStep(raw: unknown, index: number): ScenarioStep {
     case 'restart': {
       const resetReason = raw.resetReason;
       if (resetReason === undefined) return { do: 'restart' };
-      if (typeof resetReason !== 'string' || !/^[A-Z][A-Z0-9_]{0,63}$/.test(resetReason)) {
-        return fail('resetReason must be an UPPER_SNAKE_CASE string');
-      }
+      if (!isResetReason(resetReason)) return fail(`resetReason must be one of ${RESET_REASONS.join(', ')}`);
       return { do: 'restart', resetReason };
     }
+    case 'replay':
+      return { do: 'replay', ...parseReplaySelector(raw, fail) };
     case 'updateCompartment': {
       const { code, patch } = raw;
       if (typeof code !== 'string') return fail('code must be a string');
@@ -90,6 +104,44 @@ function parseStep(raw: unknown, index: number): ScenarioStep {
     default:
       return fail(`unknown action ${JSON.stringify(raw.do)}`);
   }
+}
+
+function parseAgo(raw: Record<string, unknown>, key: 'bootsAgo' | 'connectionsAgo', max: number, fail: (r: string) => never) {
+  const value = raw[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value >= max) {
+    return fail(`${key} must be an integer in 0..${max - 1}`);
+  }
+  return value;
+}
+
+function parseReplaySelector(raw: Record<string, unknown>, fail: (reason: string) => never): ReplaySelector {
+  for (const key of Object.keys(raw)) {
+    if (!['do', 'type', 'reason', 'bootsAgo', 'connectionsAgo'].includes(key)) fail(`unknown replay field ${key}`);
+  }
+  const type = raw.type;
+  if (typeof type !== 'string' || !(HUB_MESSAGE_TYPES as readonly string[]).includes(type)) {
+    return fail(`type must be one of ${HUB_MESSAGE_TYPES.join(', ')}`);
+  }
+  const reason = raw.reason;
+  if (reason !== undefined) {
+    if (type !== 'DEVICE_AVAILABILITY') return fail('reason only applies to DEVICE_AVAILABILITY');
+    if (typeof reason !== 'string' || !(AVAILABILITY_REASONS as readonly string[]).includes(reason)) {
+      return fail(`reason must be one of ${AVAILABILITY_REASONS.join(', ')}`);
+    }
+  }
+  const bootsAgo = parseAgo(raw, 'bootsAgo', MAX_TRACKED_BOOTS, fail);
+  const connectionsAgo = parseAgo(raw, 'connectionsAgo', MAX_TRACKED_CONNECTIONS, fail);
+  if (bootsAgo !== undefined && connectionsAgo !== undefined) return fail('use bootsAgo or connectionsAgo, not both');
+  if (connectionsAgo !== undefined && type === 'DEVICE_RESTARTED') {
+    return fail('DEVICE_RESTARTED carries no connectionId; select it with bootsAgo');
+  }
+  return {
+    type: type as HubMessageType,
+    ...(reason !== undefined ? { reason: reason as AvailabilityReason } : {}),
+    ...(bootsAgo !== undefined ? { bootsAgo } : {}),
+    ...(connectionsAgo !== undefined ? { connectionsAgo } : {}),
+  };
 }
 
 export function parseScenario(raw: unknown): Scenario {
@@ -122,6 +174,11 @@ export async function runScenario(
       case 'restart':
         await simulator.restart(step.resetReason);
         break;
+      case 'replay': {
+        const { do: _, ...selector } = step;
+        await simulator.replay(selector);
+        break;
+      }
       case 'updateCompartment':
         simulator.updateCompartment(step.code, step.patch);
         break;
