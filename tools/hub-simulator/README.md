@@ -109,8 +109,14 @@ relatif viserait le dépôt; les tests écrivent dans un répertoire temporaire.
 À chaque connexion, le hub s'abonne (QoS 1) aux seuls topics `commands` et
 `display` de son locker (§6.1). Il s'abonne à chaque connexion plutôt que de se
 fier à `sessionPresent` : une session persistante peut exister sans ces
-abonnements (créée par SIM-01, par exemple). Une commande retenue (`retain`)
-n'est jamais exécutée (§7.2).
+abonnements (créée par SIM-01, par exemple). Une commande livrée avec le
+drapeau `retain`, c'est-à-dire rejouée depuis le stock retenu du broker à
+l'abonnement, n'est jamais exécutée (§7.2). Une publication `retain=true` faite
+pendant que le hub est abonné lui parvient avec `retain=false`
+[MQTT-3.3.1-9] : elle est traitée comme toute commande, et seul le backend
+peut l'éviter en ne publiant jamais de commande retenue. Pendant un arrêt
+propre (`stop()`), une commande reçue n'est ni traitée ni acquittée : le broker
+la redélivre à la prochaine connexion de la session.
 
 Validation, dans cet ordre (§9.1) :
 
@@ -133,8 +139,11 @@ Une commande acceptée est écrite `EXECUTING` dans le journal **avant**
 l'actionnement, masque le QR de son opération, déverrouille la seule cellule
 visée, puis le journal passe à `ACKNOWLEDGED` et le hub publie
 `COMMAND_ACKNOWLEDGED` `ACCEPTED` puis `LOCK_UNLOCKED`. Tous ces événements
-partent sur `events`, QoS 1, sans retain. Si `EXECUTING` ne peut pas être écrit,
-rien n'est actionné et le hub répond `INTERNAL_DEVICE_ERROR`.
+partent sur `events`, QoS 1, sans retain. Si `EXECUTING` ne peut pas être écrit
+(fichier en erreur ou journal plein, voir ci-dessous), rien n'est actionné et le
+hub répond `INTERNAL_DEVICE_ERROR`. Une seconde commande d'une opération déjà
+exécutée qui vise une autre cellule est rejetée `INVALID_PAYLOAD`, sans
+actionnement.
 
 Le hub ne publie jamais `COMPARTMENT_DISABLED` ni `POWER_STATE_UNSAFE`, dont le
 sens côté hub n'est pas défini.
@@ -143,16 +152,33 @@ sens côté hub n'est pas défini.
 
 Le journal (§16.1) est l'équivalent de l'anneau en flash du firmware. Il garde,
 par commande, `messageId`, `operationId`, `compartmentId`, l'état `EXECUTING`,
-`ACKNOWLEDGED` ou `REJECTED`, la raison, le détail et l'horodatage. Il est
+`ACKNOWLEDGED` ou `REJECTED`, la raison, le détail, le `expiresAt` de la
+commande lorsqu'il est lisible et l'horodatage. Il est
 persisté comme `bootCount`, **hors du dépôt**, un fichier par `deviceKey` :
 `$XDG_STATE_HOME/aegis/hub-simulator/command-journal-<deviceKey>.json` par défaut,
 ou `AEGIS_SIM_COMMAND_JOURNAL_FILE`. Chaque écriture se fait par fichier
 temporaire puis renommage; un fichier illisible, mal formé ou d'un autre
 `deviceKey` arrête le démarrage plutôt que d'oublier les commandes consommées.
 
-- Rétention : toute entrée de moins de 24 h et au moins les 64 dernières, avec
-  un plafond de 1024 entrées. Le plafond n'est atteint qu'au-delà d'environ
-  1000 commandes par jour.
+- Rétention : toute entrée de moins de 24 h et au moins les 64 dernières. Le
+  journal garde aussi, quel que soit leur âge, les entrées dont une
+  redélivrance pourrait encore actionner une serrure : `EXECUTING`, un rapport
+  d'incertitude non acquitté, et toute commande non expirée, sauf un rejet dont
+  la raison ne peut pas changer (`INVALID_PAYLOAD`, `UNSUPPORTED_SCHEMA`,
+  `WRONG_LOCKER`, `UNKNOWN_COMPARTMENT`, `COMMAND_EXPIRED`).
+- Plafond de 1024 entrées. Au-delà, le journal oublie d'abord, du plus ancien au
+  plus récent, les rejets qui ne peuvent mener à aucun actionnement (raison
+  stable ou commande expirée), même de moins de 24 h. Une commande exécutée
+  n'est jamais oubliée avant son `expiresAt` ni dans les minimums de 24 h et de
+  64 entrées. Si seules des entrées protégées restent, le journal est plein : la
+  nouvelle commande est refusée `INTERNAL_DEVICE_ERROR` plutôt que d'oublier
+  une entrée protégée. Une rafale de plus de 1024 rejets non expirés peut donc
+  rendre le hub indisponible jusqu'à leur expiration; une commande déjà rejetée
+  dont l'écriture est refusée n'est pas journalisée.
+- Si l'écriture qui suit une décision échoue (`ACKNOWLEDGED`, `REJECTED`), le
+  journal en mémoire suit quand même la décision : une redélivrance pendant ce
+  démarrage reçoit la même réponse. La copie durable reste celle d'avant; après
+  un redémarrage, une commande restée `EXECUTING` est déclarée incertaine.
 - Après un redémarrage (`restart`, relance du processus), le journal est relu :
   une redélivrance ne rouvre jamais une serrure (§23.2 point 6).
 - Une entrée restée `EXECUTING` au démarrage devient `REJECTED`
@@ -172,7 +198,8 @@ Deux processus ne doivent pas partager le même fichier en même temps.
 est celui du démarrage courant, si l'écran est disponible et l'horloge
 synchronisée, si l'échéance n'est pas passée et si `displayRevision` dépasse
 la plus grande révision acceptée pendant ce démarrage. L'affichage dure au plus
-60 s après `issuedAt`, même si `expiresAt` est plus tardif. Après le rendu, le
+60 s après `issuedAt` et au plus 60 s à partir de la réception, même si
+`expiresAt` est plus tardif ou `issuedAt` dans le futur. Après le rendu, le
 hub publie `ACCESS_CHALLENGE_DISPLAYED` (`displayMessageId`, `challengeId`,
 `displayRevision`, `operationId`, `compartmentId`), sans le token ni
 `commandMessageId`.
@@ -460,18 +487,25 @@ et appliqués ici. Restent hors du simulateur :
 
 Choix faits par SIM-02 là où le document 10 ne tranche pas :
 
-- un message non corrélable n'est pas publié. `COMMAND_REJECTED` exige
-  `operationId` et `compartmentId`, et aucun `errorCode` de `DEVICE_ERROR` ne
-  convient au « `DEVICE_ERROR` expurgé » demandé pour l'écran (§20);
-- une commande ou une instruction d'écran retenue est ignorée sans réponse;
+- un message non corrélable n'est pas publié. Pour une commande,
+  `COMMAND_REJECTED` exige `operationId` et `compartmentId` (§20). Pour l'écran,
+  le §20 exige bien un `DEVICE_ERROR` expurgé; il ne manque que l'`errorCode`
+  correspondant dans la liste du §13.2, ce qui laisse ce cas non implémenté;
+- une commande ou une instruction d'écran livrée avec le drapeau `retain` est
+  ignorée sans réponse;
 - la déduplication passe avant l'expiration : une redélivrance tardive reçoit le
   résultat connu, pas `COMMAND_EXPIRED`;
 - un rejet est rejoué à l'identique, même si sa cause a disparu : le backend
   doit émettre une nouvelle commande;
 - une autre commande d'une opération déjà exécutée reçoit le résultat de cette
-  opération (`ALREADY_APPLIED` si elle a été acquittée). Une opération n'est
-  « consommée » qu'une fois `EXECUTING` atteint; un rejet antérieur ne la
-  consomme pas;
+  opération (`ALREADY_APPLIED` si elle a été acquittée) lorsqu'elle vise la même
+  cellule; si elle vise une autre cellule, elle est rejetée `INVALID_PAYLOAD`,
+  faute de raison dédiée, car `ALREADY_APPLIED` nommerait une cellule jamais
+  ouverte. Une opération n'est « consommée » qu'une fois `EXECUTING` atteint;
+  un rejet antérieur ne la consomme pas;
+- le §16.1 ne fixe que des minimums de rétention; le plafond de 1024 entrées et
+  le refus `INTERNAL_DEVICE_ERROR` d'un journal plein sont des choix du
+  simulateur;
 - le scan RFID après fermeture est lancé par le hub; sa fin clôt l'opération
   dans la cellule;
 - un mauvais `lockerId`, un schéma non pris en charge ou une horloge non
