@@ -5,8 +5,8 @@
 **Date de révision :** 23 septembre 2026
 **Version :** 1.3 — décisions logicielles P0 et données de suivi des clients  
 **Mise à jour ciblée :** 21 octobre 2026 — `Retry-After` de la connexion (§10.2) et langue de la requête (§6.4), comportement existant documenté (#80)  
-**Mise à jour ciblée :** 21 octobre 2026 — idempotence REST durable : contenu d’une réponse rejouée (§6.2, §20.2), attente bornée d’une clé en cours et code `IDEMPOTENCY_REQUEST_IN_PROGRESS` (§20.2, §21) (#64)
-**Mise à jour ciblée :** 21 octobre 2026 — présence obligatoire des champs nullables du catalogue et violation `REQUIRED` (§12.1, §12.2), en attente d’approbation (#25)  
+**Mise à jour ciblée :** 21 octobre 2026 — idempotence REST durable : contenu d’une réponse rejouée (§6.2, §20.2), attente bornée d’une clé en cours et code `IDEMPOTENCY_REQUEST_IN_PROGRESS` (§20.2, §21) (#64)  
+**Mise à jour ciblée :** 21 octobre 2026 — présence obligatoire des champs nullables du catalogue et violation `REQUIRED` (§12.1, §12.2), en attente d’approbation (#25)
 
 ---
 
