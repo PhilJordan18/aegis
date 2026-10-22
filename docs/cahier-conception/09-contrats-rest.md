@@ -6,7 +6,7 @@
 **Version :** 1.3 — décisions logicielles P0 et données de suivi des clients  
 **Mise à jour ciblée :** 21 octobre 2026 — `Retry-After` de la connexion (§10.2) et langue de la requête (§6.4), comportement existant documenté (#80)  
 **Mise à jour ciblée :** 21 octobre 2026 — idempotence REST durable : contenu d’une réponse rejouée (§6.2, §20.2), attente bornée d’une clé en cours et code `IDEMPOTENCY_REQUEST_IN_PROGRESS` (§20.2, §21) (#64)  
-**Mise à jour ciblée :** 22 octobre 2026 — sens commun de `reservedUntil` et `dueAt` (§8.4, §14.1), valeurs et conditions de `availableActions` (§8.10, §26.8); aucun champ ajouté, règles de retour et d’annulation inchangées (#35)
+**Mise à jour ciblée :** 22 octobre 2026 — sens commun de `reservedUntil` et `dueAt` (§8.4, §14.1), valeurs et conditions de `availableActions` (§8.10, §26.8), règles approuvées par Philippe le 22 octobre 2026; aucun champ ajouté, règles de retour et d’annulation inchangées; deux questions restent ouvertes (§8.10) (#35)
 
 ---
 
@@ -442,34 +442,34 @@ Ce diagnostic n’invente ni technicien de référence ni résultat `READY` univ
 
 ### 8.10 Actions permises (`availableActions`)
 
-`availableActions` liste les mutations métier que le serveur estime admissibles pour le demandeur **au moment où il construit la réponse**, d’après l’état qu’il connaît. C’est une indication d’affichage, jamais une autorisation durable : chaque mutation revalide toutes ses gardes dans sa propre transaction et peut être refusée si l’état a changé depuis la lecture (`409`, `422` ou `503`).
+`availableActions` liste les mutations métier que le serveur estime admissibles pour le demandeur **au moment où il construit la réponse**, d’après l’état qu’il connaît. C’est une indication d’affichage, jamais une autorisation durable : chaque mutation revalide toutes ses gardes dans sa propre transaction et peut être refusée si l’état a changé depuis la lecture (`409`, `422` ou `503`). Ces règles ont été approuvées par Philippe le 22 octobre 2026; les deux questions ouvertes en fin de section ne le sont pas.
 
-Le serveur n’émet que les valeurs suivantes; leur ordre n’a pas de sens et chacune apparaît au plus une fois.
+Le serveur n’émet que les valeurs suivantes; leur ordre n’a pas de sens et chacune apparaît au plus une fois. `CHECKOUT` correspond à « Préparer le retrait », `CANCEL` à « Annuler la réservation » et `RETURN` à « Retourner l’équipement ». « Réserver », c’est-à-dire créer la réservation (§14.1), n’a pas de valeur : ce bouton suit la readiness de l’actif (§8.1). Un casier hors ligne n’y produit donc pas le même refus : la création voit une readiness `UNKNOWN` et répond `422 ASSET_NOT_READY` (`06` §4.4, §5.1), tandis que la préparation d’un retrait ou d’un retour se heurte à la garde du locker et répond `503 LOCKER_OFFLINE` (`06` §6.1; §21, §26.5). Le `422 ASSET_NOT_READY` ne concerne que la création.
 
 | Valeur | Vue | Mutation | Conditions, toutes vraies à l’évaluation |
 |---|---|---|---|
 | `CHECKOUT` | `ReservationView` | `POST /reservations/{id}/checkout` (§15.1) | Réservation `ACTIVE` du demandeur; instant antérieur à `reservedUntil`; plage d’exploitation ouverte; aucune opération physique non terminale sur le locker, y compris une tentative de cette réservation; garde commune du locker satisfaite (`06` §6.1), donc hub `ONLINE`; readiness `READY` dans le contexte du retrait du titulaire (`06` §6.2). |
-| `CANCEL` | `ReservationView` | `POST /reservations/{id}/cancel` (§14.4) | Réservation `ACTIVE` du demandeur; instant antérieur à `reservedUntil`; aucune tentative de retrait de cette réservation n’a été autorisée, quelle que soit son issue (§14.4, `06` §5.5); aucune incertitude physique, c’est-à-dire aucune tentative `ANOMALY` dont l’anomalie n’est pas `RESOLVED`. Une tentative `AWAITING_LOCAL_PROOF` laisse `CANCEL` : l’annulation la termine (§14.4). L’horaire et la connexion du locker n’interviennent pas. |
+| `CANCEL` | `ReservationView` | `POST /reservations/{id}/cancel` (§14.4) | Réservation `ACTIVE` du demandeur; instant antérieur à `reservedUntil`; aucune tentative de retrait de cette réservation n’a été autorisée, quelle que soit son issue (§14.4, `06` §5.5; question ouverte Q1); aucune incertitude physique, c’est-à-dire aucune tentative `ANOMALY` dont l’anomalie n’est pas `RESOLVED`. Une tentative `AWAITING_LOCAL_PROOF` laisse `CANCEL` : l’annulation la termine (§14.4). L’horaire et la connexion du locker n’interviennent pas. |
 | `RETURN` | `LoanView` | `POST /loans/{id}/return` (§15.2) | Prêt `ACTIVE` du titulaire; plage d’exploitation ouverte; aucune opération physique non terminale sur le locker, y compris une tentative de ce prêt; gardes communes et de retour satisfaites (`06` §6.1, §6.3), donc hub `ONLINE`. `overdue` n’intervient pas. |
 
 À partir de `reservedUntil`, une réservation encore `ACTIVE` (expiration différée par un retrait autorisé, ou pas encore appliquée) n’expose aucune action : les règles temporelles sont réévaluées au début de chaque action (`06` §14). La limitation de fréquence des préparations (§15.5) n’est pas reflétée; elle se manifeste par `429` avec `Retry-After`.
 
-Pour un prêt `RETURN_PENDING`, `05` §4.3 et `06` §6.3 n’admettent une nouvelle tentative de récupération que si l’opération précédente est terminale **et** si la procédure de récupération l’autorise. Cette procédure n’est pas encore définie : tant qu’elle ne l’est pas, `RETURN` n’est pas émis pour un prêt `RETURN_PENDING`. Cette lecture n’ajoute aucune règle de retour.
+Pour un prêt `RETURN_PENDING`, `05` §4.3 et `06` §6.3 n’admettent une nouvelle tentative de récupération que si l’opération précédente est terminale **et** si la procédure de récupération l’autorise. Cette procédure n’est pas encore définie : tant qu’elle ne l’est pas, `RETURN` n’est pas émis pour un prêt `RETURN_PENDING` (question ouverte Q2). Cette lecture n’ajoute aucune règle de retour.
 
 | Situation lue | `ReservationView` | `LoanView` |
 |---|---|---|
 | Réservation `ACTIVE` avant `reservedUntil`, aucune tentative de retrait en cours ni autorisée auparavant, plage ouverte, gardes satisfaites | `["CHECKOUT", "CANCEL"]` | — |
 | Même cas, mais locker `OFFLINE` ou `UNKNOWN`, cellule, lecteur, porte ou serrure incompatibles, readiness autre que `READY`, plage fermée ou autre opération en cours sur le locker | `["CANCEL"]` | — |
-| Dernière tentative de retrait `AWAITING_LOCAL_PROOF` | `["CANCEL"]`, ou `[]` si une tentative précédente a été autorisée | — |
+| Dernière tentative de retrait `AWAITING_LOCAL_PROOF` | `["CANCEL"]`, ou `[]` si une tentative précédente a été autorisée (Q1) | — |
 | Dernière tentative de retrait entre `AUTHORIZED` et `OBSERVATION_RECEIVED` | `[]` | — |
-| Une tentative de retrait a été autorisée puis s’est terminée `FAILED`, `EXPIRED` ou `ANOMALY` résolue; aucune tentative en cours | `["CHECKOUT"]` si les gardes sont satisfaites, sinon `[]` | — |
+| Une tentative de retrait a été autorisée puis s’est terminée `FAILED`, `EXPIRED` ou `ANOMALY` résolue; aucune tentative en cours | `["CHECKOUT"]` si les gardes sont satisfaites, sinon `[]`; jamais `CANCEL` (Q1) | — |
 | Dernière tentative de retrait `ANOMALY`, anomalie non `RESOLVED` | `[]` | — |
 | `reservedUntil` atteint, statut encore `ACTIVE` | `[]` | — |
 | Réservation `FULFILLED`, `CANCELLED` ou `EXPIRED` | `[]` | — |
 | Prêt `ACTIVE`, en retard ou non, plage ouverte, gardes satisfaites, aucune tentative non terminale | — | `["RETURN"]` |
 | Prêt `ACTIVE`, mais locker non `ONLINE`, garde physique incompatible, plage fermée ou autre opération en cours sur le locker | — | `[]` |
 | Prêt `ACTIVE`, dernière tentative de retour `AWAITING_LOCAL_PROOF` | — | `[]` |
-| Prêt `RETURN_PENDING` ou `COMPLETED` | — | `[]` |
+| Prêt `RETURN_PENDING` (Q2) ou `COMPLETED` | — | `[]` |
 
 Une tentative terminée sans avoir été autorisée (défi expiré ou invalidé) ne change rien : les trois premières lignes s’appliquent. Après un retour terminé sans interaction physique, le prêt est de nouveau `ACTIVE` (`05` §4.3) et les lignes du prêt `ACTIVE` s’appliquent.
 
@@ -477,11 +477,11 @@ Règles pour les clients :
 
 1. Une action métier n’est proposée que si sa valeur figure dans la dernière lecture réussie de la ressource. Le client ne la déduit ni de `status`, ni de la readiness, ni de `LockerStatusView`, et ne la conserve pas comme droit au-delà de cette lecture.
 2. Une valeur inconnue est journalisée et ignorée : aucune action n’est proposée pour elle (§3).
-3. Les actions locales (actualiser, réessayer, reprendre le suivi, consulter l’équipement ou le casier) ne figurent jamais dans `availableActions` et ne changent aucun état métier. Elles restent disponibles quand la liste est vide.
+3. Les actions locales (actualiser, réessayer, reprendre le suivi, consulter l’équipement ou le casier) ne figurent jamais dans `availableActions` et ne changent aucun état métier. Elles restent disponibles quand la liste est vide. Une liste vide ne signifie ni succès ni fin d’opération : l’issue se lit dans `status` et dans l’opération courante.
 4. Une tentative non terminale se reprend par `currentOperationId` (§15.4), sans valeur dédiée ni nouvelle mutation. Le scan du QR dépend de `LockerOperationView.requiredAction = SCAN_HUB_QR`, pas de `availableActions`.
 5. Après un refus `409`, `422` ou `503` d’une mutation, le client relit la ressource parente et suit sa nouvelle liste. Un refus antérieur n’est jamais mémorisé comme blocage. Une tentative terminale `FAILED` ou `EXPIRED` ne retire pas à elle seule `CHECKOUT` ou `RETURN` (`06` §3.4).
 6. Le client distingue deux situations :
-   - **API sans réponse exploitable** (réseau absent, délai dépassé, réponse hors contrat) : aucune lecture fraîche. Le client présente le dernier état reçu comme tel, daté de l’heure locale de sa réception, désactive toutes les actions métier et propose de réessayer. Il ne conclut rien sur l’état du casier.
+   - **API sans réponse exploitable** (réseau absent, délai dépassé, réponse hors contrat) : aucune lecture fraîche. Le client présente le dernier état reçu comme tel (« Dernier état : … », en couleurs neutres), daté de l’heure locale de sa réception, désactive toutes les actions métier et propose de réessayer. Il ne conclut rien sur l’état du casier.
    - **API joignable, casier indisponible** (hub non `ONLINE`, cellule ou lecteur indisponible) : la lecture est fraîche; `CHECKOUT` et `RETURN` sont absents et `CANCEL` peut rester. Le client peut expliquer l’indisponibilité par `GET /lockers/{lockerId}/status` (§16.1 : `connectionStatus`, `lastSeenAt`, `currentWindow`), avec `lockerId` tiré de `asset.placement`, sans en déduire une permission. Actualiser relit la ressource et ce statut. Un `503` de code `LOCKER_OFFLINE` ou `DEVICE_UNAVAILABLE` relève de cette situation.
 
 Exemples (champs pertinents seulement; les autres champs obligatoires restent présents). Réservation active, locker hors ligne, puis statut du locker :
@@ -532,6 +532,21 @@ Prêt en retard, casier joignable :
   "availableActions": ["RETURN"]
 }
 ```
+
+#### Questions ouvertes (non tranchées)
+
+Ces deux points ne sont pas approuvés. En attendant, la section applique le texte existant sans ajouter de règle.
+
+- **Q1 — Annulation après une tentative de retrait autorisée.** Une tentative autorisée peut se terminer `FAILED`, `EXPIRED` ou en `ANOMALY` résolue sans qu’un prêt naisse.
+  - Référence : §14.4, `06` §5.5, `05` §3.3.
+  - Lecture appliquée : littérale; `CANCEL` n’est plus émis et l’actif reste réservé jusqu’à `reservedUntil`, qui ne dépasse pas la fermeture.
+  - Recommandation : confirmer la lecture littérale pour le P0; l’assouplir serait une nouvelle règle d’annulation.
+  - Propriétaires : décision de Philippe; contrat tenu par la session API/Web; mise en œuvre RES-02 (#38).
+- **Q2 — Récupération d’un prêt `RETURN_PENDING`.** La procédure qui autorise une nouvelle tentative n’est pas définie.
+  - Référence : `05` §4.3, `06` §6.3.
+  - Lecture appliquée : `RETURN` n’est pas émis.
+  - Recommandation : émettre `RETURN` quand la dernière tentative de retour est `ANOMALY`, que son anomalie est `ACKNOWLEDGED` (`05` §6.2 : correction physique engagée) et que toutes les autres gardes sont satisfaites.
+  - Propriétaires : décision de Philippe; contrat tenu par la session API/Web; mise en œuvre RET-01 (#50) et ANO-01 (#52).
 
 ---
 
