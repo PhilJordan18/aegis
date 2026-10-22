@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parseAdminAssetPage, parseAdminAssetView } from './contractParsers'
 import { MM001, MM002, pageOf } from './testFixtures'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('parseAdminAssetView', () => {
   it('reads the documented shape, with no readiness', () => {
@@ -20,10 +24,10 @@ describe('parseAdminAssetView', () => {
 
   it.each([
     ['a missing id', { ...MM001, id: undefined }],
-    ['an unknown operational status', { ...MM001, operationalStatus: 'RETIRED' }],
-    ['an unknown availability', { ...MM001, availability: 'READY' }],
-    ['an unknown presence', { ...MM001, presence: 'SOMEWHERE' }],
-    ['an unknown reason', { ...MM001, operationalDiagnostic: { evaluatedAt: '2026-10-21T14:30:00Z', reasons: ['ACCESS_DENIED'] } }],
+    ['an operational status that is not text', { ...MM001, operationalStatus: 5 }],
+    ['an empty availability', { ...MM001, availability: '' }],
+    ['a presence that is missing', { ...MM001, presence: undefined }],
+    ['a reason that is not text', { ...MM001, operationalDiagnostic: { evaluatedAt: '2026-10-21T14:30:00Z', reasons: [null] } }],
     ['reasons that are not a list', { ...MM001, operationalDiagnostic: { evaluatedAt: '2026-10-21T14:30:00Z', reasons: 'NOT_PRESENT' } }],
     ['a missing diagnostic', { ...MM001, operationalDiagnostic: undefined }],
     ['a calibration without a status', { ...MM001, calibration: { required: true, dueAt: null } }],
@@ -33,6 +37,57 @@ describe('parseAdminAssetView', () => {
     ['not an object', 'MM-001'],
   ])('rejects %s', (_label, body) => {
     expect(parseAdminAssetView(body)).toBeNull()
+  })
+})
+
+describe('unknown enumeration values (09 §3)', () => {
+  const warn = () => vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+  it('keeps the unit and marks one unknown reason, logging the field and no server text', () => {
+    const spy = warn()
+    const parsed = parseAdminAssetView({ ...MM001, operationalDiagnostic: { evaluatedAt: '2026-10-21T14:30:00Z', reasons: ['UNKNOWN_PHYSICAL_STATE', 'QUARANTINED_BY_SERVER'] } })
+    expect(parsed?.operationalDiagnostic.reasons).toEqual(['UNKNOWN_PHYSICAL_STATE', 'UNRECOGNIZED'])
+    expect(parsed?.assetCode).toBe('MM-001')
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(String(spy.mock.calls[0]?.[0])).toContain('operationalDiagnostic.reasons')
+    expect(JSON.stringify(spy.mock.calls)).not.toContain('QUARANTINED_BY_SERVER')
+  })
+
+  it('keeps the unit and marks one unknown operational status', () => {
+    const spy = warn()
+    const parsed = parseAdminAssetView({ ...MM001, operationalStatus: 'RETIRED' })
+    expect(parsed?.operationalStatus).toBe('UNRECOGNIZED')
+    expect(parsed?.availability).toBe('AVAILABLE')
+    expect(JSON.stringify(spy.mock.calls)).not.toContain('RETIRED')
+  })
+
+  it.each([
+    ['availability', { availability: 'READY' }],
+    ['presence', { presence: 'SOMEWHERE' }],
+    ['requiredAccessLevel', { requiredAccessLevel: 'ROOT' }],
+  ])('marks an unknown %s and never maps it to a known value', (field, change) => {
+    warn()
+    const parsed = parseAdminAssetView({ ...MM001, ...change })
+    expect(parsed?.[field as 'availability']).toBe('UNRECOGNIZED')
+  })
+
+  it('marks an unknown calibration status', () => {
+    warn()
+    expect(parseAdminAssetView({ ...MM001, calibration: { required: true, dueAt: null, status: 'WAIVED' } })?.calibration.status).toBe('UNRECOGNIZED')
+  })
+
+  it('still renders the other units of a page', () => {
+    warn()
+    const page = parseAdminAssetPage({ items: [{ ...MM001, availability: 'LOST' }, MM002], page: 0, size: 20, totalItems: 2, totalPages: 1 })
+    expect(page?.items.map((unit) => unit.assetCode)).toEqual(['MM-001', 'MM-002'])
+    expect(page?.items[0]?.availability).toBe('UNRECOGNIZED')
+    expect(page?.items[1]?.availability).toBe('AVAILABLE')
+  })
+
+  it('does not log for known values', () => {
+    const spy = warn()
+    parseAdminAssetView(MM002)
+    expect(spy).not.toHaveBeenCalled()
   })
 })
 

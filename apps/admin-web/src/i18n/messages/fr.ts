@@ -259,6 +259,9 @@ export const fr = {
     presenceUnknownHelp: "Aucune observation de présence n'est disponible.",
     zoneNote: ({ zone }: { zone: string }) => `Fuseau du laboratoire${NBSP}: ${zone}`,
 
+    /** 09 §3: a value this version does not know is shown as an unavailable state, never as a known one. */
+    unrecognized: 'État indisponible',
+    unrecognizedNote: "Une valeur envoyée par le serveur n'est pas reconnue par cette version de l'application. Elle est affichée comme état indisponible.",
     reason: {
       NOT_PRESENT: 'Absent du casier',
       NOT_AVAILABLE: 'Non disponible',

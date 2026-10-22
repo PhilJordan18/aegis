@@ -3,7 +3,7 @@ import { formattersFor } from '../../i18n/format'
 import { MESSAGES } from '../../i18n/messages'
 import type { Locale } from '../../i18n/locale'
 import type { I18n } from '../../i18n/useI18n'
-import { calibrationLabel, diagnosticChip, diagnosticTone, evaluatedAtLabel, factsLine, reasonLabel } from './assetPresentation'
+import { availabilityLabel, availabilityRole, calibrationLabel, diagnosticChip, diagnosticTone, evaluatedAtLabel, factsLine, hasUnrecognizedValue, reasonLabel } from './assetPresentation'
 import { asset, MM001, MM002 } from './testFixtures'
 
 const i18n = (locale: Locale): I18n => ({ locale, m: MESSAGES[locale], format: formattersFor(locale) })
@@ -63,5 +63,35 @@ describe('labels', () => {
 
   it('shows the evaluation instant with its zone, in the device zone', () => {
     expect(evaluatedAtLabel(MM001, i18n('en'))).toMatch(/\d{1,2}:\d{2}\s?[ap]\.m\.\s\S+/)
+  })
+})
+
+describe('unrecognized values (09 §3)', () => {
+  const unknown = asset({
+    id: 'a',
+    assetCode: 'X',
+    availability: 'UNRECOGNIZED',
+    operationalStatus: 'UNRECOGNIZED',
+    calibration: { required: true, dueAt: null, status: 'UNRECOGNIZED' },
+    operationalDiagnostic: { evaluatedAt: '2026-10-21T14:30:00Z', reasons: ['UNRECOGNIZED'] },
+  })
+
+  it('shows an unavailable state in both languages, never a known value', () => {
+    expect(reasonLabel('UNRECOGNIZED', unknown, i18n('fr'))).toBe('État indisponible')
+    expect(reasonLabel('UNRECOGNIZED', unknown, i18n('en'))).toBe('State unavailable')
+    expect(factsLine(unknown, i18n('fr'))).toBe('État indisponible · Présence inconnue · État indisponible')
+    expect(calibrationLabel(unknown, i18n('en'))).toBe('State unavailable')
+    expect(availabilityLabel('UNRECOGNIZED', i18n('en'))).toBe('State unavailable')
+    expect(availabilityRole('UNRECOGNIZED')).toBe('neutral')
+  })
+
+  it('counts an unrecognized reason as a blocker rather than hiding it', () => {
+    expect(diagnosticTone(['UNRECOGNIZED'])).toBe('blocked')
+    expect(plain(diagnosticChip(unknown, i18n('fr')).label)).toBe('1 empêchement')
+  })
+
+  it('knows when a note is needed', () => {
+    expect(hasUnrecognizedValue(unknown)).toBe(true)
+    expect(hasUnrecognizedValue(MM001)).toBe(false)
   })
 })

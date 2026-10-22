@@ -1,12 +1,14 @@
 import { act, cleanup, configure, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClient } from '../api/serverState'
 import { App } from '../app/App'
 import { unconfiguredAuthGateway, type AuthGateway } from '../features/auth/authGateway'
 import { createSessionStore } from '../features/auth/session'
 import { adminProfile, problemBody } from '../features/auth/testFixtures'
 import type { CatalogGateway } from '../features/catalog/catalogGateway'
+import type { AdminAssetView } from '../features/catalog/contract'
+import { parseAdminAssetView } from '../features/catalog/contractParsers'
 import { asset, fakeCatalogGateway, MM001, MM002, ok, pageOf } from '../features/catalog/testFixtures'
 import type { Locale } from '../i18n/locale'
 import { MESSAGES } from '../i18n/messages'
@@ -263,6 +265,25 @@ describe.each<Locale>(['fr', 'en'])('Équipements in %s', (locale) => {
     expect(text).not.toMatch(/\b(equipment|shell)\.[a-zA-Z]+/)
     expect(screen.getByRole('navigation', { name: m.equipment.viewsLabel })).toBeDefined()
     if (locale === 'en') expect(text).not.toMatch(/Exemplaire|empêchement|Présence|Disponible/)
+  })
+})
+
+describe('Équipements — unknown enumeration values (09 §3)', () => {
+  it('renders the page with one unit in an unavailable state, and the other units untouched', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const odd = { ...MM002, operationalStatus: 'RETIRED', operationalDiagnostic: { evaluatedAt: MM002.operationalDiagnostic.evaluatedAt, reasons: ['QUARANTINED', 'UNKNOWN_PHYSICAL_STATE'] } }
+    // Through the real parser, as the HTTP gateway would deliver it.
+    const parsedOdd = parseAdminAssetView(JSON.parse(JSON.stringify(odd))) as AdminAssetView
+    const gateway = fakeCatalogGateway({ pages: [ok(pageOf([MM001, parsedOdd]))], units: { [MM001.id]: ok(MM001), [MM002.id]: ok(parsedOdd) } })
+    renderEquipment(gateway, { url: `/equipements?exemplaire=${MM002.id}` })
+    const dossier = await screen.findByRole('group', { name: /Multimètre 2/ })
+    expect(plain(dossier.textContent)).toContain('État indisponible')
+    expect(plain(dossier.textContent)).toContain('Une valeur envoyée par le serveur')
+    expect(plain(dossier.textContent)).not.toContain('RETIRED')
+    expect(plain(dossier.textContent)).not.toContain('QUARANTINED')
+    expect(rows()).toHaveLength(2)
+    expect(plain(rows()[0]?.textContent)).toContain('Multimètre 1MM-001')
+    expect(warn).toHaveBeenCalled()
   })
 })
 

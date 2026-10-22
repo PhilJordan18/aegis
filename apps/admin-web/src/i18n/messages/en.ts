@@ -219,6 +219,8 @@ export const en: Messages = {
     presenceUnknownHelp: 'No presence observation is available.',
     zoneNote: ({ zone }) => `Laboratory time zone: ${zone}`,
 
+    unrecognized: 'State unavailable',
+    unrecognizedNote: 'A value sent by the server is not recognized by this version of the application. It is shown as an unavailable state.',
     reason: {
       NOT_PRESENT: 'Not in the locker',
       NOT_AVAILABLE: 'Not available',

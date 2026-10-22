@@ -3,15 +3,20 @@ import { useI18n } from '../../i18n/useI18n'
 import { Icon } from '../../ui/Icon'
 import { StatusChip } from '../../ui/StatusChip'
 import {
+  accessLevelLabel,
   archivedDateLabel,
+  availabilityLabel,
   availabilityRole,
   calibrationDueLabel,
   calibrationLabel,
   diagnosticChip,
   diagnosticTone,
   evaluatedAtLabel,
+  hasUnrecognizedValue,
   LAB_TIME_ZONE,
+  presenceLabel,
   reasonLabel,
+  serviceStateLabel,
 } from './assetPresentation'
 import { CatalogAlert } from './CatalogAlert'
 import type { CatalogFailure } from './catalogFailure'
@@ -93,12 +98,13 @@ function DossierBody({ asset, titleId }: { readonly asset: AdminAssetView; reado
         </div>
         {reasons.length > 0 && (
           <ul className="ag-diag__reasons">
-            {reasons.map((reason) => (
-              <li key={reason}>{reasonLabel(reason, asset, i18n)}</li>
+            {reasons.map((reason, index) => (
+              <li key={`${reason}-${index}`}>{reasonLabel(reason, asset, i18n)}</li>
             ))}
           </ul>
         )}
         {reasons.includes('UNKNOWN_PHYSICAL_STATE') && <p className="ag-diag__note ag-diag__note--unknown">{t.unknownNote}</p>}
+        {hasUnrecognizedValue(asset) && <p className="ag-diag__note ag-diag__note--unknown">{t.unrecognizedNote}</p>}
         <p className="ag-diag__note">{t.diagnosticNote({ time: evaluated })}</p>
       </div>
 
@@ -113,13 +119,13 @@ function DossierBody({ asset, titleId }: { readonly asset: AdminAssetView; reado
               <dt>{t.factAvailability}</dt>
               <dd>
                 <StatusChip role={availabilityRole(asset.availability)} icon="status-info">
-                  {t.availability[asset.availability]}
+                  {availabilityLabel(asset.availability, i18n)}
                 </StatusChip>
               </dd>
             </div>
             <div>
               <dt>{t.factPresence}</dt>
-              <dd>{t.presence[asset.presence]}</dd>
+              <dd>{presenceLabel(asset.presence, i18n)}</dd>
               {asset.presence === 'UNKNOWN' && <dd className="ag-help">{t.presenceUnknownHelp}</dd>}
             </div>
             <div>
@@ -144,11 +150,11 @@ function DossierBody({ asset, titleId }: { readonly asset: AdminAssetView; reado
           <dl className="ag-facts">
             <div>
               <dt>{t.settingAccessLevel}</dt>
-              <dd>{t.accessLevel[asset.requiredAccessLevel]}</dd>
+              <dd>{accessLevelLabel(asset.requiredAccessLevel, i18n)}</dd>
             </div>
             <div>
               <dt>{t.settingServiceState}</dt>
-              <dd>{t.serviceState[asset.operationalStatus]}</dd>
+              <dd>{serviceStateLabel(asset.operationalStatus, i18n)}</dd>
             </div>
             <div>
               <dt>{t.settingCalibrationRequired}</dt>

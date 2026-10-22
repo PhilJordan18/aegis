@@ -7,6 +7,13 @@ import type { AccessLevel } from '../auth/contract'
  * are not consumed by this slice.
  */
 
+/**
+ * An enumeration value this client does not know (09 §3): it is logged and shown as an unavailable
+ * state until the client is updated. It never stands for a known value, and never for « ready ».
+ */
+export const UNRECOGNIZED = 'UNRECOGNIZED' as const
+export type Unrecognized = typeof UNRECOGNIZED
+
 export type OperationalStatus = 'SERVICEABLE' | 'MAINTENANCE' | 'DAMAGED'
 export type CalibrationStatus = 'NOT_REQUIRED' | 'VALID' | 'EXPIRED' | 'UNKNOWN'
 export type Availability = 'AVAILABLE' | 'RESERVED' | 'BORROWED' | 'UNAVAILABLE'
@@ -27,7 +34,7 @@ export interface CalibrationView {
   readonly required: boolean
   /** RFC 3339 UTC instant. A business date: shown in the laboratory zone. */
   readonly dueAt: string | null
-  readonly status: CalibrationStatus
+  readonly status: CalibrationStatus | Unrecognized
 }
 
 export interface PlacementSummary {
@@ -44,7 +51,7 @@ export interface PlacementSummary {
 export interface OperationalDiagnostic {
   /** Technical instant: shown in the device zone. */
   readonly evaluatedAt: string
-  readonly reasons: readonly DiagnosticReason[]
+  readonly reasons: readonly (DiagnosticReason | Unrecognized)[]
 }
 
 export interface AdminAssetView {
@@ -52,11 +59,11 @@ export interface AdminAssetView {
   readonly assetCode: string
   readonly serialNumber: string | null
   readonly model: AssetModelSummary
-  readonly requiredAccessLevel: AccessLevel
-  readonly operationalStatus: OperationalStatus
+  readonly requiredAccessLevel: AccessLevel | Unrecognized
+  readonly operationalStatus: OperationalStatus | Unrecognized
   readonly calibration: CalibrationView
-  readonly availability: Availability
-  readonly presence: Presence
+  readonly availability: Availability | Unrecognized
+  readonly presence: Presence | Unrecognized
   readonly placement: PlacementSummary | null
   readonly operationalDiagnostic: OperationalDiagnostic
   /** Present once archived (CAT-01 addition): the asset keeps its history and stays listed. */
