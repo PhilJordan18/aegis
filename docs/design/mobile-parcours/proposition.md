@@ -4,7 +4,7 @@ Mode : Prototype. Date : 21 octobre 2026; passe de corrections du 22 octobre
 2026. Issue : #35 (DES-01). Suite de `../mobile-entree/` (connexion, approuvée
 et intégrée par #36).
 
-**Statut : design approuvé; décisions de contrat encore proposées.** Ce dossier rassemble les
+**Statut : approuvé; deux questions de contrat restent ouvertes (Q1, Q2, §11).** Ce dossier rassemble les
 parcours restants de #35 : catalogue, fiche équipement, réservation,
 préparation du retrait et scan du code du casier, progression physique, prêt
 actif et retour.
@@ -17,7 +17,7 @@ actif et retour.
 | Corrections visuelles de la revue du 22 octobre : statuts anciens neutralisés, ancienneté visible, Réessayer, suivi interrompu, navigation native, hiérarchie en grand texte, petit écran | **Approuvé** le 22 octobre 2026 (design seulement : ne vaut validation ni de VoiceOver, ni de la caméra, ni du réseau réel) |
 | Finitions du 22 octobre (§5, §7.3) : « Réserver jusqu'à » et la correspondance `reservedUntil` → `Loan.dueAt`, échéance reçue puis atteinte, rappel séparé, « Recommencer », chasse condensée aux tailles d'accessibilité sans plafonner Dynamic Type; navigation, masquage et reprise du suivi, petit écran | **Approuvé** le 22 octobre 2026 (présentation) |
 | Textes ajoutés ou modifiés et traductions anglaises (§8.1), dont le nom réel de l'équipement dans la consigne et les messages de suivi interrompu | **Approuvé** le 22 octobre 2026, sauf le message générique lié à `availableActions` |
-| Variantes de Mon activité qui dépendent de `availableActions` (§6) : retrait ou retour indisponible, nouvelle tentative avec ou sans Annuler, aucune action métier, retour en attente | Présentation acceptée; **règles de contrat proposées** (PR #97, §10), non approuvées |
+| Variantes de Mon activité qui dépendent de `availableActions` (§6) : retrait ou retour indisponible, nouvelle tentative avec ou sans Annuler, aucune action métier, retour en attente | **Approuvé** le 22 octobre 2026 : présentation et règles de la PR #97 (§10); la variante B dépend de Q1 et « Retour en attente » de Q2, toutes deux ouvertes |
 | Accessibilité réelle (VoiceOver, Taille du texte, Réduire les animations), réseau réel, caméra, haptique | **Non vérifiés** : affectés aux stories d'implémentation |
 
 Les rendus de `captures/` viennent d'un prototype SwiftUI (`prototype/`),
@@ -132,8 +132,8 @@ borne le retrait (la réservation expire à `reservedUntil`, `06` §14) et, au
 retrait confirmé, elle est copiée dans `Loan.dueAt` (`06` §11.1). Aucune règle
 métier n'est ajoutée par l'application.
 
-Précisions de la session principale (`09` §8.10, §14.1 et §26.8 de la PR #97 (commit `0ecac28`) et glossaire « Réservation et échéances » / « Actions et disponibilité du casier », **en attente de
-l'approbation de Philippe**) : `reservedUntil` est l'unique échéance; le défi
+Précisions de la session principale (`09` §8.10, §14.1 et §26.8 de la PR #97 (commit `0ecac28`) et glossaire « Réservation et échéances » / « Actions et disponibilité du casier », règles
+approuvées le 22 octobre 2026) : `reservedUntil` est l'unique échéance; le défi
 du code du casier expire au plus tard à cette heure, donc en moins de 60 s
 près de l'échéance; un retrait autorisé avant l'échéance continue et le prêt
 peut naître déjà en retard; iOS ne recalcule jamais `dueAt`.
@@ -158,16 +158,16 @@ en P0.
 |---|---|---|---|---|
 | Aucune activité | 404 sur `/me/reservation` et `/me/loan` | « Aucune réservation ni prêt en cours. » | **Voir les équipements** | — |
 | Réservation active | `ReservationView.ACTIVE`, `availableActions = ["CHECKOUT","CANCEL"]` | « Réservé pour vous » · « À retirer avant 16 h 30 HAE » | **Préparer le retrait** | Annuler la réservation (confirmation approuvée) |
-| Retrait indisponible (variante, en attente) | `availableActions = ["CANCEL"]`; l'explication vient des faits de `GET /lockers/{lockerId}/status` (`lockerId` de `asset.placement`) : `connectionStatus`, `lastSeenAt`, `currentWindow.timeZone`. Si aucun fait n'explique l'absence de `CHECKOUT` (autre opération sur le casier, non exposée) : « Retrait indisponible pour le moment. Actualisez pour vérifier à nouveau. » | Avis dans la carte : « Retrait indisponible : le casier est hors ligne. » + « Dernier signal du casier à 14 h 28 HAE. Actualisez pour vérifier à nouveau. » | **Préparer le retrait** désactivé (cadenas), juste sous l'avis, puis **Actualiser**, seule action principale active | Annuler la réservation (lien) |
-| Nouvelle tentative après un refus local (variante A, en attente) | `availableActions = ["CHECKOUT","CANCEL"]`, aucune tentative autorisée auparavant. La note « Essai de … » n'est qu'un souvenir local de l'appareil après un `503 LOCKER_OFFLINE` : en mémoire seulement, jamais persistée, elle ne commande pas le bouton | Avis : « Essai de 14 h 32 HAE : le casier était hors ligne. » + « Vous pouvez faire une nouvelle tentative. Aucune porte ne s'ouvre sans le code du casier. » | **Nouvelle tentative de retrait** | Annuler la réservation (`CANCEL` fourni) |
-| Nouvelle tentative après une tentative autorisée (variante B, en attente) | `availableActions = ["CHECKOUT"]` : une tentative autorisée s'est terminée (`FAILED`, `EXPIRED`, `ANOMALY` résolue); heure tirée de `terminalAt`, `failureReason` non interprété (C8) | Avis : l'état terminal reçu et son heure + « Vous pouvez faire une nouvelle tentative. Aucune porte ne s'ouvre sans le code du casier. » | **Nouvelle tentative de retrait** | — (pas de `CANCEL` : aucun lien Annuler) |
+| Retrait indisponible | `availableActions = ["CANCEL"]`; l'explication vient des faits de `GET /lockers/{lockerId}/status` (`lockerId` de `asset.placement`) : `connectionStatus`, `lastSeenAt`, `currentWindow.timeZone`. Si aucun fait n'explique l'absence de `CHECKOUT` (autre opération sur le casier, non exposée) : « Retrait indisponible pour le moment. Actualisez pour vérifier à nouveau. » | Avis dans la carte : « Retrait indisponible : le casier est hors ligne. » + « Dernier signal du casier à 14 h 28 HAE. Actualisez pour vérifier à nouveau. » | **Préparer le retrait** désactivé (cadenas), juste sous l'avis, puis **Actualiser**, seule action principale active | Annuler la réservation (lien) |
+| Nouvelle tentative après un refus local (variante A) | `availableActions = ["CHECKOUT","CANCEL"]`, aucune tentative autorisée auparavant. La note « Essai de … » n'est qu'un souvenir local de l'appareil après un `503 LOCKER_OFFLINE` : en mémoire seulement, jamais persistée, elle ne commande pas le bouton | Avis : « Essai de 14 h 32 HAE : le casier était hors ligne. » + « Vous pouvez faire une nouvelle tentative. Aucune porte ne s'ouvre sans le code du casier. » | **Nouvelle tentative de retrait** | Annuler la réservation (`CANCEL` fourni) |
+| Nouvelle tentative après une tentative autorisée (variante B, lecture littérale tant que Q1 est ouverte) | `availableActions = ["CHECKOUT"]` : une tentative autorisée s'est terminée (`FAILED`, `EXPIRED`, `ANOMALY` résolue); heure tirée de `terminalAt`, `failureReason` non interprété (C8) | Avis : l'état terminal reçu et son heure + « Vous pouvez faire une nouvelle tentative. Aucune porte ne s'ouvre sans le code du casier. » | **Nouvelle tentative de retrait** | — (pas de `CANCEL` : aucun lien Annuler) |
 | Réservation expirée | `EXPIRED` | « Votre réservation a expiré à 16 h 30. » | **Voir les équipements** | — |
 | Opération en cours | `currentOperationId` non terminal (aucune valeur d'action dédiée); en `AWAITING_LOCAL_PROOF`, Annuler reste offert si `CANCEL` figure; à partir de `AUTHORIZED`, aucune action | Pastille « Retrait en cours » / « Retour en cours » · « Suivi masqué. L'opération n'est pas annulée. » | **Reprendre** (relit l'opération, ne redéclenche rien) | — |
 | Prêt actif | `LoanView.ACTIVE`, `availableActions = ["RETURN"]` (retard ou non) | « Emprunté par vous » · « Retour prévu à 16 h 30 HAE » | **Retourner l'équipement** | Voir l'équipement |
-| Retour indisponible (en attente) | `LoanView.ACTIVE`, `availableActions = []` (casier non `ONLINE`, garde incompatible, plage fermée) | Même avis que « Retrait indisponible », expliqué par les faits du statut du casier; le retard reste affiché | **Retourner l'équipement** désactivé (cadenas), puis **Actualiser** | Voir l'équipement |
+| Retour indisponible | `LoanView.ACTIVE`, `availableActions = []` (casier non `ONLINE`, garde incompatible, plage fermée) | Même avis que « Retrait indisponible », expliqué par les faits du statut du casier; le retard reste affiché | **Retourner l'équipement** désactivé (cadenas), puis **Actualiser** | Voir l'équipement |
 | Aucune action métier | Liste vide : `reservedUntil` atteint sur une réservation encore `ACTIVE`, `ANOMALY` non résolue, tentative entre `AUTHORIZED` et `OBSERVATION_RECEIVED` | Carte sans bouton métier. « Aucune action métier » est une catégorie, pas un texte : la carte dit la situation reçue (échéance de réservation atteinte, anomalie non résolue, retrait autorisé en cours) | **Reprendre** si une opération non terminale existe, sinon **Actualiser** | — |
 | Prêt en retard | `overdue = true` | « Emprunté par vous » · « En retard depuis 16 h 30 HAE — rapportez l'équipement. » | **Retourner l'équipement** | — |
-| Retour en attente | `RETURN_PENDING`, `availableActions = []` | « Retour en attente de vérification. » | **Reprendre** si une opération est en cours; sinon aucune action métier (procédure de récupération de `05` §4.3 et `06` §6.3 non définie, soumise à Philippe) | — |
+| Retour en attente | `RETURN_PENDING`, `availableActions = []` | « Retour en attente de vérification. » | **Reprendre** si une opération est en cours; sinon aucune action métier (procédure de récupération de `05` §4.3 et `06` §6.3 non définie : Q2 ouverte, §11) | — |
 | Chargement / hors ligne | Téléphone sans accès à l'API | Carte squelette neutre / avis réseau au-dessus, dernière carte en « Dernier état », datée de l'heure locale de réception; rien n'est conclu sur le casier | Actions métier désactivées jusqu'à la relecture | **Réessayer** |
 
 Les boutons suivent `availableActions`; l'application ne recalcule pas les
@@ -176,7 +176,7 @@ Les valeurs de `availableActions` ne sont pas encore énumérées dans `09` (§1
 Annuler la réservation n'apparaît que si `CANCEL` figure dans la dernière
 lecture réussie, dans toutes les lignes. Cette matrice est alignée sur la
 proposition normative de la session
-principale (`09` §8.10, §14.1 et §26.8 de la PR #97 (commit `0ecac28`) et glossaire « Réservation et échéances » / « Actions et disponibilité du casier »), **en attente de l'approbation de Philippe** :
+principale (`09` §8.10, §14.1 et §26.8 de la PR #97 (commit `0ecac28`) et glossaire « Réservation et échéances » / « Actions et disponibilité du casier »), approuvée le 22 octobre 2026 :
 liste fermée en v1 — `CHECKOUT` et `CANCEL` pour la réservation, `RETURN`
 pour le prêt; une valeur inconnue est journalisée et ignorée, sans bouton.
 Reprendre, Actualiser, Réessayer et Voir l'équipement sont des actions
@@ -325,7 +325,7 @@ par l'appareil (§1).
 | Rappel de réservation, séparé | La réservation n'ouvre aucune porte. | Reserving does not unlock the compartment. | approuvé |
 | Feuille de réservation | Heures du casier : heure avancée de l'Est. | Locker time: Eastern Daylight Saving Time. | approuvé |
 | Retrait indisponible | Retrait indisponible : le casier est hors ligne. · Dernier signal du casier à 14 h 28 HAE. Actualisez pour vérifier à nouveau. | Checkout unavailable: the locker is offline. · Locker last seen at 2:28 PM EDT. Refresh to check again. | approuvé |
-| Retrait indisponible, sans fait explicatif | Retrait indisponible pour le moment. Actualisez pour vérifier à nouveau. | Checkout isn't available right now. Refresh to check again. | proposé : dépend de la proposition `availableActions` (§10) |
+| Retrait indisponible, sans fait explicatif | Retrait indisponible pour le moment. Actualisez pour vérifier à nouveau. | Checkout isn't available right now. Refresh to check again. | approuvé |
 | Nouvelle tentative | Essai de 14 h 32 HAE : le casier était hors ligne. · Vous pouvez faire une nouvelle tentative. Aucune porte ne s'ouvre sans le code du casier. · Nouvelle tentative de retrait | Attempt at 2:32 PM EDT: the locker was offline. · You can try again. No door opens without the locker code. · Try checkout again | approuvé |
 | Actualiser | Actualiser | Refresh | approuvé |
 | Opération masquée | Retrait en cours · Suivi masqué. L'opération n'est pas annulée. | Checkout in progress · Tracking hidden. The operation is not cancelled. | approuvé |
@@ -387,25 +387,21 @@ appareil.
 | Réservation | §14.1–14.4, `currentWindow` §8.6 | Routes absentes de `dev` (RES-01 #37, RES-02 #38) |
 | Retrait, retour, suivi, scan | §15.1–15.5, `LockerOperationView` §8.5 | Routes absentes de `dev` (CHK-01 #46, CHK-02 #47, LOC-02 #44, RET-01 #50, RET-02 #51); motifs d'échec en chaîne libre (C8) |
 | Statut du casier | §16.1, `LockerStatusView` §8.6 | Route absente de `dev` |
-| Actions permises dans Mon activité | `availableActions` (§8.3–8.4, `string[]`) | Valeurs non énumérées dans `09` de `dev`. **Référence commune proposée** : `09` §8.10, §14.1 et §26.8 de la PR #97 (commit `0ecac28`) et glossaire « Réservation et échéances » / « Actions et disponibilité du casier » — liste fermée, conduite dans les quatre cas, aucun champ ajouté (ni raison lisible par machine, ni `evaluatedAt`), dernier signal et fuseau lus sur `GET /lockers/{lockerId}/status`. **En attente de l'approbation de Philippe**; §6 sera figé ensuite. |
+| Actions permises dans Mon activité | `availableActions` (§8.3–8.4, `string[]`) | Valeurs non énumérées dans `09` de `dev`. **Référence commune approuvée le 22 octobre 2026** : `09` §8.10, §14.1 et §26.8 de la PR #97 (commit `0ecac28`) et glossaire « Réservation et échéances » / « Actions et disponibilité du casier » — liste fermée, conduite dans les quatre cas, aucun champ ajouté (ni raison lisible par machine, ni `evaluatedAt`), dernier signal et fuseau lus sur `GET /lockers/{lockerId}/status`. Q1 et Q2 restent ouvertes (§11). |
 
-Aucun contrat n'est modifié par cette proposition.
+Ce dossier ne modifie aucun contrat.
 
-## 11. Décisions encore nécessaires
+## 11. Questions de contrat encore ouvertes
 
-Les décisions de design et les textes sont approuvés (22 octobre 2026). Il
-reste des décisions de contrat, au propriétaire de `09`, sans lesquelles le
-handoff ne peut pas être présenté comme entièrement approuvé :
+Le design, les textes et les règles `availableActions` de la PR #97 sont
+approuvés (22 octobre 2026). Deux questions restent au propriétaire du
+contrat; l'application applique la lecture indiquée sans l'étendre :
 
-1. Approuver la proposition `availableActions` (PR #97, §10) : liste
-   fermée, conduite casier hors ligne, ancien échec, téléphone sans API et
-   opération engagée, et le message générique « Retrait indisponible pour le
-   moment. ».
-2. Q1 — annulation après une tentative de retrait autorisée puis terminée
+1. Q1 — annulation après une tentative de retrait autorisée puis terminée
    (`FAILED`, `EXPIRED`, `ANOMALY` résolue) : `09` §14.4, `06` §5.5, `05`
    §3.3. Lecture appliquée : littérale, pas de `CANCEL` (variante B de §6).
    Décision de contrat; mise en œuvre RES-02 #38.
-3. Q2 — récupération d'un retour `RETURN_PENDING` : `05` §4.3, `06` §6.3.
+2. Q2 — récupération d'un retour `RETURN_PENDING` : `05` §4.3, `06` §6.3.
    Lecture appliquée : `RETURN` non émis (ligne « Retour en attente »). La
    session principale recommande d'émettre `RETURN` quand la dernière
    tentative est `ANOMALY` et son anomalie `ACKNOWLEDGED`, toutes gardes
@@ -435,4 +431,4 @@ très grand texte (AX5). Liste et procédure : `captures/README.md`.
   porte sur la présentation, pas sur ces vérifications.
 - Le prototype ne montre pas la variante B de §6 (nouvelle tentative sans
   Annuler) ni « Retour indisponible » : leur présentation suit celle des
-  variantes rendues, et leurs règles restent proposées.
+  variantes rendues.
