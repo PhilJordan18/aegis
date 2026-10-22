@@ -17,7 +17,7 @@ actif et retour.
 | Corrections visuelles de la revue du 22 octobre : statuts anciens neutralisés, ancienneté visible, Réessayer, suivi interrompu, navigation native, hiérarchie en grand texte, petit écran | **Approuvé** le 22 octobre 2026 (design seulement : ne vaut validation ni de VoiceOver, ni de la caméra, ni du réseau réel) |
 | Finitions du 22 octobre (§5, §7.3) : « Réserver jusqu'à » et la correspondance `reservedUntil` → `Loan.dueAt`, échéance reçue puis atteinte, rappel séparé, « Recommencer », chasse condensée aux tailles d'accessibilité sans plafonner Dynamic Type; navigation, masquage et reprise du suivi, petit écran | **Approuvé** le 22 octobre 2026 (présentation) |
 | Textes ajoutés ou modifiés et traductions anglaises (§8.1), dont le nom réel de l'équipement dans la consigne et les messages de suivi interrompu | **Approuvé** le 22 octobre 2026, sauf le message générique lié à `availableActions` |
-| Variantes de Mon activité qui dépendent de `availableActions` (§6) : retrait ou retour indisponible, nouvelle tentative avec ou sans Annuler, aucune action métier, retour en attente | Présentation acceptée; **règles de contrat proposées** (`09b24ac`, §10), non approuvées |
+| Variantes de Mon activité qui dépendent de `availableActions` (§6) : retrait ou retour indisponible, nouvelle tentative avec ou sans Annuler, aucune action métier, retour en attente | Présentation acceptée; **règles de contrat proposées** (PR #97, §10), non approuvées |
 | Accessibilité réelle (VoiceOver, Taille du texte, Réduire les animations), réseau réel, caméra, haptique | **Non vérifiés** : affectés aux stories d'implémentation |
 
 Les rendus de `captures/` viennent d'un prototype SwiftUI (`prototype/`),
@@ -132,7 +132,7 @@ borne le retrait (la réservation expire à `reservedUntil`, `06` §14) et, au
 retrait confirmé, elle est copiée dans `Loan.dueAt` (`06` §11.1). Aucune règle
 métier n'est ajoutée par l'application.
 
-Précisions de la session principale (`09` §8.10, §14.1 et §26.8 au commit `09b24ac` (branche locale `35-docs-reservation-deadline-actions` de la session principale, non poussée), **en attente de
+Précisions de la session principale (`09` §8.10, §14.1 et §26.8 de la PR #97 (commit `0ecac28`) et glossaire « Réservation et échéances » / « Actions et disponibilité du casier », **en attente de
 l'approbation de Philippe**) : `reservedUntil` est l'unique échéance; le défi
 du code du casier expire au plus tard à cette heure, donc en moins de 60 s
 près de l'échéance; un retrait autorisé avant l'échéance continue et le prêt
@@ -165,7 +165,7 @@ en P0.
 | Opération en cours | `currentOperationId` non terminal (aucune valeur d'action dédiée); en `AWAITING_LOCAL_PROOF`, Annuler reste offert si `CANCEL` figure; à partir de `AUTHORIZED`, aucune action | Pastille « Retrait en cours » / « Retour en cours » · « Suivi masqué. L'opération n'est pas annulée. » | **Reprendre** (relit l'opération, ne redéclenche rien) | — |
 | Prêt actif | `LoanView.ACTIVE`, `availableActions = ["RETURN"]` (retard ou non) | « Emprunté par vous » · « Retour prévu à 16 h 30 HAE » | **Retourner l'équipement** | Voir l'équipement |
 | Retour indisponible (en attente) | `LoanView.ACTIVE`, `availableActions = []` (casier non `ONLINE`, garde incompatible, plage fermée) | Même avis que « Retrait indisponible », expliqué par les faits du statut du casier; le retard reste affiché | **Retourner l'équipement** désactivé (cadenas), puis **Actualiser** | Voir l'équipement |
-| Aucune action métier | Liste vide : `reservedUntil` atteint sur une réservation encore `ACTIVE`, `ANOMALY` non résolue, tentative entre `AUTHORIZED` et `OBSERVATION_RECEIVED` | Carte sans bouton métier; l'état reçu l'explique | **Reprendre** si une opération non terminale existe, sinon **Actualiser** | — |
+| Aucune action métier | Liste vide : `reservedUntil` atteint sur une réservation encore `ACTIVE`, `ANOMALY` non résolue, tentative entre `AUTHORIZED` et `OBSERVATION_RECEIVED` | Carte sans bouton métier. « Aucune action métier » est une catégorie, pas un texte : la carte dit la situation reçue (échéance de réservation atteinte, anomalie non résolue, retrait autorisé en cours) | **Reprendre** si une opération non terminale existe, sinon **Actualiser** | — |
 | Prêt en retard | `overdue = true` | « Emprunté par vous » · « En retard depuis 16 h 30 HAE — rapportez l'équipement. » | **Retourner l'équipement** | — |
 | Retour en attente | `RETURN_PENDING`, `availableActions = []` | « Retour en attente de vérification. » | **Reprendre** si une opération est en cours; sinon aucune action métier (procédure de récupération de `05` §4.3 et `06` §6.3 non définie, soumise à Philippe) | — |
 | Chargement / hors ligne | Téléphone sans accès à l'API | Carte squelette neutre / avis réseau au-dessus, dernière carte en « Dernier état », datée de l'heure locale de réception; rien n'est conclu sur le casier | Actions métier désactivées jusqu'à la relecture | **Réessayer** |
@@ -176,13 +176,16 @@ Les valeurs de `availableActions` ne sont pas encore énumérées dans `09` (§1
 Annuler la réservation n'apparaît que si `CANCEL` figure dans la dernière
 lecture réussie, dans toutes les lignes. Cette matrice est alignée sur la
 proposition normative de la session
-principale (`09` §8.10, §14.1 et §26.8 au commit `09b24ac` (branche locale `35-docs-reservation-deadline-actions` de la session principale, non poussée)), **en attente de l'approbation de Philippe** :
+principale (`09` §8.10, §14.1 et §26.8 de la PR #97 (commit `0ecac28`) et glossaire « Réservation et échéances » / « Actions et disponibilité du casier »), **en attente de l'approbation de Philippe** :
 liste fermée en v1 — `CHECKOUT` et `CANCEL` pour la réservation, `RETURN`
 pour le prêt; une valeur inconnue est journalisée et ignorée, sans bouton.
 Reprendre, Actualiser, Réessayer et Voir l'équipement sont des actions
 locales, hors de la liste et toujours disponibles. Seule la dernière lecture
-réussie compte : un refus n'est jamais mémorisé comme blocage, et un `503`
-reçu malgré la liste impose une relecture. Le scan dépend de
+réussie compte : un refus n'est jamais mémorisé comme blocage. Préparer un
+retrait ou un retour avec un casier hors ligne répond `503 LOCKER_OFFLINE`
+(le `422 ASSET_NOT_READY` ne concerne que `POST /reservations`) : la carte
+relit alors la ressource. Une liste vide ne signifie ni succès ni fin
+d'opération. Le scan dépend de
 `LockerOperationView.requiredAction = SCAN_HUB_QR`, pas de `availableActions`.
 L'application n'invente ni valeur d'action ni logique d'autorisation.
 
@@ -384,7 +387,7 @@ appareil.
 | Réservation | §14.1–14.4, `currentWindow` §8.6 | Routes absentes de `dev` (RES-01 #37, RES-02 #38) |
 | Retrait, retour, suivi, scan | §15.1–15.5, `LockerOperationView` §8.5 | Routes absentes de `dev` (CHK-01 #46, CHK-02 #47, LOC-02 #44, RET-01 #50, RET-02 #51); motifs d'échec en chaîne libre (C8) |
 | Statut du casier | §16.1, `LockerStatusView` §8.6 | Route absente de `dev` |
-| Actions permises dans Mon activité | `availableActions` (§8.3–8.4, `string[]`) | Valeurs non énumérées dans `09` de `dev`. **Référence commune proposée** : `09` §8.10, §14.1 et §26.8 au commit `09b24ac` (branche locale `35-docs-reservation-deadline-actions` de la session principale, non poussée) — liste fermée, conduite dans les quatre cas, aucun champ ajouté (ni raison lisible par machine, ni `evaluatedAt`), dernier signal et fuseau lus sur `GET /lockers/{lockerId}/status`. **En attente de l'approbation de Philippe**; §6 sera figé ensuite. |
+| Actions permises dans Mon activité | `availableActions` (§8.3–8.4, `string[]`) | Valeurs non énumérées dans `09` de `dev`. **Référence commune proposée** : `09` §8.10, §14.1 et §26.8 de la PR #97 (commit `0ecac28`) et glossaire « Réservation et échéances » / « Actions et disponibilité du casier » — liste fermée, conduite dans les quatre cas, aucun champ ajouté (ni raison lisible par machine, ni `evaluatedAt`), dernier signal et fuseau lus sur `GET /lockers/{lockerId}/status`. **En attente de l'approbation de Philippe**; §6 sera figé ensuite. |
 
 Aucun contrat n'est modifié par cette proposition.
 
@@ -394,14 +397,19 @@ Les décisions de design et les textes sont approuvés (22 octobre 2026). Il
 reste des décisions de contrat, au propriétaire de `09`, sans lesquelles le
 handoff ne peut pas être présenté comme entièrement approuvé :
 
-1. Approuver la proposition `availableActions` (`09b24ac`, §10) : liste
+1. Approuver la proposition `availableActions` (PR #97, §10) : liste
    fermée, conduite casier hors ligne, ancien échec, téléphone sans API et
    opération engagée, et le message générique « Retrait indisponible pour le
    moment. ».
-2. Permissions après une tentative autorisée puis terminée : la proposition
-   retire `CANCEL`; question laissée au propriétaire du contrat.
-3. Récupération d'un retour `RETURN_PENDING` : procédure de `05` §4.3 et `06`
-   §6.3 non définie; aucune action métier n'est affichée d'ici là.
+2. Q1 — annulation après une tentative de retrait autorisée puis terminée
+   (`FAILED`, `EXPIRED`, `ANOMALY` résolue) : `09` §14.4, `06` §5.5, `05`
+   §3.3. Lecture appliquée : littérale, pas de `CANCEL` (variante B de §6).
+   Décision de contrat; mise en œuvre RES-02 #38.
+3. Q2 — récupération d'un retour `RETURN_PENDING` : `05` §4.3, `06` §6.3.
+   Lecture appliquée : `RETURN` non émis (ligne « Retour en attente »). La
+   session principale recommande d'émettre `RETURN` quand la dernière
+   tentative est `ANOMALY` et son anomalie `ACKNOWLEDGED`, toutes gardes
+   satisfaites. Décision de contrat; mise en œuvre RET-01 #50 et ANO-01 #52.
 
 ## 12. Captures
 
