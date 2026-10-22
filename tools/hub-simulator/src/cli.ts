@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { BootCounterError } from './boot-counter.ts';
 import { ConfigError, configFromEnv } from './config.ts';
 import type { OutboundMessage } from './messages.ts';
-import { ScenarioError, parseScenario, runScenario, type Scenario } from './scenario.ts';
+import { loadScenarioFile } from './scenario-file.ts';
+import { ScenarioError, runScenario, type Scenario } from './scenario.ts';
 import { HubSimulator } from './simulator.ts';
 
 const USAGE = `Usage: node src/cli.ts [--scenario <file.json>] [--log-payloads]
@@ -66,9 +66,7 @@ async function main(): Promise<number> {
   }
 
   const config = configFromEnv(process.env);
-  const scenario: Scenario | undefined = values.scenario
-    ? parseScenario(JSON.parse(readFileSync(values.scenario, 'utf8')))
-    : undefined;
+  const scenario: Scenario | undefined = values.scenario ? loadScenarioFile(values.scenario) : undefined;
   const withPayload = values['log-payloads'];
 
   const simulator = new HubSimulator(config);
