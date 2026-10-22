@@ -99,7 +99,7 @@ describe('parseDisplay (doc 10 §27)', () => {
   });
 
   it.each([
-    { payload: { ...CHALLENGE.payload, token: 'q3P0n8y5XbT1sZr7Kd2Wc9Hf4Lm6Vg0Ja1Ue8Ni3Ro5=' } },
+    { payload: { ...CHALLENGE.payload, token: `${TOKEN}=` } },
     { payload: { ...CHALLENGE.payload, compartmentCode: '' } },
     { targetDeviceSessionId: undefined },
     { displayRevision: 1.5 },
