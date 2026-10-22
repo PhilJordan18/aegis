@@ -145,8 +145,9 @@ hub répond `INTERNAL_DEVICE_ERROR`. Une seconde commande d'une opération déj�
 exécutée qui vise une autre cellule est rejetée `INVALID_PAYLOAD`, sans
 actionnement.
 
-Le hub ne publie jamais `COMPARTMENT_DISABLED` ni `POWER_STATE_UNSAFE`, dont le
-sens côté hub n'est pas défini.
+Le hub ne publie jamais `COMPARTMENT_DISABLED`, réservée tant qu'aucun mécanisme
+de désactivation n'est défini, ni `POWER_STATE_UNSAFE`, défaut technique local
+que le simulateur ne modélise pas (§10.2).
 
 ## Journal de déduplication
 
@@ -488,38 +489,37 @@ et appliqués ici. Restent hors du simulateur :
 - un silence de heartbeats sans Will sur une connexion ouverte (§23.5 point 10) :
   le simulateur ne sait pas suspendre ses heartbeats en gardant la connexion;
 - les codes `DEVICE_ERROR` autres que `STORAGE_FAULT` (§13.2) : le document 10
-  ne dit pas quand les émettre.
+  ne dit pas quand les émettre, et `INBOUND_MESSAGE_INVALID` attend le schéma
+  3.0 (#98).
 
-Choix faits par SIM-02 là où le document 10 ne tranche pas :
+Les choix de SIM-02 là où le document 10 ne tranchait pas sont maintenant des
+décisions du document 10 (version 1.5, #39) :
 
-- un message non corrélable n'est pas publié. Pour une commande,
-  `COMMAND_REJECTED` exige `operationId` et `compartmentId` (§20). Pour l'écran,
-  le §20 exige bien un `DEVICE_ERROR` expurgé; il ne manque que l'`errorCode`
-  correspondant dans la liste du §13.2, ce qui laisse ce cas non implémenté;
 - une commande ou une instruction d'écran livrée avec le drapeau `retain` est
-  ignorée sans réponse;
+  ignorée sans réponse et sans entrée de journal (§7.2);
+- un message non corrélable n'est pas publié (§20). Son signalement par un
+  `DEVICE_ERROR` `INBOUND_MESSAGE_INVALID`, comme celui d'un message retenu,
+  arrive avec le schéma 3.0 (#98);
 - la déduplication passe avant l'expiration : une redélivrance tardive reçoit le
-  résultat connu, pas `COMMAND_EXPIRED`;
+  résultat connu, pas `COMMAND_EXPIRED` (§9.1, §10.1);
 - un rejet est rejoué à l'identique, même si sa cause a disparu : le backend
-  doit émettre une nouvelle commande;
+  doit émettre une nouvelle commande (§10.1);
+- un `messageId` réutilisé avec un autre contenu reçoit le résultat journalisé,
+  avec l'`operationId` et la cellule journalisés (§10.1);
 - une autre commande d'une opération déjà exécutée reçoit le résultat de cette
-  opération (`ALREADY_APPLIED` si elle a été acquittée) lorsqu'elle vise la même
-  cellule; si elle vise une autre cellule, elle est rejetée `INVALID_PAYLOAD`,
-  faute de raison dédiée, car `ALREADY_APPLIED` nommerait une cellule jamais
-  ouverte. Une opération n'est « consommée » qu'une fois `EXECUTING` atteint;
-  un rejet antérieur ne la consomme pas;
-- le §16.1 ne fixe que des minimums de rétention; le plafond de 1024 entrées et
-  le refus `INTERNAL_DEVICE_ERROR` d'un journal plein sont des choix du
-  simulateur;
+  opération lorsqu'elle vise la même cellule, `INVALID_PAYLOAD` si elle vise une
+  autre cellule; une exécution incertaine ne devient jamais un succès (§9.1);
+- les minimums de rétention, les entrées protégées et le refus
+  `INTERNAL_DEVICE_ERROR` d'un journal saturé sont normatifs (§16.1); le plafond
+  de 1024 entrées reste un choix du simulateur;
 - le scan RFID après fermeture est lancé par le hub; sa fin clôt l'opération
-  dans la cellule;
-- un mauvais `lockerId`, un schéma non pris en charge ou une horloge non
-  synchronisée sur l'écran sont rendus par `INVALID_DISPLAY_PAYLOAD` ou
-  `SCREEN_UNAVAILABLE`, faute de raison dédiée;
-- une révision ancienne reçoit `STALE_DISPLAY_REVISION` plutôt qu'un silence;
+  dans la cellule (§12.1);
+- les rejets d'écran suivent la correspondance du §27.2; une révision ancienne
+  reçoit `STALE_DISPLAY_REVISION` sans toucher l'affichage plus récent (§27.4);
 - après un débordement de la file, `STORAGE_FAULT` nomme chaque opération
   touchée (`CRITICAL`) et regroupe les pertes hors opération (`WARNING`, avec la
-  cellule si une seule est concernée). Le §18 impose le signalement; la
-  sévérité, les identifiants et la publication avant les événements conservés
-  sont des précisions du simulateur. Un redémarrage efface la file et ses pertes :
-  `DEVICE_RESTARTED` signale alors l'incertitude (§13.1).
+  cellule si une seule est concernée), avant les événements conservés (§13.2).
+  Un redémarrage efface la file et ses pertes : `DEVICE_RESTARTED` signale alors
+  l'incertitude (§13.1);
+- la durée de 15 s de la fenêtre de déverrouillage est un paramètre de
+  simulation; la durée réelle relève de l'ADR matériel et des POC (§9.2).
