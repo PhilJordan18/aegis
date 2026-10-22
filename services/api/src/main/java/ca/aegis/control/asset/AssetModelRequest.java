@@ -8,7 +8,7 @@ import jakarta.validation.constraints.Size;
 
 /**
  * {@code CreateAssetModelRequest} and {@code UpdateAssetModelRequest} of document 09, section 12.1; both carry the
- * same fields. A nullable field that is omitted is read as null, so a replacement clears it.
+ * same fields. Every field is required: a nullable field must be sent, and an explicit null clears it.
  */
 record AssetModelRequest(
         @NotBlank(message = "Le nom est requis.")
