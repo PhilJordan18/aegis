@@ -4,7 +4,17 @@ import type { ProblemViolation } from './contract'
 export const SIGN_IN_TIMEOUT_MS = 15_000
 const MAX_EMAIL_LENGTH = 320
 // Feedback only; the server validates and normalises (09 §10.2).
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+/**
+ * Same shape as /^[^\s@]+@[^\s@]+\.[^\s@]+$/ without its backtracking: one « @ », no
+ * whitespace, a non-empty local part, and a dot strictly inside the domain.
+ */
+function hasEmailShape(value: string): boolean {
+  if (/\s/.test(value)) return false
+  const at = value.indexOf('@')
+  if (at <= 0 || at !== value.lastIndexOf('@')) return false
+  const domain = value.slice(at + 1)
+  return domain.length >= 3 && domain.slice(1, -1).includes('.')
+}
 
 /**
  * A field error is a code, never a sentence: the page turns it into text in the
@@ -25,7 +35,7 @@ export function validateSignIn(email: string, password: string): FieldErrors {
       ? 'emailRequired'
       : trimmed.length > MAX_EMAIL_LENGTH
         ? 'emailTooLong'
-        : EMAIL_PATTERN.test(trimmed)
+        : hasEmailShape(trimmed)
           ? undefined
           : 'emailInvalid'
   return {

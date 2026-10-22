@@ -8,6 +8,7 @@
 **Mise à jour ciblée :** 23 septembre 2026 — IAM-01 alignée sur l’ADR-007; POC-02 conserve le choix de connecteur ouvert.  
 **Mise à jour ciblée :** 5 octobre 2026 — le backlog opérationnel est suivi dans GitHub Issues au lieu de Linear.  
 **Mise à jour ciblée :** 21 octobre 2026 — FND-02B ne dépend plus d’un Mac de l’école : Xcode est installé sur le Mac de développement (ADR-012).  
+**Mise à jour ciblée :** 21 octobre 2026 — l’ingestion durable du heartbeat relève de PHY-01, qui ne dépend plus de la clôture de FND-02 (#12).  
 **Références :** [scope](02-scope.md), documents 03–10 et [plan d’itérations](14-plan-iterations-semaines-4-a-15.md).
 
 ---
@@ -120,6 +121,8 @@ Prouver le chemin Web/iOS → API → PostgreSQL et API ↔ MQTT ↔ simulateur,
 
 **Démonstration :** les clients lisent un statut fourni par l’API; un heartbeat authentifié met à jour le locker; PostgreSQL et MQTT ne sont jamais joints directement par les clients.
 
+Le walking skeleton reste incomplet tant que PHY-01 n’a pas livré l’ingestion durable du heartbeat (doc 10 §15.3 et §16.2). Publier un heartbeat du simulateur sur le broker ne suffit pas, et aucune ingestion provisoire n’en tient lieu.
+
 ### P0.1 — Actif prêt et réservable
 
 Livrer identité, catalogue, placement, présence, horaires, readiness et réservation.
@@ -151,7 +154,7 @@ Les points ci-dessous conservent les premières estimations pour comparaison; il
 | POC-01 | Valider la lecture RFID UHF locale par cellule | Le bon tag est détecté dans la bonne cellule selon plusieurs orientations; faux positifs/négatifs et délai de stabilisation sont mesurés; le fallback est déclenchable selon un seuil écrit. | Matériel RFID | Hub, cellule, docs | 3 |
 | POC-02 | Valider les deux liaisons de l’étoile | Chaque cellule possède son câble alimentation/données et son port; chute de tension, actionnement, déconnexion et reprise sont mesurés séparément; connecteur sélectionné et brochage propriétaire documentés, sans confusion avec Ethernet/PoE. | Architecture physique 12, composants disponibles | Hub, cellules, docs | 3 |
 | FND-01 | Lancer l’environnement local reproductible | Une commande documentée démarre PostgreSQL et le broker; aucun secret réel n’est committé; PostgreSQL n’est pas exposé publiquement. | Aucune | Infra | 3 |
-| FND-02 | Prouver le walking skeleton | `GET /api/v1/system/health` répond; une migration Flyway s’applique; un heartbeat du simulateur est ingéré; Web/iOS lisent l’API. Le statut privé du locker est exposé aux clients seulement après IAM-01/02. | FND-01; IAM-01/02 pour le statut privé | API, DB, MQTT, Web, iOS, simulateur | 5 |
+| FND-02 | Prouver le walking skeleton | `GET /api/v1/system/health` répond; une migration Flyway s’applique; un heartbeat du simulateur est ingéré; Web/iOS lisent l’API. Le statut privé du locker est exposé aux clients seulement après IAM-01/02. | FND-01; IAM-01/02 pour le statut privé; PHY-01 pour l’ingestion durable du heartbeat simulé (doc 10 §16.2) | API, DB, MQTT, Web, iOS, simulateur | 5 |
 
 ### 6.2 Identité et configuration
 
@@ -168,7 +171,7 @@ Les points ci-dessous conservent les premières estimations pour comparaison; il
 
 | ID | Story | Critères essentiels | Dépendances | Composants | Points |
 |---|---|---|---|---|---:|
-| PHY-01 | Connaître l’état du locker et de ses cellules | Heartbeat toutes les 10 s; `ONLINE` si le dernier heartbeat valide a au plus 30 s; portes et erreurs sont visibles; un heartbeat ne change aucun prêt. | FND-02 | Hub/simulateur, MQTT, API, DB, Web | 3 |
+| PHY-01 | Connaître l’état du locker et de ses cellules | Heartbeat toutes les 10 s; `ONLINE` si le dernier heartbeat valide a au plus 30 s; portes et erreurs sont visibles; un heartbeat ne change aucun prêt. | FND-02A (socle API) et SIM-01 (simulateur); schéma des casiers `V003` (`lockers`, `compartments`, `locker_devices`), prévu avec CAT-02. PHY-01 ferme le critère d’ingestion de FND-02 et ne dépend pas de sa clôture | Hub/simulateur, MQTT, API, DB, Web | 3 |
 | PHY-02 | Transformer un scan RFID en observation normalisée | Le payload brut est conservé; seules des lectures stables et saines deviennent présence/absence; une absence de message ne prouve jamais l’absence. Les tests simulés précèdent la validation sur le lecteur réel. | PHY-01, contrat 10; POC-01 pour la validation réelle | Hub/simulateur, MQTT, API, DB | 5 |
 | RDY-01 | Calculer la readiness pour un technicien | Présence, disponibilité, état, calibration et accès sont évalués; résultat et raisons sont déterministes; l’état n’est pas un booléen éditable. | IAM-02, CFG-01, PHY-02 | API, DB, tests | 5 |
 | RDY-02 | Consulter les actifs et leurs raisons | Web et iOS affichent le même résultat fourni par l’API; A2 expiré est `BLOCKED/CALIBRATION_EXPIRED`; aucun identifiant RFID brut n’est exposé au technicien. | RDY-01 | API, Web, iOS | 5 |
@@ -347,7 +350,7 @@ La première timebox peut produire un brouillon complet; le ticket reste ouvert 
 - Choisir et consigner les versions réellement utilisées; ne pas générer toutes les tables du P0 dans ce ticket.
 - Vérifier démarrage initial puis redémarrage sans rejouer incorrectement la migration.
 - Ne pas exposer de secret ou d’état interne détaillé dans la réponse publique de santé.
-- Reporter ingestion heartbeat et lecture métier authentifiée dans les sous-tâches suivantes de FND-02.
+- Reporter ingestion heartbeat et lecture métier authentifiée dans les sous-tâches suivantes de FND-02; l’ingestion durable du heartbeat relève de PHY-01 (§6.3).
 
 ### FND-02B — Client iOS exécutable
 
