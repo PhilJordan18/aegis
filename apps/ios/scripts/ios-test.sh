@@ -12,7 +12,9 @@
 #   IOS_DESTINATION          xcodebuild destination
 #                            (default: platform=iOS Simulator,name=iPhone 17,OS=latest)
 #   IOS_DERIVED_DATA         derived data under apps/ios/build (default: build/DerivedData)
-#   IOS_RESULTS_DIR          result bundles (default: build/results)
+#   IOS_RESULTS_DIR          result bundles and <recipe>-summary.json
+#                            (default: build/results)
+#   GITHUB_STEP_SUMMARY      set by GitHub Actions: a Markdown summary is appended
 #   AEGIS_LIVE_API_BASE_URL         live only, e.g. http://localhost:8080/api/v1
 #   AEGIS_LIVE_TECHNICIAN_PASSWORD  live only, demo technician password
 #   AEGIS_LIVE_ADMIN_PASSWORD       live only, demo administrator password
@@ -64,34 +66,20 @@ run_tests() {
 }
 
 # Fails unless every test ran and passed; optionally requires an exact count.
+# Also records <recipe>-summary.json and, under GitHub Actions, a step summary.
 check_results() {
-    local bundle=$1 expected=${2:-}
+    local bundle=$1 recipe=$2 expected=${3:-}
     xcrun xcresulttool get test-results summary --path "$bundle" |
-        python3 -c '
-import json, sys
-expected = sys.argv[1]
-s = json.load(sys.stdin)
-total, passed = s["totalTestCount"], s["passedTests"]
-failed, skipped = s["failedTests"], s["skippedTests"]
-print(f"tests: {total} total, {passed} passed, {failed} failed, {skipped} skipped")
-problems = []
-if s["result"] != "Passed" or failed:
-    problems.append("failures")
-if skipped:
-    problems.append("skipped tests are not accepted")
-if total == 0:
-    problems.append("no test ran")
-if expected and passed != int(expected):
-    problems.append(f"expected {expected} passing tests")
-if problems:
-    sys.exit("error: " + "; ".join(problems))
-' "$expected"
+        RESULTS_DIR="$RESULTS_DIR" DESTINATION="$DESTINATION" \
+        XCODE="$(xcodebuild -version | tr '\n' ' ' | sed 's/ *$//')" \
+        SDK="$(xcrun --sdk iphonesimulator --show-sdk-version)" \
+        python3 scripts/summarize-results.py "$recipe" "$expected"
 }
 
 standalone() {
     local bundle="$RESULTS_DIR/standalone.xcresult" status=0
     run_tests "$bundle" "${LIVE_TESTS[@]/#/-skip-testing:}" || status=$?
-    check_results "$bundle"
+    check_results "$bundle" standalone
     python3 scripts/check-strings.py "$DERIVED_DATA"
     return "$status"
 }
@@ -116,7 +104,7 @@ live() {
     [[ -z "${AEGIS_LIVE_ADMIN_EMAIL:-}" ]] || export TEST_RUNNER_AEGIS_LIVE_ADMIN_EMAIL="$AEGIS_LIVE_ADMIN_EMAIL"
     local bundle="$RESULTS_DIR/live.xcresult" status=0
     run_tests "$bundle" "${LIVE_TESTS[@]/#/-only-testing:}" || status=$?
-    check_results "$bundle" "$LIVE_TEST_COUNT"
+    check_results "$bundle" live "$LIVE_TEST_COUNT"
     return "$status"
 }
 
