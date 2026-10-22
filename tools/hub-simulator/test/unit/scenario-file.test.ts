@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -23,6 +23,22 @@ describe('loadScenarioFile', () => {
     const path = write(base, 'ok.json', valid);
     expect(loadScenarioFile('ok.json', base).steps).toHaveLength(1);
     expect(loadScenarioFile(path, base).steps).toHaveLength(1);
+  });
+
+  it('accepts a file of exactly the size limit', () => {
+    const body = JSON.stringify({ steps: [{ do: 'stop' }] });
+    const path = write(base, 'exact.json', body + ' '.repeat(MAX_SCENARIO_BYTES - body.length));
+    expect(loadScenarioFile(path, base).steps).toHaveLength(1);
+  });
+
+  it('reports an unreadable file as a read error, not as invalid JSON', () => {
+    const path = write(base, 'locked.json', valid);
+    chmodSync(path, 0o000);
+    try {
+      expect(() => loadScenarioFile(path, base)).toThrow('cannot read');
+    } finally {
+      chmodSync(path, 0o644);
+    }
   });
 
   it.each([

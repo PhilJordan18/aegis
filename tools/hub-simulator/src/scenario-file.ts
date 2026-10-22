@@ -1,4 +1,4 @@
-import { readFileSync, realpathSync, statSync } from 'node:fs';
+import { closeSync, fstatSync, openSync, readSync, realpathSync } from 'node:fs';
 import { extname, resolve, sep } from 'node:path';
 
 import { ScenarioError, parseScenario, type Scenario } from './scenario.ts';
@@ -9,8 +9,9 @@ export const MAX_SCENARIO_BYTES = 256 * 1024;
 /**
  * Reads the scenario named on the command line: a regular `.json` file of at most
  * MAX_SCENARIO_BYTES, inside `baseDir` (the current directory) once symbolic links are
- * resolved, then the same validation as any scenario. A mistyped or crafted path can
- * therefore not load a file from elsewhere.
+ * resolved, then the same validation as any scenario. The file is opened once and
+ * checked through its descriptor, so it cannot be swapped between the checks and the
+ * read, and never more than the limit is read.
  */
 export function loadScenarioFile(path: string, baseDir: string = process.cwd()): Scenario {
   let base: string;
@@ -21,20 +22,36 @@ export function loadScenarioFile(path: string, baseDir: string = process.cwd()):
   } catch (error) {
     throw new ScenarioError(`cannot read the scenario file ${path}: ${(error as Error).message}`);
   }
-  if (!file.startsWith(base + sep)) {
+  const prefix = base.endsWith(sep) ? base : base + sep;
+  if (!file.startsWith(prefix)) {
     throw new ScenarioError(`a scenario file must be inside ${base}: ${path}`);
   }
   if (extname(file).toLowerCase() !== '.json') {
     throw new ScenarioError(`a scenario file must end in .json: ${path}`);
   }
-  const stats = statSync(file);
-  if (!stats.isFile()) throw new ScenarioError(`a scenario must be a regular file: ${path}`);
-  if (stats.size > MAX_SCENARIO_BYTES) {
-    throw new ScenarioError(`a scenario file is at most ${MAX_SCENARIO_BYTES} bytes: ${path}`);
+  let text: string;
+  let fd: number | undefined;
+  try {
+    fd = openSync(file, 'r');
+    if (!fstatSync(fd).isFile()) throw new ScenarioError(`a scenario must be a regular file: ${path}`);
+    const buffer = Buffer.alloc(MAX_SCENARIO_BYTES + 1);
+    let length = 0;
+    for (let read = -1; read !== 0 && length < buffer.length; length += read) {
+      read = readSync(fd, buffer, length, buffer.length - length, null);
+    }
+    if (length > MAX_SCENARIO_BYTES) {
+      throw new ScenarioError(`a scenario file is at most ${MAX_SCENARIO_BYTES} bytes: ${path}`);
+    }
+    text = buffer.subarray(0, length).toString('utf8');
+  } catch (error) {
+    if (error instanceof ScenarioError) throw error;
+    throw new ScenarioError(`cannot read the scenario file ${path}: ${(error as Error).message}`);
+  } finally {
+    if (fd !== undefined) closeSync(fd);
   }
   let raw: unknown;
   try {
-    raw = JSON.parse(readFileSync(file, 'utf8'));
+    raw = JSON.parse(text);
   } catch (error) {
     throw new ScenarioError(`invalid JSON in ${path}: ${(error as Error).message}`);
   }
