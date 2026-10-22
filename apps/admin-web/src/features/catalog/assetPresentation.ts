@@ -4,9 +4,10 @@ import type { IconName } from '../../ui/Icon'
 import { UNRECOGNIZED, type AdminAssetView, type DiagnosticReason, type Unrecognized } from './contract'
 
 /**
- * Business dates (a calibration due date) are shown in the laboratory zone, never the browser's.
+ * Business instants (a calibration due date) are shown in the laboratory zone, never the browser's.
  * The API exposes no locker or laboratory zone on an asset yet (docs/localisation/convention.md),
- * so the zone is the laboratory's, stated on screen next to the date.
+ * so the zone is the P0 laboratory convention, stated on screen next to the instant. The calibration
+ * status itself is computed by the server and is never derived from this instant here.
  */
 export const LAB_TIME_ZONE = 'America/Toronto'
 
@@ -33,11 +34,25 @@ export function diagnosticChip(asset: AdminAssetView, { m }: I18n): { role: Stat
   return { ...chip, label: reasons.length === 0 ? m.equipment.noBlockers : m.equipment.blockers({ count: reasons.length }) }
 }
 
-function dateOf(instant: string | null, { format }: I18n): string | null {
+function parsedInstant(instant: string | null): Date | null {
   if (instant === null) return null
   const date = new Date(instant)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function dateOf(instant: string | null, { format }: I18n): string | null {
+  const date = parsedInstant(instant)
   // A date never breaks across two lines.
-  return Number.isNaN(date.getTime()) ? null : format.date(date, LAB_TIME_ZONE).replace(/ /g, '\u00A0')
+  return date === null ? null : format.date(date, LAB_TIME_ZONE).replace(/ /g, '\u00A0')
+}
+
+/**
+ * A calibration due instant: date, time and zone abbreviation in the laboratory zone. The date and the
+ * time with its zone each stay on one line; the line may break after the comma that separates them.
+ */
+function dueOf(instant: string | null, { format }: I18n): string | null {
+  const date = parsedInstant(instant)
+  return date === null ? null : format.dateTime(date, LAB_TIME_ZONE).replace(/(?<!,) /g, '\u00A0')
 }
 
 /** True when any enumeration of the unit is a value this client does not know (09 §3). */
@@ -72,7 +87,7 @@ export function accessLevelLabel(value: AdminAssetView['requiredAccessLevel'], {
 export function reasonLabel(reason: DiagnosticReason | Unrecognized, asset: AdminAssetView, i18n: I18n): string {
   if (reason === UNRECOGNIZED) return i18n.m.equipment.unrecognized
   if (reason === 'CALIBRATION_EXPIRED') {
-    const date = dateOf(asset.calibration.dueAt, i18n)
+    const date = dueOf(asset.calibration.dueAt, i18n)
     if (date !== null) return i18n.m.equipment.calibrationExpiredOn({ date })
   }
   return i18n.m.equipment.reason[reason]
@@ -81,7 +96,7 @@ export function reasonLabel(reason: DiagnosticReason | Unrecognized, asset: Admi
 export function calibrationLabel(asset: AdminAssetView, i18n: I18n): string {
   const { calibration } = asset
   const { m } = i18n
-  const date = dateOf(calibration.dueAt, i18n)
+  const date = dueOf(calibration.dueAt, i18n)
   switch (calibration.status) {
     case UNRECOGNIZED:
       return m.equipment.unrecognized
@@ -96,7 +111,7 @@ export function calibrationLabel(asset: AdminAssetView, i18n: I18n): string {
 }
 
 export function calibrationDueLabel(asset: AdminAssetView, i18n: I18n): string {
-  return dateOf(asset.calibration.dueAt, i18n) ?? i18n.m.equipment.notProvided
+  return dueOf(asset.calibration.dueAt, i18n) ?? i18n.m.equipment.notProvided
 }
 
 export function factsLine(asset: AdminAssetView, i18n: I18n): string {

@@ -252,7 +252,7 @@ test.describe('flow: équipements (production page, routed fakes)', () => {
     await expect(second).toHaveAttribute('aria-current', 'true')
     await expect(second).toBeFocused()
     await expect(page.getByRole('heading', { level: 2, name: /Multimètre 2 · MM-002/ })).toBeVisible()
-    await expect(page.locator('main')).toContainText('Calibration expirée depuis le 8 sept. 2026')
+    await expect(page.locator('main')).toContainText('Calibration expirée depuis le 8 sept. 2026, 00 h 00 HAE')
     await expect(page.getByRole('status').filter({ hasText: 'Exemplaire sélectionné : Multimètre 2, MM-002.' })).toHaveCount(1)
     await page.goBack()
     await expect(page.locator('.ag-list__items a').first()).toHaveAttribute('aria-current', 'true')

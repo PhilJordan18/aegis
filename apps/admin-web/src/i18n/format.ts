@@ -11,6 +11,13 @@ export interface Formatters {
    */
   readonly date: (instant: Date, timeZone: string) => string
   /**
+   * A business instant with date, time and zone abbreviation (« 30 nov. 2026, 22 h 00 HNE »,
+   * « Nov 30, 2026, 10:00 p.m. EST »). The zone is explicit and always shown: the same instant is a
+   * different calendar day in another zone, and the hour repeats when the clocks go back, so only the
+   * abbreviation tells EDT from EST. `dateStyle` cannot be combined with `timeZoneName`, hence the fields.
+   */
+  readonly dateTime: (instant: Date, timeZone: string) => string
+  /**
    * A time of day with its zone abbreviation (« 10 h 30 HAE », « 10:30 a.m. EDT »). Without `timeZone`
    * it is the device's zone, which is right for a technical instant such as an evaluation time.
    */
@@ -36,6 +43,8 @@ function createFormatters(locale: Locale): Formatters {
       return `${minutesDigits.format(Math.floor(whole / 60))}:${secondsDigits.format(whole % 60)}`
     },
     date: (instant, timeZone) => new Intl.DateTimeFormat(tag, { dateStyle: 'medium', timeZone }).format(instant),
+    dateTime: (instant, timeZone) =>
+      new Intl.DateTimeFormat(tag, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short', timeZone }).format(instant),
     time: (instant, timeZone) => new Intl.DateTimeFormat(tag, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short', timeZone }).format(instant),
     upperCase: (value) => value.toLocaleUpperCase(tag),
   }
