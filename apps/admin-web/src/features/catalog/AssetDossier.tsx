@@ -84,7 +84,7 @@ function DossierBody({ asset, titleId }: { readonly asset: AdminAssetView; reado
     <>
       <p className="ag-overline">{t.selectedOverline}</p>
       <h2 className="ag-dossier__title" id={titleId}>
-        {asset.model.name} · <span className="ag-tnum ag-nowrap">{asset.assetCode}</span>
+        {asset.model.name} · <span className="ag-tnum">{asset.assetCode}</span>
       </h2>
       {model !== '' && <p className="ag-dossier__sub">{model}</p>}
       {archived !== null && <p className="ag-dossier__sub">{archived}</p>}

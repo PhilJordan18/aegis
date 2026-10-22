@@ -23,6 +23,8 @@ interface EnglishScenario {
   readonly title: string
   /** The preview pages keep French content; every other page must contain none of the French probes. */
   readonly previewContent?: boolean
+  /** A production page in the shell: the language switch sits in the closed account menu. */
+  readonly inShell?: boolean
   readonly reach?: (page: Page) => Promise<void>
 }
 
@@ -101,6 +103,7 @@ const SCENARIOS: readonly EnglishScenario[] = [
       state,
       path: '/connexion',
       title: 'Equipment — Aegis Manager',
+      inShell: true,
       reach: async (page) => {
         await openCatalog(page, mode, { english: true })
         await waitForCatalogState(page, mode, { english: true })
@@ -140,7 +143,7 @@ test.describe('English accessibility matrix', () => {
             await expect(page).toHaveTitle(scenario.title)
             await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1)
             // In the shell the switch sits in the account menu, which is closed in the nominal state.
-            if (!scenario.previewContent || scenario.state === 'account-menu') {
+            if ((!scenario.previewContent && !scenario.inShell) || scenario.state === 'account-menu') {
               await expect(page.getByRole('group', { name: 'Language' }).first()).toBeVisible()
             }
 

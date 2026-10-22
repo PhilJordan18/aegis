@@ -32,7 +32,7 @@ a.ag-item:hover { background: var(--ag-field); }
   margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline;
   font-size: var(--ag-eq-name-size); line-height: 1.25; font-weight: 600; letter-spacing: -0.015em; overflow-wrap: anywhere;
 }
-.ag-item__code { font-size: var(--ag-eq-code-size); font-weight: 500; letter-spacing: 0; color: var(--ag-text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ag-item__code { font-size: var(--ag-eq-code-size); font-weight: 500; letter-spacing: 0; color: var(--ag-text-2); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; min-width: 0; max-width: 100%; }
 .ag-item__facts { margin-top: 4px; font-size: var(--ag-eq-facts-size); line-height: 1.35; color: var(--ag-text-2); }
 .ag-list__foot { padding: 12px 20px 16px; border-top: 1px solid var(--ag-separator); font-size: var(--ag-type-small-size); color: var(--ag-text-2); }
 .ag-pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 20px; border-top: 1px solid var(--ag-separator); }
