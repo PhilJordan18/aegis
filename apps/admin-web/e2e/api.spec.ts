@@ -140,10 +140,13 @@ test('an administrator opens Équipements, sees the units from the API and opens
   expect(login.status()).toBe(200)
   const { accessToken } = (await login.json()) as { accessToken: string }
   const headers = () => ({ Authorization: `Bearer ${accessToken}`, 'Idempotency-Key': randomUUID() })
-  const code = `E2E-${Date.now()}`
+  // Unique per run: model names are unique among active models, and the database outlives the run.
+  const stamp = Date.now()
+  const code = `E2E-${stamp}`
+  const modelName = `Multimètre E2E ${stamp}`
   const model = await request.post('/api/v1/admin/asset-models', {
     headers: headers(),
-    data: { name: 'Multimètre E2E', manufacturer: 'Fluke', modelNumber: '117', description: null, defaultCalibrationRequired: true },
+    data: { name: modelName, manufacturer: 'Fluke', modelNumber: '117', description: null, defaultCalibrationRequired: true },
   })
   expect(model.status()).toBe(201)
   const { id: assetModelId } = (await model.json()) as { id: string }
@@ -168,14 +171,18 @@ test('an administrator opens Équipements, sees the units from the API and opens
   expect(listRequest, 'GET /admin/assets').toBeTruthy()
   expect(await listRequest?.headerValue('authorization')).toMatch(/^Bearer \S+$/)
 
-  // Opens the unit this run created: the address carries its id, the dossier is read from /admin/assets/{id}.
-  const detail = page.waitForResponse((response) => response.url().endsWith(`/api/v1/admin/assets/${unit.id}`))
+  // Opens the unit this run created: the address carries its id, and its dossier is read from /admin/assets/{id}.
+  // On an empty database that unit is also the first one, already selected and read; a cached read is not repeated.
   await page.evaluate((assetId) => {
     window.history.pushState(null, '', `/equipements?exemplaire=${assetId}`)
     window.dispatchEvent(new PopStateEvent('popstate'))
   }, unit.id)
-  expect((await detail).status()).toBe(200)
-  await expect(page.getByRole('heading', { level: 2, name: new RegExp(`Multimètre E2E · ${code}`) })).toBeVisible()
+  await expect(page).toHaveURL(new RegExp(`exemplaire=${unit.id}$`))
+  const detailPath = `/api/v1/admin/assets/${unit.id}`
+  await expect.poll(() => requests.some((candidate) => new URL(candidate.url()).pathname === detailPath)).toBe(true)
+  const detail = requests.find((candidate) => new URL(candidate.url()).pathname === detailPath)
+  expect((await detail?.response())?.status()).toBe(200)
+  await expect(page.getByRole('heading', { level: 2, name: new RegExp(`${modelName} · ${code}`) })).toBeVisible()
 
   // What the API says today: no presence observation, so no presence, no placement and no « Prêt ».
   const dossier = page.getByRole('group', { name: new RegExp(code) })
