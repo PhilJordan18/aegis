@@ -59,7 +59,7 @@ Chaque ligne a été relue sur `dev` `a18f981`.
 | Règle | Emplacement | Correction |
 |---|---|---|
 | githubactions:S6505 | `ci.yml`, job Web, `npm ci` | `npm ci --ignore-scripts`. Aucune dépendance du Web ni du simulateur ne déclare de script d'installation (relevé sur `node_modules`); typecheck, lint, tests et build passent ainsi |
-| tssecurity:S8707 | `tools/hub-simulator/src/cli.ts`, lecture de `--scenario` | `loadScenarioFile` n'accepte qu'un fichier régulier `.json` d'au plus 256 Kio, avec des erreurs explicites, avant toute connexion; tests unitaires dédiés. Le chemin reste fourni par l'utilisateur local, qui peut lire ce fichier de toute façon : aucune frontière de privilège |
+| tssecurity:S8707 | `tools/hub-simulator/src/cli.ts`, lecture de `--scenario` | `loadScenarioFile` n'accepte qu'un fichier régulier `.json` d'au plus 256 Kio, situé sous le répertoire courant une fois les liens symboliques résolus; refus explicite avant toute connexion; tests des évasions par `..` et par lien |
 | typescript:S7727 | `tools/hub-simulator/src/scenario.ts`, `.map(parseStep)` | `.map((step, index) => parseStep(step, index))` |
 | typescript:S8786 | `apps/admin-web/src/app/routes.ts`, retrait des `/` finaux | Boucle linéaire; équivalence vérifiée sur 349 525 chemins générés |
 | typescript:S8786 | `apps/admin-web/src/features/auth/signInValidation.ts`, forme du courriel | Fonction linéaire de même sens; équivalence vérifiée sur 2 396 745 entrées générées et des cas limites |
