@@ -16,6 +16,8 @@ import {
   type CommandRejectReason,
   type DisplayRejectReason,
   type Delivery,
+  type DeviceErrorCode,
+  type DeviceErrorSeverity,
   type DoorState,
   type HubMessageType,
   type LockState,
@@ -69,6 +71,16 @@ export interface DeviceRestartedPayload extends HubEnvelope {
   type: 'DEVICE_RESTARTED';
   resetReason: ResetReason;
   firmwareVersion: string;
+}
+
+/** Doc 10 §13.2; operationId and compartmentId are optional (§20). */
+export interface DeviceErrorPayload extends HubEnvelope {
+  type: 'DEVICE_ERROR';
+  operationId?: string;
+  compartmentId?: string;
+  errorCode: DeviceErrorCode;
+  severity: DeviceErrorSeverity;
+  detail: string;
 }
 
 /** Doc 10 §10.1. */
@@ -148,6 +160,7 @@ export type HubPayload =
   | HeartbeatPayload
   | AvailabilityPayload
   | DeviceRestartedPayload
+  | DeviceErrorPayload
   | CommandAcknowledgedPayload
   | CommandRejectedPayload
   | DoorEventPayload
@@ -274,6 +287,26 @@ export function buildDeviceRestarted(
     ...envelope(ctx, 'DEVICE_RESTARTED'),
     resetReason: facts.resetReason,
     firmwareVersion: facts.firmwareVersion,
+  });
+}
+
+export interface DeviceErrorFacts {
+  readonly errorCode: DeviceErrorCode;
+  readonly severity: DeviceErrorSeverity;
+  readonly operationId?: string | undefined;
+  readonly compartmentId?: string | undefined;
+  readonly detail: string;
+}
+
+/** Doc 10 §13.2: a controlled error code, its severity and a bounded detail without secret. */
+export function buildDeviceError(ctx: MessageContext, facts: DeviceErrorFacts): OutboundMessage<DeviceErrorPayload> {
+  return seal(ctx.lockerId, DELIVERY.event, {
+    ...envelope(ctx, 'DEVICE_ERROR'),
+    ...(facts.operationId !== undefined ? { operationId: facts.operationId } : {}),
+    ...(facts.compartmentId !== undefined ? { compartmentId: facts.compartmentId } : {}),
+    errorCode: facts.errorCode,
+    severity: facts.severity,
+    detail: facts.detail.slice(0, DETAIL_MAX_LENGTH),
   });
 }
 

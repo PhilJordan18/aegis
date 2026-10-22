@@ -46,6 +46,7 @@ export const HUB_MESSAGE_TYPES = [
   'HEARTBEAT',
   'DEVICE_AVAILABILITY',
   'DEVICE_RESTARTED',
+  'DEVICE_ERROR',
   'COMMAND_ACKNOWLEDGED',
   'COMMAND_REJECTED',
   'DOOR_OPENED',
@@ -63,6 +64,7 @@ export const CHANNEL_BY_TYPE: Readonly<Record<HubMessageType, 'events' | 'status
   HEARTBEAT: 'status',
   DEVICE_AVAILABILITY: 'status',
   DEVICE_RESTARTED: 'events',
+  DEVICE_ERROR: 'events',
   COMMAND_ACKNOWLEDGED: 'events',
   COMMAND_REJECTED: 'events',
   DOOR_OPENED: 'events',
@@ -90,7 +92,7 @@ export const DELIVERY = {
   availabilityOnline: { qos: 1, retain: true },
   availabilityOffline: { qos: 1, retain: true },
   deviceRestarted: { qos: 1, retain: false },
-  /** Acknowledgements, rejections, door, lock, RFID and display acknowledgements. */
+  /** Acknowledgements, rejections, door, lock, RFID, device errors and display acknowledgements. */
   event: { qos: 1, retain: false },
 } as const satisfies Record<string, Delivery>;
 
@@ -172,6 +174,19 @@ export const COMMAND_REJECT_REASONS = [
   'INTERNAL_DEVICE_ERROR',
 ] as const;
 export type CommandRejectReason = (typeof COMMAND_REJECT_REASONS)[number];
+
+/** Doc 10 §13.2: the initial controlled DEVICE_ERROR codes, and its severities. */
+export const DEVICE_ERROR_CODES = [
+  'CELL_COMMUNICATION_LOST',
+  'RFID_READER_FAULT',
+  'DOOR_SENSOR_FAULT',
+  'LOCK_ACTUATOR_FAULT',
+  'POWER_FAULT',
+  'CLOCK_SYNC_LOST',
+  'STORAGE_FAULT',
+] as const;
+export type DeviceErrorCode = (typeof DEVICE_ERROR_CODES)[number];
+export type DeviceErrorSeverity = 'WARNING' | 'CRITICAL';
 
 /** Doc 10 §10.1. */
 export type AckResult = 'ACCEPTED' | 'ALREADY_APPLIED';

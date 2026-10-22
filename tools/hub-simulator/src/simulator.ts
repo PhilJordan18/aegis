@@ -29,6 +29,7 @@ import {
   buildChallengeDisplayed,
   buildCommandAcknowledged,
   buildCommandRejected,
+  buildDeviceError,
   buildDeviceRestarted,
   buildDisplayRejected,
   buildDoorEvent,
@@ -135,6 +136,13 @@ export const STOP_STEP_TIMEOUT_MS = 5_000;
 
 /** Events prepared while the connection is down, published after the next ONLINE (§18). */
 export const MAX_QUEUED_EVENTS = 64;
+
+/** Events of one operation (or outside any operation) that the full queue could not hold. */
+interface QueueLoss {
+  readonly operationId: string | undefined;
+  readonly compartmentIds: Set<string>;
+  count: number;
+}
 
 /** Display messages whose outcome is remembered in a boot, to answer duplicates alike. */
 export const MAX_REMEMBERED_DISPLAYS = 64;
@@ -252,6 +260,8 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
   /** PREVIOUS_EXECUTION_UNCERTAIN rejections to publish after the first ONLINE of the boot. */
   #uncertainReports: JournalEntry[] = [];
   #queued: OutboundMessage[] = [];
+  /** Losses of the full queue since the last report, keyed by operationId ('' outside any). */
+  readonly #queueLosses = new Map<string, QueueLoss>();
 
   constructor(config: SimulatorConfig, deps: SimulatorDependencies = {}) {
     super();
@@ -669,6 +679,9 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
     if (firstConnection) {
       for (const entry of this.#uncertainReports.splice(0)) this.#reportUncertain(transport, entry);
     }
+    // Before the events the queue kept, so that the backend knows the touched operations
+    // are uncertain before it reads any proof of theirs (§18).
+    this.#reportQueueLosses(transport);
     for (const message of this.#queued.splice(0)) this.#publish(transport, message);
     this.#heartbeatTimer = setInterval(() => this.publishHeartbeat(), this.config.heartbeatIntervalMs);
     for (const waiter of this.#onlineWaiters.splice(0)) waiter();
@@ -1108,11 +1121,46 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
       return;
     }
     if (this.#queued.length >= MAX_QUEUED_EVENTS) {
-      // The firmware would raise STORAGE_FAULT after reconnecting (§18), not modelled here.
+      this.#recordQueueLoss(message);
       this.emit('publishFailed', message, new Error(`local event queue full (${MAX_QUEUED_EVENTS})`));
       return;
     }
     this.#queued.push(message);
+  }
+
+  #recordQueueLoss(message: OutboundMessage): void {
+    const { operationId, compartmentId } = message.payload as { operationId?: string; compartmentId?: string };
+    const key = operationId ?? '';
+    const loss = this.#queueLosses.get(key) ?? { operationId, compartmentIds: new Set<string>(), count: 0 };
+    loss.count += 1;
+    if (compartmentId !== undefined) loss.compartmentIds.add(compartmentId);
+    this.#queueLosses.set(key, loss);
+  }
+
+  /**
+   * Doc 10 §18: after an overflow, STORAGE_FAULT once the connection is back. One per
+   * touched operation, CRITICAL, naming it so that the backend treats it as uncertain;
+   * then one WARNING for observations lost outside any operation.
+   */
+  #reportQueueLosses(transport: Transport): void {
+    const losses = [...this.#queueLosses.values()].sort((a, b) => Number(a.operationId === undefined) - Number(b.operationId === undefined));
+    this.#queueLosses.clear();
+    for (const loss of losses) {
+      const compartmentId = loss.compartmentIds.size === 1 ? [...loss.compartmentIds][0] : undefined;
+      const inOperation = loss.operationId !== undefined;
+      this.#publish(
+        transport,
+        buildDeviceError(this.#context(), {
+          errorCode: 'STORAGE_FAULT',
+          severity: inOperation ? 'CRITICAL' : 'WARNING',
+          operationId: loss.operationId,
+          compartmentId,
+          detail: inOperation
+            ? `The local event queue was full while offline: ${loss.count} event(s) of this operation were lost.`
+            : `The local event queue was full while offline: ${loss.count} event(s) outside any operation were lost.`,
+        }),
+      );
+    }
   }
 
   // ---- Common ---------------------------------------------------------------------
@@ -1182,6 +1230,7 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
     this.#displayRevision = undefined;
     this.#displayOutcomes.clear();
     this.#queued = [];
+    this.#queueLosses.clear();
     this.#armedFault = undefined;
     for (const cell of this.#cells.values()) {
       this.#endOperation(cell);

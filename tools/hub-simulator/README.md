@@ -246,9 +246,12 @@ de l'actionnement jusqu'au scan qui suit la fermeture, ou jusqu'au
 reverrouillage d'une ouverture inutilisée. Hors opération (porte forcée, scan
 explicite, après un redémarrage), ils n'en portent pas (§20). Un événement
 préparé pendant une coupure est mis en file (64 au plus) et publié après
-`ONLINE` et le heartbeat, avec sa `sequence` d'origine. Le dépassement de la
-file n'est pas signalé par `STORAGE_FAULT`. Un événement survenu hub éteint
-est perdu. Au démarrage, les serrures reviennent à `LOCKED` et l'opération en
+`ONLINE` et le heartbeat, avec sa `sequence` d'origine. Si la file déborde, les
+événements suivants sont perdus et le hub publie, après la reconnexion et avant
+les événements conservés, un `DEVICE_ERROR` `STORAGE_FAULT` (§18, §13.2) : un
+par opération touchée, `CRITICAL`, avec son `operationId` et sa cellule, puis un
+`WARNING` pour les observations perdues hors opération. Aucune preuve perdue
+n'est reconstituée. Un événement survenu hub éteint est perdu. Au démarrage, les serrures reviennent à `LOCKED` et l'opération en
 cours est oubliée.
 
 ## Prérequis
@@ -484,7 +487,8 @@ et appliqués ici. Restent hors du simulateur :
   manquant), que le simulateur n'émet pas;
 - un silence de heartbeats sans Will sur une connexion ouverte (§23.5 point 10) :
   le simulateur ne sait pas suspendre ses heartbeats en gardant la connexion;
-- `DEVICE_ERROR` (§13.2), dont `STORAGE_FAULT` après débordement de la file.
+- les codes `DEVICE_ERROR` autres que `STORAGE_FAULT` (§13.2) : le document 10
+  ne dit pas quand les émettre.
 
 Choix faits par SIM-02 là où le document 10 ne tranche pas :
 
@@ -512,4 +516,10 @@ Choix faits par SIM-02 là où le document 10 ne tranche pas :
 - un mauvais `lockerId`, un schéma non pris en charge ou une horloge non
   synchronisée sur l'écran sont rendus par `INVALID_DISPLAY_PAYLOAD` ou
   `SCREEN_UNAVAILABLE`, faute de raison dédiée;
-- une révision ancienne reçoit `STALE_DISPLAY_REVISION` plutôt qu'un silence.
+- une révision ancienne reçoit `STALE_DISPLAY_REVISION` plutôt qu'un silence;
+- après un débordement de la file, `STORAGE_FAULT` nomme chaque opération
+  touchée (`CRITICAL`) et regroupe les pertes hors opération (`WARNING`, avec la
+  cellule si une seule est concernée). Le §18 impose le signalement; la
+  sévérité, les identifiants et la publication avant les événements conservés
+  sont des précisions du simulateur. Un redémarrage efface la file et ses pertes :
+  `DEVICE_RESTARTED` signale alors l'incertitude (§13.1).

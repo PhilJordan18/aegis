@@ -248,6 +248,45 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('commands and display through
     expect(api.events.filter((e) => e.payload.operationId === c.operationId && e.payload.type === 'LOCK_UNLOCKED')).toEqual([]);
   });
 
+  it('an overflow while offline reaches the backend as STORAGE_FAULT, before the kept events (§18)', { timeout: 30_000 }, async () => {
+    const { sim } = await hub('sim-it-storage');
+    const api = await backend();
+    clients.push(api.client);
+    const c = shortCommand();
+    await api.publish(COMMANDS, c.body);
+    await until(() => api.events.find((e) => e.payload.commandMessageId === c.messageId), 5_000, 'acknowledgement');
+    const session = sim.deviceSessionId;
+
+    await sim.dropConnection();
+    sim.openDoor('A1');
+    for (let i = 0; i < 40; i += 1) {
+      sim.openDoor('A2', { forced: true });
+      sim.closeDoor('A2');
+    }
+    // The queue is full: the operation's close and relock are lost.
+    sim.closeDoor('A1');
+    await sim.waitUntilOnline(15_000);
+
+    const ofSession = () => api.events.filter((e) => e.payload.deviceSessionId === session);
+    const errors = await until(
+      () => {
+        const found = ofSession().filter((e) => e.payload.type === 'DEVICE_ERROR');
+        return found.length >= 2 ? found : undefined;
+      },
+      5_000,
+      'two STORAGE_FAULT reports',
+    );
+    for (const e of errors) expect(e).toMatchObject({ qos: 1, retain: false, payload: { errorCode: 'STORAGE_FAULT' } });
+    expect(errors[0]!.payload).toMatchObject({ operationId: c.operationId, compartmentId: A1, severity: 'CRITICAL' });
+    expect(errors[1]!.payload).toMatchObject({ compartmentId: A2, severity: 'WARNING' });
+    const opened = await until(
+      () => ofSession().find((e) => e.payload.type === 'DOOR_OPENED' && e.payload.operationId === c.operationId),
+      5_000,
+      'the kept door event',
+    );
+    expect(ofSession().indexOf(errors[1]!)).toBeLessThan(ofSession().indexOf(opened));
+  });
+
   it('the device account never receives the commands of another locker (§6.1)', { timeout: 15_000 }, async () => {
     const foreign = `aegis/v1/lockers/${OTHER_LOCKER}/commands`;
     const device = await mqtt.connectAsync(BROKER, {
