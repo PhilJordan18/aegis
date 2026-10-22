@@ -46,6 +46,8 @@ export interface Transport {
   publish(topic: string, body: string, delivery: Delivery): Promise<void>;
   /** Subscribes with QoS 1; resolves on SUBACK and rejects when the broker refuses a topic. */
   subscribe(topics: readonly string[]): Promise<void>;
+  /** From now on, no inbound message is acknowledged (PUBACK) on this transport. */
+  withholdAcknowledgements(): void;
   /** Replaces the Last Will used by the next (re)connection. */
   setWill(will: WillMessage): void;
   /** Reconnects with the same session stores, so unacknowledged QoS 1 messages are resent. */
@@ -119,6 +121,9 @@ export const mqttTransportFactory: TransportFactory = (options) => {
           error ? reject(error) : resolve(),
         );
       });
+    },
+    withholdAcknowledgements() {
+      abandoned = true;
     },
     async subscribe(topics) {
       const granted = await client.subscribeAsync([...topics], { qos: 1 });

@@ -35,6 +35,8 @@ export type CommandParse =
       readonly correlation: CommandCorrelation;
       readonly reason: 'INVALID_PAYLOAD' | 'UNSUPPORTED_SCHEMA';
       readonly detail: string;
+      /** expiresAt when it could be read, so that the journal keeps the refusal until then. */
+      readonly expiresAtMs?: number;
     }
   | { readonly kind: 'command'; readonly correlation: CommandCorrelation; readonly command: UnlockCommand };
 
@@ -114,8 +116,9 @@ export function parseCommand(body: Buffer | string): CommandParse {
     return { kind: 'uncorrelatable', why: 'messageId, operationId or compartmentId is not a canonical UUID' };
   }
   const correlation: CommandCorrelation = { commandMessageId: messageId, operationId, compartmentId };
+  const readableExpiry = parseInstant(raw.expiresAt);
   const invalid = (detail: string, reason: 'INVALID_PAYLOAD' | 'UNSUPPORTED_SCHEMA' = 'INVALID_PAYLOAD') =>
-    ({ kind: 'invalid', correlation, reason, detail }) as const;
+    ({ kind: 'invalid', correlation, reason, detail, ...(readableExpiry !== undefined ? { expiresAtMs: readableExpiry } : {}) }) as const;
 
   const schema = schemaProblem(raw.schemaVersion);
   if (schema) return invalid(schema.why, schema.unsupported ? 'UNSUPPORTED_SCHEMA' : 'INVALID_PAYLOAD');

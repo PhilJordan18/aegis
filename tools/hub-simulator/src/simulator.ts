@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { reconnectDelayMs } from './backoff.ts';
 import { FileBootCounter, type BootCounter } from './boot-counter.ts';
-import { FileCommandJournal, type CommandJournal, type JournalEntry } from './command-journal.ts';
+import { CommandJournalFullError, FileCommandJournal, type CommandJournal, type JournalEntry } from './command-journal.ts';
 import {
   CHALLENGE_MAX_DISPLAY_MS,
   RFID_IDENTIFIER_MAX_LENGTH,
@@ -138,6 +138,9 @@ export const MAX_QUEUED_EVENTS = 64;
 
 /** Display messages whose outcome is remembered in a boot, to answer duplicates alike. */
 export const MAX_REMEMBERED_DISPLAYS = 64;
+
+/** A command being answered, with its expiresAt when it could be read (journal retention). */
+type HandledCommand = CommandCorrelation & { readonly expiresAt?: number };
 
 /** Doc 10 §12.2: the return proof needs at least three coherent reads. */
 export const DEFAULT_READ_COUNT = 3;
@@ -381,6 +384,9 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
     const wasOnline = this.#state === 'online';
     // Leaving `online` first stops heartbeats, replays, reconnections and inbound handling.
     this.#setState('stopping');
+    // A command arriving now is not handled: it must stay unacknowledged, so that the
+    // broker redelivers it to the next connection of the session.
+    transport.withholdAcknowledgements();
     this.#clearNetworkTimers();
     this.#clearLocalTimers();
     if (wasOnline) {
@@ -711,7 +717,8 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
       this.emit('inbound', { channel: 'commands', outcome: 'IGNORED', why: parsed.why });
       return;
     }
-    const correlation = parsed.correlation;
+    const expiresAt = parsed.kind === 'command' ? parsed.command.expiresAtMs : parsed.expiresAtMs;
+    const correlation: HandledCommand = { ...parsed.correlation, ...(expiresAt !== undefined ? { expiresAt } : {}) };
     // Deduplication first: a redelivery gets the known outcome, whatever its age.
     const known = this.#journal.findByMessageId(correlation.commandMessageId);
     if (known) {
@@ -743,6 +750,11 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
     // operationId protects the workflow against a second, different command (§16.1).
     const consumed = this.#journal.findExecutedByOperation(command.operationId);
     if (consumed) {
+      if (consumed.compartmentId !== command.compartmentId) {
+        // ALREADY_APPLIED would name a cell that was never unlocked for this operation.
+        this.#rejectCommand(correlation, 'INVALID_PAYLOAD', 'This operation was already executed on another compartment.');
+        return;
+      }
       this.#answerKnown(consumed, correlation, true);
       return;
     }
@@ -762,19 +774,24 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
     this.#execute(correlation, cell);
   }
 
-  #execute(correlation: CommandCorrelation, cell: Cell): void {
+  #execute(correlation: HandledCommand, cell: Cell): void {
     const base = {
       messageId: correlation.commandMessageId,
       operationId: correlation.operationId,
       compartmentId: correlation.compartmentId,
       executed: true,
+      ...(correlation.expiresAt !== undefined ? { expiresAt: correlation.expiresAt } : {}),
     };
     try {
       // Durable before the irreversible action (§9.1, §16.1).
       this.#journal.record({ ...base, state: 'EXECUTING', recordedAt: this.#now() });
     } catch (error) {
       this.emit('journalError', error as Error);
-      this.#rejectCommand(correlation, 'INTERNAL_DEVICE_ERROR', 'The command journal cannot be written; nothing was actuated.');
+      const detail =
+        error instanceof CommandJournalFullError
+          ? 'The command journal is full of commands that must not be forgotten; nothing was actuated.'
+          : 'The command journal cannot be written; nothing was actuated.';
+      this.#rejectCommand(correlation, 'INTERNAL_DEVICE_ERROR', detail);
       return;
     }
     // Doc 10 §9: the QR of this operation disappears as execution starts.
@@ -804,8 +821,9 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
     cell.operationId = correlation.operationId;
     cell.doorOpenedInOperation = false;
     cell.unlockTimer = setTimeout(() => this.#unlockWindowElapsed(cell), this.config.unlockWindowMs);
-    // If this write fails, the entry stays EXECUTING: after a reboot the command is
-    // reported uncertain, never executed twice.
+    // If this write fails, memory follows the decision, so that redeliveries of this
+    // boot get ALREADY_APPLIED; the durable copy stays EXECUTING, so that after a
+    // reboot the command is reported uncertain. It is never executed twice.
     this.#record({ ...base, state: 'ACKNOWLEDGED', recordedAt: this.#now() });
     this.#publishEvent(buildCommandAcknowledged(this.#context(), correlation, 'ACCEPTED'));
     const scope = this.#scope(cell);
@@ -818,7 +836,7 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
    * `newCommand`: a different command of an already executed operation, journaled in
    * turn so that its own redeliveries get the same answer.
    */
-  #answerKnown(known: JournalEntry, correlation: CommandCorrelation, newCommand = false): void {
+  #answerKnown(known: JournalEntry, correlation: HandledCommand, newCommand = false): void {
     // EXECUTING is only found after the boot that crashed, already turned uncertain;
     // journaled synchronously, it cannot be seen by a redelivery in the same boot.
     const acknowledged = known.state === 'ACKNOWLEDGED';
@@ -831,6 +849,7 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
         compartmentId: correlation.compartmentId,
         executed: false,
         recordedAt: this.#now(),
+        ...(correlation.expiresAt !== undefined ? { expiresAt: correlation.expiresAt } : {}),
         ...(acknowledged ? { state: 'ACKNOWLEDGED' as const } : { state: 'REJECTED' as const, reason, detail }),
       });
     }
@@ -843,7 +862,7 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
     this.emit('inbound', this.#commandReport(correlation, 'REJECTED', reason));
   }
 
-  #rejectCommand(correlation: CommandCorrelation, reason: CommandRejectReason, detail: string): void {
+  #rejectCommand(correlation: HandledCommand, reason: CommandRejectReason, detail: string): void {
     this.#record({
       messageId: correlation.commandMessageId,
       operationId: correlation.operationId,
@@ -853,6 +872,7 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
       reason,
       detail,
       recordedAt: this.#now(),
+      ...(correlation.expiresAt !== undefined ? { expiresAt: correlation.expiresAt } : {}),
     });
     this.#publishEvent(buildCommandRejected(this.#context(), correlation, reason, detail));
     this.emit('inbound', this.#commandReport(correlation, 'REJECTED', reason));
@@ -870,10 +890,13 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
     });
   }
 
-  /** A journal write after the decision: a failure is reported, the answer still goes out. */
+  /**
+   * A journal write after the decision: memory follows the decision even if it cannot
+   * be made durable; a failure is reported and the answer still goes out.
+   */
   #record(entry: JournalEntry): void {
     try {
-      this.#journal.record(entry);
+      this.#journal.record(entry, entry.recordedAt, { followDecision: true });
     } catch (error) {
       this.emit('journalError', error as Error);
     }
@@ -940,7 +963,8 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
     }
     // The hub never extends the display beyond its maximum after issuedAt (§27.1, §27.3).
     const maxMs = instruction.content.kind === 'challenge' ? CHALLENGE_MAX_DISPLAY_MS : STATUS_MAX_DISPLAY_MS;
-    const untilMs = Math.min(instruction.expiresAtMs, instruction.issuedAtMs + maxMs);
+    // An issuedAt in the future cannot keep the QR longer than the maximum from now either.
+    const untilMs = Math.min(instruction.expiresAtMs, instruction.issuedAtMs + maxMs, this.#now() + maxMs);
     if (this.#now() >= untilMs) {
       this.#rejectDisplay(correlation, 'DISPLAY_EXPIRED', 'display deadline passed');
       return;

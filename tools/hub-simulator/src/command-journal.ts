@@ -22,6 +22,11 @@ export interface JournalEntry {
   readonly executed: boolean;
   readonly reason?: CommandRejectReason;
   readonly detail?: string;
+  /**
+   * Epoch milliseconds of the command's expiresAt, when it could be read. Until then a
+   * redelivery could still be evaluated, so the entry is protected from eviction.
+   */
+  readonly expiresAt?: number;
   /** Epoch milliseconds of the last transition. */
   readonly recordedAt: number;
   /** A PREVIOUS_EXECUTION_UNCERTAIN rejection the broker has not acknowledged yet. */
@@ -32,12 +37,29 @@ export class CommandJournalError extends Error {
   override name = 'CommandJournalError';
 }
 
+/** Every protected entry is still needed: the hub must refuse the new command. */
+export class CommandJournalFullError extends CommandJournalError {
+  override name = 'CommandJournalFullError';
+}
+
 /**
- * Hard cap above the §16.1 minimums (24 hours and 64 commands), so that a burst of
- * commands cannot grow the journal without bound. Reached only above about 1000
- * commands a day, far beyond a P0 locker.
+ * Bound of the journal. Above it, the hub first forgets rejections that can never
+ * lead to an actuation, then refuses new commands (INTERNAL_DEVICE_ERROR) rather than
+ * forget one whose redelivery could actuate a lock.
  */
 export const JOURNAL_MAX_ENTRIES = 1_024;
+
+/**
+ * Rejections whose re-evaluation always gives the same answer: forgetting them can
+ * never let a redelivery actuate. The other reasons depend on the physical state.
+ */
+const STABLE_REJECTIONS: ReadonlySet<CommandRejectReason> = new Set([
+  'INVALID_PAYLOAD',
+  'UNSUPPORTED_SCHEMA',
+  'WRONG_LOCKER',
+  'UNKNOWN_COMPARTMENT',
+  'COMMAND_EXPIRED',
+]);
 
 export const UNCERTAIN_DETAIL = 'The hub restarted while this command was executing; the lock was not actuated again.';
 
@@ -89,16 +111,24 @@ export abstract class CommandJournal {
   }
 
   /**
-   * Inserts or replaces the entry of `entry.messageId`, prunes, then persists. The
-   * in-memory copy changes only once the durable write succeeded.
+   * Inserts or replaces the entry of `entry.messageId`, prunes, then persists. Throws
+   * CommandJournalFullError when only protected entries remain, and
+   * CommandJournalError when the durable write fails. By default the in-memory copy
+   * changes only once the durable write succeeded; `followDecision` records a decision
+   * already taken in memory even when it cannot be made durable, so that redeliveries
+   * of this boot get the same answer.
    */
-  record(entry: JournalEntry, nowMs: number = entry.recordedAt): void {
+  record(entry: JournalEntry, nowMs: number = entry.recordedAt, options: { readonly followDecision?: boolean } = {}): void {
     const exists = this.#entries.some((e) => e.messageId === entry.messageId);
     const next = exists
       ? this.#entries.map((e) => (e.messageId === entry.messageId ? entry : e))
       : [...this.#entries, entry];
     const pruned = prune(next, nowMs);
-    this.save(pruned);
+    try {
+      this.save(pruned);
+    } finally {
+      if (options.followDecision === true) this.#entries = pruned;
+    }
     this.#entries = pruned;
   }
 
@@ -115,18 +145,30 @@ export abstract class CommandJournal {
   }
 }
 
-/** Keeps the last 64 entries and every entry younger than 24 hours, within the hard cap. */
+/**
+ * Retention (§16.1): every entry younger than 24 hours and the last 64 are kept, and
+ * so is every entry a redelivery could still turn into an actuation: an execution
+ * not settled, an uncertainty not reported, or a command not yet expired, unless
+ * it was refused for a reason that cannot change. Above the bound, refusals that can
+ * never actuate go first (oldest first); an executed command is never forgotten
+ * within the minimums. If the bound still cannot hold, the journal is full.
+ */
 function prune(entries: JournalEntry[], nowMs: number): JournalEntry[] {
-  const keep = entries.filter(
-    (e, i) =>
-      e.state === 'EXECUTING' ||
-      e.pendingReport === true ||
-      i >= entries.length - JOURNAL_MIN_ENTRIES ||
-      nowMs - e.recordedAt < JOURNAL_MIN_RETENTION_MS,
+  const protectedEntry = (e: JournalEntry) =>
+    e.state === 'EXECUTING' ||
+    e.pendingReport === true ||
+    (e.expiresAt !== undefined &&
+      nowMs < e.expiresAt &&
+      !(e.state === 'REJECTED' && !e.executed && e.reason !== undefined && STABLE_REJECTIONS.has(e.reason)));
+  const withinMinimums = new Set(
+    entries.filter((e, i) => i >= entries.length - JOURNAL_MIN_ENTRIES || nowMs - e.recordedAt < JOURNAL_MIN_RETENTION_MS),
   );
+  const keep = entries.filter((e) => protectedEntry(e) || withinMinimums.has(e));
   while (keep.length > JOURNAL_MAX_ENTRIES) {
-    const oldest = keep.findIndex((e) => e.state !== 'EXECUTING' && e.pendingReport !== true);
-    if (oldest < 0) break;
+    const oldest = keep.findIndex((e) => !protectedEntry(e) && !e.executed);
+    if (oldest < 0) {
+      throw new CommandJournalFullError(`command journal full: ${keep.length} entries still protect against a second actuation`);
+    }
     keep.splice(oldest, 1);
   }
   return keep;
@@ -156,7 +198,7 @@ export function defaultCommandJournalFile(deviceKey: string, env: NodeJS.Process
 interface JournalFile {
   version: 1;
   deviceKey: string;
-  entries: Array<Omit<JournalEntry, 'recordedAt'> & { recordedAt: string }>;
+  entries: Array<Omit<JournalEntry, 'recordedAt' | 'expiresAt'> & { recordedAt: string; expiresAt?: string }>;
 }
 
 const STATES: readonly string[] = ['EXECUTING', 'ACKNOWLEDGED', 'REJECTED'];
@@ -205,9 +247,11 @@ export class FileCommandJournal extends CommandJournal {
         (e.reason === undefined || (COMMAND_REJECT_REASONS as readonly string[]).includes(e.reason)) &&
         (e.detail === undefined || typeof e.detail === 'string') &&
         (e.pendingReport === undefined || typeof e.pendingReport === 'boolean') &&
+        (e.expiresAt === undefined || !Number.isNaN(Date.parse(String(e.expiresAt)))) &&
         !Number.isNaN(recordedAt);
       if (!valid) throw new CommandJournalError(`command journal ${this.path}: invalid entry ${i}`);
-      return { ...e, recordedAt };
+      const { expiresAt, ...rest } = e;
+      return { ...rest, recordedAt, ...(expiresAt !== undefined ? { expiresAt: Date.parse(String(expiresAt)) } : {}) };
     });
   }
 
@@ -215,7 +259,11 @@ export class FileCommandJournal extends CommandJournal {
     const file: JournalFile = {
       version: 1,
       deviceKey: this.deviceKey,
-      entries: entries.map((e) => ({ ...e, recordedAt: new Date(e.recordedAt).toISOString() })),
+      entries: entries.map(({ expiresAt, ...e }) => ({
+        ...e,
+        recordedAt: new Date(e.recordedAt).toISOString(),
+        ...(expiresAt !== undefined ? { expiresAt: new Date(expiresAt).toISOString() } : {}),
+      })),
     };
     const temporary = `${this.path}.${process.pid}.tmp`;
     try {

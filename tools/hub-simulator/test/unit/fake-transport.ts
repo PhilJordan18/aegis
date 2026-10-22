@@ -73,6 +73,10 @@ export class FakeTransport implements Transport {
     return true;
   }
 
+  withholdAcknowledgements(): void {
+    this.#abandoned = true;
+  }
+
   setWill(will: WillMessage): void {
     this.will = will;
   }

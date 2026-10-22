@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   CommandJournalError,
+  CommandJournalFullError,
   FileCommandJournal,
   JOURNAL_MAX_ENTRIES,
   MemoryCommandJournal,
@@ -42,11 +43,38 @@ describe('retention (doc 10 §16.1)', () => {
     expect(journal.entries()[0]!.recordedAt).toBe(T0 + 7);
   });
 
-  it(`never grows beyond ${JOURNAL_MAX_ENTRIES} entries`, () => {
+  it(`forgets refusals that can never actuate first, oldest first, to stay within ${JOURNAL_MAX_ENTRIES}`, () => {
     const journal = new MemoryCommandJournal();
-    for (let i = 0; i < JOURNAL_MAX_ENTRIES + 10; i++) journal.record(entry({ recordedAt: T0 + i }));
+    const executed = entry({ expiresAt: T0 + 3_600_000 });
+    journal.record(executed);
+    const stable = () => entry({ state: 'REJECTED', executed: false, reason: 'WRONG_LOCKER', expiresAt: T0 + 120_000 });
+    const first = stable();
+    journal.record(first);
+    for (let i = 0; i < JOURNAL_MAX_ENTRIES; i++) journal.record(stable());
     expect(journal.entries()).toHaveLength(JOURNAL_MAX_ENTRIES);
-    expect(journal.entries()[0]!.recordedAt).toBe(T0 + 10);
+    expect(journal.findByMessageId(executed.messageId)).toBeDefined();
+    expect(journal.findByMessageId(first.messageId)).toBeUndefined();
+  });
+
+  it('refuses to grow rather than forget an executed command or a refusal that could still change', () => {
+    const journal = new MemoryCommandJournal();
+    const transient = entry({ state: 'REJECTED', executed: false, reason: 'CELL_UNREACHABLE', expiresAt: T0 + 120_000 });
+    journal.record(transient);
+    for (let i = 1; i < JOURNAL_MAX_ENTRIES; i++) journal.record(entry({ recordedAt: T0 + i, expiresAt: T0 + i + 120_000 }));
+    expect(() => journal.record(entry({ recordedAt: T0 + 2_000 }))).toThrow(CommandJournalFullError);
+    expect(journal.entries()).toHaveLength(JOURNAL_MAX_ENTRIES);
+    expect(journal.findByMessageId(transient.messageId)).toBeDefined();
+  });
+
+  it('forgets an executed command only once it expired and left the 24 h and 64-entry minimums', () => {
+    const journal = new MemoryCommandJournal();
+    const longLived = entry({ expiresAt: T0 + 3 * DAY });
+    const expired = entry({ expiresAt: T0 + 120_000 });
+    journal.record(longLived);
+    journal.record(expired);
+    for (let i = 0; i < 64; i++) journal.record(entry({ recordedAt: T0 + 2 * DAY + i }));
+    expect(journal.findByMessageId(longLived.messageId)).toBeDefined();
+    expect(journal.findByMessageId(expired.messageId)).toBeUndefined();
   });
 
   it('replaces an entry in place when its command changes state', () => {
@@ -59,12 +87,19 @@ describe('retention (doc 10 §16.1)', () => {
     expect(journal.entries()[0]!.messageId).toBe(e.messageId);
   });
 
-  it('keeps its previous content when a write fails', () => {
+  it('keeps its previous content when a write fails, unless told to follow a decision already taken', () => {
     const journal = new MemoryCommandJournal();
     journal.record(entry());
     journal.failWrites = true;
     expect(() => journal.record(entry())).toThrow(CommandJournalError);
     expect(journal.entries()).toHaveLength(1);
+    const decided = entry();
+    expect(() => journal.record(decided, T0, { followDecision: true })).toThrow(CommandJournalError);
+    expect(journal.findByMessageId(decided.messageId)).toEqual(decided);
+    // The durable copy did not change: a reboot reads it back without that entry.
+    journal.failWrites = false;
+    journal.recover(T0);
+    expect(journal.findByMessageId(decided.messageId)).toBeUndefined();
   });
 });
 
@@ -114,7 +149,7 @@ describe('FileCommandJournal', () => {
     const file = join(dir, 'nested', 'journal.json');
     const first = new FileCommandJournal(file, 'hub-1');
     first.recover(T0);
-    const e = entry({ state: 'REJECTED', executed: false, reason: 'COMMAND_EXPIRED', detail: 'expired' });
+    const e = entry({ state: 'REJECTED', executed: false, reason: 'COMMAND_EXPIRED', detail: 'expired', expiresAt: T0 - 1_000 });
     first.record(e);
     expect(statSync(file).mode & 0o777).toBe(0o600);
     const second = new FileCommandJournal(file, 'hub-1');
