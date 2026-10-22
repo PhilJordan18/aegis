@@ -116,10 +116,30 @@ versionné utilisé pour démarrer l'API, sans être affichés :
 - `AEGIS_LIVE_TECHNICIAN_EMAIL` et `AEGIS_LIVE_ADMIN_EMAIL` remplacent les
   adresses par défaut (`technician@aegis.demo`, `admin@aegis.demo`).
 
+**En CI (CI-02, #67)** : le simulateur et le résumé ne dépendent pas de la
+machine.
+
+```bash
+IOS_DESTINATION="$(scripts/ios-destination.sh)" scripts/ios-test.sh standalone
+```
+
+- `scripts/ios-destination.sh` choisit le premier simulateur disponible parmi
+  `IOS_SIMULATOR_NAMES` (défaut : iPhone 17, iPhone 16, iPhone 15), sur son
+  runtime iOS le plus récent, et l'annonce sur la sortie d'erreur; il échoue
+  si aucun n'existe.
+- Chaque recette écrit `build/results/<recette>-summary.json` (nombres de
+  tests exécutés, réussis, échoués et ignorés, version de Xcode, SDK du
+  simulateur, simulateur et durée) et, sous GitHub Actions, ajoute un tableau
+  au résumé de l'étape (`GITHUB_STEP_SUMMARY`). Le dossier `build/results/`
+  (bundles `.xcresult` et résumés) est l'artefact à conserver.
+- Le Xcode d'un runner hébergé est une configuration testée distincte de
+  celle du Mac de développement.
+
 Variables facultatives : `IOS_DESTINATION` (défaut
 `platform=iOS Simulator,name=iPhone 17,OS=latest`, à adapter aux simulateurs
 de la machine), `IOS_DERIVED_DATA` (défaut `build/DerivedData`) et
-`IOS_RESULTS_DIR` (défaut `build/results`, où sont écrits les `.xcresult`).
+`IOS_RESULTS_DIR` (défaut `build/results`, où sont écrits les `.xcresult` et
+les résumés).
 Exemple sur la cible minimale :
 
 ```bash
@@ -238,6 +258,8 @@ AegisMobileTests/    Swift Testing : configuration, client, états de l'écran,
                      traductions compilées, API réelle
 AegisMobileUITests/  XCUITest : erreur réseau et nouvelle tentative (FR, EN), service réel
 scripts/ios-test.sh      recettes standalone et live
+scripts/ios-destination.sh  choix du simulateur disponible (CI)
+scripts/summarize-results.py  contrôle et résumé des résultats (JSON, GitHub)
 scripts/check-strings.py contrôle du String Catalog
 ```
 
