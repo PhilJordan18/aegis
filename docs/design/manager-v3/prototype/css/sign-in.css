@@ -1,0 +1,98 @@
+/* Connexion Web v3 — composition de bureau : en-tête (marque, langue), promesse typographique à gauche,
+   carte de connexion à droite. Aucune illustration; la lumière localisée n'accompagne que la promesse.
+   Carte ancrée en haut : l'apparition d'une alerte ne déplace ni les champs ni le bouton. */
+.si { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+
+.si__header {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 20px clamp(20px, 3vw, 40px); border-bottom: 1px solid var(--ag-border);
+}
+.si__tools { display: flex; align-items: center; gap: 16px; }
+.si__home { padding: 6px 4px; }
+.si__lang { display: flex; gap: 4px; padding: 3px; border: 1px solid var(--ag-control-border); border-radius: 9px; }
+.si__lang button {
+  min-width: 40px; min-height: 36px; padding: 0 8px; border: 0; border-radius: 6px; cursor: pointer;
+  background: transparent; color: var(--ag-muted); font-size: .8125rem; font-weight: 500;
+}
+.si__lang button:focus-visible { outline-offset: 1px; } /* le focus reste dans l'écart de 4 px entre les deux boutons */
+.si__lang button[aria-pressed="true"] { background: var(--ag-text); color: var(--ag-bg); }
+
+.si__content {
+  flex: 1; position: relative;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 420px); gap: clamp(32px, 5vw, 72px);
+  align-items: start; align-content: start;
+  padding: clamp(40px, 9vh, 96px) clamp(24px, 4.5vw, 72px) 56px;
+}
+.si__content::before { /* lumière localisée : accompagne la promesse, n'éclaire pas la carte */
+  content: ""; position: absolute; pointer-events: none; left: -8%; top: -4%; width: 62%; height: 78%;
+  background: radial-gradient(ellipse at 38% 42%, var(--ag-halo), transparent 68%);
+}
+.si__intro { position: relative; padding-top: 6px; }
+.si__eyebrow { font-size: .75rem; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--ag-muted); line-height: 1.5; }
+.si__intro .si__eyebrow { margin-bottom: 22px; }
+.si__promise {
+  font-size: clamp(2.75rem, 0.9rem + 4.4vw, 4rem); line-height: 1.04; font-weight: 500; letter-spacing: -0.06em;
+}
+.si__promise span { color: var(--ag-accent); }
+.si__description { margin-top: 24px; max-width: 24rem; font-size: 1rem; line-height: 1.6; color: var(--ag-muted); }
+.si__rule { width: 38px; height: 2px; margin-top: 30px; background: var(--ag-accent); }
+.si__flag { margin-top: 28px; }
+
+.si__card {
+  position: relative; width: 100%; max-width: 420px; justify-self: end;
+  padding: 32px; background: var(--ag-panel); border: 1px solid var(--ag-border); border-radius: 18px;
+  box-shadow: 0 16px 48px rgb(0 0 0 / .07);
+}
+:root[data-theme="dark"] .si__card { box-shadow: 0 16px 48px rgb(0 0 0 / .28); }
+.si__eyebrow--card { margin-bottom: 10px; }
+.si__title { font-size: 1.875rem; line-height: 1.2; font-weight: 600; letter-spacing: -0.035em; outline: 0; }
+.si__sub { margin-top: 6px; font-size: .875rem; line-height: 1.55; color: var(--ag-muted); }
+.si__form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin-top: 22px; }
+.si__submit { margin-top: 14px; }
+.si__hint { margin-top: 10px; text-align: center; font-size: .875rem; color: var(--ag-muted); }
+.si__alert:not(:empty) { margin-top: 16px; }
+.si__alert--top-mode:not(:empty) { margin: 18px 0 0; }
+.si__note {
+  display: flex; gap: 8px; align-items: flex-start; margin-top: 16px;
+  font-size: .8125rem; line-height: 1.5; color: var(--ag-muted);
+}
+.si__note svg { width: 16px; height: 16px; flex: none; margin-top: 2px; }
+.si__who { margin: 18px 0 20px; font-size: .9375rem; color: var(--ag-muted); overflow-wrap: anywhere; }
+.si__who .ag-tnum { color: var(--ag-text); font-weight: 500; }
+
+.si__foot {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px 18px; flex-wrap: wrap;
+  padding: 20px clamp(20px, 3vw, 40px); border-top: 1px solid var(--ag-border);
+  font-size: .8125rem; line-height: 1.5; color: var(--ag-muted);
+}
+
+html[data-signature="off"] .si__intro { visibility: hidden; }
+html[data-notes="off"] .si__flag { display: none; }
+
+@media (max-width: 899px) {
+  .si__content { grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); gap: 28px; padding: 48px 28px 40px; }
+  .si__promise { font-size: clamp(2.5rem, 0.6rem + 4.6vw, 3.25rem); letter-spacing: -0.055em; }
+  .si__card { padding: 26px; }
+}
+/* Petit écran : le formulaire passe en premier, la promesse disparaît (maquette de Philippe). */
+@media (max-width: 719px) {
+  .si__content { display: block; padding: 28px 20px 32px; }
+  .si__content::before { display: none; }
+  .si__intro { display: none; }
+  .si__card { max-width: 440px; margin: 0 auto; padding: 24px; }
+  .si__title { font-size: 1.75rem; }
+  .si__header { padding: 16px 20px; }
+  .si__foot { flex-direction: column; align-items: flex-start; padding: 20px; }
+}
+@media (max-width: 479px) {
+  .si__home { display: none; } /* le lien de la marque mène déjà à l'accueil */
+  .si__lang button { min-width: 38px; }
+  .ag-brand__app { padding-left: 9px; }
+}
+@media (max-width: 359px) {
+  .si__header { padding: 14px 12px; }
+  .si__content { padding: 20px 12px 28px; }
+  .si__card { padding: 20px; }
+  .ag-brand__app { display: none; }
+}
+@media (pointer: coarse) { .si__lang button { min-width: 44px; min-height: 44px; } }

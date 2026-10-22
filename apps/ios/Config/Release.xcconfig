@@ -1,0 +1,15 @@
+#include "Shared.xcconfig"
+
+// No demonstration host is fixed yet. Set an HTTPS address in Local.xcconfig;
+// an empty value makes the app report a configuration error instead of guessing.
+AEGIS_API_BASE_URL =
+
+// Coverage instrumentation belongs to Debug test runs only.
+ENABLE_CODE_COVERAGE = NO
+DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
+ENABLE_NS_ASSERTIONS = NO
+MTL_ENABLE_DEBUG_INFO = NO
+SWIFT_COMPILATION_MODE = wholemodule
+VALIDATE_PRODUCT = YES
+
+#include? "Local.xcconfig"

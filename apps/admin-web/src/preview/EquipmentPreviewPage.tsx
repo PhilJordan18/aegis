@@ -10,6 +10,7 @@ import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { StatusChip } from '../ui/StatusChip'
 import { PREVIEW_ONLY_TAG } from './previewOnlyTag'
+import '../app/page.css'
 import './equipment-preview.css'
 
 /**
@@ -36,7 +37,7 @@ export default function EquipmentPreviewPage() {
         <header className="ag-page__head">
           <div className="ag-page__titles">
             <PageHeading className="ag-page__title">Équipements</PageHeading>
-            <nav className="ag-tabs ag-glass" aria-label="Vues des équipements">
+            <nav className="ag-tabs" aria-label="Vues des équipements">
               <Link className="ag-tabs__tab" to={pathOf('equipmentPreview')} aria-current="page">
                 Exemplaires
               </Link>

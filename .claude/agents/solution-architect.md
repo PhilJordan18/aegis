@@ -1,8 +1,8 @@
 ---
 name: solution-architect
 description: Use for Aegis architecture, domain boundaries, state machines, cross-component contracts, ADRs, scope impact, and vertical-slice planning.
-model: inherit
-effort: high
+model: claude-opus-5-5
+effort: xhigh
 color: purple
 skills:
   - aegis-core
@@ -16,7 +16,8 @@ You are the Aegis solution architect.
 
 In a normal subagent, the declared skills are preloaded.
 
-When running as an Agent Team teammate, invoke these skills before analysis:
+When running as an Agent Team teammate or as the main session (including
+`claude --agent`), invoke these skills before analysis:
 
 - `aegis-core`
 - `aegis-contracts`

@@ -3,7 +3,9 @@
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de révision :** 23 septembre 2026
-**Version :** 1.3 — décisions logicielles P0 et données de suivi des clients
+**Version :** 1.3 — décisions logicielles P0 et données de suivi des clients  
+**Mise à jour ciblée :** 21 octobre 2026 — `Retry-After` de la connexion (§10.2) et langue de la requête (§6.4), comportement existant documenté (#80)  
+**Mise à jour ciblée :** 21 octobre 2026 — idempotence REST durable : contenu d’une réponse rejouée (§6.2, §20.2), attente bornée d’une clé en cours et code `IDEMPOTENCY_REQUEST_IN_PROGRESS` (§20.2, §21) (#64)
 
 ---
 
@@ -170,9 +172,19 @@ Une réponse rejouée ajoute :
 Idempotency-Replayed: true
 ```
 
+Elle reprend le statut, le contenu JSON et les en-têtes stables de la réponse originale (§20.2). Son `X-Request-Id` reste celui de la tentative courante (§6.1). Une première exécution ne porte jamais `Idempotency-Replayed`.
+
 ### 6.3 Localisation d’une nouvelle ressource
 
 Une réponse 201 ou 202 retourne Location lorsque la ressource possède une route de lecture.
+
+### 6.4 Langue de la requête
+
+Un client peut envoyer `Accept-Language`; iOS le fait automatiquement. L’API ne
+modifie selon cet en-tête ni son comportement, ni le statut, ni les codes d’erreur
+ou de violation, ni ses en-têtes. Les clients affichent leurs propres messages à
+partir des codes et n’affichent jamais `detail` (voir la convention de
+localisation, `docs/localisation/convention.md`).
 
 ---
 
@@ -543,6 +555,13 @@ Réponse 200 :
 
 Erreurs : 400 VALIDATION_ERROR, 401 AUTH_INVALID_CREDENTIALS, 429 RATE_LIMITED.
 
+Limitation : au plus cinq tentatives par minute pour une même adresse cliente et
+un même courriel, sans tenir compte de la casse. Au-delà, la réponse
+`429 RATE_LIMITED` porte l’en-tête `Retry-After` en secondes (delta-seconds) :
+un entier de 1 à 60, arrondi à la seconde supérieure, jamais une date HTTP. Le
+client affiche ce délai une seule fois et seulement à partir d’une valeur valide;
+sans valeur valide, il indique seulement qu’il y a eu trop de tentatives.
+
 ### 10.3 GET /auth/me
 
 Retourne 200 avec le profil minimal. Cette route permet au client de réhydrater son contexte sans décoder le jeton.
@@ -907,7 +926,7 @@ Au cinquième secret erroné soumis par l’initiateur, le défi est invalidé e
 
 Accessible au technicien et à l’administrateur. Retourne LockerStatusView.
 
-ONLINE signifie qu’un heartbeat valide date de 30 secondes ou moins. OFFLINE signifie plus de 30 secondes. UNKNOWN signifie qu’aucune preuve suffisante n’existe.
+ONLINE signifie que le heartbeat de référence du hub, valide, date de 30 secondes ou moins et que sa connexion MQTT n’a pas été fermée par un OFFLINE. OFFLINE signifie l’inverse. UNKNOWN signifie qu’aucun heartbeat valide n’a été reçu depuis le provisionnement du hub. Les règles sont celles du document 10, §15.3.
 
 Cette lecture ne garantit pas qu’une ouverture sera autorisée : l’autorisation recalcule toutes les gardes dans sa transaction.
 
@@ -1033,11 +1052,25 @@ Le curseur encode au minimum occurredAt et id. Le client le traite comme opaque.
 |---|---|
 | Nouvelle clé et requête valide | Exécution puis réponse enregistrée |
 | Même clé, même route, même corps | Réponse originale exacte + Idempotency-Replayed |
-| Même clé, même route, corps différent | 409 IDEMPOTENCY_KEY_REUSED |
-| Clé absente sur route obligatoire | 400 IDEMPOTENCY_KEY_REQUIRED |
-| Première transaction encore bloquée au-delà du délai HTTP | 409 IDEMPOTENCY_REQUEST_IN_PROGRESS avec Retry-After |
+| Même clé, même route, corps ou paramètre de chemin différent | 409 IDEMPOTENCY_KEY_REUSED |
+| Clé absente ou vide sur route obligatoire | 400 IDEMPOTENCY_KEY_REQUIRED |
+| Clé de plus de 128 caractères | 400 VALIDATION_ERROR, violation sur `Idempotency-Key` |
+| Première transaction encore en cours après 5 secondes d’attente | 409 IDEMPOTENCY_REQUEST_IN_PROGRESS avec Retry-After, sans effet |
+| Clé expirée, 24 heures après sa création | Traitée comme une nouvelle clé |
 
-La canonicalisation du hash inclut la méthode, la route logique, les paramètres de chemin et le corps JSON normalisé. Elle exclut X-Request-Id.
+« Réponse originale exacte » signifie :
+
+- le même statut HTTP;
+- le même contenu JSON : les deux corps donnent le même document une fois analysés, sans garantie sur l’ordre des clés ni sur les espaces (document 08, §4.10);
+- les mêmes en-têtes stables : `Content-Type: application/json` et, pour une réponse 201, le même `Location`.
+
+`X-Request-Id` n’en fait pas partie : chaque tentative HTTP garde son propre identifiant de corrélation. Le rejeu ajoute `Idempotency-Replayed: true`.
+
+L’authentification et l’autorisation de la route sont vérifiées avant toute recherche de clé. Un appelant sans droit reçoit le 401 ou le 403 habituel, jamais une réponse enregistrée; une clé n’est jamais partagée entre deux utilisateurs.
+
+Pour les routes du catalogue de cette liste, une erreur métier n’est pas enregistrée : une nouvelle tentative avec la même clé réexécute la requête contre l’état courant et peut obtenir un autre résultat si cet état a changé. D’autres routes peuvent fixer une règle différente, par exemple l’autorisation locale (§15.5); voir le document 08, §8.1.
+
+La canonicalisation du hash inclut la méthode, la route logique, les paramètres de chemin et le corps JSON normalisé. Elle exclut X-Request-Id. Les routes du §20.1 ne prennent aucun paramètre de requête; une future route idempotente qui en accepterait devra les inclure dans le hash.
 
 Les PUT sont idempotents par définition. Une répétition identique ne crée pas un second effet métier ou audit inutile.
 
@@ -1059,6 +1092,7 @@ Les PUT sont idempotents par définition. Une répétition identique ne crée pa
 | 403 | ASSET_ACCESS_DENIED | Niveau d’accès insuffisant |
 | 404 | RESOURCE_NOT_FOUND | Ressource absente ou non visible |
 | 409 | IDEMPOTENCY_KEY_REUSED | Clé réutilisée avec autre intention |
+| 409 | IDEMPOTENCY_REQUEST_IN_PROGRESS | Requête de même clé encore en cours, avec Retry-After |
 | 409 | CONCURRENT_MODIFICATION | Course détectée |
 | 409 | ASSET_ALREADY_RESERVED | Réservation active existante |
 | 409 | USER_ALREADY_HAS_ACTIVE_RESERVATION | Limite P0 atteinte |

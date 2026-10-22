@@ -78,12 +78,15 @@ test.describe('flow:', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Équipements' })).toBeFocused()
   })
 
-  test('flow: sign-in tab order starts at « Accueil », then the brand, then the email field', async ({ page }) => {
+  test('flow: sign-in tab order is the brand, « Accueil », the language switch, then the email field', async ({ page }) => {
     await page.goto('/connexion')
     await settle(page)
-    await page.getByRole('link', { name: 'Accueil', exact: true }).focus()
+    await page.getByRole('link', { name: 'Aegis Manager, accueil' }).focus()
     await page.keyboard.press('Tab')
-    await expect(page.getByRole('link', { name: 'Aegis Manager, accueil' })).toBeFocused()
+    await expect(page.getByRole('link', { name: 'Accueil', exact: true })).toBeFocused()
+    await page.keyboard.press('Tab')
+    // One tab stop for the whole radio group: the checked option (French here, from the browser language).
+    await expect(page.getByRole('radio', { name: 'Français' })).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(page.getByLabel('Adresse courriel')).toBeFocused()
   })
@@ -97,7 +100,7 @@ test.describe('flow:', () => {
     await submitSignIn(page)
     const heading = page.getByRole('heading', { level: 1, name: 'Accès réservé aux administrateurs' })
     await expect(heading).toBeFocused()
-    await expect(page.getByRole('alert')).toContainText("Ce compte technicien s'utilise dans l'application Aegis.")
+    await expect(page.getByRole('alert')).toContainText("Ce compte technicien s'utilise dans Aegis Mobile.")
     await expect(page.locator('form')).toHaveCount(0)
     expect(requests.slice(before)).toEqual([])
     await page.getByRole('button', { name: 'Se connecter avec un autre compte' }).click()
@@ -158,19 +161,13 @@ test.describe('flow:', () => {
     expect(await page.evaluate(() => document.fonts.check('600 16px "Geist Variable"'))).toBe(true)
   })
 
-  test('flow: reduced transparency makes the glass opaque and removes the decor', async ({ page }) => {
-    const cdp = await page.context().newCDPSession(page)
-    await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }] })
-    await page.goto('/apercu/equipements')
-    await settle(page)
-    const sidebar = page.getByRole('navigation', { name: 'Sections' })
-    const style = await sidebar.evaluate((element) => {
-      const computed = getComputedStyle(element)
-      return { backdrop: computed.backdropFilter, background: computed.backgroundColor }
-    })
-    expect(style.backdrop).toBe('none')
-    expect(style.background).toBe('rgb(247, 249, 254)')
-    await expect(page.locator('.ag-shell__bg')).toBeHidden()
+  test('flow: no surface uses a blurred backdrop (no glass)', async ({ page }) => {
+    for (const path of ['/', '/connexion', '/apercu/equipements']) {
+      await page.goto(path)
+      await settle(page)
+      const blurred = await page.evaluate(() => [...document.querySelectorAll('*')].filter((element) => getComputedStyle(element).backdropFilter !== 'none').length)
+      expect(blurred, `${path}: elements with a backdrop filter`).toBe(0)
+    }
   })
 
   test('flow: reduced motion stops the busy indicator', async ({ page }) => {
@@ -212,54 +209,4 @@ test.describe('flow:', () => {
     await page.keyboard.press('Enter')
     await expect(page.locator('#contenu')).toBeFocused()
   })
-})
-
-// Review R1: the signature lit cell is either absent or fully visible, inside its
-// container and the viewport, and at least 16 px from the card or panel.
-const LIT_CELL_WIDTHS = [1440, 1280, 1024, 768, 640, 480, 390, 320]
-const LIT_CELL_PAGES = [
-  { name: 'landing', path: '/', container: '.ag-atmos', card: '.ag-atmos__figure', expectLitBelow768: true },
-  { name: 'connexion', path: '/connexion', container: '.ag-signin', card: '.ag-signin__panel', expectLitBelow768: false },
-]
-
-test.describe('flow: lit cell geometry', () => {
-  for (const pageCase of LIT_CELL_PAGES) {
-    for (const width of LIT_CELL_WIDTHS) {
-      test(`flow: lit cell ${pageCase.name} at ${width} px`, async ({ page }) => {
-        await page.setViewportSize({ width, height: width <= 390 ? 720 : 900 })
-        await page.goto(pageCase.path)
-        await settle(page)
-        const geometry = await page.evaluate(
-          ({ container, card }) => {
-            const rect = (element: Element) => element.getBoundingClientRect().toJSON() as DOMRect
-            const lit = [...document.querySelectorAll('[data-lit-layer] i')].filter(
-              (element) => getComputedStyle(element).visibility === 'visible' && element.getBoundingClientRect().width > 0,
-            )
-            const containerElement = document.querySelector(container)
-            const cardElement = document.querySelector(card)
-            return {
-              count: lit.length,
-              cell: lit[0] ? rect(lit[0]) : null,
-              container: containerElement ? rect(containerElement) : null,
-              card: cardElement ? rect(cardElement) : null,
-              viewport: { width: document.documentElement.clientWidth },
-            }
-          },
-          { container: pageCase.container, card: pageCase.card },
-        )
-        const expected = width >= 768 || pageCase.expectLitBelow768 ? 1 : 0
-        expect(geometry.count).toBe(expected)
-        if (expected === 0) return
-
-        const { cell, container, card, viewport } = geometry
-        if (!cell || !container || !card) throw new Error('missing geometry')
-        expect(cell.left).toBeGreaterThanOrEqual(Math.max(container.left, 0))
-        expect(cell.right).toBeLessThanOrEqual(Math.min(container.right, viewport.width))
-        expect(cell.top).toBeGreaterThanOrEqual(container.top)
-        expect(cell.bottom).toBeLessThanOrEqual(container.bottom)
-        const gap = Math.max(card.left - cell.right, cell.left - card.right, card.top - cell.bottom, cell.top - card.bottom)
-        expect(gap, 'distance between the lit cell and the card').toBeGreaterThanOrEqual(16)
-      })
-    }
-  }
 })

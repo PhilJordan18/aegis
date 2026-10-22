@@ -1,17 +1,20 @@
-import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { formattersFor } from '../../i18n/format'
+import { fr } from '../../i18n/messages/fr'
 import { installMatchMedia } from '../../test/matchMedia'
 import { renderWithProviders } from '../../test/renderApp'
 import type { AuthGateway, GatewayResult } from './authGateway'
 import type { LoginResponse, UserProfile } from './contract'
+import { createHttpAuthGateway } from './httpAuthGateway'
 import { createSessionStore } from './session'
-import { signInCopy } from './signInCopy'
 import { SignInPage } from './SignInPage'
 import { SIGN_IN_TIMEOUT_MS, validateSignIn } from './signInValidation'
 import { adminProfile, httpProblem, loginOk, problemBody, technicianProfile } from './testFixtures'
 
-const { approved, proposed } = signInCopy
+const t = fr.signIn
+const secondsFr = (value: number) => t.rateLimitedBody({ duration: formattersFor('fr').seconds(value) })
 const SERVER_TEXT = 'SERVER-SUPPLIED TEXT THAT MUST NEVER BE SHOWN'
 
 function gatewayReturning(result: GatewayResult<LoginResponse> | Promise<GatewayResult<LoginResponse>>) {
@@ -20,9 +23,9 @@ function gatewayReturning(result: GatewayResult<LoginResponse> | Promise<Gateway
   return { gateway: { signIn, currentProfile } satisfies AuthGateway, signIn, currentProfile }
 }
 
-const emailField = () => screen.getByLabelText(approved.emailLabel) as HTMLInputElement
-const passwordField = () => screen.getByLabelText(approved.passwordLabel, { selector: 'input' }) as HTMLInputElement
-const submitButton = () => screen.getByRole('button', { name: new RegExp(`^(${approved.submit}|${proposed.submitting})$`) })
+const emailField = () => screen.getByLabelText(t.emailLabel) as HTMLInputElement
+const passwordField = () => screen.getByLabelText(t.passwordLabel, { selector: 'input' }) as HTMLInputElement
+const submitButton = () => screen.getByRole('button', { name: new RegExp(`^(${t.submit}|${t.submitting})$`) })
 
 async function fillAndSubmit(user = userEvent.setup(), email = 'admin@aegis.test', password = 'mot-de-passe-test') {
   await user.type(emailField(), email)
@@ -50,10 +53,10 @@ afterEach(() => {
 })
 
 describe('validateSignIn', () => {
-  it('returns the proposed messages for each client error', () => {
-    expect(validateSignIn('', '')).toEqual({ email: proposed.emailRequired, password: proposed.passwordRequired })
-    expect(validateSignIn('admin@aegis', 'x')).toEqual({ email: proposed.emailInvalid })
-    expect(validateSignIn(`${'a'.repeat(315)}@b.test`, 'x')).toEqual({ email: proposed.emailTooLong })
+  it('returns a code for each client error', () => {
+    expect(validateSignIn('', '')).toEqual({ email: 'emailRequired', password: 'passwordRequired' })
+    expect(validateSignIn('admin@aegis', 'x')).toEqual({ email: 'emailInvalid' })
+    expect(validateSignIn(`${'a'.repeat(315)}@b.test`, 'x')).toEqual({ email: 'emailTooLong' })
     expect(validateSignIn('  admin@aegis.demo ', 'x')).toEqual({})
   })
 })
@@ -61,13 +64,13 @@ describe('validateSignIn', () => {
 describe('SignInPage — idle and client validation', () => {
   it('renders the approved structure and focuses the email field on arrival', () => {
     renderWithProviders(<SignInPage afterSignInPath="/" />)
-    expect(screen.getByRole('heading', { level: 1, name: approved.heading })).toBeDefined()
+    expect(screen.getByRole('heading', { level: 1, name: t.heading })).toBeDefined()
     expect(document.activeElement).toBe(emailField())
     expect(emailField().getAttribute('autocomplete')).toBe('username')
     expect(emailField().getAttribute('autocapitalize')).toBe('none')
     expect(passwordField().getAttribute('autocomplete')).toBe('current-password')
     expect(passwordField().hasAttribute('maxlength')).toBe(false)
-    expect(screen.getByText(approved.accountNote)).toBeDefined()
+    expect(screen.getByText(t.accountNote)).toBeDefined()
     expect(screen.queryByRole('alert')).toBeNull()
     expect(screen.queryByText(/Créer un compte|Mot de passe oublié/)).toBeNull()
   })
@@ -81,12 +84,64 @@ describe('SignInPage — idle and client validation', () => {
     expect(signIn).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(emailField())
     expect(emailField().getAttribute('aria-invalid')).toBe('true')
-    expect(describedBy(emailField())).toBe(proposed.emailRequired)
-    expect(describedBy(passwordField())).toBe(proposed.passwordRequired)
+    expect(describedBy(emailField())).toBe(t.fieldError.emailRequired)
+    expect(describedBy(passwordField())).toBe(t.fieldError.passwordRequired)
     expect(screen.queryByRole('alert')).toBeNull()
 
     await user.type(emailField(), 'admin@aegis.demo')
     expect(emailField().hasAttribute('aria-invalid')).toBe(false)
+  })
+})
+
+describe('SignInPage — structure of the v3 entry', () => {
+  it('uses persistent labels and no placeholder', () => {
+    renderWithProviders(<SignInPage afterSignInPath="/" />)
+    for (const field of [emailField(), passwordField()]) {
+      expect(field.hasAttribute('placeholder')).toBe(false)
+      expect(document.querySelector(`label[for="${field.id}"]`)).not.toBeNull()
+    }
+  })
+
+  it('shows the brand beyond the form: header brand with « Manager », the signature, the tagline and the description', () => {
+    renderWithProviders(<SignInPage afterSignInPath="/" />)
+    const header = screen.getByRole('banner')
+    expect(within(header).getByRole('link', { name: fr.brand.homeLabel }).textContent).toBe('aegisManager')
+    expect(screen.getByText(fr.brand.tagline)).toBeDefined()
+    expect(screen.getByText(fr.brand.description)).toBeDefined()
+    expect(document.body.textContent).toContain('Prêt. Autorisé. Prouvé.')
+    // The signature is not the page heading: « Connexion » stays the one h1.
+    expect(screen.getAllByRole('heading', { level: 1 }).map((heading) => heading.textContent)).toEqual([t.heading])
+    expect(screen.getByRole('link', { name: t.home })).toBeDefined()
+  })
+
+  it('keeps the card first in the document and the promise after it, so the form comes first for assistive technology', () => {
+    renderWithProviders(<SignInPage afterSignInPath="/" />)
+    const card = document.querySelector('.ag-signin__card') as HTMLElement
+    const intro = document.querySelector('.ag-signin__intro') as HTMLElement
+    expect(card.compareDocumentPosition(intro) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('announces a global error in a live region below the submit button, never above the fields', async () => {
+    const { gateway } = gatewayReturning(httpProblem(401, problemBody(401, 'AUTH_INVALID_CREDENTIALS')))
+    renderWithProviders(<SignInPage afterSignInPath="/" />, { gateway })
+    await fillAndSubmit()
+    const alert = await screen.findByRole('alert')
+    const follows = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(follows(emailField(), alert)).toBe(true)
+    expect(follows(passwordField(), alert)).toBe(true)
+    expect(follows(submitButton(), alert)).toBe(true)
+    expect(alert.closest('.ag-signin__alert')).not.toBeNull()
+    expect(alert.closest('form')).not.toBeNull()
+  })
+
+  it('keeps a field error next to its field and raises no global alert for it', async () => {
+    renderWithProviders(<SignInPage afterSignInPath="/" />)
+    await userEvent.setup().click(submitButton())
+    const emailMessage = screen.getByText(t.fieldError.emailRequired)
+    expect(emailMessage.closest('.ag-field')?.contains(emailField())).toBe(true)
+    expect(screen.queryByRole('alert')).toBeNull()
+    // The line the message occupies is reserved: the slot exists before the error does.
+    expect(document.querySelectorAll('.ag-field__slot').length).toBe(2)
   })
 })
 
@@ -98,12 +153,12 @@ describe('SignInPage — submission', () => {
     const user = await fillAndSubmit()
 
     const button = submitButton()
-    expect(button.textContent).toBe(proposed.submitting)
+    expect(button.textContent).toBe(t.submitting)
     expect(button.getAttribute('aria-disabled')).toBe('true')
     expect(button.hasAttribute('disabled')).toBe(false)
     expect(emailField().readOnly).toBe(true)
     expect(passwordField().readOnly).toBe(true)
-    expect(screen.getByText(proposed.submittingStatus).getAttribute('role')).toBe('status')
+    expect(screen.getByText(t.submittingStatus).getAttribute('role')).toBe('status')
 
     await user.click(button)
     await user.keyboard('{Enter}')
@@ -122,7 +177,7 @@ describe('SignInPage — submission', () => {
     await fillAndSubmit()
 
     const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toBe(`${approved.invalidCredentialsTitle}${proposed.invalidCredentialsBody}`)
+    expect(alert.textContent).toBe(`${t.invalidCredentialsTitle}${t.invalidCredentialsBody}`)
     expect(document.activeElement).toBe(passwordField())
     expect(passwordField().value).toBe('')
     expect(emailField().value).toBe('admin@aegis.test')
@@ -137,7 +192,7 @@ describe('SignInPage — submission', () => {
     await fillAndSubmit()
 
     await waitFor(() => expect(emailField().getAttribute('aria-invalid')).toBe('true'))
-    expect(describedBy(emailField())).toBe(proposed.emailInvalid)
+    expect(describedBy(emailField())).toBe(t.fieldError.emailInvalid)
     expect(document.activeElement).toBe(emailField())
     expect(document.body.textContent).not.toContain(SERVER_TEXT)
     expect(screen.queryByRole('alert')).toBeNull()
@@ -149,7 +204,7 @@ describe('SignInPage — submission', () => {
     renderWithProviders(<SignInPage afterSignInPath="/" />, { gateway })
     await fillAndSubmit()
     await waitFor(() => expect(passwordField().getAttribute('aria-invalid')).toBe('true'))
-    expect(describedBy(passwordField())).toBe(proposed.passwordRejected)
+    expect(describedBy(passwordField())).toBe(t.fieldError.passwordRejected)
     expect(document.activeElement).toBe(passwordField())
   })
 
@@ -158,14 +213,14 @@ describe('SignInPage — submission', () => {
     const { gateway } = gatewayReturning(httpProblem(400, problemBody(400, 'VALIDATION_ERROR', { violations })))
     renderWithProviders(<SignInPage afterSignInPath="/" />, { gateway })
     await fillAndSubmit()
-    expect((await screen.findByRole('alert')).textContent).toBe(proposed.validationUnknown)
+    expect((await screen.findByRole('alert')).textContent).toBe(t.validationUnknown)
   })
 
   it('keeps both values when the service is unreachable', async () => {
     renderWithProviders(<SignInPage afterSignInPath="/" />)
     await fillAndSubmit()
     const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toBe(`${approved.unreachableTitle}${proposed.unreachableBody}`)
+    expect(alert.textContent).toBe(`${t.unreachableTitle}${t.unreachableBody}`)
     expect(alert.className).toContain('ag-alert--warning')
     expect(emailField().value).toBe('admin@aegis.test')
     expect(passwordField().value).toBe('mot-de-passe-test')
@@ -177,7 +232,8 @@ describe('SignInPage — submission', () => {
     await fillAndSubmit()
     const alert = await screen.findByRole('alert')
     expect(alert.querySelector('code')?.textContent).toBe('5f4bc22e-66a4-48ef-8bf3-6e7184d71c30')
-    expect(alert.textContent).toContain(proposed.serviceErrorTitle)
+    expect(alert.textContent).toContain(t.serviceErrorTitle)
+    expect(alert.textContent).toContain('Identifiant de suivi\u00A0: 5f4bc22e-66a4-48ef-8bf3-6e7184d71c30')
     expect(document.body.textContent).not.toContain(SERVER_TEXT)
   })
 
@@ -190,15 +246,15 @@ describe('SignInPage — submission', () => {
     fireEvent.change(emailField(), { target: { value: 'admin@aegis.test' } })
     fireEvent.change(passwordField(), { target: { value: 'x' } })
     await act(async () => fireEvent.click(submitButton()))
-    expect(submitButton().textContent).toBe(proposed.submitting)
+    expect(submitButton().textContent).toBe(t.submitting)
 
     await act(async () => vi.advanceTimersByTime(SIGN_IN_TIMEOUT_MS))
-    expect(screen.getByRole('alert').textContent).toContain(approved.unreachableTitle)
+    expect(screen.getByRole('alert').textContent).toContain(t.unreachableTitle)
   })
 })
 
 describe('SignInPage — rate limit', () => {
-  it('locks submission with a countdown outside the live region, then re-enables and announces once', async () => {
+  it('locks submission, shows the delay once in the alert, then re-enables and announces once', async () => {
     vi.useFakeTimers()
     const { gateway, signIn } = gatewayReturning(httpProblem(429, problemBody(429, 'RATE_LIMITED'), '3'))
     renderWithProviders(<SignInPage afterSignInPath="/" />, { gateway })
@@ -207,34 +263,50 @@ describe('SignInPage — rate limit', () => {
     await act(async () => fireEvent.click(submitButton()))
 
     const alert = screen.getByRole('alert')
-    expect(alert.textContent).toBe(`${approved.rateLimitedTitle}${proposed.rateLimitedBody(3)}`)
-    const hint = screen.getByText(proposed.rateLimitedHint('0:03'))
-    expect(hint.closest('[role="alert"], [role="status"], [aria-live]')).toBeNull()
+    expect(alert.textContent).toBe(`${t.rateLimitedTitle}${secondsFr(3)}`)
+    // One display of the delay: no caption under the button, no countdown clock anywhere.
+    expect(document.body.textContent?.split(formattersFor('fr').seconds(3)).length).toBe(2)
+    expect(document.body.textContent).not.toMatch(/\d:\d{2}/)
     expect(submitButton().getAttribute('aria-disabled')).toBe('true')
-    expect(describedBy(submitButton())).toContain(proposed.rateLimitedHint('0:03'))
+    expect(describedBy(submitButton())).toBe(alert.textContent)
 
     await act(async () => fireEvent.click(submitButton()))
     expect(signIn).toHaveBeenCalledTimes(1)
 
     await act(async () => vi.advanceTimersByTime(1000))
-    expect(screen.getByText(proposed.rateLimitedHint('0:02'))).toBeDefined()
-    expect(alert.textContent).toContain(proposed.rateLimitedBody(3))
+    expect(submitButton().getAttribute('aria-disabled')).toBe('true')
+    expect(screen.getByRole('alert').textContent).toContain(secondsFr(3))
 
     await act(async () => vi.advanceTimersByTime(2000))
     expect(submitButton().hasAttribute('aria-disabled')).toBe(false)
-    expect(screen.queryByText(/Disponible dans/)).toBeNull()
     // R4: back to idle, the stale alert is gone and the only announcement is the polite status.
     expect(screen.queryByRole('alert')).toBeNull()
-    expect(screen.queryByText(proposed.rateLimitedBody(3))).toBeNull()
+    expect(screen.queryByText(secondsFr(3))).toBeNull()
     expect(document.querySelector('form')?.getAttribute('data-state')).toBe('idle')
-    expect(screen.getByText(proposed.rateLimitedReady).getAttribute('role')).toBe('status')
+    expect(screen.getByText(t.rateLimitedReady).getAttribute('role')).toBe('status')
+  })
+
+  it('unlocks when the page comes back after the deadline passed while its timer was suspended', async () => {
+    vi.useFakeTimers()
+    const { gateway } = gatewayReturning(httpProblem(429, problemBody(429, 'RATE_LIMITED'), '3'))
+    renderWithProviders(<SignInPage afterSignInPath="/" />, { gateway })
+    fireEvent.change(emailField(), { target: { value: 'admin@aegis.test' } })
+    fireEvent.change(passwordField(), { target: { value: 'x' } })
+    await act(async () => fireEvent.click(submitButton()))
+    expect(submitButton().getAttribute('aria-disabled')).toBe('true')
+
+    // System sleep: the wall clock passes the deadline, the suspended timeout has not fired.
+    vi.setSystemTime(Date.now() + 10_000)
+    await act(async () => document.dispatchEvent(new Event('visibilitychange')))
+    expect(submitButton().hasAttribute('aria-disabled')).toBe(false)
+    expect(screen.getByText(t.rateLimitedReady).getAttribute('role')).toBe('status')
   })
 
   it('falls back to the approved copy and does not lock without Retry-After', async () => {
     const { gateway } = gatewayReturning(httpProblem(429, null))
     renderWithProviders(<SignInPage afterSignInPath="/" />, { gateway })
     await fillAndSubmit()
-    expect((await screen.findByRole('alert')).textContent).toBe(`${approved.rateLimitedTitle}${approved.rateLimitedFallback}`)
+    expect((await screen.findByRole('alert')).textContent).toBe(`${t.rateLimitedTitle}${t.rateLimitedFallback}`)
     expect(submitButton().hasAttribute('aria-disabled')).toBe(false)
   })
 })
@@ -245,11 +317,11 @@ describe('SignInPage — role and session', () => {
     const { session } = renderWithProviders(<SignInPage afterSignInPath="/apercu" />, { gateway })
     const user = await fillAndSubmit()
 
-    const heading = await screen.findByRole('heading', { level: 1, name: proposed.roleHeading })
+    const heading = await screen.findByRole('heading', { level: 1, name: t.roleHeading })
     expect(document.activeElement).toBe(heading)
     expect(screen.queryByRole('textbox')).toBeNull()
     expect(document.querySelector('form')).toBeNull()
-    expect(screen.getByRole('alert').textContent).toBe(`${approved.technicianAccount}${proposed.roleBody}`)
+    expect(screen.getByRole('alert').textContent).toBe(`${t.technicianAccount}${t.roleBody}`)
     expect(screen.getByText('admin@aegis.test')).toBeDefined()
     expect(session.getAccessToken()).toBeNull()
     expect(session.getSnapshot().status).toBe('anonymous')
@@ -257,8 +329,8 @@ describe('SignInPage — role and session', () => {
     expect(document.body.innerHTML).not.toContain('technician-token')
     expect(window.location.pathname).toBe('/connexion')
 
-    await user.click(screen.getByRole('button', { name: proposed.roleRetry }))
-    expect(screen.getByRole('heading', { level: 1, name: approved.heading })).toBeDefined()
+    await user.click(screen.getByRole('button', { name: t.roleRetry }))
+    expect(screen.getByRole('heading', { level: 1, name: t.heading })).toBeDefined()
     expect(document.activeElement).toBe(emailField())
     expect(emailField().value).toBe('')
     expect(passwordField().value).toBe('')
@@ -269,7 +341,7 @@ describe('SignInPage — role and session', () => {
     const { gateway } = gatewayReturning(loginOk(auditor))
     renderWithProviders(<SignInPage afterSignInPath="/" />, { gateway })
     await fillAndSubmit()
-    expect((await screen.findByRole('alert')).textContent).toContain(proposed.roleUnknownTitle)
+    expect((await screen.findByRole('alert')).textContent).toContain(t.roleUnknownTitle)
   })
 
   it('starts an administrator session in memory and navigates', async () => {
@@ -280,14 +352,32 @@ describe('SignInPage — role and session', () => {
     expect(session.getAccessToken()).toBe('admin-token')
   })
 
+  it('after an expired session, brings the notice below the button into view without moving focus', async () => {
+    const scrollIntoView = vi.fn()
+    const original = HTMLElement.prototype.scrollIntoView
+    HTMLElement.prototype.scrollIntoView = scrollIntoView
+    try {
+      const session = createSessionStore()
+      session.end('sessionExpired', 'admin@aegis.demo')
+      renderWithProviders(<SignInPage afterSignInPath="/" />, { session })
+
+      const zone = scrollIntoView.mock.contexts.at(-1) as HTMLElement | undefined
+      expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'nearest' })
+      expect(zone?.textContent).toContain(t.sessionExpiredTitle)
+      expect(document.activeElement).toBe(passwordField())
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original
+    }
+  })
+
   it('after an expired session: info status, email prefilled, password focused and described by the alert', async () => {
     const session = createSessionStore()
     session.end('sessionExpired', 'admin@aegis.demo')
     renderWithProviders(<SignInPage afterSignInPath="/" />, { session })
 
-    const status = screen.getByText(approved.sessionExpiredTitle).closest('[role]')
+    const status = screen.getByText(t.sessionExpiredTitle).closest('[role]')
     expect(status?.getAttribute('role')).toBe('status')
-    expect(status?.textContent).toContain(proposed.sessionExpiredBody)
+    expect(status?.textContent).toContain(t.sessionExpiredBody)
     expect(emailField().value).toBe('admin@aegis.demo')
     expect(document.activeElement).toBe(passwordField())
     expect(passwordField().getAttribute('aria-describedby')).toContain(status?.id)
@@ -297,7 +387,7 @@ describe('SignInPage — role and session', () => {
     const session = createSessionStore()
     session.end('sessionInvalid', 'admin@aegis.demo')
     renderWithProviders(<SignInPage afterSignInPath="/" />, { session })
-    expect(screen.getByText(proposed.sessionInvalidTitle).closest('[role]')?.getAttribute('role')).toBe('status')
+    expect(screen.getByText(t.sessionInvalidTitle).closest('[role]')?.getAttribute('role')).toBe('status')
     expect(document.activeElement).toBe(passwordField())
   })
 
@@ -305,7 +395,7 @@ describe('SignInPage — role and session', () => {
     const session = createSessionStore()
     session.signOut()
     renderWithProviders(<SignInPage afterSignInPath="/" />, { session })
-    expect(screen.getByText(proposed.signedOutTitle).closest('[role]')?.getAttribute('role')).toBe('status')
+    expect(screen.getByText(t.signedOutTitle).closest('[role]')?.getAttribute('role')).toBe('status')
     expect(emailField().value).toBe('')
     expect(document.activeElement).toBe(emailField())
   })
@@ -316,14 +406,48 @@ describe('SignInPage — password visibility', () => {
     const { gateway } = gatewayReturning(httpProblem(500, null))
     renderWithProviders(<SignInPage afterSignInPath="/" />, { gateway })
     const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: proposed.revealLabel }))
+    await user.click(screen.getByRole('button', { name: t.revealLabel }))
     expect(passwordField().type).toBe('text')
-    expect(screen.getByText(proposed.revealedStatus).getAttribute('role')).toBe('status')
-    const conceal = screen.getByRole('button', { name: proposed.concealLabel })
-    expect(conceal.textContent).toBe(proposed.conceal)
+    expect(screen.getByText(t.revealedStatus).getAttribute('role')).toBe('status')
+    const conceal = screen.getByRole('button', { name: t.concealLabel })
+    expect(conceal.textContent).toBe(t.conceal)
     expect(document.activeElement).toBe(conceal)
 
     await fillAndSubmit(user)
     expect(passwordField().type).toBe('password')
+  })
+})
+
+describe('SignInPage with the production HTTP gateway (fetch mocked)', () => {
+  function httpGateway(response: Response) {
+    const fetchMock = vi.fn<typeof fetch>(async () => response)
+    return { gateway: createHttpAuthGateway({ fetch: fetchMock }), fetchMock }
+  }
+
+  it('starts an in-memory session from a real login response and leaves the page', async () => {
+    const body = { accessToken: 'opaque', tokenType: 'Bearer', expiresIn: 3600, expiresAt: '2026-09-30T15:30:00Z', user: adminProfile }
+    const { gateway, fetchMock } = httpGateway(new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    const session = createSessionStore()
+    renderWithProviders(<SignInPage afterSignInPath="/equipements" />, { gateway, session })
+    await fillAndSubmit()
+    await waitFor(() => expect(window.location.pathname).toBe('/equipements'))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/v1/auth/login')
+    expect(session.getAccessToken()).toBe('opaque')
+    expect(session.getSnapshot()).toMatchObject({ status: 'authenticated', profile: adminProfile })
+  })
+
+  it('shows the 429 delay from the real Retry-After header, never the server text', async () => {
+    const problem = problemBody(429, 'RATE_LIMITED', { detail: SERVER_TEXT })
+    const { gateway } = httpGateway(
+      new Response(JSON.stringify(problem), { status: 429, headers: { 'Content-Type': 'application/problem+json', 'Retry-After': '42' } }),
+    )
+    renderWithProviders(<SignInPage afterSignInPath="/equipements" />, { gateway })
+    await fillAndSubmit()
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain(t.rateLimitedTitle)
+    expect(alert.textContent).toContain(secondsFr(42))
+    expect(document.body.textContent).not.toContain(SERVER_TEXT)
+    expect(submitButton().getAttribute('aria-disabled')).toBe('true')
   })
 })

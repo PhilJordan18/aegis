@@ -1,0 +1,298 @@
+/*
+ * Aegis Manager — identité « Lumière du hub » v3 (prototype statique).
+ * Valeurs des palettes : maquette Web de Philippe (docs/design/identite/v3/web/aegis-web-v3.html),
+ * proches de docs/design/identite/reference.md.
+ * Jetons marqués [+] : ajoutés par ce prototype, absents de la référence
+ * (nécessaires au contraste WCAG 2.2 AA sur le Web); voir README.md.
+ * Aucune requête réseau : polices Geist autohébergées (fonts/, licence OFL 1.1).
+ */
+
+@font-face {
+  font-family: "Geist Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("../fonts/geist-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Geist Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("../fonts/geist-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Geist Mono Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("../fonts/geist-mono-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  --ag-font: "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ag-font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Clair minéral */
+  --ag-bg: #f4f6fa;
+  --ag-top: #f4f6fa;
+  --ag-panel: #ffffff;
+  --ag-field: #f6f8fb;
+  --ag-text: #14253b;
+  --ag-muted: #53647a;
+  --ag-border: #d3dce7;
+  --ag-accent: #234bce;
+  --ag-button: #234bce;
+  --ag-button-hover: #1c3fb0;
+  --ag-button-text: #ffffff;
+  --ag-core: #087a9b;
+  --ag-halo: #7ca7ef20;
+  --ag-ring: #5b81c32b;
+  --ag-error-bg: #fff0f1;
+  --ag-error-text: #9e2837;
+  /* [+] ajoutés */
+  --ag-control-border: #7a8ba1; /* bordure de champ : 3,48:1 sur fond blanc */
+  --ag-focus: #234bce;
+  --ag-selected: #e8eefc;
+  --ag-disabled-bg: #e3e8f1;
+  --ag-disabled-text: #52627a;
+  --ag-warn-bg: #fff0d1;
+  --ag-warn-text: #7a4b00;
+  --ag-info-bg: #eef3ff;
+  --ag-info-text: #1a45cc;
+  --ag-ready-bg: #e1f4ea;
+  --ag-ready-text: #0b6b3f;
+  --ag-ready-icon: #12824d;
+  --ag-neutral-bg: #e7ebf3;
+  --ag-neutral-text: #3a4560;
+  --ag-mock-bg: #fceaf8;
+  --ag-mock-text: #8e1277;
+  --ag-mock-border: #b8349b;
+  --ag-glyph: #ffffff;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  /* Sombre profond */
+  --ag-bg: #070c13;
+  --ag-top: #070c13;
+  --ag-panel: #0e1621;
+  --ag-field: #111d2b;
+  --ag-text: #f0f4fc;
+  --ag-muted: #a9b8cd;
+  --ag-border: #2b3b50;
+  --ag-accent: #8caeff;
+  --ag-button: #315ee8;
+  --ag-button-hover: #3f6bf5;
+  --ag-button-text: #ffffff;
+  --ag-core: #64d8eb;
+  --ag-halo: #17386655;
+  --ag-ring: #70a7ff30;
+  --ag-error-bg: #391f25;
+  --ag-error-text: #ffc8cf;
+  /* [+] ajoutés */
+  --ag-control-border: #5b6f88; /* 3,56:1 sur le panneau, 3,22:1 sur le champ */
+  --ag-focus: #8caeff;
+  --ag-selected: #13213a;
+  --ag-disabled-bg: #1a2437;
+  --ag-disabled-text: #8a99af;
+  --ag-warn-bg: #33280f;
+  --ag-warn-text: #ffd27a;
+  --ag-info-bg: #111f4d;
+  --ag-info-text: #a9c0ff;
+  --ag-ready-bg: #0e2e2a;
+  --ag-ready-text: #6fe3a8;
+  --ag-ready-icon: #4ed393;
+  --ag-neutral-bg: #1a2447;
+  --ag-neutral-text: #c8cfe6;
+  --ag-mock-bg: #3a1336;
+  --ag-mock-text: #ff9ce8;
+  --ag-mock-border: #e57ad0;
+  --ag-glyph: #06102a;
+  color-scheme: dark;
+}
+
+/* Comparaison typographique (décision ouverte) : ?font=system */
+:root[data-font="system"] {
+  --ag-font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 88px; scroll-padding-bottom: 24px; }
+body {
+  margin: 0;
+  background: var(--ag-bg);
+  color: var(--ag-text);
+  font-family: var(--ag-font);
+  font-size: 1rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, p { margin: 0; }
+button, input { font: inherit; color: inherit; }
+img { display: block; }
+
+.ag-sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.ag-tnum { font-variant-numeric: tabular-nums; }
+
+/* Un seul asset par apparence, choisi par l'attribut data-theme. */
+:root[data-theme="dark"] .ag-only-light,
+:root:not([data-theme="dark"]) .ag-only-dark { display: none !important; }
+
+/* Focus : indicateur plein de 2 px (la bague translucide de la maquette n'est qu'un halo). */
+:focus-visible {
+  outline: 2px solid var(--ag-focus);
+  outline-offset: 2px;
+}
+.ag-skip {
+  position: absolute; left: 12px; top: -80px; z-index: 50;
+  padding: 10px 14px; border-radius: 10px;
+  background: var(--ag-panel); color: var(--ag-text);
+  border: 1px solid var(--ag-border); font-weight: 600; text-decoration: none;
+}
+.ag-skip:focus { top: 12px; }
+
+/* ---------- Logo (les signatures SVG ne sont pas utilisées dans l'application : texte Inter non fiable) ---------- */
+/* Marque Web provisoire : symbole fourni + mot « aegis » en Geist + nom de l'application, en un seul composant. */
+.ag-brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ag-text); text-decoration: none; border-radius: 8px; min-width: 0; }
+.ag-brand__word { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.045em; line-height: 1; }
+.ag-brand__app {
+  font-size: .8125rem; font-weight: 500; letter-spacing: .04em; color: var(--ag-muted); line-height: 1;
+  border-left: 1px solid var(--ag-border); padding-left: 12px; margin-left: 2px;
+}
+
+/* Symbole seul : un asset par apparence (identite/assets/aegis-core-mark*.svg), choisi par data-theme. */
+.ag-mark { --s: 32px; flex: none; width: var(--s); height: var(--s); display: inline-block; }
+.ag-mark > img { width: 100%; height: 100%; }
+
+/* ---------- Boutons ---------- */
+.ag-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 48px; padding: 0 18px;
+  border: 1px solid transparent; border-radius: 12px;
+  font-weight: 500; font-size: 1rem; line-height: 1.2; text-decoration: none; cursor: pointer;
+  background: var(--ag-button); color: var(--ag-button-text);
+  transition: background-color 120ms ease-out;
+}
+.ag-btn:hover { background: var(--ag-button-hover); }
+.ag-btn--lg { min-height: 52px; }
+.ag-btn--block { width: 100%; justify-content: space-between; }
+.ag-btn--secondary { background: var(--ag-panel); color: var(--ag-text); border-color: var(--ag-control-border); }
+.ag-btn--secondary:hover { background: var(--ag-field); }
+.ag-btn svg { width: 18px; height: 18px; flex: none; }
+.ag-btn[aria-disabled="true"] { cursor: not-allowed; }
+.ag-btn.is-busy { cursor: progress; }
+.ag-btn.is-locked,
+.ag-btn.is-locked:hover { background: var(--ag-disabled-bg); color: var(--ag-disabled-text); border-color: var(--ag-border); }
+.ag-btn > span { display: inline-flex; align-items: center; }
+.ag-spinner {
+  display: inline-block; width: 18px; height: 18px; flex: none; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-top-color: currentColor;
+  animation: ag-spin 800ms linear infinite;
+}
+@keyframes ag-spin { to { transform: rotate(360deg); } }
+
+.ag-link {
+  color: var(--ag-accent); font-weight: 500; text-decoration: none;
+  display: inline-flex; align-items: center; gap: 8px; border-radius: 6px; min-height: 24px;
+}
+.ag-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.ag-link svg { width: 18px; height: 18px; }
+.ag-link > span { display: inline-flex; align-items: center; }
+
+/* ---------- Champs ---------- */
+.ag-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.ag-field__label { font-size: .875rem; font-weight: 500; line-height: 1.3; }
+.ag-field__control {
+  display: flex; align-items: center; min-width: 0;
+  min-height: 48px; padding: 0 6px 0 14px;
+  background: var(--ag-field); border: 1px solid var(--ag-control-border); border-radius: 10px;
+}
+.ag-field__control:has(input:focus-visible) {
+  border-color: var(--ag-focus);
+  outline: 2px solid var(--ag-focus); outline-offset: 2px;
+  box-shadow: 0 0 0 5px var(--ag-ring);
+}
+.ag-field__control[data-invalid] { border: 1.5px solid var(--ag-error-text); padding-left: 13.5px; }
+.ag-field__control[data-readonly] { background: var(--ag-bg); }
+.ag-field input {
+  flex: 1 1 0; width: 0; min-width: 0; height: 46px;
+  padding: 0; border: 0; background: transparent; outline: 0;
+  font-size: 1rem; color: var(--ag-text);
+}
+.ag-field__reveal {
+  flex: none; min-width: 44px; height: 36px; padding: 0 10px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--ag-accent); font-size: .875rem; font-weight: 500; cursor: pointer;
+}
+.ag-field__reveal:hover { background: var(--ag-selected); }
+.ag-field__error {
+  display: flex; gap: 8px; align-items: flex-start;
+  font-size: .875rem; font-weight: 400; line-height: 1.4; color: var(--ag-error-text);
+}
+.ag-field__error svg { width: 16px; height: 16px; flex: none; margin-top: 2px; }
+.ag-field__slot { min-height: 20px; } /* une ligne de message réservée : aucun saut pour un message d'une ligne */
+
+/* ---------- Alertes ---------- */
+.ag-alert {
+  --a-bg: var(--ag-error-bg); --a-fg: var(--ag-error-text);
+  display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px;
+  padding: 12px 14px; border-radius: 12px; border: 1px solid transparent;
+  background: var(--a-bg); color: var(--ag-text);
+  font-size: .875rem; line-height: 1.45;
+}
+.ag-alert--error { --a-bg: var(--ag-error-bg); --a-fg: var(--ag-error-text); }
+.ag-alert--warning { --a-bg: var(--ag-warn-bg); --a-fg: var(--ag-warn-text); }
+.ag-alert--info { --a-bg: var(--ag-info-bg); --a-fg: var(--ag-info-text); }
+.ag-alert svg { width: 20px; height: 20px; color: var(--a-fg); margin-top: 1px; }
+.ag-alert__title { font-weight: 600; color: var(--a-fg); }
+.ag-alert__body { margin-top: 2px; color: var(--ag-text); }
+.ag-alert__code { margin-top: 8px; display: grid; gap: 2px; }
+.ag-alert__code dt { font-size: .75rem; color: var(--ag-text); opacity: .85; }
+.ag-alert__code dd {
+  margin: 0; font-family: var(--ag-font-mono); font-size: .8125rem; line-height: 1.4;
+  word-break: break-all; user-select: all;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ag-alert.is-entering { animation: ag-alert-in 200ms ease-out; }
+}
+@keyframes ag-alert-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* ---------- Pastilles de statut (couleurs métier : forme + symbole + texte) ---------- */
+.ag-chip {
+  --c-bg: var(--ag-neutral-bg); --c-fg: var(--ag-neutral-text); --c-icon: var(--ag-neutral-text);
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px;
+  border-radius: 999px; background: var(--c-bg); color: var(--c-fg);
+  font-size: .8125rem; font-weight: 600; line-height: 18px; white-space: nowrap; border: 1px solid transparent;
+}
+.ag-chip svg { width: 18px; height: 18px; color: var(--c-icon); flex: none; }
+.ag-chip--ready { --c-bg: var(--ag-ready-bg); --c-fg: var(--ag-ready-text); --c-icon: var(--ag-ready-icon); }
+.ag-chip--blocked { --c-bg: var(--ag-error-bg); --c-fg: var(--ag-error-text); --c-icon: var(--ag-error-text); }
+.ag-chip--unknown { --c-bg: var(--ag-warn-bg); --c-fg: var(--ag-warn-text); --c-icon: var(--ag-warn-text); }
+.ag-chip--neutral { --c-bg: var(--ag-neutral-bg); --c-fg: var(--ag-neutral-text); --c-icon: var(--ag-neutral-text); }
+
+/* Annotation d'aperçu (hors produit) : toujours reconnaissable, jamais confondue avec le produit. */
+.ag-mock {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 8px; border-radius: 4px; border: 1px dashed var(--ag-mock-border);
+  background: var(--ag-mock-bg); color: var(--ag-mock-text);
+  font-size: .6875rem; font-weight: 650; line-height: 1.3;
+}
+
+@media (forced-colors: active) {
+  .ag-alert, .ag-chip { border: 2px solid CanvasText; }
+  .ag-field__control { border-color: CanvasText; }
+  .ag-btn { border-color: ButtonText; }
+  .ag-btn.is-locked { color: GrayText; border-color: GrayText; }
+  .ag-mark > img { forced-color-adjust: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+  .ag-spinner { animation: none !important; border-top-color: currentColor; border-right-color: currentColor; } /* anneau statique : l'état est porté par le texte */
+}

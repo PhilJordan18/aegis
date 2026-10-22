@@ -200,6 +200,22 @@ réservations, les prêts, les placements et les observations n'existent pas, la
 disponibilité ne dépend que de l'archivage, la présence vaut `UNKNOWN` et le
 diagnostic contient donc toujours `UNKNOWN_PHYSICAL_STATE`.
 
+## Idempotence REST
+
+`shared/idempotency` applique le document 09, sections 6.2 et 20, et le
+document 08, section 8.1. Une route de la section 20.1 déclare un paramètre
+`IdempotentRequest`, ce qui rend `Idempotency-Key` obligatoire, puis confie sa
+mutation à `IdempotencyService.execute`. La clé, la mutation et la réponse
+enregistrée partagent une transaction : une répétition rejoue la réponse avec
+`Idempotency-Replayed: true`, une autre intention reçoit 409
+`IDEMPOTENCY_KEY_REUSED` et une clé encore tenue après 5 secondes reçoit 409
+`IDEMPOTENCY_REQUEST_IN_PROGRESS` avec `Retry-After`. Pour le catalogue, un
+refus métier n'est pas enregistré : la clé est annulée avec la mutation.
+
+Aucune route de production n'utilise encore ce service dans cette étape; les
+tests passent par un contrôleur de test chargé uniquement par
+`IdempotencyApiTests`.
+
 ## Comptes de démonstration
 
 Aucun compte n'est créé tant que `AEGIS_DEMO_ACCOUNTS_ENABLED` n'est pas
@@ -225,7 +241,8 @@ docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml
 
 `down` conserve les volumes. Ne pas ajouter `--volumes` si les données locales
 doivent être conservées. Chaque démarrage de l'API applique les migrations en
-attente (`V001`, puis `V002` pour l'identité et le catalogue) et valide
+attente (`V001`, `V002` pour l'identité et le catalogue, puis `V002_1` pour
+les clés d'idempotence REST) et valide
 l'historique dans `public.flyway_schema_history` sans rejouer une migration
 déjà appliquée. Les tables métier sont dans le schéma `aegis`.
 

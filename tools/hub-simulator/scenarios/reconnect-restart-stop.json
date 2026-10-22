@@ -1,0 +1,14 @@
+{
+  "steps": [
+    { "do": "waitOnline", "timeoutMs": 10000 },
+    { "wait": 1000 },
+    { "do": "updateCompartment", "code": "A2", "patch": { "connectionStatus": "DISCONNECTED", "readerStatus": "UNKNOWN" } },
+    { "do": "dropConnection" },
+    { "do": "waitOnline", "timeoutMs": 10000 },
+    { "wait": 1000 },
+    { "do": "restart", "resetReason": "WATCHDOG" },
+    { "do": "waitOnline", "timeoutMs": 10000 },
+    { "wait": 1000 },
+    { "do": "stop" }
+  ]
+}
