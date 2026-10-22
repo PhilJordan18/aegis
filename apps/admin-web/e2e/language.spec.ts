@@ -96,6 +96,7 @@ const SCENARIOS: readonly EnglishScenario[] = [
       ['forbidden', 'access-denied'],
       ['unreachable', 'unreachable'],
       ['paged', 'pagination'],
+      ['staleDossier', 'stale-dossier'],
     ] as const satisfies readonly (readonly [CatalogMode, string])[]
   ).map(
     ([mode, state]): EnglishScenario => ({

@@ -265,6 +265,27 @@ test.describe('flow: équipements (production page, routed fakes)', () => {
     await expect(page.getByRole('group', { name: /Multimètre 2 · MM-002/ })).toBeFocused()
   })
 
+  test('flow: a stale dossier keeps the unit, says it is not up to date and retries from the keyboard', async ({ page }) => {
+    await page.goto('/connexion')
+    await settle(page)
+    const requests = await openCatalog(page, 'staleDossier')
+    await waitForCatalogState(page, 'staleDossier')
+    const dossier = page.locator('.ag-dossier')
+    await expect(dossier.getByRole('alert')).toContainText('Données non actualisées.')
+    await expect(dossier.getByRole('heading', { level: 2, name: /Multimètre 1 · MM-001/ })).toBeVisible()
+    // The list is not stale: only the dossier's refresh failed.
+    await expect(page.locator('.ag-list').getByRole('alert')).toHaveCount(0)
+    const retry = dossier.getByRole('button', { name: 'Réessayer' })
+    // Reached by keyboard, so the focus ring is the one a keyboard user sees.
+    await page.locator('.ag-dossier__scroll').focus()
+    await page.keyboard.press('Tab')
+    await expect(retry).toBeFocused()
+    expect(await retry.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe('none')
+    const before = requests.filter((request) => /assets\/[0-9a-f-]{36}$/.test(request)).length
+    await page.keyboard.press('Enter')
+    await expect.poll(() => requests.filter((request) => /assets\/[0-9a-f-]{36}$/.test(request)).length).toBeGreaterThan(before)
+  })
+
   test('flow: pagination keeps the address, resets the selection and keeps focus on the pager', async ({ page }) => {
     const requests = await openEquipment(page, 'paged')
     await expect(page.getByRole('heading', { level: 2, name: '25 exemplaires' })).toBeVisible()

@@ -21,11 +21,14 @@ import {
 import { CatalogAlert } from './CatalogAlert'
 import type { CatalogFailure } from './catalogFailure'
 import type { AdminAssetView } from './contract'
+import { StaleNotice } from './StaleNotice'
 
 interface AssetDossierProps {
   readonly asset: AdminAssetView | undefined
   readonly loading: boolean
   readonly failure: CatalogFailure | null
+  /** Set when a refresh failed but the previous unit is still shown. An initial failure is `failure`, not this. */
+  readonly stale: boolean
   /** Focus target after a selection on a stacked layout: the scrolling group, labelled by the title. */
   readonly focusRef?: Ref<HTMLDivElement>
   readonly onRetry: () => void
@@ -36,7 +39,7 @@ interface AssetDossierProps {
  * Read-only dossier of one unit (handoff §3.1). The reasons are the server's non-personal diagnostic
  * as sent: the page shows no readiness verdict, no « ready » and no invented presence or compartment.
  */
-export function AssetDossier({ asset, loading, failure, focusRef, onRetry, onBack }: AssetDossierProps) {
+export function AssetDossier({ asset, loading, failure, stale, focusRef, onRetry, onBack }: AssetDossierProps) {
   const { m } = useI18n()
   const titleId = useId()
   const t = m.equipment
@@ -63,13 +66,13 @@ export function AssetDossier({ asset, loading, failure, focusRef, onRetry, onBac
     <section className="ag-panel ag-dossier" aria-labelledby={titleId}>
       {/* Scrolls on its own at ≥ 1024 px: focusable so the keyboard can scroll it (WCAG 2.1.1). */}
       <div className="ag-dossier__scroll" tabIndex={0} role="group" aria-labelledby={titleId} ref={focusRef}>
-        <DossierBody asset={asset} titleId={titleId} />
+        <DossierBody asset={asset} titleId={titleId} stale={stale} onRetry={onRetry} />
       </div>
     </section>
   )
 }
 
-function DossierBody({ asset, titleId }: { readonly asset: AdminAssetView; readonly titleId: string }) {
+function DossierBody({ asset, titleId, stale, onRetry }: { readonly asset: AdminAssetView; readonly titleId: string; readonly stale: boolean; readonly onRetry: () => void }) {
   const i18n = useI18n()
   const { m } = i18n
   const t = m.equipment
@@ -82,6 +85,11 @@ function DossierBody({ asset, titleId }: { readonly asset: AdminAssetView; reado
 
   return (
     <>
+      {stale && (
+        <div className="ag-dossier__stale">
+          <StaleNotice evaluatedAt={evaluated} onRetry={onRetry} />
+        </div>
+      )}
       <p className="ag-overline">{t.selectedOverline}</p>
       <h2 className="ag-dossier__title" id={titleId}>
         {asset.model.name} · <span className="ag-tnum">{asset.assetCode}</span>

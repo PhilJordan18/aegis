@@ -7,7 +7,7 @@ import { PREVIEW_EMAIL, PREVIEW_PASSWORD } from './support.ts'
  * 127.0.0.1:8080; these routes answer first, so no request leaves the page. The live recipe is
  * api.spec.ts, run by `npm run test:e2e:api`.
  */
-export type CatalogMode = 'nominal' | 'long' | 'loading' | 'empty' | 'serviceError' | 'forbidden' | 'unreachable' | 'paged'
+export type CatalogMode = 'nominal' | 'long' | 'loading' | 'empty' | 'serviceError' | 'forbidden' | 'unreachable' | 'paged' | 'staleDossier'
 
 const EVALUATED_AT = '2026-10-21T14:30:00Z'
 const MODEL_ID = '8f1f3c52-5f2a-4c43-9b6b-0d2f6c1f3a01'
@@ -105,6 +105,8 @@ export function unitsOf(mode: CatalogMode): Unit[] {
 /** Answers /api/v1/admin/assets and /api/v1/admin/assets/{id} for one mode, and records the requests. */
 export async function routeCatalog(page: Page, mode: CatalogMode): Promise<string[]> {
   const requests: string[] = []
+  // staleDossier: each unit is read once, then the service fails, so a later refresh leaves the dossier stale.
+  const unitReads = new Map<string, number>()
   await page.route('**/api/v1/admin/assets**', async (route) => {
     const url = new URL(route.request().url())
     requests.push(`${route.request().method()} ${url.pathname}${url.search}`)
@@ -115,6 +117,9 @@ export async function routeCatalog(page: Page, mode: CatalogMode): Promise<strin
     const units = unitsOf(mode)
     const byId = url.pathname.match(/\/admin\/assets\/([^/]+)$/)
     if (byId) {
+      const reads = (unitReads.get(byId[1] ?? '') ?? 0) + 1
+      unitReads.set(byId[1] ?? '', reads)
+      if (mode === 'staleDossier' && reads > 1) return json(route, 503, problem(503, 'SERVICE_UNAVAILABLE', url.pathname), 'application/problem+json')
       const unit = units.find((candidate) => candidate.id === byId[1])
       return unit ? json(route, 200, view(unit)) : json(route, 404, problem(404, 'RESOURCE_NOT_FOUND', url.pathname), 'application/problem+json')
     }
@@ -153,6 +158,11 @@ export async function waitForCatalogState(page: Page, mode: CatalogMode, { engli
       await page.getByRole('heading', { level: 2, name: english ? /^(\d+) units$/ : /^(\d+) exemplaires$/ }).waitFor()
       await page.locator('.ag-dossier__title').waitFor()
       break
+    case 'staleDossier':
+      await page.getByRole('heading', { level: 2, name: english ? /^(\d+) units$/ : /^(\d+) exemplaires$/ }).waitFor()
+      await page.locator('.ag-dossier__title').waitFor()
+      await makeDossierStale(page, english)
+      break
     case 'loading':
       await page.locator('.ag-skel').first().waitFor()
       break
@@ -167,4 +177,17 @@ export async function waitForCatalogState(page: Page, mode: CatalogMode, { engli
       await page.getByRole('alert').waitFor()
       break
   }
+}
+
+/**
+ * Lets the selected unit's cached copy go stale and fires the visibility refetch: the second read of
+ * the unit fails (routeCatalog), so the dossier keeps the unit and shows the stale notice.
+ */
+export async function makeDossierStale(page: Page, english: boolean) {
+  await page.clock.install()
+  await page.clock.fastForward(60_000)
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange', { bubbles: true })))
+  // The failed read is retried twice with a growing delay before it counts as failed.
+  await page.clock.fastForward(10_000)
+  await page.locator('.ag-dossier [role="alert"]').getByText(english ? 'Data not refreshed.' : 'Données non actualisées.').waitFor({ timeout: 20_000 })
 }

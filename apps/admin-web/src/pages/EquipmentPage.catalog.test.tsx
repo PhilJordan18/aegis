@@ -259,6 +259,89 @@ describe('Équipements — adverse states', () => {
   })
 })
 
+describe('Équipements — stale dossier', () => {
+  const detailKey = (id: string) => ['catalog', 'assets', 'detail', id]
+  const offline = { kind: 'network', reason: 'offline' } as const
+
+  async function renderLoadedDossier(locale: Locale = 'fr') {
+    const gateway = fakeCatalogGateway({ pages: [ok(pageOf([MM001]))], units: { [MM001.id]: ok(MM001) } })
+    const view = renderEquipment(gateway, { locale })
+    await screen.findByRole('heading', { level: 2, name: /Multimètre 1 · MM-001/ })
+    return { gateway, ...view }
+  }
+
+  const dossierOf = () => screen.getByRole('group', { name: /Multimètre 1/ })
+
+  it('says the unit is not up to date after a failed refresh, keeps it on screen, and retries', async () => {
+    const { gateway, queryClient } = await renderLoadedDossier()
+    expect(within(dossierOf()).queryByRole('alert')).toBeNull()
+
+    gateway.getAsset.mockResolvedValue(offline)
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: detailKey(MM001.id) })
+    })
+    const notice = await within(dossierOf()).findByRole('alert')
+    expect(notice.textContent).toContain('Données non actualisées.')
+    expect(plain(notice.textContent)).toMatch(/évaluées à .*\d/)
+    // The previous unit stays on screen: nothing is blanked and nothing says « prêt ».
+    expect(screen.getByRole('heading', { level: 2, name: /Multimètre 1 · MM-001/ })).toBeDefined()
+    expect(plain(dossierOf().textContent)).toContain('Aucune observation de présence')
+    expect(plain(dossierOf().textContent)).not.toMatch(/\bPrêt\b/)
+
+    const calls = gateway.getAsset.mock.calls.length
+    gateway.getAsset.mockResolvedValueOnce(ok(MM001))
+    const user = userEvent.setup()
+    await user.click(within(notice).getByRole('button', { name: 'Réessayer' }))
+    await waitFor(() => expect(within(dossierOf()).queryByRole('alert')).toBeNull())
+    expect(gateway.getAsset.mock.calls.length).toBe(calls + 1)
+  })
+
+  it('keeps the notice when the retry fails too', async () => {
+    const { gateway, queryClient } = await renderLoadedDossier()
+    gateway.getAsset.mockResolvedValue(offline)
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: detailKey(MM001.id) })
+    })
+    const user = userEvent.setup()
+    await user.click(await within(await within(dossierOf()).findByRole('alert')).findByRole('button', { name: 'Réessayer' }))
+    await waitFor(() => expect(gateway.getAsset.mock.calls.length).toBeGreaterThanOrEqual(3))
+    expect((await within(dossierOf()).findByRole('alert')).textContent).toContain('Données non actualisées.')
+  })
+
+  it('says it in English with the same words as the list', async () => {
+    const { gateway, queryClient } = await renderLoadedDossier('en')
+    gateway.getAsset.mockResolvedValue(offline)
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: detailKey(MM001.id) })
+    })
+    const notice = await within(screen.getByRole('group', { name: /Multimètre 1/ })).findByRole('alert')
+    expect(notice.textContent).toContain('Data not refreshed.')
+    expect(within(notice).getByRole('button', { name: 'Try again' })).toBeDefined()
+  })
+
+  it('does not show it for an initial failure: that keeps its own error and no unit', async () => {
+    const gateway = fakeCatalogGateway({ pages: [ok(pageOf([MM001]))], units: { [MM001.id]: failure(500, 'INTERNAL_ERROR', 'trace-9001') } })
+    renderEquipment(gateway)
+    await screen.findByRole('heading', { level: 2, name: '1 exemplaire' })
+    const alert = await screen.findByRole('alert')
+    expect(plain(alert.textContent)).toContain("Le service n'a pas pu fournir ces données.")
+    expect(plain(alert.textContent)).toContain('Identifiant de suivi : trace-9001')
+    expect(plain(document.body.textContent)).not.toContain('Données non actualisées.')
+    expect(screen.queryByRole('group', { name: /·/ })).toBeNull()
+  })
+
+  it('does not show it on the dossier when only the list refresh failed', async () => {
+    const { gateway, queryClient } = await renderLoadedDossier()
+    gateway.listAssets.mockResolvedValue(offline)
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: ['catalog', 'assets', 'list'] })
+    })
+    const alerts = await screen.findAllByRole('alert')
+    expect(alerts).toHaveLength(1)
+    expect(within(dossierOf()).queryByRole('alert')).toBeNull()
+  })
+})
+
 describe.each<Locale>(['fr', 'en'])('Équipements in %s', (locale) => {
   const m = MESSAGES[locale]
 

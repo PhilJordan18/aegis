@@ -55,6 +55,7 @@ const CATALOG_STATES: readonly (readonly [CatalogMode, string])[] = [
   ['forbidden', 'acces-refuse'],
   ['unreachable', 'service-injoignable'],
   ['paged', 'pagination'],
+  ['staleDossier', 'dossier-non-actualise'],
 ]
 
 const catalogScenarios: readonly Scenario[] = CATALOG_STATES.map(([mode, state]) => ({

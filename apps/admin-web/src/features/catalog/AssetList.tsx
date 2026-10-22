@@ -1,12 +1,12 @@
 import { useId, type MouseEvent } from 'react'
 import { Link } from '../../app/Link'
 import { useI18n } from '../../i18n/useI18n'
-import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
 import { StatusChip } from '../../ui/StatusChip'
 import { diagnosticChip, evaluatedAtLabel, factsLine, reasonLabel } from './assetPresentation'
 import { equipmentHref } from './equipmentHref'
 import { CatalogAlert } from './CatalogAlert'
+import { StaleNotice } from './StaleNotice'
 import type { CatalogFailure } from './catalogFailure'
 import type { AdminAssetPage, AdminAssetView } from './contract'
 
@@ -131,18 +131,10 @@ function Pager({ page, onPage }: { readonly page: AdminAssetPage; readonly onPag
 
 function StaleBanner({ page, onRetry }: { readonly page: AdminAssetPage; readonly onRetry: () => void }) {
   const i18n = useI18n()
-  const { m } = i18n
   const first = page.items[0]
   return (
     <div className="ag-list__alerts">
-      <Alert kind="warning" icon="status-offline" title={m.equipment.staleTitle}>
-        {first && <p>{m.equipment.staleBody({ time: evaluatedAtLabel(first, i18n) })}</p>}
-        <div className="ag-alert__action">
-          <Button variant="secondary" size="sm" onClick={onRetry}>
-            {m.equipment.retry}
-          </Button>
-        </div>
-      </Alert>
+      <StaleNotice evaluatedAt={first ? evaluatedAtLabel(first, i18n) : null} onRetry={onRetry} />
     </div>
   )
 }

@@ -152,6 +152,7 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
               asset={asset.data}
               loading={asset.isPending || list.isPending}
               failure={assetFailure}
+              stale={asset.isRefetchError}
               focusRef={dossierRef}
               onRetry={() => void asset.refetch()}
               onBack={() => router.navigate(equipmentHref({ page: location.page, assetId: null }))}
