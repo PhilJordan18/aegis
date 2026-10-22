@@ -11,6 +11,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import ca.aegis.control.identity.AccessLevel;
+import ca.aegis.control.shared.web.PlainText;
 
 /**
  * {@code CreateAssetRequest} and {@code UpdateAssetRequest} of document 09, section 12.2. Readiness, availability
@@ -22,10 +23,12 @@ record AssetRequest(
 
         @NotBlank(message = "Le code d'actif est requis.")
         @Size(max = 64, message = "Le code d'actif dépasse 64 caractères.")
+        @PlainText(message = "Le code d'actif contient un caractère non autorisé.")
         String assetCode,
 
         @JsonProperty(required = true)
         @Size(max = 120, message = "Le numéro de série dépasse 120 caractères.")
+        @PlainText(message = "Le numéro de série contient un caractère non autorisé.")
         String serialNumber,
 
         @NotNull(message = "Le niveau d'accès requis est obligatoire.")

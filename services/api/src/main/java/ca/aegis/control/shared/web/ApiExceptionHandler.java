@@ -135,7 +135,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     static String violationCode(String constraint) {
-        if (constraint == null || constraint.isBlank()) {
+        // Document 09 has no dedicated code for a forbidden character: it is an invalid value like any other.
+        if (constraint == null || constraint.isBlank() || constraint.equals(PlainText.class.getSimpleName())) {
             return "INVALID_VALUE";
         }
         return constraint.replaceAll("([a-z0-9])([A-Z])", "$1_$2").toUpperCase(Locale.ROOT);
