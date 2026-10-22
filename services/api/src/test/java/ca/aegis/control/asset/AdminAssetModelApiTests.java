@@ -174,10 +174,12 @@ class AdminAssetModelApiTests extends CatalogApiTest {
                 .andExpect(jsonPath("$.archivedAt").value(archivedAt.toString()))
                 .andExpect(jsonPath("$.name").value("Archivé " + suffix));
 
+        // A new key on an archived model: no new business change.
         clock.advance(Duration.ofMinutes(10));
         archiveModel(id)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.archivedAt").value(archivedAt.toString()));
+        assertEquals(archivedAt, updatedAt(id));
         mvc.perform(asAdmin(get(MODELS + "/" + id)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.archivedAt").value(archivedAt.toString()));
@@ -223,6 +225,9 @@ class AdminAssetModelApiTests extends CatalogApiTest {
         mvc.perform(asAdmin(get(MODELS).param("page", "1").param("size", "1")))
                 .andExpect(jsonPath("$.items.length()").value(1))
                 .andExpect(jsonPath("$.totalPages").value((int) total));
+        mvc.perform(asAdmin(get(MODELS).param("q", "ignored").param("sort", "name")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value((int) total));
 
         for (String[] invalid : new String[][] {{"page", "-1"}, {"size", "0"}, {"size", "101"}, {"page", "x"}}) {
             mvc.perform(asAdmin(get(MODELS).param(invalid[0], invalid[1])))

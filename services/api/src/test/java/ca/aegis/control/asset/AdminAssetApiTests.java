@@ -244,10 +244,14 @@ class AdminAssetApiTests extends CatalogApiTest {
                 .andExpect(jsonPath("$.operationalDiagnostic.reasons").value(
                         contains("NOT_AVAILABLE", "UNKNOWN_PHYSICAL_STATE")));
 
+        // A new key on an archived asset: no new business change, the derived fields are evaluated again.
         clock.advance(Duration.ofMinutes(10));
         archiveAsset(id)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.archivedAt").value(archivedAt.toString()));
+                .andExpect(jsonPath("$.archivedAt").value(archivedAt.toString()))
+                .andExpect(jsonPath("$.operationalDiagnostic.evaluatedAt")
+                        .value(archivedAt.plus(Duration.ofMinutes(10)).toString()));
+        assertEquals(archivedAt, updatedAt(id));
         mvc.perform(asAdmin(get(ASSETS + "/" + id)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.assetCode").value("HIST-" + suffix))
@@ -294,6 +298,11 @@ class AdminAssetApiTests extends CatalogApiTest {
                 .andExpect(jsonPath("$.totalPages").value(2))
                 .andExpect(jsonPath("$.items[*].id").value(contains(c1)))
                 .andExpect(jsonPath("$.items[0].operationalDiagnostic.evaluatedAt").value(START.toString()));
+
+        // Doc 09 §12.2: an unknown query parameter is ignored on the catalog reads.
+        mvc.perform(asAdmin(get(ASSETS).param("q", suffix).param("readiness", "READY").param("x", "1")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].id").value(contains(a1, b1, c1)));
 
         mvc.perform(asAdmin(get(ASSETS).param("q", "%")))
                 .andExpect(status().isOk())
