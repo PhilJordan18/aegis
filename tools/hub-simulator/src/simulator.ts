@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { setTimeout as sleep } from 'node:timers/promises';
 import { reconnectDelayMs } from './backoff.ts';
 import { FileBootCounter, type BootCounter } from './boot-counter.ts';
 import { FileCommandJournal, type CommandJournal, type JournalEntry } from './command-journal.ts';
@@ -238,6 +237,7 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
   #heartbeatTimer: NodeJS.Timeout | undefined;
   #reconnectTimer: NodeJS.Timeout | undefined;
   #onlineWaiters: Array<() => void> = [];
+  #crashing: Promise<void> | undefined;
 
   #clockSynchronized = true;
   #screenAvailable = true;
@@ -411,15 +411,23 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
    * Abrupt failure (power loss): the socket closes without DISCONNECT, the broker
    * publishes the Will, and a message being handled is never acknowledged.
    */
-  async crash(): Promise<void> {
+  crash(): Promise<void> {
     const transport = this.#transport;
-    if (!transport || this.#state === 'stopped') return;
+    if (!transport || this.#state === 'stopped') return Promise.resolve();
+    // A crash already under way (a fault during actuation) is the same crash.
+    if (this.#crashing) return this.#crashing;
     this.#setState('stopping');
     this.#clearNetworkTimers();
     this.#clearLocalTimers();
-    await transport.destroy();
-    this.#transport = undefined;
-    this.#setState('stopped');
+    this.#crashing = transport
+      .destroy()
+      .catch((error: Error) => this.emit('transportError', error))
+      .then(() => {
+        this.#crashing = undefined;
+        this.#transport = undefined;
+        this.#setState('stopped');
+      });
+    return this.#crashing;
   }
 
   /**
@@ -429,7 +437,7 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
    */
   async restart(resetReason?: ResetReason, offlineMs = 0): Promise<void> {
     await this.crash();
-    if (offlineMs > 0) await sleep(offlineMs);
+    if (offlineMs > 0) await new Promise((resolve) => setTimeout(resolve, offlineMs));
     if (resetReason !== undefined) this.#resetReason = resetReason;
     this.start();
   }
@@ -526,6 +534,32 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
   /** The next command that passes validation suffers this fault instead of a clean actuation. */
   armFault(fault: ActuationFault): void {
     this.#armedFault = fault;
+  }
+
+  /**
+   * Resolves once the lock of a cell is unlocked by a command (already unlocked
+   * included); rejects after `timeoutMs`. Lets a physical script follow the unlock
+   * that a real backend decided.
+   */
+  waitUntilUnlocked(code: string, timeoutMs = 60_000): Promise<void> {
+    const cell = this.#cell(code);
+    if (cell.lockState === 'UNLOCKED') return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const listener = (compartmentId: string) => {
+        if (compartmentId !== cell.compartmentId) return;
+        cleanup();
+        resolve();
+      };
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error(`${code} not unlocked after ${timeoutMs} ms`));
+      }, timeoutMs);
+      const cleanup = () => {
+        clearTimeout(timer);
+        this.off('actuated', listener);
+      };
+      this.on('actuated', listener);
+    });
   }
 
   /**
