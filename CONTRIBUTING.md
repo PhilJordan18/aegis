@@ -243,3 +243,13 @@ vérification n’est pas évidente.
   réécrit pas l'historique (amend, rebase, squash, reset, force push) sans
   accord humain. Le push et la PR exigent la porte « deliver »; la fusion reste
   humaine.
+
+## SonarQube Cloud
+
+SonarQube Cloud analyse automatiquement chaque pull request (application GitHub,
+projet `PhilJordan18_aegis`). Son check n'est pas obligatoire et ne reçoit
+aucune couverture : une porte « passed » signifie qu'aucune règle n'est
+déclenchée par le nouveau code, pas que le code est testé. Corriger un défaut
+confirmé; documenter un faux positif avant de le marquer dans SonarQube Cloud;
+ne jamais exclure un dossier ni désactiver une règle pour obtenir du vert.
+Fonctionnement, exclusions et constats : `docs/qualite/sonarqube.md`.

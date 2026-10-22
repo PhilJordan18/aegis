@@ -148,7 +148,7 @@ export function parseScenario(raw: unknown): Scenario {
   if (!isRecord(raw) || !Array.isArray(raw.steps)) {
     throw new ScenarioError('a scenario is an object with a "steps" array');
   }
-  return { steps: raw.steps.map(parseStep) };
+  return { steps: raw.steps.map((step, index) => parseStep(step, index)) };
 }
 
 export async function runScenario(

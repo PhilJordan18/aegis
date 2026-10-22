@@ -26,7 +26,10 @@ export function pathOf(id: Exclude<RouteId, 'notFound'>): string {
 }
 
 function normalize(pathname: string): string {
-  return pathname.length > 1 ? pathname.replace(/\/+$/, '') || '/' : pathname
+  // Trailing slashes are trimmed with a loop: a regular expression here backtracks on long slash runs.
+  let end = pathname.length
+  while (end > 1 && pathname[end - 1] === '/') end -= 1
+  return pathname.slice(0, end)
 }
 
 export function matchRoute(pathname: string, previewEnabled: boolean): RouteId {

@@ -18,7 +18,7 @@ que Philippe ne les a pas approuvés.
 Node 22.12 ou plus récent (vérifié avec Node 24.13 et npm 11.8).
 
 ```bash
-npm install
+npm ci --ignore-scripts   # installation reproductible; aucune dépendance n’a de script d’installation
 npm run dev            # serveur Vite, aperçu de conception actif
 npm run dev:api        # serveur Vite sans aperçu : /api est relayé vers l'API locale
 npm run typecheck      # TypeScript strict (tsc -b)

@@ -114,7 +114,7 @@ encore à aucun topic et ne prend aucune décision métier.
 Depuis `tools/hub-simulator/` :
 
 ```bash
-npm ci
+npm ci --ignore-scripts
 export AEGIS_MQTT_DEVICE_PASSWORD="$(grep '^AEGIS_MQTT_DEVICE_PASSWORD=' ../../infra/docker/.env.example | cut -d= -f2)"
 npm start
 ```
@@ -171,7 +171,8 @@ l'inverse.
 
 ## Scénarios scriptables
 
-`--scenario <fichier.json>` exécute une suite d'étapes, puis le processus
+`--scenario <fichier.json>` (un fichier `.json` d'au plus 256 Kio, situé sous le
+répertoire courant) exécute une suite d'étapes, puis le processus
 s'arrête si la dernière étape est `stop` ou `crash`, sinon il continue jusqu'au
 signal d'arrêt :
 
