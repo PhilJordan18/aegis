@@ -130,7 +130,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run typecheck
       - name: Unit tests
-        run: npx vitest run test/unit --reporter=default --reporter=junit --outputFile.junit=reports/unit.xml
+        # Through the repository's npm scripts, so only the locked vitest runs (never an on-demand npx install).
+        run: npm test -- --reporter=default --reporter=junit --outputFile.junit=reports/unit.xml
       - name: Start an isolated broker
         working-directory: .
         # Example credentials of infra/docker/.env.example; plaintext MQTT stays on this runner.
@@ -140,7 +141,7 @@ jobs:
           set -a
           . ../../infra/docker/.env.example
           set +a
-          npx vitest run test/integration --reporter=default --reporter=junit --outputFile.junit=reports/integration.xml
+          npm run test:integration -- --reporter=default --reporter=junit --outputFile.junit=reports/integration.xml
       - name: Test counts
         if: always()
         run: python3 ../../.github/scripts/test-report.py "Simulator tests" reports/unit.xml reports/integration.xml

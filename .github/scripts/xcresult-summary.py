@@ -12,8 +12,12 @@ import sys
 
 
 def summary(bundle):
+    # An absolute path to an existing .xcresult directory can never be read as an option.
+    path = os.path.abspath(bundle)
+    if not path.endswith(".xcresult") or not os.path.isdir(path):
+        raise ValueError(f"not an .xcresult bundle: {bundle}")
     output = subprocess.run(
-        ["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", bundle, "--compact"],
+        ["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", path, "--compact"],
         capture_output=True, text=True, check=True,
     ).stdout
     return json.loads(output)
@@ -25,7 +29,7 @@ def main(bundles):
     for bundle in bundles:
         try:
             s = summary(bundle)
-        except (subprocess.CalledProcessError, json.JSONDecodeError) as error:
+        except (ValueError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
             print(f"::warning::cannot read {bundle}: {error}")
             status = 1
             continue
