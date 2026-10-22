@@ -640,7 +640,10 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
     const topics = [this.#commandsTopic, this.#displayTopic];
     transport.subscribe(topics).then(
       () => this.emit('subscribed', topics),
-      (error: Error) => this.emit('transportError', error),
+      (error: Error) => {
+        // A SUBSCRIBE cut short by a crash or a lost socket is not an error of the current connection.
+        if (transport === this.#transport && this.#state === 'online') this.emit('transportError', error);
+      },
     );
     // Doc 10 §18 order after (re)connection: ONLINE, DEVICE_RESTARTED on a real boot,
     // an immediate heartbeat carrying the current cell states, then the rest.
