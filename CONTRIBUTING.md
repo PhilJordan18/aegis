@@ -143,7 +143,7 @@ repose sur la discipline des humains et des agents.
 | Aucun push direct, aucun force push ni suppression de `dev` et `main`; PR obligatoire | Rulesets GitHub « Protect dev » et « Protect main », sans contournement | Aucune approbation exigée : l'auteur peut fusionner sa propre PR |
 | PR vers `dev` depuis une branche `<issue>-<type>-<slug>`; `main` ne reçoit que `dev` | Check obligatoire « Source branch » (`.github/workflows/branch-policy.yml`) | Vérifie le nom de la branche, pas son contenu |
 | Aucun commit sur `main` ou `dev`; aucun push vers eux; nom de branche | Hooks locaux `pre-commit` et `pre-push` | Local : `core.hooksPath` à configurer par clone, contournable par `--no-verify` |
-| ADR accepté jamais modifié | Hook local `pre-commit` (fichiers de `docs/adr/` et fiches acceptées du document 13); job CI « Accepted ADR guard », mêmes règles appliquées à la PR depuis sa base | Le hook est contournable; le job CI n'est pas encore obligatoire (#67) |
+| ADR accepté jamais modifié | Hook local `pre-commit` (fichiers de `docs/adr/` et fiches acceptées du document 13); job CI « Accepted ADR guard », règles du hook lues à la base de la PR | Le hook est contournable; le job CI n'est pas encore obligatoire (#67) et une PR qui modifie la CI elle-même repose sur la relecture |
 | Push et PR seulement après « deliver » | Consigne des agents; case du modèle de PR | Aucun blocage technique |
 | Fusion par un humain | Consigne | Un compte autorisé peut fusionner, y compris par `gh` |
 | Petits commits vérifiés sur la branche d'issue, sans réécriture d'historique | Consigne | Un amend, un rebase ou un commit non vérifié restent possibles localement |

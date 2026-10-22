@@ -15,16 +15,14 @@ import xml.etree.ElementTree as ET
 
 
 def counts(path):
-    root = ET.parse(path).getroot()
-    suites = [root] if root.tag == "testsuite" else root.findall("testsuite")
     total = failed = skipped = 0
-    for suite in suites:
-        for case in suite.iter("testcase"):
-            total += 1
-            if case.find("failure") is not None or case.find("error") is not None:
-                failed += 1
-            elif case.find("skipped") is not None:
-                skipped += 1
+    # Every test case at any depth: suites may nest (<testsuites><testsuite>…).
+    for case in ET.parse(path).getroot().iter("testcase"):
+        total += 1
+        if case.find("failure") is not None or case.find("error") is not None:
+            failed += 1
+        elif case.find("skipped") is not None:
+            skipped += 1
     return total, failed, skipped
 
 

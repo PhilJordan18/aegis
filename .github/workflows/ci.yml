@@ -131,7 +131,7 @@ jobs:
       - run: npm run typecheck
       - name: Unit tests
         # Through the repository's npm scripts, so only the locked vitest runs (never an on-demand npx install).
-        run: npm test -- --reporter=default --reporter=junit --outputFile.junit=reports/unit.xml
+        run: npm test -- --reporter=default --reporter=junit --outputFile.junit="$RUNNER_TEMP/simulator-reports/unit.xml"
       - name: Start an isolated broker
         working-directory: .
         # Example credentials of infra/docker/.env.example; plaintext MQTT stays on this runner.
@@ -141,10 +141,10 @@ jobs:
           set -a
           . ../../infra/docker/.env.example
           set +a
-          npm run test:integration -- --reporter=default --reporter=junit --outputFile.junit=reports/integration.xml
+          npm run test:integration -- --reporter=default --reporter=junit --outputFile.junit="$RUNNER_TEMP/simulator-reports/integration.xml"
       - name: Test counts
         if: always()
-        run: python3 ../../.github/scripts/test-report.py "Simulator tests" reports/unit.xml reports/integration.xml
+        run: python3 ../../.github/scripts/test-report.py "Simulator tests" "$RUNNER_TEMP/simulator-reports/unit.xml" "$RUNNER_TEMP/simulator-reports/integration.xml"
       - name: Broker logs
         if: failure()
         working-directory: .
@@ -153,7 +153,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: simulator-junit
-          path: tools/hub-simulator/reports/
+          path: ${{ runner.temp }}/simulator-reports/
           retention-days: 7
 
   agents:
@@ -217,7 +217,7 @@ jobs:
         # once it is on dev (#90).
         run: |
           destination=$(xcrun simctl list devices available -j | python3 -c '
-          import json, re, sys
+          import json, os, re, sys
           devices = json.load(sys.stdin)["devices"]
           found = []
           for runtime, items in devices.items():
@@ -234,6 +234,8 @@ jobs:
           version, _, udid, name = max(found)
           print(f"platform=iOS Simulator,id={udid}")
           print(f"{name}, iOS {version[0]}.{version[1]}", file=sys.stderr)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as out:
+              out.write(f"Simulator chosen: {name}, iOS {version[0]}.{version[1]}\n")
           ')
           echo "IOS_DESTINATION=$destination" >> "$GITHUB_ENV"
       - name: Standalone recipe

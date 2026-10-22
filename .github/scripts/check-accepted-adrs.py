@@ -2,25 +2,38 @@
 """Fail a pull request that edits or deletes an accepted ADR, compared with its base.
 
 The local pre-commit hook .githooks/check-accepted-adrs can be bypassed, so CI
-applies the same rules, loaded from that hook, to BASE_SHA..HEAD_SHA: a file of
-docs/adr/ whose base version is ACCEPTED, or an accepted '## ADR-NNN' fiche of
-the document 13 register, must come out unchanged. Adding a new ADR or editing
-a proposed one stays allowed. Any git failure fails the check.
+applies the same rules to BASE_SHA..HEAD_SHA: a file of docs/adr/ whose base
+version is ACCEPTED, or an accepted '## ADR-NNN' fiche of the document 13
+register, must come out unchanged, and an accepted fiche heading may not be
+duplicated (the hook's mapping keeps only the last occurrence). The rules are
+loaded from the hook as it is at BASE_SHA, so the pull request cannot weaken
+them by editing the hook; a change to this script or to the workflow still
+relies on review. Adding a new ADR or editing a proposed one stays allowed.
+Any git failure fails the check.
 """
 
 import importlib.machinery
 import importlib.util
 import os
+import subprocess
 import sys
+import tempfile
 
 HOOK = ".githooks/check-accepted-adrs"
 
 
-def load_hook():
-    loader = importlib.machinery.SourceFileLoader("check_accepted_adrs", HOOK)
-    spec = importlib.util.spec_from_loader(loader.name, loader)
-    module = importlib.util.module_from_spec(spec)
-    loader.exec_module(module)
+def load_hook(base):
+    source = subprocess.run(["git", "show", f"{base}:{HOOK}"], capture_output=True, text=True, encoding="utf-8")
+    if source.returncode != 0:
+        return None
+    with tempfile.TemporaryDirectory() as folder:
+        path = os.path.join(folder, "check_accepted_adrs_base.py")
+        with open(path, "w", encoding="utf-8") as out:
+            out.write(source.stdout)
+        loader = importlib.machinery.SourceFileLoader("check_accepted_adrs_base", path)
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
     return module
 
 
@@ -29,7 +42,10 @@ def main():
     if not base or not head:
         print("::error::BASE_SHA and HEAD_SHA are required.")
         return 1
-    hook = load_hook()
+    hook = load_hook(base)
+    if hook is None:
+        print(f"::error::cannot read {HOOK} at {base}.")
+        return 1
     changed = hook.git("diff", "--name-status", "--no-renames", base, head, "--", hook.ADR_DIR, hook.REGISTER)
     if changed is None:
         print(f"::error::cannot diff {base}..{head}.")
@@ -47,10 +63,16 @@ def main():
             if hook.ACCEPTED.search(before):
                 violations.append(f"{path} (accepted ADR)")
         elif path == hook.REGISTER:
-            after = hook.fiches(hook.git("show", f"{head}:{path}") or "")
+            after_text = hook.git("show", f"{head}:{path}") or ""
+            after = hook.fiches(after_text)
+            headings = [match.group(1) for match in hook.FICHE.finditer(after_text)]
             for name, text in hook.fiches(before).items():
-                if hook.ACCEPTED.search(text) and after.get(name) != text:
+                if not hook.ACCEPTED.search(text):
+                    continue
+                if after.get(name) != text:
                     violations.append(f"{path}, fiche {name} (accepted)")
+                elif headings.count(name) > 1:
+                    violations.append(f"{path}, fiche {name} (accepted, heading duplicated)")
     if violations:
         for violation in violations:
             print(f"::error::Accepted ADRs are immutable; edited or removed: {violation}")
