@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseInstant } from '../../src/contract.ts';
 import { parseCommand, parseDisplay } from '../../src/inbound.ts';
+import { TOKEN } from './hub-harness.ts';
 
 const COMMAND = {
   schemaVersion: '2.0',
@@ -79,7 +80,7 @@ describe('parseDisplay (doc 10 §27)', () => {
       challengeId: '9d65cbae-4610-4e40-a314-3b93af07be9c',
       action: 'CHECKOUT',
       compartmentCode: 'A1',
-      token: 'q3P0n8y5XbT1sZr7Kd2Wc9Hf4Lm6Vg0Ja1Ue8Ni3Ro5',
+      token: TOKEN,
     },
   };
 
