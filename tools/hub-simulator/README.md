@@ -1,4 +1,4 @@
-# Simulateur du hub Aegis (SIM-01)
+# Simulateur du hub Aegis (SIM-01, SIM-02)
 
 Outil Node/TypeScript autonome qui se comporte comme le hub ESP32 d'un locker
 (Aegis Locker Node) face au broker MQTT, afin de développer et tester le backend
@@ -6,7 +6,15 @@ sans le matériel. Il réimplémente le [contrat MQTT](../../docs/cahier-concept
 à partir de la documentation, sans partager de code avec l'API Java : un écart
 entre les deux lectures du contrat doit apparaître en intégration.
 
-Cette tranche (P0.0, issue #15, mise au schéma 2.0 par #63) couvre :
+Il ne prend aucune décision métier : il valide techniquement, déduplique,
+actionne la cellule simulée visée et rapporte ce qu'il observe. Le monde physique
+(portes, tags, pannes) est scripté, jamais décidé par le hub.
+
+La tranche SIM-02 (#39) ajoute les commandes, l'écran et les observations
+physiques; voir [Commandes](#commandes-unlock_compartment),
+[Journal de déduplication](#journal-de-déduplication), [Écran](#écran-du-hub) et
+[Observations physiques](#observations-physiques). La tranche SIM-01 (P0.0,
+issue #15, mise au schéma 2.0 par #63) couvre :
 
 - `DEVICE_AVAILABILITY` `ONLINE` (`reason` `CONNECTED`) publié à chaque connexion,
   QoS 1, `retain=true` (§15.1);
@@ -96,9 +104,125 @@ simuler le même `deviceKey` en même temps (ils partageraient aussi le `clientI
 Le `.gitignore` du simulateur exclut `boot-count*.json` au cas où un chemin
 relatif viserait le dépôt; les tests écrivent dans un répertoire temporaire.
 
-Hors périmètre, prévus par SIM-02 (#39) : commandes `UNLOCK_COMPARTMENT`,
-accusés, écran (`display`), porte, serrure et RFID. Le simulateur ne s'abonne
-encore à aucun topic et ne prend aucune décision métier.
+## Commandes `UNLOCK_COMPARTMENT`
+
+À chaque connexion, le hub s'abonne (QoS 1) aux seuls topics `commands` et
+`display` de son locker (§6.1). Il s'abonne à chaque connexion plutôt que de se
+fier à `sessionPresent` : une session persistante peut exister sans ces
+abonnements (créée par SIM-01, par exemple). Une commande retenue (`retain`)
+n'est jamais exécutée (§7.2).
+
+Validation, dans cet ordre (§9.1) :
+
+| Étape | Résultat si elle échoue |
+|---|---|
+| Taille ≤ 16 Kio, JSON objet, `messageId`, `operationId` et `compartmentId` en UUID canonique | Ignorée et journalisée localement : un `COMMAND_REJECTED` exige ces trois champs (§20) |
+| `messageId` déjà dans le journal | Résultat connu republié : `COMMAND_ACKNOWLEDGED` `ALREADY_APPLIED` ou le même `COMMAND_REJECTED`, sans actionnement |
+| `schemaVersion` majeure 2 | `UNSUPPORTED_SCHEMA` (version absente ou mal formée : `INVALID_PAYLOAD`) |
+| `type`, `lockerId`, `issuedAt`, `expiresAt` valides, `expiresAt` > `issuedAt` | `INVALID_PAYLOAD` |
+| `lockerId` du hub | `WRONG_LOCKER` |
+| `compartmentId` d'une cellule configurée | `UNKNOWN_COMPARTMENT` |
+| Horloge synchronisée | `CLOCK_NOT_SYNCHRONIZED` |
+| Maintenant < `expiresAt` | `COMMAND_EXPIRED` |
+| `operationId` déjà exécuté par une autre commande | Résultat connu de cette opération, avec le nouveau `commandMessageId` |
+| Aucune opération physique en cours sur le locker | `LOCAL_OPERATION_IN_PROGRESS` |
+| Cellule `CONNECTED` | `CELL_UNREACHABLE` |
+| Porte `CLOSED` | `DOOR_STATE_UNSAFE` |
+
+Une commande acceptée est écrite `EXECUTING` dans le journal **avant**
+l'actionnement, masque le QR de son opération, déverrouille la seule cellule
+visée, puis le journal passe à `ACKNOWLEDGED` et le hub publie
+`COMMAND_ACKNOWLEDGED` `ACCEPTED` puis `LOCK_UNLOCKED`. Tous ces événements
+partent sur `events`, QoS 1, sans retain. Si `EXECUTING` ne peut pas être écrit,
+rien n'est actionné et le hub répond `INTERNAL_DEVICE_ERROR`.
+
+Le hub ne publie jamais `COMPARTMENT_DISABLED` ni `POWER_STATE_UNSAFE`, dont le
+sens côté hub n'est pas défini.
+
+## Journal de déduplication
+
+Le journal (§16.1) est l'équivalent de l'anneau en flash du firmware. Il garde,
+par commande, `messageId`, `operationId`, `compartmentId`, l'état `EXECUTING`,
+`ACKNOWLEDGED` ou `REJECTED`, la raison, le détail et l'horodatage. Il est
+persisté comme `bootCount`, **hors du dépôt**, un fichier par `deviceKey` :
+`$XDG_STATE_HOME/aegis/hub-simulator/command-journal-<deviceKey>.json` par défaut,
+ou `AEGIS_SIM_COMMAND_JOURNAL_FILE`. Chaque écriture se fait par fichier
+temporaire puis renommage; un fichier illisible, mal formé ou d'un autre
+`deviceKey` arrête le démarrage plutôt que d'oublier les commandes consommées.
+
+- Rétention : toute entrée de moins de 24 h et au moins les 64 dernières, avec
+  un plafond de 1024 entrées. Le plafond n'est atteint qu'au-delà d'environ
+  1000 commandes par jour.
+- Après un redémarrage (`restart`, relance du processus), le journal est relu :
+  une redélivrance ne rouvre jamais une serrure (§23.2 point 6).
+- Une entrée restée `EXECUTING` au démarrage devient `REJECTED`
+  `PREVIOUS_EXECUTION_UNCERTAIN`. Le hub publie ce rejet après `ONLINE`,
+  `DEVICE_RESTARTED` et le premier heartbeat, puis à chaque démarrage tant que
+  le broker ne l'a pas acquitté. Une redélivrance de cette commande, ou une
+  autre commande de la même opération, reçoit la même réponse, sans
+  actionnement.
+- Un crash pendant le traitement n'envoie pas de PUBACK : le broker redélivre la
+  commande à la reconnexion de la session persistante (§23.6 point 2).
+
+Deux processus ne doivent pas partager le même fichier en même temps.
+
+## Écran du hub
+
+`DISPLAY_ACCESS_CHALLENGE` (§27.1) est affiché si son `targetDeviceSessionId`
+est celui du démarrage courant, si l'écran est disponible et l'horloge
+synchronisée, si l'échéance n'est pas passée et si `displayRevision` dépasse
+la plus grande révision acceptée pendant ce démarrage. L'affichage dure au plus
+60 s après `issuedAt`, même si `expiresAt` est plus tardif. Après le rendu, le
+hub publie `ACCESS_CHALLENGE_DISPLAYED` (`displayMessageId`, `challengeId`,
+`displayRevision`, `operationId`, `compartmentId`), sans le token ni
+`commandMessageId`.
+
+Le QR est masqué au début de l'exécution de la commande de cette opération, à
+une perte de connexion, à l'échéance et à chaque démarrage. Un doublon est
+acquitté de nouveau sans réafficher le QR. `DISPLAY_OPERATION_STATUS` (§27.3)
+remplace l'écran pour 30 s au plus, sans accusé positif.
+
+| Cas | `DISPLAY_REJECTED.reason` |
+|---|---|
+| Autre démarrage | `TARGET_SESSION_MISMATCH` |
+| Échéance passée | `DISPLAY_EXPIRED` |
+| Révision inférieure ou égale | `STALE_DISPLAY_REVISION` |
+| Écran coupé ou horloge non synchronisée | `SCREEN_UNAVAILABLE` |
+| Schéma, type, `lockerId`, cellule ou payload invalide | `INVALID_DISPLAY_PAYLOAD` |
+
+Un message non corrélable (sans `messageId`, `operationId` ou `compartmentId`
+valides) ou retenu est ignoré et journalisé localement. Le token et l'URI du QR
+ne sont jamais journalisés ni publiés. Seul l'accesseur `screen` de l'API les
+expose, pour qu'un test de bout en bout puisse « scanner » le QR.
+
+## Observations physiques
+
+Chaque cellule simulée garde son adresse, l'état de connexion, du lecteur, de
+la porte et de la serrure (ceux du heartbeat) et les tags présents. Le monde
+physique est scripté :
+
+- `openDoor` publie `DOOR_OPENED`. Une porte verrouillée ne s'ouvre qu'avec
+  `forced` (effraction, gâche défaillante);
+- `closeDoor` publie `DOOR_CLOSED`. Si la serrure est encore ouverte, le hub la
+  reverrouille et publie `LOCK_LOCKED`; dans une opération, il lance ensuite un
+  scan RFID de 3 s (`AEGIS_SIM_RFID_WINDOW_MS`);
+- `RFID_SCAN_COMPLETED` liste les tags présents à la fin de la fenêtre, avec
+  leur `readCount` (3 par défaut, pour la preuve de retour §12.2). Un lecteur
+  `FAULTED` donne `FAULTED` et une liste vide; une cellule déconnectée donne
+  `UNKNOWN` et une liste vide;
+- sans ouverture de porte, la serrure se reverrouille d'elle-même après
+  `AEGIS_SIM_UNLOCK_WINDOW_MS` (15 s par défaut, §9.2). Cette durée continue de
+  s'écouler pendant une coupure réseau.
+
+Les événements portent l'`operationId` de l'opération en cours dans la cellule,
+de l'actionnement jusqu'au scan qui suit la fermeture, ou jusqu'au
+reverrouillage d'une ouverture inutilisée. Hors opération (porte forcée, scan
+explicite, après un redémarrage), ils n'en portent pas (§20). Un événement
+préparé pendant une coupure est mis en file (64 au plus) et publié après
+`ONLINE` et le heartbeat, avec sa `sequence` d'origine. Le dépassement de la
+file n'est pas signalé par `STORAGE_FAULT`. Un événement survenu hub éteint
+est perdu. Au démarrage, les serrures reviennent à `LOCKED` et l'opération en
+cours est oubliée.
 
 ## Prérequis
 
@@ -157,6 +281,9 @@ docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml
 | `AEGIS_SIM_RESET_REASON` | `POWER_ON` | `resetReason` du premier `DEVICE_RESTARTED`, dans la liste contrôlée |
 | `AEGIS_SIM_BOOT_COUNT_FILE` | `$XDG_STATE_HOME/aegis/hub-simulator/boot-count-<deviceKey>.json` | Fichier d'état de `bootCount`, hors du dépôt |
 | `AEGIS_SIM_BOOT_COUNT` | aucun | `bootCount` imposé au premier démarrage (tests, remise à zéro délibérée) |
+| `AEGIS_SIM_COMMAND_JOURNAL_FILE` | `$XDG_STATE_HOME/aegis/hub-simulator/command-journal-<deviceKey>.json` | Journal de déduplication des commandes, hors du dépôt |
+| `AEGIS_SIM_UNLOCK_WINDOW_MS` | `15000` | Reverrouillage automatique après un déverrouillage (1000 à 120000) |
+| `AEGIS_SIM_RFID_WINDOW_MS` | `3000` | Fenêtre du scan RFID après fermeture (100 à 10000) |
 | `AEGIS_SIM_RSSI_DBM` | `-55` | `network.rssiDbm` du heartbeat |
 | `AEGIS_SIM_ALLOW_INSECURE_REMOTE` | `false` | `true` autorise `mqtt:` vers un hôte non local, sur un réseau Docker isolé seulement (§4.2) |
 
@@ -179,7 +306,19 @@ signal d'arrêt :
 npm start -- --scenario scenarios/heartbeats-then-crash.json
 npm start -- --scenario scenarios/reconnect-restart-stop.json
 npm start -- --scenario scenarios/late-messages-replay.json
+npm start -- --scenario scenarios/checkout-with-backend.json
 ```
+
+Les scénarios `*-local.json` fabriquent eux-mêmes leurs commandes
+(`receiveCommand`) et tournent sans backend :
+
+| Fichier | Couvre |
+|---|---|
+| `checkout-return-local.json` | Retrait (scan sain, vide) puis retour (tag lu 3 fois) |
+| `negative-commands-local.json` | Mauvaise cellule, mauvais locker, commande expirée, redélivrance et seconde commande de la même opération (`ALREADY_APPLIED`), rejeu d'un accusé |
+| `missing-tag-reader-fault-local.json` | Retour sans l'actif (scan vide), lecteur en panne, rejeu d'un scan |
+| `restart-mid-operation-local.json` | Crash pendant l'actionnement puis `PREVIOUS_EXECUTION_UNCERTAIN`, redémarrage porte ouverte |
+| `checkout-with-backend.json` | Attend le déverrouillage décidé par un vrai backend, puis retire l'actif et referme |
 
 | Étape | Effet |
 |---|---|
@@ -191,6 +330,17 @@ npm start -- --scenario scenarios/late-messages-replay.json
 | `{ "do": "updateCompartment", "code": "A2", "patch": { "connectionStatus": "DISCONNECTED" } }` | État de cellule rapporté par les heartbeats suivants |
 | `{ "do": "replay", "type": "DEVICE_AVAILABILITY", "reason": "CONNECTION_LOST", "connectionsAgo": 1 }` | Republie tel quel un message déjà émis (voir ci-dessous) |
 | `{ "do": "stop" }` / `{ "do": "crash" }` | Arrêt propre (`SHUTDOWN`) ou brutal (Last Will) |
+| `{ "do": "restart", "offlineMs": 30000 }` | Hub éteint 30 s avant de redémarrer; les commandes publiées entre-temps attendent dans la session |
+| `{ "do": "openDoor", "code": "A1", "forced": true }` | Ouverture de porte; `forced` pour une porte verrouillée |
+| `{ "do": "closeDoor", "code": "A1" }` | Fermeture, reverrouillage, puis scan dans une opération |
+| `{ "do": "putTag", "code": "A1", "identifier": "E200…", "readCount": 3 }` / `{ "do": "takeTag", … }` | Un tag entre dans la cellule ou en sort |
+| `{ "do": "scanRfid", "code": "A2", "windowMs": 3000 }` | Scan explicite, terminé avant l'étape suivante |
+| `{ "do": "updateCompartment", "code": "A1", "patch": { "readerStatus": "FAULTED" } }` | Panne de lecteur ou de cellule, sans événement |
+| `{ "do": "setClock", "synchronized": false }` / `{ "do": "setScreen", "available": false }` | Horloge non synchronisée, écran coupé |
+| `{ "do": "armFault", "fault": "CRASH_DURING_ACTUATION" }` | La prochaine commande valide fait planter le hub après l'actionnement (ou `LOCK_ACTUATION_FAILED`) |
+| `{ "do": "waitUnlocked", "code": "A1", "timeoutMs": 600000 }` | Attendre qu'une commande déverrouille la cellule |
+| `{ "do": "receiveCommand", "ref": "c1", "compartment": "A1", "operation": "op1", "expiresInMs": 120000 }` | Commande fabriquée localement, livrée comme par le broker; options `compartmentId` (UUID brut), `lockerId`, `issuedInMs`, `schemaVersion` |
+| `{ "do": "redeliverCommand", "ref": "c1" }` | Redélivrance des mêmes octets |
 
 `restart` passe par un arrêt brutal : le broker publie le Will de la connexion
 interrompue, puis le nouveau démarrage prend `bootCount` + 1. Une étape qui suit
@@ -199,10 +349,15 @@ un `restart` ou un `dropConnection` et qui publie doit attendre `waitOnline`.
 Les mêmes actions existent en API pour des tests TypeScript
 (`src/index.ts`) : `new HubSimulator(defineConfig({ password }))`, puis
 `start()`, `waitUntilOnline()`, `dropConnection()`, `restart()`,
-`updateCompartment()`, `replay()`, `stop()`, `crash()`, les accesseurs
-`bootCount`, `deviceSessionId` et `connectionId`, et les événements `sent`,
-`delivered`, `willPrepared` et `replayed`. Le transport, l'horloge et le
-compteur de démarrages (`MemoryBootCounter` en test) sont injectables.
+`updateCompartment()`, `replay()`, `stop()`, `crash()`, `openDoor()`,
+`closeDoor()`, `putTag()`, `takeTag()`, `scanRfid()`, `setClockSynchronized()`,
+`setScreenAvailable()`, `armFault()`, `waitUntilUnlocked()` et `deliver()`; les
+accesseurs `bootCount`, `deviceSessionId`, `connectionId`, `screen` et
+`compartment(code)`; les événements `sent`, `delivered`, `willPrepared`,
+`replayed`, `subscribed`, `inbound`, `actuated`, `screen` et `journalError`. Le
+transport, l'horloge, le compteur de démarrages (`MemoryBootCounter` en test)
+et le journal (`MemoryCommandJournal`) sont injectables. Le CLI journalise
+`inbound`, `actuated` et `screen` sans token ni URI de QR.
 
 ### Rejeu d'un message déjà émis
 
@@ -214,16 +369,17 @@ tardif, heartbeat retardé, ancien `DEVICE_RESTARTED`, doublon.
 
 | Champ | Rôle |
 |---|---|
-| `type` | Requis : `HEARTBEAT`, `DEVICE_AVAILABILITY` ou `DEVICE_RESTARTED` |
+| `type` | Requis : tout type publié par le hub (`HEARTBEAT`, `DEVICE_AVAILABILITY`, `DEVICE_RESTARTED`, `COMMAND_ACKNOWLEDGED`, `DOOR_OPENED`, `RFID_SCAN_COMPLETED`...) |
 | `reason` | `DEVICE_AVAILABILITY` seulement; `CONNECTION_LOST` désigne un Last Will préparé |
 | `bootsAgo` | 0 = démarrage courant, 1 = précédent |
-| `connectionsAgo` | Connexions établies seulement (celles qui ont publié `ONLINE`), comptées sur toute l'exécution, démarrages compris : 0 = la dernière (la connexion courante une fois connecté), 1 = la précédente. Une tentative échouée ne compte pas, même si la reconnexion en a demandé plusieurs. Interdit pour `DEVICE_RESTARTED`, qui n'a pas de `connectionId` |
+| `connectionsAgo` | Connexions établies seulement (celles qui ont publié `ONLINE`), comptées sur toute l'exécution, démarrages compris : 0 = la dernière (la connexion courante une fois connecté), 1 = la précédente. Une tentative échouée ne compte pas, même si la reconnexion en a demandé plusieurs. Réservé à `HEARTBEAT` et `DEVICE_AVAILABILITY`, seuls types porteurs d'un `connectionId` |
 
 Sans `bootsAgo` ni `connectionsAgo`, le message le plus récent du type est
 choisi; les deux ensemble sont refusés. Le simulateur garde, par connexion, le
 Will, `ONLINE`, `SHUTDOWN` et le dernier heartbeat, et par démarrage
 `DEVICE_RESTARTED`, sur les 32 dernières connexions établies et les 16 derniers
-démarrages. Les Wills des tentatives sans `ONLINE` sont gardés à part (32 au
+démarrages, ainsi que les 64 derniers événements opérationnels (accusés, porte,
+serrure, RFID, écran). Les Wills des tentatives sans `ONLINE` sont gardés à part (32 au
 plus), si bien qu'une longue panne n'évince aucune connexion établie; ils ne
 sont pas désignables par `connectionsAgo`. Le rejeu exige d'être connecté et
 échoue si rien ne correspond.
@@ -255,8 +411,15 @@ AEGIS_MQTT_API_PASSWORD="$(grep '^AEGIS_MQTT_API_PASSWORD=' ../../infra/docker/.
 types, topics, QoS, retain, `sequence`, `bootCount`, `connectionId`, `reason`,
 `resetReason`, cadence de 10 s, backoff), la persistance de `bootCount` dans un
 répertoire temporaire et le rejeu, avec un transport simulé et une horloge
-contrôlée. `npm run test:integration` utilise le broker local, observé comme
-`aegis_api` :
+contrôlée. Il couvre aussi chaque validation et chaque rejet de commande et
+d'écran, la déduplication (redélivrance, seconde commande d'une opération,
+redémarrage, nouveau processus), le crash pendant l'actionnement, les
+événements de porte, serrure et RFID, le journal et les scénarios `*-local.json`.
+Désactiver l'une ou l'autre des deux déduplications fait échouer ces tests.
+
+`npm run test:integration` utilise le broker local, observé comme `aegis_api`,
+fichier par fichier. Chaque test de commande efface au début et à la fin la
+session persistante de son propre `clientId` :
 
 - le CLI publie `ONLINE`, `DEVICE_RESTARTED` et trois heartbeats espacés de
   10 s, avec le même `bootCount` et le même `connectionId` que son Will; après
@@ -266,7 +429,20 @@ contrôlée. `npm run test:integration` utilise le broker local, observé comme
   un `SHUTDOWN` retenu et aucun Will;
 - `restart()` augmente `bootCount` sur le fil, et un rejeu arrive octet pour
   octet avec son `messageId` d'origine;
-- un mauvais secret est refusé.
+- un mauvais secret est refusé;
+- une commande publiée par `aegis_api` est acquittée une fois, sa redélivrance
+  reçoit `ALREADY_APPLIED`; mauvaise cellule, mauvais locker, commande expirée
+  et opération concurrente sont rejetées sans actionnement;
+- un défi d'écran est affiché et acquitté sans son token; une instruction pour
+  un autre démarrage est refusée;
+- un crash pendant l'actionnement laisse la commande sans PUBACK : le broker la
+  redélivre après le redémarrage et le hub répond
+  `PREVIOUS_EXECUTION_UNCERTAIN`, sans second actionnement;
+- le compte du device ne reçoit pas les commandes d'un autre locker.
+
+Tous les simulateurs du locker fictif partagent son topic `commands`, et une
+session persistante hors ligne garde les commandes publiées entre-temps. Les
+tests SIM-01 ne vérifient donc que les faits de statut.
 
 Sans les deux mots de passe dans l'environnement, ces tests sont ignorés.
 
@@ -279,4 +455,26 @@ et appliqués ici. Restent hors du simulateur :
 - les cas de rejet de l'ingestion (message 1.0, `resetReason` hors liste, champ
   manquant), que le simulateur n'émet pas;
 - un silence de heartbeats sans Will sur une connexion ouverte (§23.5 point 10) :
-  le simulateur ne sait pas suspendre ses heartbeats en gardant la connexion.
+  le simulateur ne sait pas suspendre ses heartbeats en gardant la connexion;
+- `DEVICE_ERROR` (§13.2), dont `STORAGE_FAULT` après débordement de la file.
+
+Choix faits par SIM-02 là où le document 10 ne tranche pas :
+
+- un message non corrélable n'est pas publié. `COMMAND_REJECTED` exige
+  `operationId` et `compartmentId`, et aucun `errorCode` de `DEVICE_ERROR` ne
+  convient au « `DEVICE_ERROR` expurgé » demandé pour l'écran (§20);
+- une commande ou une instruction d'écran retenue est ignorée sans réponse;
+- la déduplication passe avant l'expiration : une redélivrance tardive reçoit le
+  résultat connu, pas `COMMAND_EXPIRED`;
+- un rejet est rejoué à l'identique, même si sa cause a disparu : le backend
+  doit émettre une nouvelle commande;
+- une autre commande d'une opération déjà exécutée reçoit le résultat de cette
+  opération (`ALREADY_APPLIED` si elle a été acquittée). Une opération n'est
+  « consommée » qu'une fois `EXECUTING` atteint; un rejet antérieur ne la
+  consomme pas;
+- le scan RFID après fermeture est lancé par le hub; sa fin clôt l'opération
+  dans la cellule;
+- un mauvais `lockerId`, un schéma non pris en charge ou une horloge non
+  synchronisée sur l'écran sont rendus par `INVALID_DISPLAY_PAYLOAD` ou
+  `SCREEN_UNAVAILABLE`, faute de raison dédiée;
+- une révision ancienne reçoit `STALE_DISPLAY_REVISION` plutôt qu'un silence.
