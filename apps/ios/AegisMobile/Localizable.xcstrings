@@ -1,12 +1,32 @@
 {
   "sourceLanguage" : "fr",
   "strings" : {
+    "Accès réservé aux techniciens" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Technicians only"
+          }
+        }
+      }
+    },
     "Actualiser" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Refresh"
+          }
+        }
+      }
+    },
+    "Administrateur" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Administrator"
           }
         }
       }
@@ -21,12 +41,62 @@
         }
       }
     },
+    "Adresse courriel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Email address"
+          }
+        }
+      }
+    },
+    "Adresse courriel ou mot de passe incorrect." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Incorrect email address or password."
+          }
+        }
+      }
+    },
     "Adresse du service absente" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Service address missing"
+          }
+        }
+      }
+    },
+    "Afficher le mot de passe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show password"
+          }
+        }
+      }
+    },
+    "Ce compte administrateur s’utilise dans Aegis Manager sur le Web. Aucune donnée n’a été chargée." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This administrator account is used in Aegis Manager on the web. No data was loaded."
+          }
+        }
+      }
+    },
+    "Ce compte n’a pas accès à l’application Aegis. Aucune donnée n’a été chargée." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This account can't use the Aegis app. No data was loaded."
           }
         }
       }
@@ -41,12 +111,92 @@
         }
       }
     },
+    "Compte" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account"
+          }
+        }
+      }
+    },
+    "Compte fourni par votre administrateur." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account provided by your administrator."
+          }
+        }
+      }
+    },
+    "Compte utilisé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account used"
+          }
+        }
+      }
+    },
+    "Connexion" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in"
+          }
+        }
+      }
+    },
+    "Connexion au service impossible" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't reach the service"
+          }
+        }
+      }
+    },
     "Connexion au service impossible. Vérifiez le réseau." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Can't reach the service. Check your network."
+          }
+        }
+      }
+    },
+    "Connexion en cours" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signing in"
+          }
+        }
+      }
+    },
+    "Connexion…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signing in…"
+          }
+        }
+      }
+    },
+    "Espace technicien" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Technician access"
           }
         }
       }
@@ -71,6 +221,16 @@
         }
       }
     },
+    "La session n’a pas pu être enregistrée sur cet appareil. Réessayez." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The session couldn't be saved on this device. Try again."
+          }
+        }
+      }
+    },
     "Le service a répondu avec l’erreur %lld. Réessayez dans un instant." : {
       "localizations" : {
         "en" : {
@@ -91,12 +251,113 @@
         }
       }
     },
+    "Le service n’a pas pu traiter la connexion. Identifiant de suivi : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service couldn't process the sign-in. Trace ID: %@"
+          }
+        }
+      }
+    },
+    "Le service n’a pas pu traiter la connexion. Réessayez dans un instant." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service couldn't process the sign-in. Try again in a moment."
+          }
+        }
+      }
+    },
     "Le service répond mais ne se déclare pas opérationnel." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "The service responds but doesn't report itself as operational."
+          }
+        }
+      }
+    },
+    "L’adresse courriel est trop longue." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The email address is too long."
+          }
+        }
+      }
+    },
+    "Masquer le mot de passe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide password"
+          }
+        }
+      }
+    },
+    "Mot de passe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password"
+          }
+        }
+      }
+    },
+    "Niveau d’accès" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Access level"
+          }
+        }
+      }
+    },
+    "Niveau inconnu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unknown level"
+          }
+        }
+      }
+    },
+    "Prêt.\nAutorisé.\nProuvé." : {
+      "comment" : "Common Aegis signature, three lines",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready.\nAuthorized.\nProven."
+          }
+        }
+      }
+    },
+    "Reprise de la session…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resuming your session…"
+          }
+        }
+      }
+    },
+    "Restreint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restricted"
           }
         }
       }
@@ -117,6 +378,86 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Unexpected response"
+          }
+        }
+      }
+    },
+    "Rôle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Role"
+          }
+        }
+      }
+    },
+    "Rôle inconnu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unknown role"
+          }
+        }
+      }
+    },
+    "Saisissez une adresse courriel valide." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a valid email address."
+          }
+        }
+      }
+    },
+    "Saisissez votre adresse courriel." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter your email address."
+          }
+        }
+      }
+    },
+    "Saisissez votre mot de passe." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter your password."
+          }
+        }
+      }
+    },
+    "Se connecter" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in"
+          }
+        }
+      }
+    },
+    "Se connecter avec un autre compte" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in with another account"
+          }
+        }
+      }
+    },
+    "Se déconnecter" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign out"
           }
         }
       }
@@ -171,12 +512,133 @@
         }
       }
     },
+    "Standard" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Standard"
+          }
+        }
+      }
+    },
+    "Technicien" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Technician"
+          }
+        }
+      }
+    },
+    "Trop de tentatives. Réessayez dans %@." : {
+      "comment" : "The argument is a localized duration, for example 55 seconds",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Too many attempts. Try again in %@."
+          }
+        }
+      }
+    },
+    "Trop de tentatives. Réessayez plus tard." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Too many attempts. Try again later."
+          }
+        }
+      }
+    },
     "Version" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Version"
+          }
+        }
+      }
+    },
+    "Vos équipements. Votre activité." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your equipment. Your activity."
+          }
+        }
+      }
+    },
+    "Votre réservation et votre prêt restent actifs." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your reservation and loan stay active."
+          }
+        }
+      }
+    },
+    "Votre session a expiré. Vos réservations et prêts sont conservés." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your session has expired. Your reservations and loans are kept."
+          }
+        }
+      }
+    },
+    "Votre session est conservée, mais elle n’a pas pu être vérifiée. Aucune action n’est possible hors ligne." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your session is kept but couldn't be verified. No action is available offline."
+          }
+        }
+      }
+    },
+    "Votre session n’est plus valide. Reconnectez-vous." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your session is no longer valid. Sign in again."
+          }
+        }
+      }
+    },
+    "Vous déconnecter ?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign out?"
+          }
+        }
+      }
+    },
+    "Vous pouvez réessayer." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can try again."
+          }
+        }
+      }
+    },
+    "Vous êtes déconnecté." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You're signed out."
           }
         }
       }
@@ -197,6 +659,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Checks that the app can reach the Aegis Control service."
+          }
+        }
+      }
+    },
+    "Vérifiez les champs indiqués." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the highlighted fields."
+          }
+        }
+      }
+    },
+    "Vérifiez votre mot de passe." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check your password."
+          }
+        }
+      }
+    },
+    "nom@entreprise.ca" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "name@company.ca"
+          }
+        }
+      }
+    },
+    "État du service" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service status"
           }
         }
       }

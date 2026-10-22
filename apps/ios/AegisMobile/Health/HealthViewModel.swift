@@ -15,7 +15,7 @@ enum HealthFailure: Equatable, Sendable {
         switch error {
         case .unreachable, .cancelled:
             self = .unreachable
-        case let .http(status, problem):
+        case let .http(status, problem, _):
             self = .unavailable(status: status, traceId: problem?.traceId)
         case .invalidResponse:
             self = .unexpectedResponse
@@ -47,10 +47,11 @@ final class HealthViewModel {
         state = checker == nil ? .failed(.misconfigured) : .idle
     }
 
-    convenience init(configuration: Result<APIConfiguration, APIConfiguration.Failure>) {
+    convenience init(configuration: Result<APIConfiguration, APIConfiguration.Failure>,
+                     transport: any HTTPTransport = URLSessionTransport()) {
         switch configuration {
         case let .success(configuration):
-            self.init(checker: APIClient(configuration: configuration),
+            self.init(checker: APIClient(configuration: configuration, transport: transport),
                       serviceHost: configuration.baseURL.host(percentEncoded: false))
         case .failure:
             self.init(checker: nil, serviceHost: nil)

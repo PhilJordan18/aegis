@@ -4,15 +4,20 @@
 #   standalone  Unit and UI tests that need no backend, then the String Catalog
 #               check. Live tests are excluded, not skipped, and any skipped
 #               test fails the recipe.
-#   live        Tests against a running Aegis Control. Fails when the address is
-#               missing, the API is unreachable, or a live test is skipped.
+#   live        Tests against a running Aegis Control with demo accounts. Fails
+#               when a variable is missing, the API is unreachable, or a live
+#               test is skipped.
 #
 # Environment:
 #   IOS_DESTINATION          xcodebuild destination
 #                            (default: platform=iOS Simulator,name=iPhone 17,OS=latest)
 #   IOS_DERIVED_DATA         derived data under apps/ios/build (default: build/DerivedData)
 #   IOS_RESULTS_DIR          result bundles (default: build/results)
-#   AEGIS_LIVE_API_BASE_URL  live only, e.g. http://localhost:8080/api/v1
+#   AEGIS_LIVE_API_BASE_URL         live only, e.g. http://localhost:8080/api/v1
+#   AEGIS_LIVE_TECHNICIAN_PASSWORD  live only, demo technician password
+#   AEGIS_LIVE_ADMIN_PASSWORD       live only, demo administrator password
+#   AEGIS_LIVE_TECHNICIAN_EMAIL, AEGIS_LIVE_ADMIN_EMAIL
+#                                   optional, default technician@ / admin@aegis.demo
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -21,9 +26,14 @@ DESTINATION=${IOS_DESTINATION:-"platform=iOS Simulator,name=iPhone 17,OS=latest"
 DERIVED_DATA=${IOS_DERIVED_DATA:-build/DerivedData}
 RESULTS_DIR=${IOS_RESULTS_DIR:-build/results}
 
-LIVE_UNIT_TESTS="AegisMobileTests/LiveAPIIntegrationTests"
-LIVE_UI_TESTS="AegisMobileUITests/HealthScreenUITests/testLiveServiceShowsHealth"
-LIVE_TEST_COUNT=2
+LIVE_TESTS=(
+    "AegisMobileTests/LiveAPIIntegrationTests"
+    "AegisMobileTests/LiveAuthIntegrationTests"
+    "AegisMobileUITests/HealthScreenUITests/testLiveServiceShowsHealth"
+    "AegisMobileUITests/SignInLiveUITests"
+)
+# 1 health + 4 authentication client tests, 1 health + 2 sign-in UI tests.
+LIVE_TEST_COUNT=8
 
 usage() {
     echo "usage: $0 standalone|live" >&2
@@ -80,28 +90,32 @@ if problems:
 
 standalone() {
     local bundle="$RESULTS_DIR/standalone.xcresult" status=0
-    run_tests "$bundle" \
-        "-skip-testing:$LIVE_UNIT_TESTS" \
-        "-skip-testing:$LIVE_UI_TESTS" || status=$?
+    run_tests "$bundle" "${LIVE_TESTS[@]/#/-skip-testing:}" || status=$?
     check_results "$bundle"
     python3 scripts/check-strings.py "$DERIVED_DATA"
     return "$status"
 }
 
 live() {
-    if [[ -z "${AEGIS_LIVE_API_BASE_URL:-}" ]]; then
-        echo "error: AEGIS_LIVE_API_BASE_URL is required, e.g. http://localhost:8080/api/v1" >&2
-        exit 1
-    fi
+    local name
+    for name in AEGIS_LIVE_API_BASE_URL AEGIS_LIVE_TECHNICIAN_PASSWORD AEGIS_LIVE_ADMIN_PASSWORD; do
+        if [[ -z "${!name:-}" ]]; then
+            echo "error: $name is required for the live recipe" >&2
+            exit 1
+        fi
+    done
     if ! curl -fsS --max-time 10 "$AEGIS_LIVE_API_BASE_URL/system/health" >/dev/null; then
         echo "error: Aegis Control is unreachable at $AEGIS_LIVE_API_BASE_URL" >&2
         exit 1
     fi
+    # Passed to the test runners only; never printed.
     export TEST_RUNNER_AEGIS_LIVE_API_BASE_URL="$AEGIS_LIVE_API_BASE_URL"
+    export TEST_RUNNER_AEGIS_LIVE_TECHNICIAN_PASSWORD="$AEGIS_LIVE_TECHNICIAN_PASSWORD"
+    export TEST_RUNNER_AEGIS_LIVE_ADMIN_PASSWORD="$AEGIS_LIVE_ADMIN_PASSWORD"
+    [[ -z "${AEGIS_LIVE_TECHNICIAN_EMAIL:-}" ]] || export TEST_RUNNER_AEGIS_LIVE_TECHNICIAN_EMAIL="$AEGIS_LIVE_TECHNICIAN_EMAIL"
+    [[ -z "${AEGIS_LIVE_ADMIN_EMAIL:-}" ]] || export TEST_RUNNER_AEGIS_LIVE_ADMIN_EMAIL="$AEGIS_LIVE_ADMIN_EMAIL"
     local bundle="$RESULTS_DIR/live.xcresult" status=0
-    run_tests "$bundle" \
-        "-only-testing:$LIVE_UNIT_TESTS" \
-        "-only-testing:$LIVE_UI_TESTS" || status=$?
+    run_tests "$bundle" "${LIVE_TESTS[@]/#/-only-testing:}" || status=$?
     check_results "$bundle" "$LIVE_TEST_COUNT"
     return "$status"
 }

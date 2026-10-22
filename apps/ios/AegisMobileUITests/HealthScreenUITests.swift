@@ -52,6 +52,8 @@ final class HealthScreenUITests: XCTestCase {
     private func makeApp(language: Language) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += ["-AppleLanguages", "(\(language.code))", "-AppleLocale", language.locale]
+        // The diagnostic is no longer the first screen; open it directly.
+        app.launchEnvironment["AEGIS_START_SCREEN"] = "health"
         return app
     }
 
