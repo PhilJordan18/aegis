@@ -106,7 +106,7 @@ describe('catalog consistency (fr is the source of the shape)', () => {
 
   it('does not leave an English message identical to French, except a product name and words that really match', () => {
     // Product name and words that really are the same in both languages.
-    const shared = new Set(['pageTitle.landing', 'shell.sectionsLabel', 'shell.menuTitle', 'shell.sections.audit', 'shell.sections.anomalies'])
+    const shared = new Set(['pageTitle.landing', 'signIn.footerProduct', 'shell.sectionsLabel', 'shell.menuTitle', 'shell.sections.audit', 'shell.sections.anomalies'])
     const same = [...frLeaves]
       .filter(([key, leaf]) => typeof leaf === 'string' && enLeaves.get(key) === leaf && !shared.has(key))
       .map(([key]) => key)
@@ -120,6 +120,33 @@ describe('catalog consistency (fr is the source of the shape)', () => {
     expect(en.signIn.roleAccountUsed).toMatch(/[a-z]:$/)
     expect(en.signIn.traceIdLabel).toMatch(/[A-Za-z]:$/)
     expect(en.signIn.footerTechnician).toContain('Technician?')
+    expect(fr.landing.footerTechnician).toContain('\u00A0?')
+    expect(en.landing.footerTechnician).toContain('Technician?')
+  })
+})
+
+describe('brand texts (decided by Philippe, 2026-10-21)', () => {
+  it('has the common signature, the tagline and the description in both languages', () => {
+    expect(Object.values(fr.brand.signature).join(' ')).toBe('Prêt. Autorisé. Prouvé.')
+    expect(Object.values(en.brand.signature).join(' ')).toBe('Ready. Authorized. Proven.')
+    expect(fr.brand.tagline).toBe('L’essentiel, sous contrôle.')
+    expect(en.brand.tagline).toBe('What matters, under control.')
+    expect(fr.brand.description).toBe('Disponibilité, conformité et traçabilité de vos équipements.')
+    expect(en.brand.description).toBe('Equipment availability, compliance and traceability.')
+  })
+
+  it('names the mobile application Aegis Mobile in both footers, and no longer shows the old hero words', () => {
+    for (const catalog of [fr, en]) {
+      expect(catalog.signIn.footerTechnician).toContain('Aegis Mobile')
+      expect(catalog.landing.footerTechnician).toContain('Aegis Mobile')
+    }
+    const everything = JSON.stringify([fr, en])
+    expect(everything).not.toMatch(/Observé|Observed|Tracé|Traced/)
+  })
+
+  it('has no key for the countdown caption: the Retry-After delay is shown once, in the alert', () => {
+    expect(Object.keys(fr.signIn)).not.toContain('rateLimitedHint')
+    expect(Object.keys(en.signIn)).not.toContain('rateLimitedHint')
   })
 })
 
@@ -127,8 +154,6 @@ describe('message functions', () => {
   it('builds each sentence in one piece, with the inserted value last-formatted', () => {
     expect(fr.signIn.rateLimitedBody({ duration: '42 secondes' })).toBe('Réessayez dans 42 secondes.')
     expect(en.signIn.rateLimitedBody({ duration: '42 seconds' })).toBe('Try again in 42 seconds.')
-    expect(fr.signIn.rateLimitedHint({ remaining: '0:42' })).toBe('Disponible dans 0:42')
-    expect(en.signIn.rateLimitedHint({ remaining: '0:42' })).toBe('Available in 0:42')
     expect(fr.landing.calibrationExpired({ date: '8 sept. 2026' })).toBe('Calibration expirée depuis le 8 sept. 2026')
     expect(en.landing.calibrationExpired({ date: 'Sep 8, 2026' })).toBe('Calibration expired on Sep 8, 2026')
   })

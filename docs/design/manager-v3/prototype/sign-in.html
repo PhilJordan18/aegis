@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connexion — Aegis Manager</title>
+  <script src="js/boot.js"></script>
+  <link rel="stylesheet" href="css/aegis-v3.css">
+  <link rel="stylesheet" href="css/sign-in.css">
+</head>
+<body>
+  <a class="ag-skip" href="#contenu" data-i18n="skip">Aller au contenu principal</a>
+  <div class="si">
+    <header class="si__header">
+      <div id="brand"></div>
+      <div class="si__tools">
+        <a class="ag-link si__home" href="index.html"><span id="home-icon"></span><span data-i18n="home">Accueil</span></a>
+        <div class="si__lang" role="group" aria-label="Langue">
+          <button type="button" data-lang="fr" lang="fr" aria-label="Français">FR</button>
+          <button type="button" data-lang="en" lang="en" aria-label="English">EN</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="si__content">
+      <aside class="si__intro" id="intro" aria-label="Aegis">
+        <p class="si__eyebrow" id="tagline"></p>
+        <p class="si__promise" id="signature"></p>
+        <p class="si__description" id="description"></p>
+        <div class="si__rule" aria-hidden="true"></div>
+        <p class="si__flag"><span class="ag-mock" id="signature-flag"></span></p>
+      </aside>
+
+      <main id="contenu" class="si__card">
+        <div id="form-view">
+          <p class="si__eyebrow si__eyebrow--card" data-i18n="role">Espace administrateur</p>
+          <h1 class="si__title" id="title" tabindex="-1" data-i18n="heading">Connexion</h1>
+          <p class="si__sub" data-i18n="sub">Accédez à Aegis Manager.</p>
+          <div id="alert-top" class="si__alert"></div>
+          <form class="si__form" id="form" method="post" novalidate>
+            <div class="ag-field">
+              <label class="ag-field__label" for="email" data-i18n="emailLabel">Adresse courriel</label>
+              <div class="ag-field__control" id="email-control">
+                <input id="email" name="email" type="email" autocomplete="username" autocapitalize="none" spellcheck="false">
+              </div>
+              <div class="ag-field__slot"><p class="ag-field__error" id="email-error" hidden></p></div>
+            </div>
+            <div class="ag-field">
+              <label class="ag-field__label" for="password" data-i18n="passwordLabel">Mot de passe</label>
+              <div class="ag-field__control" id="password-control">
+                <input id="password" name="password" type="password" autocomplete="current-password">
+                <button type="button" class="ag-field__reveal" id="reveal" aria-controls="password"></button>
+              </div>
+              <div class="ag-field__slot"><p class="ag-field__error" id="password-error" hidden></p></div>
+            </div>
+            <div class="si__submit">
+              <button type="submit" class="ag-btn ag-btn--lg ag-btn--block" id="submit"><span id="submit-label"></span><span id="submit-icon"></span></button>
+              <p class="si__hint ag-tnum" id="hint" hidden></p>
+            </div>
+            <div id="alert-bottom" class="si__alert"></div>
+            <p class="si__note"><span id="note-icon"></span><span data-i18n="accountNote">Compte fourni par votre administrateur.</span></p>
+          </form>
+        </div>
+
+        <div id="role-view" hidden>
+          <p class="si__eyebrow si__eyebrow--card" data-i18n="role">Espace administrateur</p>
+          <h1 class="si__title" id="role-title" tabindex="-1">Accès réservé aux administrateurs</h1>
+          <div class="si__alert" id="role-alert"></div>
+          <p class="si__who"><span id="role-account"></span> <span class="ag-tnum">technician@aegis.demo</span></p>
+          <button type="button" class="ag-btn ag-btn--lg ag-btn--block" id="role-retry"></button>
+        </div>
+        <p class="ag-sr-only" role="status" id="status"></p>
+      </main>
+    </div>
+
+    <footer class="si__foot">
+      <span data-i18n="footerProduct">Aegis Manager · Administration</span>
+      <span data-i18n="technicianFooter">Technicien ? Utilisez Aegis Mobile sur iPhone.</span>
+    </footer>
+  </div>
+  <script src="js/copy.js"></script>
+  <script src="js/icons.js"></script>
+  <script src="js/brand.js"></script>
+  <script src="js/sign-in.js"></script>
+</body>
+</html>

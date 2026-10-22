@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aegis Manager — identité v3, prototype</title>
+  <script src="js/boot.js"></script>
+  <link rel="stylesheet" href="css/aegis-v3.css">
+  <style>
+    main { max-width: 920px; margin: 0 auto; padding: 40px 20px 64px; }
+    h1 { font-size: 1.75rem; letter-spacing: -0.03em; margin-bottom: 8px; }
+    h2 { font-size: 1.125rem; margin: 32px 0 10px; }
+    p, li { color: var(--ag-muted); }
+    table { width: 100%; border-collapse: collapse; font-size: .9375rem; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--ag-border); vertical-align: top; }
+    thead th { font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ag-muted); }
+    a { color: var(--ag-accent); }
+    ul { padding-left: 20px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Aegis Manager — identité « Lumière du hub » v3</h1>
+    <p>Prototype statique de l'issue #79 (aucune requête réseau, polices Geist autohébergées). Paramètres d'URL : <code>state</code>, <code>lang</code> (fr, en), <code>theme</code> (dark, light), <code>font=system</code>, <code>signature=off</code>, <code>notes=off</code>, <code>still</code> (décompte figé).</p>
+
+    <h2>Connexion</h2>
+    <table>
+      <thead><tr><th scope="col">État</th><th scope="col">Français</th><th scope="col">English</th></tr></thead>
+      <tbody>
+<tr><th scope="row">Nominal (inactif)</th><td><a href="sign-in.html?state=nominal&amp;lang=fr&amp;theme=dark">FR sombre</a> · <a href="sign-in.html?state=nominal&amp;lang=fr&amp;theme=light">FR clair</a></td><td><a href="sign-in.html?state=nominal&amp;lang=en&amp;theme=dark">EN sombre</a> · <a href="sign-in.html?state=nominal&amp;lang=en&amp;theme=light">EN clair</a></td></tr>
+<tr><th scope="row">Envoi en cours</th><td><a href="sign-in.html?state=sending&amp;lang=fr&amp;theme=dark">FR sombre</a> · <a href="sign-in.html?state=sending&amp;lang=fr&amp;theme=light">FR clair</a></td><td><a href="sign-in.html?state=sending&amp;lang=en&amp;theme=dark">EN sombre</a> · <a href="sign-in.html?state=sending&amp;lang=en&amp;theme=light">EN clair</a></td></tr>
+<tr><th scope="row">Identifiants refusés (401)</th><td><a href="sign-in.html?state=invalid-credentials&amp;lang=fr&amp;theme=dark">FR sombre</a> · <a href="sign-in.html?state=invalid-credentials&amp;lang=fr&amp;theme=light">FR clair</a></td><td><a href="sign-in.html?state=invalid-credentials&amp;lang=en&amp;theme=dark">EN sombre</a> · <a href="sign-in.html?state=invalid-credentials&amp;lang=en&amp;theme=light">EN clair</a></td></tr>
+<tr><th scope="row">Validation des champs</th><td><a href="sign-in.html?state=validation&amp;lang=fr&amp;theme=dark">FR sombre</a> · <a href="sign-in.html?state=validation&amp;lang=fr&amp;theme=light">FR clair</a></td><td><a href="sign-in.html?state=validation&amp;lang=en&amp;theme=dark">EN sombre</a> · <a href="sign-in.html?state=validation&amp;lang=en&amp;theme=light">EN clair</a></td></tr>
+<tr><th scope="row">Trop de tentatives (429, Retry-After 55 s)</th><td><a href="sign-in.html?state=rate-limited&amp;lang=fr&amp;theme=dark&amp;still">FR sombre</a> · <a href="sign-in.html?state=rate-limited&amp;lang=fr&amp;theme=light&amp;still">FR clair</a></td><td><a href="sign-in.html?state=rate-limited&amp;lang=en&amp;theme=dark&amp;still">EN sombre</a> · <a href="sign-in.html?state=rate-limited&amp;lang=en&amp;theme=light&amp;still">EN clair</a></td></tr>
+<tr><th scope="row">Service injoignable (réseau, sans traceId)</th><td><a href="sign-in.html?state=unreachable&amp;lang=fr&amp;theme=dark">FR sombre</a> · <a href="sign-in.html?state=unreachable&amp;lang=fr&amp;theme=light">FR clair</a></td><td><a href="sign-in.html?state=unreachable&amp;lang=en&amp;theme=dark">EN sombre</a> · <a href="sign-in.html?state=unreachable&amp;lang=en&amp;theme=light">EN clair</a></td></tr>
+<tr><th scope="row">Erreur du service (5xx, avec traceId)</th><td><a href="sign-in.html?state=service-error&amp;lang=fr&amp;theme=dark">FR sombre</a> · <a href="sign-in.html?state=service-error&amp;lang=fr&amp;theme=light">FR clair</a></td><td><a href="sign-in.html?state=service-error&amp;lang=en&amp;theme=dark">EN sombre</a> · <a href="sign-in.html?state=service-error&amp;lang=en&amp;theme=light">EN clair</a></td></tr>
+<tr><th scope="row">Session expirée</th><td><a href="sign-in.html?state=session-expired&amp;lang=fr&amp;theme=dark">FR sombre</a> · <a href="sign-in.html?state=session-expired&amp;lang=fr&amp;theme=light">FR clair</a></td><td><a href="sign-in.html?state=session-expired&amp;lang=en&amp;theme=dark">EN sombre</a> · <a href="sign-in.html?state=session-expired&amp;lang=en&amp;theme=light">EN clair</a></td></tr>
+<tr><th scope="row">Rôle non autorisé (technicien)</th><td><a href="sign-in.html?state=role-unauthorized&amp;lang=fr&amp;theme=dark">FR sombre</a> · <a href="sign-in.html?state=role-unauthorized&amp;lang=fr&amp;theme=light">FR clair</a></td><td><a href="sign-in.html?state=role-unauthorized&amp;lang=en&amp;theme=dark">EN sombre</a> · <a href="sign-in.html?state=role-unauthorized&amp;lang=en&amp;theme=light">EN clair</a></td></tr>
+      </tbody>
+    </table>
+
+    <h2>En-tête et barre latérale du Manager</h2>
+    <ul>
+      <li>Bureau : <a href="shell.html?theme=dark">FR sombre</a> · <a href="shell.html?theme=light">FR clair</a> · <a href="shell.html?theme=dark&amp;lang=en">EN sombre</a> · <a href="shell.html?theme=light&amp;lang=en">EN clair</a> (largeur ≥ 1024 px : barre latérale)</li>
+      <li>Compact (réduire la fenêtre sous 768 px) : barre supérieure; tiroir ouvert : <a href="shell.html?theme=dark&amp;drawer=1">FR sombre</a> · <a href="shell.html?theme=light&amp;drawer=1&amp;lang=en">EN clair</a></li>
+    </ul>
+
+    <h2>Lisibilité du logo</h2>
+    <ul><li><a href="logo-sizes.html">Symbole et composant de marque, de 12 à 48 px, sur les quatre fonds</a></li></ul>
+  </main>
+</body>
+</html>

@@ -45,11 +45,10 @@ export function ManagerShell({ currentPath, profile, onSignOut, children }: Shel
   const { m } = useI18n()
   return (
     <div className="ag-shell">
-      <div className="ag-shell__bg ag-decor" aria-hidden="true" />
       <a className="ag-skip" href="#contenu">
         {m.shell.skipLink}
       </a>
-      <nav className="ag-side ag-glass" aria-label={m.shell.sectionsLabel}>
+      <nav className="ag-side" aria-label={m.shell.sectionsLabel}>
         <div className="ag-side__brand">
           <Brand />
         </div>
@@ -58,7 +57,7 @@ export function ManagerShell({ currentPath, profile, onSignOut, children }: Shel
       </nav>
       <div className="ag-shell__main">
         <CompactNav currentPath={currentPath} profile={profile} onSignOut={onSignOut} />
-        {children}
+        <div className="ag-shell__content">{children}</div>
       </div>
     </div>
   )
@@ -166,7 +165,7 @@ function AccountMenu({ profile, onSignOut }: { readonly profile: UserProfile; re
   )
 }
 
-/** Below 1024 px: glass top bar and a modal drawer (native <dialog>: focus trapped, Escape, focus returned). */
+/** Below 1024 px: flat top bar and a modal drawer (native <dialog>: focus trapped, Escape, focus returned). */
 function CompactNav({ currentPath, profile, onSignOut }: Omit<ShellProps, 'children'>) {
   const { m } = useI18n()
   const dialogRef = useRef<HTMLDialogElement>(null)
@@ -195,7 +194,7 @@ function CompactNav({ currentPath, profile, onSignOut }: Omit<ShellProps, 'child
 
   return (
     <>
-      <div className="ag-topbar ag-glass">
+      <div className="ag-topbar">
         <Brand />
         <button
           ref={triggerRef}

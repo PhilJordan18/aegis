@@ -88,7 +88,7 @@ test('a technician account is refused, its token is dropped and no request follo
   expect((await login).status()).toBe(200)
 
   await expect(page.getByRole('heading', { level: 1, name: 'Accès réservé aux administrateurs' })).toBeFocused()
-  await expect(page.getByRole('alert')).toContainText("Ce compte technicien s'utilise dans l'application Aegis.")
+  await expect(page.getByRole('alert')).toContainText("Ce compte technicien s'utilise dans Aegis Mobile.")
   await expect(page.locator('form')).toHaveCount(0)
   await page.waitForLoadState('networkidle')
   expect(requests.map((request) => new URL(request.url()).pathname)).toEqual(['/api/v1/auth/login'])
@@ -128,6 +128,7 @@ test('repeated attempts reach the rate limit and use its Retry-After delay', asy
   const alert = page.getByRole('alert')
   await expect(alert).toContainText('Trop de tentatives.')
   await expect(alert).toContainText(/Réessayez dans \d+\s+secondes?\./)
-  await expect(page.getByText(/^Disponible dans \d+:\d{2}$/)).toBeVisible()
+  // The delay is shown once, in the alert: no countdown caption under the button.
+  await expect(page.getByText(/\d+:\d{2}/)).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Se connecter' })).toHaveAttribute('aria-disabled', 'true')
 })

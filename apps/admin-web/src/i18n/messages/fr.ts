@@ -19,8 +19,16 @@ const count = new Intl.NumberFormat('fr-CA')
 
 export const fr = {
   brand: {
-    /** Accessible name of the wordmark link; the visible name « Aegis Manager » is a product name and is never translated. */
+    /** Accessible name of the brand link; « aegis » and « Manager » are names and are never translated. */
     homeLabel: 'Aegis Manager, accueil',
+    /** Common signature, decided by Philippe on 2026-10-21 (glossary « Signatures de marque »); « Prêt » is READY. */
+    signature: {
+      ready: 'Prêt.',
+      authorized: 'Autorisé.',
+      proven: 'Prouvé.',
+    },
+    tagline: 'L’essentiel, sous contrôle.',
+    description: 'Disponibilité, conformité et traçabilité de vos équipements.',
   },
 
   language: {
@@ -66,11 +74,6 @@ export const fr = {
 
   landing: {
     signIn: 'Se connecter',
-    overline: "Aegis Manager · console d'administration",
-    heroLine1: 'Autorisé',
-    heroLine2: 'Observé',
-    heroLine3: 'Tracé',
-    lead: "Aegis montre si chaque équipement critique peut servir, n'ouvre que la cellule attendue et conserve une chaîne de possession complète, du retrait au retour.",
     seeGuarantees: 'Voir les cinq garanties',
     /** [A] */
     accountNote: 'Compte fourni par votre administrateur.',
@@ -104,7 +107,7 @@ export const fr = {
       },
     },
     footerPrototype: "Prototype académique en cours de validation en laboratoire, conçu pour les équipes de maintenance et d'inspection.",
-    footerTechnician: `Technicien${NBSP}? Utilisez l'application Aegis sur iPhone.`,
+    footerTechnician: `Technicien${NBSP}? Utilisez Aegis Mobile sur iPhone.`,
   },
 
   signIn: {
@@ -118,8 +121,14 @@ export const fr = {
     passwordLabel: 'Mot de passe',
     /** [A] */
     submit: 'Se connecter',
+    /** [A] Eyebrow above the title, from the v3 mock. */
+    role: 'Espace administrateur',
+    /** [A] */
+    subtitle: 'Accédez à Aegis Manager.',
     home: 'Accueil',
-    footerTechnician: `Technicien${NBSP}? Utilisez l'application Aegis sur iPhone.`,
+    /** [A] */
+    footerProduct: 'Aegis Manager · Administration',
+    footerTechnician: `Technicien${NBSP}? Utilisez Aegis Mobile sur iPhone.`,
     fieldError: {
       emailRequired: 'Saisissez votre adresse courriel.',
       emailInvalid: 'Saisissez une adresse courriel valide, par exemple nom@example.com.',
@@ -142,12 +151,10 @@ export const fr = {
     invalidCredentialsBody: 'Vérifiez les deux champs, puis réessayez.',
     /** [A] */
     rateLimitedTitle: 'Trop de tentatives.',
-    /** [A→P] T1: the delay is fixed when the 429 arrives; `duration` is already formatted (« 42 secondes »). */
+    /** [A→P] T1: the one place the delay is shown, fixed when the 429 arrives; `duration` is already formatted (« 42 secondes »). */
     rateLimitedBody: ({ duration }: { duration: string }) => `Réessayez dans ${duration}.`,
     /** [A] Shown when the 429 carries no usable Retry-After. */
     rateLimitedFallback: 'Réessayez dans une minute.',
-    /** `remaining` is a countdown clock (« 0:42 »). */
-    rateLimitedHint: ({ remaining }: { remaining: string }) => `Disponible dans ${remaining}`,
     rateLimitedReady: 'Vous pouvez réessayer.',
     /** [A] */
     unreachableTitle: 'Connexion au service impossible.',
@@ -168,8 +175,8 @@ export const fr = {
     signedOutTitle: 'Vous êtes déconnecté.',
     roleHeading: 'Accès réservé aux administrateurs',
     roleBody: "Aegis Manager est réservé aux comptes administrateur. Aucune donnée n'a été chargée et la session a été fermée.",
-    /** [A] */
-    technicianAccount: "Ce compte technicien s'utilise dans l'application Aegis.",
+    /** [A] Names the mobile app as the footers do (Aegis Mobile). */
+    technicianAccount: "Ce compte technicien s'utilise dans Aegis Mobile.",
     roleUnknownTitle: 'Ce compte ne peut pas utiliser Aegis Manager.',
     roleAccountUsed: `Compte utilisé${NBSP}:`,
     roleRetry: 'Se connecter avec un autre compte',

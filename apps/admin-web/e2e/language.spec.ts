@@ -145,7 +145,7 @@ test.describe('flow: language', () => {
     test('flow: an English browser gets English, and nothing is stored until the user chooses', async ({ page }) => {
       await page.goto('/')
       await expect(page.locator('html')).toHaveAttribute('lang', 'en-CA')
-      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Authorized. Observed. Traced.')
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Ready. Authorized. Proven.')
       expect(await page.evaluate(() => ({ ...window.localStorage }))).toEqual({})
     })
 
@@ -166,7 +166,7 @@ test.describe('flow: language', () => {
       const alert = page.getByRole('alert')
       await expect(alert).toContainText('Too many attempts.')
       await expect(alert).toContainText(/Try again in \d+\s+seconds?\./)
-      await expect(page.getByText(/^Available in \d+:\d{2}$/)).toBeVisible()
+      await expect(page.getByText(/\d+:\d{2}/)).toHaveCount(0)
       await expect(page.getByRole('button', { name: 'Sign in' })).toHaveAttribute('aria-disabled', 'true')
     })
 
@@ -188,7 +188,7 @@ test.describe('flow: language', () => {
     test('flow: an unsupported browser language falls back to French', async ({ page }) => {
       await page.goto('/')
       await expect(page.locator('html')).toHaveAttribute('lang', 'fr-CA')
-      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Autorisé. Observé. Tracé.')
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Prêt. Autorisé. Prouvé.')
     })
   })
 

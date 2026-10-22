@@ -53,7 +53,7 @@ describe('SignInPage — English wording (explicit strings, not read back from t
     expect(screen.getByRole('button', { name: 'Show password' })).toBeDefined()
     expect(screen.getByRole('link', { name: 'Home' })).toBeDefined()
     expect(screen.getByText('Account provided by your administrator.')).toBeDefined()
-    expect(screen.getByText('Technician? Use the Aegis app on iPhone.')).toBeDefined()
+    expect(screen.getByText('Technician? Use Aegis Mobile on iPhone.')).toBeDefined()
   })
 
   it('client validation', async () => {
@@ -132,7 +132,7 @@ describe('SignInPage — English wording (explicit strings, not read back from t
     renderWithProviders(<SignInPage afterSignInPath="/" />, { locale: 'en', gateway: gatewayReturning(loginOk(technicianProfile)) })
     await fillAndSubmit('en')
     expect(await screen.findByRole('heading', { level: 1, name: 'Access reserved for administrators' })).toBeDefined()
-    expect(screen.getByRole('alert').textContent).toContain('This technician account is used in the Aegis app.')
+    expect(screen.getByRole('alert').textContent).toContain('This technician account is used in Aegis Mobile.')
     expect(screen.getByText('Account used:')).toBeDefined()
     expect(screen.getByRole('button', { name: 'Sign in with another account' })).toBeDefined()
   })
@@ -228,7 +228,7 @@ describe.each(LOCALES)('SignInPage — every state in %s', (locale) => {
     expect(alert.querySelector('code')).toBeNull()
   })
 
-  it('rate limit: formatted delay, countdown outside the live region, then a polite announcement', async () => {
+  it('rate limit: the formatted delay appears once, in the alert, then a polite announcement', async () => {
     vi.useFakeTimers()
     renderWithProviders(<SignInPage afterSignInPath="/" />, {
       locale,
@@ -239,8 +239,9 @@ describe.each(LOCALES)('SignInPage — every state in %s', (locale) => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: t.submit })))
 
     expect(screen.getByRole('alert').textContent).toBe(`${t.rateLimitedTitle}${t.rateLimitedBody({ duration: format.seconds(3) })}`)
-    const hint = screen.getByText(t.rateLimitedHint({ remaining: '0:03' }))
-    expect(hint.closest('[role="alert"], [role="status"], [aria-live]')).toBeNull()
+    const delay = format.seconds(3)
+    expect(document.body.textContent?.split(delay).length, 'the delay appears exactly once').toBe(2)
+    expect(document.body.textContent).not.toMatch(/\d:\d{2}/)
 
     await act(async () => vi.advanceTimersByTime(3000))
     expect(screen.queryByRole('alert')).toBeNull()

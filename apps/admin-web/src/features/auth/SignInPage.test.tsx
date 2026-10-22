@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formattersFor } from '../../i18n/format'
@@ -90,6 +90,58 @@ describe('SignInPage — idle and client validation', () => {
 
     await user.type(emailField(), 'admin@aegis.demo')
     expect(emailField().hasAttribute('aria-invalid')).toBe(false)
+  })
+})
+
+describe('SignInPage — structure of the v3 entry', () => {
+  it('uses persistent labels and no placeholder', () => {
+    renderWithProviders(<SignInPage afterSignInPath="/" />)
+    for (const field of [emailField(), passwordField()]) {
+      expect(field.hasAttribute('placeholder')).toBe(false)
+      expect(document.querySelector(`label[for="${field.id}"]`)).not.toBeNull()
+    }
+  })
+
+  it('shows the brand beyond the form: header brand with « Manager », the signature, the tagline and the description', () => {
+    renderWithProviders(<SignInPage afterSignInPath="/" />)
+    const header = screen.getByRole('banner')
+    expect(within(header).getByRole('link', { name: fr.brand.homeLabel }).textContent).toBe('aegisManager')
+    expect(screen.getByText(fr.brand.tagline)).toBeDefined()
+    expect(screen.getByText(fr.brand.description)).toBeDefined()
+    expect(document.body.textContent).toContain('Prêt. Autorisé. Prouvé.')
+    // The signature is not the page heading: « Connexion » stays the one h1.
+    expect(screen.getAllByRole('heading', { level: 1 }).map((heading) => heading.textContent)).toEqual([t.heading])
+    expect(screen.getByRole('link', { name: t.home })).toBeDefined()
+  })
+
+  it('keeps the card first in the document and the promise after it, so the form comes first for assistive technology', () => {
+    renderWithProviders(<SignInPage afterSignInPath="/" />)
+    const card = document.querySelector('.ag-signin__card') as HTMLElement
+    const intro = document.querySelector('.ag-signin__intro') as HTMLElement
+    expect(card.compareDocumentPosition(intro) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('announces a global error in a live region below the submit button, never above the fields', async () => {
+    const { gateway } = gatewayReturning(httpProblem(401, problemBody(401, 'AUTH_INVALID_CREDENTIALS')))
+    renderWithProviders(<SignInPage afterSignInPath="/" />, { gateway })
+    await fillAndSubmit()
+    const alert = await screen.findByRole('alert')
+    const follows = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(follows(emailField(), alert)).toBe(true)
+    expect(follows(passwordField(), alert)).toBe(true)
+    expect(follows(submitButton(), alert)).toBe(true)
+    expect(alert.closest('.ag-signin__alert')).not.toBeNull()
+    expect(alert.closest('form')).not.toBeNull()
+  })
+
+  it('keeps a field error next to its field and raises no global alert for it', async () => {
+    renderWithProviders(<SignInPage afterSignInPath="/" />)
+    await userEvent.setup().click(submitButton())
+    const emailMessage = screen.getByText(t.fieldError.emailRequired)
+    expect(emailMessage.closest('.ag-field')?.contains(emailField())).toBe(true)
+    expect(screen.queryByRole('alert')).toBeNull()
+    // The line the message occupies is reserved: the slot exists before the error does.
+    expect(document.querySelectorAll('.ag-field__slot').length).toBe(2)
   })
 })
 
@@ -202,7 +254,7 @@ describe('SignInPage — submission', () => {
 })
 
 describe('SignInPage — rate limit', () => {
-  it('locks submission with a countdown outside the live region, then re-enables and announces once', async () => {
+  it('locks submission, shows the delay once in the alert, then re-enables and announces once', async () => {
     vi.useFakeTimers()
     const { gateway, signIn } = gatewayReturning(httpProblem(429, problemBody(429, 'RATE_LIMITED'), '3'))
     renderWithProviders(<SignInPage afterSignInPath="/" />, { gateway })
@@ -212,25 +264,41 @@ describe('SignInPage — rate limit', () => {
 
     const alert = screen.getByRole('alert')
     expect(alert.textContent).toBe(`${t.rateLimitedTitle}${secondsFr(3)}`)
-    const hint = screen.getByText(t.rateLimitedHint({ remaining: '0:03' }))
-    expect(hint.closest('[role="alert"], [role="status"], [aria-live]')).toBeNull()
+    // One display of the delay: no caption under the button, no countdown clock anywhere.
+    expect(document.body.textContent?.split(formattersFor('fr').seconds(3)).length).toBe(2)
+    expect(document.body.textContent).not.toMatch(/\d:\d{2}/)
     expect(submitButton().getAttribute('aria-disabled')).toBe('true')
-    expect(describedBy(submitButton())).toContain(t.rateLimitedHint({ remaining: '0:03' }))
+    expect(describedBy(submitButton())).toBe(alert.textContent)
 
     await act(async () => fireEvent.click(submitButton()))
     expect(signIn).toHaveBeenCalledTimes(1)
 
     await act(async () => vi.advanceTimersByTime(1000))
-    expect(screen.getByText(t.rateLimitedHint({ remaining: '0:02' }))).toBeDefined()
-    expect(alert.textContent).toContain(secondsFr(3))
+    expect(submitButton().getAttribute('aria-disabled')).toBe('true')
+    expect(screen.getByRole('alert').textContent).toContain(secondsFr(3))
 
     await act(async () => vi.advanceTimersByTime(2000))
     expect(submitButton().hasAttribute('aria-disabled')).toBe(false)
-    expect(screen.queryByText(/Disponible dans/)).toBeNull()
     // R4: back to idle, the stale alert is gone and the only announcement is the polite status.
     expect(screen.queryByRole('alert')).toBeNull()
     expect(screen.queryByText(secondsFr(3))).toBeNull()
     expect(document.querySelector('form')?.getAttribute('data-state')).toBe('idle')
+    expect(screen.getByText(t.rateLimitedReady).getAttribute('role')).toBe('status')
+  })
+
+  it('unlocks when the page comes back after the deadline passed while its timer was suspended', async () => {
+    vi.useFakeTimers()
+    const { gateway } = gatewayReturning(httpProblem(429, problemBody(429, 'RATE_LIMITED'), '3'))
+    renderWithProviders(<SignInPage afterSignInPath="/" />, { gateway })
+    fireEvent.change(emailField(), { target: { value: 'admin@aegis.test' } })
+    fireEvent.change(passwordField(), { target: { value: 'x' } })
+    await act(async () => fireEvent.click(submitButton()))
+    expect(submitButton().getAttribute('aria-disabled')).toBe('true')
+
+    // System sleep: the wall clock passes the deadline, the suspended timeout has not fired.
+    vi.setSystemTime(Date.now() + 10_000)
+    await act(async () => document.dispatchEvent(new Event('visibilitychange')))
+    expect(submitButton().hasAttribute('aria-disabled')).toBe(false)
     expect(screen.getByText(t.rateLimitedReady).getAttribute('role')).toBe('status')
   })
 
@@ -282,6 +350,24 @@ describe('SignInPage — role and session', () => {
     await fillAndSubmit()
     await waitFor(() => expect(window.location.pathname).toBe('/apres'))
     expect(session.getAccessToken()).toBe('admin-token')
+  })
+
+  it('after an expired session, brings the notice below the button into view without moving focus', async () => {
+    const scrollIntoView = vi.fn()
+    const original = HTMLElement.prototype.scrollIntoView
+    HTMLElement.prototype.scrollIntoView = scrollIntoView
+    try {
+      const session = createSessionStore()
+      session.end('sessionExpired', 'admin@aegis.demo')
+      renderWithProviders(<SignInPage afterSignInPath="/" />, { session })
+
+      const zone = scrollIntoView.mock.contexts.at(-1) as HTMLElement | undefined
+      expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'nearest' })
+      expect(zone?.textContent).toContain(t.sessionExpiredTitle)
+      expect(document.activeElement).toBe(passwordField())
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original
+    }
   })
 
   it('after an expired session: info status, email prefilled, password focused and described by the alert', async () => {

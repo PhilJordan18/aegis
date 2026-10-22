@@ -6,7 +6,7 @@ import { usePreviewControls, useSignInPreviewAutoSubmit } from '../../preview/Pr
 import { Alert } from '../../ui/Alert'
 import { Brand } from '../../ui/Brand'
 import { Button } from '../../ui/Button'
-import { Cells } from '../../ui/Cells'
+import { BrandPromise } from '../../ui/BrandPromise'
 import { Icon } from '../../ui/Icon'
 import { LanguageSwitch } from '../language/LanguageSwitch'
 import { useI18n } from '../../i18n/useI18n'
@@ -60,7 +60,6 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
   const [unknownViolation, setUnknownViolation] = useState(false)
   const [attempted, setAttempted] = useState(false)
   const [lockDeadline, setLockDeadline] = useState<number | null>(null)
-  const [now, setNow] = useState(() => Date.now())
   const [statusKey, setStatusKey] = useState<StatusKey | null>(null)
   const [roleScreen, setRoleScreen] = useState<RoleScreen | null>(null)
 
@@ -72,6 +71,7 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
   const emailRef = useRef<HTMLInputElement>(null)
   const passwordRef = useRef<HTMLInputElement>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
+  const alertZoneRef = useRef<HTMLDivElement>(null)
 
   const ids = {
     alert: useId(),
@@ -79,7 +79,6 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
     emailError: useId(),
     password: useId(),
     passwordError: useId(),
-    hint: useId(),
   }
 
   useEffect(() => {
@@ -102,20 +101,38 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
     ;({ email: emailRef, password: passwordRef, heading: headingRef })[target].current?.focus()
   })
 
+  // The delay is shown once, in the alert, fixed when the 429 arrives: no per-second state, one timer to the deadline.
   useEffect(() => {
     if (lockDeadline === null) return
-    const timer = setInterval(() => {
-      const current = Date.now()
-      setNow(current)
-      if (current >= lockDeadline) {
-        // Back to idle: the stale « Réessayez dans N secondes. » alert goes away (review R4).
-        setLockDeadline(null)
-        setOutcome({ kind: 'idle' })
-        setStatusKey('rateLimitedReady')
-      }
-    }, 1000)
-    return () => clearInterval(timer)
+    const release = () => {
+      // Back to idle: the stale « Réessayez dans N secondes. » alert goes away (review R4).
+      setLockDeadline(null)
+      setOutcome({ kind: 'idle' })
+      setStatusKey('rateLimitedReady')
+    }
+    const timer = setTimeout(release, Math.max(0, lockDeadline - Date.now()))
+    // A timeout does not count system sleep: re-read the clock when the page comes back.
+    const recheck = () => {
+      if (Date.now() >= lockDeadline) release()
+    }
+    window.addEventListener('focus', recheck)
+    document.addEventListener('visibilitychange', recheck)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('focus', recheck)
+      document.removeEventListener('visibilitychange', recheck)
+    }
   }, [lockDeadline])
+
+  const arrivalReason = session.status === 'anonymous' ? session.arrivalReason : null
+
+  // The alert zone sits below the button: at a high zoom or on a short screen, bring an error or an
+  // arrival notice (session expired, signed out) into view without moving focus.
+  useEffect(() => {
+    if (outcome.kind === 'submitting') return
+    if (outcome.kind === 'idle' && arrivalReason === null) return
+    alertZoneRef.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [outcome, arrivalReason])
 
   const locked = lockDeadline !== null
   const submitting = outcome.kind === 'submitting'
@@ -179,9 +196,7 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
         }
         case 'rateLimited':
           if (next.retryAfterSeconds !== null && next.retryAfterSeconds > 0) {
-            const current = Date.now()
-            setNow(current)
-            setLockDeadline(current + next.retryAfterSeconds * 1000)
+            setLockDeadline(Date.now() + next.retryAfterSeconds * 1000)
           }
           break
         default:
@@ -244,27 +259,27 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
     pendingFocus.current = 'email'
   }
 
-  const arrival = outcome.kind === 'idle' && session.status === 'anonymous' ? session.arrivalReason : null
+  const arrival = outcome.kind === 'idle' ? arrivalReason : null
   const alert = renderAlert({ id: ids.alert, outcome, arrival, unknownViolation, t, format })
   const alertDescribesPassword =
     outcome.kind === 'invalidCredentials' || arrival === 'sessionExpired' || arrival === 'sessionInvalid'
-  const remaining = lockDeadline === null ? 0 : Math.max(0, Math.ceil((lockDeadline - now) / 1000))
 
   return (
     <div className="ag-signin">
-      <div className="ag-signin__bg ag-decor" aria-hidden="true" />
-      <Cells count={98} lit={38} litCompact={null} className="ag-cells--page ag-signin__cells" />
-      <header className="ag-signin__top">
-        <Link className="ag-signin__home" to={pathOf('landing')}>
-          <Icon name="back" />
-          {t.home}
-        </Link>
-        <LanguageSwitch compact />
+      <header className="ag-signin__header">
+        <Brand />
+        <div className="ag-signin__tools">
+          <Link className="ag-link ag-signin__home" to={pathOf('landing')}>
+            <Icon name="back" />
+            {t.home}
+          </Link>
+          <LanguageSwitch compact />
+        </div>
       </header>
 
-      <main id="contenu" className="ag-signin__center">
-        <div className="ag-signin__panel">
-          <Brand />
+      <div className="ag-signin__content">
+        <main id="contenu" className="ag-signin__card">
+          <p className="ag-overline ag-signin__eyebrow">{t.role}</p>
           <h1 ref={headingRef} className="ag-signin__title" tabIndex={-1}>
             {roleScreen ? t.roleHeading : t.heading}
           </h1>
@@ -279,97 +294,105 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
               </p>
               <Button variant="primary" size="lg" block onClick={retryWithAnotherAccount}>
                 {t.roleRetry}
+                <Icon name="arrow" />
               </Button>
             </div>
           ) : (
-            <form className="ag-signin__body" method="post" noValidate onSubmit={handleSubmit} aria-busy={submitting || undefined} data-state={outcome.kind}>
-              {alert}
-              <Field
-                id={ids.email}
-                errorId={ids.emailError}
-                label={t.emailLabel}
-                error={fieldErrors.email && t.fieldError[fieldErrors.email]}
-                readOnly={submitting}
-              >
-                <input
-                  ref={emailRef}
+            <>
+              <p className="ag-signin__sub">{t.subtitle}</p>
+              <form className="ag-signin__form" method="post" noValidate onSubmit={handleSubmit} aria-busy={submitting || undefined} data-state={outcome.kind}>
+                <Field
                   id={ids.email}
-                  name="email"
-                  type="email"
-                  autoComplete="username"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  value={email}
-                  onChange={handleEmail}
+                  errorId={ids.emailError}
+                  label={t.emailLabel}
+                  error={fieldErrors.email && t.fieldError[fieldErrors.email]}
                   readOnly={submitting}
-                  aria-invalid={fieldErrors.email ? true : undefined}
-                  aria-describedby={fieldErrors.email ? ids.emailError : undefined}
-                />
-              </Field>
-              <Field
-                id={ids.password}
-                errorId={ids.passwordError}
-                label={t.passwordLabel}
-                error={fieldErrors.password && t.fieldError[fieldErrors.password]}
-                readOnly={submitting}
-              >
-                <input
-                  ref={passwordRef}
+                >
+                  <input
+                    ref={emailRef}
+                    id={ids.email}
+                    name="email"
+                    type="email"
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    value={email}
+                    onChange={handleEmail}
+                    readOnly={submitting}
+                    aria-invalid={fieldErrors.email ? true : undefined}
+                    aria-describedby={fieldErrors.email ? ids.emailError : undefined}
+                  />
+                </Field>
+                <Field
                   id={ids.password}
-                  name="password"
-                  type={revealed ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={handlePassword}
+                  errorId={ids.passwordError}
+                  label={t.passwordLabel}
+                  error={fieldErrors.password && t.fieldError[fieldErrors.password]}
                   readOnly={submitting}
-                  aria-invalid={fieldErrors.password ? true : undefined}
-                  aria-describedby={
-                    [alertDescribesPassword ? ids.alert : null, fieldErrors.password ? ids.passwordError : null].filter(Boolean).join(' ') ||
-                    undefined
-                  }
-                />
-                <button
-                  type="button"
-                  className="ag-field__reveal"
-                  aria-controls={ids.password}
-                  aria-label={revealed ? t.concealLabel : t.revealLabel}
-                  onClick={toggleReveal}
                 >
-                  {revealed ? t.conceal : t.reveal}
-                </button>
-              </Field>
+                  <input
+                    ref={passwordRef}
+                    id={ids.password}
+                    name="password"
+                    type={revealed ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={handlePassword}
+                    readOnly={submitting}
+                    aria-invalid={fieldErrors.password ? true : undefined}
+                    aria-describedby={
+                      [alertDescribesPassword ? ids.alert : null, fieldErrors.password ? ids.passwordError : null].filter(Boolean).join(' ') ||
+                      undefined
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="ag-field__reveal"
+                    aria-controls={ids.password}
+                    aria-label={revealed ? t.concealLabel : t.revealLabel}
+                    onClick={toggleReveal}
+                  >
+                    {revealed ? t.conceal : t.reveal}
+                  </button>
+                </Field>
 
-              <div className="ag-signin__submit">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="lg"
-                  block
-                  busy={submitting}
-                  inert={locked}
-                  aria-describedby={locked ? `${ids.alert} ${ids.hint}` : undefined}
-                >
-                  {submitting ? t.submitting : t.submit}
-                </Button>
-                {locked && (
-                  <p id={ids.hint} className="ag-signin__hint ag-tnum">
-                    {t.rateLimitedHint({ remaining: format.clock(remaining) })}
-                  </p>
-                )}
-              </div>
-              <p className="ag-signin__mention">
-                <Icon name="info" />
-                {t.accountNote}
-              </p>
-            </form>
+                <div className="ag-signin__submit">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="lg"
+                    block
+                    busy={submitting}
+                    inert={locked}
+                    aria-describedby={locked ? ids.alert : undefined}
+                  >
+                    {submitting ? t.submitting : t.submit}
+                    {!submitting && <Icon name="arrow" />}
+                  </Button>
+                </div>
+                {/* Global errors sit below the button: the fields and the button never move when one appears. */}
+                <div className="ag-signin__alert" ref={alertZoneRef}>
+                  {alert}
+                </div>
+                <p className="ag-signin__mention">
+                  <Icon name="info" />
+                  {t.accountNote}
+                </p>
+              </form>
+            </>
           )}
           <p className="ag-sr-only" role="status">
             {statusKey && t[STATUS_MESSAGES[statusKey]]}
           </p>
+        </main>
+
+        <div className="ag-signin__intro">
+          <BrandPromise />
         </div>
-      </main>
+      </div>
 
       <footer className="ag-signin__foot">
+        <p>{t.footerProduct}</p>
         <p>{t.footerTechnician}</p>
       </footer>
     </div>
@@ -399,12 +422,14 @@ function Field({
       <div className="ag-field__control" data-invalid={error ? '' : undefined} data-readonly={readOnly ? '' : undefined}>
         {children}
       </div>
-      {error && (
-        <p className="ag-field__error" id={errorId}>
-          <Icon name="status-error" />
-          {error}
-        </p>
-      )}
+      <div className="ag-field__slot">
+        {error && (
+          <p className="ag-field__error" id={errorId}>
+            <Icon name="status-error" />
+            {error}
+          </p>
+        )}
+      </div>
     </div>
   )
 }
