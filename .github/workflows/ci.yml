@@ -22,6 +22,10 @@ jobs:
     outputs:
       api: ${{ steps.filter.outputs.api }}
       web: ${{ steps.filter.outputs.web }}
+      simulator: ${{ steps.filter.outputs.simulator }}
+      agents: ${{ steps.filter.outputs.agents }}
+      adrs: ${{ steps.filter.outputs.adrs }}
+      ios: ${{ steps.filter.outputs.ios }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -102,6 +106,149 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+
+  # The jobs below are not required yet (#67): they stay outside the `needs` of
+  # `CI result` until they meet the promotion criteria recorded in that issue.
+  simulator:
+    name: Simulator tests
+    needs: changes
+    if: needs.changes.outputs.simulator == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tools/hub-simulator
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tools/hub-simulator/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - name: Unit tests
+        # Through the repository's npm scripts, so only the locked vitest runs (never an on-demand npx install).
+        run: npm test -- --reporter=default --reporter=junit --outputFile.junit="$RUNNER_TEMP/simulator-reports/unit.xml"
+      - name: Start an isolated broker
+        working-directory: .
+        # Example credentials of infra/docker/.env.example; plaintext MQTT stays on this runner.
+        run: docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml up -d --wait mosquitto
+      - name: Broker integration tests
+        run: |
+          set -a
+          . ../../infra/docker/.env.example
+          set +a
+          npm run test:integration -- --reporter=default --reporter=junit --outputFile.junit="$RUNNER_TEMP/simulator-reports/integration.xml"
+      - name: Test counts
+        if: always()
+        run: python3 ../../.github/scripts/test-report.py "Simulator tests" "$RUNNER_TEMP/simulator-reports/unit.xml" "$RUNNER_TEMP/simulator-reports/integration.xml"
+      - name: Broker logs
+        if: failure()
+        working-directory: .
+        run: docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml logs mosquitto
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: simulator-junit
+          path: ${{ runner.temp }}/simulator-reports/
+          retention-days: 7
+
+  agents:
+    name: Agent setup validator
+    needs: changes
+    if: needs.changes.outputs.agents == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Python 3.11+ so tomllib also parses .codex/*.toml (Python 3.9 skips it).
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - run: python3 --version
+      - run: python3 .claude/skills/aegis-delivery/scripts/validate_agent_setup.py
+
+  adrs:
+    name: Accepted ADR guard
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.adrs == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: python3 .github/scripts/check-accepted-adrs.py
+
+  ios:
+    name: iOS standalone tests
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
+    # Xcode 26.3 (17C529) is pinned explicitly; this hosted configuration is
+    # recorded as distinct from the development Mac (#67).
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    defaults:
+      run:
+        working-directory: apps/ios
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcrun simctl list runtimes
+      - name: Choose a simulator
+        # Newest available iPhone 17, 16 or 15 on an iOS 17+ runtime; fails
+        # explicitly when none exists. To be replaced by scripts/ios-destination.sh
+        # once it is on dev (#90).
+        run: |
+          destination=$(xcrun simctl list devices available -j | python3 -c '
+          import json, os, re, sys
+          devices = json.load(sys.stdin)["devices"]
+          found = []
+          for runtime, items in devices.items():
+              match = re.search(r"iOS-(\d+)-(\d+)", runtime)
+              if not match or int(match.group(1)) < 17:
+                  continue
+              version = (int(match.group(1)), int(match.group(2)))
+              for item in items:
+                  model = re.fullmatch(r"iPhone (17|16|15)", item["name"])
+                  if model:
+                      found.append((version, int(model.group(1)), item["udid"], item["name"]))
+          if not found:
+              sys.exit("no iPhone 15, 16 or 17 simulator on an iOS 17+ runtime")
+          version, _, udid, name = max(found)
+          print(f"platform=iOS Simulator,id={udid}")
+          print(f"{name}, iOS {version[0]}.{version[1]}", file=sys.stderr)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as out:
+              out.write(f"Simulator chosen: {name}, iOS {version[0]}.{version[1]}\n")
+          ')
+          echo "IOS_DESTINATION=$destination" >> "$GITHUB_ENV"
+      - name: Standalone recipe
+        run: scripts/ios-test.sh standalone
+      - name: Result summary
+        if: always()
+        run: python3 ../../.github/scripts/xcresult-summary.py
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-standalone-results
+          path: apps/ios/build/results/
+          retention-days: 7
 
   # The only check to require on dev and main: component jobs may be skipped by
   # the change filter, and a skipped job must neither block nor hide a failure.
