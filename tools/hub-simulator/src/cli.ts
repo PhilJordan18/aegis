@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { BootCounterError } from './boot-counter.ts';
+import { CommandJournalError } from './command-journal.ts';
 import { ConfigError, configFromEnv } from './config.ts';
 import type { OutboundMessage } from './messages.ts';
 import { ScenarioError, parseScenario, runScenario, type Scenario } from './scenario.ts';
@@ -11,6 +12,9 @@ const USAGE = `Usage: node src/cli.ts [--scenario <file.json>] [--log-payloads]
 
 Runs the Aegis hub simulator until SIGINT/SIGTERM (clean OFFLINE) or until a
 scenario ends with "stop" or "crash". Kill it with SIGKILL to trigger the Last Will.
+It subscribes to its locker's commands and display topics, executes valid
+UNLOCK_COMPARTMENT commands on the simulated cells and acknowledges them. It never
+logs the display token nor the QR content.
 
 Environment (credentials are never accepted as arguments):
   AEGIS_MQTT_DEVICE_PASSWORD   required, device secret (local: infra/docker/.env.example)
@@ -26,6 +30,10 @@ Environment (credentials are never accepted as arguments):
   AEGIS_SIM_BOOT_COUNT_FILE    default $XDG_STATE_HOME/aegis/hub-simulator/boot-count-<deviceKey>.json
                                (~/.local/state/... without XDG_STATE_HOME); keep it outside the repository
   AEGIS_SIM_BOOT_COUNT         optional bootCount of the first boot (tests, deliberate reset)
+  AEGIS_SIM_COMMAND_JOURNAL_FILE  default $XDG_STATE_HOME/aegis/hub-simulator/command-journal-<deviceKey>.json;
+                               the deduplication journal (doc 10 §16.1), outside the repository
+  AEGIS_SIM_UNLOCK_WINDOW_MS   default 15000; relock delay after an accepted unlock (1000..120000)
+  AEGIS_SIM_RFID_WINDOW_MS     default 3000; RFID scan window after a door closes (100..10000)
   AEGIS_SIM_RSSI_DBM           default -55
   AEGIS_SIM_ALLOW_INSECURE_REMOTE  "true" to allow mqtt: to a non-loopback host on an isolated network
 `;
@@ -36,6 +44,8 @@ function log(event: string, fields: Record<string, unknown> = {}): void {
 
 function describe(message: OutboundMessage, withPayload: boolean): Record<string, unknown> {
   const p = message.payload;
+  const pick = (...keys: string[]) =>
+    Object.fromEntries(keys.filter((k) => k in p).map((k) => [k, (p as unknown as Record<string, unknown>)[k]]));
   return {
     type: p.type,
     topic: message.topic,
@@ -45,8 +55,8 @@ function describe(message: OutboundMessage, withPayload: boolean): Record<string
     sequence: p.sequence,
     deviceSessionId: p.deviceSessionId,
     bootCount: p.bootCount,
-    ...(p.type === 'DEVICE_RESTARTED' ? {} : { connectionId: p.connectionId }),
-    ...(p.type === 'DEVICE_AVAILABILITY' ? { status: p.status, reason: p.reason } : {}),
+    // Hub payloads never hold a secret; the display token stays in the inbound message.
+    ...pick('connectionId', 'status', 'reason', 'commandMessageId', 'operationId', 'compartmentId', 'result', 'displayMessageId'),
     ...(withPayload ? { payload: p } : {}),
   };
 }
@@ -80,6 +90,11 @@ async function main(): Promise<number> {
   simulator.on('publishFailed', (m, error) => log('publish_failed', { ...describe(m, false), error: error.message }));
   simulator.on('reconnectScheduled', (delayMs, attempt) => log('reconnect_scheduled', { delayMs, attempt }));
   simulator.on('transportError', (error) => log('transport_error', { error: error.message }));
+  simulator.on('subscribed', (topics) => log('subscribed', { topics }));
+  simulator.on('inbound', (report) => log('inbound', { ...report }));
+  simulator.on('actuated', (compartmentId, operationId) => log('actuated', { compartmentId, operationId }));
+  simulator.on('screen', (view) => log('screen', { ...view }));
+  simulator.on('journalError', (error) => log('journal_error', { error: error.message }));
 
   log('starting', {
     brokerUrl: config.brokerUrl,
@@ -88,6 +103,7 @@ async function main(): Promise<number> {
     lockerId: config.lockerId,
     compartments: config.compartments.map((c) => c.code),
     bootCountFile: config.bootCountFile,
+    commandJournalFile: config.commandJournalFile,
   });
 
   let shuttingDown = false;
@@ -127,6 +143,7 @@ main().then(
       error instanceof ConfigError ||
       error instanceof ScenarioError ||
       error instanceof BootCounterError ||
+      error instanceof CommandJournalError ||
       error instanceof SyntaxError
     ) {
       process.stderr.write(`hub-simulator: ${error.message}\n`);

@@ -3,3 +3,5 @@
 # AEGIS_SIM_BOOT_COUNT_FILE pointing here.
 boot-count*.json
 *.json.*.tmp
+# Command journal state (doc 10 §16.1), same rule as the boot count.
+command-journal*.json

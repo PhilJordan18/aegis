@@ -163,8 +163,21 @@ describe('envelope rules (doc 10 §8.1, §16.3, §20)', () => {
     expect(new DeviceSession(SESSION, 4_294_967_295, BOOT).bootCount).toBe(4_294_967_295);
   });
 
-  it('never publishes a heartbeat or availability on events, nor a device fact on status', () => {
-    expect(CHANNEL_BY_TYPE).toEqual({ HEARTBEAT: 'status', DEVICE_AVAILABILITY: 'status', DEVICE_RESTARTED: 'events' });
+  it('follows the §20 type/topic matrix: only heartbeat and availability on status', () => {
+    expect(CHANNEL_BY_TYPE).toEqual({
+      HEARTBEAT: 'status',
+      DEVICE_AVAILABILITY: 'status',
+      DEVICE_RESTARTED: 'events',
+      COMMAND_ACKNOWLEDGED: 'events',
+      COMMAND_REJECTED: 'events',
+      DOOR_OPENED: 'events',
+      DOOR_CLOSED: 'events',
+      LOCK_UNLOCKED: 'events',
+      LOCK_LOCKED: 'events',
+      RFID_SCAN_COMPLETED: 'events',
+      ACCESS_CHALLENGE_DISPLAYED: 'events',
+      DISPLAY_REJECTED: 'events',
+    });
   });
 
   it('builds wildcard-free topics', () => {

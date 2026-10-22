@@ -3,6 +3,8 @@ export * from './config.ts';
 export * from './messages.ts';
 export * from './backoff.ts';
 export * from './boot-counter.ts';
+export * from './command-journal.ts';
+export * from './inbound.ts';
 export * from './emission-log.ts';
 export * from './transport.ts';
 export * from './simulator.ts';
