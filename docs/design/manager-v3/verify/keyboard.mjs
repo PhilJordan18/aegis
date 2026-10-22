@@ -29,7 +29,7 @@ async function tabThrough(label, url, opts = {}) {
         tag: el.tagName.toLowerCase() + (el.id ? '#' + el.id : ''), name,
         focusVisible: el.matches(':focus-visible'),
         outline: `${cs.outlineStyle} ${cs.outlineWidth} ${cs.outlineColor} +${cs.outlineOffset}`,
-        outlineWidth: parseFloat(cs.outlineWidth), outlineOffset: parseFloat(cs.outlineOffset),
+        outlineWidth: Number.parseFloat(cs.outlineWidth), outlineOffset: Number.parseFloat(cs.outlineOffset),
         rect: { x: r.x, y: r.y, w: r.width, h: r.height },
         inViewport: r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth,
         obscured: !(top === el || el.contains(top) || (ringEl.contains(top))),

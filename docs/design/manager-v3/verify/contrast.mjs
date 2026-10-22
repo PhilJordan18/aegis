@@ -13,8 +13,8 @@ async function scanText(page) {
     let n
     const push = (label, b, cs, el) => {
       let op = 1, e = el
-      while (e) { op *= parseFloat(getComputedStyle(e).opacity); e = e.parentElement }
-      res.push({ text: label.slice(0, 48), x: b.x + scrollX, y: b.y + scrollY, w: b.width, h: b.height, color: cs.color, size: parseFloat(cs.fontSize), weight: parseInt(cs.fontWeight, 10), op, cls: (el.className && el.className.baseVal === undefined ? el.className : el.tagName) })
+      while (e) { op *= Number.parseFloat(getComputedStyle(e).opacity); e = e.parentElement }
+      res.push({ text: label.slice(0, 48), x: b.x + scrollX, y: b.y + scrollY, w: b.width, h: b.height, color: cs.color, size: Number.parseFloat(cs.fontSize), weight: Number.parseInt(cs.fontWeight, 10), op, cls: (el.className && el.className.baseVal === undefined ? el.className : el.tagName) })
     }
     while ((n = walker.nextNode())) {
       const t = n.textContent.trim()

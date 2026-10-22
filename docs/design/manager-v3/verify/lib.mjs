@@ -47,7 +47,7 @@ export const lum = (rgb) => {
   const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }
   return 0.2126 * f(rgb[0]) + 0.7152 * f(rgb[1]) + 0.0722 * f(rgb[2])
 }
-export const hex = (s) => { s = s.replace('#', ''); return [0, 2, 4].map((i) => parseInt(s.slice(i, i + 2), 16)) }
+export const hex = (s) => { s = s.replace('#', ''); return [0, 2, 4].map((i) => Number.parseInt(s.slice(i, i + 2), 16)) }
 export const blend = (fg, a, bg) => fg.map((v, i) => v * a + bg[i] * (1 - a))
 export const ratio = (a, b) => {
   const x = lum(a), y = lum(b)
@@ -57,6 +57,6 @@ export const ratio = (a, b) => {
 export const parseTok = (s) => {
   s = s.trim()
   const rgb = hex(s)
-  const a = s.length >= 9 ? parseInt(s.slice(7, 9), 16) / 255 : 1
+  const a = s.length >= 9 ? Number.parseInt(s.slice(7, 9), 16) / 255 : 1
   return { rgb, a }
 }

@@ -53,7 +53,7 @@ for (const dpr of [1, 2]) {
       const c = document.createElement('canvas'); c.width = img.width; c.height = img.height
       const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0)
       const L = (r, gg, b) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }; return 0.2126 * f(r) + 0.7152 * f(gg) + 0.0722 * f(b) }
-      const bgRGB = [1, 3, 5].map((i) => parseInt(bg.slice(i, i + 2), 16))
+      const bgRGB = [1, 3, 5].map((i) => Number.parseInt(bg.slice(i, i + 2), 16))
       const R = (a, b) => { const x = L(...a), y = L(...b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05) }
       const imgs = [...document.querySelectorAll('img')]
       return imgs.map((el, i) => {

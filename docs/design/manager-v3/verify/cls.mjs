@@ -51,7 +51,6 @@ await browser.close()
 // Synthèse
 for (const vp of [1440, 390]) for (const mode of ['bottom', 'top']) {
   const sel = rows.filter((r) => r.viewport === vp && r.mode === mode && r.maxInteractiveShift !== undefined)
-  const worst = sel.reduce((a, b) => (b.maxInteractiveShift > a.maxInteractiveShift ? b : a))
   const per = Object.fromEntries(['invalid-credentials', 'rate-limited', 'unreachable', 'service-error', 'session-expired', 'validation', 'sending'].map((t) => [t, Math.max(...sel.filter((r) => r.to === t).map((r) => r.maxInteractiveShift))]))
   console.log(`${vp}px alert=${mode} : décalage max des éléments interactifs ou de la carte (px) par transition`, JSON.stringify(per))
 }
