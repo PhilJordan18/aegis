@@ -1110,7 +1110,9 @@ CREATE TABLE audit_events (
 
 #### `rest_idempotency_keys`
 
-Une clé est liée à l’acteur, à la route logique et au hash de la requête. La réponse est enregistrée dans la même transaction que la mutation métier.
+Une clé est liée à l’acteur, à la route logique et au hash de la requête. La réponse est enregistrée dans la même transaction que la mutation métier. La table est créée par `V002_1` (§11.1).
+
+`response_body` est un `jsonb` : il conserve le document JSON de la réponse, mais ni l’ordre des clés ni les espaces du texte émis. Un rejeu restitue donc le même contenu JSON, pas les mêmes octets; c’est le sens de « réponse originale exacte » au document 09, §20.2. Aucun en-tête n’est stocké : `Location` est reconstruit à partir de `resource_type` et `resource_id`.
 
 ```sql
 CREATE TABLE rest_idempotency_keys (
@@ -1414,7 +1416,7 @@ Quand plusieurs agrégats sont requis, le backend les verrouille dans cet ordre 
 7. `local_access_challenges`, si concerné;
 8. `anomalies`.
 
-Les lectures de garde utilisent `SELECT ... FOR UPDATE` sur les lignes existantes. Le verrou de la ligne `lockers` sérialise le parcours physique; l’index partiel reste la barrière finale lorsqu’aucune opération ouverte n’existait encore.
+Les lectures de garde utilisent `SELECT ... FOR UPDATE` sur les lignes existantes, sauf pour `users`, verrouillée par `SELECT ... FOR NO KEY UPDATE`. Ces parcours ne modifient jamais la clé d’un utilisateur, et ce mode n’entre pas en conflit avec le verrou `KEY SHARE` que la clé étrangère `fk_rest_idempotency_actor` prend sur la ligne de l’acteur à l’insertion de sa clé d’idempotence (§8.1). Avec `FOR UPDATE`, deux requêtes concurrentes du même utilisateur portant des clés différentes s’attendraient mutuellement jusqu’au deadlock, et une ligne `users` tenue ailleurs retarderait l’insertion d’une nouvelle clé. Le verrou de la ligne `lockers` sérialise le parcours physique; l’index partiel reste la barrière finale lorsqu’aucune opération ouverte n’existait encore.
 
 ### 7.2 Création d’une réservation
 
@@ -1422,7 +1424,7 @@ Dans une seule transaction :
 
 1. calculer `now` une seule fois côté backend;
 2. prendre la clé REST et son `request_hash`;
-3. verrouiller l’utilisateur puis l’actif;
+3. verrouiller l’utilisateur (`FOR NO KEY UPDATE`, §7.1) puis l’actif;
 4. charger et verrouiller la réservation active éventuelle et le prêt ouvert éventuel;
 5. vérifier rôle, horaire, accès, calibration, présence, statut opérationnel et readiness;
 6. insérer `reservations` et `audit_events`;
@@ -1435,7 +1437,7 @@ Une violation `23505` sur un index d’invariant est convertie en `CONFLICT`; la
 
 **Transaction de préparation :** vérifier et verrouiller le contexte, créer l’opération `AWAITING_LOCAL_PROOF`, le défi `PENDING` et son affichage chiffré dans `hub_display_outbox`. Incrémenter `lockers.display_revision` sous verrou. Ne créer aucune commande de serrure et ne pas modifier le prêt.
 
-**Transaction de validation QR :** verrouiller utilisateur, actif, réservation/prêt, locker, compartiment, opération puis défi; vérifier l’initiateur, le hash constant-time, l’affichage, la session, l’expiration et toutes les gardes métier courantes. Consommer le défi; passer l’opération à `AUTHORIZED`; renseigner `local_proof_validated_at = authorized_at`, `expires_at = authorized_at + 120 secondes`; passer le prêt à `RETURN_PENDING` pour un retour; insérer l’unique `command_outbox`; purger le ciphertext du QR et enregistrer audit/réponse idempotente. Tout est validé ou annulé ensemble.
+**Transaction de validation QR :** verrouiller utilisateur (`FOR NO KEY UPDATE`, §7.1), actif, réservation/prêt, locker, compartiment, opération puis défi; vérifier l’initiateur, le hash constant-time, l’affichage, la session, l’expiration et toutes les gardes métier courantes. Consommer le défi; passer l’opération à `AUTHORIZED`; renseigner `local_proof_validated_at = authorized_at`, `expires_at = authorized_at + 120 secondes`; passer le prêt à `RETURN_PENDING` pour un retour; insérer l’unique `command_outbox`; purger le ciphertext du QR et enregistrer audit/réponse idempotente. Tout est validé ou annulé ensemble.
 
 Les refus avec incrément d’essais doivent être commités. Une erreur applicative ne doit pas annuler ce compteur. Le même `Idempotency-Key` et la même requête rejouent la réponse initiale; une autre clé après consommation ne produit aucune commande supplémentaire.
 
@@ -1485,18 +1487,22 @@ Les transactions qui échouent sur `40P01` (deadlock) ou `40001` (serialization 
 
 ### 8.1 Idempotence REST
 
-Les mutations suivantes exigent une clé `Idempotency-Key` : création de réservation, annulation, autorisation de checkout, autorisation de retour, reconnaissance d’anomalie et toute commande équivalente ajoutée au P0. La clé est limitée à 128 caractères.
+Les mutations de la liste du document 09, §20.1, exigent une clé `Idempotency-Key` : création de réservation, annulation, préparation d’un retrait (`checkout`) et d’un retour, autorisation locale QR, création et archivage d’un modèle d’actif, création et archivage d’un actif, ajout et révocation d’un identifiant physique, reconnaissance d’anomalie, et toute commande équivalente ajoutée au P0. La clé est limitée à 128 caractères.
 
-Flux :
+Flux, dans une seule transaction `READ COMMITTED` :
 
-1. normaliser la route logique et calculer un SHA-256 du corps canonique;
-2. tenter d’insérer `(actor_user_id, endpoint, idempotency_key, request_hash)` avec `status = 'IN_PROGRESS'`;
-3. si l’insertion gagne, exécuter la mutation, enregistrer la réponse et passer la clé à `COMPLETED` dans la même transaction;
-4. si la clé existe, attendre la fin de la transaction gagnante, verrouiller sa ligne et comparer le hash;
-5. avec le même hash, retourner exactement `response_status` et `response_body` déjà enregistrés;
-6. avec un hash différent, retourner `409 IDEMPOTENCY_KEY_REUSED` sans modifier le métier.
+1. normaliser la route logique et calculer un SHA-256 de la méthode, de la route, des paramètres de chemin et du corps canonique;
+2. borner l’attente de la clé par `SET LOCAL lock_timeout = '5s'`;
+3. tenter d’insérer `(actor_user_id, endpoint, idempotency_key, request_hash)` avec `status = 'IN_PROGRESS'` (`ON CONFLICT DO NOTHING`); une insertion concurrente de la même clé attend la fin de la transaction gagnante;
+4. si l’insertion gagne, rétablir le `lock_timeout` par défaut, exécuter la mutation, enregistrer la réponse et passer la clé à `COMPLETED` dans la même transaction;
+5. si la clé existe, verrouiller sa ligne (`FOR UPDATE`); si elle a expiré, la supprimer et reprendre à l’étape 3; si elle a disparu pendant l’attente, reprendre aussi à l’étape 3;
+6. avec le même hash, retourner le `response_status` et le contenu JSON de `response_body` déjà enregistrés, sans appeler la mutation;
+7. avec un hash différent, retourner `409 IDEMPOTENCY_KEY_REUSED` sans modifier le métier;
+8. si l’attente dépasse le délai, retourner `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` avec `Retry-After`; la transaction est annulée sans effet.
 
-Une erreur métier déterministe peut elle aussi être enregistrée comme réponse, afin qu’une répétition ne produise pas un résultat différent pendant la durée de rétention. Les clés sont conservées au moins 24 heures; leur purge est une opération de maintenance distincte et ne doit pas toucher aux tables métier.
+La ligne de clé est la première ligne que le flux verrouille explicitement, avant les agrégats de l’ordre du §7.1. Son insertion prend toutefois un verrou `KEY SHARE` sur la ligne `users` de l’acteur, par la contrainte `fk_rest_idempotency_actor`; c’est pourquoi les gardes verrouillent `users` en `FOR NO KEY UPDATE`, mode compatible avec ce verrou (§7.1).
+
+Pour les routes du catalogue (création et archivage d’un modèle d’actif ou d’un actif), une erreur métier n’est pas enregistrée : la transaction est annulée, ligne de clé comprise. Une nouvelle tentative avec la même clé réexécute la requête contre l’état métier du moment; son résultat peut donc différer du premier si cet état a changé entre-temps. Ce choix vaut pour cette tranche seulement, pas comme règle générale : d’autres flux, par exemple l’autorisation locale QR (§7.3), devront rejouer certains refus sans recompter la tentative et fixeront leur propre règle. Les clés sont conservées au moins 24 heures; leur purge est une opération de maintenance distincte et ne doit pas toucher aux tables métier.
 
 Les requêtes GET sont naturellement sans effet; elles n’utilisent pas cette table.
 
@@ -1682,6 +1688,7 @@ Découpage recommandé :
 |---|---|
 | `V001__create_schema_and_extensions.sql` | `pgcrypto`, schéma `aegis`, conventions initiales. |
 | `V002__create_identity_and_catalog.sql` | `users`, `asset_models`, `assets`, `asset_identifiers`. |
+| `V002_1__create_rest_idempotency_keys.sql` | `rest_idempotency_keys` (§4.10), avancée depuis `V010` pour les routes du catalogue (document 09, §20.1). Ajoutée quand toutes les bases s’arrêtaient à `V002`. |
 | `V003__create_lockers_and_placements.sql` | `lockers`, `compartments`, `locker_devices`, `asset_placements`. |
 | `V004__create_operating_schedules.sql` | `operating_schedules`, `operating_windows` et leurs index. |
 | `V005__create_reservations.sql` | `reservations` et index d’unicité active. |
@@ -1689,7 +1696,7 @@ Découpage recommandé :
 | `V007__create_command_outbox.sql` | `command_outbox`, `local_access_challenges`, `hub_display_outbox` et index de claim, si aucune migration n’a encore été appliquée. |
 | `V008__create_device_messages_and_observations.sql` | `inbound_device_messages`, `physical_observations`. |
 | `V009__create_anomalies_and_audit.sql` | `anomalies`, `audit_events`. |
-| `V010__create_rest_idempotency.sql` | `rest_idempotency_keys`. |
+| `V010__create_rest_idempotency.sql` | Déplacée vers `V002_1`; numéro laissé inutilisé, aucune migration n’est renumérotée. |
 | `V011__create_read_indexes.sql` | Index de lecture et index partiels restant. |
 | `V012__seed_demo_reference_data.sql` | Facultatif et réservé à l’environnement de démonstration; comptes et UUIDs fixes documentés. |
 

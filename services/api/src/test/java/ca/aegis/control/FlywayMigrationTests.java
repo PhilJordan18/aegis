@@ -48,12 +48,13 @@ class FlywayMigrationTests {
 
     @Test
     void migratesAnEmptyDatabaseOnceAndValidatesAfterwards() {
-        assertEquals(2, flyway(null).migrate().migrationsExecuted);
+        assertEquals(3, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
 
-        assertEquals(List.of("001", "002"), appliedVersions());
-        assertEquals(List.of("asset_identifiers", "asset_models", "assets", "users"), jdbc.sql("""
+        assertEquals(List.of("001", "002", "002.1"), appliedVersions());
+        assertEquals(List.of("asset_identifiers", "asset_models", "assets", "rest_idempotency_keys", "users"),
+                jdbc.sql("""
                 SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'aegis' ORDER BY table_name
                 """).query(String.class).list());
@@ -64,8 +65,82 @@ class FlywayMigrationTests {
         assertEquals(1, flyway("001").migrate().migrationsExecuted);
         assertEquals(List.of("001"), appliedVersions());
 
-        assertEquals(1, flyway(null).migrate().migrationsExecuted);
+        assertEquals(2, flyway(null).migrate().migrationsExecuted);
+        assertEquals(List.of("001", "002", "002.1"), appliedVersions());
+    }
+
+    /** Every database applied V001 and V002 only when V002_1 was added, so it upgrades them in order. */
+    @Test
+    void upgradesADatabaseAtTheCatalogMigrationWithItsData() {
+        assertEquals(2, flyway("2").migrate().migrationsExecuted);
         assertEquals(List.of("001", "002"), appliedVersions());
+        UUID user = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
+        UUID model = insertModel("Oscilloscope");
+
+        assertEquals(1, flyway(null).migrate().migrationsExecuted);
+        assertEquals(0, flyway(null).migrate().migrationsExecuted);
+        assertTrue(flyway(null).validateWithResult().validationSuccessful);
+        assertEquals(List.of("001", "002", "002.1"), appliedVersions());
+        assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis.users WHERE id = :id").param("id", user)
+                .query(Long.class).single());
+        assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis.asset_models WHERE id = :id").param("id", model)
+                .query(Long.class).single());
+        assertEquals(0, jdbc.sql("SELECT count(*) FROM aegis.rest_idempotency_keys").query(Long.class).single());
+    }
+
+    @Test
+    void restIdempotencyKeysEnforceTheirScopeAndLifecycle() {
+        flyway(null).migrate();
+        UUID actor = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
+        UUID other = insertUser("Autre", "other@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
+        byte[] hash = new byte[32];
+
+        UUID key = insertKey(actor, "POST /admin/asset-models", "k".repeat(128), hash);
+        Map<String, Object> defaults = jdbc.sql("""
+                SELECT status, completed_at, response_status, response_body FROM aegis.rest_idempotency_keys
+                WHERE id = :id
+                """).param("id", key).query().singleRow();
+        assertEquals("IN_PROGRESS", defaults.get("status"));
+        assertEquals(null, defaults.get("completed_at"));
+        insertKey(other, "POST /admin/asset-models", "k".repeat(128), hash);
+        insertKey(actor, "POST /admin/assets", "k".repeat(128), hash);
+
+        assertViolation("23505", "uq_rest_idempotency_scope",
+                () -> insertKey(actor, "POST /admin/asset-models", "k".repeat(128), hash));
+        assertViolation("23514", "ck_rest_idempotency_key_length",
+                () -> insertKey(actor, "POST /admin/asset-models", "k".repeat(129), hash));
+        assertViolation("23514", "ck_rest_idempotency_key_length",
+                () -> insertKey(actor, "POST /admin/asset-models", "", hash));
+        assertViolation("23514", "ck_rest_idempotency_hash",
+                () -> insertKey(actor, "POST /admin/asset-models", "short-hash", new byte[31]));
+        assertViolation("23514", "ck_rest_idempotency_endpoint", () -> insertKey(actor, " ", "blank", hash));
+        assertViolation("23503", "fk_rest_idempotency_actor",
+                () -> insertKey(UUID.randomUUID(), "POST /admin/asset-models", "unknown-actor", hash));
+        assertViolation("23514", "ck_rest_idempotency_dates", () -> jdbc.sql("""
+                INSERT INTO aegis.rest_idempotency_keys
+                    (actor_user_id, endpoint, idempotency_key, request_hash, expires_at)
+                VALUES (:actor, 'POST /admin/assets', 'expired-at-birth', :hash, now())
+                """).param("actor", actor).param("hash", hash).update());
+        assertViolation("23514", "ck_rest_idempotency_lifecycle", () -> jdbc.sql(
+                "UPDATE aegis.rest_idempotency_keys SET status = 'COMPLETED' WHERE id = :id")
+                .param("id", key).update());
+        assertViolation("23514", "ck_rest_idempotency_lifecycle", () -> jdbc.sql(
+                "UPDATE aegis.rest_idempotency_keys SET response_body = '{}'::jsonb WHERE id = :id")
+                .param("id", key).update());
+        assertViolation("23514", "ck_rest_idempotency_resource_pair", () -> jdbc.sql(
+                "UPDATE aegis.rest_idempotency_keys SET resource_type = 'ASSET' WHERE id = :id")
+                .param("id", key).update());
+        assertViolation("23514", "ck_rest_idempotency_response_status", () -> jdbc.sql("""
+                UPDATE aegis.rest_idempotency_keys
+                SET status = 'COMPLETED', completed_at = now(), response_status = 600 WHERE id = :id
+                """).param("id", key).update());
+
+        assertEquals(1, jdbc.sql("""
+                UPDATE aegis.rest_idempotency_keys
+                SET status = 'COMPLETED', completed_at = now(), response_status = 201,
+                    response_body = '{"id": 1}'::jsonb, resource_type = 'ASSET_MODEL', resource_id = :resource
+                WHERE id = :id
+                """).param("resource", UUID.randomUUID()).param("id", key).update());
     }
 
     @Test
@@ -162,6 +237,17 @@ class FlywayMigrationTests {
                 """)
                 .param("displayName", displayName).param("email", email).param("passwordHash", passwordHash)
                 .param("role", role).param("level", level)
+                .query((row, number) -> row.getObject("id", UUID.class)).single();
+    }
+
+    private UUID insertKey(UUID actor, String endpoint, String key, byte[] hash) {
+        return jdbc.sql("""
+                INSERT INTO aegis.rest_idempotency_keys
+                    (actor_user_id, endpoint, idempotency_key, request_hash, expires_at)
+                VALUES (:actor, :endpoint, :key, :hash, now() + interval '24 hours')
+                RETURNING id
+                """)
+                .param("actor", actor).param("endpoint", endpoint).param("key", key).param("hash", hash)
                 .query((row, number) -> row.getObject("id", UUID.class)).single();
     }
 
