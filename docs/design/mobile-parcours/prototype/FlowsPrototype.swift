@@ -1328,7 +1328,7 @@ fileprivate struct Copy {
     var prepareAgain: String { t("Recommencer", "Start again") }
     var prepareAgainSpoken: String { t("Recommencer le retrait", "Start the checkout again") }
     var prepareAgainHint: String {
-        t("Un nouveau code s'affichera sur le casier.", "A new code will appear on the locker.")
+        t("Relance la préparation du retrait.", "Starts checkout preparation again.")
     }
     var phases: [String] { lang == .fr
         ? ["Demande", "Code du casier", "Autorisation", "Commande", "Porte", "Vérification"]

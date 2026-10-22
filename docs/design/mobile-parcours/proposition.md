@@ -4,7 +4,7 @@ Mode : Prototype. Date : 21 octobre 2026; passe de corrections du 22 octobre
 2026. Issue : #35 (DES-01). Suite de `../mobile-entree/` (connexion, approuvée
 et intégrée par #36).
 
-**Statut : proposition partiellement validée.** Ce dossier rassemble les
+**Statut : design approuvé; décisions de contrat encore proposées.** Ce dossier rassemble les
 parcours restants de #35 : catalogue, fiche équipement, réservation,
 préparation du retrait et scan du code du casier, progression physique, prêt
 actif et retour.
@@ -15,8 +15,10 @@ actif et retour.
 | Direction « Lumière du hub » v3, logo provisoire, apparences claire et sombre, connexion | **Approuvé** le 21 octobre 2026 (`../mobile-entree/proposition.md`) |
 | Direction v3 des écrans intérieurs (sombre profond, clair distinct, surfaces sobres, bleu d'action), typographie système, cartes, statuts associant symbole et texte, structure des fiches et de Mon activité, cellule A1 mise en évidence dans le parcours guidé, principe des dernières données connues hors ligne avec ancienneté explicite | **Approuvé** le 22 octobre 2026 (revue de Philippe) |
 | Corrections visuelles de la revue du 22 octobre : statuts anciens neutralisés, ancienneté visible, Réessayer, suivi interrompu, navigation native, hiérarchie en grand texte, petit écran | **Approuvé** le 22 octobre 2026 (design seulement : ne vaut validation ni de VoiceOver, ni de la caméra, ni du réseau réel) |
-| Variantes « Retrait indisponible » et « Nouvelle tentative permise » de Mon activité (§6) | Visuellement acceptées; **choix de la variante en attente** de la clarification de `availableActions` (§10) |
-| Textes ajoutés ou modifiés et traductions anglaises (§8.1), finitions du 22 octobre (§5, §7.3), comportements d'accessibilité | **Proposition** (ce dossier) |
+| Finitions du 22 octobre (§5, §7.3) : « Réserver jusqu'à » et la correspondance `reservedUntil` → `Loan.dueAt`, échéance reçue puis atteinte, rappel séparé, « Recommencer », chasse condensée aux tailles d'accessibilité sans plafonner Dynamic Type; navigation, masquage et reprise du suivi, petit écran | **Approuvé** le 22 octobre 2026 (présentation) |
+| Textes ajoutés ou modifiés et traductions anglaises (§8.1), dont le nom réel de l'équipement dans la consigne et les messages de suivi interrompu | **Approuvé** le 22 octobre 2026, sauf le message générique lié à `availableActions` |
+| Variantes de Mon activité qui dépendent de `availableActions` (§6) : retrait ou retour indisponible, nouvelle tentative avec ou sans Annuler, aucune action métier, retour en attente | Présentation acceptée; **règles de contrat proposées** (`09b24ac`, §10), non approuvées |
+| Accessibilité réelle (VoiceOver, Taille du texte, Réduire les animations), réseau réel, caméra, haptique | **Non vérifiés** : affectés aux stories d'implémentation |
 
 Les rendus de `captures/` viennent d'un prototype SwiftUI (`prototype/`),
 compilé dans une copie temporaire de `apps/ios` : données fictives, aucune
@@ -157,7 +159,8 @@ en P0.
 | Aucune activité | 404 sur `/me/reservation` et `/me/loan` | « Aucune réservation ni prêt en cours. » | **Voir les équipements** | — |
 | Réservation active | `ReservationView.ACTIVE`, `availableActions = ["CHECKOUT","CANCEL"]` | « Réservé pour vous » · « À retirer avant 16 h 30 HAE » | **Préparer le retrait** | Annuler la réservation (confirmation approuvée) |
 | Retrait indisponible (variante, en attente) | `availableActions = ["CANCEL"]`; l'explication vient des faits de `GET /lockers/{lockerId}/status` (`lockerId` de `asset.placement`) : `connectionStatus`, `lastSeenAt`, `currentWindow.timeZone`. Si aucun fait n'explique l'absence de `CHECKOUT` (autre opération sur le casier, non exposée) : « Retrait indisponible pour le moment. Actualisez pour vérifier à nouveau. » | Avis dans la carte : « Retrait indisponible : le casier est hors ligne. » + « Dernier signal du casier à 14 h 28 HAE. Actualisez pour vérifier à nouveau. » | **Préparer le retrait** désactivé (cadenas), juste sous l'avis, puis **Actualiser**, seule action principale active | Annuler la réservation (lien) |
-| Nouvelle tentative permise (variante, en attente) | `CHECKOUT` figure dans la dernière lecture réussie. La note « Essai de … » n'est qu'un souvenir local de l'appareil après un `503 LOCKER_OFFLINE` : en mémoire seulement, jamais persistée, elle ne commande pas le bouton. Si une tentative autorisée s'est terminée (`FAILED`, `EXPIRED`, `ANOMALY` résolue), la liste devient `["CHECKOUT"]` : heure tirée de `terminalAt`, `failureReason` non interprété (C8), et **pas de lien Annuler** | Avis : « Essai de 14 h 32 HAE : le casier était hors ligne. » + « Vous pouvez faire une nouvelle tentative. Aucune porte ne s'ouvre sans le code du casier. » | **Nouvelle tentative de retrait** | Annuler la réservation |
+| Nouvelle tentative après un refus local (variante A, en attente) | `availableActions = ["CHECKOUT","CANCEL"]`, aucune tentative autorisée auparavant. La note « Essai de … » n'est qu'un souvenir local de l'appareil après un `503 LOCKER_OFFLINE` : en mémoire seulement, jamais persistée, elle ne commande pas le bouton | Avis : « Essai de 14 h 32 HAE : le casier était hors ligne. » + « Vous pouvez faire une nouvelle tentative. Aucune porte ne s'ouvre sans le code du casier. » | **Nouvelle tentative de retrait** | Annuler la réservation (`CANCEL` fourni) |
+| Nouvelle tentative après une tentative autorisée (variante B, en attente) | `availableActions = ["CHECKOUT"]` : une tentative autorisée s'est terminée (`FAILED`, `EXPIRED`, `ANOMALY` résolue); heure tirée de `terminalAt`, `failureReason` non interprété (C8) | Avis : l'état terminal reçu et son heure + « Vous pouvez faire une nouvelle tentative. Aucune porte ne s'ouvre sans le code du casier. » | **Nouvelle tentative de retrait** | — (pas de `CANCEL` : aucun lien Annuler) |
 | Réservation expirée | `EXPIRED` | « Votre réservation a expiré à 16 h 30. » | **Voir les équipements** | — |
 | Opération en cours | `currentOperationId` non terminal (aucune valeur d'action dédiée); en `AWAITING_LOCAL_PROOF`, Annuler reste offert si `CANCEL` figure; à partir de `AUTHORIZED`, aucune action | Pastille « Retrait en cours » / « Retour en cours » · « Suivi masqué. L'opération n'est pas annulée. » | **Reprendre** (relit l'opération, ne redéclenche rien) | — |
 | Prêt actif | `LoanView.ACTIVE`, `availableActions = ["RETURN"]` (retard ou non) | « Emprunté par vous » · « Retour prévu à 16 h 30 HAE » | **Retourner l'équipement** | Voir l'équipement |
@@ -170,7 +173,9 @@ en P0.
 Les boutons suivent `availableActions`; l'application ne recalcule pas les
 actions permises. Le statut du casier explique un refus, il ne décide rien.
 Les valeurs de `availableActions` ne sont pas encore énumérées dans `09` (§10).
-Cette matrice est alignée sur la proposition normative de la session
+Annuler la réservation n'apparaît que si `CANCEL` figure dans la dernière
+lecture réussie, dans toutes les lignes. Cette matrice est alignée sur la
+proposition normative de la session
 principale (`09` §8.10, §14.1 et §26.8 au commit `09b24ac` (branche locale `35-docs-reservation-deadline-actions` de la session principale, non poussée)), **en attente de l'approbation de Philippe** :
 liste fermée en v1 — `CHECKOUT` et `CANCEL` pour la réservation, `RETURN`
 pour le prêt; une valeur inconnue est journalisée et ignorée, sans bouton.
@@ -257,7 +262,7 @@ secondes »; annonces automatiques seulement à 30 s et 10 s.
 |---|---|
 | Réseau perdu pendant le suivi | Avis ambre en tête : « Suivi interrompu : connexion perdue » + « Ce n'est ni une annulation ni une confirmation. L'état sera relu dès le retour du réseau. » Titre : « Dernier état reçu : porte ouverte » (jamais l'affirmation « Porte ouverte »). Étape courante marquée d'un symbole pause, lue « dernier état reçu, suivi interrompu ». Le temps restant continue vers l'échéance reçue, avec « Échéance reçue : 14 h 36 HAE »; à zéro, « Échéance atteinte : en attente de confirmation du service. » L'interruption ne promet aucune relecture à heure fixe : la relecture se fait au retour du réseau (suivi ralenti puis repris, `09` §15.4). |
 | Application en arrière-plan | Suivi suspendu; relecture immédiate au retour |
-| Porte restée fermée | `EXPIRED` : « Délai dépassé. Aucune porte n'a été ouverte. Recommencez la préparation. » Bouton **Recommencer** (libellé court, en chasse condensée aux tailles d'accessibilité comme le titre, pour garder le mot entier en AX5 sans plafonner la taille); VoiceOver lit « Recommencer le retrait » avec l'indice « Un nouveau code s'affichera sur le casier. » |
+| Porte restée fermée | `EXPIRED` : « Délai dépassé. Aucune porte n'a été ouverte. Recommencez la préparation. » Bouton **Recommencer** (libellé court, en chasse condensée aux tailles d'accessibilité comme le titre, pour garder le mot entier en AX5 sans plafonner la taille); VoiceOver lit « Recommencer le retrait » avec l'indice « Relance la préparation du retrait. », qui ne promet pas de code avant l'acceptation du serveur. |
 | Échec sûr | `FAILED` : « Opération arrêtée sans ouverture. Vous pouvez recommencer. »; motif générique tant que `failureReason` reste une chaîne libre (C8) |
 | Incertitude physique | `ANOMALY` : « Intervention requise. Ne réessayez pas. Un administrateur doit vérifier la cellule A1. » |
 | Session expirée en cours | Retour à la connexion, avec l'information que l'opération du casier n'est pas annulée; reprise par `currentOperationId` après connexion |
@@ -278,10 +283,11 @@ consigne); le compte à rebours n'est pas annoncé chaque seconde; retours
 haptiques en appui seulement; aucune information portée par la seule couleur
 ou le seul mouvement.
 
-## 8. Textes (français de référence, anglais proposé)
+## 8. Textes (français de référence et anglais)
 
-Les textes français marqués « approuvé » viennent de `sections.md`; leurs
-traductions et les autres textes sont **proposés**. Les heures sont formatées
+Les textes français marqués « approuvé » viennent de `sections.md`; ceux de
+§8.1 et les traductions anglaises de ce dossier ont été approuvés le 22
+octobre 2026, sauf mention contraire. Les heures sont formatées
 par l'appareil (§1).
 
 | Clé | Français | English | Statut FR |
@@ -300,38 +306,38 @@ par l'appareil (§1).
 | Autorisé | Accès autorisé · N'ouvrez pas encore. | Access authorized · Don't open yet. | approuvé |
 | Succès | Retrait confirmé · Retour confirmé | Checkout confirmed · Return confirmed | approuvé |
 
-### 8.1 Textes ajoutés ou modifiés le 22 octobre (à valider)
+### 8.1 Textes ajoutés ou modifiés le 22 octobre (approuvés)
 
 | Où | Français | English | Statut |
 |---|---|---|---|
-| Catalogue et fiche hors ligne | Informations non actualisées depuis 14 h 30 HAE. | Not up to date since 2:30 PM EDT. | FR proposé (« Informations non actualisées » approuvé, complété de l'heure) |
-| Catalogue hors ligne | Réessayer | Try again | proposé (glossaire) |
-| Pastille non actualisée | Dernier état : Prêt | Last known: Ready | proposé |
-| Pastille, VoiceOver | Dernier état connu, non actualisé : Prêt | Last known status, not up to date: Ready | proposé |
-| Fiche hors ligne | Réservation possible après actualisation de la fiche. | You can reserve once this page is up to date. | proposé |
-| Filtres, très grand texte | Filtre : Tous | Filter: All | proposé |
-| Raison bloquée | Calibration expirée depuis le 8 sept. 2026 | Calibration expired on Sep 8, 2026 | FR inchangé; EN corrigé |
-| Feuille de réservation, sélecteur (remplace « Heure de retour » · « Return by ») | Réserver jusqu'à | Reserve until | demandé par Philippe le 22 octobre; glossaire en attente (session principale) |
-| Feuille de réservation, conséquences de l'heure (remplace la première moitié du rappel approuvé) | Retirez l'équipement avant cette heure. Elle sera aussi l'heure de retour prévue. | Pick up the equipment before this time. It will also be the expected return time. | demandé par Philippe le 22 octobre (`06` §11.1); glossaire en attente |
-| Rappel de réservation, séparé | La réservation n'ouvre aucune porte. | Reserving does not unlock the compartment. | FR repris du rappel approuvé; glossaire en attente |
-| Feuille de réservation | Heures du casier : heure avancée de l'Est. | Locker time: Eastern Daylight Saving Time. | proposé (nom du fuseau fourni par le système) |
-| Retrait indisponible | Retrait indisponible : le casier est hors ligne. · Dernier signal du casier à 14 h 28 HAE. Actualisez pour vérifier à nouveau. | Checkout unavailable: the locker is offline. · Locker last seen at 2:28 PM EDT. Refresh to check again. | proposé |
-| Retrait indisponible, sans fait explicatif | Retrait indisponible pour le moment. Actualisez pour vérifier à nouveau. | Checkout isn't available right now. Refresh to check again. | proposé |
-| Nouvelle tentative | Essai de 14 h 32 HAE : le casier était hors ligne. · Vous pouvez faire une nouvelle tentative. Aucune porte ne s'ouvre sans le code du casier. · Nouvelle tentative de retrait | Attempt at 2:32 PM EDT: the locker was offline. · You can try again. No door opens without the locker code. · Try checkout again | proposé |
-| Actualiser | Actualiser | Refresh | proposé (glossaire) |
-| Opération masquée | Retrait en cours · Suivi masqué. L'opération n'est pas annulée. | Checkout in progress · Tracking hidden. The operation is not cancelled. | proposé (le cas « Opération en cours » est approuvé, pas son libellé) |
-| Note Fermer | Fermer masque ce suivi sans annuler l'opération. Reprenez-le depuis Mon activité. | Close hides this tracking without cancelling the operation. Resume it from My activity. | proposé |
-| Indice VoiceOver de Fermer | Masque le suivi sans annuler l'opération. | Hides tracking without cancelling the operation. | proposé |
-| Réseau perdu (remplace « Connexion perdue. L'opération continue sur le casier… ») | Suivi interrompu : connexion perdue · Ce n'est ni une annulation ni une confirmation. L'état sera relu dès le retour du réseau. | Tracking interrupted: connection lost · This neither cancels nor confirms the operation. Its status will be read again when the network is back. | proposé |
-| Titre réseau perdu (remplace « Porte ouverte ») | Dernier état reçu : porte ouverte | Last status received: door open | proposé |
-| Étape, VoiceOver | dernier état reçu, suivi interrompu | last status received, tracking interrupted | proposé |
-| Temps restant | Temps restant · Échéance : 14 h 36 HAE | Time remaining · Deadline: 2:36 PM EDT | proposé |
-| Temps restant, réseau perdu | Échéance reçue : 14 h 36 HAE | Deadline received: 2:36 PM EDT | proposé |
-| Temps restant à zéro | Échéance atteinte : en attente de confirmation du service. | Deadline reached: waiting for the service to confirm. | FR demandé par Philippe le 22 octobre; EN proposé |
-| Délai dépassé, bouton (remplace « Recommencer la préparation ») | Recommencer · VoiceOver : Recommencer le retrait · indice : Un nouveau code s'affichera sur le casier. | Start again · VoiceOver: Start the checkout again · hint: A new code will appear on the locker. | libellé visible demandé par Philippe le 22 octobre; libellé et indice VoiceOver proposés |
-| Déverrouillage | Ouvrez la porte A1 et retirez « Multimètre 1 ». Si elle reste fermée, ne forcez pas et attendez le message suivant. | Open door A1 and take “Multimètre 1”. If it stays shut, don't force it; wait for the next message. | FR proposé : le nom saisi remplace « le multimètre » approuvé, que le contrat ne fournit pas |
-| Retard | En retard depuis 16 h 30 HAE — rapportez l'équipement. | Overdue since 4:30 PM EDT. Please bring the equipment back. | FR approuvé; EN revu |
-| Autres anglais revus | — | Why it's blocked · Browse equipment · View my activity · Stand in front of the locker screen. · Code appearing on the locker · Start the checkout again. · Start again · Due back at … · Allow camera access in Settings to scan the code. · Scanning unlocks nothing until the server authorizes it. | EN proposé |
+| Catalogue et fiche hors ligne | Informations non actualisées depuis 14 h 30 HAE. | Not up to date since 2:30 PM EDT. | approuvé |
+| Catalogue hors ligne | Réessayer | Try again | approuvé |
+| Pastille non actualisée | Dernier état : Prêt | Last known: Ready | approuvé |
+| Pastille, VoiceOver | Dernier état connu, non actualisé : Prêt | Last known status, not up to date: Ready | approuvé |
+| Fiche hors ligne | Réservation possible après actualisation de la fiche. | You can reserve once this page is up to date. | approuvé |
+| Filtres, très grand texte | Filtre : Tous | Filter: All | approuvé |
+| Raison bloquée | Calibration expirée depuis le 8 sept. 2026 | Calibration expired on Sep 8, 2026 | approuvé |
+| Feuille de réservation, sélecteur (remplace « Heure de retour » · « Return by ») | Réserver jusqu'à | Reserve until | approuvé |
+| Feuille de réservation, conséquences de l'heure (remplace la première moitié du rappel approuvé) | Retirez l'équipement avant cette heure. Elle sera aussi l'heure de retour prévue. | Pick up the equipment before this time. It will also be the expected return time. | approuvé |
+| Rappel de réservation, séparé | La réservation n'ouvre aucune porte. | Reserving does not unlock the compartment. | approuvé |
+| Feuille de réservation | Heures du casier : heure avancée de l'Est. | Locker time: Eastern Daylight Saving Time. | approuvé |
+| Retrait indisponible | Retrait indisponible : le casier est hors ligne. · Dernier signal du casier à 14 h 28 HAE. Actualisez pour vérifier à nouveau. | Checkout unavailable: the locker is offline. · Locker last seen at 2:28 PM EDT. Refresh to check again. | approuvé |
+| Retrait indisponible, sans fait explicatif | Retrait indisponible pour le moment. Actualisez pour vérifier à nouveau. | Checkout isn't available right now. Refresh to check again. | proposé : dépend de la proposition `availableActions` (§10) |
+| Nouvelle tentative | Essai de 14 h 32 HAE : le casier était hors ligne. · Vous pouvez faire une nouvelle tentative. Aucune porte ne s'ouvre sans le code du casier. · Nouvelle tentative de retrait | Attempt at 2:32 PM EDT: the locker was offline. · You can try again. No door opens without the locker code. · Try checkout again | approuvé |
+| Actualiser | Actualiser | Refresh | approuvé |
+| Opération masquée | Retrait en cours · Suivi masqué. L'opération n'est pas annulée. | Checkout in progress · Tracking hidden. The operation is not cancelled. | approuvé |
+| Note Fermer | Fermer masque ce suivi sans annuler l'opération. Reprenez-le depuis Mon activité. | Close hides this tracking without cancelling the operation. Resume it from My activity. | approuvé |
+| Indice VoiceOver de Fermer | Masque le suivi sans annuler l'opération. | Hides tracking without cancelling the operation. | approuvé |
+| Réseau perdu (remplace « Connexion perdue. L'opération continue sur le casier… ») | Suivi interrompu : connexion perdue · Ce n'est ni une annulation ni une confirmation. L'état sera relu dès le retour du réseau. | Tracking interrupted: connection lost · This neither cancels nor confirms the operation. Its status will be read again when the network is back. | approuvé |
+| Titre réseau perdu (remplace « Porte ouverte ») | Dernier état reçu : porte ouverte | Last status received: door open | approuvé |
+| Étape, VoiceOver | dernier état reçu, suivi interrompu | last status received, tracking interrupted | approuvé |
+| Temps restant | Temps restant · Échéance : 14 h 36 HAE | Time remaining · Deadline: 2:36 PM EDT | approuvé |
+| Temps restant, réseau perdu | Échéance reçue : 14 h 36 HAE | Deadline received: 2:36 PM EDT | approuvé |
+| Temps restant à zéro | Échéance atteinte : en attente de confirmation du service. | Deadline reached: waiting for the service to confirm. | approuvé |
+| Délai dépassé, bouton (remplace « Recommencer la préparation ») | Recommencer · VoiceOver : Recommencer le retrait · indice : Relance la préparation du retrait. | Start again · VoiceOver: Start the checkout again · hint: Starts checkout preparation again. | approuvé (indice fourni par Philippe le 22 octobre) |
+| Déverrouillage | Ouvrez la porte A1 et retirez « Multimètre 1 ». Si elle reste fermée, ne forcez pas et attendez le message suivant. | Open door A1 and take “Multimètre 1”. If it stays shut, don't force it; wait for the next message. | approuvé |
+| Retard | En retard depuis 16 h 30 HAE — rapportez l'équipement. | Overdue since 4:30 PM EDT. Please bring the equipment back. | approuvé |
+| Autres anglais revus | — | Why it's blocked · Browse equipment · View my activity · Stand in front of the locker screen. · Code appearing on the locker · Start the checkout again. · Start again · Due back at … · Allow camera access in Settings to scan the code. · Scanning unlocks nothing until the server authorizes it. | approuvé |
 
 Les autres messages de refus reprennent `sections.md` §4.1, §4.2 et §6; leur
 version anglaise suivra le glossaire partagé (`docs/localisation/`).
@@ -384,19 +390,18 @@ Aucun contrat n'est modifié par cette proposition.
 
 ## 11. Décisions encore nécessaires
 
-1. Valider les textes de §8.1 encore proposés, dont deux changements du
-   français approuvé : le nom saisi dans la consigne de déverrouillage, et le
-   nouveau message de réseau perdu qui remplace « L'opération continue sur le
-   casier ». Les textes de réservation et « Échéance atteinte » viennent de la
-   revue du 22 octobre; leurs entrées de glossaire restent à faire par la
-   session principale.
-2. Approuver la proposition `availableActions` de la session principale
-   (§10), dont deux points qui touchent l'écran : plus d'Annuler après une
-   tentative autorisée puis terminée, et aucune action pour `RETURN_PENDING`
-   hors reprise (procédure de récupération à définir). La matrice de §6 y est
-   déjà alignée, marquée « en attente ».
-3. Valider la présentation « Dernier état : … » en couleurs neutres pour les
-   statuts non actualisés.
+Les décisions de design et les textes sont approuvés (22 octobre 2026). Il
+reste des décisions de contrat, au propriétaire de `09`, sans lesquelles le
+handoff ne peut pas être présenté comme entièrement approuvé :
+
+1. Approuver la proposition `availableActions` (`09b24ac`, §10) : liste
+   fermée, conduite casier hors ligne, ancien échec, téléphone sans API et
+   opération engagée, et le message générique « Retrait indisponible pour le
+   moment. ».
+2. Permissions après une tentative autorisée puis terminée : la proposition
+   retire `CANCEL`; question laissée au propriétaire du contrat.
+3. Récupération d'un retour `RETURN_PENDING` : procédure de `05` §4.3 et `06`
+   §6.3 non définie; aucune action métier n'est affichée d'ici là.
 
 ## 12. Captures
 
@@ -418,4 +423,8 @@ très grand texte (AX5). Liste et procédure : `captures/README.md`.
   haptique.
 - Contrastes calculés sur les valeurs des jetons, pas mesurés sur appareil.
 - VoiceOver, Taille du texte et Réduire les animations seront vérifiés par
-  les tests de chaque story d'implémentation.
+  les tests de chaque story d'implémentation; l'approbation du 22 octobre
+  porte sur la présentation, pas sur ces vérifications.
+- Le prototype ne montre pas la variante B de §6 (nouvelle tentative sans
+  Annuler) ni « Retour indisponible » : leur présentation suit celle des
+  variantes rendues, et leurs règles restent proposées.
