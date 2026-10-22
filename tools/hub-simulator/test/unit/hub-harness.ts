@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { MemoryBootCounter } from '../../src/boot-counter.ts';
 import { MemoryCommandJournal } from '../../src/command-journal.ts';
 import { defineConfig, type SimulatorConfig } from '../../src/config.ts';
@@ -13,7 +13,8 @@ export const COMMANDS = `aegis/v1/lockers/${LOCKER}/commands`;
 export const DISPLAY = `aegis/v1/lockers/${LOCKER}/display`;
 export const EVENTS = `aegis/v1/lockers/${LOCKER}/events`;
 export const STATUS = `aegis/v1/lockers/${LOCKER}/status`;
-export const TOKEN = 'q3P0n8y5XbT1sZr7Kd2Wc9Hf4Lm6Vg0Ja1Ue8Ni3Ro5';
+/** A fresh display token for each test run: the tests check it never leaks, so no fixed value lives in the repository. */
+export const TOKEN = randomBytes(32).toString('base64url');
 
 export interface Harness {
   readonly sim: HubSimulator;
