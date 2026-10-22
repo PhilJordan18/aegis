@@ -6,6 +6,7 @@
 **Version :** 1.3 — décisions logicielles P0 et données de suivi des clients  
 **Mise à jour ciblée :** 21 octobre 2026 — `Retry-After` de la connexion (§10.2) et langue de la requête (§6.4), comportement existant documenté (#80)  
 **Mise à jour ciblée :** 21 octobre 2026 — idempotence REST durable : contenu d’une réponse rejouée (§6.2, §20.2), attente bornée d’une clé en cours et code `IDEMPOTENCY_REQUEST_IN_PROGRESS` (§20.2, §21) (#64)
+**Mise à jour ciblée :** 21 octobre 2026 — présence obligatoire des champs nullables du catalogue et violation `REQUIRED` (§12.1, §12.2), en attente d’approbation (#25)  
 
 ---
 
@@ -620,6 +621,8 @@ CreateAssetModelRequest et UpdateAssetModelRequest :
 | modelNumber | string ou null | oui | Maximum 120 |
 | description | string ou null | oui | Maximum 2000 |
 | defaultCalibrationRequired | boolean | oui | — |
+
+Dans les tables de §12.1 et §12.2, « Requis : oui » signifie que le champ figure dans le corps. Un champ `string ou null` ou `instant ou null` absent est refusé par `400 VALIDATION_ERROR` avec la violation `{field, code: REQUIRED}`; un `null` explicite est accepté et vide la valeur. *(Ajout CAT-01, en attente d’approbation.)*
 
 POST /admin/asset-models retourne 201 et exige Idempotency-Key.
 
