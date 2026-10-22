@@ -10,6 +10,11 @@ export interface Formatters {
    * `timeZone` is explicit: a business time is shown in the locker's zone, whatever the language.
    */
   readonly date: (instant: Date, timeZone: string) => string
+  /**
+   * A time of day with its zone abbreviation (« 10 h 30 HAE », « 10:30 a.m. EDT »). Without `timeZone`
+   * it is the device's zone, which is right for a technical instant such as an evaluation time.
+   */
+  readonly time: (instant: Date, timeZone?: string) => string
   /** Capitalization that follows the language's rules. */
   readonly upperCase: (value: string) => string
 }
@@ -31,6 +36,7 @@ function createFormatters(locale: Locale): Formatters {
       return `${minutesDigits.format(Math.floor(whole / 60))}:${secondsDigits.format(whole % 60)}`
     },
     date: (instant, timeZone) => new Intl.DateTimeFormat(tag, { dateStyle: 'medium', timeZone }).format(instant),
+    time: (instant, timeZone) => new Intl.DateTimeFormat(tag, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short', timeZone }).format(instant),
     upperCase: (value) => value.toLocaleUpperCase(tag),
   }
 }

@@ -91,6 +91,19 @@ describe('dates', () => {
   })
 })
 
+describe('times', () => {
+  const instant = new Date('2026-10-21T19:20:00Z')
+
+  it('shows the zone abbreviation next to the time, in the zone it is given', () => {
+    expect(plain(formattersFor('fr').time(instant, 'America/Toronto'))).toBe('15 h 20 HAE')
+    expect(plain(formattersFor('en').time(instant, 'America/Toronto'))).toBe('3:20 p.m. EDT')
+  })
+
+  it('moves the same instant to another zone instead of keeping the digits', () => {
+    expect(plain(formattersFor('en').time(instant, 'UTC'))).toMatch(/^7:20 p\.m\. UTC$/)
+  })
+})
+
 describe('capitalisation', () => {
   it('upper-cases an initial with the language rules', () => {
     expect(formattersFor('fr').upperCase('é')).toBe('É')
