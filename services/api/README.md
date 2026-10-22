@@ -212,9 +212,13 @@ enregistrée partagent une transaction : une répétition rejoue la réponse ave
 `IDEMPOTENCY_REQUEST_IN_PROGRESS` avec `Retry-After`. Pour le catalogue, un
 refus métier n'est pas enregistré : la clé est annulée avec la mutation.
 
-Aucune route de production n'utilise encore ce service dans cette étape; les
-tests passent par un contrôleur de test chargé uniquement par
-`IdempotencyApiTests`.
+Les quatre mutations du catalogue (`POST /admin/asset-models`,
+`POST /admin/asset-models/{modelId}/archive`, `POST /admin/assets` et
+`POST /admin/assets/{assetId}/archive`) utilisent ce service : leurs services
+métier rejoignent sa transaction et n'en ouvrent jamais une nouvelle.
+`CatalogIdempotencyTests` les vérifie sur les vraies routes;
+`IdempotencyApiTests` garde son contrôleur de test pour la concurrence,
+l'attente de verrou et l'expiration.
 
 ## Comptes de démonstration
 

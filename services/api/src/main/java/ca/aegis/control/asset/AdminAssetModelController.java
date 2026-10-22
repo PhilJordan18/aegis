@@ -1,6 +1,5 @@
 package ca.aegis.control.asset;
 
-import java.net.URI;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
@@ -16,23 +15,29 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import ca.aegis.control.shared.web.IdempotencyKey;
+import tools.jackson.databind.JsonNode;
+
+import ca.aegis.control.shared.idempotency.IdempotencyService;
+import ca.aegis.control.shared.idempotency.IdempotentRequest;
+import ca.aegis.control.shared.idempotency.IdempotentResource;
+import ca.aegis.control.shared.idempotency.IdempotentResult;
 import ca.aegis.control.shared.web.PageQuery;
 import ca.aegis.control.shared.web.PageResponse;
 
 /**
- * Routes of document 09, section 12.1, reserved to administrators by {@code ApiRoutes}. The idempotency key is
- * required and validated, but responses are not yet stored for replay: that needs {@code rest_idempotency_keys}
- * (document 08, section 4.10). Until then the uniqueness constraints keep a repeated creation from creating twice.
+ * Routes of document 09, section 12.1, reserved to administrators by {@code ApiRoutes}. Creation and archival are
+ * idempotent mutations of section 20.1: {@link IdempotencyService} owns their transaction, which the service joins.
  */
 @RestController
 @RequestMapping("/api/v1/admin/asset-models")
 class AdminAssetModelController {
 
     private final AssetModelService models;
+    private final IdempotencyService idempotency;
 
-    AdminAssetModelController(AssetModelService models) {
+    AdminAssetModelController(AssetModelService models, IdempotencyService idempotency) {
         this.models = models;
+        this.idempotency = idempotency;
     }
 
     @GetMapping
@@ -42,10 +47,12 @@ class AdminAssetModelController {
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-    ResponseEntity<AssetModelView> create(IdempotencyKey idempotencyKey,
+    ResponseEntity<JsonNode> create(IdempotentRequest idempotentRequest,
             @Valid @RequestBody AssetModelRequest request) {
-        AssetModelView created = models.create(request);
-        return ResponseEntity.created(URI.create("/api/v1/admin/asset-models/" + created.id())).body(created);
+        return idempotency.execute(idempotentRequest, request, () -> {
+            AssetModelView created = models.create(request);
+            return IdempotentResult.created(IdempotentResource.ASSET_MODEL, created.id(), created);
+        });
     }
 
     @GetMapping("/{modelId}")
@@ -59,7 +66,7 @@ class AdminAssetModelController {
     }
 
     @PostMapping("/{modelId}/archive")
-    AssetModelView archive(IdempotencyKey idempotencyKey, @PathVariable UUID modelId) {
-        return models.archive(modelId);
+    ResponseEntity<JsonNode> archive(IdempotentRequest idempotentRequest, @PathVariable UUID modelId) {
+        return idempotency.execute(idempotentRequest, () -> IdempotentResult.ok(models.archive(modelId)));
     }
 }

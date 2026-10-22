@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import com.jayway.jsonpath.JsonPath;
 
 import ca.aegis.control.support.ApiIntegrationTest;
+import ca.aegis.control.support.TestAccounts.TestAccount;
 
 /**
  * Catalog API tests share one database per run, so every model name, asset code and serial number is made unique
@@ -34,12 +35,14 @@ abstract class CatalogApiTest extends ApiIntegrationTest {
     @Autowired
     JdbcClient jdbc;
 
+    TestAccount admin;
     String adminToken;
     String suffix;
 
     @BeforeEach
     void signInAsAdministrator() throws Exception {
-        adminToken = accessToken(accounts.admin());
+        admin = accounts.admin();
+        adminToken = accessToken(admin);
         suffix = UUID.randomUUID().toString().substring(0, 8);
     }
 
