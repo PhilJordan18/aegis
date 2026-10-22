@@ -15,7 +15,7 @@ d'accessibilité la plus grande, AX5).
 | Réservation | `fr-reserver-light`, `en-reserver-light`, `fr-reserver-casier-ferme-dark`, `fr-reserver-light-se` |
 | Mon activité | `fr-activite-vide-light`, `fr-activite-reservation-light`, `en-activite-reservation-dark`, `fr-activite-pret-retard-light`, `fr-activite-casier-hors-ligne-light`, `en-activite-casier-hors-ligne-dark`, `fr-activite-retrait-a-reessayer-light`, `fr-activite-operation-en-cours-light` |
 | Code du casier | `fr-operation-code-en-attente-light`, `fr-scan-dark`, `fr-scan-camera-refusee-light` |
-| Progression physique | `fr-operation-autorisee-light`, `fr-operation-deverrouillage-dark`, `en-operation-deverrouillage-light`, `fr-operation-deverrouillage-light-ax`, `fr-operation-deverrouillage-light-se`, `fr-operation-reseau-perdu-light`, `en-operation-reseau-perdu-dark`, `fr-operation-reseau-perdu-light-ax`, `fr-operation-confirmee-light`, `fr-operation-expiree-light`, `fr-operation-anomalie-dark` |
+| Progression physique | `fr-operation-autorisee-light`, `fr-operation-deverrouillage-dark`, `en-operation-deverrouillage-light`, `fr-operation-deverrouillage-light-ax`, `fr-operation-deverrouillage-light-se`, `fr-operation-reseau-perdu-light`, `en-operation-reseau-perdu-dark`, `fr-operation-reseau-perdu-light-ax`, `fr-operation-reseau-perdu-echeance-light`, `en-operation-reseau-perdu-echeance-dark`, `fr-operation-confirmee-light`, `fr-operation-expiree-light`, `fr-operation-expiree-light-ax`, `fr-operation-anomalie-dark` |
 | Retour | `fr-retour-porte-ouverte-light` |
 
 Le dossier `interactions/` contient des captures prises pendant l'essai manuel
@@ -27,6 +27,10 @@ Reproduire (depuis la racine du dépôt) :
 ```bash
 docs/design/mobile-parcours/prototype/render.sh
 ```
+
+`PROTO_ONLY` limite le rendu aux captures dont le nom correspond à une
+expression régulière, par exemple
+`PROTO_ONLY='^fr-operation-expiree-' docs/design/mobile-parcours/prototype/render.sh`.
 
 Ces captures illustrent une **proposition** : elles ne prouvent ni VoiceOver,
 ni la caméra, ni le comportement réseau réel, et ne remplacent pas l'essai sur

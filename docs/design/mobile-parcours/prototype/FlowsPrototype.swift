@@ -44,6 +44,7 @@ fileprivate enum Screen: String {
     case authorized = "operation-autorisee"
     case unlockStarted = "operation-deverrouillage"
     case networkLost = "operation-reseau-perdu"
+    case networkLostDeadline = "operation-reseau-perdu-echeance"
     case confirmed = "operation-confirmee"
     case returnDoorOpen = "retour-porte-ouverte"
     case expired = "operation-expiree"
@@ -52,7 +53,7 @@ fileprivate enum Screen: String {
     var isOperation: Bool {
         switch self {
         case .awaitingDisplay, .scan, .scanCameraDenied, .authorized, .unlockStarted,
-             .networkLost, .confirmed, .returnDoorOpen, .expired, .anomaly: true
+             .networkLost, .networkLostDeadline, .confirmed, .returnDoorOpen, .expired, .anomaly: true
         default: false
         }
     }
@@ -576,17 +577,24 @@ fileprivate struct ReserveSheet: View {
                         Card {
                             // Native picker in the locker time zone, bounded by
                             // currentWindow.closesAt in the app.
-                            DatePicker(t.pickUpBy, selection: .constant(Sample.pickUpBy),
+                            DatePicker(t.reserveUntil, selection: .constant(Sample.pickUpBy),
                                        displayedComponents: .hourAndMinute)
                                 .environment(\.timeZone, Sample.zone)
                                 .foregroundStyle(Color.brandText)
                             Divider()
                             Fact(label: t.lockerCloses, value: Sample.time(Sample.closesAt))
                         }
-                        Text(t.lockerZoneNote(Sample.zoneName(Sample.pickUpBy)))
-                            .font(.footnote)
-                            .foregroundStyle(Color.brandMuted)
-                        Label(t.reserveReminder, systemImage: "lock.fill")
+                        VStack(alignment: .leading, spacing: 6) {
+                            // reservedUntil becomes Loan.dueAt on checkout (06 §11.1).
+                            Text(t.reserveUntilExplained)
+                                .font(.subheadline)
+                                .foregroundStyle(Color.brandText)
+                            Text(t.lockerZoneNote(Sample.zoneName(Sample.pickUpBy)))
+                                .font(.footnote)
+                                .foregroundStyle(Color.brandMuted)
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                        Label(t.reserveUnlocksNothing, systemImage: "lock.fill")
                             .font(.subheadline)
                             .foregroundStyle(Color.brandText)
                     }
@@ -739,7 +747,7 @@ fileprivate struct OperationScreen: View {
         case .awaitingDisplay, .scan, .scanCameraDenied: 2
         case .authorized: 3
         case .unlockStarted: 4
-        case .networkLost, .returnDoorOpen: 5
+        case .networkLost, .networkLostDeadline, .returnDoorOpen: 5
         case .confirmed: 7
         case .expired: 5
         case .anomaly: 6
@@ -748,7 +756,7 @@ fileprivate struct OperationScreen: View {
     }
 
     private var isReturn: Bool { screen == .returnDoorOpen }
-    private var interrupted: Bool { screen == .networkLost }
+    private var interrupted: Bool { screen == .networkLost || screen == .networkLostDeadline }
 
     var body: some View {
         NavigationStack {
@@ -828,6 +836,7 @@ fileprivate struct OperationScreen: View {
         case .authorized: Countdown(seconds: 118, interrupted: false, t: t)
         case .unlockStarted: Countdown(seconds: 101, interrupted: false, t: t)
         case .networkLost: Countdown(seconds: 72, interrupted: true, t: t)
+        case .networkLostDeadline: Countdown(seconds: 0, interrupted: true, t: t)
         case .returnDoorOpen: Countdown(seconds: 72, interrupted: false, t: t)
         default: EmptyView()
         }
@@ -841,7 +850,15 @@ fileprivate struct OperationScreen: View {
         case .confirmed:
             Button(t.seeActivity, action: close).buttonStyle(PrimaryButtonStyle())
         case .expired:
-            Button(t.prepareAgain) {}.buttonStyle(PrimaryButtonStyle())
+            // Short visible label, condensed at accessibility sizes like the
+            // title, keeps the word whole at AX5 without capping the size; the
+            // title and instruction above give the context.
+            Button {} label: {
+                Text(t.prepareAgain).fontWidth(typeSize.isAccessibilitySize ? .condensed : .standard)
+            }
+                .buttonStyle(PrimaryButtonStyle())
+                .accessibilityLabel(t.prepareAgainSpoken)
+                .accessibilityHint(t.prepareAgainHint)
         case .anomaly:
             Button(t.seeActivity, action: close).buttonStyle(SecondaryButtonStyle())
         default:
@@ -851,7 +868,7 @@ fileprivate struct OperationScreen: View {
 }
 
 /// Counts down to the received `expiresAt` on the device clock. It never
-/// decides an outcome: at zero the app reads the operation again.
+/// decides an outcome: at zero it waits for the service's own state.
 fileprivate struct Countdown: View {
     let seconds: Int
     let interrupted: Bool
@@ -869,16 +886,26 @@ fileprivate struct Countdown: View {
                 Image(systemName: "timer")
             }
             .foregroundStyle(Color.brandText)
-            Text(interrupted ? t.countdownInterrupted(Sample.time(Sample.operationDeadline))
-                             : t.deadline(Sample.time(Sample.operationDeadline)))
+            if seconds == 0 {
+                Text(t.deadlineReached)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.brandText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text(deadlineText)
                 .font(.footnote)
                 .foregroundStyle(Color.brandMuted)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(t.timeRemaining)
-        .accessibilityValue(Sample.spoken(seconds: seconds))
-        .accessibilityHint(interrupted ? t.countdownInterrupted(Sample.time(Sample.operationDeadline)) : "")
+        .accessibilityValue(seconds == 0 ? t.deadlineReached : Sample.spoken(seconds: seconds))
+        .accessibilityHint(deadlineText)
+    }
+
+    private var deadlineText: String {
+        let time = Sample.time(Sample.operationDeadline)
+        return interrupted ? t.deadlineReceived(time) : t.deadline(time)
     }
 }
 
@@ -895,7 +922,7 @@ fileprivate struct StepHeader: View {
             case .scan, .scanCameraDenied: (t.scanTitle, t.noDoorOpen, .progress)
             case .authorized: (t.accessAuthorized, t.dontOpenYet, .progress)
             case .unlockStarted: (t.unlockStarted, t.openDoorAndTake("Multimètre 1"), .progress)
-            case .networkLost: (t.lastStatusReceived(t.doorOpenLowercase), t.takeAndClose, .progress)
+            case .networkLost, .networkLostDeadline: (t.lastStatusReceived(t.doorOpenLowercase), t.takeAndClose, .progress)
             case .returnDoorOpen: (t.doorOpened, t.depositAndClose, .progress)
             case .confirmed: (t.checkoutConfirmed, t.loanStarted(Sample.time(Sample.pickUpBy)), .ready)
             case .expired: (t.timeExceeded, t.noDoorOpenedRestart, .blocked)
@@ -1211,14 +1238,17 @@ fileprivate struct Copy {
     var reserveNeedsRefresh: String {
         t("Réservation possible après actualisation de la fiche.", "You can reserve once this page is up to date.")
     }
-    var pickUpBy: String { t("Retirer avant", "Pick up by") }
+    var reserveUntil: String { t("Réserver jusqu'à", "Reserve until") }
     var lockerCloses: String { t("Fermeture du casier", "Locker closes") }
     func lockerZoneNote(_ zone: String) -> String {
         t("Heures du casier : \(zone).", "Locker time: \(zone).")
     }
-    var reserveReminder: String {
-        t("Retirez l'équipement avant cette heure; la réservation n'ouvre aucune porte.",
-          "Pick up the equipment before this time. Reserving does not unlock the compartment.")
+    var reserveUntilExplained: String {
+        t("Retirez l'équipement avant cette heure. Elle sera aussi l'heure de retour prévue.",
+          "Pick up the equipment before this time. It will also be the expected return time.")
+    }
+    var reserveUnlocksNothing: String {
+        t("La réservation n'ouvre aucune porte.", "Reserving does not unlock the compartment.")
     }
     var confirmReservation: String { t("Confirmer la réservation", "Confirm reservation") }
     func lockerClosed(_ time: String) -> String { t("Le casier est fermé. Réouverture à \(time).", "The locker is closed. It reopens at \(time).") }
@@ -1268,9 +1298,9 @@ fileprivate struct Copy {
     var doorOpenLowercase: String { t("porte ouverte", "door open") }
     var timeRemaining: String { t("Temps restant", "Time remaining") }
     func deadline(_ time: String) -> String { t("Échéance : \(time)", "Deadline: \(time)") }
-    func countdownInterrupted(_ time: String) -> String {
-        t("Calculé sur l'échéance reçue (\(time)). À zéro, l'état sera relu; aucun résultat n'est déduit sur l'appareil.",
-          "Counted to the deadline received (\(time)). At zero the status is read again; the phone draws no conclusion.")
+    func deadlineReceived(_ time: String) -> String { t("Échéance reçue : \(time)", "Deadline received: \(time)") }
+    var deadlineReached: String {
+        t("Échéance atteinte : en attente de confirmation du service.", "Deadline reached: waiting for the service to confirm.")
     }
     func compartmentSpoken(_ code: String) -> String { t("Cellule \(code)", "Compartment \(code)") }
     var codeAppearing: String { t("Le code s'affiche sur le casier", "Code appearing on the locker") }
@@ -1295,7 +1325,11 @@ fileprivate struct Copy {
     var dontRetryAdmin: String { t("Ne réessayez pas. Un administrateur doit vérifier la cellule A1.", "Don't try again. An administrator must check compartment A1.") }
     var scanCode: String { t("Scanner le code", "Scan the code") }
     var seeActivity: String { t("Voir mon activité", "View my activity") }
-    var prepareAgain: String { t("Recommencer la préparation", "Start again") }
+    var prepareAgain: String { t("Recommencer", "Start again") }
+    var prepareAgainSpoken: String { t("Recommencer le retrait", "Start the checkout again") }
+    var prepareAgainHint: String {
+        t("Un nouveau code s'affichera sur le casier.", "A new code will appear on the locker.")
+    }
     var phases: [String] { lang == .fr
         ? ["Demande", "Code du casier", "Autorisation", "Commande", "Porte", "Vérification"]
         : ["Request", "Locker code", "Authorization", "Command", "Door", "Verification"] }

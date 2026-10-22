@@ -9,6 +9,8 @@
 #   PROTO_SMALL_DEVICE  small simulator (default: iPhone SE (3rd generation))
 #   PROTO_SMALL_OS      its runtime (default: 17.5, the minimum target's major)
 #   OUT_DIR             captures directory (default: ../captures)
+#   PROTO_ONLY          extended regex; only captures whose name matches are
+#                       rendered (default: all)
 #
 # The simulator's language and region stand for the user's own settings; the
 # prototype does not force a locale.
@@ -70,6 +72,10 @@ render() {
     xcrun simctl install "$target" "$app"
     echo "$list" | while read -r lang screen theme size; do
         [[ -n "$lang" ]] || continue
+        suffix=$theme
+        [[ "$size" == large ]] || suffix="$theme-ax"
+        name="$lang-$screen-$suffix$tag"
+        [[ -z "${PROTO_ONLY:-}" || "$name" =~ $PROTO_ONLY ]] || continue
         xcrun simctl terminate "$target" "$bundle_id" 2>/dev/null || true
         xcrun simctl ui "$target" appearance "$theme"
         xcrun simctl ui "$target" content_size "$size"
@@ -78,9 +84,7 @@ render() {
         SIMCTL_CHILD_AEGIS_PROTO_SCREEN="$screen" \
             xcrun simctl launch "$target" "$bundle_id" -AppleLanguages "($lang)" -AppleLocale "$locale" >/dev/null
         sleep 6
-        suffix=$theme
-        [[ "$size" == large ]] || suffix="$theme-ax"
-        file="$out/$lang-$screen-$suffix$tag.png"
+        file="$out/$name.png"
         xcrun simctl io "$target" screenshot "$file" >/dev/null 2>&1
         sips --resampleWidth 600 "$file" >/dev/null
         echo "$file"
@@ -124,9 +128,12 @@ fr operation-deverrouillage light accessibility-extra-extra-extra-large
 fr operation-reseau-perdu light large
 en operation-reseau-perdu dark large
 fr operation-reseau-perdu light accessibility-extra-extra-extra-large
+fr operation-reseau-perdu-echeance light large
+en operation-reseau-perdu-echeance dark large
 fr retour-porte-ouverte light large
 fr operation-confirmee light large
 fr operation-expiree light large
+fr operation-expiree light accessibility-extra-extra-extra-large
 fr operation-anomalie dark large
 "
 

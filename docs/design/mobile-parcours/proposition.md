@@ -14,7 +14,9 @@ actif et retour.
 | Structure des sections, hiérarchies, règles d'affichage et textes français de `../asset-lifecycle/sections.md` §1, §4, §6, décisions U1 à U8 | **Approuvé** le 23 septembre 2026; repris tel quel sauf mention « proposé » en §8 |
 | Direction « Lumière du hub » v3, logo provisoire, apparences claire et sombre, connexion | **Approuvé** le 21 octobre 2026 (`../mobile-entree/proposition.md`) |
 | Direction v3 des écrans intérieurs (sombre profond, clair distinct, surfaces sobres, bleu d'action), typographie système, cartes, statuts associant symbole et texte, structure des fiches et de Mon activité, cellule A1 mise en évidence dans le parcours guidé, principe des dernières données connues hors ligne avec ancienneté explicite | **Approuvé** le 22 octobre 2026 (revue de Philippe) |
-| Corrections de la revue du 22 octobre (§3, §4, §6, §7.3), textes ajoutés ou modifiés et traductions anglaises (§8), comportements d'accessibilité | **Proposition** (ce dossier) |
+| Corrections visuelles de la revue du 22 octobre : statuts anciens neutralisés, ancienneté visible, Réessayer, suivi interrompu, navigation native, hiérarchie en grand texte, petit écran | **Approuvé** le 22 octobre 2026 (design seulement : ne vaut validation ni de VoiceOver, ni de la caméra, ni du réseau réel) |
+| Variantes « Retrait indisponible » et « Nouvelle tentative permise » de Mon activité (§6) | Visuellement acceptées; **choix de la variante en attente** de la clarification de `availableActions` (§10) |
+| Textes ajoutés ou modifiés et traductions anglaises (§8.1), finitions du 22 octobre (§5, §7.3), comportements d'accessibilité | **Proposition** (ce dossier) |
 
 Les rendus de `captures/` viennent d'un prototype SwiftUI (`prototype/`),
 compilé dans une copie temporaire de `apps/ios` : données fictives, aucune
@@ -115,12 +117,18 @@ réservation.
 
 ## 5. Réservation (feuille)
 
-**Composition** (approuvée) : équipement et cellule → « Retirer avant »
+**Composition** (approuvée) : équipement et cellule → « Réserver jusqu'à »
 (`reservedUntil`, sélecteur natif dans le fuseau du casier, pas de 15 min)
-bornée par `currentWindow.closesAt` → fermeture du casier → note « Heures du
-casier : heure avancée de l'Est. » → rappel « Retirez l'équipement avant cette
-heure; la réservation n'ouvre aucune porte. » → **Confirmer la réservation**,
-fixé en bas de la feuille pour rester atteignable en très grand texte.
+bornée par `currentWindow.closesAt` → fermeture du casier → « Retirez
+l'équipement avant cette heure. Elle sera aussi l'heure de retour prévue. » →
+note « Heures du casier : heure avancée de l'Est. » → rappel séparé « La
+réservation n'ouvre aucune porte. » → **Confirmer la réservation**, fixé en
+bas de la feuille pour rester atteignable en très grand texte.
+
+L'heure choisie a deux conséquences, et la feuille les dit toutes deux : elle
+borne le retrait (la réservation expire à `reservedUntil`, `06` §14) et, au
+retrait confirmé, elle est copiée dans `Loan.dueAt` (`06` §11.1). Aucune règle
+métier n'est ajoutée par l'application.
 
 | État | Déclencheur | Affichage |
 |---|---|---|
@@ -142,8 +150,8 @@ en P0.
 |---|---|---|---|---|
 | Aucune activité | 404 sur `/me/reservation` et `/me/loan` | « Aucune réservation ni prêt en cours. » | **Voir les équipements** | — |
 | Réservation active | `ReservationView.ACTIVE` | « Réservé pour vous » · « À retirer avant 16 h 30 HAE » | **Préparer le retrait** | Annuler la réservation (confirmation approuvée) |
-| Retrait indisponible | Le retrait ne figure pas dans `availableActions`; le casier est hors ligne (`LockerStatusView.connectionStatus = OFFLINE`) | Avis dans la carte : « Retrait indisponible : le casier est hors ligne. » + « Dernier signal du casier à 14 h 28 HAE. Actualisez pour vérifier à nouveau. » | **Préparer le retrait** désactivé (cadenas), juste sous l'avis, puis **Actualiser**, seule action principale active | Annuler la réservation (lien) |
-| Nouvelle tentative permise | Le retrait figure dans `availableActions` après un `503 LOCKER_OFFLINE` | Avis : « Essai de 14 h 32 HAE : le casier était hors ligne. » + « Vous pouvez faire une nouvelle tentative. Aucune porte ne s'ouvre sans le code du casier. » | **Nouvelle tentative de retrait** | Annuler la réservation |
+| Retrait indisponible (variante, sélection en attente) | Le retrait ne figure pas dans `availableActions`; le casier est hors ligne (`LockerStatusView.connectionStatus = OFFLINE`) | Avis dans la carte : « Retrait indisponible : le casier est hors ligne. » + « Dernier signal du casier à 14 h 28 HAE. Actualisez pour vérifier à nouveau. » | **Préparer le retrait** désactivé (cadenas), juste sous l'avis, puis **Actualiser**, seule action principale active | Annuler la réservation (lien) |
+| Nouvelle tentative permise (variante, sélection en attente) | Le retrait figure dans `availableActions` après un `503 LOCKER_OFFLINE` | Avis : « Essai de 14 h 32 HAE : le casier était hors ligne. » + « Vous pouvez faire une nouvelle tentative. Aucune porte ne s'ouvre sans le code du casier. » | **Nouvelle tentative de retrait** | Annuler la réservation |
 | Réservation expirée | `EXPIRED` | « Votre réservation a expiré à 16 h 30. » | **Voir les équipements** | — |
 | Opération en cours | `currentOperationId` non terminal | Pastille « Retrait en cours » / « Retour en cours » · « Suivi masqué. L'opération n'est pas annulée. » | **Reprendre** (relit l'opération, ne redéclenche rien) | — |
 | Prêt actif | `LoanView.ACTIVE` | « Emprunté par vous » · « Retour prévu à 16 h 30 HAE » | **Retourner l'équipement** | Voir l'équipement |
@@ -154,6 +162,13 @@ en P0.
 Les boutons suivent `availableActions`; l'application ne recalcule pas les
 actions permises. Le statut du casier explique un refus, il ne décide rien.
 Les valeurs de `availableActions` ne sont pas encore énumérées dans `09` (§10).
+Les deux variantes « casier hors ligne » sont des maquettes acceptées, pas une
+règle : la session principale, propriétaire de `09`, doit formaliser les
+valeurs et la conduite dans quatre cas — casier actuellement hors ligne,
+ancien échec suivi d'une nouvelle lecture, téléphone sans accès à l'API,
+opération déjà engagée à reprendre. Cette matrice et ses exemples seront
+alignés sur la clarification approuvée; d'ici là, l'application n'invente ni
+valeur d'action ni logique d'autorisation.
 
 ## 7. Retrait et retour guidés
 
@@ -217,17 +232,21 @@ passe en chasse condensée pour garder les mots longs entiers
 actions du bas restent atteignables.
 
 **Temps restant** : libellé « Temps restant », valeur en chiffres tabulaires,
-puis « Échéance : 14 h 36 HAE ». Le décompte part de l'`expiresAt` reçu et
-utilise l'horloge de l'appareil. À zéro, l'application relit l'opération : elle
-n'affiche jamais « Délai dépassé » ni aucun autre résultat d'elle-même; seul
-`EXPIRED` reçu le fait. VoiceOver lit « Temps restant, 1 minute, 41
+puis « Échéance : 14 h 36 HAE » (« Échéance reçue : … » quand le suivi est
+interrompu). Le décompte part de l'`expiresAt` reçu et utilise l'horloge de
+l'appareil. À zéro, il reste à 0:00 avec « Échéance atteinte : en attente de
+confirmation du service. » L'application demande l'état au service si le
+réseau le permet; tant qu'aucune réponse n'arrive, l'écran reste dans cet
+état, sans promettre de délai. Elle ne déduit jamais localement `CONFIRMED`,
+`EXPIRED`, `FAILED`, `ANOMALY` ni aucun autre résultat : seul l'état reçu
+change le titre (« Délai dépassé » n'apparaît qu'avec `EXPIRED` reçu). VoiceOver lit « Temps restant, 1 minute, 41
 secondes »; annonces automatiques seulement à 30 s et 10 s.
 
 | Attente ou échec matériel | Affichage |
 |---|---|
-| Réseau perdu pendant le suivi | Avis ambre en tête : « Suivi interrompu : connexion perdue » + « Ce n'est ni une annulation ni une confirmation. L'état sera relu dès le retour du réseau. » Titre : « Dernier état reçu : porte ouverte » (jamais l'affirmation « Porte ouverte »). Étape courante marquée d'un symbole pause, lue « dernier état reçu, suivi interrompu ». Le temps restant continue vers l'échéance reçue, avec « Calculé sur l'échéance reçue (14 h 36 HAE). À zéro, l'état sera relu; aucun résultat n'est déduit sur l'appareil. » Suivi ralenti puis repris (`09` §15.4). |
+| Réseau perdu pendant le suivi | Avis ambre en tête : « Suivi interrompu : connexion perdue » + « Ce n'est ni une annulation ni une confirmation. L'état sera relu dès le retour du réseau. » Titre : « Dernier état reçu : porte ouverte » (jamais l'affirmation « Porte ouverte »). Étape courante marquée d'un symbole pause, lue « dernier état reçu, suivi interrompu ». Le temps restant continue vers l'échéance reçue, avec « Échéance reçue : 14 h 36 HAE »; à zéro, « Échéance atteinte : en attente de confirmation du service. » L'interruption ne promet aucune relecture à heure fixe : la relecture se fait au retour du réseau (suivi ralenti puis repris, `09` §15.4). |
 | Application en arrière-plan | Suivi suspendu; relecture immédiate au retour |
-| Porte restée fermée | `EXPIRED` : « Délai dépassé. Aucune porte n'a été ouverte. Recommencez la préparation. » |
+| Porte restée fermée | `EXPIRED` : « Délai dépassé. Aucune porte n'a été ouverte. Recommencez la préparation. » Bouton **Recommencer** (libellé court, en chasse condensée aux tailles d'accessibilité comme le titre, pour garder le mot entier en AX5 sans plafonner la taille); VoiceOver lit « Recommencer le retrait » avec l'indice « Un nouveau code s'affichera sur le casier. » |
 | Échec sûr | `FAILED` : « Opération arrêtée sans ouverture. Vous pouvez recommencer. »; motif générique tant que `failureReason` reste une chaîne libre (C8) |
 | Incertitude physique | `ANOMALY` : « Intervention requise. Ne réessayez pas. Un administrateur doit vérifier la cellule A1. » |
 | Session expirée en cours | Retour à la connexion, avec l'information que l'opération du casier n'est pas annulée; reprise par `currentOperationId` après connexion |
@@ -281,8 +300,9 @@ par l'appareil (§1).
 | Fiche hors ligne | Réservation possible après actualisation de la fiche. | You can reserve once this page is up to date. | proposé |
 | Filtres, très grand texte | Filtre : Tous | Filter: All | proposé |
 | Raison bloquée | Calibration expirée depuis le 8 sept. 2026 | Calibration expired on Sep 8, 2026 | FR inchangé; EN corrigé |
-| Rappel de réservation | Retirez l'équipement avant cette heure; la réservation n'ouvre aucune porte. | Pick up the equipment before this time. Reserving does not unlock the compartment. | FR approuvé; EN corrigé |
-| Feuille de réservation, sélecteur (remplace « Heure de retour » · « Return by ») | Retirer avant | Pick up by | proposé : la valeur est `reservedUntil` (09 §14.1), limite de retrait de la réservation, pas l'échéance de retour du prêt (`dueAt`) |
+| Feuille de réservation, sélecteur (remplace « Heure de retour » · « Return by ») | Réserver jusqu'à | Reserve until | demandé par Philippe le 22 octobre; glossaire en attente (session principale) |
+| Feuille de réservation, conséquences de l'heure (remplace la première moitié du rappel approuvé) | Retirez l'équipement avant cette heure. Elle sera aussi l'heure de retour prévue. | Pick up the equipment before this time. It will also be the expected return time. | demandé par Philippe le 22 octobre (`06` §11.1); glossaire en attente |
+| Rappel de réservation, séparé | La réservation n'ouvre aucune porte. | Reserving does not unlock the compartment. | FR repris du rappel approuvé; glossaire en attente |
 | Feuille de réservation | Heures du casier : heure avancée de l'Est. | Locker time: Eastern Daylight Saving Time. | proposé (nom du fuseau fourni par le système) |
 | Retrait indisponible | Retrait indisponible : le casier est hors ligne. · Dernier signal du casier à 14 h 28 HAE. Actualisez pour vérifier à nouveau. | Checkout unavailable: the locker is offline. · Locker last seen at 2:28 PM EDT. Refresh to check again. | proposé |
 | Nouvelle tentative | Essai de 14 h 32 HAE : le casier était hors ligne. · Vous pouvez faire une nouvelle tentative. Aucune porte ne s'ouvre sans le code du casier. · Nouvelle tentative de retrait | Attempt at 2:32 PM EDT: the locker was offline. · You can try again. No door opens without the locker code. · Try checkout again | proposé |
@@ -294,7 +314,9 @@ par l'appareil (§1).
 | Titre réseau perdu (remplace « Porte ouverte ») | Dernier état reçu : porte ouverte | Last status received: door open | proposé |
 | Étape, VoiceOver | dernier état reçu, suivi interrompu | last status received, tracking interrupted | proposé |
 | Temps restant | Temps restant · Échéance : 14 h 36 HAE | Time remaining · Deadline: 2:36 PM EDT | proposé |
-| Temps restant, réseau perdu | Calculé sur l'échéance reçue (14 h 36 HAE). À zéro, l'état sera relu; aucun résultat n'est déduit sur l'appareil. | Counted to the deadline received (2:36 PM EDT). At zero the status is read again; the phone draws no conclusion. | proposé |
+| Temps restant, réseau perdu | Échéance reçue : 14 h 36 HAE | Deadline received: 2:36 PM EDT | proposé |
+| Temps restant à zéro | Échéance atteinte : en attente de confirmation du service. | Deadline reached: waiting for the service to confirm. | FR demandé par Philippe le 22 octobre; EN proposé |
+| Délai dépassé, bouton (remplace « Recommencer la préparation ») | Recommencer · VoiceOver : Recommencer le retrait · indice : Un nouveau code s'affichera sur le casier. | Start again · VoiceOver: Start the checkout again · hint: A new code will appear on the locker. | libellé visible demandé par Philippe le 22 octobre; libellé et indice VoiceOver proposés |
 | Déverrouillage | Ouvrez la porte A1 et retirez « Multimètre 1 ». Si elle reste fermée, ne forcez pas et attendez le message suivant. | Open door A1 and take “Multimètre 1”. If it stays shut, don't force it; wait for the next message. | FR proposé : le nom saisi remplace « le multimètre » approuvé, que le contrat ne fournit pas |
 | Retard | En retard depuis 16 h 30 HAE — rapportez l'équipement. | Overdue since 4:30 PM EDT. Please bring the equipment back. | FR approuvé; EN revu |
 | Autres anglais revus | — | Why it's blocked · Browse equipment · View my activity · Stand in front of the locker screen. · Code appearing on the locker · Start the checkout again. · Start again · Due back at … · Allow camera access in Settings to scan the code. · Scanning unlocks nothing until the server authorizes it. | EN proposé |
@@ -344,21 +366,20 @@ appareil.
 | Réservation | §14.1–14.4, `currentWindow` §8.6 | Routes absentes de `dev` (RES-01 #37, RES-02 #38) |
 | Retrait, retour, suivi, scan | §15.1–15.5, `LockerOperationView` §8.5 | Routes absentes de `dev` (CHK-01 #46, CHK-02 #47, LOC-02 #44, RET-01 #50, RET-02 #51); motifs d'échec en chaîne libre (C8) |
 | Statut du casier | §16.1, `LockerStatusView` §8.6 | Route absente de `dev` |
-| Actions permises dans Mon activité | `availableActions` (§8.3–8.4, `string[]`) | **Valeurs non énumérées**, et rien ne dit si un casier hors ligne retire le retrait des actions permises. Les deux variantes de §6 couvrent les deux réponses possibles; la règle relève du contrat, pas de l'application. |
+| Actions permises dans Mon activité | `availableActions` (§8.3–8.4, `string[]`) | **Valeurs non énumérées**, et rien ne dit si un casier hors ligne retire le retrait des actions permises. Demande transmise le 22 octobre à la session principale (propriétaire de `09`) : valeurs approuvées pour la réservation et le prêt; conduite pour un casier actuellement hors ligne, un ancien échec suivi d'une nouvelle lecture, un téléphone sans accès à l'API et une opération déjà engagée; raison lisible par machine si une action est retirée; motif et heure d'un échec dû au casier (C8); dernier signal et fuseau du casier sur la carte, ou appel à `GET /lockers/{id}/status`. **Référence commune : en attente.** |
 
 Aucun contrat n'est modifié par cette proposition.
 
 ## 11. Décisions encore nécessaires
 
-1. Valider les textes de §8.1, dont trois changements du français approuvé :
-   le nom saisi dans la consigne de déverrouillage, le nouveau message de
-   réseau perdu qui remplace « L'opération continue sur le casier », et
-   « Retirer avant » qui remplace « Heure de retour » sur le sélecteur de la
-   réservation (la valeur envoyée est `reservedUntil`, pas une heure de
-   retour).
-2. Casier hors ligne dans Mon activité : décision de contrat (propriétaire de
-   `09`) sur les valeurs de `availableActions` et sur l'effet d'un casier hors
-   ligne. Le design est prêt pour les deux réponses.
+1. Valider les textes de §8.1 encore proposés, dont deux changements du
+   français approuvé : le nom saisi dans la consigne de déverrouillage, et le
+   nouveau message de réseau perdu qui remplace « L'opération continue sur le
+   casier ». Les textes de réservation et « Échéance atteinte » viennent de la
+   revue du 22 octobre; leurs entrées de glossaire restent à faire par la
+   session principale.
+2. `availableActions` : clarification de contrat demandée à la session
+   principale (§10), puis approbation. La matrice de §6 sera alignée ensuite.
 3. Valider la présentation « Dernier état : … » en couleurs neutres pour les
    statuts non actualisés.
 
@@ -378,7 +399,8 @@ très grand texte (AX5). Liste et procédure : `captures/README.md`.
   filtre), défilement en très grand texte; captures dans
   `captures/interactions/`. Le prototype sélectionne le filtre mais ne
   filtre pas la liste. **Spécifié seulement** : VoiceOver (libellés et
-  annonces), comportement réseau réel, relecture à zéro, caméra, haptique.
+  annonces), comportement réseau réel, attente et relecture à zéro, caméra,
+  haptique.
 - Contrastes calculés sur les valeurs des jetons, pas mesurés sur appareil.
 - VoiceOver, Taille du texte et Réduire les animations seront vérifiés par
   les tests de chaque story d'implémentation.
