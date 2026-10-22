@@ -114,7 +114,7 @@ encore à aucun topic et ne prend aucune décision métier.
 Depuis `tools/hub-simulator/` :
 
 ```bash
-npm ci
+npm ci --ignore-scripts
 export AEGIS_MQTT_DEVICE_PASSWORD="$(grep '^AEGIS_MQTT_DEVICE_PASSWORD=' ../../infra/docker/.env.example | cut -d= -f2)"
 npm start
 ```
