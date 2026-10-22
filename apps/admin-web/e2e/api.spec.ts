@@ -187,11 +187,13 @@ test('an administrator opens Équipements, sees the units from the API and opens
   // What the API says today: no presence observation, so no presence, no placement and no « Prêt ».
   const dossier = page.getByRole('group', { name: new RegExp(code) })
   await expect(dossier).toContainText('État physique inconnu')
-  await expect(dossier).toContainText('Présence')
+  await expect(dossier).toContainText("Aucune observation de présence n'est disponible.")
   await expect(dossier).toContainText('Aucun placement connu')
   await expect(dossier).toContainText('Fluke 117')
   await expect(page.locator('main')).not.toContainText(/\bPrêt\b/)
-  await expect(page.locator('main').getByRole('button')).toHaveCount(0)
+  // Read-only: no create, edit or archive control. The kept database may hold more than one page, whose pager has buttons.
+  const pagerButtons = await page.getByRole('navigation', { name: 'Pagination des exemplaires' }).getByRole('button').count()
+  await expect(page.locator('main').getByRole('button')).toHaveCount(pagerButtons)
 
   // Clicking a listed unit selects it through the address and reads it by id.
   const first = rows.first()
