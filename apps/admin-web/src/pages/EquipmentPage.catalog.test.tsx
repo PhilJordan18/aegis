@@ -173,6 +173,13 @@ describe('Équipements — pagination', () => {
     renderEquipment(gateway, { url: '/equipements?page=5' })
     await waitFor(() => expect(window.location.search).toBe(''))
   })
+
+  it('ignores a page the API cannot read and shows the first page', async () => {
+    const gateway = fakeCatalogGateway({ pages: [ok(pageOf([MM001]))], units: { [MM001.id]: ok(MM001) } })
+    renderEquipment(gateway, { url: '/equipements?page=2147483649' })
+    expect(await screen.findByRole('heading', { level: 2, name: '1 exemplaire' })).toBeDefined()
+    expect(gateway.listAssets.mock.calls.map((call) => call[1].page)).toEqual([0])
+  })
 })
 
 describe('Équipements — adverse states', () => {

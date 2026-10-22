@@ -20,13 +20,18 @@ import '../features/catalog/equipment.css'
 
 const LIST_QUERY_BASE = { size: DEFAULT_PAGE_SIZE, sort: 'assetCode,asc' } as const
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+/** The API reads `page` as a Java int (PageQuery): a larger index is a 400, not a page past the end. */
+const MAX_PAGE_INDEX = 2_147_483_647
 
 /** `?page=2&exemplaire=<id>`: the page is one-based in the address, zero-based in the API. An unusable value is ignored. */
 function readLocation(search: string): { page: number; assetId: string | null } {
   const params = new URLSearchParams(search)
   const page = Number.parseInt(params.get('page') ?? '', 10)
   const assetId = params.get('exemplaire')
-  return { page: Number.isInteger(page) && page >= 1 ? page - 1 : 0, assetId: assetId !== null && UUID.test(assetId) ? assetId.toLowerCase() : null }
+  return {
+    page: Number.isInteger(page) && page >= 1 && page - 1 <= MAX_PAGE_INDEX ? page - 1 : 0,
+    assetId: assetId !== null && UUID.test(assetId) ? assetId.toLowerCase() : null,
+  }
 }
 
 /** The dossier sits under the list below 1024 px, out of sight after a selection (handoff §5). */
