@@ -6,8 +6,8 @@ simulateur, Spring Boot, Flyway, `GET /api/v1/system/health`, la connexion par
 comptes préparés (`POST /api/v1/auth/login`, `GET /api/v1/auth/me`), les
 contrôles de rôle et de niveau d'accès côté serveur et l'administration des
 modèles et des actifs (document 09, sections 12.1 et 12.2). Il n'implémente pas
-encore les identifiants physiques, les placements, l'ingestion MQTT ni les
-clients Web et iOS.
+encore les identifiants physiques, les placements ni l'ingestion MQTT. Les
+clients Web et iOS ont leur propre dossier sous `apps/`.
 
 ## Prérequis
 
@@ -261,11 +261,6 @@ cette étape autorisent seulement l'identité fictive du contrat MQTT.
   n'utilisent pas ces routes; CORS sera configuré avec le client Web.
 - La connexion et les mutations du catalogue ne sont pas encore auditées :
   `audit_events` arrive avec `V009`.
-- `Idempotency-Key` est exigé et validé sur les créations et archivages du
-  catalogue, mais la réponse n'est pas encore enregistrée pour être rejouée :
-  `rest_idempotency_keys` arrive avec `V010`. D'ici là, répéter une création
-  donne un conflit d'unicité au lieu de la réponse initiale; répéter un
-  archivage retourne la ressource déjà archivée.
 - La limite de 5 tentatives par minute, par adresse TCP et par compte, est
   tenue en mémoire : elle suppose le déploiement P0 à instance unique.
   Plusieurs instances multiplieraient la limite et un redémarrage l'efface.
