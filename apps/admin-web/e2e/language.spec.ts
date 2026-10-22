@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { fileURLToPath } from 'node:url'
+import { openCatalog, waitForCatalogState, type CatalogMode } from './catalogFakes.ts'
 import { THEMES, VIEWPORTS } from './matrix.ts'
 import { expectNoAxeViolations, expectNoHorizontalScroll, settle, PREVIEW_EMAIL } from './support.ts'
 
@@ -83,6 +84,29 @@ const SCENARIOS: readonly EnglishScenario[] = [
       await page.getByRole('radio', { name: 'System' }).first().waitFor({ state: 'visible' })
     },
   },
+  ...(
+    [
+      ['nominal', 'nominal'],
+      ['long', 'long-content'],
+      ['loading', 'loading'],
+      ['empty', 'empty'],
+      ['serviceError', 'service-error'],
+      ['forbidden', 'access-denied'],
+      ['unreachable', 'unreachable'],
+      ['paged', 'pagination'],
+    ] as const satisfies readonly (readonly [CatalogMode, string])[]
+  ).map(
+    ([mode, state]): EnglishScenario => ({
+      route: 'equipment',
+      state,
+      path: '/connexion',
+      title: 'Equipment — Aegis Manager',
+      reach: async (page) => {
+        await openCatalog(page, mode, { english: true })
+        await waitForCatalogState(page, mode, { english: true })
+      },
+    }),
+  ),
   { route: 'not-found', state: 'default', path: '/nulle-part', title: 'Page not found — Aegis Manager' },
 ]
 

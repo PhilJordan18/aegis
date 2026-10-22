@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test'
+import { openCatalog, waitForCatalogState, type CatalogMode } from './catalogFakes.ts'
 import { afterSubmit, submitSignIn } from './support.ts'
 
 export interface Viewport {
@@ -43,6 +44,28 @@ export interface Scenario {
   /** Brings the page into the state to inspect, after navigation. */
   readonly reach?: (page: Page) => Promise<void>
 }
+
+/** Production Équipements page with routed fakes: signed in through the preview gateway, then /equipements. */
+const CATALOG_STATES: readonly (readonly [CatalogMode, string])[] = [
+  ['nominal', 'nominal'],
+  ['long', 'contenu-long'],
+  ['loading', 'chargement'],
+  ['empty', 'vide'],
+  ['serviceError', 'erreur-service'],
+  ['forbidden', 'acces-refuse'],
+  ['unreachable', 'service-injoignable'],
+  ['paged', 'pagination'],
+]
+
+const catalogScenarios: readonly Scenario[] = CATALOG_STATES.map(([mode, state]) => ({
+  route: 'equipements',
+  state,
+  path: '/connexion',
+  reach: async (page: Page) => {
+    await openCatalog(page, mode)
+    await waitForCatalogState(page, mode)
+  },
+}))
 
 export const SCENARIOS: readonly Scenario[] = [
   { route: 'landing', state: 'defaut', path: '/' },
@@ -90,5 +113,6 @@ export const SCENARIOS: readonly Scenario[] = [
       await page.getByRole('radio', { name: 'Système' }).first().waitFor({ state: 'visible' })
     },
   },
+  ...catalogScenarios,
   { route: 'introuvable', state: 'defaut', path: '/nulle-part' },
 ]
