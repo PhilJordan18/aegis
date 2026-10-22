@@ -17,6 +17,7 @@ const DEVICE_PASSWORD = process.env.AEGIS_MQTT_DEVICE_PASSWORD;
 const API_PASSWORD = process.env.AEGIS_MQTT_API_PASSWORD;
 const STATUS = `aegis/v1/lockers/${DEFAULT_LOCKER_ID}/status`;
 const EVENTS = `aegis/v1/lockers/${DEFAULT_LOCKER_ID}/events`;
+const STATUS_FACTS = new Set(['DEVICE_AVAILABILITY', 'DEVICE_RESTARTED', 'HEARTBEAT']);
 const CLI = fileURLToPath(new URL('../../src/cli.ts', import.meta.url));
 
 interface Received {
@@ -90,6 +91,7 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
         AEGIS_MQTT_URL: BROKER,
         AEGIS_MQTT_DEVICE_PASSWORD: DEVICE_PASSWORD,
         AEGIS_SIM_BOOT_COUNT_FILE: join(stateDir, 'cli-boot-counts.json'),
+        AEGIS_SIM_COMMAND_JOURNAL_FILE: join(stateDir, 'cli-journal.json'),
       },
       stdio: ['ignore', 'pipe', 'inherit'],
     });
@@ -161,7 +163,12 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
     const observer = await observe();
     clients.push(observer.client);
     const sim = new HubSimulator(
-      defineConfig({ brokerUrl: BROKER, password: DEVICE_PASSWORD!, bootCountFile: join(stateDir, 'api-loss.json') }),
+      defineConfig({
+        brokerUrl: BROKER,
+        password: DEVICE_PASSWORD!,
+        bootCountFile: join(stateDir, 'api-loss.json'),
+        commandJournalFile: join(stateDir, 'api-loss-journal.json'),
+      }),
     );
     const wills: string[] = [];
     const willConnections: string[] = [];
@@ -173,7 +180,10 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
       sim.start();
       await sim.waitUntilOnline(5_000);
       const session = sim.deviceSessionId;
-      const mine = () => observer.live.filter((m) => m.payload.deviceSessionId === session);
+      // Status facts only: a persistent session may hand this hub commands queued by
+      // other runs, whose answers are not the subject here.
+      const mine = () =>
+        observer.live.filter((m) => m.payload.deviceSessionId === session && STATUS_FACTS.has(String(m.payload.type)));
       await until(() => (mine().some((m) => m.payload.type === 'HEARTBEAT') ? true : undefined), 5_000, 'first heartbeat');
 
       await sim.dropConnection();
@@ -243,6 +253,7 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
         brokerUrl: BROKER,
         password: DEVICE_PASSWORD!,
         bootCountFile: join(stateDir, 'api-restart.json'),
+        commandJournalFile: join(stateDir, 'api-restart-journal.json'),
         firstBootCount: 9,
       }),
     );
@@ -291,7 +302,12 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
 
   it('refuses a wrong device secret', { timeout: 15_000 }, async () => {
     const sim = new HubSimulator(
-      defineConfig({ brokerUrl: BROKER, password: 'definitely-wrong', bootCountFile: join(stateDir, 'wrong-secret.json') }),
+      defineConfig({
+        brokerUrl: BROKER,
+        password: 'definitely-wrong',
+        bootCountFile: join(stateDir, 'wrong-secret.json'),
+        commandJournalFile: join(stateDir, 'wrong-secret-journal.json'),
+      }),
     );
     const errors: string[] = [];
     sim.on('transportError', (e) => errors.push(e.message));
