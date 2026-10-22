@@ -8,8 +8,9 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import mqtt, { type MqttClient } from 'mqtt';
-import { afterAll, afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_LOCKER_ID, defineConfig } from '../../src/config.ts';
+import { clientIdFor } from '../../src/contract.ts';
 import { HubSimulator } from '../../src/simulator.ts';
 
 const BROKER = process.env.AEGIS_MQTT_URL ?? 'mqtt://127.0.0.1:1883';
@@ -70,6 +71,21 @@ const clients: MqttClient[] = [];
 const children: ChildProcess[] = [];
 // Boot counts of these runs live in a throwaway directory, never in the user's state.
 const stateDir = mkdtempSync(join(tmpdir(), 'aegis-sim-it-'));
+
+// These tests take over the default clientId. Since SIM-02 its persistent session
+// subscribes to commands, so it may hold commands queued by other runs: start clean.
+beforeAll(async () => {
+  if (!DEVICE_PASSWORD) return;
+  const client = await mqtt.connectAsync(BROKER, {
+    protocolVersion: 4,
+    clientId: clientIdFor(`sim-${DEFAULT_LOCKER_ID}`),
+    username: DEFAULT_LOCKER_ID,
+    password: DEVICE_PASSWORD,
+    clean: true,
+    reconnectPeriod: 0,
+  });
+  await client.endAsync();
+});
 
 afterAll(() => {
   rmSync(stateDir, { recursive: true, force: true });
@@ -182,8 +198,16 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
       const session = sim.deviceSessionId;
       // Status facts only: a persistent session may hand this hub commands queued by
       // other runs, whose answers are not the subject here.
+      // QoS 1 is at least once: a publish still awaiting its PUBACK when the socket
+      // drops is resent after reconnecting with the same messageId, which the backend
+      // deduplicates. Keep the first copy of each fact.
       const mine = () =>
-        observer.live.filter((m) => m.payload.deviceSessionId === session && STATUS_FACTS.has(String(m.payload.type)));
+        observer.live.filter(
+          (m, i, all) =>
+            m.payload.deviceSessionId === session &&
+            STATUS_FACTS.has(String(m.payload.type)) &&
+            all.findIndex((o) => o.payload.messageId === m.payload.messageId) === i,
+        );
       await until(() => (mine().some((m) => m.payload.type === 'HEARTBEAT') ? true : undefined), 5_000, 'first heartbeat');
 
       await sim.dropConnection();
