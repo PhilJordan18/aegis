@@ -323,3 +323,22 @@ ajoute deux textes à approuver :
 
 - « Ce mot de passe n'est pas accepté. Vérifiez-le, puis réessayez. » (R5);
 - le texte de la page introuvable (écart 6).
+
+## 8. Suivi après l’intégration de la v3 (#88, 21 octobre 2026)
+
+Contrôle de chaque constat sur `dev` `a18f981`, après l’adoption de l’identité
+« Lumière du hub » v3. La v3 approuvée prévaut : aucun ancien jeton ni la cellule
+allumée ne sont réintroduits pour satisfaire cette revue.
+
+| Constat | Statut | Preuve |
+|---|---|---|
+| R0 — recopie de `tokens.css` | Remplacé par la direction approuvée | `src/styles/tokens.css` suit `docs/design/identite/reference.md`; `docs/design/manager-entree/tokens.css` est marqué historique; `tokens.test.ts` vérifie les contrastes des jetons v3 |
+| R1 — cellule allumée coupée | Remplacé par la direction approuvée | Les cellules ont disparu (`Cells.tsx` supprimé); `identity.test.ts` refuse leur retour dans le code de production |
+| R2 — « Se connecter » sur deux lignes à 320 px | Corrigé | `landing.css` : `.ag-landing__head .ag-btn { white-space: nowrap; flex: none; }`; rendu mesuré à 320 et 390 px, clair et sombre : une ligne, aucun défilement horizontal |
+| R3 — dossier coupé sans indice de défilement | Corrigé | `.ag-dossier__scroll` porte les quatre fonds d’ombre (`local`, `scroll`); rendu à 1280 et 1440 px : contenu débordant et ombre basse visible au-dessus du pied |
+| R4 — alerte 429 maintenue après l’échéance | Corrigé | `SignInPage.tsx` revient à l’état initial à l’échéance; test « locks submission… then re-enables and announces once » (alerte absente, statut poli « Vous pouvez réessayer. ») |
+| R5 — violation serveur sur le mot de passe | Corrigé, texte à valider | `errorsFromViolations` réutilise le message local ou `passwordRejected`; vérifié contre l’API réelle (#14); le texte reste proposé |
+| R6 — onglet « Modèles » inerte | Corrigé | `[aria-disabled='true']` en `--ag-text-3`, `cursor: default`, sans `tabindex`, marque « à venir » et suffixe lu « , à venir »; mesuré en clair et en sombre |
+
+Reste pour clore #13 : la validation des textes proposés, listés dans
+`docs/localisation/textes-proposes-manager.md`.
