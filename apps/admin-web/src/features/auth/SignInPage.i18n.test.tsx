@@ -12,6 +12,10 @@ import { createSessionStore } from './session'
 import { SignInPage } from './SignInPage'
 import { adminProfile, httpProblem, loginOk, problemBody, technicianProfile } from './testFixtures'
 
+// Several tests render the page many times in a loop (every state, both languages); on a loaded
+// machine they exceeded Vitest's 5 s default, so this file alone gets a larger budget.
+vi.setConfig({ testTimeout: 20_000 })
+
 const SERVER_TEXT = 'SERVER-SUPPLIED TEXT THAT MUST NEVER BE SHOWN'
 const TRACE_ID = '5f4bc22e-66a4-48ef-8bf3-6e7184d71c30'
 const LOCALES: readonly Locale[] = ['fr', 'en']

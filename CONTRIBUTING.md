@@ -95,6 +95,30 @@ rapport et ses commits restent locaux.
 - Un agent ne fusionne jamais et n'ouvre pas de PR vers `main` sans demande
   explicite.
 
+## Contrôles CI
+
+Le workflow `.github/workflows/ci.yml` détecte les composants modifiés
+(`.github/scripts/changed-components.sh`) et ne lance que leurs jobs; une
+modification de la CI elle-même relance tout. Seul le check « CI result » est
+obligatoire sur `dev` et `main`.
+
+| Job | Composant | Obligatoire | Équivalent local |
+|---|---|---|---|
+| API tests | `services/api`, `infra/docker` | Oui, via « CI result » | `./mvnw test` (voir `services/api/README.md`) |
+| Web checks | `apps/admin-web` | Oui, via « CI result » | `npm ci`, `typecheck`, `lint`, `test`, `build` |
+| Simulator tests | `tools/hub-simulator`, `infra/mqtt`, `infra/docker` | Non (#67) | `npm test`; `npm run test:integration` avec le broker du compose et les mots de passe de `infra/docker/.env.example` |
+| Agent setup validator | `.claude`, `.codex`, `.agents`, `AGENTS.md`, `CLAUDE.md`, fichiers Markdown | Non (#67) | `python3 .claude/skills/aegis-delivery/scripts/validate_agent_setup.py` (Python 3.11 ou plus pour lire le TOML) |
+| Accepted ADR guard | `docs/adr`, registre du document 13 | Non (#67) | hook `pre-commit` |
+| iOS standalone tests | `apps/ios` | Non (#67) | `apps/ios/scripts/ios-test.sh standalone` |
+
+Un job non obligatoire le devient seulement après les critères de #67 :
+exécutions hébergées stables, échec démontré quand il le faut, comptes de tests
+exacts, versions épinglées, durée bornée. Chaque job de tests publie ses comptes
+(exécutés, réussis, échoués, ignorés) et échoue si aucun test ne tourne ou si un
+test est ignoré. La recette iOS `live`, qui exige l'API et ses comptes de
+démonstration, reste une recette locale documentée dans `apps/ios/README.md`,
+hors CI hébergée.
+
 ## Hooks Git locaux
 
 Les hooks versionnés de `.githooks/` bloquent un commit sur `main` ou `dev`,
@@ -119,7 +143,7 @@ repose sur la discipline des humains et des agents.
 | Aucun push direct, aucun force push ni suppression de `dev` et `main`; PR obligatoire | Rulesets GitHub « Protect dev » et « Protect main », sans contournement | Aucune approbation exigée : l'auteur peut fusionner sa propre PR |
 | PR vers `dev` depuis une branche `<issue>-<type>-<slug>`; `main` ne reçoit que `dev` | Check obligatoire « Source branch » (`.github/workflows/branch-policy.yml`) | Vérifie le nom de la branche, pas son contenu |
 | Aucun commit sur `main` ou `dev`; aucun push vers eux; nom de branche | Hooks locaux `pre-commit` et `pre-push` | Local : `core.hooksPath` à configurer par clone, contournable par `--no-verify` |
-| ADR accepté jamais modifié | Hook local `pre-commit` (fichiers de `docs/adr/` et fiches acceptées du document 13) | Local, comme ci-dessus; aucun contrôle en CI pour l'instant |
+| ADR accepté jamais modifié | Hook local `pre-commit` (fichiers de `docs/adr/` et fiches acceptées du document 13); job CI « Accepted ADR guard », règles du hook lues à la base de la PR | Le hook est contournable; le job CI n'est pas encore obligatoire (#67) et une PR qui modifie la CI elle-même repose sur la relecture |
 | Push et PR seulement après « deliver » | Consigne des agents; case du modèle de PR | Aucun blocage technique |
 | Fusion par un humain | Consigne | Un compte autorisé peut fusionner, y compris par `gh` |
 | Petits commits vérifiés sur la branche d'issue, sans réécriture d'historique | Consigne | Un amend, un rebase ou un commit non vérifié restent possibles localement |
@@ -219,3 +243,13 @@ vérification n’est pas évidente.
   réécrit pas l'historique (amend, rebase, squash, reset, force push) sans
   accord humain. Le push et la PR exigent la porte « deliver »; la fusion reste
   humaine.
+
+## SonarQube Cloud
+
+SonarQube Cloud analyse automatiquement chaque pull request (application GitHub,
+projet `PhilJordan18_aegis`). Son check n'est pas obligatoire et ne reçoit
+aucune couverture : une porte « passed » signifie qu'aucune règle n'est
+déclenchée par le nouveau code, pas que le code est testé. Corriger un défaut
+confirmé; documenter un faux positif avant de le marquer dans SonarQube Cloud;
+ne jamais exclure un dossier ni désactiver une règle pour obtenir du vert.
+Fonctionnement, exclusions et constats : `docs/qualite/sonarqube.md`.

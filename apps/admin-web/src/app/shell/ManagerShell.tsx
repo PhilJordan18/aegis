@@ -128,19 +128,22 @@ function AccountMenu({ profile, onSignOut }: { readonly profile: UserProfile; re
     function onPointerDown(event: PointerEvent) {
       if (!containerRef.current?.contains(event.target as Node)) setOpen(false)
     }
+    // Escape closes the disclosure when focus is inside it, and gives focus back to its button.
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key !== 'Escape' || !containerRef.current?.contains(document.activeElement)) return
+      setOpen(false)
+      buttonRef.current?.focus()
+    }
     document.addEventListener('pointerdown', onPointerDown)
-    return () => document.removeEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
   }, [open])
 
-  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key !== 'Escape' || !open) return
-    event.stopPropagation()
-    setOpen(false)
-    buttonRef.current?.focus()
-  }
-
   return (
-    <div className="ag-account" ref={containerRef} onKeyDown={onKeyDown}>
+    <div className="ag-account" ref={containerRef}>
       <button
         ref={buttonRef}
         type="button"

@@ -21,13 +21,18 @@ export const fr = {
   brand: {
     /** Accessible name of the brand link; « aegis » and « Manager » are names and are never translated. */
     homeLabel: 'Aegis Manager, accueil',
-    /** Common signature, decided by Philippe on 2026-10-21 (glossary « Signatures de marque »); « Prêt » is READY. */
+    /** [A] Common signature, decided on 2026-10-21 (glossary « Signatures de marque »); « Prêt » is READY. */
     signature: {
+      /** [A] */
       ready: 'Prêt.',
+      /** [A] */
       authorized: 'Autorisé.',
+      /** [A] */
       proven: 'Prouvé.',
     },
+    /** [A] Decided on 2026-10-21. */
     tagline: 'L’essentiel, sous contrôle.',
+    /** [A] Decided on 2026-10-21. */
     description: 'Disponibilité, conformité et traçabilité de vos équipements.',
   },
 
@@ -162,7 +167,7 @@ export const fr = {
     unreachableBody: 'Vérifiez le réseau, puis réessayez.',
     serviceErrorTitle: "Le service n'a pas pu traiter la connexion.",
     serviceErrorBody: "Réessayez dans un instant. Si le problème persiste, transmettez l'identifiant de suivi au support.",
-    /** Visible label of the traceId, shared with iOS (glossary); the traceId itself is never translated. */
+    /** [A] Visible label of the traceId, shared with iOS (glossary, decided on 2026-10-21); the traceId itself is never translated. */
     traceIdLabel: `Identifiant de suivi${NBSP}:`,
     /** Not in states.md: same message when no traceId is available. */
     serviceErrorBodyWithoutCode: 'Réessayez dans un instant.',
