@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -288,6 +289,88 @@ describe('deduplication (doc 10 §10.1, §16.1, §23.2 points 5-6)', () => {
     h.transport().deliver(COMMANDS, c.body, { dup: true });
     expect(h.actuations).toHaveLength(1);
     expect(h.events('COMMAND_ACKNOWLEDGED').at(-1)).toMatchObject({ result: 'ALREADY_APPLIED', bootCount: 4 });
+  });
+
+  describe('a messageId reused with another content (§10.1, §23.2 point 10)', () => {
+    function reuse(c: { messageId: string }) {
+      return command({ messageId: c.messageId, operationId: randomUUID(), compartmentId: A2 });
+    }
+
+    function expectNoTrace(h: ReturnType<typeof online>, other: { operationId: string }) {
+      expect(h.events().filter((e) => e.operationId === other.operationId)).toEqual([]);
+      expect(h.events().filter((e) => e.compartmentId === A2)).toEqual([]);
+      expect(h.sim.compartment('A2').lockState).toBe('LOCKED');
+      expect(h.actuations.filter((a) => a.compartmentId === A2)).toEqual([]);
+    }
+
+    it('answers with the journaled operation and cell after an execution, and actuates nothing', () => {
+      const h = online();
+      const c = command();
+      h.transport().deliver(COMMANDS, c.body);
+      const other = reuse(c);
+      h.transport().deliver(COMMANDS, other.body);
+
+      expect(h.actuations).toEqual([{ compartmentId: A1, operationId: c.operationId }]);
+      expect(h.events('COMMAND_ACKNOWLEDGED').at(-1)).toMatchObject({
+        commandMessageId: c.messageId,
+        operationId: c.operationId,
+        compartmentId: A1,
+        result: 'ALREADY_APPLIED',
+      });
+      expectNoTrace(h, other);
+      expect(h.journal.entries()).toEqual([expect.objectContaining({ messageId: c.messageId, operationId: c.operationId, compartmentId: A1 })]);
+    });
+
+    it('repeats the journaled rejection with its own operation and cell, even when the new cell could open', () => {
+      const h = online();
+      h.sim.updateCompartment('A1', { connectionStatus: 'DISCONNECTED' });
+      const c = command();
+      h.transport().deliver(COMMANDS, c.body);
+      const other = reuse(c);
+      h.transport().deliver(COMMANDS, other.body);
+
+      expect(h.actuations).toEqual([]);
+      expect(h.events('COMMAND_REJECTED')).toEqual([
+        expect.objectContaining({ commandMessageId: c.messageId, operationId: c.operationId, compartmentId: A1, reason: 'CELL_UNREACHABLE' }),
+        expect.objectContaining({ commandMessageId: c.messageId, operationId: c.operationId, compartmentId: A1, reason: 'CELL_UNREACHABLE' }),
+      ]);
+      expectNoTrace(h, other);
+    });
+
+    it('keeps the journaled correlation across a reboot and after an uncertain execution', async () => {
+      const h = online();
+      const done = command();
+      h.transport().deliver(COMMANDS, done.body);
+      await vi.advanceTimersByTimeAsync(15_000);
+      h.sim.armFault('CRASH_DURING_ACTUATION');
+      const uncertain = command();
+      h.transport().deliver(COMMANDS, uncertain.body);
+      await vi.advanceTimersByTimeAsync(0);
+      h.sim.start();
+      h.accept();
+      await vi.advanceTimersByTimeAsync(0);
+
+      const reusedDone = reuse(done);
+      const reusedUncertain = reuse(uncertain);
+      h.transport().deliver(COMMANDS, reusedDone.body);
+      h.transport().deliver(COMMANDS, reusedUncertain.body);
+
+      expect(h.actuations).toHaveLength(2);
+      expect(h.events('COMMAND_ACKNOWLEDGED').at(-1)).toMatchObject({
+        commandMessageId: done.messageId,
+        operationId: done.operationId,
+        compartmentId: A1,
+        result: 'ALREADY_APPLIED',
+      });
+      expect(h.events('COMMAND_REJECTED').at(-1)).toMatchObject({
+        commandMessageId: uncertain.messageId,
+        operationId: uncertain.operationId,
+        compartmentId: A1,
+        reason: 'PREVIOUS_EXECUTION_UNCERTAIN',
+      });
+      expectNoTrace(h, reusedDone);
+      expectNoTrace(h, reusedUncertain);
+    });
   });
 
   describe('with the journal file, across simulator processes', () => {

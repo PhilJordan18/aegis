@@ -170,6 +170,18 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('commands and display through
     expect(answers[1]!.payload).toMatchObject({ type: 'COMMAND_ACKNOWLEDGED', result: 'ALREADY_APPLIED' });
     expect(answers[1]!.payload.messageId).not.toBe(answers[0]!.payload.messageId);
 
+    // The same messageId with another operation and cell (§10.1): the journaled
+    // correlation is answered, the other cell is neither actuated nor named.
+    const reused = shortCommand({ messageId: valid.messageId, compartmentId: A2 });
+    await api.publish(COMMANDS, reused.body);
+    const reusedAnswers = await answerTo(valid.messageId, 3);
+    expect(reusedAnswers[2]!.payload).toMatchObject({
+      type: 'COMMAND_ACKNOWLEDGED',
+      result: 'ALREADY_APPLIED',
+      operationId: valid.operationId,
+      compartmentId: A1,
+    });
+
     const now = Date.now();
     const bad = [
       [shortCommand({ compartmentId: '7d4bd7a0-6a0e-4b8e-8e57-1f2c3d4e5f60' }), 'UNKNOWN_COMPARTMENT'],
@@ -190,6 +202,8 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('commands and display through
     expect(actuated.filter((op) => op === valid.operationId)).toHaveLength(1);
     expect(api.events.filter((e) => e.payload.type === 'LOCK_UNLOCKED' && e.payload.operationId === valid.operationId)).toHaveLength(1);
     for (const [c] of bad) expect(actuated).not.toContain(c.operationId);
+    expect(actuated).not.toContain(reused.operationId);
+    expect(api.events.filter((e) => e.payload.operationId === reused.operationId)).toEqual([]);
   });
 
   it('shows a backend challenge, acknowledges it without the token, and refuses another boot', { timeout: 30_000 }, async () => {
