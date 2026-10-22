@@ -14,6 +14,8 @@ import type { AuthGateway } from './features/auth/authGateway'
 import { AuthGatewayContext } from './features/auth/AuthGatewayContext'
 import { createHttpAuthGateway } from './features/auth/httpAuthGateway'
 import { createSessionStore, SessionContext } from './features/auth/session'
+import { CatalogGatewayContext } from './features/catalog/CatalogGatewayContext'
+import { createHttpCatalogGateway } from './features/catalog/httpCatalogGateway'
 import { createLocaleController } from './i18n/locale'
 import { LocaleContext } from './i18n/useI18n'
 import { PreviewContext, type PreviewControls } from './preview/PreviewContext'
@@ -36,6 +38,9 @@ if (__AEGIS_PREVIEW__) {
   previewControls = preview.controls
 }
 
+// The catalog has no preview scenario: design-review captures route /api/v1/admin/assets themselves.
+const catalogGateway = createHttpCatalogGateway()
+
 const container = document.getElementById('root')
 if (!container) throw new Error('Missing #root element')
 
@@ -47,9 +52,11 @@ createRoot(container).render(
           <LocaleContext value={locale}>
             <SessionContext value={session}>
               <AuthGatewayContext value={gateway}>
-                <PreviewContext value={previewControls}>
-                  <App />
-                </PreviewContext>
+                <CatalogGatewayContext value={catalogGateway}>
+                  <PreviewContext value={previewControls}>
+                    <App />
+                  </PreviewContext>
+                </CatalogGatewayContext>
               </AuthGatewayContext>
             </SessionContext>
           </LocaleContext>

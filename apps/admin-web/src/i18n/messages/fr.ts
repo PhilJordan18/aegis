@@ -1,5 +1,7 @@
 import type { RouteId } from '../../app/routes'
+import type { AccessLevel } from '../../features/auth/contract'
 import type { FieldErrorCode } from '../../features/auth/signInValidation'
+import type { Availability, DiagnosticReason, OperationalStatus, Presence } from '../../features/catalog/contract'
 import { createPluralSelector } from '../plural'
 
 /**
@@ -182,10 +184,121 @@ export const fr = {
     roleRetry: 'Se connecter avec un autre compte',
   },
 
+  /**
+   * Équipements (CAT-01, read-only list and dossier). Every text below is [P]: proposed, awaiting
+   * Philippe's approval. Reasons, statuses and calibration follow docs/localisation/glossaire.md;
+   * codes (REST enums, assetCode, traceId) are never translated, only their presentation.
+   */
   equipment: {
     heading: 'Équipements',
-    /** [P] Awaiting design approval; follows the preview bar wording « La liste réelle arrive avec CAT-01. » (states.md §4). */
-    pendingTitle: 'La liste des équipements arrive avec CAT-01.',
+    viewsLabel: 'Vues des équipements',
+    unitsTab: 'Exemplaires',
+    modelsTab: 'Modèles',
+    selectedOverline: 'Exemplaire sélectionné',
+    listTitle: ({ count: value }: { count: number }) =>
+      plural(value, { one: `${count.format(value)} exemplaire`, other: `${count.format(value)} exemplaires` }),
+    listMeta: 'Diagnostic opérationnel',
+    listFoot: ({ time }: { time: string }) => `Triés par code · diagnostic évalué à ${time}`,
+    blockers: ({ count: value }: { count: number }) =>
+      plural(value, { one: `${count.format(value)} empêchement`, other: `${count.format(value)} empêchements` }),
+    noBlockers: 'Aucun empêchement détecté',
+    archived: 'Archivé',
+    archivedOn: ({ date }: { date: string }) => `Archivé le ${date}`,
+    /** « Disponible · Présence inconnue · En service »: availability, presence, service state. */
+    facts: ({ availability, presence, status }: { availability: string; presence: string; status: string }) => `${availability} · ${presence} · ${status}`,
+
+    loading: 'Chargement des exemplaires…',
+    loaded: ({ count: value, page, pages }: { count: number; page: number; pages: number }) =>
+      `Liste chargée${NBSP}: ${plural(value, { one: `${count.format(value)} exemplaire`, other: `${count.format(value)} exemplaires` })}, page ${count.format(page)} sur ${count.format(pages)}.`,
+    selectedStatus: ({ name }: { name: string }) => `Exemplaire sélectionné${NBSP}: ${name}.`,
+    detailLoading: "Chargement de l'exemplaire…",
+
+    paginationLabel: 'Pagination des exemplaires',
+    previousPage: 'Précédent',
+    nextPage: 'Suivant',
+    pageOf: ({ page, pages }: { page: number; pages: number }) => `Page ${count.format(page)} sur ${count.format(pages)}`,
+
+    emptyTitle: 'Aucun exemplaire.',
+    emptyBody: "Dès qu'un exemplaire est enregistré, il apparaît ici avec son diagnostic opérationnel.",
+
+    retry: 'Réessayer',
+    backToList: 'Retour à la liste',
+    unreachableTitle: 'Connexion au service impossible.',
+    unreachableBody: 'Vérifiez le réseau, puis réessayez.',
+    serviceErrorTitle: "Le service n'a pas pu fournir ces données.",
+    serviceErrorBody: "Réessayez dans un instant. Si le problème persiste, transmettez l'identifiant de suivi au support.",
+    serviceErrorBodyWithoutCode: 'Réessayez dans un instant.',
+    traceIdLabel: `Identifiant de suivi${NBSP}:`,
+    forbiddenTitle: "Votre compte n'a pas accès aux équipements.",
+    forbiddenBody: "Le serveur a refusé la demande. Aucune donnée n'a été chargée.",
+    notFoundTitle: 'Exemplaire introuvable.',
+    notFoundBody: "Cet exemplaire n'existe plus ou n'est plus accessible.",
+    staleTitle: 'Données non actualisées.',
+    staleBody: ({ time }: { time: string }) => `Les données affichées ont été évaluées à ${time}. La dernière actualisation a échoué.`,
+
+    diagnosticTitle: 'Diagnostic opérationnel',
+    diagnosticNote: ({ time }: { time: string }) =>
+      `Empêchements non personnels connus (disponibilité, état de service, calibration, présence), évalués à ${time}. Une liste vide ne donne ni droit d'emprunt ni possibilité d'ouvrir le casier.`,
+    unknownNote: `L'état physique n'est pas encore observé${NBSP}: aucune présence ni absence n'est supposée.`,
+    derivedFacts: 'Faits dérivés',
+    settings: 'Réglages',
+    readOnly: 'lecture seule',
+    factAvailability: 'Disponibilité',
+    factPresence: 'Présence',
+    factCalibration: 'Calibration',
+    factPlacement: 'Placement',
+    factSerialNumber: 'Numéro de série',
+    settingAccessLevel: "Niveau d'accès requis",
+    settingServiceState: 'État de service',
+    settingCalibrationRequired: 'Calibration requise',
+    settingCalibrationDue: 'Échéance de calibration',
+    yes: 'Oui',
+    no: 'Non',
+    notProvided: 'Non renseigné',
+    noPlacement: 'Aucun placement connu',
+    presenceUnknownHelp: "Aucune observation de présence n'est disponible.",
+    zoneNote: ({ zone }: { zone: string }) => `Fuseau du laboratoire${NBSP}: ${zone}`,
+
+    reason: {
+      NOT_PRESENT: 'Absent du casier',
+      NOT_AVAILABLE: 'Non disponible',
+      MAINTENANCE: 'En maintenance',
+      DAMAGED: 'Endommagé',
+      CALIBRATION_EXPIRED: 'Calibration expirée',
+      UNKNOWN_PHYSICAL_STATE: 'État physique inconnu',
+    } satisfies Record<DiagnosticReason, string>,
+    calibrationExpiredOn: ({ date }: { date: string }) => `Calibration expirée depuis le ${date}`,
+    availability: {
+      AVAILABLE: 'Disponible',
+      RESERVED: 'Réservé',
+      BORROWED: 'Emprunté',
+      UNAVAILABLE: 'Indisponible',
+    } satisfies Record<Availability, string>,
+    presence: {
+      PRESENT: 'Présent',
+      ABSENT: 'Absent du casier',
+      UNKNOWN: 'Inconnue',
+    } satisfies Record<Presence, string>,
+    presenceInline: {
+      PRESENT: 'Présent',
+      ABSENT: 'Absent du casier',
+      UNKNOWN: 'Présence inconnue',
+    } satisfies Record<Presence, string>,
+    serviceState: {
+      SERVICEABLE: 'En service',
+      MAINTENANCE: 'En maintenance',
+      DAMAGED: 'Endommagé',
+    } satisfies Record<OperationalStatus, string>,
+    accessLevel: {
+      STANDARD: 'Standard',
+      RESTRICTED: 'Restreint',
+    } satisfies Record<AccessLevel, string>,
+    calibrationStatus: {
+      NOT_REQUIRED: 'Non requise',
+      UNKNOWN: 'Échéance non renseignée',
+    },
+    calibrationValidUntil: ({ date }: { date: string }) => `Valide jusqu'au ${date}`,
+    calibrationExpiredSince: ({ date }: { date: string }) => `Expirée depuis le ${date}`,
   },
 
   notFound: {

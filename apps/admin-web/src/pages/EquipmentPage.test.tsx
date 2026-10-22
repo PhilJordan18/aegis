@@ -105,7 +105,7 @@ describe('protected Équipements page', () => {
   it('« Se déconnecter » drops the token and the cached profile', async () => {
     const gateway = gatewayAnswering({ kind: 'ok', value: adminProfile, requestId: null })
     const { session, queryClient } = renderProtected(gateway)
-    await waitFor(() => expect(queryClient.getQueryCache().getAll()).toHaveLength(1))
+    await waitFor(() => expect(queryClient.getQueryCache().find({ queryKey: ['auth', 'currentProfile'] })?.state.status).toBe('success'))
     const user = userEvent.setup()
     const trigger = screen.getAllByRole('button', { name: new RegExp(adminProfile.displayName) })[0] as HTMLElement
     await user.click(trigger)
