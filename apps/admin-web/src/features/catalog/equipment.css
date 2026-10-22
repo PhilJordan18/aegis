@@ -58,7 +58,14 @@ a.ag-item:hover { background: var(--ag-field); }
 
 .ag-dossier__scroll {
   flex: 1; min-height: 0; overflow: auto; padding: 24px 32px 20px; border-radius: var(--ag-r-panel);
-  background: var(--ag-surface);
+  /* Scroll shadows (review R3): the only gradient allowed in production, a functional cue that content continues
+     above or below. Neutral tint to transparent; identity.test.ts allows exactly these four layers. */
+  background:
+    linear-gradient(var(--ag-surface) 30%, transparent) center top / 100% 28px no-repeat local,
+    linear-gradient(transparent, var(--ag-surface) 70%) center bottom / 100% 28px no-repeat local,
+    linear-gradient(rgba(var(--ag-shadow-tint), 0.16), transparent) center top / 100% 12px no-repeat scroll,
+    linear-gradient(transparent, rgba(var(--ag-shadow-tint), 0.16)) center bottom / 100% 12px no-repeat scroll,
+    var(--ag-surface);
 }
 .ag-dossier__scroll:focus-visible { outline-offset: -2px; }
 .ag-dossier__title {

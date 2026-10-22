@@ -11,16 +11,8 @@
 .ag-previewbar span { font-weight: 450; color: var(--ag-text); }
 
 /* The preview dossier keeps a sticky footer under the scroll area. */
-.ag-dossier__scroll {
-  border-radius: var(--ag-r-panel) var(--ag-r-panel) 0 0;
-  /* Scroll shadows: signal content above or below the sticky footer (review R3). Preview only: identity v3 allows no gradient in production. */
-  background:
-    linear-gradient(var(--ag-surface) 30%, transparent) center top / 100% 28px no-repeat local,
-    linear-gradient(transparent, var(--ag-surface) 70%) center bottom / 100% 28px no-repeat local,
-    linear-gradient(rgba(var(--ag-shadow-tint), 0.16), transparent) center top / 100% 12px no-repeat scroll,
-    linear-gradient(transparent, rgba(var(--ag-shadow-tint), 0.16)) center bottom / 100% 12px no-repeat scroll,
-    var(--ag-surface);
-}
+/* The scroll shadows come from the shared stylesheet; only the radius differs above the footer. */
+.ag-dossier__scroll { border-radius: var(--ag-r-panel) var(--ag-r-panel) 0 0; }
 .ag-settings { margin-top: 12px; display: grid; gap: 12px; }
 .ag-settings > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .ag-settings dt { font-size: var(--ag-type-label-size); font-weight: var(--ag-type-label-weight); }
