@@ -56,6 +56,21 @@ class CatalogAudit {
         archived(AuditSubjectType.ASSET, asset.id(), asset.archivedAt(), actor, at, alreadyArchived);
     }
 
+    void identifierAssigned(AssetIdentifierView identifier, UUID actor, Instant at) {
+        record(AuditEventType.ASSET_IDENTIFIER_ASSIGNED, AuditSubjectType.ASSET_IDENTIFIER, identifier.id(), actor,
+                AuditResult.ACCEPTED, Map.of("assigned", snapshot(identifier)), at);
+    }
+
+    /**
+     * Document 08 has no revocation event type; {@code ASSET_UPDATED} on the identifier is the closest one. Like a
+     * repeated archival, a repeated revocation keeps the first {@code revokedAt} and is {@code ALREADY_APPLIED}.
+     */
+    void identifierRevoked(AssetIdentifierView identifier, UUID actor, Instant at, boolean alreadyRevoked) {
+        record(AuditEventType.ASSET_UPDATED, AuditSubjectType.ASSET_IDENTIFIER, identifier.id(), actor,
+                alreadyRevoked ? AuditResult.ALREADY_APPLIED : AuditResult.ACCEPTED,
+                Map.of("revoked", snapshot(identifier), "revokedAt", identifier.revokedAt().toString()), at);
+    }
+
     /** A repeated archival keeps the first {@code archivedAt} and is recorded as {@code ALREADY_APPLIED}. */
     private void archived(AuditSubjectType subjectType, UUID id, Instant archivedAt, UUID actor, Instant at,
             boolean alreadyArchived) {
@@ -88,6 +103,14 @@ class CatalogAudit {
         fields.put("operationalStatus", asset.operationalStatus().name());
         fields.put("calibrationRequired", asset.calibrationRequired());
         fields.put("calibrationDueAt", asset.calibrationDueAt() == null ? null : asset.calibrationDueAt().toString());
+        return fields;
+    }
+
+    private static Map<String, Object> snapshot(AssetIdentifierView identifier) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("assetId", identifier.assetId().toString());
+        fields.put("type", identifier.type().name());
+        fields.put("value", identifier.value());
         return fields;
     }
 

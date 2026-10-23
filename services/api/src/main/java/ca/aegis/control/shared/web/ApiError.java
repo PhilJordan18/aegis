@@ -6,8 +6,8 @@ import java.util.Locale;
 import org.springframework.http.HttpStatus;
 
 /**
- * Stable error codes of the REST contract (document 09, section 21). The catalog uniqueness and archived-resource
- * codes are not yet listed there; they are proposed with CAT-01 for addition to the contract.
+ * Stable error codes of the REST contract (document 09, section 21). The identifier and compartment codes of CAT-02
+ * are listed there as proposed until the contract is approved.
  */
 public enum ApiError {
 
@@ -39,6 +39,10 @@ public enum ApiError {
             "Un actif porte déjà ce numéro de série."),
     ASSET_ARCHIVED(HttpStatus.CONFLICT, "Actif archivé",
             "Un actif archivé ne peut plus être modifié."),
+    IDENTIFIER_ALREADY_ASSIGNED(HttpStatus.CONFLICT, "Identifiant déjà attribué",
+            "Cet identifiant est déjà actif sur un actif."),
+    IDENTIFIER_TYPE_UNSUPPORTED(HttpStatus.UNPROCESSABLE_CONTENT, "Type d'identifiant non pris en charge",
+            "Les types d'identifiant acceptés sont RFID_UHF, NFC et QR."),
     IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT, "Clé d'idempotence réutilisée",
             "Cette clé d'idempotence a déjà servi pour une autre requête."),
     IDEMPOTENCY_REQUEST_IN_PROGRESS(HttpStatus.CONFLICT, "Requête déjà en cours",
