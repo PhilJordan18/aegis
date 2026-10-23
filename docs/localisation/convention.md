@@ -25,13 +25,24 @@ Elle ne change jamais :
 
 - les règles métier, la readiness et les autorisations;
 - les fuseaux horaires, quelle que soit la langue :
-  - une heure métier (réservation, échéance, horaire) s'affiche dans le fuseau du
-    casier fourni par l'API, jamais dans celui de l'appareil ou du navigateur;
+  - une heure métier liée à un casier (réservation, échéance, horaire) s'affiche
+    dans le fuseau du casier fourni par l'API, jamais dans celui de l'appareil ou
+    du navigateur;
+  - l'échéance de calibration d'un exemplaire (`calibrationDueAt`) s'affiche avec
+    la date, l'heure et le fuseau `America/Toronto` rendus explicites, comme
+    convention du laboratoire P0 (décision de Philippe, 22 octobre 2026) : par
+    exemple « 30 nov. 2026, 22 h 00 HNE » / « Nov 30, 2026, 10:00 p.m. EST ».
+    Elle ne dépend pas du placement de l'équipement. L'état de calibration reste
+    calculé par le backend : aucun client ne le déduit de la date affichée;
+  - aucune règle « date saisie = minuit au début du jour » n'est retenue : un
+    futur formulaire de calibration demandera une date et une heure explicites,
+    jusqu'à décision contraire;
   - un instant purement technique, comme l'heure renvoyée par la vérification de
     santé, s'affiche dans le fuseau de l'appareil;
   - en attendant que l'API expose le fuseau du casier, iOS n'affiche aucune heure
-    métier, et le Web n'en affiche que dans l'exemple illustratif de l'accueil,
-    avec le fuseau `America/Toronto` du laboratoire rendu explicite;
+    métier liée à un casier, et le Web n'en affiche que dans l'exemple
+    illustratif de l'accueil, avec le fuseau `America/Toronto` du laboratoire
+    rendu explicite;
 - les contrats : codes REST et MQTT, états techniques, identifiants (UUID,
   `assetCode`, `traceId`) et données saisies (noms, descriptions, numéros de
   série). On traduit la présentation d'un code, jamais le code.
@@ -83,6 +94,7 @@ et `FormatStyle` sur iOS), jamais assemblés à la main.
 | Date longue | 21 octobre 2026 | October 21, 2026 |
 | Heure | 15 h 20 | 3:20 p.m. |
 | Heure avec fuseau | 15 h 20 HAE | 3:20 p.m. EDT |
+| Date, heure et fuseau (Web) | 21 oct. 2026, 15 h 20 HAE | Oct 21, 2026, 3:20 p.m. EDT |
 | Nombre | 1 234,5 | 1,234.5 |
 | Durée | 55 secondes | 55 seconds |
 

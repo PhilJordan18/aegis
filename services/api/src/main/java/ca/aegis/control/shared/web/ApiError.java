@@ -5,7 +5,10 @@ import java.util.Locale;
 
 import org.springframework.http.HttpStatus;
 
-/** Stable error codes of the REST contract (document 09, section 21). */
+/**
+ * Stable error codes of the REST contract (document 09, section 21). The catalog uniqueness and archived-resource
+ * codes are not yet listed there; they are proposed with CAT-01 for addition to the contract.
+ */
 public enum ApiError {
 
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST, "Requête invalide",
@@ -24,6 +27,18 @@ public enum ApiError {
             "Votre niveau d'accès ne permet pas d'utiliser cet actif."),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "Ressource introuvable",
             "La ressource demandée est absente ou n'est pas visible."),
+    ASSET_MODEL_IN_USE(HttpStatus.CONFLICT, "Modèle utilisé",
+            "Le modèle est encore utilisé par un actif non archivé."),
+    ASSET_MODEL_NAME_ALREADY_EXISTS(HttpStatus.CONFLICT, "Nom de modèle déjà utilisé",
+            "Un modèle actif porte déjà ce nom."),
+    ASSET_MODEL_ARCHIVED(HttpStatus.CONFLICT, "Modèle archivé",
+            "Un modèle archivé ne peut plus être modifié."),
+    ASSET_CODE_ALREADY_EXISTS(HttpStatus.CONFLICT, "Code d'actif déjà utilisé",
+            "Un actif porte déjà ce code."),
+    ASSET_SERIAL_NUMBER_ALREADY_EXISTS(HttpStatus.CONFLICT, "Numéro de série déjà utilisé",
+            "Un actif porte déjà ce numéro de série."),
+    ASSET_ARCHIVED(HttpStatus.CONFLICT, "Actif archivé",
+            "Un actif archivé ne peut plus être modifié."),
     IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT, "Clé d'idempotence réutilisée",
             "Cette clé d'idempotence a déjà servi pour une autre requête."),
     IDEMPOTENCY_REQUEST_IN_PROGRESS(HttpStatus.CONFLICT, "Requête déjà en cours",

@@ -21,6 +21,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import tools.jackson.core.JacksonException;
+import tools.jackson.databind.exc.MismatchedInputException;
 import tools.jackson.databind.exc.UnrecognizedPropertyException;
 
 /**
@@ -69,9 +70,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @Override
     protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-        ProblemResponse.Violation violation = switch (ex.getMostSpecificCause()) {
+        ProblemResponse.Violation violation = switch (jacksonCause(ex)) {
             case UnrecognizedPropertyException unknown -> new ProblemResponse.Violation(unknown.getPropertyName(),
                     "UNKNOWN_FIELD", "Ce champ n'est pas reconnu.");
+            case MismatchedInputException missing when isMissingRequiredProperty(missing) && fieldName(missing) != null ->
+                    new ProblemResponse.Violation(fieldName(missing), "REQUIRED",
+                            "Ce champ doit être présent; utilisez null pour le laisser vide.");
             case JacksonException invalid when fieldName(invalid) != null -> new ProblemResponse.Violation(
                     fieldName(invalid), "INVALID_VALUE", "La valeur de ce champ n'a pas le type attendu.");
             default -> new ProblemResponse.Violation("body", "MALFORMED_BODY",
@@ -103,13 +107,36 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return ((ServletWebRequest) request).getRequest();
     }
 
+    /**
+     * The outermost Jackson exception, which carries the JSON path. The most specific cause is not used: for a
+     * value such as an instant it is the parser's own exception, which no longer knows the field.
+     */
+    private static Throwable jacksonCause(HttpMessageNotReadableException ex) {
+        for (Throwable cause = ex.getCause(); cause != null; cause = cause.getCause()) {
+            if (cause instanceof JacksonException) {
+                return cause;
+            }
+        }
+        return ex.getMostSpecificCause();
+    }
+
+    /**
+     * A property marked {@code @JsonProperty(required = true)} and absent from the body. Jackson has no dedicated
+     * exception type for it; its message prefix has been stable since 2.6 and the catalog tests pin it.
+     */
+    private static boolean isMissingRequiredProperty(MismatchedInputException exception) {
+        String message = exception.getOriginalMessage();
+        return message != null && message.startsWith("Missing required creator property");
+    }
+
     private static String fieldName(JacksonException exception) {
         List<JacksonException.Reference> path = exception.getPath();
         return path.isEmpty() ? null : path.getLast().getPropertyName();
     }
 
     static String violationCode(String constraint) {
-        if (constraint == null || constraint.isBlank()) {
+        // Document 09 has no dedicated code for a forbidden character: it is an invalid value like any other.
+        if (constraint == null || constraint.isBlank() || constraint.equals(PlainText.class.getSimpleName())) {
             return "INVALID_VALUE";
         }
         return constraint.replaceAll("([a-z0-9])([A-Z])", "$1_$2").toUpperCase(Locale.ROOT);

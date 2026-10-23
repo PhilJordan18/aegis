@@ -1,11 +1,13 @@
 # Aegis Control — démarrage local
 
-Ce socle couvre FND-01, FND-02A et la partie backend d'IAM-01/02. Il fournit
-PostgreSQL, un broker MQTT local authentifié pour le simulateur, Spring Boot,
-Flyway, `GET /api/v1/system/health`, la connexion par comptes préparés
-(`POST /api/v1/auth/login`, `GET /api/v1/auth/me`) et les contrôles de rôle et
-de niveau d'accès côté serveur. Il n'implémente pas encore les actifs,
-l'ingestion MQTT ni les clients Web et iOS.
+Ce socle couvre FND-01, FND-02A, la partie backend d'IAM-01/02 et la partie
+API de CAT-01. Il fournit PostgreSQL, un broker MQTT local authentifié pour le
+simulateur, Spring Boot, Flyway, `GET /api/v1/system/health`, la connexion par
+comptes préparés (`POST /api/v1/auth/login`, `GET /api/v1/auth/me`), les
+contrôles de rôle et de niveau d'accès côté serveur et l'administration des
+modèles et des actifs (document 09, sections 12.1 et 12.2). Il n'implémente pas
+encore les identifiants physiques, les placements ni l'ingestion MQTT. Les
+clients Web et iOS ont leur propre dossier sous `apps/`.
 
 ## Prérequis
 
@@ -177,6 +179,27 @@ sur les vrais endpoints :
 - aucune route administrative ne confirme une opération ni ne résout une
   anomalie (section 26.2).
 
+## Catalogue administratif (CAT-01)
+
+Les routes `/api/v1/admin/asset-models` et `/api/v1/admin/assets` sont
+réservées au rôle `ADMIN`. Un modèle ou un actif n'est jamais supprimé :
+l'archivage le conserve, le laisse lisible et interdit sa modification
+(`409 ASSET_MODEL_ARCHIVED` ou `ASSET_ARCHIVED`). Un modèle utilisé par un
+actif non archivé ne peut pas être archivé (`409 ASSET_MODEL_IN_USE`).
+
+Les index uniques de `V002` restent la garde finale : code d'actif sans casse,
+numéro de série et nom de modèle actif sans casse donnent respectivement
+`409 ASSET_CODE_ALREADY_EXISTS`, `ASSET_SERIAL_NUMBER_ALREADY_EXISTS` et
+`ASSET_MODEL_NAME_ALREADY_EXISTS`. Ces codes ne figurent pas encore dans le
+document 09, section 21. Une création ou une modification d'actif verrouille
+le modèle en partage, et l'archivage d'un modèle le verrouille en exclusif :
+un actif non archivé ne peut donc jamais référencer un modèle archivé.
+
+La vue `AdminAssetView` ne contient aucune readiness. Tant que les
+réservations, les prêts, les placements et les observations n'existent pas, la
+disponibilité ne dépend que de l'archivage, la présence vaut `UNKNOWN` et le
+diagnostic contient donc toujours `UNKNOWN_PHYSICAL_STATE`.
+
 ## Idempotence REST
 
 `shared/idempotency` applique le document 09, sections 6.2 et 20, et le
@@ -189,9 +212,13 @@ enregistrée partagent une transaction : une répétition rejoue la réponse ave
 `IDEMPOTENCY_REQUEST_IN_PROGRESS` avec `Retry-After`. Pour le catalogue, un
 refus métier n'est pas enregistré : la clé est annulée avec la mutation.
 
-Aucune route de production n'utilise encore ce service dans cette étape; les
-tests passent par un contrôleur de test chargé uniquement par
-`IdempotencyApiTests`.
+Les quatre mutations du catalogue (`POST /admin/asset-models`,
+`POST /admin/asset-models/{modelId}/archive`, `POST /admin/assets` et
+`POST /admin/assets/{assetId}/archive`) utilisent ce service : leurs services
+métier rejoignent sa transaction et n'en ouvrent jamais une nouvelle.
+`CatalogIdempotencyTests` les vérifie sur les vraies routes;
+`IdempotencyApiTests` garde son contrôleur de test pour la concurrence,
+l'attente de verrou et l'expiration.
 
 ## Comptes de démonstration
 
@@ -232,7 +259,8 @@ cette étape autorisent seulement l'identité fictive du contrat MQTT.
 
 - IAM-01 n'est pas terminé de bout en bout tant que les clients Web et iOS
   n'utilisent pas ces routes; CORS sera configuré avec le client Web.
-- La connexion n'est pas encore auditée : `audit_events` arrive avec `V009`.
+- La connexion et les mutations du catalogue ne sont pas encore auditées :
+  `audit_events` arrive avec `V009`.
 - La limite de 5 tentatives par minute, par adresse TCP et par compte, est
   tenue en mémoire : elle suppose le déploiement P0 à instance unique.
   Plusieurs instances multiplieraient la limite et un redémarrage l'efface.
