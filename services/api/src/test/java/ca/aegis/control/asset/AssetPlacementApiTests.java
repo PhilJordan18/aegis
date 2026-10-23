@@ -91,6 +91,37 @@ class AssetPlacementApiTests extends CatalogApiTest {
     }
 
     @Test
+    void archivalEndsTheActivePlacementOnceAndFreesTheCompartment() throws Exception {
+        String model = createModel("Archivage placé " + suffix);
+        String asset = createAsset(model, "ARP-" + suffix);
+        String other = createAsset(model, "ARP-OTHER-" + suffix);
+        String placed = id(place(asset, body(first, "Initial")));
+        clock.advance(Duration.ofMinutes(4));
+        String archivedAt = START.plus(Duration.ofMinutes(4)).toString();
+
+        archiveAsset(asset).andExpect(status().isOk())
+                .andExpect(jsonPath("$.archivedAt").value(archivedAt))
+                .andExpect(jsonPath("$.placement").isEmpty());
+        clock.advance(Duration.ofMinutes(1));
+        archiveAsset(asset).andExpect(status().isOk());
+
+        assertEquals(List.of(placed + " " + first + " " + archivedAt), history(asset));
+        List<JsonNode> events = events(asset);
+        assertEquals(2, events.size());
+        assertEquals(snapshot(placed, first, "A1", START.toString(), "Initial"), events.get(1).get("from"));
+        assertEquals(true, events.get(1).get("to").isNull());
+        assertEquals(List.of("ASSET_PLACEMENT_CHANGED ACCEPTED " + admin.id() + " " + START,
+                "ASSET_PLACEMENT_CHANGED ACCEPTED " + admin.id() + " " + archivedAt), eventHeads(asset));
+        assertEquals(List.of("ACCEPTED " + archivedAt, "ALREADY_APPLIED " + START.plus(Duration.ofMinutes(5))),
+                jdbc.sql("""
+                        SELECT result || ' ' || to_char(occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+                        FROM aegis.audit_events
+                        WHERE event_type = 'ASSET_ARCHIVED' AND subject_id = :id ORDER BY occurred_at
+                        """).param("id", UUID.fromString(asset)).query(String.class).list());
+        place(other, body(first, "Cellule libérée par l'archivage")).andExpect(status().isOk());
+    }
+
+    @Test
     void refusedPlacementsChangeNothingAndWriteNoEvent() throws Exception {
         String model = createModel("Refus placement " + suffix);
         String asset = createAsset(model, "RPL-" + suffix);

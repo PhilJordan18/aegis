@@ -7,11 +7,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -20,6 +22,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import ca.aegis.control.identity.AccessLevel;
 import ca.aegis.control.shared.web.ApiError;
@@ -33,6 +37,7 @@ import ca.aegis.control.support.ApiIntegrationTest;
 class PhysicalCatalogConcurrencyTests extends ApiIntegrationTest {
 
     private static final int ATTEMPTS = 8;
+    private static final long BLOCKED_MILLIS = 300;
 
     @Autowired
     AssetModelService models;
@@ -48,6 +53,9 @@ class PhysicalCatalogConcurrencyTests extends ApiIntegrationTest {
 
     @Autowired
     JdbcClient jdbc;
+
+    @Autowired
+    PlatformTransactionManager transactionManager;
 
     private ExecutorService executor;
     private String suffix;
@@ -161,6 +169,103 @@ class PhysicalCatalogConcurrencyTests extends ApiIntegrationTest {
                 SELECT asset_id || ' ' || compartment_id FROM aegis.asset_placements
                 WHERE asset_id IN (:first, :second) AND removed_at IS NULL ORDER BY asset_id = :second
                 """).param("first", first).param("second", second).query(String.class).list());
+    }
+
+    @Test
+    void anArchivalWaitingForAPlacementChangeEndsTheNewPlacement() throws Exception {
+        UUID model = models.create(new AssetModelRequest("Archivage après " + suffix, null, null, null, false), actor)
+                .id();
+        UUID locker = PlacementFixtures.locker(jdbc, "ARCH-A-" + suffix);
+        UUID left = PlacementFixtures.compartment(jdbc, locker, "A1", 1);
+        UUID right = PlacementFixtures.compartment(jdbc, locker, "A2", 2);
+        UUID asset = asset(model, "ARCH-A-" + suffix);
+        placements.place(asset, new PlacementRequest(left, "Initial"), actor);
+        AtomicReference<CompletableFuture<ApiError>> archival = new AtomicReference<>();
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(transaction -> {
+            placements.place(asset, new PlacementRequest(right, "Déplacement"), actor);
+            archival.set(CompletableFuture.supplyAsync(() -> outcome(() -> assets.archive(asset, actor)), executor));
+            assertStillBlocked(archival.get());
+        });
+
+        assertEquals(null, archival.get().get(30, TimeUnit.SECONDS));
+        assertCoherentArchivedAsset(asset, 2, 3);
+    }
+
+    @Test
+    void aPlacementChangeWaitingForAnArchivalIsRefused() throws Exception {
+        UUID model = models.create(new AssetModelRequest("Archivage avant " + suffix, null, null, null, false), actor)
+                .id();
+        UUID locker = PlacementFixtures.locker(jdbc, "ARCH-B-" + suffix);
+        UUID left = PlacementFixtures.compartment(jdbc, locker, "A1", 1);
+        UUID right = PlacementFixtures.compartment(jdbc, locker, "A2", 2);
+        UUID asset = asset(model, "ARCH-B-" + suffix);
+        placements.place(asset, new PlacementRequest(left, "Initial"), actor);
+        AtomicReference<CompletableFuture<ApiError>> change = new AtomicReference<>();
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(transaction -> {
+            assets.archive(asset, actor);
+            change.set(CompletableFuture.supplyAsync(() -> outcome(() -> placements.place(asset,
+                    new PlacementRequest(right, "Trop tard"), actor)), executor));
+            assertStillBlocked(change.get());
+        });
+
+        assertEquals(ApiError.ASSET_ARCHIVED, change.get().get(30, TimeUnit.SECONDS));
+        assertCoherentArchivedAsset(asset, 1, 2);
+    }
+
+    /** Without a forced order, whichever transaction wins leaves an archived asset with no active placement. */
+    @Test
+    void archivalsRacingPlacementChangesNeverLeaveAnActivePlacementOnAnArchivedAsset() throws Exception {
+        UUID model = models.create(new AssetModelRequest("Archivage course " + suffix, null, null, null, false),
+                actor).id();
+        UUID locker = PlacementFixtures.locker(jdbc, "ARCH-C-" + suffix);
+        List<UUID> cells = new ArrayList<>();
+        for (int i = 1; i <= ATTEMPTS; i++) {
+            cells.add(PlacementFixtures.compartment(jdbc, locker, "C" + i, i));
+        }
+        for (int round = 0; round < ATTEMPTS; round++) {
+            UUID asset = asset(model, "ARCH-C-" + round + "-" + suffix);
+            placements.place(asset, new PlacementRequest(cells.get(round), "Initial"), actor);
+            // The target is still free: only the archived asset of round 0 ever held cell C1.
+            UUID target = cells.get((round + 1) % ATTEMPTS);
+
+            List<ApiError> outcomes = race(List.of(
+                    () -> placements.place(asset, new PlacementRequest(target, "Course"), actor),
+                    () -> assets.archive(asset, actor)));
+
+            assertEquals(null, outcomes.get(1));
+            assertEquals(true, outcomes.getFirst() == null || outcomes.getFirst() == ApiError.ASSET_ARCHIVED,
+                    outcomes::toString);
+            assertEquals(0L, jdbc.sql("""
+                    SELECT count(*) FROM aegis.asset_placements WHERE asset_id = :id AND removed_at IS NULL
+                    """).param("id", asset).query(Long.class).single());
+        }
+    }
+
+    /** The asset is archived, every placement row is kept and ended, and each effective change has one event. */
+    private void assertCoherentArchivedAsset(UUID asset, long rows, long placementEvents) {
+        assertEquals(true, jdbc.sql("SELECT archived_at IS NOT NULL FROM aegis.assets WHERE id = :id")
+                .param("id", asset).query(Boolean.class).single());
+        assertEquals(List.of(rows, 0L), jdbc.sql("""
+                SELECT count(*) AS total, count(*) FILTER (WHERE removed_at IS NULL) AS active
+                FROM aegis.asset_placements WHERE asset_id = :id
+                """).param("id", asset).query((row, number) -> List.of(row.getLong("total"), row.getLong("active")))
+                .single());
+        assertEquals(placementEvents, jdbc.sql("""
+                SELECT count(*) FROM aegis.audit_events
+                WHERE event_type = 'ASSET_PLACEMENT_CHANGED' AND subject_id = :id
+                """).param("id", asset).query(Long.class).single());
+    }
+
+    private static void assertStillBlocked(CompletableFuture<ApiError> future) {
+        try {
+            Thread.sleep(BLOCKED_MILLIS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(interrupted);
+        }
+        assertFalse(future.isDone(), "the concurrent transaction should wait for the asset row lock");
     }
 
     private UUID asset(UUID model, String code) {
