@@ -1,4 +1,4 @@
-import { useId, type Ref } from 'react'
+import { useId, useLayoutEffect, useRef, type Ref } from 'react'
 import { useI18n } from '../../i18n/useI18n'
 import { Icon } from '../../ui/Icon'
 import { StatusChip } from '../../ui/StatusChip'
@@ -45,13 +45,23 @@ export function AssetDossier({ asset, loading, failure, stale, retrying, focusRe
   const { m } = useI18n()
   const titleId = useId()
   const groupId = useId()
+  const alertRef = useRef<HTMLDivElement>(null)
+  const focusLost = useRef(false)
   const t = m.equipment
+
+  // The stale notice that had focus is gone. Its target exists only after this commit: the unit after a successful
+  // refresh, or the refusal when the server answered 403 or 404, which replaces the unit (WCAG 2.4.3).
+  useLayoutEffect(() => {
+    if (!focusLost.current) return
+    focusLost.current = false
+    ;(asset === undefined ? alertRef.current : document.getElementById(groupId))?.focus()
+  })
 
   if (asset === undefined) {
     return (
       <section className="ag-panel ag-dossier" aria-label={t.selectedOverline} aria-busy={loading || undefined}>
         {failure !== null ? (
-          <div className="ag-dossier__alert">
+          <div className="ag-dossier__alert" ref={alertRef} tabIndex={-1}>
             <CatalogAlert failure={failure} onRetry={onRetry} onBack={onBack} />
           </div>
         ) : (
@@ -75,7 +85,7 @@ export function AssetDossier({ asset, loading, failure, stale, retrying, focusRe
           stale={stale}
           retrying={retrying}
           onRetry={onRetry}
-          returnFocus={() => document.getElementById(groupId)?.focus()}
+          returnFocus={() => (focusLost.current = true)}
         />
       </div>
     </section>

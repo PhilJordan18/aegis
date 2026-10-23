@@ -264,6 +264,27 @@ describe('Équipements — adverse states', () => {
     // The button that had focus is gone: focus moves to the list title, not to the page body.
     expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: '1 exemplaire' }))
   })
+
+  it('a refresh answered 403 shows the refusal instead of stale units, and a retry keeps focus in the list', async () => {
+    const gateway = fakeCatalogGateway({ pages: [ok(pageOf([MM001]))], units: { [MM001.id]: ok(MM001) } })
+    const { queryClient } = renderEquipment(gateway)
+    await screen.findByRole('heading', { level: 2, name: '1 exemplaire' })
+    gateway.listAssets.mockResolvedValue({ kind: 'network', reason: 'offline' })
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: ['catalog', 'assets', 'list'] })
+    })
+    const notice = await screen.findByRole('alert')
+
+    // A catalog 403 does not end the session: the page itself stops showing what the account may no longer read.
+    gateway.listAssets.mockResolvedValue(failure(403, 'FORBIDDEN'))
+    const user = userEvent.setup()
+    await user.click(within(notice).getByRole('button', { name: 'Réessayer' }))
+    expect(plain((await screen.findByRole('alert')).textContent)).toContain("Votre compte n'a pas accès aux équipements.")
+    expect(document.querySelector('.ag-list__items')).toBeNull()
+    expect(screen.queryByRole('group', { name: /·/ })).toBeNull()
+    expect(plain(document.body.textContent)).not.toContain('Données non actualisées.')
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Exemplaires' }))
+  })
 })
 
 describe('Équipements — stale dossier', () => {
@@ -344,6 +365,27 @@ describe('Équipements — stale dossier', () => {
     })
     expect(plain((await screen.findByRole('alert')).textContent)).toContain("Votre compte n'a pas accès aux équipements.")
     expect(plain(document.body.textContent)).not.toContain('Données non actualisées.')
+  })
+
+  it.each([
+    [404, 'ASSET_NOT_FOUND', 'Exemplaire introuvable.'],
+    [403, 'FORBIDDEN', "Votre compte n'a pas accès aux équipements."],
+  ])('moves focus to the refusal when a retry from the notice is answered %s', async (status, code, title) => {
+    const { gateway, queryClient } = await renderLoadedDossier()
+    gateway.getAsset.mockResolvedValue(offline)
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: detailKey(MM001.id) })
+    })
+    const notice = await within(dossierOf()).findByRole('alert')
+    gateway.getAsset.mockResolvedValue(failure(status, code))
+    const user = userEvent.setup()
+    await user.click(within(notice).getByRole('button', { name: 'Réessayer' }))
+    const refusal = await screen.findByRole('alert')
+    expect(plain(refusal.textContent)).toContain(title)
+    // The refusal replaces the unit in the same place: focus lands on it and it can hold focus, not on the body.
+    const focused = document.activeElement as HTMLElement
+    expect(focused.contains(refusal)).toBe(true)
+    expect(focused.getAttribute('tabindex')).toBe('-1')
   })
 
   it('says it in English with the same words as the list', async () => {
