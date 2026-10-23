@@ -289,6 +289,26 @@ provisionnement crée seulement les lignes absentes et ne modifie jamais une
 ligne existante; aucun device n'est enregistré. Sans la variable, rien n'est
 créé.
 
+## Horaire d'exploitation (CFG-02)
+
+`V004` crée `operating_schedules` et `operating_windows` tels que le document
+08, sections 4.5 et 5.1, les définit. `GET` et `PUT
+/admin/lockers/{lockerId}/operating-schedule` (document 09, section 13) sont
+réservés à `ADMIN`. Le `PUT` valide les sept jours, le fuseau IANA et les
+heures, verrouille le locker, archive la version active et en insère une
+nouvelle avec ses sept plages; il écrit un événement `SCHEDULE_UPDATED` par
+version. Un `PUT` identique ne crée rien. Un locker sans horaire actif
+retourne `404 OPERATING_SCHEDULE_NOT_CONFIGURED`. Ce code et les codes de
+violation de la section 13.2 sont proposés et attendent leur approbation.
+
+Le casier de démonstration n'a pas d'horaire au démarrage : sa version doit
+être créée par un administrateur, l'administrateur de démonstration par
+exemple, avec ce `PUT`. `OperatingHours.requireOpenOperatingWindow` porte la
+règle de réservation du document 06, section 5.1, y compris les changements
+d'heure; aucune route ne l'appelle encore. `OperatingScheduleApiTests`,
+`OperatingScheduleConcurrencyTests`, `OperatingHoursTests` et
+`OperatingScheduleMigrationTests` le vérifient.
+
 ## Rôles PostgreSQL
 
 Le document 08, section 12.1, sépare le propriétaire des migrations du rôle
