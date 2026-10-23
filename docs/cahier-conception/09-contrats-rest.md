@@ -716,7 +716,7 @@ POST /admin/assets retourne 201 et exige Idempotency-Key.
 
 PUT /admin/assets/{assetId} retourne 200. La readiness n’est jamais acceptée dans la requête. Un PUT identique est un no-op métier. Un actif archivé ne se modifie plus : `409 ASSET_ARCHIVED`.
 
-POST /admin/assets/{assetId}/archive exige Idempotency-Key et retourne 200 avec la vue administrative. L’archivage est refusé lorsqu’une réservation active, un prêt ouvert ou une opération non terminale concerne l’actif. Un actif déjà archivé suit la règle d’archivage répété de §12.1.
+POST /admin/assets/{assetId}/archive exige Idempotency-Key et retourne 200 avec la vue administrative. L’archivage est refusé lorsqu’une réservation active, un prêt ouvert ou une opération non terminale concerne l’actif. Il termine le placement actif de l’actif (§12.4). Un actif déjà archivé suit la règle d’archivage répété de §12.1.
 
 ### 12.3 Identifiant physique
 
@@ -739,6 +739,16 @@ Erreurs particulières :
 
 POST /admin/assets/{assetId}/identifiers/{identifierId}/revoke exige une clé d’idempotence. Une révocation ne supprime pas l’historique. Elle est refusée pendant une opération physique utilisant cet identifiant.
 
+**Comportement de la tranche CAT-02 (proposé, à approuver).**
+
+- `type` vaut `RFID_UHF`, `NFC` ou `QR` (document 03, §4.5). Un `type` absent ou vide retourne `400 VALIDATION_ERROR`; toute autre valeur, casse comprise, retourne `422 IDENTIFIER_TYPE_UNSUPPORTED`. `value` est requise, débarrassée de ses espaces extérieurs, limitée à 128 caractères sans caractère de contrôle, puis comparée telle quelle.
+- Une paire `type + value` active appartient à un seul actif, le même actif compris : `409 IDENTIFIER_ALREADY_ASSIGNED`. Une valeur révoquée peut être attribuée de nouveau.
+- Un actif archivé refuse l’attribution et la révocation : `409 ASSET_ARCHIVED`. Un actif inconnu, ou un identifiant qui n’appartient pas à l’actif du chemin, retourne `404 RESOURCE_NOT_FOUND`.
+- Les deux routes retournent un `AssetIdentifierView` : `id`, `assetId`, `type`, `value`, `active`, `assignedAt`, `revokedAt` (instant ou `null`). L’attribution retourne `201` avec un `Location` vers l’actif, car aucune route ne lit un identifiant seul; la révocation retourne `200`.
+- Révoquer un identifiant déjà révoqué suit la règle d’archivage répété de §12.1 : `200` avec la représentation courante, `revokedAt` conservé et un événement de résultat `ALREADY_APPLIED`.
+- Audit, avec `subjectType` `ASSET_IDENTIFIER` : une attribution écrit `ASSET_IDENTIFIER_ASSIGNED`. Le document 08 n’ayant pas de type de révocation, une révocation écrit `ASSET_UPDATED`. Un rejeu de même clé et une mutation refusée n’écrivent aucun événement.
+- `409 ASSET_OPERATION_IN_PROGRESS` et le refus de révocation pendant une opération physique seront appliqués par la tranche qui crée les opérations.
+
 ### 12.4 Placement attendu
 
 PUT /admin/assets/{assetId}/placement
@@ -758,6 +768,16 @@ La mutation est refusée si :
 - un autre actif possède déjà ce placement;
 - l’actif possède une réservation active, un prêt ouvert ou une opération non terminale;
 - le compartiment n’appartient pas au locker visé par la configuration.
+
+**Comportement de la tranche CAT-02 (proposé, à approuver).**
+
+- `compartmentId` est requis. `reason` est requis, débarrassé de ses espaces extérieurs et limité à 500 caractères sans caractère de contrôle.
+- La réponse est un `AssetPlacementView` : `id`, `assetId`, `lockerId`, `lockerCode`, `compartmentId`, `compartmentCode`, `assignedAt`, `reason`. `AdminAssetView.placement` (§8.9) présente le placement actif.
+- Un changement termine le placement précédent (`removedAt`) au lieu de le supprimer, et écrit un seul événement `ASSET_PLACEMENT_CHANGED` sur l’actif, avec l’ancien et le nouveau placement. Un PUT vers le compartiment actuel est un no-op : la réponse est le placement courant, motif compris, sans événement.
+- Refus vérifiables aujourd’hui : actif archivé, `409 ASSET_ARCHIVED`; compartiment inconnu, `400 VALIDATION_ERROR` avec la violation `{field: compartmentId, code: COMPARTMENT_NOT_FOUND}`; compartiment désactivé, `409 COMPARTMENT_DISABLED`; compartiment occupé par un autre actif, `409 COMPARTMENT_ALREADY_OCCUPIED`.
+- L’archivage d’un actif (§12.2) termine son placement actif dans la même transaction (décision approuvée le 22 octobre 2026), conserve la ligne et écrit `ASSET_PLACEMENT_CHANGED` vers `null`.
+- Le refus pour réservation active, prêt ouvert ou opération non terminale sera appliqué par les tranches qui créent ces objets.
+- La condition « le compartiment n’appartient pas au locker visé par la configuration » n’est pas définie : aucune configuration ne désigne de locker cible. Elle n’est pas appliquée tant qu’elle n’est pas décidée.
 
 ---
 
@@ -1176,10 +1196,14 @@ Les PUT sont idempotents par définition. Une répétition identique ne crée pa
 | 409 | ASSET_CODE_ALREADY_EXISTS | Code d’actif déjà utilisé, archives comprises (§12.2) |
 | 409 | ASSET_SERIAL_NUMBER_ALREADY_EXISTS | Numéro de série déjà utilisé, archives comprises (§12.2) |
 | 409 | ASSET_ARCHIVED | Modification d’un actif archivé (§12.2) |
+| 409 | IDENTIFIER_ALREADY_ASSIGNED | Paire type + valeur déjà active (§12.3; proposé, CAT-02) |
+| 409 | COMPARTMENT_DISABLED | Placement dans un compartiment désactivé (§12.4; proposé, CAT-02) |
+| 409 | COMPARTMENT_ALREADY_OCCUPIED | Compartiment déjà attribué à un autre actif (§12.4; proposé, CAT-02) |
 | 422 | ASSET_NOT_READY | Readiness autre que READY |
 | 422 | OUTSIDE_OPERATING_HOURS | Action hors plage |
 | 422 | RESERVATION_END_AFTER_CLOSING | Échéance trop tardive |
 | 422 | PHYSICAL_STATE_UNKNOWN | Preuve courante insuffisante |
+| 422 | IDENTIFIER_TYPE_UNSUPPORTED | Type d’identifiant hors RFID_UHF, NFC et QR (§12.3; proposé, CAT-02) |
 | 429 | RATE_LIMITED | Trop de requêtes |
 | 500 | INTERNAL_ERROR | Erreur inattendue corrélée |
 | 503 | LOCKER_OFFLINE | Locker temporairement indisponible |
