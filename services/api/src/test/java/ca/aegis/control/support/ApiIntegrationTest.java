@@ -67,6 +67,8 @@ public abstract class ApiIntegrationTest {
         // AEGIS_DB_MIGRATION_* of the developer's shell must not reach the test server either.
         registry.add("spring.flyway.user", () -> TestDatabases.shared().server().user());
         registry.add("spring.flyway.password", () -> TestDatabases.shared().server().password());
+        // Nor may AEGIS_DB_APPLICATION_ROLE grant anything in the test databases: this role never exists.
+        registry.add("spring.flyway.placeholders[application_role]", () -> "aegis_test_no_application_role");
         registry.add("aegis.security.jwt.secret", () -> JWT_SECRET);
     }
 

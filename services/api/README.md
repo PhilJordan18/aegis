@@ -264,7 +264,7 @@ Après chaque migration, le callback Flyway accorde au rôle applicatif, s'il
 existe : `USAGE` sur `aegis`, `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les
 tables métier, et seulement `SELECT` et `INSERT` sur `audit_events`; jamais
 `TRUNCATE`, `REFERENCES` ni `TRIGGER`. Il échoue si ce rôle est
-superutilisateur ou membre d'un propriétaire du schéma. Le trigger
+superutilisateur ou membre d'un propriétaire du schéma, même sans héritage. Le trigger
 append-only de `audit_events` n'est qu'une défense en profondeur : le
 propriétaire de la table peut le désactiver et un superutilisateur le
 contourne. Seuls les droits du rôle applicatif protègent l'audit.
@@ -295,7 +295,7 @@ aux environnements partagés dans cette carte :
 
 Retour arrière : remettre `AEGIS_DB_USER` sur le compte propriétaire. Les tests
 utilisent toujours le compte du serveur de test pour Flyway et ignorent
-`AEGIS_DB_MIGRATION_*`; `FlywayMigrationTests` vérifie les droits accordés et
+`AEGIS_DB_MIGRATION_*` et `AEGIS_DB_APPLICATION_ROLE`; `FlywayMigrationTests` vérifie les droits accordés et
 le trigger sur une base et un rôle jetables.
 
 ## Arrêt et reprise

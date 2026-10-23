@@ -7,6 +7,10 @@
 -- Table privileges are not granted here: the Flyway callback afterMigrate__grant_application_role.sql applies them
 -- after every migration, so they follow the schema.
 
+-- A refusal below must stop the script even when the caller omits -v ON_ERROR_STOP=1: the ALTER ROLE statements
+-- that follow would otherwise demote the refused role.
+\set ON_ERROR_STOP on
+
 \if :{?app_role}
 \else
 \set app_role aegis_app
@@ -28,7 +32,7 @@ SELECT
     OR EXISTS (
         SELECT FROM pg_catalog.pg_roles r
         JOIN pg_catalog.pg_namespace n ON n.nspname = 'aegis'
-        WHERE r.rolname = :'app_role' AND pg_catalog.pg_has_role(r.oid, n.nspowner, 'USAGE'))
+        WHERE r.rolname = :'app_role' AND pg_catalog.pg_has_role(r.oid, n.nspowner, 'MEMBER'))
     AS refused
 \gset
 \if :refused
