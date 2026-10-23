@@ -5,7 +5,8 @@ API de CAT-01. Il fournit PostgreSQL, un broker MQTT local authentifié pour le
 simulateur, Spring Boot, Flyway, `GET /api/v1/system/health`, la connexion par
 comptes préparés (`POST /api/v1/auth/login`, `GET /api/v1/auth/me`), les
 contrôles de rôle et de niveau d'accès côté serveur et l'administration des
-modèles et des actifs (document 09, sections 12.1 et 12.2). Il n'implémente pas
+modèles et des actifs (document 09, sections 12.1 et 12.2), dont les mutations
+sont auditées (AUD-00). Il n'implémente pas
 encore les identifiants physiques, les placements ni l'ingestion MQTT. Les
 clients Web et iOS ont leur propre dossier sous `apps/`.
 
@@ -195,6 +196,19 @@ document 09, section 21. Une création ou une modification d'actif verrouille
 le modèle en partage, et l'archivage d'un modèle le verrouille en exclusif :
 un actif non archivé ne peut donc jamais référencer un modèle archivé.
 
+Chaque création, modification effective et premier archivage écrit un seul
+événement dans `audit_events`, dans la transaction de la mutation et avec
+l'instant qu'elle enregistre : `ASSET_CREATED`, `ASSET_UPDATED` ou
+`ASSET_ARCHIVED`, avec `subject_type` `ASSET_MODEL` ou `ASSET` et le compte
+authentifié comme acteur. `details` contient l'instantané des champs créés,
+les champs modifiés avec leurs valeurs avant et après, ou `archivedAt`. Un
+archivage répété avec une nouvelle clé écrit `ASSET_ARCHIVED` avec le
+résultat `ALREADY_APPLIED`; un rejeu de même clé, un `PUT` identique ou un
+refus n'écrit rien. `audit/AuditTrail` exige une transaction existante et
+refuse d'écrire hors de celle de la mutation. Les lignes antérieures à
+`V002_2` n'ont aucun événement reconstitué. `CatalogAuditTests` et
+`CatalogConcurrencyTests` le vérifient.
+
 La vue `AdminAssetView` ne contient aucune readiness. Tant que les
 réservations, les prêts, les placements et les observations n'existent pas, la
 disponibilité ne dépend que de l'archivage, la présence vaut `UNKNOWN` et le
@@ -311,8 +325,8 @@ cette étape autorisent seulement l'identité fictive du contrat MQTT.
 
 - IAM-01 n'est pas terminé de bout en bout tant que les clients Web et iOS
   n'utilisent pas ces routes; CORS sera configuré avec le client Web.
-- La connexion et les mutations du catalogue ne sont pas encore auditées :
-  `audit_events` arrive avec `V009`.
+- La connexion n'est pas encore auditée, et aucune route ne lit encore
+  `audit_events` (AUD-01).
 - La limite de 5 tentatives par minute, par adresse TCP et par compte, est
   tenue en mémoire : elle suppose le déploiement P0 à instance unique.
   Plusieurs instances multiplieraient la limite et un redémarrage l'efface.

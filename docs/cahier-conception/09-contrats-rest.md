@@ -679,7 +679,9 @@ PUT /admin/asset-models/{modelId} retourne 200. Un PUT identique est un no-op m�
 
 POST /admin/asset-models/{modelId}/archive retourne 200. Il est refusé avec 409 ASSET_MODEL_IN_USE si un actif non archivé l’utilise. Un modèle déjà archivé suit la règle d’archivage répété ci-dessous.
 
-**Archivage répété** (modèle et actif). Archiver une ressource déjà archivée retourne `200` sans nouveau changement métier : `archivedAt` est conservé et aucune donnée n’est réécrite. Avec la même Idempotency-Key, la réponse initiale est rejouée (§20.2). Avec une nouvelle clé, la réponse est la représentation courante de la ressource archivée; pour un actif, ses champs dérivés (disponibilité, `operationalDiagnostic` et son `evaluatedAt`) peuvent être réévalués. Comme pour une réservation déjà annulée (§14.4), l’audit prévu enregistre ce cas avec le résultat `ALREADY_APPLIED`, sans second événement d’archivage.
+**Archivage répété** (modèle et actif). Archiver une ressource déjà archivée retourne `200` sans nouveau changement métier : `archivedAt` est conservé et aucune donnée n’est réécrite. Avec la même Idempotency-Key, la réponse initiale est rejouée (§20.2). Avec une nouvelle clé, la réponse est la représentation courante de la ressource archivée; pour un actif, ses champs dérivés (disponibilité, `operationalDiagnostic` et son `evaluatedAt`) peuvent être réévalués. Comme pour une réservation déjà annulée (§14.4), l’audit enregistre ce cas par un événement `ASSET_ARCHIVED` de résultat `ALREADY_APPLIED`, qui reprend l’`archivedAt` conservé; seul le premier archivage écrit un événement `ACCEPTED`. Le rejeu avec la même clé n’écrit aucun événement.
+
+**Audit du catalogue** (modèle et actif). Une création, une modification effective et un premier archivage écrivent chacun un seul événement d’audit (`ASSET_CREATED`, `ASSET_UPDATED` ou `ASSET_ARCHIVED`, `subjectType` `ASSET_MODEL` ou `ASSET`), dans la transaction de la mutation et avec l’instant qu’elle enregistre. L’acteur est le compte authentifié. Un rejeu de même clé, un PUT identique et une mutation refusée n’en écrivent aucun.
 
 ### 12.2 Asset
 
