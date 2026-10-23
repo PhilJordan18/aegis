@@ -190,6 +190,9 @@ test('an administrator opens Équipements, sees the units from the API and opens
   await expect(dossier).toContainText("Aucune observation de présence n'est disponible.")
   await expect(dossier).toContainText('Aucun placement connu')
   await expect(dossier).toContainText('Fluke 117')
+  // 2027-01-15T05:00:00Z is local midnight in the laboratory zone: date, time and zone are all shown.
+  await expect(dossier).toContainText(/15\sjanv\.\s2027,\s00\sh\s00\sHNE/)
+  await expect(dossier).toContainText('America/Toronto')
   await expect(page.locator('main')).not.toContainText(/\bPrêt\b/)
   // Read-only: no create, edit or archive control. The kept database may hold more than one page, whose pager has buttons.
   const pagerButtons = await page.getByRole('navigation', { name: 'Pagination des exemplaires' }).getByRole('button').count()
