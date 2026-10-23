@@ -3,6 +3,7 @@ package ca.aegis.control.asset;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -35,8 +36,10 @@ class AssetIdentifierService {
     }
 
     /**
-     * Locker operations do not exist yet; the slice that creates them must refuse here with
-     * {@code 409 ASSET_OPERATION_IN_PROGRESS} while a non-terminal operation concerns the asset.
+     * An asset carries at most one active identifier of each type (pending decision): a new one revokes the previous
+     * one of its type in the same transaction, and both changes are audited. Locker operations do not exist yet; the
+     * slice that creates them must refuse here with {@code 409 ASSET_OPERATION_IN_PROGRESS} while a non-terminal
+     * operation concerns the asset.
      */
     @Transactional
     AssetIdentifierView assign(UUID assetId, AssetIdentifierRequest request, UUID actor) {
@@ -50,12 +53,16 @@ class AssetIdentifierService {
             throw new CatalogConflictException(ApiError.IDENTIFIER_ALREADY_ASSIGNED);
         }
         Instant now = now();
+        Optional<AssetIdentifierView> replaced = identifiers.lockActiveOfType(assetId, type);
         UUID id;
         try {
+            replaced.ifPresent(previous -> identifiers.revoke(previous.id(), now));
             id = identifiers.insert(assetId, type, request.value(), now);
         } catch (DataIntegrityViolationException violation) {
             throw CatalogConflictException.translate(violation);
         }
+        replaced.ifPresent(previous -> audit.identifierRevoked(identifiers.find(previous.id()).orElseThrow(), actor,
+                now, false));
         AssetIdentifierView assigned = identifiers.find(id).orElseThrow();
         audit.identifierAssigned(assigned, actor, now);
         return assigned;

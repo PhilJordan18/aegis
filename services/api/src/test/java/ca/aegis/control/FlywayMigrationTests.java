@@ -341,6 +341,21 @@ class FlywayMigrationTests {
         assertEquals(3, jdbc.sql("SELECT count(*) FROM aegis.asset_placements").query(Long.class).single());
     }
 
+    /** Pending decision of CAT-02: an asset carries at most one active identifier of each type. */
+    @Test
+    void anAssetCarriesAtMostOneActiveIdentifierOfEachType() {
+        flyway(null).migrate();
+        UUID asset = insertAsset(insertModel("Multimeter"), "AEG-001", false, null);
+        UUID tag = insertIdentifier(asset, "RFID_UHF", "E200-0001");
+        insertIdentifier(asset, "NFC", "N-0001");
+
+        assertViolation("23505", "ux_asset_identifiers_one_active_per_type",
+                () -> insertIdentifier(asset, "RFID_UHF", "E200-0002"));
+        jdbc.sql("UPDATE aegis.asset_identifiers SET active = false, revoked_at = now() WHERE id = :id")
+                .param("id", tag).update();
+        insertIdentifier(asset, "RFID_UHF", "E200-0002");
+    }
+
     @Test
     void restIdempotencyKeysEnforceTheirScopeAndLifecycle() {
         flyway(null).migrate();

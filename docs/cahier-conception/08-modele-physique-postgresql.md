@@ -1299,6 +1299,11 @@ CREATE UNIQUE INDEX ux_asset_placements_one_current_per_compartment
     ON asset_placements (compartment_id)
     WHERE removed_at IS NULL;
 
+-- Décision en attente (CAT-02) : au plus un identifiant actif par type et par actif.
+CREATE UNIQUE INDEX ux_asset_identifiers_one_active_per_type
+    ON asset_identifiers (asset_id, identifier_type)
+    WHERE active = true;
+
 -- Un seul horaire actif et une seule fenêtre configurée par jour
 CREATE UNIQUE INDEX ux_operating_schedules_one_active_per_locker
     ON operating_schedules (locker_id)
@@ -1777,7 +1782,7 @@ Découpage recommandé :
 | `V002__create_identity_and_catalog.sql` | `users`, `asset_models`, `assets`, `asset_identifiers`. |
 | `V002_1__create_rest_idempotency_keys.sql` | `rest_idempotency_keys` (§4.10), avancée depuis `V010` pour les routes du catalogue (document 09, §20.1). Ajoutée quand toutes les bases s’arrêtaient à `V002`. |
 | `V002_2__create_audit_events.sql` | `audit_events` (§4.9), avancée depuis `V009` pour auditer le catalogue avant `V003`, sans `operation_id`, `inbound_message_id` ni `physical_observation_id`; index `ix_audit_events_subject_time` et `ix_audit_events_time`; triggers append-only. Ajoutée quand les bases s’arrêtaient à `V002` ou `V002_1`. |
-| `V003__create_lockers_and_placements.sql` | `lockers`, `compartments`, `locker_devices`, `asset_placements`. |
+| `V003__create_lockers_and_placements.sql` | `lockers`, `compartments`, `locker_devices`, `asset_placements`; `ux_asset_identifiers_one_active_per_type` sur `asset_identifiers` (décision en attente, CAT-02). |
 | `V004__create_operating_schedules.sql` | `operating_schedules`, `operating_windows` et leurs index. |
 | `V005__create_reservations.sql` | `reservations` et index d’unicité active. |
 | `V006__create_operations_and_loans.sql` | `locker_operations`, `loans`, FK circulaire ajoutée après les deux tables; `audit_events.operation_id`, `fk_audit_events_operation` et `ix_audit_events_operation_time`. |

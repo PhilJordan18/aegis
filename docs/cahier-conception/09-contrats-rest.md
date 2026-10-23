@@ -743,6 +743,7 @@ POST /admin/assets/{assetId}/identifiers/{identifierId}/revoke exige une clé d�
 
 - `type` vaut `RFID_UHF`, `NFC` ou `QR` (document 03, §4.5). Un `type` absent ou vide retourne `400 VALIDATION_ERROR`; toute autre valeur, casse comprise, retourne `422 IDENTIFIER_TYPE_UNSUPPORTED`. `value` est requise, débarrassée de ses espaces extérieurs, limitée à 128 caractères sans caractère de contrôle, puis comparée telle quelle.
 - Une paire `type + value` active appartient à un seul actif, le même actif compris : `409 IDENTIFIER_ALREADY_ASSIGNED`. Une valeur révoquée peut être attribuée de nouveau.
+- Décision en attente : un actif porte au plus un identifiant actif par type. Attribuer un identifiant d’un type déjà actif sur l’actif révoque l’ancien dans la même transaction; la révocation et l’attribution sont auditées chacune.
 - Un actif archivé refuse l’attribution et la révocation : `409 ASSET_ARCHIVED`. Un actif inconnu, ou un identifiant qui n’appartient pas à l’actif du chemin, retourne `404 RESOURCE_NOT_FOUND`.
 - Les deux routes retournent un `AssetIdentifierView` : `id`, `assetId`, `type`, `value`, `active`, `assignedAt`, `revokedAt` (instant ou `null`). L’attribution retourne `201` avec un `Location` vers l’actif, car aucune route ne lit un identifiant seul; la révocation retourne `200`.
 - Révoquer un identifiant déjà révoqué suit la règle d’archivage répété de §12.1 : `200` avec la représentation courante, `revokedAt` conservé et un événement de résultat `ALREADY_APPLIED`.

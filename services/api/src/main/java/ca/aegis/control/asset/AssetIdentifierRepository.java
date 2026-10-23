@@ -55,6 +55,15 @@ class AssetIdentifierRepository {
                 .optional();
     }
 
+    Optional<AssetIdentifierView> lockActiveOfType(UUID assetId, IdentifierType type) {
+        return jdbc.sql(SELECT_IDENTIFIER
+                        + "WHERE asset_id = :assetId AND identifier_type = :type AND active FOR UPDATE")
+                .param("assetId", assetId)
+                .param("type", type.name())
+                .query(AssetIdentifierRepository::map)
+                .optional();
+    }
+
     boolean activeValueExists(IdentifierType type, String value) {
         return jdbc.sql("""
                 SELECT EXISTS (
