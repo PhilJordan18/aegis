@@ -817,6 +817,23 @@ Règles :
 
 Réponse 200 avec la nouvelle version active.
 
+**Comportement de la tranche CFG-02 (proposé, à approuver).**
+
+- Les deux routes sont réservées à `ADMIN`. Le PUT ne prend pas d’`Idempotency-Key` (§20.1); une répétition identique ne crée aucun effet (§20.2).
+- Les deux routes retournent un `OperatingScheduleView` : `id` (la version), `lockerId`, `timeZone`, `createdAt`, `createdByUserId` et `windows`, sept objets `{dayOfWeek, enabled, opensAt, closesAt}` ordonnés de MONDAY à SUNDAY, heures locales au format `HH:mm:ss` ou `null` pour un jour fermé. Chaque changement crée une version immuable : `createdAt` et `createdByUserId` sont le `updatedAt` et le `updatedBy` du document 03, §4.10.
+- Un locker inconnu retourne `404 RESOURCE_NOT_FOUND`. Un locker existant sans horaire actif retourne, au GET, `404 OPERATING_SCHEDULE_NOT_CONFIGURED`, pour que le client distingue « rien de configuré » de « aucun locker ».
+- Validation, avec `400 VALIDATION_ERROR`. Les contraintes d’un champ seul sont signalées d’abord (§7.1) : `timeZone` vide, `NOT_BLANK`; `windows` absent, `NOT_NULL`; autre chose que sept éléments, `SIZE` sur `windows`; un élément `null`, `NOT_NULL` sur `windows[i]`; `dayOfWeek` ou `enabled` absent, `NOT_NULL`. Les règles qui combinent des champs sont ensuite signalées ensemble, triées par champ :
+  - `timeZone` absent de `ZoneId.getAvailableZoneIds()` de Java, casse exacte : `INVALID_VALUE`. Un décalage fixe (`Z`, `+01:00`, `UTC+1`) est refusé, car il ignore l’heure d’été;
+  - `windows[i].dayOfWeek` autre que MONDAY à SUNDAY en majuscules, nombre compris : `INVALID_VALUE`; un jour déjà présent : `DUPLICATE_DAY_OF_WEEK` (nouveau);
+  - jour activé sans `opensAt` ou sans `closesAt` : `REQUIRED_WHEN_ENABLED` (nouveau) sur l’heure manquante; une heure omise vaut `null`;
+  - jour fermé avec une heure : `NOT_ALLOWED_WHEN_DISABLED` (nouveau) sur chaque heure fournie;
+  - `closesAt` égal ou antérieur à `opensAt`, plage traversant minuit comprise : `NOT_AFTER_OPENS_AT` (nouveau) sur `windows[i].closesAt`. La dernière fermeture possible est donc `23:59:59`;
+  - heure avec une fraction de seconde : `INVALID_VALUE`; une heure illisible, par exemple `24:00:00`, est une erreur de lecture `INVALID_VALUE`.
+- Le PUT verrouille la ligne du locker (`FOR UPDATE`, document 08, §7.1), archive la version active (`active = false`, `archivedAt`), puis insère la nouvelle version et ses sept plages, dans une transaction. L’index `ux_operating_schedules_one_active_per_locker` reste la garde finale. Aucune version n’est modifiée en place ni supprimée.
+- Un PUT dont le fuseau et les sept jours sont identiques à la version active, quel que soit l’ordre des jours ou la forme `09:00` ou `09:00:00`, ne crée ni version ni événement et retourne la version active.
+- Audit : un événement `SCHEDULE_UPDATED` par nouvelle version, `subjectType` `OPERATING_SCHEDULE` et `subjectId` la nouvelle version; `details` contient `previousScheduleId` (ou `null`), `before` (fuseau et sept jours de la version archivée, ou `null`) et `after`.
+- Lecture d’une plage pour une réservation (document 06, §5.1-5.2) : la plage est celle de la date locale de `now` dans le fuseau de l’horaire, ouverte de `opensAt` inclus à `closesAt` exclu, et `now < reservedUntil <= closesAt`. Une heure locale qui tombe dans le saut ou le recouvrement d’un changement d’heure a deux instants candidats : l’ouverture prend le plus tardif et la fermeture le plus tôt, si bien qu’un changement d’heure peut raccourcir une plage mais jamais l’allonger; une plage devenue vide compte comme fermée.
+
 ---
 
 ## 14. Réservations
@@ -1182,6 +1199,7 @@ Les PUT sont idempotents par définition. Une répétition identique ne crée pa
 | 403 | FORBIDDEN | Rôle insuffisant |
 | 403 | ASSET_ACCESS_DENIED | Niveau d’accès insuffisant |
 | 404 | RESOURCE_NOT_FOUND | Ressource absente ou non visible |
+| 404 | OPERATING_SCHEDULE_NOT_CONFIGURED | Locker existant sans horaire actif (§13.1; proposé, CFG-02) |
 | 409 | IDEMPOTENCY_KEY_REUSED | Clé réutilisée avec autre intention |
 | 409 | IDEMPOTENCY_REQUEST_IN_PROGRESS | Requête de même clé encore en cours, avec Retry-After |
 | 409 | CONCURRENT_MODIFICATION | Course détectée |
