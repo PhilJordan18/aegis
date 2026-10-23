@@ -42,6 +42,7 @@ export AEGIS_JWT_SECRET="$(openssl rand -base64 48)"
 export AEGIS_DEMO_ACCOUNTS_ENABLED=true
 export AEGIS_DEMO_ADMIN_PASSWORD='choisir-un-mot-de-passe-admin'
 export AEGIS_DEMO_TECHNICIAN_PASSWORD='choisir-un-mot-de-passe-technicien'
+export AEGIS_DEMO_LOCKER_ENABLED=true
 ./mvnw spring-boot:run
 ```
 
@@ -191,8 +192,7 @@ actif non archivé ne peut pas être archivé (`409 ASSET_MODEL_IN_USE`).
 Les index uniques de `V002` restent la garde finale : code d'actif sans casse,
 numéro de série et nom de modèle actif sans casse donnent respectivement
 `409 ASSET_CODE_ALREADY_EXISTS`, `ASSET_SERIAL_NUMBER_ALREADY_EXISTS` et
-`ASSET_MODEL_NAME_ALREADY_EXISTS`. Ces codes ne figurent pas encore dans le
-document 09, section 21. Une création ou une modification d'actif verrouille
+`ASSET_MODEL_NAME_ALREADY_EXISTS`. Une création ou une modification d'actif verrouille
 le modèle en partage, et l'archivage d'un modèle le verrouille en exclusif :
 un actif non archivé ne peut donc jamais référencer un modèle archivé.
 
@@ -210,9 +210,39 @@ refuse d'écrire hors de celle de la mutation. Les lignes antérieures à
 `CatalogConcurrencyTests` le vérifient.
 
 La vue `AdminAssetView` ne contient aucune readiness. Tant que les
-réservations, les prêts, les placements et les observations n'existent pas, la
-disponibilité ne dépend que de l'archivage, la présence vaut `UNKNOWN` et le
-diagnostic contient donc toujours `UNKNOWN_PHYSICAL_STATE`.
+réservations, les prêts et les observations n'existent pas, la disponibilité
+ne dépend que de l'archivage, la présence vaut `UNKNOWN` et le diagnostic
+contient donc toujours `UNKNOWN_PHYSICAL_STATE`. Son champ `placement`
+présente le placement actif, lu dans la même requête que l'actif.
+
+## Identifiants physiques et placement (CAT-02)
+
+`V003` crée `lockers`, `compartments`, `locker_devices` et `asset_placements`
+tels que le document 08, sections 4.4 et 5.1, les définit. Aucune route ne crée
+de locker en P0 : le casier de démonstration est provisionné au démarrage
+(section suivante).
+
+`POST /admin/assets/{assetId}/identifiers` et
+`POST /admin/assets/{assetId}/identifiers/{identifierId}/revoke` exigent une
+`Idempotency-Key`. Une paire `type + valeur` active n'appartient qu'à un actif
+(`409 IDENTIFIER_ALREADY_ASSIGNED`, index `ux_asset_identifiers_active_value`
+en garde finale); un type hors `RFID_UHF`, `NFC` et `QR` reçoit
+`422 IDENTIFIER_TYPE_UNSUPPORTED`. La révocation conserve la ligne; une
+révocation répétée est auditée `ALREADY_APPLIED`. Une attribution écrit
+`ASSET_IDENTIFIER_ASSIGNED` et une révocation `ASSET_UPDATED`, faute de type
+de révocation dans le document 08.
+
+`PUT /admin/assets/{assetId}/placement` termine le placement précédent au lieu
+de le supprimer et écrit `ASSET_PLACEMENT_CHANGED`. Il verrouille l'actif, puis
+les compartiments visé et quitté dans l'ordre de leur identifiant. Il refuse un
+actif archivé, un compartiment inconnu (violation `COMPARTMENT_NOT_FOUND`),
+désactivé (`409 COMPARTMENT_DISABLED`) ou occupé par un autre actif
+(`409 COMPARTMENT_ALREADY_OCCUPIED`). Un `PUT` vers le compartiment actuel ne
+change rien. L'archivage d'un actif termine son placement actif dans sa
+transaction. Les nouveaux codes sont proposés dans le document 09 et attendent
+leur approbation. Les refus liés aux réservations, prêts et opérations
+viendront avec les tranches qui les créent. `AssetIdentifierApiTests`,
+`AssetPlacementApiTests` et `PhysicalCatalogConcurrencyTests` le vérifient.
 
 ## Idempotence REST
 
@@ -247,6 +277,17 @@ BCrypt, un mot de passe modifié est haché à nouveau, mais le rôle, le niveau
 d'accès et le statut d'un compte existant ne sont jamais modifiés. Un compte
 désactivé par un administrateur le reste donc après redémarrage. Aucun mot de
 passe en clair n'est versionné.
+
+## Casier de démonstration
+
+Avec `AEGIS_DEMO_LOCKER_ENABLED=true`, le démarrage crée le casier
+`AEGIS-DEMO-01` (`d46a74ae-39dc-460b-8af0-38fc791b376a`, topologie
+`HUB_CELL`) et ses cellules `A1` (`1ae77ae3-8490-4f09-9412-a7816b77bff9`) et
+`A2` (`5c1d0b7e-2f4a-4d3b-9a61-0e8b7c2d4f10`), aux adresses et ports 1 et 2.
+Ce sont les identifiants des documents 09 et 10 et du simulateur de hub. Le
+provisionnement crée seulement les lignes absentes et ne modifie jamais une
+ligne existante; aucun device n'est enregistré. Sans la variable, rien n'est
+créé.
 
 ## Rôles PostgreSQL
 
