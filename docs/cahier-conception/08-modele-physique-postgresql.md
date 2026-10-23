@@ -1109,6 +1109,10 @@ CREATE TABLE anomalies (
 
 L’audit est append-only du point de vue de l’application. `from_state` et `to_state` sont renseignés pour les transitions; les événements de consultation ou d’authentification peuvent les laisser nuls.
 
+La table est créée par `V002_2` (§11.1), avant les tables que référencent `operation_id`, `inbound_message_id` et `physical_observation_id`. Ces trois colonnes n’y figurent donc pas encore : chacune arrive avec sa FK, et `ix_audit_events_operation_time` avec `operation_id`, dans la migration qui crée la table référencée (`V006` pour `locker_operations`, `V008` pour `inbound_device_messages` et `physical_observations`). Aucune colonne de référence n’existe sans sa FK. Le DDL ci-dessous reste le schéma cible complet. Aucun événement n’est reconstitué pour les lignes antérieures à la table.
+
+`V002_2` ajoute deux triggers qui refusent `UPDATE` et `DELETE` ligne par ligne et `TRUNCATE` par instruction (`aegis.refuse_audit_event_change`, SQLSTATE `23001`). C’est une défense en profondeur seulement : le propriétaire de la table peut désactiver ou supprimer ces triggers, et un superutilisateur les contourne, par exemple avec `session_replication_role = replica`. La protection réelle est l’absence de ces droits pour le rôle applicatif (§12.1).
+
 ```sql
 CREATE TABLE audit_events (
     id                       uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
@@ -1772,13 +1776,14 @@ Découpage recommandé :
 | `V001__create_schema_and_extensions.sql` | `pgcrypto`, schéma `aegis`, conventions initiales. |
 | `V002__create_identity_and_catalog.sql` | `users`, `asset_models`, `assets`, `asset_identifiers`. |
 | `V002_1__create_rest_idempotency_keys.sql` | `rest_idempotency_keys` (§4.10), avancée depuis `V010` pour les routes du catalogue (document 09, §20.1). Ajoutée quand toutes les bases s’arrêtaient à `V002`. |
+| `V002_2__create_audit_events.sql` | `audit_events` (§4.9), avancée depuis `V009` pour auditer le catalogue avant `V003`, sans `operation_id`, `inbound_message_id` ni `physical_observation_id`; index `ix_audit_events_subject_time` et `ix_audit_events_time`; triggers append-only. Ajoutée quand les bases s’arrêtaient à `V002` ou `V002_1`. |
 | `V003__create_lockers_and_placements.sql` | `lockers`, `compartments`, `locker_devices`, `asset_placements`. |
 | `V004__create_operating_schedules.sql` | `operating_schedules`, `operating_windows` et leurs index. |
 | `V005__create_reservations.sql` | `reservations` et index d’unicité active. |
-| `V006__create_operations_and_loans.sql` | `locker_operations`, `loans`, FK circulaire ajoutée après les deux tables. |
+| `V006__create_operations_and_loans.sql` | `locker_operations`, `loans`, FK circulaire ajoutée après les deux tables; `audit_events.operation_id`, `fk_audit_events_operation` et `ix_audit_events_operation_time`. |
 | `V007__create_command_outbox.sql` | `command_outbox`, `local_access_challenges`, `hub_display_outbox` et index de claim, si aucune migration n’a encore été appliquée. |
-| `V008__create_device_messages_and_observations.sql` | `inbound_device_messages`, `physical_observations`. |
-| `V009__create_anomalies_and_audit.sql` | `anomalies`, `audit_events`. |
+| `V008__create_device_messages_and_observations.sql` | `inbound_device_messages`, `physical_observations`; `audit_events.inbound_message_id`, `audit_events.physical_observation_id` et leurs FK `fk_audit_events_message` et `fk_audit_events_observation`. |
+| `V009__create_anomalies.sql` | `anomalies`. `audit_events` a été déplacée vers `V002_2`; aucune migration n’est renumérotée. |
 | `V010__create_rest_idempotency.sql` | Déplacée vers `V002_1`; numéro laissé inutilisé, aucune migration n’est renumérotée. |
 | `V011__create_read_indexes.sql` | Index de lecture et index partiels restant. |
 | `V012__seed_demo_reference_data.sql` | Facultatif et réservé à l’environnement de démonstration; comptes et UUIDs fixes documentés. |
@@ -1786,6 +1791,8 @@ Découpage recommandé :
 Si V001–V012 existent déjà dans une base, ajouter une migration V013 dédiée : nouvelles tables/colonnes, enums textuels CHECK, FK et index partiel des opérations ouvertes. Déployer pendant une pause sans opération physique active; traiter explicitement les lignes historiques sans preuve QR. Ne pas inventer des preuves pour satisfaire le nouveau CHECK. Ce document décrit le schéma cible neuf, pas un ALTER rétroactif prêt à exécuter sur des données existantes.
 
 Les numéros ne sont pas réécrits après application. Une correction ajoute `V013`, `V014`, etc.; elle ne modifie pas le fichier déjà enregistré dans `flyway_schema_history`.
+
+Le callback Flyway `afterMigrate__grant_application_role.sql`, placé avec les migrations, réapplique les droits du rôle applicatif après chaque `migrate` (§12.1). Un callback n’est pas versionné : il n’entre ni dans `flyway_schema_history` ni dans la validation des checksums, et peut donc évoluer sans nouvelle migration.
 
 ### 11.2 DDL transactionnel et index concurrents
 
@@ -1823,6 +1830,28 @@ Les comptes de démo, un locker et deux compartiments peuvent être insérés pa
 Le compte applicatif possède uniquement les droits nécessaires sur `aegis`. Les clients, le broker MQTT, le hub et les cellules n’ont aucun accès PostgreSQL.
 
 L’application ne reçoit pas le droit de supprimer ou de modifier `audit_events`. Si une correction d’audit est nécessaire, elle crée un nouvel événement de rectification. Une politique de rétention peut archiver les payloads bruts dans une procédure séparée, sans supprimer l’audit métier ou la chaîne de possession exigée par le P0.
+
+**Séparation des rôles.** Deux comptes distincts :
+
+| Rôle | Attributs | Droits |
+|---|---|---|
+| Propriétaire des migrations (`aegis_migrator` par défaut, ou le compte propriétaire actuel) | `LOGIN`, jamais superutilisateur dans un environnement cible | Possède le schéma `aegis`, ses objets et `public.flyway_schema_history`; exécute Flyway. |
+| Rôle applicatif (`aegis_app` par défaut) | `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS` | `CONNECT` sur la base; `USAGE` sur `aegis`; `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les tables métier; `SELECT` et `INSERT` seulement sur `audit_events`; `USAGE`, `SELECT` sur les séquences. Jamais `TRUNCATE`, `REFERENCES`, `TRIGGER`, ni `CREATE` sur le schéma. |
+
+Les droits suivent le schéma : le callback `afterMigrate` de §11.1 les réapplique de façon idempotente après chaque migration, avec le nom du placeholder Flyway `application_role` (`AEGIS_DB_APPLICATION_ROLE`, `aegis_app` par défaut). Si le rôle n’existe pas, le callback ne fait rien; s’il est superutilisateur ou membre d’un propriétaire du schéma ou de ses objets, même sans héritage (une appartenance `WITH INHERIT FALSE` permet encore `SET ROLE`), il échoue, car révoquer les droits du propriétaire casserait le schéma. Une future table append-only s’ajoute à la liste `append_only` du callback.
+
+Le trigger de §4.9 n’est qu’une défense en profondeur. Ni lui ni ces droits ne protègent contre un superutilisateur ou le propriétaire de la table : la confiance envers ces comptes relève de l’exploitation (accès restreint, journalisation, sauvegardes).
+
+**Mise en place par un opérateur** (aucun environnement n’est basculé par la carte AUD-00) :
+
+1. Créer les rôles avec `infra/postgres/provision-roles.sql`, en tant que superutilisateur et sans mot de passe dans la commande : `psql -v ON_ERROR_STOP=1 -v app_role=aegis_app -v migration_role=aegis_migrator -d aegis -f infra/postgres/provision-roles.sql`. Le script est idempotent et ne contient aucun secret.
+2. Fixer chaque mot de passe avec `\password aegis_app` (et `\password aegis_migrator`) dans `psql` : le client calcule le hachage SCRAM et le mot de passe en clair n’atteint ni le serveur ni ses journaux, contrairement à `ALTER ROLE ... PASSWORD '...'`.
+3. Redémarrer l’API une fois avec le compte propriétaire actuel pour Flyway : le callback accorde alors les droits à `aegis_app`.
+4. Basculer la source de données : `AEGIS_DB_USER=aegis_app` et son mot de passe, en conservant `AEGIS_DB_MIGRATION_USER` et `AEGIS_DB_MIGRATION_PASSWORD` sur le compte propriétaire. Sans ces deux variables, Flyway emprunte le compte de la source de données.
+5. Vérifier en tant que `aegis_app` que `UPDATE`, `DELETE` et `TRUNCATE` sur `aegis.audit_events` sont refusés avec `42501`.
+6. Facultatif, pour ne plus migrer en superutilisateur : transférer au rôle de migration la propriété du schéma `aegis`, de ses tables, séquences et fonctions et de `public.flyway_schema_history` (`ALTER ... OWNER TO aegis_migrator`), puis pointer `AEGIS_DB_MIGRATION_USER` vers lui. `pgcrypto` étant une extension de confiance, il suffit que ce rôle ait `CREATE` sur la base.
+
+Retour arrière : remettre `AEGIS_DB_USER` sur le compte propriétaire. Aucune donnée n’est modifiée par ces étapes.
 
 ### 12.2 Observabilité minimale
 

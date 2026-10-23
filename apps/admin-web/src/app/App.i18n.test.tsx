@@ -203,7 +203,7 @@ describe.each<Locale>(['fr', 'en'])('screens in %s', (locale) => {
   it('protected page and shell: navigation, account menu, drawer and skip link are translated', async () => {
     window.history.replaceState(null, '', '/equipements')
     renderWithProviders(<App />, { locale, gateway, session: signedInSession() })
-    expect(screen.getByText(m.equipment.pendingTitle)).toBeDefined()
+    expect(screen.getByRole('heading', { level: 1, name: m.equipment.heading })).toBeDefined()
     expect(screen.getByRole('link', { name: m.shell.skipLink }).getAttribute('href')).toBe('#contenu')
 
     const sidebar = screen.getAllByRole('navigation', { name: m.shell.sectionsLabel })[0] as HTMLElement

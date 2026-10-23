@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { expect, test, type Page, type Request } from '@playwright/test'
 
 /**
@@ -131,4 +132,75 @@ test('repeated attempts reach the rate limit and use its Retry-After delay', asy
   // The delay is shown once, in the alert: no countdown caption under the button.
   await expect(page.getByText(/\d+:\d{2}/)).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Se connecter' })).toHaveAttribute('aria-disabled', 'true')
+})
+
+test('an administrator opens Équipements, sees the units from the API and opens one', async ({ page, request }) => {
+  // The API holds no seed: this run registers its own unit (document 09 §12.1-12.2), through the same proxy.
+  const login = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
+  expect(login.status()).toBe(200)
+  const { accessToken } = (await login.json()) as { accessToken: string }
+  const headers = () => ({ Authorization: `Bearer ${accessToken}`, 'Idempotency-Key': randomUUID() })
+  // Unique per run: model names are unique among active models, and the database outlives the run.
+  const stamp = Date.now()
+  const code = `E2E-${stamp}`
+  const modelName = `Multimètre E2E ${stamp}`
+  const model = await request.post('/api/v1/admin/asset-models', {
+    headers: headers(),
+    data: { name: modelName, manufacturer: 'Fluke', modelNumber: '117', description: null, defaultCalibrationRequired: true },
+  })
+  expect(model.status()).toBe(201)
+  const { id: assetModelId } = (await model.json()) as { id: string }
+  const created = await request.post('/api/v1/admin/assets', {
+    headers: headers(),
+    data: { assetModelId, assetCode: code, serialNumber: null, requiredAccessLevel: 'STANDARD', operationalStatus: 'SERVICEABLE', calibrationRequired: true, calibrationDueAt: '2027-01-15T05:00:00Z' },
+  })
+  expect(created.status()).toBe(201)
+  const unit = (await created.json()) as { id: string }
+
+  const requests = apiRequests(page)
+  await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
+  await expect(page).toHaveURL(/\/equipements$/)
+  await expect(page.getByRole('heading', { level: 1, name: 'Équipements' })).toBeFocused()
+
+  // The list comes from GET /admin/assets with the bearer token; the first unit is selected and read by id.
+  await expect(page.getByRole('heading', { level: 2, name: /^\d+ exemplaires?$/ })).toBeVisible()
+  const rows = page.locator('.ag-list__items a')
+  await expect(rows.first()).toBeVisible()
+  await expect(rows.first()).toHaveAttribute('aria-current', 'true')
+  const listRequest = requests.find((candidate) => new URL(candidate.url()).pathname === '/api/v1/admin/assets')
+  expect(listRequest, 'GET /admin/assets').toBeTruthy()
+  expect(await listRequest?.headerValue('authorization')).toMatch(/^Bearer \S+$/)
+
+  // Opens the unit this run created: the address carries its id, and its dossier is read from /admin/assets/{id}.
+  // On an empty database that unit is also the first one, already selected and read; a cached read is not repeated.
+  await page.evaluate((assetId) => {
+    window.history.pushState(null, '', `/equipements?exemplaire=${assetId}`)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }, unit.id)
+  await expect(page).toHaveURL(new RegExp(`exemplaire=${unit.id}$`))
+  const detailPath = `/api/v1/admin/assets/${unit.id}`
+  await expect.poll(() => requests.some((candidate) => new URL(candidate.url()).pathname === detailPath)).toBe(true)
+  const detail = requests.find((candidate) => new URL(candidate.url()).pathname === detailPath)
+  expect((await detail?.response())?.status()).toBe(200)
+  await expect(page.getByRole('heading', { level: 2, name: new RegExp(`${modelName} · ${code}`) })).toBeVisible()
+
+  // What the API says today: no presence observation, so no presence, no placement and no « Prêt ».
+  const dossier = page.getByRole('group', { name: new RegExp(code) })
+  await expect(dossier).toContainText('État physique inconnu')
+  await expect(dossier).toContainText("Aucune observation de présence n'est disponible.")
+  await expect(dossier).toContainText('Aucun placement connu')
+  await expect(dossier).toContainText('Fluke 117')
+  // 2027-01-15T05:00:00Z is local midnight in the laboratory zone: date, time and zone are all shown.
+  await expect(dossier).toContainText(/15\sjanv\.\s2027,\s00\sh\s00\sHNE/)
+  await expect(dossier).toContainText('America/Toronto')
+  await expect(page.locator('main')).not.toContainText(/\bPrêt\b/)
+  // Read-only: no create, edit or archive control. The kept database may hold more than one page, whose pager has buttons.
+  const pagerButtons = await page.getByRole('navigation', { name: 'Pagination des exemplaires' }).getByRole('button').count()
+  await expect(page.locator('main').getByRole('button')).toHaveCount(pagerButtons)
+
+  // Clicking a listed unit selects it through the address and reads it by id.
+  const first = rows.first()
+  await first.click()
+  await expect(page).toHaveURL(/\/equipements\?exemplaire=[0-9a-f-]{36}/)
+  await expect(first).toHaveAttribute('aria-current', 'true')
 })
