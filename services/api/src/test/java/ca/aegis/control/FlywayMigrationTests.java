@@ -31,7 +31,7 @@ import ca.aegis.control.support.TestDatabases;
 /** Applies the real migrations to a new empty PostgreSQL database with the application's Flyway settings. */
 class FlywayMigrationTests {
 
-    private static final List<String> ALL_VERSIONS = List.of("001", "002", "002.1", "002.2", "003");
+    private static final List<String> ALL_VERSIONS = List.of("001", "002", "002.1", "002.2", "003", "004");
 
     private final TestDatabases databases = TestDatabases.shared();
     private final TestDatabaseServer server = databases.server();
@@ -55,13 +55,14 @@ class FlywayMigrationTests {
 
     @Test
     void migratesAnEmptyDatabaseOnceAndValidatesAfterwards() {
-        assertEquals(5, flyway(null).migrate().migrationsExecuted);
+        assertEquals(6, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
 
         assertEquals(ALL_VERSIONS, appliedVersions());
         assertEquals(List.of("asset_identifiers", "asset_models", "asset_placements", "assets", "audit_events",
-                "compartments", "locker_devices", "lockers", "rest_idempotency_keys", "users"), jdbc.sql("""
+                "compartments", "locker_devices", "lockers", "operating_schedules", "operating_windows",
+                "rest_idempotency_keys", "users"), jdbc.sql("""
                 SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'aegis' ORDER BY table_name COLLATE "C"
                 """).query(String.class).list());
@@ -72,7 +73,7 @@ class FlywayMigrationTests {
         assertEquals(1, flyway("001").migrate().migrationsExecuted);
         assertEquals(List.of("001"), appliedVersions());
 
-        assertEquals(4, flyway(null).migrate().migrationsExecuted);
+        assertEquals(5, flyway(null).migrate().migrationsExecuted);
         assertEquals(ALL_VERSIONS, appliedVersions());
     }
 
@@ -83,7 +84,7 @@ class FlywayMigrationTests {
         UUID user = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
         UUID model = insertModel("Oscilloscope");
 
-        assertEquals(2, flyway(null).migrate().migrationsExecuted);
+        assertEquals(3, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -163,7 +164,7 @@ class FlywayMigrationTests {
         jdbc.sql("CREATE ROLE " + role + " NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS")
                 .update();
         try {
-            assertEquals(5, flyway(null, role).migrate().migrationsExecuted);
+            assertEquals(6, flyway(null, role).migrate().migrationsExecuted);
             assertEquals(0, flyway(null, role).migrate().migrationsExecuted);
             assertTrue(flyway(null, role).validateWithResult().validationSuccessful);
             UUID actor = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
@@ -254,7 +255,7 @@ class FlywayMigrationTests {
         UUID user = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
         UUID model = insertModel("Oscilloscope");
 
-        assertEquals(3, flyway(null).migrate().migrationsExecuted);
+        assertEquals(4, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -275,7 +276,7 @@ class FlywayMigrationTests {
         insertEvent(null, "ASSET_CREATED", "ASSET", "ACCEPTED");
         List<Map<String, Object>> history = history();
 
-        assertEquals(1, flyway(null).migrate().migrationsExecuted);
+        assertEquals(2, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
