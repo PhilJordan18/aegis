@@ -457,7 +457,7 @@ Les détails techniques sensibles ne sont inclus que dans la vue de détail admi
 
 ### 8.9 AdminAssetView et diagnostic opérationnel
 
-La vue administrative reprend les champs de `AssetView` de §8.2 **sauf `readiness`**, et ajoute `serialNumber` (string ou null), `operationalDiagnostic` et `archivedAt` (instant ou null : l’instant de l’archivage, `null` pour un actif actif). Ce dernier contient `evaluatedAt` (instant) et `reasons` (tableau des raisons de §8.1, sauf `ACCESS_DENIED`). Il expose les empêchements non personnels connus : disponibilité, état de service, calibration et présence physique. Une réservation active rend l’actif indisponible dans cette vue générale, sans empêcher le retrait autorisé de son titulaire.
+La vue administrative reprend les champs de `AssetView` de §8.2 **sauf `readiness`**, et ajoute `serialNumber` (string ou null), `operationalDiagnostic` et `archivedAt` (instant ou null : l’instant de l’archivage, `null` pour un actif actif). `operationalDiagnostic` contient `evaluatedAt` (instant) et `reasons` (tableau des raisons de §8.1, sauf `ACCESS_DENIED`). Il expose les empêchements non personnels connus : disponibilité, état de service, calibration et présence physique. Une réservation active rend l’actif indisponible dans cette vue générale, sans empêcher le retrait autorisé de son titulaire.
 
 Ce diagnostic n’invente ni technicien de référence ni résultat `READY` universel. Un tableau vide signifie seulement « aucun empêchement non personnel détecté ». Il ne prouve ni le droit d’un utilisateur ni la possibilité d’ouvrir le casier. L’administrateur ne reçoit pas de `canCheckout` et ne se substitue pas au technicien. L’horaire et la santé du casier restent consultables via leurs vues dédiées.
 
