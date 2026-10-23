@@ -26,14 +26,16 @@ class AdminAssetService {
     private final AssetRepository assets;
     private final AssetModelRepository models;
     private final AssetPlacementRepository placements;
+    private final AssetIdentifierRepository identifiers;
     private final CatalogAudit audit;
     private final Clock clock;
 
     AdminAssetService(AssetRepository assets, AssetModelRepository models, AssetPlacementRepository placements,
-            CatalogAudit audit, Clock clock) {
+            AssetIdentifierRepository identifiers, CatalogAudit audit, Clock clock) {
         this.assets = assets;
         this.models = models;
         this.placements = placements;
+        this.identifiers = identifiers;
         this.audit = audit;
         this.clock = clock;
     }
@@ -92,9 +94,10 @@ class AdminAssetService {
     }
 
     /**
-     * Archival keeps the asset row, its identifiers and every future reference to it. It ends the active placement in
-     * the same transaction, keeping its row, so the compartment is freed (document 03, section 4.8). Placement changes
-     * lock the asset row first too, so no placement can start on an asset being archived. Archiving an archived asset
+     * Archival keeps the asset row, its identifier rows and every future reference to it. In the same transaction it
+     * revokes the active identifiers (pending decision), so that a tag can be reused, and ends the active placement,
+     * keeping its row, so the compartment is freed (document 03, section 4.8). Placement changes lock the asset row
+     * first too, so no placement can start on an asset being archived. Archiving an archived asset
      * returns it unchanged and is audited as already applied. Reservations, loans and locker operations do not exist
      * yet; their slices must refuse archival here while one of them is open (document 09, section 12.2).
      */
@@ -109,6 +112,10 @@ class AdminAssetService {
         assets.archive(id, now);
         AssetRecord archived = assets.find(id).orElseThrow();
         audit.assetArchived(archived, actor, now, false);
+        identifiers.lockActiveOfAsset(id).forEach(identifier -> {
+            identifiers.revoke(identifier.id(), now);
+            audit.identifierRevoked(identifiers.find(identifier.id()).orElseThrow(), actor, now, false);
+        });
         placements.currentOf(id).ifPresent(placement -> {
             placements.end(placement.id(), now);
             audit.placementChanged(id, placement, null, actor, now);

@@ -716,7 +716,7 @@ POST /admin/assets retourne 201 et exige Idempotency-Key.
 
 PUT /admin/assets/{assetId} retourne 200. La readiness n’est jamais acceptée dans la requête. Un PUT identique est un no-op métier. Un actif archivé ne se modifie plus : `409 ASSET_ARCHIVED`.
 
-POST /admin/assets/{assetId}/archive exige Idempotency-Key et retourne 200 avec la vue administrative. L’archivage est refusé lorsqu’une réservation active, un prêt ouvert ou une opération non terminale concerne l’actif. Il termine le placement actif de l’actif (§12.4). Un actif déjà archivé suit la règle d’archivage répété de §12.1.
+POST /admin/assets/{assetId}/archive exige Idempotency-Key et retourne 200 avec la vue administrative. L’archivage est refusé lorsqu’une réservation active, un prêt ouvert ou une opération non terminale concerne l’actif. Il termine le placement actif de l’actif (§12.4). Décision en attente : il révoque aussi les identifiants actifs de l’actif, en conservant leur historique, pour qu’un tag puisse être réutilisé (§12.3). Un actif déjà archivé suit la règle d’archivage répété de §12.1.
 
 ### 12.3 Identifiant physique
 
@@ -748,6 +748,7 @@ POST /admin/assets/{assetId}/identifiers/{identifierId}/revoke exige une clé d�
 - Les deux routes retournent un `AssetIdentifierView` : `id`, `assetId`, `type`, `value`, `active`, `assignedAt`, `revokedAt` (instant ou `null`). L’attribution retourne `201` avec un `Location` vers l’actif, car aucune route ne lit un identifiant seul; la révocation retourne `200`.
 - Révoquer un identifiant déjà révoqué suit la règle d’archivage répété de §12.1 : `200` avec la représentation courante, `revokedAt` conservé et un événement de résultat `ALREADY_APPLIED`.
 - Audit, avec `subjectType` `ASSET_IDENTIFIER` : une attribution écrit `ASSET_IDENTIFIER_ASSIGNED`. Le document 08 n’ayant pas de type de révocation, une révocation écrit `ASSET_UPDATED`. Un rejeu de même clé et une mutation refusée n’écrivent aucun événement.
+- Décision en attente : l’archivage d’un actif (§12.2) révoque ses identifiants actifs dans la même transaction et écrit un événement `ASSET_UPDATED` par identifiant révoqué.
 - `409 ASSET_OPERATION_IN_PROGRESS` et le refus de révocation pendant une opération physique seront appliqués par la tranche qui crée les opérations.
 
 ### 12.4 Placement attendu

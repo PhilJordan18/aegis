@@ -6,6 +6,7 @@ import static ca.aegis.control.asset.AssetModelRepository.utc;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -77,6 +78,13 @@ class AssetIdentifierRepository {
                 .param("now", utc(now))
                 .param("id", id)
                 .update();
+    }
+
+    List<AssetIdentifierView> lockActiveOfAsset(UUID assetId) {
+        return jdbc.sql(SELECT_IDENTIFIER + "WHERE asset_id = :assetId AND active ORDER BY id FOR UPDATE")
+                .param("assetId", assetId)
+                .query(AssetIdentifierRepository::map)
+                .list();
     }
 
     private static AssetIdentifierView map(ResultSet row, int rowNumber) throws SQLException {
