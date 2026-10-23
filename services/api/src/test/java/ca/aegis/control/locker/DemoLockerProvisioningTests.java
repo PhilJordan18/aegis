@@ -1,12 +1,18 @@
 package ca.aegis.control.locker;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.springframework.http.HttpHeaders.AUTHORIZATION;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -53,6 +59,29 @@ class DemoLockerProvisioningTests extends ApiIntegrationTest {
             jdbc.sql("UPDATE aegis.compartments SET enabled = true WHERE code = 'A2' AND locker_id = :locker")
                     .param("locker", DemoLockerProvisioner.LOCKER_ID).update();
         }
+    }
+
+    @Test
+    void anAssetCanBePlacedInTheDemoCellA1() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        UUID model = jdbc.sql("INSERT INTO aegis.asset_models (name) VALUES (:name) RETURNING id")
+                .param("name", "Démo " + suffix).query(UUID.class).single();
+        UUID asset = jdbc.sql("""
+                INSERT INTO aegis.assets (asset_model_id, asset_code, required_access_level, calibration_required)
+                VALUES (:model, :code, 'STANDARD', false) RETURNING id
+                """).param("model", model).param("code", "DEMO-" + suffix).query(UUID.class).single();
+
+        mvc.perform(put("/api/v1/admin/assets/" + asset + "/placement")
+                .header(AUTHORIZATION, bearer(accessToken(accounts.admin())))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"compartmentId": "1ae77ae3-8490-4f09-9412-a7816b77bff9",
+                         "reason": "Affectation initiale pour la démonstration"}
+                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lockerId").value(DemoLockerProvisioner.LOCKER_ID.toString()))
+                .andExpect(jsonPath("$.lockerCode").value("AEGIS-DEMO-01"))
+                .andExpect(jsonPath("$.compartmentCode").value("A1"));
     }
 
     private List<String> cells() {

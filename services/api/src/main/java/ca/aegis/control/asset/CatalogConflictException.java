@@ -18,7 +18,8 @@ final class CatalogConflictException extends ApiException {
             "ux_asset_models_name_ci", ApiError.ASSET_MODEL_NAME_ALREADY_EXISTS,
             "ux_assets_code_ci", ApiError.ASSET_CODE_ALREADY_EXISTS,
             "ux_assets_serial_number", ApiError.ASSET_SERIAL_NUMBER_ALREADY_EXISTS,
-            "ux_asset_identifiers_active_value", ApiError.IDENTIFIER_ALREADY_ASSIGNED);
+            "ux_asset_identifiers_active_value", ApiError.IDENTIFIER_ALREADY_ASSIGNED,
+            "ux_asset_placements_one_current_per_compartment", ApiError.COMPARTMENT_ALREADY_OCCUPIED);
 
     CatalogConflictException(ApiError error) {
         super(error);

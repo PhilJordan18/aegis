@@ -71,6 +71,18 @@ class CatalogAudit {
                 Map.of("revoked", snapshot(identifier), "revokedAt", identifier.revokedAt().toString()), at);
     }
 
+    /**
+     * One event per effective change of the expected placement, on the asset: {@code from} is null for a first
+     * placement and {@code to} is null when archival ends the placement.
+     */
+    void placementChanged(UUID assetId, AssetPlacementView from, AssetPlacementView to, UUID actor, Instant at) {
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("from", from == null ? null : snapshot(from));
+        details.put("to", to == null ? null : snapshot(to));
+        record(AuditEventType.ASSET_PLACEMENT_CHANGED, AuditSubjectType.ASSET, assetId, actor, AuditResult.ACCEPTED,
+                details, at);
+    }
+
     /** A repeated archival keeps the first {@code archivedAt} and is recorded as {@code ALREADY_APPLIED}. */
     private void archived(AuditSubjectType subjectType, UUID id, Instant archivedAt, UUID actor, Instant at,
             boolean alreadyArchived) {
@@ -111,6 +123,18 @@ class CatalogAudit {
         fields.put("assetId", identifier.assetId().toString());
         fields.put("type", identifier.type().name());
         fields.put("value", identifier.value());
+        return fields;
+    }
+
+    private static Map<String, Object> snapshot(AssetPlacementView placement) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("placementId", placement.id().toString());
+        fields.put("lockerId", placement.lockerId().toString());
+        fields.put("lockerCode", placement.lockerCode());
+        fields.put("compartmentId", placement.compartmentId().toString());
+        fields.put("compartmentCode", placement.compartmentCode());
+        fields.put("assignedAt", placement.assignedAt().toString());
+        fields.put("reason", placement.reason());
         return fields;
     }
 
