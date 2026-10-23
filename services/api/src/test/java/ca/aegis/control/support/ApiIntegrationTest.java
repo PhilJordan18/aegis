@@ -64,6 +64,9 @@ public abstract class ApiIntegrationTest {
         registry.add("spring.datasource.url", () -> TestDatabases.shared().applicationDatabaseUrl());
         registry.add("spring.datasource.username", () -> TestDatabases.shared().server().user());
         registry.add("spring.datasource.password", () -> TestDatabases.shared().server().password());
+        // AEGIS_DB_MIGRATION_* of the developer's shell must not reach the test server either.
+        registry.add("spring.flyway.user", () -> TestDatabases.shared().server().user());
+        registry.add("spring.flyway.password", () -> TestDatabases.shared().server().password());
         registry.add("aegis.security.jwt.secret", () -> JWT_SECRET);
     }
 

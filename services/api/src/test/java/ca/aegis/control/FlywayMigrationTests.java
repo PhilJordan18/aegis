@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.FlywayException;
 import org.flywaydb.core.api.configuration.FluentConfiguration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +23,7 @@ import org.postgresql.util.PSQLException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
 import ca.aegis.control.support.TestDatabaseServer;
 import ca.aegis.control.support.TestDatabases;
@@ -31,6 +33,9 @@ class FlywayMigrationTests {
 
     private final TestDatabases databases = TestDatabases.shared();
     private final TestDatabaseServer server = databases.server();
+
+    /** The grant callback skips a role that does not exist, like the default role on a local database. */
+    private final String absentRole = "aegis_test_absent_" + UUID.randomUUID().toString().substring(0, 8);
 
     private String database;
     private JdbcClient jdbc;
@@ -48,13 +53,13 @@ class FlywayMigrationTests {
 
     @Test
     void migratesAnEmptyDatabaseOnceAndValidatesAfterwards() {
-        assertEquals(3, flyway(null).migrate().migrationsExecuted);
+        assertEquals(4, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
 
-        assertEquals(List.of("001", "002", "002.1"), appliedVersions());
-        assertEquals(List.of("asset_identifiers", "asset_models", "assets", "rest_idempotency_keys", "users"),
-                jdbc.sql("""
+        assertEquals(List.of("001", "002", "002.1", "002.2"), appliedVersions());
+        assertEquals(List.of("asset_identifiers", "asset_models", "assets", "audit_events", "rest_idempotency_keys",
+                "users"), jdbc.sql("""
                 SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'aegis' ORDER BY table_name
                 """).query(String.class).list());
@@ -65,11 +70,152 @@ class FlywayMigrationTests {
         assertEquals(1, flyway("001").migrate().migrationsExecuted);
         assertEquals(List.of("001"), appliedVersions());
 
-        assertEquals(2, flyway(null).migrate().migrationsExecuted);
-        assertEquals(List.of("001", "002", "002.1"), appliedVersions());
+        assertEquals(3, flyway(null).migrate().migrationsExecuted);
+        assertEquals(List.of("001", "002", "002.1", "002.2"), appliedVersions());
     }
 
-    /** Every database applied V001 and V002 only when V002_1 was added, so it upgrades them in order. */
+    /** Dev databases stood at V002_1 when V002_2 was added; existing rows get no backfilled event. */
+    @Test
+    void upgradesADatabaseAtTheIdempotencyMigrationWithoutInventingHistory() {
+        assertEquals(3, flyway("2.1").migrate().migrationsExecuted);
+        UUID user = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
+        UUID model = insertModel("Oscilloscope");
+
+        assertEquals(1, flyway(null).migrate().migrationsExecuted);
+        assertEquals(0, flyway(null).migrate().migrationsExecuted);
+        assertTrue(flyway(null).validateWithResult().validationSuccessful);
+        assertEquals(List.of("001", "002", "002.1", "002.2"), appliedVersions());
+        assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis.asset_models WHERE id = :id").param("id", model)
+                .query(Long.class).single());
+        assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis.users WHERE id = :id").param("id", user)
+                .query(Long.class).single());
+        assertEquals(0, jdbc.sql("SELECT count(*) FROM aegis.audit_events").query(Long.class).single());
+    }
+
+    /**
+     * The three proof references of document 08, section 4.9, arrive with the tables they reference (V006, V008),
+     * so no reference column exists without its foreign key.
+     */
+    @Test
+    void auditEventsEnforceTheirConstraintsWithoutReferencesToMissingTables() {
+        flyway(null).migrate();
+        UUID actor = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
+
+        assertEquals(List.of("id", "event_type", "actor_user_id", "subject_type", "subject_id", "from_state",
+                "to_state", "result", "reason", "details", "occurred_at"), jdbc.sql("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_schema = 'aegis' AND table_name = 'audit_events' ORDER BY ordinal_position
+                """).query(String.class).list());
+        UUID event = insertEvent(actor, "ASSET_CREATED", "ASSET", "ACCEPTED");
+        Map<String, Object> defaults = jdbc.sql("SELECT details::text AS details, occurred_at FROM aegis.audit_events "
+                + "WHERE id = :id").param("id", event).query().singleRow();
+        assertEquals("{}", defaults.get("details"));
+        assertNotNull(defaults.get("occurred_at"));
+        insertEvent(null, "LOCKER_OFFLINE", "LOCKER", null);
+
+        assertViolation("23514", "ck_audit_events_type", () -> insertEvent(actor, "ASSET_DELETED", "ASSET", null));
+        assertViolation("23514", "ck_audit_events_subject_type",
+                () -> insertEvent(actor, "ASSET_CREATED", "CATALOG", null));
+        assertViolation("23514", "ck_audit_events_result", () -> insertEvent(actor, "ASSET_CREATED", "ASSET", "OK"));
+        assertViolation("23503", "fk_audit_events_actor",
+                () -> insertEvent(UUID.randomUUID(), "ASSET_CREATED", "ASSET", null));
+        assertViolation("23514", "ck_audit_events_state_pair", () -> jdbc.sql("""
+                INSERT INTO aegis.audit_events (event_type, subject_type, subject_id, from_state)
+                VALUES ('RESERVATION_CREATED', 'RESERVATION', gen_random_uuid(), 'ACTIVE')
+                """).update());
+        assertViolation("23514", "ck_audit_events_state_pair", () -> jdbc.sql("""
+                INSERT INTO aegis.audit_events (event_type, subject_type, subject_id, from_state, to_state)
+                VALUES ('RESERVATION_CREATED', 'RESERVATION', gen_random_uuid(), ' ', 'ACTIVE')
+                """).update());
+    }
+
+    /**
+     * Defense in depth only: the owner meets the triggers, but can disable them, and a superuser skips them with
+     * {@code session_replication_role}. The application role's privileges are the protection (document 08, 12.1).
+     */
+    @Test
+    void auditEventsRefuseRewritesFromTheOwnerButNotFromASuperuserBypassingTriggers() {
+        flyway(null).migrate();
+        UUID event = insertEvent(null, "LOCKER_ONLINE", "LOCKER", null);
+
+        assertRefused("23001", () -> jdbc.sql("UPDATE aegis.audit_events SET reason = 'x' WHERE id = :id")
+                .param("id", event).update());
+        assertRefused("23001", () -> jdbc.sql("DELETE FROM aegis.audit_events WHERE id = :id")
+                .param("id", event).update());
+        assertRefused("23001", () -> jdbc.sql("TRUNCATE aegis.audit_events").update());
+        assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis.audit_events").query(Long.class).single());
+
+        assertTrue(jdbc.sql("SELECT rolsuper FROM pg_roles WHERE rolname = current_user").query(Boolean.class)
+                .single(), "the bypass below needs the superuser of the test server");
+        try (SingleConnectionDataSource session = session()) {
+            JdbcClient superuser = JdbcClient.create(session);
+            superuser.sql("SET session_replication_role = replica").update();
+            assertEquals(1, superuser.sql("DELETE FROM aegis.audit_events WHERE id = :id").param("id", event)
+                    .update());
+        }
+    }
+
+    @Test
+    void theApplicationRoleMayAppendAuditEventsButNeverRewriteThem() {
+        String role = "aegis_test_app_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        jdbc.sql("CREATE ROLE " + role + " NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS")
+                .update();
+        try {
+            assertEquals(4, flyway(null, role).migrate().migrationsExecuted);
+            assertEquals(0, flyway(null, role).migrate().migrationsExecuted);
+            assertTrue(flyway(null, role).validateWithResult().validationSuccessful);
+            UUID actor = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
+
+            assertEquals(List.of("audit_events:INSERT,SELECT"), privileges(role, "audit_events"));
+            assertEquals(List.of("assets:DELETE,INSERT,SELECT,UPDATE"), privileges(role, "assets"));
+            assertEquals(List.of("rest_idempotency_keys:DELETE,INSERT,SELECT,UPDATE"),
+                    privileges(role, "rest_idempotency_keys"));
+
+            try (SingleConnectionDataSource session = session()) {
+                JdbcClient application = JdbcClient.create(session);
+                application.sql("SET ROLE " + role).update();
+
+                UUID model = application.sql("INSERT INTO aegis.asset_models (name) VALUES ('Sonde') RETURNING id")
+                        .query(UUID.class).single();
+                application.sql("SELECT id FROM aegis.asset_models WHERE id = :id FOR UPDATE").param("id", model)
+                        .query(UUID.class).single();
+                assertEquals(1, application.sql("UPDATE aegis.asset_models SET description = 'x' WHERE id = :id")
+                        .param("id", model).update());
+                UUID event = application.sql("""
+                        INSERT INTO aegis.audit_events (event_type, actor_user_id, subject_type, subject_id, result)
+                        VALUES ('ASSET_CREATED', :actor, 'ASSET_MODEL', :model, 'ACCEPTED')
+                        RETURNING id
+                        """).param("actor", actor).param("model", model).query(UUID.class).single();
+                assertEquals(1, application.sql("SELECT count(*) FROM aegis.audit_events WHERE id = :id")
+                        .param("id", event).query(Long.class).single());
+
+                assertRefused("42501", () -> application
+                        .sql("UPDATE aegis.audit_events SET reason = 'x' WHERE id = :id").param("id", event).update());
+                assertRefused("42501", () -> application.sql("DELETE FROM aegis.audit_events WHERE id = :id")
+                        .param("id", event).update());
+                assertRefused("42501", () -> application.sql("TRUNCATE aegis.audit_events").update());
+                assertRefused("42501", () -> application.sql("TRUNCATE aegis.asset_models").update());
+                assertRefused("42501", () -> application.sql("CREATE TABLE aegis.intruder (id int)").update());
+                assertRefused("42501", () -> application.sql("ALTER TABLE aegis.audit_events DISABLE TRIGGER ALL")
+                        .update());
+                assertEquals(1, application.sql("DELETE FROM aegis.asset_models WHERE id = :id").param("id", model)
+                        .update());
+                application.sql("RESET ROLE").update();
+            }
+            assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis.audit_events").query(Long.class).single());
+        } finally {
+            jdbc.sql("DROP OWNED BY " + role).update();
+            jdbc.sql("DROP ROLE " + role).update();
+        }
+    }
+
+    /** Granting to the owner would revoke its own privileges, and a superuser ignores them. */
+    @Test
+    void theGrantCallbackRefusesTheOwnerAsApplicationRole() {
+        assertThrows(FlywayException.class, () -> flyway(null, server.user()).migrate());
+    }
+
+    /** Every database applied V001 and V002 only when V002_1 was added; V002_1 and V002_2 follow in order. */
     @Test
     void upgradesADatabaseAtTheCatalogMigrationWithItsData() {
         assertEquals(2, flyway("2").migrate().migrationsExecuted);
@@ -77,10 +223,10 @@ class FlywayMigrationTests {
         UUID user = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
         UUID model = insertModel("Oscilloscope");
 
-        assertEquals(1, flyway(null).migrate().migrationsExecuted);
+        assertEquals(2, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
-        assertEquals(List.of("001", "002", "002.1"), appliedVersions());
+        assertEquals(List.of("001", "002", "002.1", "002.2"), appliedVersions());
         assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis.users WHERE id = :id").param("id", user)
                 .query(Long.class).single());
         assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis.asset_models WHERE id = :id").param("id", model)
@@ -213,10 +359,15 @@ class FlywayMigrationTests {
     }
 
     private Flyway flyway(String target) {
+        return flyway(target, absentRole);
+    }
+
+    private Flyway flyway(String target, String applicationRole) {
         FluentConfiguration configuration = Flyway.configure()
                 .dataSource(server.url(database), server.user(), server.password())
                 .locations("classpath:db/migration")
                 .defaultSchema("public")
+                .placeholders(Map.of("application_role", applicationRole))
                 .validateOnMigrate(true);
         if (target != null) {
             configuration.target(target);
@@ -251,6 +402,30 @@ class FlywayMigrationTests {
                 .query((row, number) -> row.getObject("id", UUID.class)).single();
     }
 
+    private UUID insertEvent(UUID actor, String type, String subjectType, String result) {
+        return jdbc.sql("""
+                INSERT INTO aegis.audit_events (event_type, actor_user_id, subject_type, subject_id, result)
+                VALUES (:type, :actor, :subjectType, gen_random_uuid(), :result)
+                RETURNING id
+                """)
+                .param("type", type).param("actor", actor).param("subjectType", subjectType).param("result", result)
+                .query((row, number) -> row.getObject("id", UUID.class)).single();
+    }
+
+    /** One session, so that {@code SET ROLE} and session settings apply to the following statements. */
+    private SingleConnectionDataSource session() {
+        return new SingleConnectionDataSource(server.url(database), server.user(), server.password(), true);
+    }
+
+    private List<String> privileges(String role, String table) {
+        return jdbc.sql("""
+                SELECT table_name || ':' || string_agg(privilege_type, ',' ORDER BY privilege_type)
+                FROM information_schema.role_table_grants
+                WHERE grantee = :role AND table_schema = 'aegis' AND table_name = :table
+                GROUP BY table_name
+                """).param("role", role).param("table", table).query(String.class).list();
+    }
+
     private UUID insertModel(String name) {
         return jdbc.sql("INSERT INTO aegis.asset_models (name) VALUES (:name) RETURNING id")
                 .param("name", name)
@@ -277,6 +452,12 @@ class FlywayMigrationTests {
                 """)
                 .param("asset", asset).param("type", type).param("value", value)
                 .query((row, number) -> row.getObject("id", UUID.class)).single();
+    }
+
+    private static void assertRefused(String sqlState, Executable statement) {
+        DataAccessException failure = assertThrows(DataAccessException.class, statement);
+        PSQLException cause = assertInstanceOf(PSQLException.class, failure.getMostSpecificCause());
+        assertEquals(sqlState, cause.getSQLState(), cause::getMessage);
     }
 
     private static void assertViolation(String sqlState, String constraint, Executable statement) {

@@ -18,7 +18,7 @@ class AegisControlApplicationTests extends ApiIntegrationTest {
 	@Test
 	void flywayAppliesEachMigrationOnce() {
 		assertEquals("aegis", jdbc.queryForObject("SELECT nspname FROM pg_namespace WHERE nspname = 'aegis'", String.class));
-		assertEquals(List.of("001", "002", "002.1"), jdbc.queryForList(
+		assertEquals(List.of("001", "002", "002.1", "002.2"), jdbc.queryForList(
 				"SELECT version FROM public.flyway_schema_history WHERE success ORDER BY installed_rank", String.class));
 	}
 
