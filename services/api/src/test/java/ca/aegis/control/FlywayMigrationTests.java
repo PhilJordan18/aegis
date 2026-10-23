@@ -215,6 +215,32 @@ class FlywayMigrationTests {
         assertThrows(FlywayException.class, () -> flyway(null, server.user()).migrate());
     }
 
+    /** A membership without inheritance still allows {@code SET ROLE} to the owner, and from there any rewrite. */
+    @Test
+    void theGrantCallbackRefusesAMemberOfAnOwnerEvenWithoutInheritance() {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String owner = "aegis_test_owner_" + suffix;
+        String member = "aegis_test_member_" + suffix;
+        flyway(null).migrate();
+        jdbc.sql("CREATE ROLE " + owner + " NOLOGIN NOSUPERUSER").update();
+        jdbc.sql("CREATE ROLE " + member + " NOLOGIN NOSUPERUSER").update();
+        try {
+            jdbc.sql("ALTER TABLE aegis.rest_idempotency_keys OWNER TO " + owner).update();
+            jdbc.sql("GRANT " + owner + " TO " + member + " WITH INHERIT FALSE, SET TRUE").update();
+            assertTrue(jdbc.sql("SELECT NOT pg_has_role('" + member + "', '" + owner + "', 'USAGE')")
+                    .query(Boolean.class).single(), "the membership must not inherit for this case to mean anything");
+
+            assertThrows(FlywayException.class, () -> flyway(null, member).migrate());
+            assertEquals(List.of(), privileges(member, "audit_events"));
+        } finally {
+            jdbc.sql("REASSIGN OWNED BY " + owner + " TO " + server.user()).update();
+            jdbc.sql("DROP OWNED BY " + member).update();
+            jdbc.sql("DROP OWNED BY " + owner).update();
+            jdbc.sql("DROP ROLE " + member).update();
+            jdbc.sql("DROP ROLE " + owner).update();
+        }
+    }
+
     /** Every database applied V001 and V002 only when V002_1 was added; V002_1 and V002_2 follow in order. */
     @Test
     void upgradesADatabaseAtTheCatalogMigrationWithItsData() {

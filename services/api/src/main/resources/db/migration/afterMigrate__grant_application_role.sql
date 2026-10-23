@@ -18,14 +18,15 @@ BEGIN
         RETURN;
     END IF;
     -- Revoking the owner's own privileges would break the schema; a superuser ignores privileges altogether.
+    -- MEMBER, not USAGE: a membership granted WITH INHERIT FALSE still allows SET ROLE to the owner.
     IF EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = application_role AND rolsuper)
         OR EXISTS (
             SELECT FROM pg_catalog.pg_namespace
-            WHERE nspname = 'aegis' AND pg_catalog.pg_has_role(application_role, nspowner, 'USAGE'))
+            WHERE nspname = 'aegis' AND pg_catalog.pg_has_role(application_role, nspowner, 'MEMBER'))
         OR EXISTS (
             SELECT FROM pg_catalog.pg_class c
             JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-            WHERE n.nspname = 'aegis' AND pg_catalog.pg_has_role(application_role, c.relowner, 'USAGE'))
+            WHERE n.nspname = 'aegis' AND pg_catalog.pg_has_role(application_role, c.relowner, 'MEMBER'))
     THEN
         RAISE EXCEPTION 'Role % must be neither a superuser nor a member of an owner of schema aegis or its objects',
             application_role;
