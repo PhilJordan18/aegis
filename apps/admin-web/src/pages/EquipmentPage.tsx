@@ -100,6 +100,8 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
 
   const listFailure = list.isError ? classifyCatalogFailure(list.error) : null
   const assetFailure = asset.isError ? classifyCatalogFailure(asset.error) : null
+  // A refresh the server refuses (403, 404) does not leave stale data: the unit can no longer be read.
+  const assetGone = asset.isRefetchError && (assetFailure?.kind === 'forbidden' || assetFailure?.kind === 'notFound')
   const listAnnouncement = list.isPending
     ? m.equipment.loading
     : page !== undefined && !list.isPlaceholderData
@@ -143,16 +145,18 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
             refreshing={list.isPlaceholderData}
             failure={listFailure}
             stale={list.isRefetchError}
+            retrying={list.isFetching}
             onRetry={() => void list.refetch()}
             onSelect={select}
             onPage={(next) => router.navigate(equipmentHref({ page: next, assetId: null }))}
           />
           {showDossier && (
             <AssetDossier
-              asset={asset.data}
+              asset={assetGone ? undefined : asset.data}
               loading={asset.isPending || list.isPending}
               failure={assetFailure}
-              stale={asset.isRefetchError}
+              stale={asset.isRefetchError && !assetGone}
+              retrying={asset.isFetching}
               focusRef={dossierRef}
               onRetry={() => void asset.refetch()}
               onBack={() => router.navigate(equipmentHref({ page: location.page, assetId: null }))}

@@ -256,6 +256,13 @@ describe('Équipements — adverse states', () => {
     expect(alert.textContent).toContain('Données non actualisées.')
     expect(plain(alert.textContent)).toMatch(/évaluées à .*\d/)
     expect(rows()).toHaveLength(1)
+
+    gateway.listAssets.mockResolvedValue(ok(pageOf([MM001])))
+    const user = userEvent.setup()
+    await user.click(within(alert).getByRole('button', { name: 'Réessayer' }))
+    await waitFor(() => expect(screen.queryByText('Données non actualisées.')).toBeNull())
+    // The button that had focus is gone: focus moves to the list title, not to the page body.
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: '1 exemplaire' }))
   })
 })
 
@@ -294,6 +301,8 @@ describe('Équipements — stale dossier', () => {
     await user.click(within(notice).getByRole('button', { name: 'Réessayer' }))
     await waitFor(() => expect(within(dossierOf()).queryByRole('alert')).toBeNull())
     expect(gateway.getAsset.mock.calls.length).toBe(calls + 1)
+    // The button that had focus is gone: focus moves to the dossier, not to the page body.
+    expect(document.activeElement).toBe(dossierOf())
   })
 
   it('keeps the notice when the retry fails too', async () => {
@@ -302,10 +311,39 @@ describe('Équipements — stale dossier', () => {
     await act(async () => {
       await queryClient.refetchQueries({ queryKey: detailKey(MM001.id) })
     })
+    let answer: (value: typeof offline) => void = () => {}
+    gateway.getAsset.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)))
     const user = userEvent.setup()
-    await user.click(await within(await within(dossierOf()).findByRole('alert')).findByRole('button', { name: 'Réessayer' }))
-    await waitFor(() => expect(gateway.getAsset.mock.calls.length).toBeGreaterThanOrEqual(3))
+    const retry = await within(await within(dossierOf()).findByRole('alert')).findByRole('button', { name: 'Réessayer' })
+    expect(within(dossierOf()).getByRole('status').textContent).toBe('')
+    await user.click(retry)
+    // While the retry runs the button says it is busy and keeps focus.
+    await waitFor(() => expect(retry.getAttribute('aria-disabled')).toBe('true'))
+    expect(document.activeElement).toBe(retry)
+    await act(async () => answer(offline))
     expect((await within(dossierOf()).findByRole('alert')).textContent).toContain('Données non actualisées.')
+    // The alert does not speak twice, so the status region says the retry failed too.
+    await waitFor(() => expect(within(dossierOf()).getByRole('status').textContent).toBe('Données non actualisées.'))
+    expect(retry.getAttribute('aria-disabled')).toBeNull()
+    expect(document.activeElement).toBe(retry)
+  })
+
+  it('shows the refusal, not stale data, when a refresh is answered 404 or 403', async () => {
+    const { gateway, queryClient } = await renderLoadedDossier()
+    gateway.getAsset.mockResolvedValue(failure(404, 'ASSET_NOT_FOUND'))
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: detailKey(MM001.id) })
+    })
+    expect(plain((await screen.findByRole('alert')).textContent)).toContain('Exemplaire introuvable.')
+    expect(screen.queryByRole('heading', { level: 2, name: /Multimètre 1 · MM-001/ })).toBeNull()
+    expect(plain(document.body.textContent)).not.toContain('Données non actualisées.')
+
+    gateway.getAsset.mockResolvedValue(failure(403, 'FORBIDDEN'))
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: detailKey(MM001.id) })
+    })
+    expect(plain((await screen.findByRole('alert')).textContent)).toContain("Votre compte n'a pas accès aux équipements.")
+    expect(plain(document.body.textContent)).not.toContain('Données non actualisées.')
   })
 
   it('says it in English with the same words as the list', async () => {
