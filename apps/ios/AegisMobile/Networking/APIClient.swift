@@ -52,6 +52,7 @@ struct Endpoint<Response: Decodable & Sendable>: Sendable {
     let method: String
     /// Path relative to `/api/v1`, without a leading slash.
     let path: String
+    var query: [URLQueryItem] = []
     var body: Data? = nil
 
     static func json(method: String, path: String, body: some Encodable) -> Endpoint {
@@ -73,7 +74,7 @@ struct APIClient: Sendable {
 
     func makeRequest<Response>(for endpoint: Endpoint<Response>, bearer token: String? = nil) -> URLRequest {
         var request = URLRequest(
-            url: configuration.baseURL.appending(path: endpoint.path),
+            url: Self.url(configuration.baseURL.appending(path: endpoint.path), query: endpoint.query),
             cachePolicy: .reloadIgnoringLocalCacheData,
             timeoutInterval: Self.requestTimeout
         )
@@ -116,6 +117,21 @@ struct APIClient: Sendable {
             throw .invalidResponse
         }
     }
+
+    /// Query values are encoded strictly (RFC 3986 unreserved characters only):
+    /// `URLComponents` would leave `+`, which servers decode as a space.
+    static func url(_ url: URL, query: [URLQueryItem]) -> URL {
+        guard !query.isEmpty,
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        func encode(_ text: String) -> String {
+            text.addingPercentEncoding(withAllowedCharacters: unreserved) ?? ""
+        }
+        components.percentEncodedQueryItems = query.map { URLQueryItem(name: encode($0.name), value: $0.value.map(encode)) }
+        return components.url ?? url
+    }
+
+    private static let unreserved = CharacterSet(
+        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
 
     /// Accepts delta-seconds only, 1 to 3600: the API sends 1 to 60 for the
     /// sign-in limiter. Anything else is ignored rather than guessed.

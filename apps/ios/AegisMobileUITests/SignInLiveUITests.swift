@@ -36,14 +36,14 @@ final class SignInLiveUITests: XCTestCase {
         let app = makeApp(live, resetSession: true)
         app.launch()
         submit(app, email: live.technicianEmail, password: live.technicianPassword)
-        XCTAssertTrue(app.descendants(matching: .any)["account.name"].firstMatch.waitForExistence(timeout: 30))
+        openAccount(app)
         XCTAssertTrue(app.descendants(matching: .any)["account.role"].firstMatch.label.contains("Technicien"))
 
         // A new launch resumes from the Keychain once GET /auth/me accepts the token.
         app.terminate()
         let resumed = makeApp(live, resetSession: false)
         resumed.launch()
-        XCTAssertTrue(resumed.descendants(matching: .any)["account.name"].firstMatch.waitForExistence(timeout: 30))
+        openAccount(resumed)
 
         resumed.buttons["account.signOut"].tap()
         let confirm = resumed.buttons.matching(identifier: "account.confirmSignOut").firstMatch
@@ -66,6 +66,14 @@ final class SignInLiveUITests: XCTestCase {
         submit(app, email: live.adminEmail, password: live.adminPassword)
 
         XCTAssertTrue(app.staticTexts["Accès réservé aux techniciens"].waitForExistence(timeout: 30))
+    }
+
+    @MainActor
+    private func openAccount(_ app: XCUIApplication) {
+        let tab = app.tabBars.buttons["Compte"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 30))
+        tab.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["account.name"].firstMatch.waitForExistence(timeout: 10))
     }
 
     @MainActor

@@ -9,12 +9,17 @@ import Foundation
 ///   before launch.
 /// - `AEGIS_START_SCREEN=health`: opens the diagnostic screen directly.
 /// - `AEGIS_UI_FOCUS=email|password`: focuses a field (keyboard captures).
+/// - `AEGIS_START_TAB=account`: opens the Account tab once signed in.
+///
+/// Catalogue answers come from `UITestCatalogFixtures`: fictional data for UI
+/// tests and captures only, never a fallback of the real app.
 struct UITestHooks {
     let environment: [String: String]
 
     @MainActor
     func apply(transport: inout any HTTPTransport, store: inout any SessionStore,
-               startScreen: inout AppDependencies.StartScreen, focus: inout SessionModel.Field?) {
+               startScreen: inout AppDependencies.StartScreen, focus: inout SessionModel.Field?,
+               tab: inout SignedInView.Tab) {
         if let name = environment["AEGIS_UI_SCENARIO"], let scenario = UITestScenario(rawValue: name) {
             transport = ScenarioTransport(scenario: scenario)
             store = InMemorySessionStore(scenario.storedSession)
@@ -23,6 +28,9 @@ struct UITestHooks {
         }
         if environment["AEGIS_START_SCREEN"] == "health" {
             startScreen = .health
+        }
+        if environment["AEGIS_START_TAB"] == "account" {
+            tab = .account
         }
         switch environment["AEGIS_UI_FOCUS"] {
         case "email": focus = .email
@@ -47,10 +55,21 @@ enum UITestScenario: String {
     case resumeExpired = "resume-expired"
     case resumeInvalid = "resume-invalid"
     case signedIn = "signed-in"
+    /// Signed in on the catalogue fixtures; detail reads succeed.
+    case catalog = "catalog"
+    /// Signed in on an empty catalogue.
+    case catalogEmpty = "catalog-empty"
+    /// The first list read succeeds, the second is offline, later ones succeed.
+    case catalogOffline = "catalog-offline"
+    /// List reads succeed; every asset read is offline.
+    case catalogDetailOffline = "catalog-detail-offline"
+    /// List reads succeed; every asset read answers 404 ASSET_NOT_FOUND.
+    case catalogDetailGone = "catalog-detail-gone"
 
     var storedSession: StoredSession? {
         switch self {
-        case .resumeSlow, .resumeOffline, .resumeRecovers, .resumeInvalid, .signedIn:
+        case .resumeSlow, .resumeOffline, .resumeRecovers, .resumeInvalid, .signedIn,
+             .catalog, .catalogEmpty, .catalogOffline, .catalogDetailOffline, .catalogDetailGone:
             StoredSession(accessToken: "scenario-token", expiresAt: .now + 3600, email: Self.technicianEmail)
         case .resumeExpired:
             StoredSession(accessToken: "scenario-token", expiresAt: .now - 60, email: Self.technicianEmail)
@@ -68,6 +87,7 @@ enum UITestScenario: String {
 struct ScenarioTransport: HTTPTransport {
     let scenario: UITestScenario
     private let profileChecks = Counter()
+    private let listReads = Counter()
 
     init(scenario: UITestScenario) {
         self.scenario = scenario
@@ -83,6 +103,8 @@ struct ScenarioTransport: HTTPTransport {
         let path = request.url?.path() ?? ""
         if path.hasSuffix("/auth/login") { return try await login(request) }
         if path.hasSuffix("/auth/me") { return try await me(request) }
+        if path.hasSuffix("/assets") { return try assets(request) }
+        if path.contains("/assets/") { return try asset(request) }
         throw URLError(.cannotConnectToHost)
     }
 
@@ -117,7 +139,8 @@ struct ScenarioTransport: HTTPTransport {
         case .resumeSlow:
             try await Task.sleep(for: .seconds(3600))
             throw URLError(.timedOut)
-        case .signedIn, .loginSuccess:
+        case .signedIn, .loginSuccess, .catalog, .catalogEmpty, .catalogOffline, .catalogDetailOffline,
+             .catalogDetailGone:
             return response(request, 200, UITestScenario.technician)
         case .resumeRecovers where profileChecks.next() > 1:
             return response(request, 200, UITestScenario.technician)
@@ -125,6 +148,33 @@ struct ScenarioTransport: HTTPTransport {
             return problem(request, 401, "AUTH_TOKEN_INVALID")
         default:
             throw URLError(.notConnectedToInternet)
+        }
+    }
+
+    private func assets(_ request: URLRequest) throws -> (Data, URLResponse) {
+        guard request.value(forHTTPHeaderField: "Authorization") == "Bearer scenario-token" else {
+            return problem(request, 401, "AUTH_TOKEN_INVALID")
+        }
+        if scenario == .catalogOffline, listReads.next() == 2 {
+            throw URLError(.notConnectedToInternet)
+        }
+        return response(request, 200, UITestCatalogFixtures.page(for: request.url!, empty: scenario == .catalogEmpty))
+    }
+
+    private func asset(_ request: URLRequest) throws -> (Data, URLResponse) {
+        guard request.value(forHTTPHeaderField: "Authorization") == "Bearer scenario-token" else {
+            return problem(request, 401, "AUTH_TOKEN_INVALID")
+        }
+        switch scenario {
+        case .catalogDetailOffline:
+            throw URLError(.notConnectedToInternet)
+        case .catalogDetailGone:
+            return problem(request, 404, "ASSET_NOT_FOUND")
+        default:
+            guard let body = UITestCatalogFixtures.item(id: request.url!.lastPathComponent) else {
+                return problem(request, 404, "ASSET_NOT_FOUND")
+            }
+            return response(request, 200, body)
         }
     }
 

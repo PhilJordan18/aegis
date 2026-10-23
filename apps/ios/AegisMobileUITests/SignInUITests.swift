@@ -16,7 +16,7 @@ final class SignInUITests: XCTestCase {
         subscript(_ key: String) -> String { texts[key]! }
 
         static let french = Language(code: "fr", locale: "fr_CA", texts: [
-            "submit": "Se connecter", "busy": "Connexion en cours", "role": "Technicien",
+            "submit": "Se connecter", "busy": "Connexion en cours", "role": "Technicien", "account": "Compte",
             "rejected": "Adresse courriel ou mot de passe incorrect.",
             "rateLimited": "Trop de tentatives. Réessayez dans 55 secondes.",
             "rateLimitedLater": "Trop de tentatives. Réessayez plus tard.",
@@ -31,7 +31,7 @@ final class SignInUITests: XCTestCase {
             "emailInvalid": "Saisissez une adresse courriel valide.",
         ])
         static let english = Language(code: "en", locale: "en_CA", texts: [
-            "submit": "Sign in", "busy": "Signing in", "role": "Technician",
+            "submit": "Sign in", "busy": "Signing in", "role": "Technician", "account": "Account",
             "rejected": "Incorrect email address or password.",
             "rateLimited": "Too many attempts. Try again in 55 seconds.",
             "rateLimitedLater": "Too many attempts. Try again later.",
@@ -197,7 +197,7 @@ final class SignInUITests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any)["account.name"].firstMatch.exists)
 
         app.buttons["resume.retry"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["account.name"].firstMatch.waitForExistence(timeout: 30))
+        openAccount(app, .english)
     }
 
     @MainActor
@@ -254,7 +254,9 @@ final class SignInUITests: XCTestCase {
         attach(app, "\(language.code)-signin")
 
         submit(app, email: "technician@aegis.demo", password: "secret")
-        XCTAssertTrue(app.descendants(matching: .any)["account.name"].firstMatch.waitForExistence(timeout: 15))
+        // A technician lands on the catalogue; the account is one tab away.
+        XCTAssertTrue(app.descendants(matching: .any)["asset.card.MM-001"].firstMatch.waitForExistence(timeout: 15))
+        openAccount(app, language)
         XCTAssertTrue(app.descendants(matching: .any)["account.name"].firstMatch.label.contains("Technicien Démo"))
         let role = app.descendants(matching: .any)["account.role"].firstMatch
         XCTAssertTrue(role.label.contains(language["role"]) || (role.value as? String) == language["role"])
@@ -267,6 +269,14 @@ final class SignInUITests: XCTestCase {
         XCTAssertEqual(confirm.label, language["confirm"])
         confirm.tap()
         XCTAssertTrue(app.staticTexts[language["signedOut"]].waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    private func openAccount(_ app: XCUIApplication, _ language: Language) {
+        let tab = app.tabBars.buttons[language["account"]]
+        XCTAssertTrue(tab.waitForExistence(timeout: 30))
+        tab.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["account.name"].firstMatch.waitForExistence(timeout: 10))
     }
 
     @MainActor
