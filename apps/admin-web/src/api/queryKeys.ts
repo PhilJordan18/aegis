@@ -9,4 +9,9 @@ export const queryKeys = {
     all: ['auth'] as const,
     currentProfile: () => ['auth', 'currentProfile'] as const,
   },
+  catalog: {
+    all: ['catalog'] as const,
+    assetList: (query: { readonly page: number; readonly size: number; readonly sort: string }) => ['catalog', 'assets', 'list', query] as const,
+    asset: (assetId: string) => ['catalog', 'assets', 'detail', assetId] as const,
+  },
 } as const

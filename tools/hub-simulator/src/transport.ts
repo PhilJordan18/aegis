@@ -17,10 +17,23 @@ export interface TransportOptions {
   readonly caFile?: string;
 }
 
+/** Delivery facts of an inbound PUBLISH that the hub must check itself (§7.2). */
+export interface InboundMeta {
+  readonly retain: boolean;
+  readonly qos: number;
+  readonly dup: boolean;
+}
+
 export interface TransportEvents {
   connect(sessionPresent: boolean): void;
   close(): void;
   error(error: Error): void;
+  /**
+   * An inbound PUBLISH. The listener runs synchronously before the PUBACK, so a hub
+   * that dies while handling a QoS 1 message never acknowledges it and the broker
+   * redelivers it on the next connection of the persistent session.
+   */
+  message(topic: string, body: Buffer, meta: InboundMeta): void;
 }
 
 /**
@@ -31,6 +44,10 @@ export interface Transport {
   on<E extends keyof TransportEvents>(event: E, listener: TransportEvents[E]): void;
   /** Resolves once the broker acknowledged a QoS 1 publish or a QoS 0 publish was written. */
   publish(topic: string, body: string, delivery: Delivery): Promise<void>;
+  /** Subscribes with QoS 1; resolves on SUBACK and rejects when the broker refuses a topic. */
+  subscribe(topics: readonly string[]): Promise<void>;
+  /** From now on, no inbound message is acknowledged (PUBACK) on this transport. */
+  withholdAcknowledgements(): void;
   /** Replaces the Last Will used by the next (re)connection. */
   setWill(will: WillMessage): void;
   /** Reconnects with the same session stores, so unacknowledged QoS 1 messages are resent. */
@@ -45,7 +62,8 @@ export interface Transport {
   disconnect(): Promise<void>;
   /**
    * Closes the socket now. Without a prior DISCONNECT the broker publishes the Last
-   * Will; after one, it only releases a socket the broker left half-open.
+   * Will; after one, it only releases a socket the broker left half-open. A message
+   * being handled when destroy() is called is never acknowledged.
    */
   destroy(): Promise<void>;
 }
@@ -73,6 +91,15 @@ export const mqttTransportFactory: TransportFactory = (options) => {
     will: toWill(options.will),
     ...(options.caFile ? { ca: readFileSync(options.caFile), rejectUnauthorized: true } : {}),
   });
+  // mqtt.js emits 'message', then calls handleMessage and sends the PUBACK from its
+  // callback. Withholding the callback once the hub is destroyed models a power loss
+  // between the reception of a command and its acknowledgement (§23.6 point 2).
+  let abandoned = false;
+  const handleMessage = client.handleMessage.bind(client);
+  client.handleMessage = (packet, callback) => {
+    if (abandoned) return;
+    handleMessage(packet, callback);
+  };
 
   return {
     on(event, listener) {
@@ -80,6 +107,10 @@ export const mqttTransportFactory: TransportFactory = (options) => {
         client.on('connect', (packet) => (listener as TransportEvents['connect'])(packet.sessionPresent));
       } else if (event === 'close') {
         client.on('close', listener as TransportEvents['close']);
+      } else if (event === 'message') {
+        client.on('message', (topic, body, packet) =>
+          (listener as TransportEvents['message'])(topic, body, { retain: packet.retain, qos: packet.qos, dup: packet.dup }),
+        );
       } else {
         client.on('error', listener as TransportEvents['error']);
       }
@@ -90,6 +121,15 @@ export const mqttTransportFactory: TransportFactory = (options) => {
           error ? reject(error) : resolve(),
         );
       });
+    },
+    withholdAcknowledgements() {
+      abandoned = true;
+    },
+    async subscribe(topics) {
+      const granted = await client.subscribeAsync([...topics], { qos: 1 });
+      // MQTT 3.1.1 SUBACK return code 0x80: refused by the broker ACL.
+      const refused = granted.filter((g) => g.qos === 128).map((g) => g.topic);
+      if (refused.length > 0) throw new Error(`subscription refused for ${refused.join(', ')}`);
     },
     setWill(will) {
       // mqtt.js rebuilds the CONNECT packet from options on every reconnect.
@@ -107,6 +147,7 @@ export const mqttTransportFactory: TransportFactory = (options) => {
       return client.endAsync(false);
     },
     destroy() {
+      abandoned = true;
       if (!client.disconnecting) return client.endAsync(true);
       // end() is a no-op once a DISCONNECT is under way, so the socket would stay
       // open while waiting for the broker's FIN: destroy it directly.

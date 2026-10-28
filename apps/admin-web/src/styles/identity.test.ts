@@ -17,6 +17,29 @@ function sources(dir: string): string[] {
   })
 }
 
+/**
+ * The one functional gradient allowed in production: the scroll shadow of the Équipements dossier
+ * (review R3). Neutral surface or shadow tint to transparent, on `.ag-dossier__scroll` only. Matched
+ * layer by layer and removed before the gradient rule runs, so any other gradient, in that file or
+ * elsewhere, still fails.
+ */
+const SCROLL_SHADOW_FILE = 'features/catalog/equipment.css'
+const SCROLL_SHADOW_LAYERS = [
+  'linear-gradient(var(--ag-surface) 30%, transparent) center top / 100% 28px no-repeat local',
+  'linear-gradient(transparent, var(--ag-surface) 70%) center bottom / 100% 28px no-repeat local',
+  'linear-gradient(rgba(var(--ag-shadow-tint), 0.16), transparent) center top / 100% 12px no-repeat scroll',
+  'linear-gradient(transparent, rgba(var(--ag-shadow-tint), 0.16)) center bottom / 100% 12px no-repeat scroll',
+]
+
+function withoutScrollShadow(file: string, css: string): string {
+  if (file.slice(SRC.length + 1) !== SCROLL_SHADOW_FILE) return css
+  return css.replace(/\.ag-dossier__scroll\s*\{[^}]*\}/g, (rule) => SCROLL_SHADOW_LAYERS.reduce((text, layer) => text.replace(layer, ''), rule))
+}
+
+function production(file: string): string {
+  return withoutScrollShadow(file, readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''))
+}
+
 describe('identity v3 in production sources', () => {
   const files = sources(SRC)
 
@@ -32,8 +55,17 @@ describe('identity v3 in production sources', () => {
     ['a gradient on a surface or a button', /(linear|conic)-gradient/],
     ['hub, orbit or lit cell wording', /\b(orbit|hub|lit-cell|is-lit)\b/i],
   ])('has no %s', (_label, pattern) => {
-    const hits = files.filter((file) => pattern.test(readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')))
+    const hits = files.filter((file) => pattern.test(production(file)))
     expect(hits).toEqual([])
+  })
+
+  it('allows exactly one gradient rule besides the halo: the four-layer scroll shadow of the dossier', () => {
+    const css = readFileSync(join(SRC, SCROLL_SHADOW_FILE), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    const rule = css.match(/\.ag-dossier__scroll\s*\{[^}]*\}/)?.[0] ?? ''
+    for (const layer of SCROLL_SHADOW_LAYERS) expect(rule, layer).toContain(layer)
+    expect(rule.match(/linear-gradient/g)).toHaveLength(4)
+    const linear = files.filter((file) => /linear-gradient/.test(readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')))
+    expect(linear.map((file) => file.slice(SRC.length + 1))).toEqual([SCROLL_SHADOW_FILE])
   })
 
   it('allows the one localized halo, a radial gradient, only on the promise surfaces', () => {

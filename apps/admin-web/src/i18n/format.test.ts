@@ -91,6 +91,53 @@ describe('dates', () => {
   })
 })
 
+describe('business instants (date, time and zone)', () => {
+  // Cases around midnight and the daylight-saving changes of America/Toronto, 2026. They hold whatever
+  // zone the machine runs in: the zone is an argument, never the host's.
+  const ZONE = 'America/Toronto'
+  const cases = [
+    ['evening before midnight stays on the previous day', '2026-12-01T03:00:00Z', '30 nov. 2026, 22 h 00 HNE', 'Nov 30, 2026, 10:00 p.m. EST'],
+    ['local midnight of a summer day', '2026-09-08T04:00:00Z', '8 sept. 2026, 00 h 00 HAE', 'Sep 8, 2026, 12:00 a.m. EDT'],
+    ['fall back, first 01:30', '2026-11-01T05:30:00Z', '1 nov. 2026, 01 h 30 HAE', 'Nov 1, 2026, 1:30 a.m. EDT'],
+    ['fall back, second 01:30', '2026-11-01T06:30:00Z', '1 nov. 2026, 01 h 30 HNE', 'Nov 1, 2026, 1:30 a.m. EST'],
+    ['spring forward, last minute before', '2026-03-08T06:59:00Z', '8 mars 2026, 01 h 59 HNE', 'Mar 8, 2026, 1:59 a.m. EST'],
+    ['spring forward, first minute after', '2026-03-08T07:00:00Z', '8 mars 2026, 03 h 00 HAE', 'Mar 8, 2026, 3:00 a.m. EDT'],
+  ] as const
+
+  it.each(cases)('%s (%s)', (_name, iso, fr, en) => {
+    const instant = new Date(iso)
+    expect(plain(formattersFor('fr').dateTime(instant, ZONE))).toBe(fr)
+    expect(plain(formattersFor('en').dateTime(instant, ZONE))).toBe(en)
+  })
+
+  it('tells the two 01:30 of the November change apart by the zone abbreviation', () => {
+    for (const locale of ['fr', 'en'] as const) {
+      const first = formattersFor(locale).dateTime(new Date('2026-11-01T05:30:00Z'), ZONE)
+      const second = formattersFor(locale).dateTime(new Date('2026-11-01T06:30:00Z'), ZONE)
+      expect(first).not.toBe(second)
+    }
+  })
+
+  it('never reads 22:00 on 30 November as 1 December', () => {
+    const instant = new Date('2026-12-01T03:00:00Z')
+    expect(plain(formattersFor('en').dateTime(instant, ZONE))).not.toContain('Dec')
+    expect(plain(formattersFor('en').dateTime(instant, 'UTC'))).toBe('Dec 1, 2026, 3:00 a.m. UTC')
+  })
+})
+
+describe('times', () => {
+  const instant = new Date('2026-10-21T19:20:00Z')
+
+  it('shows the zone abbreviation next to the time, in the zone it is given', () => {
+    expect(plain(formattersFor('fr').time(instant, 'America/Toronto'))).toBe('15 h 20 HAE')
+    expect(plain(formattersFor('en').time(instant, 'America/Toronto'))).toBe('3:20 p.m. EDT')
+  })
+
+  it('moves the same instant to another zone instead of keeping the digits', () => {
+    expect(plain(formattersFor('en').time(instant, 'UTC'))).toMatch(/^7:20 p\.m\. UTC$/)
+  })
+})
+
 describe('capitalisation', () => {
   it('upper-cases an initial with the language rules', () => {
     expect(formattersFor('fr').upperCase('é')).toBe('É')

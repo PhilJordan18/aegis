@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.MethodParameter;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.firewall.RequestRejectedException;
 import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
@@ -18,6 +19,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import ca.aegis.control.identity.CurrentAccount;
 import ca.aegis.control.shared.web.InvalidRequestException;
+import ca.aegis.control.shared.web.PlainText;
 
 @Configuration(proxyBeanMethods = false)
 class IdempotencyWebConfiguration implements WebMvcConfigurer {
@@ -31,9 +33,9 @@ class IdempotencyWebConfiguration implements WebMvcConfigurer {
 
     /**
      * Builds the {@link IdempotentRequest} of the matched handler. Declared before the body parameter, it refuses a
-     * missing or blank key with {@code IDEMPOTENCY_KEY_REQUIRED} and a key over 128 characters with
-     * {@code VALIDATION_ERROR} before the body is read. The actor comes from the authenticated account, never
-     * from the request.
+     * missing or blank key with {@code IDEMPOTENCY_KEY_REQUIRED}, and a key over 128 characters or holding a control
+     * character with {@code VALIDATION_ERROR}, before the body is read and before the key reaches PostgreSQL. The
+     * actor comes from the authenticated account, never from the request.
      */
     static final class IdempotentRequestResolver implements HandlerMethodArgumentResolver {
 
@@ -46,7 +48,7 @@ class IdempotencyWebConfiguration implements WebMvcConfigurer {
         public IdempotentRequest resolveArgument(MethodParameter parameter, ModelAndViewContainer container,
                 NativeWebRequest webRequest, WebDataBinderFactory binderFactory) {
             HttpServletRequest request = webRequest.getNativeRequest(HttpServletRequest.class);
-            String key = requireKey(request.getHeader(IdempotentRequest.HEADER));
+            String key = requireKey(keyHeader(request));
             return new IdempotentRequest(currentActor().id(), key, request.getMethod(), logicalRoute(request),
                     pathParameters(request));
         }
@@ -59,7 +61,27 @@ class IdempotencyWebConfiguration implements WebMvcConfigurer {
                 throw InvalidRequestException.of(IdempotentRequest.HEADER, "SIZE",
                         "La clé d'idempotence dépasse 128 caractères.");
             }
+            if (!PlainText.Validator.isPlain(header, false)) {
+                throw forbiddenCharacter();
+            }
             return header;
+        }
+
+        /**
+         * The security firewall checks a header value only when it is read, and refuses most control characters
+         * there; that refusal is the same invalid key, not a server error.
+         */
+        private static String keyHeader(HttpServletRequest request) {
+            try {
+                return request.getHeader(IdempotentRequest.HEADER);
+            } catch (RequestRejectedException rejected) {
+                throw forbiddenCharacter();
+            }
+        }
+
+        private static InvalidRequestException forbiddenCharacter() {
+            return InvalidRequestException.of(IdempotentRequest.HEADER, "INVALID_VALUE",
+                    "La clé d'idempotence contient un caractère non autorisé.");
         }
 
         /** Only reachable through a mapping error: every idempotent route requires an authenticated role. */

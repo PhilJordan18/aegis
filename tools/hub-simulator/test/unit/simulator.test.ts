@@ -1,8 +1,9 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FileBootCounter, MemoryBootCounter } from '../../src/boot-counter.ts';
+import { MemoryCommandJournal } from '../../src/command-journal.ts';
 import { defineConfig } from '../../src/config.ts';
 import { HubSimulator } from '../../src/simulator.ts';
 import { fakeTransportFactory, type FakeTransport } from './fake-transport.ts';
@@ -14,7 +15,12 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function setup(overrides: Parameters<typeof defineConfig>[0] = { password: 'test-only' }, bootCounter = new MemoryBootCounter(6)) {
   const { factory, instances } = fakeTransportFactory();
-  const sim = new HubSimulator(defineConfig(overrides), { transportFactory: factory, random: () => 0.5, bootCounter });
+  const sim = new HubSimulator(defineConfig(overrides), {
+    transportFactory: factory,
+    random: () => 0.5,
+    bootCounter,
+    commandJournal: new MemoryCommandJournal(),
+  });
   const transport = (): FakeTransport => {
     const t = instances.at(-1);
     if (!t) throw new Error('no transport created');
@@ -430,6 +436,7 @@ describe('bootCount persistence (doc 10 §8.1, NVS equivalent)', () => {
       password: 'test-only',
       deviceKey,
       bootCountFile: file,
+      commandJournalFile: join(dirname(file), `journal-${deviceKey}.json`),
       ...(firstBootCount !== undefined ? { firstBootCount } : {}),
     });
     const sim = new HubSimulator(config, { transportFactory: factory, random: () => 0.5 });

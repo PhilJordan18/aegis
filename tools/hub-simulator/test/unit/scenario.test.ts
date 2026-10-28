@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { MemoryBootCounter } from '../../src/boot-counter.ts';
+import { MemoryCommandJournal } from '../../src/command-journal.ts';
 import { defineConfig } from '../../src/config.ts';
 import { ScenarioError, parseScenario, runScenario } from '../../src/scenario.ts';
 import { HubSimulator } from '../../src/simulator.ts';
@@ -43,6 +44,7 @@ describe('scenario execution', () => {
       transportFactory: factory,
       random: () => 0.5,
       bootCounter: new MemoryBootCounter(),
+      commandJournal: new MemoryCommandJournal(),
     });
     const waits: number[] = [];
     const scenario = parseScenario({
@@ -81,6 +83,7 @@ describe('scenario execution', () => {
       transportFactory: autoAccept,
       random: () => 0.5,
       bootCounter: new MemoryBootCounter(),
+      commandJournal: new MemoryCommandJournal(),
     });
     sim.start();
     await sim.waitUntilOnline(1_000);
@@ -133,6 +136,7 @@ describe('scenario execution', () => {
         transportFactory: flaky,
         random: () => 0.5,
         bootCounter: new MemoryBootCounter(),
+        commandJournal: new MemoryCommandJournal(),
       });
       const replayed: Array<Record<string, unknown>> = [];
       sim.on('replayed', (m) => replayed.push(m.payload as unknown as Record<string, unknown>));

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { fileURLToPath } from 'node:url'
+import { openCatalog, waitForCatalogState, type CatalogMode } from './catalogFakes.ts'
 import { THEMES, VIEWPORTS } from './matrix.ts'
 import { expectNoAxeViolations, expectNoHorizontalScroll, settle, PREVIEW_EMAIL } from './support.ts'
 
@@ -22,6 +23,8 @@ interface EnglishScenario {
   readonly title: string
   /** The preview pages keep French content; every other page must contain none of the French probes. */
   readonly previewContent?: boolean
+  /** A production page in the shell: the language switch sits in the closed account menu. */
+  readonly inShell?: boolean
   readonly reach?: (page: Page) => Promise<void>
 }
 
@@ -83,6 +86,31 @@ const SCENARIOS: readonly EnglishScenario[] = [
       await page.getByRole('radio', { name: 'System' }).first().waitFor({ state: 'visible' })
     },
   },
+  ...(
+    [
+      ['nominal', 'nominal'],
+      ['long', 'long-content'],
+      ['loading', 'loading'],
+      ['empty', 'empty'],
+      ['serviceError', 'service-error'],
+      ['forbidden', 'access-denied'],
+      ['unreachable', 'unreachable'],
+      ['paged', 'pagination'],
+      ['staleDossier', 'stale-dossier'],
+    ] as const satisfies readonly (readonly [CatalogMode, string])[]
+  ).map(
+    ([mode, state]): EnglishScenario => ({
+      route: 'equipment',
+      state,
+      path: '/connexion',
+      title: 'Equipment — Aegis Manager',
+      inShell: true,
+      reach: async (page) => {
+        await openCatalog(page, mode, { english: true })
+        await waitForCatalogState(page, mode, { english: true })
+      },
+    }),
+  ),
   { route: 'not-found', state: 'default', path: '/nulle-part', title: 'Page not found — Aegis Manager' },
 ]
 
@@ -116,7 +144,7 @@ test.describe('English accessibility matrix', () => {
             await expect(page).toHaveTitle(scenario.title)
             await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1)
             // In the shell the switch sits in the account menu, which is closed in the nominal state.
-            if (!scenario.previewContent || scenario.state === 'account-menu') {
+            if ((!scenario.previewContent && !scenario.inShell) || scenario.state === 'account-menu') {
               await expect(page.getByRole('group', { name: 'Language' }).first()).toBeVisible()
             }
 
