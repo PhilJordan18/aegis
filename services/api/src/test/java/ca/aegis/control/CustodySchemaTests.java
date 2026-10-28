@@ -386,6 +386,76 @@ class CustodySchemaTests {
                 .param("name", "ix_audit_events_operation_time").query(String.class).single());
     }
 
+    /**
+     * Custody history is never destructively erased (AGENTS.md, document 08, section 12.1): the application role
+     * records custody, takes the row locks of section 7.1 and moves states forward, but cannot delete or truncate.
+     */
+    @Test
+    void theApplicationRoleRecordsAndUpdatesCustodyButNeverDeletesIt() {
+        String role = "aegis_test_app_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        jdbc.sql("CREATE ROLE " + role + " NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS")
+                .update();
+        try {
+            // The callback runs after every migrate, even when no migration is pending.
+            assertEquals(0, flyway(role).migrate().migrationsExecuted);
+            for (String table : List.of("reservations", "locker_operations", "loans")) {
+                assertEquals(List.of(table + ":INSERT,SELECT,UPDATE"), privileges(role, table));
+            }
+            assertEquals(List.of("audit_events:INSERT,SELECT"), privileges(role, "audit_events"));
+            assertEquals(List.of("assets:DELETE,INSERT,SELECT,UPDATE"), privileges(role, "assets"));
+            Site site = site("A");
+            Map<String, UUID> rows = new LinkedHashMap<>();
+
+            try (SingleConnectionDataSource session = new SingleConnectionDataSource(server.url(database),
+                    server.user(), server.password(), true)) {
+                JdbcClient application = JdbcClient.create(session);
+                application.sql("SET ROLE " + role).update();
+
+                application.sql("SELECT id FROM aegis.users WHERE id = :id FOR NO KEY UPDATE")
+                        .param("id", site.user()).query(UUID.class).single();
+                UUID reservation = insert(application, "reservations", reservation(site.asset(), site.user()));
+                application.sql("SELECT id FROM aegis.reservations WHERE id = :id FOR UPDATE")
+                        .param("id", reservation).query(UUID.class).single();
+                UUID checkout = insert(application, "locker_operations",
+                        checkout(site, reservation, "AWAITING_LOCAL_PROOF"));
+                application.sql("SELECT id FROM aegis.locker_operations WHERE id = :id FOR UPDATE")
+                        .param("id", checkout).query(UUID.class).single();
+                update(application, "locker_operations", checkout, milestones("CONFIRMED"));
+                update(application, "reservations", reservation, Map.of("status", "FULFILLED",
+                        "fulfilled_at", CONFIRMED));
+                UUID loan = insert(application, "loans", loan(site, checkout));
+                update(application, "loans", loan, Map.of("status", "RETURN_PENDING", "return_requested_at",
+                        CONFIRMED.plusHours(1)));
+                application.sql("""
+                        INSERT INTO aegis.audit_events (event_type, actor_user_id, subject_type, subject_id,
+                                                        operation_id, result)
+                        VALUES ('CHECKOUT_CONFIRMED', :actor, 'LOAN', :loan, :operation, 'ACCEPTED')
+                        """).param("actor", site.user()).param("loan", loan).param("operation", checkout).update();
+                rows.put("reservations", reservation);
+                rows.put("locker_operations", checkout);
+                rows.put("loans", loan);
+
+                for (Map.Entry<String, UUID> row : rows.entrySet()) {
+                    assertEquals(1, application.sql("SELECT count(*) FROM aegis." + row.getKey() + " WHERE id = :id")
+                            .param("id", row.getValue()).query(Long.class).single());
+                    assertRefused("42501", () -> application.sql("DELETE FROM aegis." + row.getKey()
+                            + " WHERE id = :id").param("id", row.getValue()).update());
+                    assertRefused("42501", () -> application.sql("TRUNCATE aegis." + row.getKey()).update());
+                }
+                application.sql("RESET ROLE").update();
+            }
+            for (Map.Entry<String, UUID> row : rows.entrySet()) {
+                assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis." + row.getKey() + " WHERE id = :id")
+                        .param("id", row.getValue()).query(Long.class).single());
+            }
+            assertEquals("RETURN_PENDING", jdbc.sql("SELECT status FROM aegis.loans WHERE id = :id")
+                    .param("id", rows.get("loans")).query(String.class).single());
+        } finally {
+            jdbc.sql("DROP OWNED BY " + role).update();
+            jdbc.sql("DROP ROLE " + role).update();
+        }
+    }
+
     @Test
     void twoTechniciansReservingOneAssetAtOnceLeaveOneActiveReservation() throws Exception {
         Site first = site("A");
@@ -673,7 +743,11 @@ class CustodySchemaTests {
     }
 
     private void update(String table, UUID id, Map<String, Object> columns) {
-        JdbcClient.StatementSpec statement = jdbc.sql("UPDATE aegis." + table + " SET "
+        update(jdbc, table, id, columns);
+    }
+
+    private static void update(JdbcClient client, String table, UUID id, Map<String, Object> columns) {
+        JdbcClient.StatementSpec statement = client.sql("UPDATE aegis." + table + " SET "
                 + columns.keySet().stream().map(column -> column + " = :" + column).collect(Collectors.joining(", "))
                 + " WHERE id = :id").param("id", id);
         for (Map.Entry<String, Object> column : columns.entrySet()) {
@@ -689,6 +763,15 @@ class CustodySchemaTests {
                 JOIN pg_namespace n ON n.oid = c.relnamespace
                 WHERE n.nspname = 'aegis' AND c.relname = :table ORDER BY con.conname COLLATE "C"
                 """).param("table", table).query(String.class).list();
+    }
+
+    private List<String> privileges(String role, String table) {
+        return jdbc.sql("""
+                SELECT table_name || ':' || string_agg(privilege_type, ',' ORDER BY privilege_type)
+                FROM information_schema.role_table_grants
+                WHERE grantee = :role AND table_schema = 'aegis' AND table_name = :table
+                GROUP BY table_name
+                """).param("role", role).param("table", table).query(String.class).list();
     }
 
     private List<String> indexes(String table) {

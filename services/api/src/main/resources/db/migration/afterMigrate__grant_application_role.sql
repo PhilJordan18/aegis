@@ -2,12 +2,15 @@
 -- follow the schema. A Flyway callback is not versioned: it may change without touching any migration checksum.
 -- Nothing happens while the role does not exist, which keeps local and CI databases that connect as the owner
 -- unchanged. Every table of schema aegis gets exactly SELECT, INSERT, UPDATE and DELETE, except the append-only
--- tables, which get SELECT and INSERT only; TRUNCATE, REFERENCES and TRIGGER are never granted.
+-- tables, which get SELECT and INSERT only, and the custody tables, which get SELECT, INSERT and UPDATE: their rows
+-- change state but custody history is never destructively erased. TRUNCATE, REFERENCES and TRIGGER are never
+-- granted. A listed table that does not exist yet, at an earlier migration target, is simply not met.
 
 DO $grants$
 DECLARE
     application_role CONSTANT text := '${application_role}';
     append_only CONSTANT text[] := ARRAY['audit_events'];
+    no_delete CONSTANT text[] := ARRAY['reservations', 'locker_operations', 'loans'];
     relation record;
 BEGIN
     IF application_role !~ '^[a-z_][a-z0-9_]{0,62}$' THEN
@@ -48,6 +51,10 @@ BEGIN
         ELSIF relation.relname = ANY (append_only) THEN
             EXECUTE format('REVOKE ALL ON TABLE aegis.%I FROM %I', relation.relname, application_role);
             EXECUTE format('GRANT SELECT, INSERT ON TABLE aegis.%I TO %I', relation.relname, application_role);
+        ELSIF relation.relname = ANY (no_delete) THEN
+            EXECUTE format('REVOKE ALL ON TABLE aegis.%I FROM %I', relation.relname, application_role);
+            EXECUTE format('GRANT SELECT, INSERT, UPDATE ON TABLE aegis.%I TO %I', relation.relname,
+                    application_role);
         ELSE
             EXECUTE format('REVOKE ALL ON TABLE aegis.%I FROM %I', relation.relname, application_role);
             EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE aegis.%I TO %I',
