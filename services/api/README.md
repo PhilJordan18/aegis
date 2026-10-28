@@ -452,6 +452,30 @@ active `404 ACTIVE_RESERVATION_NOT_FOUND`. `ReservationApiTests`,
 `ReservationConcurrencyTests` et `ReservationProductionPresenceTests` le
 vérifient.
 
+### Test négatif de la recette
+
+Une réservation refusée est le résultat attendu de ce test, jamais une
+réservation réussie. Après le jeu de démonstration, avec l'API locale :
+
+```bash
+set -a; . ~/.config/aegis/local-api.env; set +a
+python3 -I scripts/check-refused-reservation.py
+```
+
+Le script se connecte comme technicien de démonstration, sans afficher le mot
+de passe, et demande `AEG-DEMO-004` pour une heure. Cet actif n'a pas de
+placement : l'horaire ne s'applique pas et le résultat ne dépend pas de
+l'heure du test. Résultat attendu, à chaque étape :
+
+| Étape | Attendu |
+|---|---|
+| Réservation courante avant la demande | `404 ACTIVE_RESERVATION_NOT_FOUND` |
+| Demande de réservation | `422 ASSET_NOT_READY`, `reasons` `[UNKNOWN_PHYSICAL_STATE]` |
+| Réservation courante après la demande | `404 ACTIVE_RESERVATION_NOT_FOUND` |
+
+Le script échoue sur tout écart. Un `201` serait un échec : la réservation
+resterait active, car aucune annulation n'existe avant RES-02.
+
 ## Rôles PostgreSQL
 
 Le document 08, section 12.1, sépare le propriétaire des migrations du rôle
