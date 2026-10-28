@@ -105,6 +105,21 @@ class AssetRepository {
                 .list();
     }
 
+    /**
+     * Technician catalog: archived assets leave the active catalog (document 03, section 4.4). The list is not paged
+     * here because its readiness and availability filters only exist after evaluation.
+     */
+    List<AssetRecord> listActive(Optional<String> pattern, AssetSort sort) {
+        String search = pattern.isPresent()
+                ? "AND (lower(a.asset_code) LIKE :pattern ESCAPE '\\' OR lower(m.name) LIKE :pattern ESCAPE '\\') "
+                : "";
+        JdbcClient.StatementSpec statement = jdbc.sql(
+                SELECT_ASSET + "WHERE a.archived_at IS NULL " + search + "ORDER BY " + sort.orderBy());
+        return pattern.map(value -> statement.param("pattern", value)).orElse(statement)
+                .query(AssetRepository::map)
+                .list();
+    }
+
     long count(Optional<String> pattern) {
         String select = "SELECT count(*) FROM aegis.assets a JOIN aegis.asset_models m ON m.id = a.asset_model_id ";
         return search(select, pattern, "").query(Long.class).single();
