@@ -17,6 +17,11 @@ public final class InvalidRequestException extends ApiException {
         return new InvalidRequestException(List.of(new ProblemResponse.Violation(field, code, message)));
     }
 
+    /** Several fields refused by application rules, reported together and sorted like Bean Validation's. */
+    public static InvalidRequestException of(List<ProblemResponse.Violation> violations) {
+        return new InvalidRequestException(violations.stream().sorted(ProblemResponse.Violation.ORDER).toList());
+    }
+
     @Override
     public List<ProblemResponse.Violation> violations() {
         return violations;

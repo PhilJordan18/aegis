@@ -4,5 +4,6 @@ package ca.aegis.control.audit;
 public enum AuditSubjectType {
     ASSET_MODEL,
     ASSET,
-    ASSET_IDENTIFIER
+    ASSET_IDENTIFIER,
+    OPERATING_SCHEDULE
 }

@@ -9,7 +9,8 @@
 **Mise à jour ciblée :** 21 octobre 2026 — présence obligatoire des champs nullables du catalogue et violation `REQUIRED` (§12.1, §12.2) (#25), approuvée le 22 octobre 2026  
 **Mise à jour ciblée :** 22 octobre 2026 — catalogue administrateur décidé par Philippe (#25) : codes de violation (§7.1), `archivedAt` et `AssetModelView` (§8.9, §12.1), lectures paginées, unicités, refus d’une ressource archivée et archivage répété (§12.1, §12.2), codes `409` du catalogue (§21), caractères de contrôle (§23.2), tests (§26.6); comportement existant documenté  
 **Mise à jour ciblée :** 22 octobre 2026 — sens commun de `reservedUntil` et `dueAt` (§8.4, §14.1), valeurs et conditions de `availableActions` (§8.10, §26.8), règles approuvées par Philippe le 22 octobre 2026; aucun champ ajouté, règles de retour et d’annulation inchangées; deux questions restent ouvertes (§8.10) (#35)  
-**Mise à jour ciblée :** 28 octobre 2026 — identifiants et placement (#26), décisions du 28 octobre 2026 : un identifiant actif par type et remplacement atomique, révocation à l’archivage, comparaison exacte des valeurs (§12.2, §12.3), refus du placement et codes `COMPARTMENT_*` (§12.4, §21)
+**Mise à jour ciblée :** 28 octobre 2026 — identifiants et placement (#26), décisions du 28 octobre 2026 : un identifiant actif par type et remplacement atomique, révocation à l’archivage, comparaison exacte des valeurs (§12.2, §12.3), refus du placement et codes `COMPARTMENT_*` (§12.4, §21)  
+**Mise à jour ciblée :** 28 octobre 2026 — horaire d’exploitation (#28) : codes approuvés le 28 octobre 2026, `OPERATING_SCHEDULE_NOT_CONFIGURED` (§13.1, §21) et violations de l’horaire (§7.1, §13.2); chemin complet d’une erreur de lecture (§13.2); vue, audit et changements d’heure proposés (§13)
 
 ---
 
@@ -246,6 +247,10 @@ Une violation contient field, code et message. Elle ne contient jamais la valeur
 | REQUIRED_WHEN_CALIBRATION_REQUIRED | `calibrationDueAt` est `null` alors que `calibrationRequired=true` |
 | NOT_ALLOWED_WITHOUT_CALIBRATION | `calibrationDueAt` est fourni alors que `calibrationRequired=false` |
 | COMPARTMENT_NOT_FOUND | `compartmentId` inconnu (§12.4) |
+| DUPLICATE_DAY_OF_WEEK | Jour déjà présent dans `windows` (§13.2) |
+| REQUIRED_WHEN_ENABLED | Heure absente pour un jour activé (§13.2) |
+| NOT_ALLOWED_WHEN_DISABLED | Heure fournie pour un jour fermé (§13.2) |
+| NOT_AFTER_OPENS_AT | `closesAt` égal ou antérieur à `opensAt` (§13.2) |
 
 Un client traite un code de violation inconnu de façon générique : un message contrôlé pour le champ nommé, ou pour le formulaire si le champ lui est inconnu, avec le `traceId`. Un nouveau code de violation n’est pas une rupture de la v1.
 
@@ -932,6 +937,23 @@ Règles :
 
 Réponse 200 avec la nouvelle version active.
 
+**Comportement de la tranche CFG-02.** `404 OPERATING_SCHEDULE_NOT_CONFIGURED` et les violations `DUPLICATE_DAY_OF_WEEK`, `REQUIRED_WHEN_ENABLED`, `NOT_ALLOWED_WHEN_DISABLED` et `NOT_AFTER_OPENS_AT` sont approuvés depuis le 28 octobre 2026. Le reste de ce comportement (vue, audit, règle des changements d’heure, fuseaux acceptés) est proposé avec la tranche.
+
+- Les deux routes sont réservées à `ADMIN`. Le PUT ne prend pas d’`Idempotency-Key` (§20.1); une répétition identique ne crée aucun effet (§20.2).
+- Les deux routes retournent un `OperatingScheduleView` : `id` (la version), `lockerId`, `timeZone`, `createdAt`, `createdByUserId` et `windows`, sept objets `{dayOfWeek, enabled, opensAt, closesAt}` ordonnés de MONDAY à SUNDAY, heures locales au format `HH:mm:ss` ou `null` pour un jour fermé. Chaque changement crée une version immuable : `createdAt` et `createdByUserId` sont le `updatedAt` et le `updatedBy` du document 03, §4.10.
+- Un locker inconnu retourne `404 RESOURCE_NOT_FOUND`. Un locker existant sans horaire actif retourne, au GET, `404 OPERATING_SCHEDULE_NOT_CONFIGURED`, pour que le client distingue « rien de configuré » de « aucun locker ».
+- Validation, avec `400 VALIDATION_ERROR`. Les contraintes d’un champ seul sont signalées d’abord (§7.1) : `timeZone` vide, `NOT_BLANK`; `windows` absent, `NOT_NULL`; autre chose que sept éléments, `SIZE` sur `windows`; un élément `null`, `NOT_NULL` sur `windows[i]`; `dayOfWeek` ou `enabled` absent, `NOT_NULL`. Les règles qui combinent des champs sont ensuite signalées ensemble, triées par champ :
+  - `timeZone` absent de `ZoneId.getAvailableZoneIds()` de Java, casse exacte : `INVALID_VALUE`. Un décalage écrit (`Z`, `+01:00`, `UTC+1`) ou une abréviation absente de cette liste (`EST`) est refusé. Les identifiants IANA à décalage fixe, comme `UTC` ou `Etc/GMT+5`, en font partie et sont acceptés, mais ils ignorent l’heure d’été : un locker utilise une zone géographique comme `America/Toronto`;
+  - `windows[i].dayOfWeek` autre que MONDAY à SUNDAY en majuscules, nombre compris : `INVALID_VALUE`; un jour déjà présent : `DUPLICATE_DAY_OF_WEEK`;
+  - jour activé sans `opensAt` ou sans `closesAt` : `REQUIRED_WHEN_ENABLED` sur l’heure manquante; une heure omise vaut `null`;
+  - jour fermé avec une heure : `NOT_ALLOWED_WHEN_DISABLED` sur chaque heure fournie;
+  - `closesAt` égal ou antérieur à `opensAt`, plage traversant minuit comprise : `NOT_AFTER_OPENS_AT` sur `windows[i].closesAt`. La dernière fermeture possible est donc `23:59:59`;
+  - heure avec une fraction de seconde : `INVALID_VALUE`; une heure illisible, par exemple `24:00:00`, est une erreur de lecture `INVALID_VALUE` sur `windows[i].opensAt` ou `windows[i].closesAt`.
+- Le PUT verrouille la ligne du locker (`FOR UPDATE`, document 08, §7.1), archive la version active (`active = false`, `archivedAt`), puis insère la nouvelle version et ses sept plages, dans une transaction. L’index `ux_operating_schedules_one_active_per_locker` reste la garde finale. Aucune version n’est modifiée en place ni supprimée.
+- Un PUT dont le fuseau et les sept jours sont identiques à la version active, quel que soit l’ordre des jours ou la forme `09:00` ou `09:00:00`, ne crée ni version ni événement et retourne la version active.
+- Audit : un événement `SCHEDULE_UPDATED` par nouvelle version, `subjectType` `OPERATING_SCHEDULE` et `subjectId` la nouvelle version; `details` contient `previousScheduleId` (ou `null`), `before` (fuseau et sept jours de la version archivée, ou `null`) et `after`.
+- Lecture d’une plage pour une réservation (document 06, §5.1-5.2) : la plage est celle de la date locale de `now` dans le fuseau de l’horaire, ouverte de `opensAt` inclus à `closesAt` exclu, et `now < reservedUntil <= closesAt`. Une heure locale qui tombe dans le saut ou le recouvrement d’un changement d’heure a deux instants candidats : l’ouverture prend le plus tardif et la fermeture le plus tôt, si bien qu’un changement d’heure peut raccourcir une plage mais jamais l’allonger; une plage devenue vide compte comme fermée.
+
 ---
 
 ## 14. Réservations
@@ -1304,6 +1326,7 @@ Les PUT sont idempotents par définition. Une répétition identique ne crée pa
 | 403 | FORBIDDEN | Rôle insuffisant |
 | 403 | ASSET_ACCESS_DENIED | Niveau d’accès insuffisant |
 | 404 | RESOURCE_NOT_FOUND | Ressource absente ou non visible |
+| 404 | OPERATING_SCHEDULE_NOT_CONFIGURED | Locker existant sans horaire actif (§13.1) |
 | 409 | IDEMPOTENCY_KEY_REUSED | Clé réutilisée avec autre intention |
 | 409 | IDEMPOTENCY_REQUEST_IN_PROGRESS | Requête de même clé encore en cours, avec Retry-After |
 | 409 | CONCURRENT_MODIFICATION | Course détectée |
