@@ -73,7 +73,7 @@ class AssetIdentifierApiTests extends CatalogApiTest {
                 "RESOURCE_NOT_FOUND");
         expectCode(assign(asset, body(" ", "N-" + suffix), null), 400, "VALIDATION_ERROR");
         expectCode(assign(asset, body("NFC", " "), null), 400, "VALIDATION_ERROR");
-        expectCode(assign(asset, body("NFC", "x".repeat(129)), null), 400, "VALIDATION_ERROR");
+        expectCode(assign(asset, body("NFC", "x".repeat(256)), null), 400, "VALIDATION_ERROR");
         expectCode(assign(asset, body("NFC", "N\u0000" + suffix), null), 400, "VALIDATION_ERROR");
         Map<String, Object> extra = body("NFC", "N-" + suffix);
         extra.put("active", false);
@@ -83,6 +83,7 @@ class AssetIdentifierApiTests extends CatalogApiTest {
 
         assertEquals(events, totalEvents());
         assertEquals(identifiers, totalIdentifiers());
+        assign(asset, body("NFC", "N".repeat(255 - suffix.length()) + suffix), null).andExpect(status().isCreated());
     }
 
     @Test
