@@ -1,6 +1,56 @@
 {
   "sourceLanguage" : "fr",
   "strings" : {
+    "+ %lld autre raison" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "+ %lld more reason"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "+ %lld more reasons"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "+ %lld autre raison"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "+ %lld autres raisons"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Absent de sa cellule" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not in its compartment"
+          }
+        }
+      }
+    },
     "Accès réservé aux techniciens" : {
       "localizations" : {
         "en" : {
@@ -81,6 +131,76 @@
         }
       }
     },
+    "Aucun placement connu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No known placement"
+          }
+        }
+      }
+    },
+    "Aucun équipement ne correspond." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No equipment matches."
+          }
+        }
+      }
+    },
+    "Aucun équipement n’est encore disponible." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No equipment is available yet."
+          }
+        }
+      }
+    },
+    "Bloqué" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blocked"
+          }
+        }
+      }
+    },
+    "Calibration" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calibration"
+          }
+        }
+      }
+    },
+    "Calibration expirée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calibration expired"
+          }
+        }
+      }
+    },
+    "Calibration expirée depuis le %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calibration expired on %@"
+          }
+        }
+      }
+    },
     "Ce compte administrateur s’utilise dans Aegis Manager sur le Web. Aucune donnée n’a été chargée." : {
       "localizations" : {
         "en" : {
@@ -101,12 +221,92 @@
         }
       }
     },
+    "Cellule" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartment"
+          }
+        }
+      }
+    },
+    "Cellule %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartment %@"
+          }
+        }
+      }
+    },
+    "Cet équipement n’est plus disponible." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This equipment is no longer available."
+          }
+        }
+      }
+    },
+    "Cette version de l’application ne reconnaît pas cette information." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This version of the app doesn't recognize this information."
+          }
+        }
+      }
+    },
     "Cette version de l’application n’a pas d’adresse de service valide." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "This version of the app has no valid service address."
+          }
+        }
+      }
+    },
+    "Chargement de l’équipement" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading equipment details"
+          }
+        }
+      }
+    },
+    "Chargement des équipements" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading equipment"
+          }
+        }
+      }
+    },
+    "Choisissez un autre équipement." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose another piece of equipment."
+          }
+        }
+      }
+    },
+    "Code ou modèle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code or model"
           }
         }
       }
@@ -191,12 +391,132 @@
         }
       }
     },
+    "Demandez l’accès à un administrateur." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ask an administrator for access."
+          }
+        }
+      }
+    },
+    "Dernier état : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last known: %@"
+          }
+        }
+      }
+    },
+    "Dernier état connu, non actualisé : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last known status, not up to date: %@"
+          }
+        }
+      }
+    },
+    "Disponible dans la cellule %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Available in compartment %@"
+          }
+        }
+      }
+    },
+    "Déjà réservé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Already reserved"
+          }
+        }
+      }
+    },
+    "Effacer les filtres" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear filters"
+          }
+        }
+      }
+    },
+    "Emprunté" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borrowed"
+          }
+        }
+      }
+    },
+    "En maintenance" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In maintenance"
+          }
+        }
+      }
+    },
+    "Endommagé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Damaged"
+          }
+        }
+      }
+    },
     "Espace technicien" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Technician access"
+          }
+        }
+      }
+    },
+    "Expirée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expired"
+          }
+        }
+      }
+    },
+    "Expirée le %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expired on %@"
+          }
+        }
+      }
+    },
+    "Filtre : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter: %@"
           }
         }
       }
@@ -217,6 +537,56 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Trace ID: %@"
+          }
+        }
+      }
+    },
+    "Inconnue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unknown"
+          }
+        }
+      }
+    },
+    "Indisponible" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unavailable"
+          }
+        }
+      }
+    },
+    "Indisponible jusqu’au retour" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unavailable until returned"
+          }
+        }
+      }
+    },
+    "Indisponible pour le moment" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unavailable for now"
+          }
+        }
+      }
+    },
+    "Informations non actualisées depuis %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not up to date since %@."
           }
         }
       }
@@ -247,6 +617,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The service replied in an unexpected format. Check the configured address."
+          }
+        }
+      }
+    },
+    "Le service n’a pas pu charger les équipements." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service couldn't load the equipment."
           }
         }
       }
@@ -321,12 +701,92 @@
         }
       }
     },
+    "Niveau d’accès insuffisant" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Access level too low"
+          }
+        }
+      }
+    },
+    "Niveau d’accès requis" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Required access level"
+          }
+        }
+      }
+    },
     "Niveau inconnu" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Unknown level"
+          }
+        }
+      }
+    },
+    "Non disponible" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not available"
+          }
+        }
+      }
+    },
+    "Non requise" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not required"
+          }
+        }
+      }
+    },
+    "Pourquoi il est bloqué" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Why it's blocked"
+          }
+        }
+      }
+    },
+    "Présence non confirmée par le casier" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Presence not confirmed by the locker"
+          }
+        }
+      }
+    },
+    "Prévenez un administrateur." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tell an administrator."
+          }
+        }
+      }
+    },
+    "Prêt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready"
           }
         }
       }
@@ -362,12 +822,42 @@
         }
       }
     },
+    "Retiré de la circulation par l’administration" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Withdrawn from use by the administration"
+          }
+        }
+      }
+    },
+    "Retour à la liste" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back to the list"
+          }
+        }
+      }
+    },
     "Réessayer" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Try again"
+          }
+        }
+      }
+    },
+    "Réessayez plus tard." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try again later."
           }
         }
       }
@@ -532,6 +1022,16 @@
         }
       }
     },
+    "Tous" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All"
+          }
+        }
+      }
+    },
     "Trop de tentatives. Réessayez dans %@." : {
       "comment" : "The argument is a localized duration, for example 55 seconds",
       "localizations" : {
@@ -553,6 +1053,26 @@
         }
       }
     },
+    "Valide" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valid"
+          }
+        }
+      }
+    },
+    "Valide jusqu’au %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valid until %@"
+          }
+        }
+      }
+    },
     "Version" : {
       "localizations" : {
         "en" : {
@@ -569,6 +1089,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Your equipment. Your activity."
+          }
+        }
+      }
+    },
+    "Votre compte n’a pas accès aux équipements." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your account doesn't have access to equipment."
           }
         }
       }
@@ -693,6 +1223,26 @@
         }
       }
     },
+    "À vérifier" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs checking"
+          }
+        }
+      }
+    },
+    "Équipements" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Equipment"
+          }
+        }
+      }
+    },
     "État du service" : {
       "localizations" : {
         "en" : {
@@ -703,12 +1253,32 @@
         }
       }
     },
+    "État indisponible" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Status unavailable"
+          }
+        }
+      }
+    },
     "État signalé : %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reported status: %@"
+          }
+        }
+      }
+    },
+    "État évalué à %@, heure du casier." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Status checked at %@, locker time."
           }
         }
       }
