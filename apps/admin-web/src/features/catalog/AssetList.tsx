@@ -19,12 +19,14 @@ interface AssetListProps {
   readonly failure: CatalogFailure | null
   /** Set when a refresh failed but a page is still shown. */
   readonly stale: boolean
+  /** A refresh is running. */
+  readonly retrying: boolean
   readonly onRetry: () => void
   readonly onSelect: (asset: AdminAssetView, event: MouseEvent<HTMLAnchorElement>) => void
   readonly onPage: (page: number) => void
 }
 
-export function AssetList({ page, selectedId, loading, refreshing, failure, stale, onRetry, onSelect, onPage }: AssetListProps) {
+export function AssetList({ page, selectedId, loading, refreshing, failure, stale, retrying, onRetry, onSelect, onPage }: AssetListProps) {
   const { m } = useI18n()
   const titleId = useId()
   const t = m.equipment
@@ -33,7 +35,8 @@ export function AssetList({ page, selectedId, loading, refreshing, failure, stal
   return (
     <section className="ag-panel ag-list" aria-labelledby={titleId} aria-busy={loading || refreshing || undefined}>
       <div className="ag-list__head">
-        <h2 className="ag-list__title" id={titleId}>
+        {/* Focus target when a successful refresh removes the stale notice that had focus. */}
+        <h2 className="ag-list__title" id={titleId} tabIndex={-1}>
           {page ? t.listTitle({ count: page.totalItems }) : t.unitsTab}
         </h2>
         <span className="ag-list__meta">{t.listMeta}</span>
@@ -44,7 +47,9 @@ export function AssetList({ page, selectedId, loading, refreshing, failure, stal
           <CatalogAlert failure={failure} onRetry={onRetry} />
         </div>
       )}
-      {stale && page !== undefined && <StaleBanner page={page} onRetry={onRetry} />}
+      {stale && page !== undefined && (
+        <StaleBanner page={page} retrying={retrying} onRetry={onRetry} returnFocus={() => document.getElementById(titleId)?.focus()} />
+      )}
 
       {loading && <LoadingRows />}
 
@@ -129,12 +134,19 @@ function Pager({ page, onPage }: { readonly page: AdminAssetPage; readonly onPag
   )
 }
 
-function StaleBanner({ page, onRetry }: { readonly page: AdminAssetPage; readonly onRetry: () => void }) {
+interface StaleBannerProps {
+  readonly page: AdminAssetPage
+  readonly retrying: boolean
+  readonly onRetry: () => void
+  readonly returnFocus: () => void
+}
+
+function StaleBanner({ page, retrying, onRetry, returnFocus }: StaleBannerProps) {
   const i18n = useI18n()
   const first = page.items[0]
   return (
     <div className="ag-list__alerts">
-      <StaleNotice evaluatedAt={first ? evaluatedAtLabel(first, i18n) : null} onRetry={onRetry} />
+      <StaleNotice evaluatedAt={first ? evaluatedAtLabel(first, i18n) : null} retrying={retrying} onRetry={onRetry} returnFocus={returnFocus} />
     </div>
   )
 }

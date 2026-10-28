@@ -146,7 +146,7 @@ CREATE UNIQUE INDEX ux_asset_placements_one_current_per_compartment
     ON aegis.asset_placements (compartment_id)
     WHERE removed_at IS NULL;
 
--- Pending decision (CAT-02): an asset carries at most one active identifier of each type.
+-- CAT-02, decided on 28 October 2026: an asset carries at most one active identifier of each type.
 CREATE UNIQUE INDEX ux_asset_identifiers_one_active_per_type
     ON aegis.asset_identifiers (asset_id, identifier_type)
     WHERE active = true;

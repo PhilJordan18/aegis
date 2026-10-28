@@ -27,7 +27,7 @@ class AssetIdentifierApiTests extends CatalogApiTest {
     void anAssignmentReturnsTheActiveIdentifierAndIsAuditedOnce() throws Exception {
         String asset = createAsset(createModel("Tag " + suffix), "TAG-" + suffix);
         String key = UUID.randomUUID().toString();
-        String tag = "E200" + suffix;
+        String tag = epc("E200");
 
         String id = id(assign(asset, body("RFID_UHF", "  " + tag + " "), key)
                 .andExpect(status().isCreated())
@@ -59,7 +59,7 @@ class AssetIdentifierApiTests extends CatalogApiTest {
         String other = createAsset(model, "RTAG-OTHER-" + suffix);
         String archived = createAsset(model, "RTAG-ARCH-" + suffix);
         archiveAsset(archived).andExpect(status().isOk());
-        String tag = "E201" + suffix;
+        String tag = epc("E201");
         assign(other, body("RFID_UHF", tag), null).andExpect(status().isCreated());
         long events = totalEvents();
         long identifiers = totalIdentifiers();
@@ -73,7 +73,7 @@ class AssetIdentifierApiTests extends CatalogApiTest {
                 "RESOURCE_NOT_FOUND");
         expectCode(assign(asset, body(" ", "N-" + suffix), null), 400, "VALIDATION_ERROR");
         expectCode(assign(asset, body("NFC", " "), null), 400, "VALIDATION_ERROR");
-        expectCode(assign(asset, body("NFC", "x".repeat(129)), null), 400, "VALIDATION_ERROR");
+        expectCode(assign(asset, body("NFC", "x".repeat(256)), null), 400, "VALIDATION_ERROR");
         expectCode(assign(asset, body("NFC", "N\u0000" + suffix), null), 400, "VALIDATION_ERROR");
         Map<String, Object> extra = body("NFC", "N-" + suffix);
         extra.put("active", false);
@@ -83,6 +83,7 @@ class AssetIdentifierApiTests extends CatalogApiTest {
 
         assertEquals(events, totalEvents());
         assertEquals(identifiers, totalIdentifiers());
+        assign(asset, body("NFC", "N".repeat(255 - suffix.length()) + suffix), null).andExpect(status().isCreated());
     }
 
     @Test
@@ -90,7 +91,7 @@ class AssetIdentifierApiTests extends CatalogApiTest {
         String model = createModel("Révocation " + suffix);
         String asset = createAsset(model, "REV-" + suffix);
         String other = createAsset(model, "REV-OTHER-" + suffix);
-        String tag = "E202" + suffix;
+        String tag = epc("E202");
         String id = id(assign(asset, body("RFID_UHF", tag), null).andExpect(status().isCreated()));
         clock.advance(Duration.ofMinutes(2));
         String revokedAt = START.plus(Duration.ofMinutes(2)).toString();

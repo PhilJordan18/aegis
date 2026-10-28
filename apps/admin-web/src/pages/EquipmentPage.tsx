@@ -100,6 +100,11 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
 
   const listFailure = list.isError ? classifyCatalogFailure(list.error) : null
   const assetFailure = asset.isError ? classifyCatalogFailure(asset.error) : null
+  // A refresh the server refuses (403, 404) does not leave stale data: the units can no longer be read. A 403 on the
+  // catalog does not end the session (only /auth/me does), so the page shows the refusal itself.
+  const listGone = list.isRefetchError && listFailure?.kind === 'forbidden'
+  const assetGone = asset.isRefetchError && (assetFailure?.kind === 'forbidden' || assetFailure?.kind === 'notFound')
+  const shownPage = listGone ? undefined : page
   const listAnnouncement = list.isPending
     ? m.equipment.loading
     : page !== undefined && !list.isPlaceholderData
@@ -107,7 +112,7 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
       : ''
 
   const empty = page !== undefined && page.totalItems === 0
-  const showDossier = !empty && !(list.isError && page === undefined)
+  const showDossier = !empty && !(list.isError && shownPage === undefined)
 
   return (
     <ManagerShell currentPath={pathOf('equipment')} profile={profile} onSignOut={signOut}>
@@ -137,22 +142,24 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
 
         <div className={showDossier ? 'ag-eq' : 'ag-eq ag-eq--single'}>
           <AssetList
-            page={page}
+            page={shownPage}
             selectedId={selectedId}
             loading={list.isPending}
             refreshing={list.isPlaceholderData}
             failure={listFailure}
-            stale={list.isRefetchError}
+            stale={list.isRefetchError && !listGone}
+            retrying={list.isFetching}
             onRetry={() => void list.refetch()}
             onSelect={select}
             onPage={(next) => router.navigate(equipmentHref({ page: next, assetId: null }))}
           />
           {showDossier && (
             <AssetDossier
-              asset={asset.data}
+              asset={assetGone ? undefined : asset.data}
               loading={asset.isPending || list.isPending}
               failure={assetFailure}
-              stale={asset.isRefetchError}
+              stale={asset.isRefetchError && !assetGone}
+              retrying={asset.isFetching}
               focusRef={dossierRef}
               onRetry={() => void asset.refetch()}
               onBack={() => router.navigate(equipmentHref({ page: location.page, assetId: null }))}

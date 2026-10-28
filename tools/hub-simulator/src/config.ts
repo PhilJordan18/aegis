@@ -1,10 +1,13 @@
 import { isAbsolute, resolve } from 'node:path';
 import { defaultBootCountFile, isValidBootCount } from './boot-counter.ts';
+import { defaultCommandJournalFile } from './command-journal.ts';
 import {
   CANONICAL_UUID,
   CELL_ADDRESS_MAX,
   CELL_ADDRESS_MIN,
   HEARTBEAT_INTERVAL_MS,
+  RFID_DEFAULT_WINDOW_MS,
+  RFID_WINDOW_MAX_MS,
   RESET_REASONS,
   isResetReason,
   type CellConnectionStatus,
@@ -30,6 +33,14 @@ export const DEFAULT_FIRMWARE_VERSION = '0.1.0-sim';
 /** A simulated process start is a cold boot. */
 export const DEFAULT_RESET_REASON: ResetReason = 'POWER_ON';
 export const DEFAULT_RSSI_DBM = -55;
+/**
+ * Doc 10 §9.2: the real value belongs to the hardware ADR (lock mechanism). This
+ * simulator default leaves a technician time to open the door in a demonstration.
+ */
+export const DEFAULT_UNLOCK_WINDOW_MS = 15_000;
+export const UNLOCK_WINDOW_MIN_MS = 1_000;
+export const UNLOCK_WINDOW_MAX_MS = 120_000;
+export const RFID_WINDOW_MIN_MS = 100;
 
 export interface CompartmentConfig {
   /** Readable code used by scenarios only; it never appears in a payload. */
@@ -60,6 +71,12 @@ export interface SimulatorConfig {
   readonly bootCountFile: string;
   /** Overrides the bootCount of the first boot only (tests, deliberate reset). */
   readonly firstBootCount?: number;
+  /** State file of the §16.1 command journal of this deviceKey, outside the repository. */
+  readonly commandJournalFile: string;
+  /** How long an accepted unlock lasts before the hub relocks on its own (§9.2). */
+  readonly unlockWindowMs: number;
+  /** Stabilisation window of the RFID scan that follows a door closing (§12). */
+  readonly rfidWindowMs: number;
 }
 
 export class ConfigError extends Error {
@@ -132,6 +149,19 @@ export function validateConfig(config: SimulatorConfig): SimulatorConfig {
   if (config.bootCountFile.length === 0 || !isAbsolute(config.bootCountFile)) {
     throw new ConfigError('bootCountFile must be an absolute path');
   }
+  if (config.commandJournalFile.length === 0 || !isAbsolute(config.commandJournalFile)) {
+    throw new ConfigError('commandJournalFile must be an absolute path');
+  }
+  if (
+    !Number.isInteger(config.unlockWindowMs) ||
+    config.unlockWindowMs < UNLOCK_WINDOW_MIN_MS ||
+    config.unlockWindowMs > UNLOCK_WINDOW_MAX_MS
+  ) {
+    throw new ConfigError(`unlockWindowMs must be an integer in ${UNLOCK_WINDOW_MIN_MS}..${UNLOCK_WINDOW_MAX_MS}`);
+  }
+  if (!Number.isInteger(config.rfidWindowMs) || config.rfidWindowMs < RFID_WINDOW_MIN_MS || config.rfidWindowMs > RFID_WINDOW_MAX_MS) {
+    throw new ConfigError(`rfidWindowMs must be an integer in ${RFID_WINDOW_MIN_MS}..${RFID_WINDOW_MAX_MS}`);
+  }
   if (config.firstBootCount !== undefined && !isValidBootCount(config.firstBootCount)) {
     throw new ConfigError('the first bootCount must be an integer >= 1');
   }
@@ -199,6 +229,15 @@ export function configFromEnv(env: NodeJS.ProcessEnv): SimulatorConfig {
       ? resolve(env.AEGIS_SIM_BOOT_COUNT_FILE)
       : defaultBootCountFile(deviceKey, env),
     ...(bootCount ? { firstBootCount: parseInteger('AEGIS_SIM_BOOT_COUNT', bootCount) } : {}),
+    commandJournalFile: env.AEGIS_SIM_COMMAND_JOURNAL_FILE
+      ? resolve(env.AEGIS_SIM_COMMAND_JOURNAL_FILE)
+      : defaultCommandJournalFile(deviceKey, env),
+    unlockWindowMs: env.AEGIS_SIM_UNLOCK_WINDOW_MS
+      ? parseInteger('AEGIS_SIM_UNLOCK_WINDOW_MS', env.AEGIS_SIM_UNLOCK_WINDOW_MS)
+      : DEFAULT_UNLOCK_WINDOW_MS,
+    rfidWindowMs: env.AEGIS_SIM_RFID_WINDOW_MS
+      ? parseInteger('AEGIS_SIM_RFID_WINDOW_MS', env.AEGIS_SIM_RFID_WINDOW_MS)
+      : RFID_DEFAULT_WINDOW_MS,
   });
 }
 
@@ -218,6 +257,9 @@ export function defineConfig(overrides: Partial<SimulatorConfig> & Pick<Simulato
     heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
     allowInsecureRemote: false,
     bootCountFile: defaultBootCountFile(deviceKey),
+    commandJournalFile: defaultCommandJournalFile(deviceKey),
+    unlockWindowMs: DEFAULT_UNLOCK_WINDOW_MS,
+    rfidWindowMs: RFID_DEFAULT_WINDOW_MS,
     ...overrides,
   });
 }

@@ -6,8 +6,7 @@ import java.util.Locale;
 import org.springframework.http.HttpStatus;
 
 /**
- * Stable error codes of the REST contract (document 09, section 21). The identifier and compartment codes of CAT-02
- * are listed there as proposed until the contract is approved.
+ * Stable error codes of the REST contract (document 09, section 21).
  */
 public enum ApiError {
 

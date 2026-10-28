@@ -4,8 +4,8 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Administrative model representation. Document 09, section 12.1 defines only the request; this view returns the
- * same fields with the identifier and the archival instant.
+ * Administrative model representation ({@code AssetModelView}, document 09, section 12.1): the request fields with
+ * the identifier and the archival instant.
  */
 public record AssetModelView(
         UUID id,

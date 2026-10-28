@@ -1,0 +1,21 @@
+{
+  "steps": [
+    { "do": "waitOnline", "timeoutMs": 10000 },
+    { "do": "putTag", "code": "A1", "identifier": "E20034120123456789000001" },
+    { "do": "receiveCommand", "ref": "checkout", "compartment": "A1", "operation": "checkout" },
+    { "wait": 1000 },
+    { "do": "openDoor", "code": "A1" },
+    { "do": "takeTag", "code": "A1", "identifier": "E20034120123456789000001" },
+    { "wait": 1000 },
+    { "do": "closeDoor", "code": "A1" },
+    { "wait": 3500 },
+    { "do": "receiveCommand", "ref": "return", "compartment": "A1", "operation": "return" },
+    { "wait": 1000 },
+    { "do": "openDoor", "code": "A1" },
+    { "do": "putTag", "code": "A1", "identifier": "E20034120123456789000001" },
+    { "wait": 1000 },
+    { "do": "closeDoor", "code": "A1" },
+    { "wait": 3500 },
+    { "do": "stop" }
+  ]
+}

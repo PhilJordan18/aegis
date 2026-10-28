@@ -7,7 +7,9 @@
 **Mise à jour ciblée :** 21 octobre 2026 — `Retry-After` de la connexion (§10.2) et langue de la requête (§6.4), comportement existant documenté (#80)  
 **Mise à jour ciblée :** 21 octobre 2026 — idempotence REST durable : contenu d’une réponse rejouée (§6.2, §20.2), attente bornée d’une clé en cours et code `IDEMPOTENCY_REQUEST_IN_PROGRESS` (§20.2, §21) (#64)  
 **Mise à jour ciblée :** 21 octobre 2026 — présence obligatoire des champs nullables du catalogue et violation `REQUIRED` (§12.1, §12.2) (#25), approuvée le 22 octobre 2026  
-**Mise à jour ciblée :** 22 octobre 2026 — catalogue administrateur décidé par Philippe (#25) : codes de violation (§7.1), `archivedAt` et `AssetModelView` (§8.9, §12.1), lectures paginées, unicités, refus d’une ressource archivée et archivage répété (§12.1, §12.2), codes `409` du catalogue (§21), caractères de contrôle (§23.2), tests (§26.6); comportement existant documenté
+**Mise à jour ciblée :** 22 octobre 2026 — catalogue administrateur décidé par Philippe (#25) : codes de violation (§7.1), `archivedAt` et `AssetModelView` (§8.9, §12.1), lectures paginées, unicités, refus d’une ressource archivée et archivage répété (§12.1, §12.2), codes `409` du catalogue (§21), caractères de contrôle (§23.2), tests (§26.6); comportement existant documenté  
+**Mise à jour ciblée :** 22 octobre 2026 — sens commun de `reservedUntil` et `dueAt` (§8.4, §14.1), valeurs et conditions de `availableActions` (§8.10, §26.8), règles approuvées par Philippe le 22 octobre 2026; aucun champ ajouté, règles de retour et d’annulation inchangées; deux questions restent ouvertes (§8.10) (#35)  
+**Mise à jour ciblée :** 28 octobre 2026 — identifiants et placement (#26), décisions du 28 octobre 2026 : un identifiant actif par type et remplacement atomique, révocation à l’archivage, comparaison exacte des valeurs (§12.2, §12.3), refus du placement et codes `COMPARTMENT_*` (§12.4, §21)
 
 ---
 
@@ -367,6 +369,10 @@ Exemple :
 
 `returnOperationId` conserve son sens historique : il désigne uniquement le retour **confirmé**, conformément au modèle logique. Il ne sert pas à retrouver une tentative en cours. Les références de suivi sont dérivées des relations existantes, sans colonne SQL supplémentaire imposée.
 
+`dueAt` est la copie de `Reservation.reservedUntil` faite à la confirmation du retrait (§14.1). Il n’est ni saisi ni recalculé par un client.
+
+Les valeurs et les conditions de `availableActions` des vues §8.3 et §8.4 sont fixées en §8.10.
+
 ### 8.5 LockerOperationView
 
 | Champ | Type | Requis |
@@ -457,9 +463,117 @@ Les détails techniques sensibles ne sont inclus que dans la vue de détail admi
 
 ### 8.9 AdminAssetView et diagnostic opérationnel
 
-La vue administrative reprend les champs de `AssetView` de §8.2 **sauf `readiness`**, et ajoute `serialNumber` (string ou null), `operationalDiagnostic` et `archivedAt` (instant ou null : l’instant de l’archivage, `null` pour un actif actif). Ce dernier contient `evaluatedAt` (instant) et `reasons` (tableau des raisons de §8.1, sauf `ACCESS_DENIED`). Il expose les empêchements non personnels connus : disponibilité, état de service, calibration et présence physique. Une réservation active rend l’actif indisponible dans cette vue générale, sans empêcher le retrait autorisé de son titulaire.
+La vue administrative reprend les champs de `AssetView` de §8.2 **sauf `readiness`**, et ajoute `serialNumber` (string ou null), `operationalDiagnostic` et `archivedAt` (instant ou null : l’instant de l’archivage, `null` pour un actif actif). `operationalDiagnostic` contient `evaluatedAt` (instant) et `reasons` (tableau des raisons de §8.1, sauf `ACCESS_DENIED`). Il expose les empêchements non personnels connus : disponibilité, état de service, calibration et présence physique. Une réservation active rend l’actif indisponible dans cette vue générale, sans empêcher le retrait autorisé de son titulaire.
 
 Ce diagnostic n’invente ni technicien de référence ni résultat `READY` universel. Un tableau vide signifie seulement « aucun empêchement non personnel détecté ». Il ne prouve ni le droit d’un utilisateur ni la possibilité d’ouvrir le casier. L’administrateur ne reçoit pas de `canCheckout` et ne se substitue pas au technicien. L’horaire et la santé du casier restent consultables via leurs vues dédiées.
+
+### 8.10 Actions permises (`availableActions`)
+
+`availableActions` liste les mutations métier que le serveur estime admissibles pour le demandeur **au moment où il construit la réponse**, d’après l’état qu’il connaît. C’est une indication d’affichage, jamais une autorisation durable : chaque mutation revalide toutes ses gardes dans sa propre transaction et peut être refusée si l’état a changé depuis la lecture (`409`, `422` ou `503`). Ces règles ont été approuvées par Philippe le 22 octobre 2026; les deux questions ouvertes en fin de section ne le sont pas.
+
+Le serveur n’émet que les valeurs suivantes; leur ordre n’a pas de sens et chacune apparaît au plus une fois. `CHECKOUT` correspond à « Préparer le retrait », `CANCEL` à « Annuler la réservation » et `RETURN` à « Retourner l’équipement ». « Réserver », c’est-à-dire créer la réservation (§14.1), n’a pas de valeur : ce bouton suit la readiness de l’actif (§8.1). Un casier hors ligne n’y produit donc pas le même refus : la création voit une readiness `UNKNOWN` et répond `422 ASSET_NOT_READY` (`06` §4.4, §5.1), tandis que la préparation d’un retrait ou d’un retour se heurte à la garde du locker et répond `503 LOCKER_OFFLINE` (`06` §6.1; §21, §26.5). Le `422 ASSET_NOT_READY` ne concerne que la création.
+
+| Valeur | Vue | Mutation | Conditions, toutes vraies à l’évaluation |
+|---|---|---|---|
+| `CHECKOUT` | `ReservationView` | `POST /reservations/{id}/checkout` (§15.1) | Réservation `ACTIVE` du demandeur; instant antérieur à `reservedUntil`; plage d’exploitation ouverte; aucune opération physique non terminale sur le locker, y compris une tentative de cette réservation; garde commune du locker satisfaite (`06` §6.1), donc hub `ONLINE`; readiness `READY` dans le contexte du retrait du titulaire (`06` §6.2). |
+| `CANCEL` | `ReservationView` | `POST /reservations/{id}/cancel` (§14.4) | Réservation `ACTIVE` du demandeur; instant antérieur à `reservedUntil`; aucune tentative de retrait de cette réservation n’a été autorisée, quelle que soit son issue (§14.4, `06` §5.5; question ouverte Q1); aucune incertitude physique, c’est-à-dire aucune tentative `ANOMALY` dont l’anomalie n’est pas `RESOLVED`. Une tentative `AWAITING_LOCAL_PROOF` laisse `CANCEL` : l’annulation la termine (§14.4). L’horaire et la connexion du locker n’interviennent pas. |
+| `RETURN` | `LoanView` | `POST /loans/{id}/return` (§15.2) | Prêt `ACTIVE` du titulaire; plage d’exploitation ouverte; aucune opération physique non terminale sur le locker, y compris une tentative de ce prêt; gardes communes et de retour satisfaites (`06` §6.1, §6.3), donc hub `ONLINE`. `overdue` n’intervient pas. |
+
+À partir de `reservedUntil`, une réservation encore `ACTIVE` (expiration différée par un retrait autorisé, ou pas encore appliquée) n’expose aucune action : les règles temporelles sont réévaluées au début de chaque action (`06` §14). La limitation de fréquence des préparations (§15.5) n’est pas reflétée; elle se manifeste par `429` avec `Retry-After`.
+
+Pour un prêt `RETURN_PENDING`, `05` §4.3 et `06` §6.3 n’admettent une nouvelle tentative de récupération que si l’opération précédente est terminale **et** si la procédure de récupération l’autorise. Cette procédure n’est pas encore définie : tant qu’elle ne l’est pas, `RETURN` n’est pas émis pour un prêt `RETURN_PENDING` (question ouverte Q2). Cette lecture n’ajoute aucune règle de retour.
+
+| Situation lue | `ReservationView` | `LoanView` |
+|---|---|---|
+| Réservation `ACTIVE` avant `reservedUntil`, aucune tentative de retrait en cours ni autorisée auparavant, plage ouverte, gardes satisfaites | `["CHECKOUT", "CANCEL"]` | — |
+| Même cas, mais locker `OFFLINE` ou `UNKNOWN`, cellule, lecteur, porte ou serrure incompatibles, readiness autre que `READY`, plage fermée ou autre opération en cours sur le locker | `["CANCEL"]` | — |
+| Dernière tentative de retrait `AWAITING_LOCAL_PROOF` | `["CANCEL"]`, ou `[]` si une tentative précédente a été autorisée (Q1) | — |
+| Dernière tentative de retrait entre `AUTHORIZED` et `OBSERVATION_RECEIVED` | `[]` | — |
+| Une tentative de retrait a été autorisée puis s’est terminée `FAILED`, `EXPIRED` ou `ANOMALY` résolue; aucune tentative en cours | `["CHECKOUT"]` si les gardes sont satisfaites, sinon `[]`; jamais `CANCEL` (Q1) | — |
+| Dernière tentative de retrait `ANOMALY`, anomalie non `RESOLVED` | `[]` | — |
+| `reservedUntil` atteint, statut encore `ACTIVE` | `[]` | — |
+| Réservation `FULFILLED`, `CANCELLED` ou `EXPIRED` | `[]` | — |
+| Prêt `ACTIVE`, en retard ou non, plage ouverte, gardes satisfaites, aucune tentative non terminale | — | `["RETURN"]` |
+| Prêt `ACTIVE`, mais locker non `ONLINE`, garde physique incompatible, plage fermée ou autre opération en cours sur le locker | — | `[]` |
+| Prêt `ACTIVE`, dernière tentative de retour `AWAITING_LOCAL_PROOF` | — | `[]` |
+| Prêt `RETURN_PENDING` (Q2) ou `COMPLETED` | — | `[]` |
+
+Une tentative terminée sans avoir été autorisée (défi expiré ou invalidé) ne change rien : les trois premières lignes s’appliquent. Après un retour terminé sans interaction physique, le prêt est de nouveau `ACTIVE` (`05` §4.3) et les lignes du prêt `ACTIVE` s’appliquent.
+
+Règles pour les clients :
+
+1. Une action métier n’est proposée que si sa valeur figure dans la dernière lecture réussie de la ressource. Le client ne la déduit ni de `status`, ni de la readiness, ni de `LockerStatusView`, et ne la conserve pas comme droit au-delà de cette lecture.
+2. Une valeur inconnue est journalisée et ignorée : aucune action n’est proposée pour elle (§3).
+3. Les actions locales (actualiser, réessayer, reprendre le suivi, consulter l’équipement ou le casier) ne figurent jamais dans `availableActions` et ne changent aucun état métier. Elles restent disponibles quand la liste est vide. Une liste vide ne signifie ni succès ni fin d’opération : l’issue se lit dans `status` et dans l’opération courante.
+4. Une tentative non terminale se reprend par `currentOperationId` (§15.4), sans valeur dédiée ni nouvelle mutation. Le scan du QR dépend de `LockerOperationView.requiredAction = SCAN_HUB_QR`, pas de `availableActions`.
+5. Après un refus `409`, `422` ou `503` d’une mutation, le client relit la ressource parente et suit sa nouvelle liste. Un refus antérieur n’est jamais mémorisé comme blocage. Une tentative terminale `FAILED` ou `EXPIRED` ne retire pas à elle seule `CHECKOUT` ou `RETURN` (`06` §3.4).
+6. Le client distingue deux situations :
+   - **API sans réponse exploitable** (réseau absent, délai dépassé, réponse hors contrat) : aucune lecture fraîche. Le client présente le dernier état reçu comme tel (« Dernier état : … », en couleurs neutres), daté de l’heure locale de sa réception, désactive toutes les actions métier et propose de réessayer. Il ne conclut rien sur l’état du casier.
+   - **API joignable, casier indisponible** (hub non `ONLINE`, cellule ou lecteur indisponible) : la lecture est fraîche; `CHECKOUT` et `RETURN` sont absents et `CANCEL` peut rester. Le client peut expliquer l’indisponibilité par `GET /lockers/{lockerId}/status` (§16.1 : `connectionStatus`, `lastSeenAt`, `currentWindow`), avec `lockerId` tiré de `asset.placement`, sans en déduire une permission. Actualiser relit la ressource et ce statut. Un `503` de code `LOCKER_OFFLINE` ou `DEVICE_UNAVAILABLE` relève de cette situation.
+
+Exemples (champs pertinents seulement; les autres champs obligatoires restent présents). Réservation active, locker hors ligne, puis statut du locker :
+
+```json
+{
+  "id": "7b726e56-2a19-44de-887b-d3e2bfc8bf28",
+  "status": "ACTIVE",
+  "reservedUntil": "2026-09-16T20:30:00Z",
+  "currentOperationId": null,
+  "availableActions": ["CANCEL"]
+}
+```
+
+```json
+{
+  "connectionStatus": "OFFLINE",
+  "lastSeenAt": "2026-09-16T18:28:10Z",
+  "evaluatedAt": "2026-09-16T18:31:02Z",
+  "currentWindow": {
+    "timeZone": "America/Toronto",
+    "open": true,
+    "closesAt": "2026-09-16T21:00:00Z",
+    "nextOpensAt": null
+  }
+}
+```
+
+Retrait autorisé en cours : la carte propose seulement de reprendre le suivi.
+
+```json
+{
+  "status": "ACTIVE",
+  "reservedUntil": "2026-09-16T20:30:00Z",
+  "currentOperationId": "2f38d3b6-c18f-4a74-aa9a-2d574286013f",
+  "availableActions": []
+}
+```
+
+Prêt en retard, casier joignable :
+
+```json
+{
+  "status": "ACTIVE",
+  "dueAt": "2026-09-16T20:30:00Z",
+  "overdue": true,
+  "currentOperationId": null,
+  "availableActions": ["RETURN"]
+}
+```
+
+#### Questions ouvertes (non tranchées)
+
+Ces deux points ne sont pas approuvés. En attendant, la section applique le texte existant sans ajouter de règle.
+
+- **Q1 — Annulation après une tentative de retrait autorisée.** Une tentative autorisée peut se terminer `FAILED`, `EXPIRED` ou en `ANOMALY` résolue sans qu’un prêt naisse.
+  - Référence : §14.4, `06` §5.5, `05` §3.3.
+  - Lecture appliquée : littérale; `CANCEL` n’est plus émis et l’actif reste réservé jusqu’à `reservedUntil`, qui ne dépasse pas la fermeture.
+  - Recommandation : confirmer la lecture littérale pour le P0; l’assouplir serait une nouvelle règle d’annulation.
+  - Propriétaires : décision de Philippe; contrat tenu par la session API/Web; mise en œuvre RES-02 (#38).
+- **Q2 — Récupération d’un prêt `RETURN_PENDING`.** La procédure qui autorise une nouvelle tentative n’est pas définie.
+  - Référence : `05` §4.3, `06` §6.3.
+  - Lecture appliquée : `RETURN` n’est pas émis.
+  - Recommandation : émettre `RETURN` quand la dernière tentative de retour est `ANOMALY`, que son anomalie est `ACKNOWLEDGED` (`05` §6.2 : correction physique engagée) et que toutes les autres gardes sont satisfaites.
+  - Propriétaires : décision de Philippe; contrat tenu par la session API/Web; mise en œuvre RET-01 (#50) et ANO-01 (#52).
 
 ---
 
@@ -716,7 +830,7 @@ POST /admin/assets retourne 201 et exige Idempotency-Key.
 
 PUT /admin/assets/{assetId} retourne 200. La readiness n’est jamais acceptée dans la requête. Un PUT identique est un no-op métier. Un actif archivé ne se modifie plus : `409 ASSET_ARCHIVED`.
 
-POST /admin/assets/{assetId}/archive exige Idempotency-Key et retourne 200 avec la vue administrative. L’archivage est refusé lorsqu’une réservation active, un prêt ouvert ou une opération non terminale concerne l’actif. Il termine le placement actif de l’actif (§12.4). Décision en attente : il révoque aussi les identifiants actifs de l’actif, en conservant leur historique, pour qu’un tag puisse être réutilisé (§12.3). Un actif déjà archivé suit la règle d’archivage répété de §12.1.
+POST /admin/assets/{assetId}/archive exige Idempotency-Key et retourne 200 avec la vue administrative. L’archivage est refusé lorsqu’une réservation active, un prêt ouvert ou une opération non terminale concerne l’actif. Il termine le placement actif de l’actif (§12.4). Il révoque aussi les identifiants actifs de l’actif, en conservant leur historique, pour qu’un tag puisse être réutilisé (§12.3; décision du 28 octobre 2026). Un actif déjà archivé suit la règle d’archivage répété de §12.1.
 
 ### 12.3 Identifiant physique
 
@@ -739,17 +853,17 @@ Erreurs particulières :
 
 POST /admin/assets/{assetId}/identifiers/{identifierId}/revoke exige une clé d’idempotence. Une révocation ne supprime pas l’historique. Elle est refusée pendant une opération physique utilisant cet identifiant.
 
-**Comportement de la tranche CAT-02 (proposé, à approuver).**
+**Comportement de la tranche CAT-02 (approuvé le 28 octobre 2026).**
 
-- `type` vaut `RFID_UHF`, `NFC` ou `QR` (document 03, §4.5). Un `type` absent ou vide retourne `400 VALIDATION_ERROR`; toute autre valeur, casse comprise, retourne `422 IDENTIFIER_TYPE_UNSUPPORTED`. `value` est requise, débarrassée de ses espaces extérieurs, limitée à 128 caractères sans caractère de contrôle, puis comparée telle quelle.
+- `type` vaut `RFID_UHF`, `NFC` ou `QR` (document 03, §4.5). Un `type` absent ou vide retourne `400 VALIDATION_ERROR`; toute autre valeur, casse comprise, retourne `422 IDENTIFIER_TYPE_UNSUPPORTED`. `value` est requise, débarrassée de ses espaces extérieurs, limitée à 255 caractères comme un `identifierValue` observé (document 10, §12.1), sans caractère de contrôle, puis comparée telle quelle. Aucune mise en majuscules n’est appliquée, ni aux EPC RFID, ni aux valeurs NFC, QR ou opaques; la normalisation des EPC sera fixée avec PHY-02 avant le raccordement du lecteur réel.
 - Une paire `type + value` active appartient à un seul actif, le même actif compris : `409 IDENTIFIER_ALREADY_ASSIGNED`. Une valeur révoquée peut être attribuée de nouveau.
-- Décision en attente : un actif porte au plus un identifiant actif par type. Attribuer un identifiant d’un type déjà actif sur l’actif révoque l’ancien dans la même transaction; la révocation et l’attribution sont auditées chacune.
+- Un actif porte au plus un identifiant actif par type (décision du 28 octobre 2026). Attribuer un identifiant d’un type déjà actif sur l’actif révoque l’ancien dans la même transaction; la révocation et l’attribution sont auditées chacune.
 - Un actif archivé refuse l’attribution et la révocation : `409 ASSET_ARCHIVED`. Un actif inconnu, ou un identifiant qui n’appartient pas à l’actif du chemin, retourne `404 RESOURCE_NOT_FOUND`.
 - Les deux routes retournent un `AssetIdentifierView` : `id`, `assetId`, `type`, `value`, `active`, `assignedAt`, `revokedAt` (instant ou `null`). L’attribution retourne `201` avec un `Location` vers l’actif, car aucune route ne lit un identifiant seul; la révocation retourne `200`.
 - Révoquer un identifiant déjà révoqué suit la règle d’archivage répété de §12.1 : `200` avec la représentation courante, `revokedAt` conservé et un événement de résultat `ALREADY_APPLIED`.
 - Audit, avec `subjectType` `ASSET_IDENTIFIER` : une attribution écrit `ASSET_IDENTIFIER_ASSIGNED`. Le document 08 n’ayant pas de type de révocation, une révocation écrit `ASSET_UPDATED`. Un rejeu de même clé et une mutation refusée n’écrivent aucun événement.
-- Décision en attente : l’archivage d’un actif (§12.2) révoque ses identifiants actifs dans la même transaction et écrit un événement `ASSET_UPDATED` par identifiant révoqué.
-- `409 ASSET_OPERATION_IN_PROGRESS` et le refus de révocation pendant une opération physique seront appliqués par la tranche qui crée les opérations.
+- L’archivage d’un actif (§12.2) révoque ses identifiants actifs dans la même transaction, sans supprimer leur historique, et écrit un événement `ASSET_UPDATED` par identifiant révoqué.
+- `409 ASSET_OPERATION_IN_PROGRESS` et le refus de révocation pendant une opération physique doivent être en place avant l’introduction des opérations physiques : la tranche qui crée les opérations les applique.
 
 ### 12.4 Placement attendu
 
@@ -771,13 +885,13 @@ La mutation est refusée si :
 - l’actif possède une réservation active, un prêt ouvert ou une opération non terminale;
 - le compartiment n’appartient pas au locker visé par la configuration.
 
-**Comportement de la tranche CAT-02 (proposé, à approuver).**
+**Comportement de la tranche CAT-02 (approuvé le 28 octobre 2026).**
 
 - `compartmentId` est requis. `reason` est requis, débarrassé de ses espaces extérieurs et limité à 500 caractères sans caractère de contrôle.
 - La réponse est un `AssetPlacementView` : `id`, `assetId`, `lockerId`, `lockerCode`, `compartmentId`, `compartmentCode`, `assignedAt`, `reason`. `AdminAssetView.placement` (§8.9) présente le placement actif.
 - Un changement termine le placement précédent (`removedAt`) au lieu de le supprimer, et écrit un seul événement `ASSET_PLACEMENT_CHANGED` sur l’actif, avec l’ancien et le nouveau placement. Un PUT vers le compartiment actuel est un no-op : la réponse est le placement courant, motif compris, sans événement.
-- Refus vérifiables aujourd’hui : actif archivé, `409 ASSET_ARCHIVED`; compartiment inconnu, `400 VALIDATION_ERROR` avec la violation `{field: compartmentId, code: COMPARTMENT_NOT_FOUND}`; compartiment désactivé, `409 COMPARTMENT_DISABLED`; compartiment occupé par un autre actif, `409 COMPARTMENT_ALREADY_OCCUPIED`.
-- L’archivage d’un actif (§12.2) termine son placement actif dans la même transaction (décision approuvée le 22 octobre 2026), conserve la ligne et écrit `ASSET_PLACEMENT_CHANGED` vers `null`.
+- Refus vérifiables aujourd’hui : actif archivé, `409 ASSET_ARCHIVED`; compartiment inconnu, `400 VALIDATION_ERROR` avec la violation `{field: compartmentId, code: COMPARTMENT_NOT_FOUND}`; compartiment désactivé, `409 COMPARTMENT_DISABLED`; compartiment occupé par un autre actif, `409 COMPARTMENT_ALREADY_OCCUPIED`. `COMPARTMENT_DISABLED` vise un compartiment désactivé dans la configuration du backend; il ne définit aucun mécanisme de désactivation du firmware.
+- L’archivage d’un actif (§12.2) termine son placement actif dans la même transaction (décision approuvée le 22 octobre 2026, confirmée le 28 octobre 2026), conserve la ligne et écrit `ASSET_PLACEMENT_CHANGED` vers `null`.
 - Le refus pour réservation active, prêt ouvert ou opération non terminale sera appliqué par les tranches qui créent ces objets.
 - La condition « le compartiment n’appartient pas au locker visé par la configuration » n’est pas définie : aucune configuration ne désigne de locker cible. Elle n’est pas appliquée tant qu’elle n’est pas décidée.
 
@@ -861,6 +975,13 @@ Le backend :
 6. vérifie qu’elle se situe dans la plage ouverte courante;
 7. recalcule la readiness;
 8. crée la réservation et l’audit dans la même transaction.
+
+`reservedUntil` est la seule échéance que choisit le technicien; il n’existe pas d’échéance de retour indépendante. Elle a deux effets :
+
+1. **avant le retrait**, elle borne la réservation : la préparation et l’autorisation locale d’un retrait exigent un instant antérieur à `reservedUntil` (`06` §6.2), l’échéance du défi QR ne la dépasse pas (§15.5) et une réservation sans retrait expire à cette heure (`06` §14.1);
+2. **au retrait confirmé**, elle est copiée telle quelle dans `Loan.dueAt` (`06` §11.1) et devient l’heure de retour prévue.
+
+Un retrait autorisé avant `reservedUntil` n’est pas interrompu par cette heure : l’expiration de la réservation attend le classement physique de l’opération, et le prêt peut naître déjà en retard (`05` §3.4, `06` §14.1). Comme `reservedUntil` ne dépasse pas la fermeture de la plage courante, `dueAt` non plus; un retrait tardif raccourcit le prêt sans déplacer l’heure de retour prévue. Un retour exige une plage ouverte (`06` §6.1) : après la fermeture, il attend la prochaine ouverture et le prêt reste en retard, sans transition (§15.3). Le client ne saisit pas `dueAt`, ne le recalcule pas et ne propose pas de seconde échéance.
 
 Réponse 201 :
 
@@ -1216,14 +1337,14 @@ Les PUT sont idempotents par définition. Une répétition identique ne crée pa
 | 409 | ASSET_CODE_ALREADY_EXISTS | Code d’actif déjà utilisé, archives comprises (§12.2) |
 | 409 | ASSET_SERIAL_NUMBER_ALREADY_EXISTS | Numéro de série déjà utilisé, archives comprises (§12.2) |
 | 409 | ASSET_ARCHIVED | Modification d’un actif archivé (§12.2) |
-| 409 | IDENTIFIER_ALREADY_ASSIGNED | Paire type + valeur déjà active (§12.3; proposé, CAT-02) |
-| 409 | COMPARTMENT_DISABLED | Placement dans un compartiment désactivé (§12.4; proposé, CAT-02) |
-| 409 | COMPARTMENT_ALREADY_OCCUPIED | Compartiment déjà attribué à un autre actif (§12.4; proposé, CAT-02) |
+| 409 | IDENTIFIER_ALREADY_ASSIGNED | Paire type + valeur déjà active (§12.3) |
+| 409 | COMPARTMENT_DISABLED | Placement dans un compartiment désactivé (§12.4) |
+| 409 | COMPARTMENT_ALREADY_OCCUPIED | Compartiment déjà attribué à un autre actif (§12.4) |
 | 422 | ASSET_NOT_READY | Readiness autre que READY |
 | 422 | OUTSIDE_OPERATING_HOURS | Action hors plage |
 | 422 | RESERVATION_END_AFTER_CLOSING | Échéance trop tardive |
 | 422 | PHYSICAL_STATE_UNKNOWN | Preuve courante insuffisante |
-| 422 | IDENTIFIER_TYPE_UNSUPPORTED | Type d’identifiant hors RFID_UHF, NFC et QR (§12.3; proposé, CAT-02) |
+| 422 | IDENTIFIER_TYPE_UNSUPPORTED | Type d’identifiant hors RFID_UHF, NFC et QR (§12.3) |
 | 429 | RATE_LIMITED | Trop de requêtes |
 | 500 | INTERNAL_ERROR | Erreur inattendue corrélée |
 | 503 | LOCKER_OFFLINE | Locker temporairement indisponible |
@@ -1406,6 +1527,17 @@ Ces cas sont à implémenter et à exécuter, pas déclarés réussis par la pr�
 4. La vue administrateur exclut `readiness` et `ACCESS_DENIED`; le technicien de niveau insuffisant voit le blocage sans recevoir de secret matériel.
 5. Le cinquième secret erroné ferme le défi; une image illisible et un rejeu idempotent n’épuisent pas le compteur.
 6. La cadence représentative de dix retraits et dix retours reste possible avec la limitation de préparation activée; une rafale abusive est refusée.
+
+### 26.8 Actions permises et échéance (22 octobre)
+
+Ces cas sont à implémenter et à exécuter, pas déclarés réussis par la présente révision :
+
+1. Locker `OFFLINE` : `CHECKOUT` et `RETURN` sont absents, `CANCEL` reste; une préparation envoyée malgré tout est refusée par `503 LOCKER_OFFLINE`.
+2. Tentative `AWAITING_LOCAL_PROOF` : `CANCEL` présent, `CHECKOUT` absent; dès `AUTHORIZED`, la liste de la réservation est vide.
+3. Après un refus `503` ou une tentative `FAILED`, une nouvelle lecture dont les gardes sont satisfaites rend `CHECKOUT`.
+4. À `reservedUntil`, une réservation encore `ACTIVE` n’expose aucune action; un retrait autorisé avant cette heure et confirmé après crée un prêt avec `dueAt = reservedUntil` et `overdue = true`.
+5. Un prêt en retard garde `RETURN` lorsque les gardes le permettent; un prêt `RETURN_PENDING` n’expose aucune action.
+6. Une valeur listée ne dispense d’aucune garde : une mutation envoyée après un changement d’état est refusée sans effet.
 
 ---
 
