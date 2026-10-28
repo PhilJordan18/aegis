@@ -74,23 +74,27 @@ struct CatalogCard<Content: View>: View {
     }
 }
 
-/// Label and value side by side, stacked when the text no longer fits.
+/// Label and value side by side; stacked at accessibility sizes, where a
+/// long value would otherwise be squeezed beside its label.
 struct FactRow: View {
     let label: String
     let value: String
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(label).foregroundStyle(Color.brandText)
-                Spacer(minLength: 12)
-                Text(value).foregroundStyle(Color.brandMuted).multilineTextAlignment(.trailing)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label).foregroundStyle(Color.brandText)
-                Text(value).foregroundStyle(Color.brandMuted)
-            }
+        let stacked = typeSize.isAccessibilitySize
+        let layout = stacked
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 12))
+        layout {
+            Text(label)
+                .foregroundStyle(Color.brandText)
+                .frame(maxWidth: stacked ? nil : .infinity, alignment: .leading)
+            Text(value)
+                .foregroundStyle(Color.brandMuted)
+                .multilineTextAlignment(stacked ? .leading : .trailing)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .combine)
     }
 }

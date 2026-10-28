@@ -10,6 +10,7 @@ struct AssetRoute: Hashable {
 struct CatalogScreen: View {
     @Bindable var model: CatalogViewModel
     let makeSheet: (UUID) -> AssetSheetViewModel
+    private static let minimumRefresh = Duration.milliseconds(800)
 
     var body: some View {
         NavigationStack {
@@ -30,9 +31,13 @@ struct CatalogScreen: View {
             .onSubmit(of: .search) { model.submitSearch() }
             .onChange(of: model.searchText) { model.searchTextChanged() }
             .refreshable {
+                let started = ContinuousClock.now
                 // An unstructured task: the refresh must not be cancelled by
                 // the list updating under the indicator.
                 await Task { await model.reload() }.value
+                // An instant answer (offline) ending the refresh during the
+                // pull's own bounce left the list offset on iOS 26.
+                try? await Task.sleep(until: started + Self.minimumRefresh, clock: .continuous)
             }
             .task(id: model.criteria) { await model.loadIfNeeded() }
             .navigationDestination(for: AssetRoute.self) { route in
@@ -120,8 +125,14 @@ struct FilterBar: View {
                     .accessibilityAddTraits(selection == filter ? .isSelected : [])
                 }
             } label: {
-                Label(String(localized: "Filtre : \(Self.name(selection))"),
-                      systemImage: "line.3.horizontal.decrease.circle")
+                Label {
+                    // Wraps instead of truncating "Filtre : À vérifier" at AX5.
+                    Text("Filtre : \(Self.name(selection))")
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                }
                     .font(.body.weight(.semibold))
                     .foregroundStyle(Color.brandAccent)
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)

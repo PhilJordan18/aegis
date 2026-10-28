@@ -82,6 +82,22 @@ struct AssetCatalogTests {
         #expect(AssetPresentation.identityLine(for: asset) == "MM-001")
     }
 
+    /// The API truncates instants to microseconds: up to six fractional
+    /// digits, none for a whole second (doc 09 §3). Every form must decode;
+    /// sub-millisecond precision is not needed for display.
+    @Test(arguments: [
+        ("2026-10-21T19:20:00Z", 0.0),
+        ("2026-10-21T19:20:00.123Z", 0.123),
+        ("2026-10-21T19:20:00.123456Z", 0.123456),
+        ("2026-10-21T19:20:00.000001Z", 0.000001),
+    ])
+    func decodesInstantsUpToMicroseconds(_ text: String, _ fraction: Double) throws {
+        let asset = CatalogFixtures.decode(CatalogFixtures.json(evaluatedAt: text), as: TechnicianAsset.self)
+        let whole = try Date("2026-10-21T19:20:00Z", strategy: .iso8601)
+
+        #expect(abs(asset.readiness.evaluatedAt.timeIntervalSince(whole) - fraction) < 0.001)
+    }
+
     @Test func dropsTheRFIDIdentifier() {
         let secret = "E28011606000020FAKE0RFID"
         let asset = CatalogFixtures.decode(

@@ -62,7 +62,8 @@ enum UITestCatalogFixtures {
         Item(id: "300e72fd-118c-4d1f-af9c-7fb61e89f005", code: "OS-001", name: "Oscilloscope portatif",
              manufacturer: nil, modelNumber: nil, access: "STANDARD", operational: "MAINTENANCE",
              calibration: #"{"required":true,"dueAt":null,"status":"UNKNOWN"}"#,
-             availability: "UNAVAILABLE", presence: "PRESENT", result: "BLOCKED", reasons: ["MAINTENANCE"],
+             availability: "UNAVAILABLE", presence: "PRESENT", result: "BLOCKED",
+             reasons: ["NOT_AVAILABLE", "MAINTENANCE"],
              compartment: nil),
     ]
 
