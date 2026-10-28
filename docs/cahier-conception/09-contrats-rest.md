@@ -246,6 +246,7 @@ Une violation contient field, code et message. Elle ne contient jamais la valeur
 | ASSET_MODEL_NOT_ACTIVE | `assetModelId` introuvable ou archivé (§12.2) |
 | REQUIRED_WHEN_CALIBRATION_REQUIRED | `calibrationDueAt` est `null` alors que `calibrationRequired=true` |
 | NOT_ALLOWED_WITHOUT_CALIBRATION | `calibrationDueAt` est fourni alors que `calibrationRequired=false` |
+| COMPARTMENT_NOT_FOUND | `compartmentId` inconnu (§12.4) |
 | DUPLICATE_DAY_OF_WEEK | Jour déjà présent dans `windows` (§13.2) |
 | REQUIRED_WHEN_ENABLED | Heure absente pour un jour activé (§13.2) |
 | NOT_ALLOWED_WHEN_DISABLED | Heure fournie pour un jour fermé (§13.2) |
