@@ -213,6 +213,47 @@ class ReservationApiTests extends ApiIntegrationTest {
         expectProblem(reserve(token, key(), UUID.randomUUID(), UNTIL), 404, "ASSET_NOT_FOUND");
     }
 
+    /** Document 09, section 14.1: when several checks fail, the first one in the documented order is reported. */
+    @Test
+    void theFirstFailingCheckInTheDocumentedOrderIsReported() throws Exception {
+        UUID other = accounts.technician().id();
+        UUID holder = accounts.technician().id();
+        fixtures.reservation(fixtures.asset(locker), technician.id(), "ACTIVE", START, UNTIL);
+
+        // An end that is not after now, then an unknown asset, come before the technician's own reservation.
+        expectProblem(reserve(token, key(), UUID.randomUUID(), START), 400, "VALIDATION_ERROR");
+        expectProblem(reserve(token, key(), UUID.randomUUID(), UNTIL), 404, "ASSET_NOT_FOUND");
+
+        // The technician's reservation, then the asset's, then its open loan.
+        UUID reservedAndBorrowed = fixtures.asset(locker);
+        fixtures.loan(reservedAndBorrowed, holder, START.minusSeconds(3600));
+        fixtures.reservation(reservedAndBorrowed, other, "ACTIVE", START, UNTIL);
+        expectProblem(reserve(token, key(), reservedAndBorrowed, UNTIL), 409,
+                "USER_ALREADY_HAS_ACTIVE_RESERVATION");
+        TestAccount free = accounts.technician();
+        String freeToken = accessToken(free);
+        expectProblem(reserve(freeToken, key(), reservedAndBorrowed, UNTIL), 409, "ASSET_ALREADY_RESERVED");
+
+        // The end of the open window, then the access level, then readiness, then the missing placement.
+        UUID restrictedExpired = fixtures.asset(locker, "RESTRICTED", "SERVICEABLE", true, START.minusSeconds(1));
+        expectProblem(reserve(freeToken, key(), restrictedExpired, CLOSING.plusMillis(1)), 422,
+                "RESERVATION_END_AFTER_CLOSING");
+        expectProblem(reserve(freeToken, key(), restrictedExpired, UNTIL), 403, "ASSET_ACCESS_DENIED");
+        UUID unplacedExpired = fixtures.asset(null, "STANDARD", "SERVICEABLE", true, START.minusSeconds(1));
+        expectProblem(reserve(freeToken, key(), unplacedExpired, UNTIL), 422, "ASSET_NOT_READY")
+                .andExpect(jsonPath("$.reasons").value(contains("CALIBRATION_EXPIRED")));
+
+        // Before opening: the open loan comes before the window, and the window before the access level.
+        UUID borrowed = fixtures.asset(locker);
+        fixtures.loan(borrowed, holder, START.minusSeconds(3600));
+        clock.set(Instant.parse("2026-09-28T11:59:59Z"));
+        String early = accessToken(free);
+        expectProblem(reserve(early, key(), borrowed, UNTIL), 409, "ASSET_HAS_OPEN_LOAN");
+        expectProblem(reserve(early, key(), restrictedExpired, UNTIL), 422, "OUTSIDE_OPERATING_HOURS");
+
+        assertEquals(0L, fixtures.count("SELECT count(*) FROM aegis.reservations WHERE user_id = :id", free.id()));
+    }
+
     @Test
     void theSameKeyAndBodyReplayTheFirstResponseWithoutASecondReservation() throws Exception {
         String key = key();
