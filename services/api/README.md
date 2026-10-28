@@ -309,6 +309,20 @@ d'heure; aucune route ne l'appelle encore. `OperatingScheduleApiTests`,
 `OperatingScheduleConcurrencyTests`, `OperatingHoursTests` et
 `OperatingScheduleMigrationTests` le vérifient.
 
+## Réservations, opérations et prêts (DB-02)
+
+`V005` crée `reservations`; `V006` crée `locker_operations` et `loans`, leur
+clé étrangère circulaire et `audit_events.operation_id` (document 08,
+sections 4.6, 4.9 et 5.1). PostgreSQL refuse lui-même, avec `23505`, une
+deuxième réservation active par actif ou par technicien, un deuxième prêt
+ouvert par actif, une deuxième opération non terminale par locker et un
+deuxième prêt pour une même opération de retrait
+(`uq_loans_checkout_operation`); le service convertira ces refus en
+`CONFLICT` (section 7.2). Le rôle applicatif ne peut ni supprimer ni vider
+ces trois tables. Aucun service ni aucune route ne les utilise encore;
+`CustodySchemaTests` vérifie les contraintes, cinq courses concurrentes et
+les droits.
+
 ## Rôles PostgreSQL
 
 Le document 08, section 12.1, sépare le propriétaire des migrations du rôle
@@ -323,8 +337,9 @@ même compte `aegis`, et le rôle applicatif n'existe pas.
 
 Après chaque migration, le callback Flyway accorde au rôle applicatif, s'il
 existe : `USAGE` sur `aegis`, `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les
-tables métier, et seulement `SELECT` et `INSERT` sur `audit_events`; jamais
-`TRUNCATE`, `REFERENCES` ni `TRIGGER`. Il échoue si ce rôle est
+tables métier, `SELECT`, `INSERT` et `UPDATE` sans `DELETE` sur
+`reservations`, `locker_operations` et `loans`, et seulement `SELECT` et
+`INSERT` sur `audit_events`; jamais `TRUNCATE`, `REFERENCES` ni `TRIGGER`. Il échoue si ce rôle est
 superutilisateur ou membre d'un propriétaire du schéma, même sans héritage. Le trigger
 append-only de `audit_events` n'est qu'une défense en profondeur : le
 propriétaire de la table peut le désactiver et un superutilisateur le
@@ -349,7 +364,9 @@ aux environnements partagés dans cette carte :
    plaçant le compte propriétaire dans `AEGIS_DB_MIGRATION_USER` et
    `AEGIS_DB_MIGRATION_PASSWORD`;
 5. vérifier en tant que `aegis_app` que `UPDATE`, `DELETE` et `TRUNCATE` sur
-   `aegis.audit_events` échouent avec `42501`;
+   `aegis.audit_events`, ainsi que `DELETE` et `TRUNCATE` sur
+   `aegis.reservations`, `aegis.locker_operations` et `aegis.loans`, échouent
+   avec `42501`;
 6. facultatif : transférer la propriété du schéma `aegis`, de ses objets et de
    `public.flyway_schema_history` à `aegis_migrator`, puis migrer avec lui
    plutôt qu'avec un superutilisateur.
