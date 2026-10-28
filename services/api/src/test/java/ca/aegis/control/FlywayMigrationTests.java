@@ -31,7 +31,8 @@ import ca.aegis.control.support.TestDatabases;
 /** Applies the real migrations to a new empty PostgreSQL database with the application's Flyway settings. */
 class FlywayMigrationTests {
 
-    private static final List<String> ALL_VERSIONS = List.of("001", "002", "002.1", "002.2", "003", "004");
+    private static final List<String> ALL_VERSIONS = List.of("001", "002", "002.1", "002.2", "003", "004", "005",
+            "006");
 
     private final TestDatabases databases = TestDatabases.shared();
     private final TestDatabaseServer server = databases.server();
@@ -55,14 +56,14 @@ class FlywayMigrationTests {
 
     @Test
     void migratesAnEmptyDatabaseOnceAndValidatesAfterwards() {
-        assertEquals(6, flyway(null).migrate().migrationsExecuted);
+        assertEquals(8, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
 
         assertEquals(ALL_VERSIONS, appliedVersions());
         assertEquals(List.of("asset_identifiers", "asset_models", "asset_placements", "assets", "audit_events",
-                "compartments", "locker_devices", "lockers", "operating_schedules", "operating_windows",
-                "rest_idempotency_keys", "users"), jdbc.sql("""
+                "compartments", "loans", "locker_devices", "locker_operations", "lockers", "operating_schedules",
+                "operating_windows", "reservations", "rest_idempotency_keys", "users"), jdbc.sql("""
                 SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'aegis' ORDER BY table_name COLLATE "C"
                 """).query(String.class).list());
@@ -73,7 +74,7 @@ class FlywayMigrationTests {
         assertEquals(1, flyway("001").migrate().migrationsExecuted);
         assertEquals(List.of("001"), appliedVersions());
 
-        assertEquals(5, flyway(null).migrate().migrationsExecuted);
+        assertEquals(7, flyway(null).migrate().migrationsExecuted);
         assertEquals(ALL_VERSIONS, appliedVersions());
     }
 
@@ -84,7 +85,7 @@ class FlywayMigrationTests {
         UUID user = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
         UUID model = insertModel("Oscilloscope");
 
-        assertEquals(3, flyway(null).migrate().migrationsExecuted);
+        assertEquals(5, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -97,7 +98,7 @@ class FlywayMigrationTests {
 
     /**
      * The three proof references of document 08, section 4.9, arrive with the tables they reference (V006, V008),
-     * so no reference column exists without its foreign key.
+     * so no reference column exists without its foreign key: operation_id is appended by V006.
      */
     @Test
     void auditEventsEnforceTheirConstraintsWithoutReferencesToMissingTables() {
@@ -105,7 +106,7 @@ class FlywayMigrationTests {
         UUID actor = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
 
         assertEquals(List.of("id", "event_type", "actor_user_id", "subject_type", "subject_id", "from_state",
-                "to_state", "result", "reason", "details", "occurred_at"), jdbc.sql("""
+                "to_state", "result", "reason", "details", "occurred_at", "operation_id"), jdbc.sql("""
                 SELECT column_name FROM information_schema.columns
                 WHERE table_schema = 'aegis' AND table_name = 'audit_events' ORDER BY ordinal_position
                 """).query(String.class).list());
@@ -164,7 +165,7 @@ class FlywayMigrationTests {
         jdbc.sql("CREATE ROLE " + role + " NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS")
                 .update();
         try {
-            assertEquals(6, flyway(null, role).migrate().migrationsExecuted);
+            assertEquals(8, flyway(null, role).migrate().migrationsExecuted);
             assertEquals(0, flyway(null, role).migrate().migrationsExecuted);
             assertTrue(flyway(null, role).validateWithResult().validationSuccessful);
             UUID actor = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
@@ -255,7 +256,7 @@ class FlywayMigrationTests {
         UUID user = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
         UUID model = insertModel("Oscilloscope");
 
-        assertEquals(4, flyway(null).migrate().migrationsExecuted);
+        assertEquals(6, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -276,7 +277,7 @@ class FlywayMigrationTests {
         insertEvent(null, "ASSET_CREATED", "ASSET", "ACCEPTED");
         List<Map<String, Object>> history = history();
 
-        assertEquals(2, flyway(null).migrate().migrationsExecuted);
+        assertEquals(4, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -285,6 +286,46 @@ class FlywayMigrationTests {
                 .param("id", asset).query(Long.class).single());
         assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis.audit_events").query(Long.class).single());
         assertEquals(0, jdbc.sql("SELECT count(*) FROM aegis.asset_placements").query(Long.class).single());
+    }
+
+    /**
+     * Databases stand at V004 when V005 and V006 are added: history rows, data and audit events are kept as they
+     * were, and no operation is invented for an existing event.
+     */
+    @Test
+    void upgradesADatabaseAtTheScheduleMigrationWithoutRewritingItsHistory() {
+        assertEquals(6, flyway("4").migrate().migrationsExecuted);
+        UUID actor = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
+        UUID asset = insertAsset(insertModel("Oscilloscope"), "AEG-001", false, null);
+        insertIdentifier(asset, "RFID_UHF", "E200-0001");
+        UUID locker = insertLocker("AEGIS-DEMO-01");
+        insertPlacement(asset, insertCompartment(locker, "A1", 1, 1));
+        jdbc.sql("INSERT INTO aegis.operating_schedules (locker_id, created_by_user_id) VALUES (:locker, :actor)")
+                .param("locker", locker).param("actor", actor).update();
+        insertEvent(actor, "ASSET_CREATED", "ASSET", "ACCEPTED");
+        List<Map<String, Object>> history = history();
+        String priorEvents = """
+                SELECT id, event_type, actor_user_id, subject_type, subject_id, from_state, to_state, result, reason,
+                       details::text AS details, occurred_at
+                FROM aegis.audit_events ORDER BY id
+                """;
+        List<Map<String, Object>> events = jdbc.sql(priorEvents).query().listOfRows();
+
+        assertEquals(2, flyway(null).migrate().migrationsExecuted);
+        assertEquals(0, flyway(null).migrate().migrationsExecuted);
+        assertTrue(flyway(null).validateWithResult().validationSuccessful);
+        assertEquals(ALL_VERSIONS, appliedVersions());
+        assertEquals(history, history().subList(0, history.size()));
+        assertEquals(events, jdbc.sql(priorEvents).query().listOfRows());
+        assertEquals(0, jdbc.sql("SELECT count(*) FROM aegis.audit_events WHERE operation_id IS NOT NULL")
+                .query(Long.class).single());
+        assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis.asset_placements WHERE asset_id = :id")
+                .param("id", asset).query(Long.class).single());
+        assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis.operating_schedules").query(Long.class).single());
+        assertEquals(0, jdbc.sql("""
+                SELECT (SELECT count(*) FROM aegis.reservations) + (SELECT count(*) FROM aegis.locker_operations)
+                       + (SELECT count(*) FROM aegis.loans)
+                """).query(Long.class).single());
     }
 
     @Test
