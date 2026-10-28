@@ -7,8 +7,8 @@ import ca.aegis.control.identity.AccessLevel;
 
 /**
  * Administrative asset representation (document 09, section 8.9): the technician view without {@code readiness},
- * plus {@code serialNumber} and {@code operationalDiagnostic}. {@code archivedAt} is an addition proposed with
- * CAT-01 so that an archived asset stays recognisable in the administrative list.
+ * plus {@code serialNumber}, {@code operationalDiagnostic} and {@code archivedAt}, which keeps an archived asset
+ * recognisable in the administrative list.
  */
 public record AdminAssetView(
         UUID id,

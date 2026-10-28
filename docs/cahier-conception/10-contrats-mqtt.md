@@ -2,8 +2,9 @@
 
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Date de révision :** 21 octobre 2026  
-**Version documentaire :** 1.4 — schéma des messages 2.0 : connexions, ordre des démarrages et projection de disponibilité (#63); topics et ACL inchangés
+**Date de révision :** 22 octobre 2026  
+**Version documentaire :** 1.5 — comportement du hub décidé par Philippe le 22 octobre 2026 : messages retenus, doublons tardifs, opération déjà exécutée, rétention et saturation du journal, rejets d’affichage, révision périmée, abonnements, `STORAGE_FAULT` (§7.2, §9, §10, §13.2, §16.1, §18, §20, §23, §27) (#39); schéma 2.0, topics et ACL inchangés  
+**Version documentaire précédente :** 1.4 — schéma des messages 2.0 : connexions, ordre des démarrages et projection de disponibilité (#63)
 
 ---
 
@@ -246,6 +247,8 @@ Le backend ne compte jamais sur une livraison exactement une fois. Toute livrais
 
 Une commande ou une instruction d’écran `retain=true` est strictement interdite. Une ancienne commande ne doit jamais être livrée à un hub simplement parce qu’il vient de se reconnecter.
 
+Si le hub en reçoit une malgré tout, il ne l’exécute pas, ne l’affiche pas et ne la consigne pas dans son journal des commandes (§16.1) : elle ne consomme ni son `messageId` ni son `operationId`, et ne change pas la réponse faite à la même commande livrée sans retain. Le schéma 2.0 ne prévoit aucun signalement de ce cas; il est suivi par #98 (schéma 3.0, `INBOUND_MESSAGE_INVALID`).
+
 Seuls les messages DEVICE_AVAILABILITY sont retenus : ONLINE, OFFLINE `SHUTDOWN` et le Last Will OFFLINE `CONNECTION_LOST`. Un statut retenu ne remplace jamais la vérification de fraîcheur (§15.3).
 
 ---
@@ -346,7 +349,7 @@ Payload :
 
 ### 9.1 Validation locale
 
-Avant toute action, le hub vérifie :
+Avant toute action, le hub vérifie les points ci-dessous. La déduplication passe avant les contrôles 4 à 12 : dès que les étapes 1 à 3 rendent `messageId` lisible, une commande déjà journalisée reçoit son résultat connu (§10.1), même après `expiresAt`, sans nouvel actionnement et sans réévaluer ses gardes.
 
 1. JSON valide et taille acceptable;
 2. schemaVersion supportée;
@@ -355,11 +358,17 @@ Avant toute action, le hub vérifie :
 5. compartmentId connu et adressable;
 6. horloge synchronisée;
 7. instant courant strictement antérieur à expiresAt;
-8. messageId et operationId non déjà consommés;
+8. messageId et operationId non déjà consommés : une opération est consommée dès que l’une de ses commandes a atteint EXECUTING (exécutée, en cours, incertaine ou en échec d’actionnement `LOCK_ACTUATION_FAILED`); une commande seulement rejetée avant actionnement ne la consomme pas;
 9. aucune autre ouverture locale active;
 10. cellule connectée;
 11. porte dans un état sûr;
 12. alimentation et actionneur disponibles.
+
+Une nouvelle commande (nouveau `messageId`) pour une opération déjà consommée ne réactionne rien :
+
+- même cellule : le hub répond le résultat connu de l’opération, `COMMAND_ACKNOWLEDGED` `ALREADY_APPLIED` si elle a été acquittée, sinon son rejet journalisé;
+- autre cellule : `COMMAND_REJECTED` `INVALID_PAYLOAD`; la cellule nommée reste verrouillée et aucun accusé ne la cite comme actionnée;
+- une exécution incertaine (`PREVIOUS_EXECUTION_UNCERTAIN`) ne devient jamais un succès : elle reste un rejet pour toute commande de la même opération.
 
 Avant l’action irréversible, le hub persiste la commande dans un état local EXECUTING. Après l’actionnement, il enregistre son résultat final ACKNOWLEDGED ou REJECTED. Si le hub redémarre avec une commande restée EXECUTING, il ne réactive jamais la serrure : il publie PREVIOUS_EXECUTION_UNCERTAIN afin que le backend crée ou maintienne une anomalie.
 
@@ -368,6 +377,8 @@ Avant l’action irréversible, le hub persiste la commande dans un état local 
 Le hub impose une durée maximale de déverrouillage indépendante de la connexion réseau. À son expiration, il tente de remettre la serrure dans son état sûr et publie l’état observé.
 
 La valeur exacte dépend du mécanisme de serrure et doit être fixée dans l’ADR matériel. Elle ne peut pas dépasser la fenêtre de LockerOperation.
+
+La minuterie est locale et continue pendant une perte de réseau; les événements produits hors ligne attendent dans la file locale (§18). La durée de 15 secondes du simulateur est un paramètre de simulation, sans valeur normative. La durée réelle, le reverrouillage et la sécurité électrique relèvent de l’ADR matériel et des POC (POC-02 #20, POC-03 #21).
 
 ---
 
@@ -396,7 +407,11 @@ Un accusé positif signifie que le hub a validé la commande, que la cellule cib
 
 result vaut ACCEPTED ou ALREADY_APPLIED.
 
-Pour une commande dupliquée, le hub republie l’accusé logique connu avec un nouveau messageId d’événement, le même commandMessageId et result=ALREADY_APPLIED. Il ne réactive pas la serrure.
+Pour une commande dupliquée, le hub republie l’accusé logique connu avec un nouveau messageId d’événement, le même commandMessageId et result=ALREADY_APPLIED. Il ne réactive pas la serrure. Cette réponse vaut aussi pour un doublon livré après `expiresAt` (§9.1).
+
+Un rejet connu reste un rejet : un doublon d’une commande rejetée republie le même rejet, avec un nouveau messageId d’événement, même si sa cause a disparu. Une nouvelle tentative relève d’une nouvelle décision du backend, avec une nouvelle commande et un nouveau `messageId` (§16.3).
+
+`messageId` identifie la commande (§16.1). Un message qui réutilise un `messageId` déjà journalisé avec un autre contenu reçoit le résultat de la commande journalisée, avec son `operationId` et son `compartmentId`, jamais ceux du nouveau message; aucune cellule n’est actionnée. Le backend ne réutilise jamais un `messageId` pour un autre contenu.
 
 ### 10.2 COMMAND_REJECTED
 
@@ -428,14 +443,14 @@ Raisons P0 :
 - COMMAND_EXPIRED;
 - LOCAL_OPERATION_IN_PROGRESS;
 - CELL_UNREACHABLE;
-- COMPARTMENT_DISABLED;
+- COMPARTMENT_DISABLED (réservée : aucun mécanisme de désactivation n’est défini côté hub; le hub ne l’émet pas tant qu’il ne l’est pas);
 - DOOR_STATE_UNSAFE;
 - LOCK_ACTUATION_FAILED;
-- POWER_STATE_UNSAFE;
+- POWER_STATE_UNSAFE (défaut technique local d’alimentation ou d’actionneur détecté par le hub, §9.1 étape 12; ce contrat ne fixe aucun seuil électrique);
 - PREVIOUS_EXECUTION_UNCERTAIN;
 - INTERNAL_DEVICE_ERROR.
 
-detail est borné à 240 caractères et ne contient aucun secret.
+detail est borné à 240 caractères et ne contient aucun secret. Il sert au diagnostic : aucun consommateur n’en déduit une règle métier; seuls `reason` et les identifiants comptent.
 
 ---
 
@@ -479,7 +494,7 @@ Un événement de serrure ne remplace pas un événement de porte. Une serrure d
 
 ### 12.1 RFID_SCAN_COMPLETED
 
-Chaque cellule lit localement les tags. À la fin d’une fenêtre de stabilisation, le hub publie une preuve positive que la lecture a réellement été exécutée. Cette preuve contient l’état du lecteur et les identifiants observés, y compris un tableau vide lorsqu’aucun tag n’a été détecté.
+Chaque cellule lit localement les tags. Pendant une opération, le hub lance le scan de la cellule après la fermeture de sa porte; aucune commande de scan n’existe. À la fin d’une fenêtre de stabilisation, le hub publie une preuve positive que la lecture a réellement été exécutée. Cette preuve contient l’état du lecteur et les identifiants observés, y compris un tableau vide lorsqu’aucun tag n’a été détecté.
 
 ```json
 {
@@ -590,6 +605,19 @@ Codes initiaux :
 - POWER_FAULT;
 - CLOCK_SYNC_LOST;
 - STORAGE_FAULT.
+
+`detail` suit la règle du §10.2 : borné à 240 caractères, sans secret, pour le diagnostic seulement.
+
+`STORAGE_FAULT` après un débordement de la file locale (§18) :
+
+- un `DEVICE_ERROR` `CRITICAL` par opération touchée, avec son `operationId` et son `compartmentId`;
+- un `DEVICE_ERROR` `WARNING` pour les événements perdus hors opération, avec `compartmentId` seulement si une seule cellule est touchée;
+- publié après `DEVICE_AVAILABILITY` ONLINE, le heartbeat et les rejets `PREVIOUS_EXECUTION_UNCERTAIN`, avant les événements gardés en file;
+- une perte n’est signalée qu’une fois;
+- un redémarrage efface la file et ses pertes : `DEVICE_RESTARTED` porte déjà l’incertitude (§13.1), sans `STORAGE_FAULT`;
+- aucune preuve perdue n’est reconstituée (§23.6 point 4).
+
+Un message entrant impossible à corréler ou retenu n’a pas encore de code : `INBOUND_MESSAGE_INVALID` (`WARNING`, sans payload ni identifiant inventé) exige une nouvelle major et arrive avec le schéma 3.0 (#98).
 
 ---
 
@@ -817,11 +845,17 @@ Le hub conserve durablement un journal borné des commandes consommées :
 - raison;
 - horodatage.
 
-Rétention P0 recommandée :
+Rétention P0 :
 
 - au moins 24 heures;
 - au moins les 64 dernières commandes;
 - stockage en anneau afin de limiter l’usure de la mémoire flash.
+
+Le hub garde en outre, quel que soit leur âge, les entrées dont l’oubli pourrait permettre un second actionnement : une commande EXECUTING, un rejet `PREVIOUS_EXECUTION_UNCERTAIN` dont le broker n’a pas encore accusé la publication, et une commande dont `expiresAt` n’est pas passé, sauf si elle a été rejetée avant actionnement pour une raison qui ne peut pas changer (`INVALID_PAYLOAD`, `UNSUPPORTED_SCHEMA`, `WRONG_LOCKER`, `UNKNOWN_COMPARTMENT`, `COMMAND_EXPIRED`).
+
+Exceptions aux minimums, quand le journal atteint son plafond : le hub oublie d’abord, de la plus ancienne à la plus récente, les entrées non protégées qui n’ont mené à aucun actionnement (rejets, et réponses à une nouvelle commande d’une opération déjà exécutée), même à l’intérieur des 24 heures. Il n’oublie jamais, dans les minimums, une commande qui a atteint EXECUTING. Si seules des entrées protégées restent, il refuse la nouvelle commande par `COMMAND_REJECTED` `INTERNAL_DEVICE_ERROR`, sans actionnement, plutôt que d’oublier une entrée protégée.
+
+Le plafond dépend de la mémoire du hub et n’est pas fixé par ce contrat : le simulateur utilise 1024 entrées, sans l’imposer au firmware.
 
 L’état EXECUTING est persisté avant l’actionnement. Après redémarrage, un doublon ne peut pas rouvrir la serrure. Une entrée EXECUTING retrouvée au démarrage devient un rejet PREVIOUS_EXECUTION_UNCERTAIN; elle exige une réconciliation physique plutôt qu’une nouvelle action.
 
@@ -905,7 +939,7 @@ Avant chaque tentative de connexion, le hub prépare un nouveau `connectionId` e
 nouveau Last Will (§15.2). Après reconnexion :
 
 1. vérifier si la session broker a été restaurée;
-2. se réabonner à commands si nécessaire;
+2. se réabonner à commands et display si nécessaire;
 3. publier DEVICE_AVAILABILITY ONLINE avec le `connectionId` de la connexion;
 4. publier DEVICE_RESTARTED lorsque le hub a réellement redémarré;
 5. publier immédiatement un HEARTBEAT et l’état courant des cellules;
@@ -980,7 +1014,7 @@ Les types ajoutés pour l’écran sont exclus des trois topics de commande/éta
 | ACCESS_CHALLENGE_DISPLAYED | events | requis | requis |
 | DISPLAY_REJECTED | events | requis si le message est corrélable | requis si corrélable |
 
-Un message impossible à corréler produit un `DEVICE_ERROR` expurgé, pas un faux `DISPLAY_REJECTED` sans identifiants obligatoires.
+Un message impossible à corréler ne produit jamais un faux `DISPLAY_REJECTED` ou `COMMAND_REJECTED` sans identifiants obligatoires. Son signalement par un `DEVICE_ERROR` expurgé attend le code `INBOUND_MESSAGE_INVALID` du schéma 3.0 (#98); en schéma 2.0, le hub ne publie rien et n’actionne rien.
 
 ## 21. Codes de rejet backend
 
@@ -1072,6 +1106,11 @@ Les logs n’incluent aucun secret, mot de passe ou payload complet par défaut.
 5. Une commande dupliquée republie son résultat sans nouvel actionnement.
 6. Un redémarrage du hub n’efface pas immédiatement la déduplication.
 7. Une cellule déconnectée produit CELL_UNREACHABLE.
+8. Un doublon livré après `expiresAt` reçoit son résultat connu, pas `COMMAND_EXPIRED`.
+9. Une nouvelle commande d’une opération déjà exécutée n’actionne rien : même cellule, résultat connu; autre cellule, `INVALID_PAYLOAD`.
+10. Un `messageId` réutilisé avec un autre contenu reçoit le résultat journalisé, avec l’`operationId` et le `compartmentId` journalisés; aucune autre cellule n’est actionnée ni citée comme actionnée.
+11. Une commande ou une instruction d’écran retenue n’est ni exécutée, ni affichée, ni journalisée.
+12. Un journal saturé d’entrées protégées refuse la nouvelle commande par `INTERNAL_DEVICE_ERROR` sans actionnement.
 
 ### 23.3 Événements
 
@@ -1241,6 +1280,18 @@ Cet extrait est ajouté à l’enveloppe complète, pas publié seul. Il est ém
 
 `DISPLAY_REJECTED` utilise la même corrélation (`challengeId` seulement pour un défi) et une raison : `SCREEN_UNAVAILABLE`, `TARGET_SESSION_MISMATCH`, `DISPLAY_EXPIRED`, `STALE_DISPLAY_REVISION` ou `INVALID_DISPLAY_PAYLOAD`. Aucun de ces événements ne contient le token ni `commandMessageId`.
 
+Correspondance des cas, pour un message corrélable :
+
+| Cas | Raison |
+|---|---|
+| Schéma non supporté, champ invalide, autre `lockerId`, `compartmentId` inconnu | `INVALID_DISPLAY_PAYLOAD` |
+| `targetDeviceSessionId` d’un autre démarrage | `TARGET_SESSION_MISMATCH` |
+| Horloge non synchronisée, ou écran indisponible | `SCREEN_UNAVAILABLE` |
+| Échéance d’affichage passée | `DISPLAY_EXPIRED` |
+| Nouveau `messageId` dont la révision est inférieure ou égale à la plus grande révision acceptée pendant ce démarrage | `STALE_DISPLAY_REVISION` (§27.4) |
+
+Un doublon (même `messageId`) reçoit à nouveau sa réponse connue avant ces contrôles, sans réafficher (§27.4).
+
 ### 27.3 DISPLAY_OPERATION_STATUS
 
 Même enveloppe backend que §27.1, nouveau `messageId`, révision supérieure, échéance d’affichage de 30 secondes, et payload :
@@ -1260,7 +1311,7 @@ Ce message n’exige pas d’accusé applicatif positif au P0; sa distribution r
 
 ### 27.4 Ordre, reconnexion et purge
 
-Le backend alloue `displayRevision` sous verrou du locker. Le hub conserve la plus grande révision acceptée pendant son démarrage; un doublon identique peut être acquitté à nouveau sans réafficher un QR masqué ou consommé. Une ancienne révision est ignorée.
+Le backend alloue `displayRevision` sous verrou du locker. Le hub conserve la plus grande révision acceptée pendant son démarrage; un doublon identique peut être acquitté à nouveau sans réafficher un QR masqué ou consommé. Une ancienne révision n’est pas affichée : le hub publie `DISPLAY_REJECTED` `STALE_DISPLAY_REVISION`. Ce rejet ne masque pas et n’invalide pas l’affichage plus récent; le backend le traite comme une information, pas comme l’échec du défi courant.
 
 Un nouveau démarrage efface tout QR et génère un nouveau `deviceSessionId`. Les anciennes instructions ciblant l’ancienne session sont rejetées, même si une session MQTT persistante les restitue. Avant autorisation, une perte de connexion invalide le défi côté backend et masque l’écran côté hub.
 

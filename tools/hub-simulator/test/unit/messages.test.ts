@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CHANNEL_BY_TYPE, MAX_PAYLOAD_BYTES, SCHEMA_VERSION, formatInstant, topicFor } from '../../src/contract.ts';
 import {
   DeviceSession,
+  buildDeviceError,
   buildDeviceRestarted,
   buildHeartbeat,
   buildOffline,
@@ -24,6 +25,7 @@ const HEARTBEAT_KEYS = [...ENVELOPE_KEYS, 'connectionId', 'firmwareVersion', 'up
 const COMPARTMENT_KEYS = ['compartmentId', 'cellAddress', 'connectionStatus', 'readerStatus', 'doorState', 'lockState'];
 const AVAILABILITY_KEYS = [...ENVELOPE_KEYS, 'connectionId', 'status', 'reason'];
 const RESTARTED_KEYS = [...ENVELOPE_KEYS, 'resetReason', 'firmwareVersion'];
+const DEVICE_ERROR_KEYS = [...ENVELOPE_KEYS, 'errorCode', 'severity', 'detail'];
 
 const A1: CompartmentStatus = {
   compartmentId: '1ae77ae3-8490-4f09-9412-a7816b77bff9',
@@ -130,6 +132,28 @@ describe('DEVICE_RESTARTED (doc 10 §13.1)', () => {
   });
 });
 
+describe('DEVICE_ERROR (doc 10 §13.2)', () => {
+  it('is a QoS 1, non-retained fact on events, with operationId and compartmentId only when given', () => {
+    const OPERATION = '2f38d3b6-c18f-4a74-aa9a-2d574286013f';
+    const m = buildDeviceError(context(BOOT), {
+      errorCode: 'STORAGE_FAULT',
+      severity: 'CRITICAL',
+      operationId: OPERATION,
+      compartmentId: A1.compartmentId,
+      detail: 'x'.repeat(300),
+    });
+    expect(sorted(m.payload)).toEqual([...DEVICE_ERROR_KEYS, 'operationId', 'compartmentId'].sort());
+    expect(m.payload).toMatchObject({ errorCode: 'STORAGE_FAULT', severity: 'CRITICAL', operationId: OPERATION });
+    expect(m.payload.detail).toHaveLength(240);
+    expect(m.topic).toBe(`aegis/v1/lockers/${LOCKER}/events`);
+    expect(m.delivery).toEqual({ qos: 1, retain: false });
+
+    const bare = buildDeviceError(context(BOOT), { errorCode: 'STORAGE_FAULT', severity: 'WARNING', detail: 'lost' });
+    expect(sorted(bare.payload)).toEqual([...DEVICE_ERROR_KEYS].sort());
+    expectEnvelope(bare.payload as unknown as Record<string, unknown>, 'DEVICE_ERROR');
+  });
+});
+
 describe('envelope rules (doc 10 §8.1, §16.3, §20)', () => {
   it('numbers the Will first, so ONLINE gets 1, and renews messageId for each fact; bootCount is constant', () => {
     const session = new DeviceSession(SESSION, BOOT_COUNT, BOOT);
@@ -163,8 +187,22 @@ describe('envelope rules (doc 10 §8.1, §16.3, §20)', () => {
     expect(new DeviceSession(SESSION, 4_294_967_295, BOOT).bootCount).toBe(4_294_967_295);
   });
 
-  it('never publishes a heartbeat or availability on events, nor a device fact on status', () => {
-    expect(CHANNEL_BY_TYPE).toEqual({ HEARTBEAT: 'status', DEVICE_AVAILABILITY: 'status', DEVICE_RESTARTED: 'events' });
+  it('follows the §20 type/topic matrix: only heartbeat and availability on status', () => {
+    expect(CHANNEL_BY_TYPE).toEqual({
+      HEARTBEAT: 'status',
+      DEVICE_AVAILABILITY: 'status',
+      DEVICE_RESTARTED: 'events',
+      DEVICE_ERROR: 'events',
+      COMMAND_ACKNOWLEDGED: 'events',
+      COMMAND_REJECTED: 'events',
+      DOOR_OPENED: 'events',
+      DOOR_CLOSED: 'events',
+      LOCK_UNLOCKED: 'events',
+      LOCK_LOCKED: 'events',
+      RFID_SCAN_COMPLETED: 'events',
+      ACCESS_CHALLENGE_DISPLAYED: 'events',
+      DISPLAY_REJECTED: 'events',
+    });
   });
 
   it('builds wildcard-free topics', () => {

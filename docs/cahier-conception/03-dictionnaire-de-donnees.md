@@ -4,6 +4,7 @@
 **Date de révision :** 16 septembre 2026
 **Mise à jour ciblée :** 23 septembre 2026 — paramètres QR approuvés, vocabulaire inchangé.
 **Mise à jour ciblée :** 21 octobre 2026 — `bootCount` et connexions MQTT du schéma 2.0 (#63).
+**Mise à jour ciblée :** 22 octobre 2026 — double effet de `reservedUntil` et copie dans `dueAt` (§4.12, §4.13), alignés sur `02-scope.md` et `06` §11.1; règles inchangées (#35).
 **Statut :** Version de référence pour le cahier de conception  
 **Source principale :** `02-scope.md` v0.3 (9 septembre 2026)
 
@@ -242,7 +243,7 @@ Intention temporaire d’un technicien d’obtenir un actif donné.
 | `status` | Voir 5.5. |
 | `createdAt` | Moment où la demande est enregistrée. |
 | `reservedFrom` | Début demandé de la fenêtre d’utilisation. Dans le P0, il correspond au moment de création. |
-| `reservedUntil` | Heure de retour attendue choisie par le technicien. |
+| `reservedUntil` | Échéance unique choisie par le technicien. Avant le retrait, elle borne la réservation et la préparation du retrait; au retrait confirmé, elle devient l’heure de retour prévue du prêt (`Loan.dueAt`). |
 | `expiredAt` | Moment où une réservation non utilisée est effectivement passée à `EXPIRED`. |
 | `cancelledAt`, `fulfilledAt` | Dates de conclusion selon le résultat. |
 
@@ -252,7 +253,7 @@ Invariant P0 supplémentaire : un technicien ne peut posséder qu’une seule r�
 
 Le technicien choisit sa durée en sélectionnant `reservedUntil`. La limite maximale est la fermeture de la plage d’exploitation courante. Une réservation demandée hors des heures d’exploitation ou se terminant après `closesAt` est refusée.
 
-Une réservation non utilisée passe à `EXPIRED` lorsque `reservedUntil` est atteint. Si le retrait a déjà été confirmé, la réservation est déjà `FULFILLED` et son échéance ne modifie jamais la disponibilité de l’actif : le prêt actif devient alors la source de vérité.
+Une réservation non utilisée passe à `EXPIRED` lorsque `reservedUntil` est atteint. Si le retrait a déjà été confirmé, la réservation est déjà `FULFILLED` et son échéance ne modifie jamais la disponibilité de l’actif : le prêt actif devient alors la source de vérité. Un retrait autorisé avant `reservedUntil` n’est pas interrompu par cette échéance : l’expiration attend le classement physique de l’opération, et un prêt confirmé après elle naît déjà en retard (`06` §14.1).
 
 ### 4.13 Prêt / chaîne de possession (`Loan`)
 
@@ -267,7 +268,7 @@ Période pendant laquelle un actif est officiellement attribué à un utilisateu
 | `returnOperationId` | Opération qui a confirmé le retour, lorsque terminée. |
 | `status` | Voir 5.6. |
 | `checkedOutAt` | Moment de confirmation du retrait. |
-| `dueAt` | Heure de retour attendue, copiée depuis `Reservation.reservedUntil`. |
+| `dueAt` | Heure de retour prévue, copiée depuis `Reservation.reservedUntil` à la confirmation du retrait. Elle n’est ni saisie ni recalculée par un client. |
 | `overdue` | Indicateur dérivé : `true` lorsque `dueAt` est dépassée et que le prêt n’est pas terminé. |
 | `returnRequestedAt` | Moment où un retour est commencé. |
 | `returnedAt` | Moment de confirmation du retour. |

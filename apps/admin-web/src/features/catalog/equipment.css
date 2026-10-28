@@ -68,7 +68,7 @@ a.ag-item:hover { background: var(--ag-field); }
     linear-gradient(transparent, rgba(var(--ag-shadow-tint), 0.16)) center bottom / 100% 12px no-repeat scroll,
     var(--ag-surface);
 }
-.ag-dossier__scroll:focus-visible { outline-offset: -2px; }
+.ag-dossier__scroll:focus-visible, .ag-dossier__alert:focus-visible { outline-offset: -2px; }
 .ag-dossier__title {
   margin-top: 8px; font-size: var(--ag-type-title-lg-size); line-height: var(--ag-type-title-lg-lh);
   font-weight: var(--ag-type-title-lg-weight); letter-spacing: var(--ag-type-title-lg-track); overflow-wrap: anywhere;
