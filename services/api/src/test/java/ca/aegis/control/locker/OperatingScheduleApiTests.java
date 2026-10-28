@@ -194,10 +194,12 @@ class OperatingScheduleApiTests extends ApiIntegrationTest {
         }), "windows[4].closesAt", "NOT_AFTER_OPENS_AT");
         expectViolation(with(body -> day(body, 0).put("opensAt", "09:00:00.5")), "windows[0].opensAt",
                 "INVALID_VALUE");
-        expectCode(with(body -> day(body, 0).put("closesAt", "24:00:00")), "INVALID_VALUE");
-        expectCode(with(body -> day(body, 0).put("dayOfWeek", 1)), "INVALID_VALUE");
-        expectCode(with(body -> day(body, 0).put("id", UUID.randomUUID().toString())), "UNKNOWN_FIELD");
-        expectCode(with(body -> body.put("active", false)), "UNKNOWN_FIELD");
+        expectViolation(with(body -> day(body, 3).put("closesAt", "24:00:00")), "windows[3].closesAt",
+                "INVALID_VALUE");
+        expectViolation(with(body -> day(body, 2).put("dayOfWeek", 1)), "windows[2].dayOfWeek", "INVALID_VALUE");
+        expectViolation(with(body -> day(body, 1).put("id", UUID.randomUUID().toString())), "windows[1].id",
+                "UNKNOWN_FIELD");
+        expectViolation(with(body -> body.put("active", false)), "active", "UNKNOWN_FIELD");
 
         replace(locker, with(body -> {
             body.put("timeZone", "UTC+1");
@@ -284,12 +286,6 @@ class OperatingScheduleApiTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.violations.length()").value(1))
                 .andExpect(jsonPath("$.violations[0].field").value(field))
-                .andExpect(jsonPath("$.violations[0].code").value(code));
-    }
-
-    private void expectCode(Object body, String code) throws Exception {
-        replace(locker, body).andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.violations[0].code").value(code));
     }
 
