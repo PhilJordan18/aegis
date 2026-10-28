@@ -101,7 +101,8 @@ class CustodySchemaTests {
         assertEquals(List.of(
                 "fk_audit_events_operation FOREIGN KEY (operation_id) REFERENCES locker_operations(id)",
                 "fk_loans_asset FOREIGN KEY (asset_id) REFERENCES assets(id)",
-                "fk_loans_checkout_operation FOREIGN KEY (checkout_operation_id) REFERENCES locker_operations(id)",
+                "fk_loans_checkout_operation FOREIGN KEY (checkout_operation_id, asset_id, holder_user_id) "
+                        + "REFERENCES locker_operations(id, asset_id, user_id)",
                 "fk_loans_holder FOREIGN KEY (holder_user_id) REFERENCES users(id)",
                 "fk_loans_return_operation FOREIGN KEY (return_operation_id) REFERENCES locker_operations(id)",
                 "fk_locker_operations_asset FOREIGN KEY (asset_id) REFERENCES assets(id)",
@@ -300,6 +301,8 @@ class CustodySchemaTests {
         UUID secondReservation = reserve(site);
         UUID secondCheckout = insertOperation(checkout(site, secondReservation, "CONFIRMED"));
         assertViolation("23505", "ux_loans_one_open_per_asset", () -> insert("loans", loan(site, secondCheckout)));
+        // A missing asset or holder also breaks fk_loans_checkout_operation; PostgreSQL fires foreign key triggers in
+        // creation order and reports the simple key declared first.
         assertViolation("23503", "fk_loans_asset", () -> insert("loans", with(loan(site, secondCheckout),
                 "asset_id", UUID.randomUUID())));
         assertViolation("23503", "fk_loans_holder", () -> insert("loans", with(loan(other, secondCheckout),
@@ -344,6 +347,12 @@ class CustodySchemaTests {
 
         // A replayed confirmation finds the completed loan of its checkout and cannot open a second one.
         assertViolation("23505", "uq_loans_checkout_operation", () -> insert("loans", loan(site, firstCheckout)));
+        // The checkout operation belongs to the loan's asset and holder (composite foreign key, 28 October 2026).
+        // The asset has no open loan any more, so only that key can refuse these rows.
+        assertViolation("23503", "fk_loans_checkout_operation", () -> insert("loans", with(loan(site,
+                secondCheckout), "asset_id", other.asset())));
+        assertViolation("23503", "fk_loans_checkout_operation", () -> insert("loans", with(loan(site,
+                secondCheckout), "holder_user_id", other.user())));
         insert("loans", loan(site, secondCheckout));
         assertEquals(List.of("ACTIVE", "COMPLETED"), jdbc.sql(
                 "SELECT status FROM aegis.loans WHERE asset_id = :asset ORDER BY status")

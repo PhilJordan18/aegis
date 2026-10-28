@@ -117,8 +117,11 @@ CREATE TABLE aegis.loans (
         FOREIGN KEY (asset_id) REFERENCES aegis.assets (id),
     CONSTRAINT fk_loans_holder
         FOREIGN KEY (holder_user_id) REFERENCES aegis.users (id),
+    -- The checkout operation belongs to the loan's asset and holder (decision of 28 October 2026). Its CHECKOUT type
+    -- and the coherence of the return operation remain explicit checks of the confirmation services.
     CONSTRAINT fk_loans_checkout_operation
-        FOREIGN KEY (checkout_operation_id) REFERENCES aegis.locker_operations (id),
+        FOREIGN KEY (checkout_operation_id, asset_id, holder_user_id)
+        REFERENCES aegis.locker_operations (id, asset_id, user_id),
     CONSTRAINT fk_loans_return_operation
         FOREIGN KEY (return_operation_id) REFERENCES aegis.locker_operations (id),
     -- Section 7.4: one checkout operation creates at most one loan, even when two confirmations race.
