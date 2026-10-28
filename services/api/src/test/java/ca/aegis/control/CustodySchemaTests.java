@@ -3,6 +3,7 @@ package ca.aegis.control;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -10,6 +11,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.flywaydb.core.Flyway;
@@ -21,6 +28,7 @@ import org.postgresql.util.PSQLException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
 import ca.aegis.control.support.TestDatabaseServer;
 import ca.aegis.control.support.TestDatabases;
@@ -378,6 +386,128 @@ class CustodySchemaTests {
                 .param("name", "ix_audit_events_operation_time").query(String.class).single());
     }
 
+    @Test
+    void twoTechniciansReservingOneAssetAtOnceLeaveOneActiveReservation() throws Exception {
+        Site first = site("A");
+        Site second = site("B");
+
+        assertSecondWriterRefused("ux_reservations_one_active_per_asset",
+                "SELECT count(*) FROM aegis.reservations WHERE asset_id = :asset AND status = 'ACTIVE'",
+                Map.of("asset", first.asset()), "reservations",
+                reservation(first.asset(), first.user()), reservation(first.asset(), second.user()));
+    }
+
+    @Test
+    void oneTechnicianReservingTwoAssetsAtOnceKeepsOneActiveReservation() throws Exception {
+        Site first = site("A");
+        Site second = site("B");
+
+        assertSecondWriterRefused("ux_reservations_one_active_per_user",
+                "SELECT count(*) FROM aegis.reservations WHERE user_id = :user AND status = 'ACTIVE'",
+                Map.of("user", first.user()), "reservations",
+                reservation(first.asset(), first.user()), reservation(second.asset(), first.user()));
+    }
+
+    /** Two ingestions confirm the same checkout: the second loan is refused even for the same asset and holder. */
+    @Test
+    void twoConfirmationsOfOneCheckoutCreateOneLoan() throws Exception {
+        Site site = site("A");
+        UUID reservation = reserve(site);
+        UUID checkout = insertOperation(checkout(site, reservation, "CONFIRMED"));
+
+        assertSecondWriterRefused("uq_loans_checkout_operation",
+                "SELECT count(*) FROM aegis.loans WHERE checkout_operation_id = :operation",
+                Map.of("operation", checkout), "loans", loan(site, checkout), loan(site, checkout));
+    }
+
+    /** Two confirmed checkouts of one asset, each from its own reservation, race to open a loan. */
+    @Test
+    void twoCheckoutsOfOneAssetConfirmedAtOnceOpenOneLoan() throws Exception {
+        Site site = site("A");
+        UUID firstReservation = reserve(site);
+        UUID firstCheckout = insertOperation(checkout(site, firstReservation, "CONFIRMED"));
+        update("reservations", firstReservation, Map.of("status", "FULFILLED", "fulfilled_at", CONFIRMED));
+        UUID secondCheckout = insertOperation(checkout(site, reserve(site), "CONFIRMED"));
+
+        assertSecondWriterRefused("ux_loans_one_open_per_asset",
+                "SELECT count(*) FROM aegis.loans WHERE asset_id = :asset AND status IN ('ACTIVE', 'RETURN_PENDING')",
+                Map.of("asset", site.asset()), "loans", loan(site, firstCheckout), loan(site, secondCheckout));
+    }
+
+    /** Two technicians start a physical operation on two cells of one locker at the same time. */
+    @Test
+    void twoOperationsStartedAtOnceOnOneLockerLeaveOneOpen() throws Exception {
+        Site first = site("A");
+        Site second = site("B", first.locker(), 2);
+        Map<String, Object> firstOperation = checkout(first, reserve(first), "AWAITING_LOCAL_PROOF");
+        Map<String, Object> secondOperation = checkout(second, reserve(second), "AWAITING_LOCAL_PROOF");
+
+        assertSecondWriterRefused("ux_locker_operations_one_open_per_locker", """
+                SELECT count(*) FROM aegis.locker_operations
+                WHERE locker_id = :locker AND status NOT IN ('CONFIRMED', 'FAILED', 'EXPIRED', 'ANOMALY')
+                """, Map.of("locker", first.locker()), "locker_operations", firstOperation, secondOperation);
+    }
+
+    /**
+     * Two READ COMMITTED transactions both pass the application pre-check, since neither sees the other's
+     * uncommitted row, then both insert. The second insert waits on the first transaction's index entry; once the
+     * first commits, PostgreSQL itself refuses the second with 23505 on the invariant index, and one row remains.
+     */
+    private void assertSecondWriterRefused(String index, String precheck, Map<String, ?> keys, String table,
+            Map<String, Object> first, Map<String, Object> second) throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try (SingleConnectionDataSource firstSession = transaction();
+                SingleConnectionDataSource secondSession = transaction()) {
+            JdbcClient firstWriter = JdbcClient.create(firstSession);
+            JdbcClient secondWriter = JdbcClient.create(secondSession);
+            assertEquals(0, firstWriter.sql(precheck).params(keys).query(Long.class).single());
+            assertEquals(0, secondWriter.sql(precheck).params(keys).query(Long.class).single());
+            int firstPid = firstWriter.sql("SELECT pg_backend_pid()").query(Integer.class).single();
+            int secondPid = secondWriter.sql("SELECT pg_backend_pid()").query(Integer.class).single();
+            insert(firstWriter, table, first);
+
+            CountDownLatch secondStarted = new CountDownLatch(1);
+            Future<UUID> secondInsert = executor.submit(() -> {
+                secondStarted.countDown();
+                return insert(secondWriter, table, second);
+            });
+            assertTrue(secondStarted.await(10, TimeUnit.SECONDS));
+            awaitBlocked(secondPid, firstPid);
+            firstSession.getConnection().commit();
+
+            ExecutionException failure = assertThrows(ExecutionException.class,
+                    () -> secondInsert.get(10, TimeUnit.SECONDS));
+            DataAccessException refusal = assertInstanceOf(DataAccessException.class, failure.getCause());
+            PSQLException cause = assertInstanceOf(PSQLException.class, refusal.getMostSpecificCause());
+            assertEquals("23505", cause.getSQLState(), cause::getMessage);
+            assertEquals(index, cause.getServerErrorMessage().getConstraint(), cause::getMessage);
+            secondSession.getConnection().rollback();
+        } finally {
+            executor.shutdownNow();
+        }
+        assertEquals(1, jdbc.sql(precheck).params(keys).query(Long.class).single());
+    }
+
+    /** Waits until PostgreSQL reports the waiter as blocked by the holder, proving the two writes overlap. */
+    private void awaitBlocked(int waiter, int holder) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (!jdbc.sql("SELECT :holder = ANY (pg_blocking_pids(:waiter))").param("holder", holder)
+                .param("waiter", waiter).query(Boolean.class).single()) {
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError("Session " + waiter + " was never blocked by session " + holder);
+            }
+            Thread.sleep(20);
+        }
+    }
+
+    /** One connection with autocommit off, kept open across statements until it is closed. */
+    private SingleConnectionDataSource transaction() {
+        SingleConnectionDataSource session = new SingleConnectionDataSource(server.url(database), server.user(),
+                server.password(), true);
+        session.setAutoCommit(false);
+        return session;
+    }
+
     private Flyway flyway(String applicationRole) {
         return Flyway.configure()
                 .dataSource(server.url(database), server.user(), server.password())
@@ -528,7 +658,11 @@ class CustodySchemaTests {
     }
 
     private UUID insert(String table, Map<String, Object> columns) {
-        JdbcClient.StatementSpec statement = jdbc.sql("INSERT INTO aegis." + table + " ("
+        return insert(jdbc, table, columns);
+    }
+
+    private static UUID insert(JdbcClient client, String table, Map<String, Object> columns) {
+        JdbcClient.StatementSpec statement = client.sql("INSERT INTO aegis." + table + " ("
                 + String.join(", ", columns.keySet()) + ") VALUES ("
                 + columns.keySet().stream().map(column -> ":" + column).collect(Collectors.joining(", "))
                 + ") RETURNING id");
