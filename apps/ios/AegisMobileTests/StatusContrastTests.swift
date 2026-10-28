@@ -16,6 +16,15 @@ struct StatusContrastTests {
         #expect(ratio >= 4.5, "\(pair.0) on \(pair.1), \(style == .dark ? "dark" : "light"): \(ratio)")
     }
 
+    /// Filter chips: unselected text on the panel, selected white on the accent.
+    @Test(arguments: [UIUserInterfaceStyle.light, .dark])
+    func filterChipTextReachesNormalTextContrast(_ style: UIUserInterfaceStyle) throws {
+        #expect(try Self.contrast("BrandText", "BrandPanel", style) >= 4.5)
+        let traits = UITraitCollection(userInterfaceStyle: style)
+        let accent = try Self.luminance(try #require(UIColor(named: "AccentColor")).resolvedColor(with: traits))
+        #expect((1 + 0.05) / (accent + 0.05) >= 4.5)
+    }
+
     @Test(arguments: [UIUserInterfaceStyle.light, .dark])
     func neutralIconReachesNonTextContrast(_ style: UIUserInterfaceStyle) throws {
         #expect(try Self.contrast("NeutralIcon", "StatusNeutralFill", style) >= 3)
