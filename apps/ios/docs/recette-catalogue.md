@@ -197,21 +197,21 @@ enregistrée sur le Bureau.
 
 ## Parcours manuel
 
-Contre l'API réelle, en français, en mode clair. Cocher OK ou KO et noter
-toute différence.
+Contre l'API réelle, en français, en mode clair. Pour chaque étape, noter le résultat observé, puis
+« Réussi », « Échoué » ou « Non exécuté », et toute différence en remarque.
 
-| N° | Action | Résultat attendu | OK / KO | Remarque |
-|---:|---|---|---|---|
-| 1 | Lancer l'application en français (voir ci-dessus). | L'écran de connexion s'affiche. Aucune donnée d'équipement n'est visible. | | |
-| 2 | Saisir `technician@aegis.demo`, coller le mot de passe (étape 7 de la section API), puis toucher **Se connecter**. | L'onglet **Équipements** s'ouvre. | | |
-| 3 | Lire le catalogue. | Cinq cartes, `AEG-DEMO-001` à `AEG-DEMO-005`. Chacune dit son état en mots : « À vérifier » pour 001 et 004, « Bloqué » pour 002, 003 et 005. Aucun « Prêt ». Sous les cartes : « État évalué à …, heure du casier. » Aucun identifiant RFID n'apparaît. | | |
-| 4 | Toucher le filtre **Bloqué**. | Le filtre est sélectionné. Seules 002, 003 et 005 restent. | | |
-| 5 | Ouvrir `AEG-DEMO-002`. | La fiche s'ouvre sur l'état « Bloqué », puis la section « Pourquoi il est bloqué ». | | |
-| 6 | Lire la raison et les faits. | La raison commence par « Calibration expirée depuis le 1 oct. 2026 à 00:00 HAE ». La date, l'heure et le fuseau sont présents. La ligne **Cellule** indique `A2 · AEGIS-DEMO-01`. | | |
-| 7 | Revenir avec le bouton de retour en haut à gauche. | La liste réapparaît, toujours filtrée sur « Bloqué ». | | |
-| 8 | Fermer l'application : `xcrun simctl terminate booted com.example.aegis.mobile`. La rouvrir en touchant son icône sur l'écran d'accueil du simulateur. | **Équipements** s'ouvre sans redemander le mot de passe. « Reprise de la session… » peut s'afficher un instant avant. | | |
-| 9 | Onglet **Compte**, toucher **Se déconnecter**, puis confirmer « Vous déconnecter ? ». | L'écran de connexion s'affiche avec « Vous êtes déconnecté. ». Après une nouvelle fermeture et réouverture, l'application redemande la connexion. | | |
-| 10 | Refaire les étapes 1 à 7 en anglais (voir ci-dessus). | Les écrans essentiels sont en anglais : **Equipment**, **Blocked**, « Why it's blocked », « Calibration expired on … » avec la date, l'heure et le fuseau, **Compartment** `A2 · AEGIS-DEMO-01`, **Account**, **Sign out**. Les codes d'équipement et les noms de modèle ne sont pas traduits. | | |
+| N° | Action | Résultat attendu | Résultat observé | Réussi / Échoué / Non exécuté | Remarque |
+|---:|---|---|---|---|---|
+| 1 | Lancer l'application en français (voir ci-dessus). | L'écran de connexion s'affiche. Aucune donnée d'équipement n'est visible. | | | |
+| 2 | Saisir `technician@aegis.demo`, coller le mot de passe (étape 7 de la section API), puis toucher **Se connecter**. | L'onglet **Équipements** s'ouvre. | | | |
+| 3 | Lire le catalogue. | Cinq cartes, `AEG-DEMO-001` à `AEG-DEMO-005`. Chacune dit son état en mots : « À vérifier » pour 001 et 004, « Bloqué » pour 002, 003 et 005. Aucun « Prêt ». Sous les cartes : « État évalué à …, heure du casier. » Aucun identifiant RFID n'apparaît. | | | |
+| 4 | Toucher le filtre **Bloqué**. | Le filtre est sélectionné. Seules 002, 003 et 005 restent. | | | |
+| 5 | Ouvrir `AEG-DEMO-002`. | La fiche s'ouvre sur l'état « Bloqué », puis la section « Pourquoi il est bloqué ». | | | |
+| 6 | Lire la raison et les faits. | La raison commence par « Calibration expirée depuis le 1 oct. 2026 à 00:00 HAE ». La date, l'heure et le fuseau sont présents. La ligne **Cellule** indique `A2 · AEGIS-DEMO-01`. | | | |
+| 7 | Revenir avec le bouton de retour en haut à gauche. | La liste réapparaît, toujours filtrée sur « Bloqué ». | | | |
+| 8 | Fermer l'application : `xcrun simctl terminate booted com.example.aegis.mobile`. La rouvrir en touchant son icône sur l'écran d'accueil du simulateur. | **Équipements** s'ouvre sans redemander le mot de passe. « Reprise de la session… » peut s'afficher un instant avant. | | | |
+| 9 | Onglet **Compte**, toucher **Se déconnecter**, puis confirmer « Vous déconnecter ? ». | L'écran de connexion s'affiche avec « Vous êtes déconnecté. ». Après une nouvelle fermeture et réouverture, l'application redemande la connexion. | | | |
+| 10 | Refaire les étapes 1 à 7 en anglais (voir ci-dessus). | Les écrans essentiels sont en anglais : **Equipment**, **Blocked**, « Why it's blocked », « Calibration expired on … » avec la date, l'heure et le fuseau, **Compartment** `A2 · AEGIS-DEMO-01`, **Account**, **Sign out**. Les codes d'équipement et les noms de modèle ne sont pas traduits. | | | |
 
 ### Scénario réseau : « Dernier état », puis retour
 
@@ -219,13 +219,13 @@ Ce scénario montre que des données anciennes ne passent jamais pour un état
 actuel. Il se fait en français, connecté, sur l'onglet **Équipements**, filtre
 **Tous**.
 
-| N° | Action | Résultat attendu | OK / KO | Remarque |
-|---:|---|---|---|---|
-| R1 | Noter l'heure. Arrêter l'API : Ctrl+C dans le terminal 1. | Rien ne change à l'écran tant que l'application ne relit pas. | | |
-| R2 | Tirer la liste vers le bas pour l'actualiser. | Un avis s'affiche au-dessus des cartes : « Connexion au service impossible. Vérifiez le réseau. » et « Informations non actualisées depuis HH:MM. », où HH:MM est l'heure locale de la dernière réception. La liste reste visible, mais chaque carte dit « Dernier état : … », en couleurs neutres (gris), et non « Bloqué » ou « À vérifier » en couleur. La ligne « État évalué à … » disparaît. Le bouton **Réessayer** est présent. | | |
-| R3 | Ouvrir `AEG-DEMO-002`. | La fiche reste lisible, avec l'état « Dernier état : Bloqué » et « Informations non actualisées depuis HH:MM. ». Rien n'indique un état actuel. Revenir à la liste. | | |
-| R4 | Redémarrer l'API : refaire l'étape 5 de la section API dans le terminal 1, jusqu'à `Started`. Les données sont conservées ; l'étape 6 n'est pas nécessaire. | — | | |
-| R5 | Toucher **Réessayer**. | L'avis disparaît. Les cartes retrouvent « Bloqué » ou « À vérifier » en couleur, et « État évalué à …, heure du casier. » revient, avec une heure postérieure à R1. | | |
+| N° | Action | Résultat attendu | Résultat observé | Réussi / Échoué / Non exécuté | Remarque |
+|---:|---|---|---|---|---|
+| R1 | Noter l'heure. Arrêter l'API : Ctrl+C dans le terminal 1. | Rien ne change à l'écran tant que l'application ne relit pas. | | | |
+| R2 | Tirer la liste vers le bas pour l'actualiser. | Un avis s'affiche au-dessus des cartes : « Connexion au service impossible. Vérifiez le réseau. » et « Informations non actualisées depuis HH:MM. », où HH:MM est l'heure locale de la dernière réception. La liste reste visible, mais chaque carte dit « Dernier état : … », en couleurs neutres (gris), et non « Bloqué » ou « À vérifier » en couleur. La ligne « État évalué à … » disparaît. Le bouton **Réessayer** est présent. | | | |
+| R3 | Ouvrir `AEG-DEMO-002`. | La fiche reste lisible, avec l'état « Dernier état : Bloqué » et « Informations non actualisées depuis HH:MM. ». Rien n'indique un état actuel. Revenir à la liste. | | | |
+| R4 | Redémarrer l'API : refaire l'étape 5 de la section API dans le terminal 1, jusqu'à `Started`. Les données sont conservées ; l'étape 6 n'est pas nécessaire. | — | | | |
+| R5 | Toucher **Réessayer**. | L'avis disparaît. Les cartes retrouvent « Bloqué » ou « À vérifier » en couleur, et « État évalué à …, heure du casier. » revient, avec une heure postérieure à R1. | | | |
 
 Si l'application est fermée pendant que l'API est arrêtée, la réouverture
 affiche « Connexion au service impossible » avec **Réessayer** : la session est
@@ -239,9 +239,9 @@ Test négatif : une réservation refusée n'est pas une réservation réussie. L
 procédure est dans `services/api/README.md`, section « Test négatif de la
 recette ». L'application iOS n'a pas encore d'écran de réservation.
 
-| N° | Action | Résultat attendu | OK / KO | Remarque |
-|---:|---|---|---|---|
-| N1 | Depuis `services/api`, après le seed, lancer le script selon le README de l'API. | Le script affiche, dans l'ordre : `404 ACTIVE_RESERVATION_NOT_FOUND`, `422 ASSET_NOT_READY ['UNKNOWN_PHYSICAL_STATE']`, `404 ACTIVE_RESERVATION_NOT_FOUND`, et se termine avec le code 0. | | |
+| N° | Action | Résultat attendu | Résultat observé | Réussi / Échoué / Non exécuté | Remarque |
+|---:|---|---|---|---|---|
+| N1 | Depuis `services/api`, après le seed, lancer le script selon le README de l'API. | Le script affiche, dans l'ordre : `404 ACTIVE_RESERVATION_NOT_FOUND`, `422 ASSET_NOT_READY ['UNKNOWN_PHYSICAL_STATE']`, `404 ACTIVE_RESERVATION_NOT_FOUND`, et se termine avec le code 0. | | | |
 
 ### Captures à joindre
 
@@ -268,8 +268,9 @@ non dans le dépôt :
 | SHA de `dev` testé (API et iOS) | |
 | Migrations appliquées (étape 5) | |
 | Simulateur et version d'iOS | |
-| Parcours 1 à 10 : nombre d'OK sur 10 | |
-| Scénario réseau R1 à R5 : nombre d'OK sur 5 | |
+| Parcours 1 à 10 : réussis / échoués / non exécutés | |
+| Scénario réseau R1 à R5 : réussis / échoués / non exécutés | |
+| Test négatif N1 : réussi / échoué / non exécuté | |
 | Anomalies (étape, observé, attendu) | |
 
 ## Tests automatiques exécutés
