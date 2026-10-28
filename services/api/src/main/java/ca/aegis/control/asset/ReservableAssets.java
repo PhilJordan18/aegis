@@ -44,11 +44,16 @@ public class ReservableAssets {
         this.presence = presence;
     }
 
-    /** Locks the asset row ({@code FOR UPDATE}), the second lock of document 08, section 7.1, after the user. */
+    /**
+     * Locks the asset row ({@code FOR UPDATE}), the second lock of document 08, section 7.1, after the user, then reads
+     * the asset again. Under READ COMMITTED, a statement that waited for the lock re-checks the asset row but keeps the
+     * placement it joined before waiting; a new statement sees the placement committed by the lock holder.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<LockedAsset> lock(UUID assetId) {
-        return assets.lockForUpdate(assetId).map(asset -> new LockedAsset(asset.id(), asset.requiredAccessLevel(),
-                asset.placement() == null ? null : asset.placement().lockerId()));
+        return assets.lockForUpdate(assetId).flatMap(locked -> assets.find(assetId))
+                .map(asset -> new LockedAsset(asset.id(), asset.requiredAccessLevel(),
+                        asset.placement() == null ? null : asset.placement().lockerId()));
     }
 
     /**

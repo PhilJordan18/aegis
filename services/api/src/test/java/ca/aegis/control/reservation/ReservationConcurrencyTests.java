@@ -135,6 +135,69 @@ class ReservationConcurrencyTests extends ApiIntegrationTest {
                 """, technician));
     }
 
+    /**
+     * An archival holds the asset lock while the request arrives: the request waits for it, then reads the archived
+     * asset and is refused, instead of reserving an asset that left the catalog (document 09, section 12.2).
+     */
+    @Test
+    void aRequestWaitsForAnArchivalHoldingTheAssetLockAndIsThenRefused() throws Exception {
+        UUID asset = fixtures.asset(locker);
+        UUID technician = accounts.technician().id();
+        List<CompletableFuture<ApiError>> attempt = new ArrayList<>();
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(transaction -> {
+            lockAsset(asset);
+            jdbc.sql("UPDATE aegis.assets SET archived_at = :now WHERE id = :id")
+                    .param("now", ReservationFixtures.utc(START)).param("id", asset).update();
+            attempt.add(CompletableFuture.supplyAsync(() -> outcome(() -> reservations.create(technician,
+                    new CreateReservationRequest(asset, UNTIL))), executor));
+            pause();
+            assertFalse(attempt.getFirst().isDone(), "the request should wait for the asset lock");
+        });
+
+        assertEquals(ApiError.ASSET_NOT_READY, attempt.getFirst().get(30, TimeUnit.SECONDS));
+        assertEquals(0L, fixtures.count("SELECT count(*) FROM aegis.reservations WHERE asset_id = :id", asset));
+    }
+
+    /**
+     * A placement change holds the asset lock and moves the asset to a locker without a schedule: once the lock is
+     * released, the request applies the schedule of the new locker, not the one it saw before waiting.
+     */
+    @Test
+    void aRequestWaitsForAPlacementChangeAndAppliesTheScheduleOfTheNewLocker() throws Exception {
+        UUID asset = fixtures.asset(locker);
+        UUID unscheduled = fixtures.locker();
+        UUID technician = accounts.technician().id();
+        List<CompletableFuture<ApiError>> attempt = new ArrayList<>();
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(transaction -> {
+            lockAsset(asset);
+            jdbc.sql("UPDATE aegis.asset_placements SET removed_at = :now WHERE asset_id = :id AND removed_at IS NULL")
+                    .param("now", ReservationFixtures.utc(START)).param("id", asset).update();
+            UUID compartment = jdbc.sql("""
+                    INSERT INTO aegis.compartments (locker_id, code, local_address, hub_port)
+                    VALUES (:locker, 'M1', 1, 1)
+                    RETURNING id
+                    """).param("locker", unscheduled).query(UUID.class).single();
+            jdbc.sql("""
+                    INSERT INTO aegis.asset_placements (asset_id, compartment_id, reason, assigned_at)
+                    VALUES (:asset, :compartment, 'Déplacement', :now)
+                    """).param("asset", asset).param("compartment", compartment)
+                    .param("now", ReservationFixtures.utc(START)).update();
+            attempt.add(CompletableFuture.supplyAsync(() -> outcome(() -> reservations.create(technician,
+                    new CreateReservationRequest(asset, UNTIL))), executor));
+            pause();
+            assertFalse(attempt.getFirst().isDone(), "the request should wait for the asset lock");
+        });
+
+        assertEquals(ApiError.OUTSIDE_OPERATING_HOURS, attempt.getFirst().get(30, TimeUnit.SECONDS));
+        assertEquals(0L, fixtures.count("SELECT count(*) FROM aegis.reservations WHERE asset_id = :id", asset));
+    }
+
+    private void lockAsset(UUID asset) {
+        jdbc.sql("SELECT id FROM aegis.assets WHERE id = :id FOR UPDATE").param("id", asset).query(UUID.class).single();
+    }
+
     private List<ApiError> race(List<Supplier<?>> actions) throws Exception {
         CountDownLatch start = new CountDownLatch(1);
         List<Future<ApiError>> attempts = new ArrayList<>();
