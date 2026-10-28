@@ -1,5 +1,5 @@
 import type { Delivery } from '../../src/contract.ts';
-import type { Transport, TransportEvents, TransportFactory, TransportOptions, WillMessage } from '../../src/transport.ts';
+import type { InboundMeta, Transport, TransportEvents, TransportFactory, TransportOptions, WillMessage } from '../../src/transport.ts';
 
 export interface PublishedRecord {
   topic: string;
@@ -23,8 +23,18 @@ export class FakeTransport implements Transport {
   hangDisconnect = false;
   /** Socket state as the broker sees it. */
   socketOpen = false;
+  /** Every SUBSCRIBE, in order. */
+  readonly subscriptions: string[][] = [];
+  /** Inbound messages the hub acknowledged (PUBACK), by body. */
+  readonly acknowledged: string[] = [];
+  #abandoned = false;
   #inFlight = 0;
-  readonly #listeners: { [E in keyof TransportEvents]: TransportEvents[E][] } = { connect: [], close: [], error: [] };
+  readonly #listeners: { [E in keyof TransportEvents]: TransportEvents[E][] } = {
+    connect: [],
+    close: [],
+    error: [],
+    message: [],
+  };
 
   constructor(options: TransportOptions) {
     this.options = options;
@@ -43,6 +53,28 @@ export class FakeTransport implements Transport {
       return new Promise(() => {});
     }
     return Promise.resolve();
+  }
+
+  subscribe(topics: readonly string[]): Promise<void> {
+    if (!this.connected) return Promise.reject(new Error('not connected'));
+    this.subscriptions.push([...topics]);
+    return Promise.resolve();
+  }
+
+  /**
+   * The broker delivers a PUBLISH to the hub. Like mqtt.js, the PUBACK follows the
+   * synchronous listener, unless the hub destroyed the transport meanwhile.
+   */
+  deliver(topic: string, body: string, meta: Partial<InboundMeta> = {}): boolean {
+    const full: InboundMeta = { retain: false, qos: 1, dup: false, ...meta };
+    for (const l of this.#listeners.message) l(topic, Buffer.from(body, 'utf8'), full);
+    if (this.#abandoned || full.qos === 0) return false;
+    this.acknowledged.push(body);
+    return true;
+  }
+
+  withholdAcknowledgements(): void {
+    this.#abandoned = true;
   }
 
   setWill(will: WillMessage): void {
@@ -72,6 +104,7 @@ export class FakeTransport implements Transport {
   }
 
   destroy(): Promise<void> {
+    this.#abandoned = true;
     this.destroys++;
     this.connected = false;
     this.socketOpen = false;
