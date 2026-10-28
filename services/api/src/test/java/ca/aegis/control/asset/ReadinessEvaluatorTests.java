@@ -174,11 +174,21 @@ class ReadinessEvaluatorTests {
     }
 
     @Test
-    void anAssessmentCannotClaimReadyWithReasonsOrBlockedWithout() {
+    void anAssessmentRejectsReasonsThatContradictItsResult() {
         assertThrows(IllegalArgumentException.class, () -> new ReadinessAssessment(ASSET, TECHNICIAN.id(),
                 ReadinessResult.READY, List.of(UNKNOWN_PHYSICAL_STATE), NOW));
         assertThrows(IllegalArgumentException.class, () -> new ReadinessAssessment(ASSET, TECHNICIAN.id(),
                 ReadinessResult.BLOCKED, List.of(), NOW));
+        assertThrows(IllegalArgumentException.class, () -> new ReadinessAssessment(ASSET, TECHNICIAN.id(),
+                ReadinessResult.BLOCKED, List.of(MAINTENANCE, UNKNOWN_PHYSICAL_STATE), NOW));
+        assertThrows(IllegalArgumentException.class, () -> new ReadinessAssessment(ASSET, TECHNICIAN.id(),
+                ReadinessResult.UNKNOWN, List.of(), NOW));
+        assertThrows(IllegalArgumentException.class, () -> new ReadinessAssessment(ASSET, TECHNICIAN.id(),
+                ReadinessResult.UNKNOWN, List.of(ACCESS_DENIED), NOW));
+        assertThrows(IllegalArgumentException.class, () -> new ReadinessAssessment(ASSET, TECHNICIAN.id(),
+                ReadinessResult.BLOCKED, List.of(MAINTENANCE, MAINTENANCE), NOW));
+        assertThrows(IllegalArgumentException.class, () -> new ReadinessAssessment(ASSET, TECHNICIAN.id(),
+                ReadinessResult.BLOCKED, List.of(ACCESS_DENIED, MAINTENANCE), NOW));
     }
 
     private static ReadinessAssessment evaluate(User user, AssetFacts asset, Custody custody, Presence presence) {
