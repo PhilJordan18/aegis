@@ -644,6 +644,8 @@ CREATE TABLE locker_operations (
 
 `return_requested_at` est conservé même après un échec sûr ramenant le prêt à `ACTIVE`; `return_operation_id` n’est renseigné qu’après confirmation.
 
+`uq_loans_checkout_operation` porte l’index unique sur lequel s’appuie le §7.4 : une opération de checkout crée au plus un prêt, même si deux confirmations se concurrencent ou si une confirmation est rejouée après la fin du prêt.
+
 ```sql
 CREATE TABLE loans (
     id                    uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
@@ -666,6 +668,8 @@ CREATE TABLE loans (
         FOREIGN KEY (checkout_operation_id) REFERENCES locker_operations (id),
     CONSTRAINT fk_loans_return_operation
         FOREIGN KEY (return_operation_id) REFERENCES locker_operations (id),
+    CONSTRAINT uq_loans_checkout_operation
+        UNIQUE (checkout_operation_id),
     CONSTRAINT ck_loans_status
         CHECK (status IN ('ACTIVE', 'RETURN_PENDING', 'COMPLETED')),
     CONSTRAINT ck_loans_dates
@@ -1784,8 +1788,8 @@ Découpage recommandé :
 | `V002_2__create_audit_events.sql` | `audit_events` (§4.9), avancée depuis `V009` pour auditer le catalogue avant `V003`, sans `operation_id`, `inbound_message_id` ni `physical_observation_id`; index `ix_audit_events_subject_time` et `ix_audit_events_time`; triggers append-only. Ajoutée quand les bases s’arrêtaient à `V002` ou `V002_1`. |
 | `V003__create_lockers_and_placements.sql` | `lockers`, `compartments`, `locker_devices`, `asset_placements`; `ux_asset_identifiers_one_active_per_type` sur `asset_identifiers` (décision en attente, CAT-02). |
 | `V004__create_operating_schedules.sql` | `operating_schedules`, `operating_windows` et leurs index. |
-| `V005__create_reservations.sql` | `reservations` et index d’unicité active. |
-| `V006__create_operations_and_loans.sql` | `locker_operations`, `loans`, FK circulaire ajoutée après les deux tables; `audit_events.operation_id`, `fk_audit_events_operation` et `ix_audit_events_operation_time`. |
+| `V005__create_reservations.sql` | `reservations` et index d’unicité active `ux_reservations_one_active_per_asset` et `ux_reservations_one_active_per_user`. |
+| `V006__create_operations_and_loans.sql` | `locker_operations`, `loans`, FK circulaire ajoutée après les deux tables; `uq_loans_checkout_operation`; index partiels `ux_loans_one_open_per_asset` et `ux_locker_operations_one_open_per_locker`; `audit_events.operation_id`, `fk_audit_events_operation` et `ix_audit_events_operation_time`. Les index de lecture de §5.2 restent dans `V011`. |
 | `V007__create_command_outbox.sql` | `command_outbox`, `local_access_challenges`, `hub_display_outbox` et index de claim, si aucune migration n’a encore été appliquée. |
 | `V008__create_device_messages_and_observations.sql` | `inbound_device_messages`, `physical_observations`; `audit_events.inbound_message_id`, `audit_events.physical_observation_id` et leurs FK `fk_audit_events_message` et `fk_audit_events_observation`. |
 | `V009__create_anomalies.sql` | `anomalies`. `audit_events` a été déplacée vers `V002_2`; aucune migration n’est renumérotée. |
