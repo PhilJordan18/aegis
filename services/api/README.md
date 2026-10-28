@@ -309,6 +309,46 @@ d'heure; aucune route ne l'appelle encore. `OperatingScheduleApiTests`,
 `OperatingScheduleConcurrencyTests`, `OperatingHoursTests` et
 `OperatingScheduleMigrationTests` le vérifient.
 
+## Catalogue technicien et readiness (RDY-01, RDY-02)
+
+`GET /api/v1/assets` et `GET /api/v1/assets/{assetId}` sont réservés au rôle
+`TECHNICIAN` : un `ADMIN` reçoit `403 FORBIDDEN`, un appel anonyme `401`.
+Chaque élément est un `AssetView` (document 09, §8.2) dont la `readiness` est
+calculée pour le compte authentifié, au même instant pour toute la réponse, par
+`asset/ReadinessEvaluator` (document 06, §4.3 à §4.5) : un blocage certain
+donne `BLOCKED` avec toutes ses raisons distinctes; une preuve physique
+insuffisante donne `UNKNOWN` / `UNKNOWN_PHYSICAL_STATE` seulement sans blocage;
+`READY` exige la présence `PRESENT`.
+
+Avant PHY-02, aucune observation n'est stockée : `asset/NoPhysicalProofPresence`
+répond `UNKNOWN` pour tout actif, donc un actif conforme est `UNKNOWN` et jamais
+`READY`. PHY-02 remplace ce composant derrière l'interface `PhysicalPresence`.
+La disponibilité vient de `asset/AssetCustodyRepository`.
+
+La liste exclut les actifs archivés (document 03, §4.4); lu par son
+identifiant, un actif archivé reste `BLOCKED` / `NOT_AVAILABLE`. Les filtres
+`readiness` et `availability` s'appliquent après l'évaluation de tout le
+catalogue correspondant, puis la page est découpée : `totalItems` et
+`totalPages` restent exacts. Ce choix vise la taille du catalogue P0. Un
+identifiant inconnu donne `404 ASSET_NOT_FOUND`.
+
+Avec l'API lancée comme ci-dessus et `AEGIS_DEMO_TECHNICIAN_PASSWORD` exporté :
+
+```bash
+TOKEN="$(curl -s -X POST http://127.0.0.1:8080/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"technician@aegis.demo\",\"password\":\"$AEGIS_DEMO_TECHNICIAN_PASSWORD\"}" \
+  | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p')"
+curl -s 'http://127.0.0.1:8080/api/v1/assets?size=20&sort=assetCode,asc' \
+  -H "Authorization: Bearer $TOKEN"
+curl -s 'http://127.0.0.1:8080/api/v1/assets?q=A2&readiness=BLOCKED' \
+  -H "Authorization: Bearer $TOKEN"
+curl -s "http://127.0.0.1:8080/api/v1/assets/<assetId>" -H "Authorization: Bearer $TOKEN"
+```
+
+`TechnicianCatalogApiTests` et `ReadinessEvaluatorTests` vérifient ce
+comportement.
+
 ## Rôles PostgreSQL
 
 Le document 08, section 12.1, sépare le propriétaire des migrations du rôle
