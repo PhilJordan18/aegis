@@ -36,7 +36,7 @@ class AssetIdentifierService {
     }
 
     /**
-     * An asset carries at most one active identifier of each type (pending decision): a new one revokes the previous
+     * An asset carries at most one active identifier of each type (decided on 28 October 2026): a new one revokes the previous
      * one of its type in the same transaction, and both changes are audited. Locker operations do not exist yet; the
      * slice that creates them must refuse here with {@code 409 ASSET_OPERATION_IN_PROGRESS} while a non-terminal
      * operation concerns the asset.

@@ -230,7 +230,13 @@ en garde finale); un type hors `RFID_UHF`, `NFC` et `QR` reçoit
 `422 IDENTIFIER_TYPE_UNSUPPORTED`. La révocation conserve la ligne; une
 révocation répétée est auditée `ALREADY_APPLIED`. Une attribution écrit
 `ASSET_IDENTIFIER_ASSIGNED` et une révocation `ASSET_UPDATED`, faute de type
-de révocation dans le document 08.
+de révocation dans le document 08. Décisions du 28 octobre 2026 : un actif
+porte au plus un identifiant actif par type (une nouvelle attribution du même
+type révoque l'ancienne dans la même transaction, index
+`ux_asset_identifiers_one_active_per_type` de `V003`), et l'archivage révoque
+les identifiants actifs de l'actif. La valeur, limitée à 255 caractères comme
+une observation du document 10, est comparée telle quelle, sans mise en
+majuscules; la normalisation des EPC RFID sera fixée avec PHY-02.
 
 `PUT /admin/assets/{assetId}/placement` termine le placement précédent au lieu
 de le supprimer et écrit `ASSET_PLACEMENT_CHANGED`. Il verrouille l'actif, puis
@@ -239,8 +245,9 @@ actif archivé, un compartiment inconnu (violation `COMPARTMENT_NOT_FOUND`),
 désactivé (`409 COMPARTMENT_DISABLED`) ou occupé par un autre actif
 (`409 COMPARTMENT_ALREADY_OCCUPIED`). Un `PUT` vers le compartiment actuel ne
 change rien. L'archivage d'un actif termine son placement actif dans sa
-transaction. Les nouveaux codes sont proposés dans le document 09 et attendent
-leur approbation. Les refus liés aux réservations, prêts et opérations
+transaction. Les codes `COMPARTMENT_*` ont été approuvés le 28 octobre 2026;
+`COMPARTMENT_DISABLED` vise la configuration du backend, pas le firmware. Les
+refus liés aux réservations, prêts et opérations
 viendront avec les tranches qui les créent. `AssetIdentifierApiTests`,
 `AssetPlacementApiTests` et `PhysicalCatalogConcurrencyTests` le vérifient.
 
@@ -298,8 +305,10 @@ réservés à `ADMIN`. Le `PUT` valide les sept jours, le fuseau IANA et les
 heures, verrouille le locker, archive la version active et en insère une
 nouvelle avec ses sept plages; il écrit un événement `SCHEDULE_UPDATED` par
 version. Un `PUT` identique ne crée rien. Un locker sans horaire actif
-retourne `404 OPERATING_SCHEDULE_NOT_CONFIGURED`. Ce code et les codes de
-violation de la section 13.2 sont proposés et attendent leur approbation.
+retourne `404 OPERATING_SCHEDULE_NOT_CONFIGURED`. Ce code et les quatre codes
+de violation de la section 13.2 sont approuvés depuis le 28 octobre 2026. Les
+fuseaux IANA à décalage fixe (`UTC`, `Etc/GMT+5`) sont acceptés mais ignorent
+l'heure d'été : un locker utilise une zone géographique.
 
 Le casier de démonstration n'a pas d'horaire au démarrage : sa version doit
 être créée par un administrateur, l'administrateur de démonstration par

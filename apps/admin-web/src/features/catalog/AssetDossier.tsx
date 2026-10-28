@@ -1,4 +1,4 @@
-import { useId, type Ref } from 'react'
+import { useId, useLayoutEffect, useRef, type Ref } from 'react'
 import { useI18n } from '../../i18n/useI18n'
 import { Icon } from '../../ui/Icon'
 import { StatusChip } from '../../ui/StatusChip'
@@ -29,6 +29,8 @@ interface AssetDossierProps {
   readonly failure: CatalogFailure | null
   /** Set when a refresh failed but the previous unit is still shown. An initial failure is `failure`, not this. */
   readonly stale: boolean
+  /** A refresh is running. */
+  readonly retrying: boolean
   /** Focus target after a selection on a stacked layout: the scrolling group, labelled by the title. */
   readonly focusRef?: Ref<HTMLDivElement>
   readonly onRetry: () => void
@@ -39,16 +41,27 @@ interface AssetDossierProps {
  * Read-only dossier of one unit (handoff §3.1). The reasons are the server's non-personal diagnostic
  * as sent: the page shows no readiness verdict, no « ready » and no invented presence or compartment.
  */
-export function AssetDossier({ asset, loading, failure, stale, focusRef, onRetry, onBack }: AssetDossierProps) {
+export function AssetDossier({ asset, loading, failure, stale, retrying, focusRef, onRetry, onBack }: AssetDossierProps) {
   const { m } = useI18n()
   const titleId = useId()
+  const groupId = useId()
+  const alertRef = useRef<HTMLDivElement>(null)
+  const focusLost = useRef(false)
   const t = m.equipment
+
+  // The stale notice that had focus is gone. Its target exists only after this commit: the unit after a successful
+  // refresh, or the refusal when the server answered 403 or 404, which replaces the unit (WCAG 2.4.3).
+  useLayoutEffect(() => {
+    if (!focusLost.current) return
+    focusLost.current = false
+    ;(asset === undefined ? alertRef.current : document.getElementById(groupId))?.focus()
+  })
 
   if (asset === undefined) {
     return (
       <section className="ag-panel ag-dossier" aria-label={t.selectedOverline} aria-busy={loading || undefined}>
         {failure !== null ? (
-          <div className="ag-dossier__alert">
+          <div className="ag-dossier__alert" ref={alertRef} tabIndex={-1}>
             <CatalogAlert failure={failure} onRetry={onRetry} onBack={onBack} />
           </div>
         ) : (
@@ -65,14 +78,30 @@ export function AssetDossier({ asset, loading, failure, stale, focusRef, onRetry
   return (
     <section className="ag-panel ag-dossier" aria-labelledby={titleId}>
       {/* Scrolls on its own at ≥ 1024 px: focusable so the keyboard can scroll it (WCAG 2.1.1). */}
-      <div className="ag-dossier__scroll" tabIndex={0} role="group" aria-labelledby={titleId} ref={focusRef}>
-        <DossierBody asset={asset} titleId={titleId} stale={stale} onRetry={onRetry} />
+      <div id={groupId} className="ag-dossier__scroll" tabIndex={0} role="group" aria-labelledby={titleId} ref={focusRef}>
+        <DossierBody
+          asset={asset}
+          titleId={titleId}
+          stale={stale}
+          retrying={retrying}
+          onRetry={onRetry}
+          returnFocus={() => (focusLost.current = true)}
+        />
       </div>
     </section>
   )
 }
 
-function DossierBody({ asset, titleId, stale, onRetry }: { readonly asset: AdminAssetView; readonly titleId: string; readonly stale: boolean; readonly onRetry: () => void }) {
+interface DossierBodyProps {
+  readonly asset: AdminAssetView
+  readonly titleId: string
+  readonly stale: boolean
+  readonly retrying: boolean
+  readonly onRetry: () => void
+  readonly returnFocus: () => void
+}
+
+function DossierBody({ asset, titleId, stale, retrying, onRetry, returnFocus }: DossierBodyProps) {
   const i18n = useI18n()
   const { m } = i18n
   const t = m.equipment
@@ -87,7 +116,7 @@ function DossierBody({ asset, titleId, stale, onRetry }: { readonly asset: Admin
     <>
       {stale && (
         <div className="ag-dossier__stale">
-          <StaleNotice evaluatedAt={evaluated} onRetry={onRetry} />
+          <StaleNotice evaluatedAt={evaluated} retrying={retrying} onRetry={onRetry} returnFocus={returnFocus} />
         </div>
       )}
       <p className="ag-overline">{t.selectedOverline}</p>

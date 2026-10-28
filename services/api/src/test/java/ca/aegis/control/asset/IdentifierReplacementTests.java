@@ -12,7 +12,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.ResultActions;
 
-/** Pending decision of CAT-02: an asset carries at most one active identifier of each type. */
+/** CAT-02, decided on 28 October 2026: an asset carries at most one active identifier of each type. */
 class IdentifierReplacementTests extends CatalogApiTest {
 
     @Test
@@ -20,12 +20,12 @@ class IdentifierReplacementTests extends CatalogApiTest {
         String model = createModel("Remplacement tag " + suffix);
         String asset = createAsset(model, "RTG-" + suffix);
         String other = createAsset(model, "RTG-OTHER-" + suffix);
-        String previous = id(assign(asset, "RFID_UHF", "E400" + suffix).andExpect(status().isCreated()));
+        String previous = id(assign(asset, "RFID_UHF", epc("E400")).andExpect(status().isCreated()));
         String nfc = id(assign(asset, "NFC", "N400" + suffix).andExpect(status().isCreated()));
         clock.advance(Duration.ofMinutes(2));
         String replacedAt = START.plus(Duration.ofMinutes(2)).toString();
 
-        String current = id(assign(asset, "RFID_UHF", "E401" + suffix).andExpect(status().isCreated())
+        String current = id(assign(asset, "RFID_UHF", epc("E401")).andExpect(status().isCreated())
                 .andExpect(jsonPath("$.active").value(true)));
 
         assertEquals(List.of(previous + " false " + replacedAt, nfc + " true null", current + " true null"),
@@ -37,7 +37,7 @@ class IdentifierReplacementTests extends CatalogApiTest {
         assertEquals(List.of("ASSET_IDENTIFIER_ASSIGNED ACCEPTED", "ASSET_UPDATED ACCEPTED"), events(previous));
         assertEquals(List.of("ASSET_IDENTIFIER_ASSIGNED ACCEPTED"), events(current));
         assertEquals(List.of("ASSET_IDENTIFIER_ASSIGNED ACCEPTED"), events(nfc));
-        assign(other, "RFID_UHF", "E400" + suffix).andExpect(status().isCreated());
+        assign(other, "RFID_UHF", epc("E400")).andExpect(status().isCreated());
     }
 
     @Test

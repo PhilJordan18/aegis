@@ -8,8 +8,9 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import mqtt, { type MqttClient } from 'mqtt';
-import { afterAll, afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_LOCKER_ID, defineConfig } from '../../src/config.ts';
+import { clientIdFor } from '../../src/contract.ts';
 import { HubSimulator } from '../../src/simulator.ts';
 
 const BROKER = process.env.AEGIS_MQTT_URL ?? 'mqtt://127.0.0.1:1883';
@@ -17,6 +18,7 @@ const DEVICE_PASSWORD = process.env.AEGIS_MQTT_DEVICE_PASSWORD;
 const API_PASSWORD = process.env.AEGIS_MQTT_API_PASSWORD;
 const STATUS = `aegis/v1/lockers/${DEFAULT_LOCKER_ID}/status`;
 const EVENTS = `aegis/v1/lockers/${DEFAULT_LOCKER_ID}/events`;
+const STATUS_FACTS = new Set(['DEVICE_AVAILABILITY', 'DEVICE_RESTARTED', 'HEARTBEAT']);
 const CLI = fileURLToPath(new URL('../../src/cli.ts', import.meta.url));
 
 interface Received {
@@ -70,6 +72,21 @@ const children: ChildProcess[] = [];
 // Boot counts of these runs live in a throwaway directory, never in the user's state.
 const stateDir = mkdtempSync(join(tmpdir(), 'aegis-sim-it-'));
 
+// These tests take over the default clientId. Since SIM-02 its persistent session
+// subscribes to commands, so it may hold commands queued by other runs: start clean.
+beforeAll(async () => {
+  if (!DEVICE_PASSWORD) return;
+  const client = await mqtt.connectAsync(BROKER, {
+    protocolVersion: 4,
+    clientId: clientIdFor(`sim-${DEFAULT_LOCKER_ID}`),
+    username: DEFAULT_LOCKER_ID,
+    password: DEVICE_PASSWORD,
+    clean: true,
+    reconnectPeriod: 0,
+  });
+  await client.endAsync();
+});
+
 afterAll(() => {
   rmSync(stateDir, { recursive: true, force: true });
 });
@@ -90,6 +107,7 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
         AEGIS_MQTT_URL: BROKER,
         AEGIS_MQTT_DEVICE_PASSWORD: DEVICE_PASSWORD,
         AEGIS_SIM_BOOT_COUNT_FILE: join(stateDir, 'cli-boot-counts.json'),
+        AEGIS_SIM_COMMAND_JOURNAL_FILE: join(stateDir, 'cli-journal.json'),
       },
       stdio: ['ignore', 'pipe', 'inherit'],
     });
@@ -161,7 +179,12 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
     const observer = await observe();
     clients.push(observer.client);
     const sim = new HubSimulator(
-      defineConfig({ brokerUrl: BROKER, password: DEVICE_PASSWORD!, bootCountFile: join(stateDir, 'api-loss.json') }),
+      defineConfig({
+        brokerUrl: BROKER,
+        password: DEVICE_PASSWORD!,
+        bootCountFile: join(stateDir, 'api-loss.json'),
+        commandJournalFile: join(stateDir, 'api-loss-journal.json'),
+      }),
     );
     const wills: string[] = [];
     const willConnections: string[] = [];
@@ -173,7 +196,18 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
       sim.start();
       await sim.waitUntilOnline(5_000);
       const session = sim.deviceSessionId;
-      const mine = () => observer.live.filter((m) => m.payload.deviceSessionId === session);
+      // Status facts only: a persistent session may hand this hub commands queued by
+      // other runs, whose answers are not the subject here.
+      // QoS 1 is at least once: a publish still awaiting its PUBACK when the socket
+      // drops is resent after reconnecting with the same messageId, which the backend
+      // deduplicates. Keep the first copy of each fact.
+      const mine = () =>
+        observer.live.filter(
+          (m, i, all) =>
+            m.payload.deviceSessionId === session &&
+            STATUS_FACTS.has(String(m.payload.type)) &&
+            all.findIndex((o) => o.payload.messageId === m.payload.messageId) === i,
+        );
       await until(() => (mine().some((m) => m.payload.type === 'HEARTBEAT') ? true : undefined), 5_000, 'first heartbeat');
 
       await sim.dropConnection();
@@ -243,6 +277,7 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
         brokerUrl: BROKER,
         password: DEVICE_PASSWORD!,
         bootCountFile: join(stateDir, 'api-restart.json'),
+        commandJournalFile: join(stateDir, 'api-restart-journal.json'),
         firstBootCount: 9,
       }),
     );
@@ -291,7 +326,12 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
 
   it('refuses a wrong device secret', { timeout: 15_000 }, async () => {
     const sim = new HubSimulator(
-      defineConfig({ brokerUrl: BROKER, password: 'definitely-wrong', bootCountFile: join(stateDir, 'wrong-secret.json') }),
+      defineConfig({
+        brokerUrl: BROKER,
+        password: 'definitely-wrong',
+        bootCountFile: join(stateDir, 'wrong-secret.json'),
+        commandJournalFile: join(stateDir, 'wrong-secret-journal.json'),
+      }),
     );
     const errors: string[] = [];
     sim.on('transportError', (e) => errors.push(e.message));

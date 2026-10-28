@@ -1303,7 +1303,7 @@ CREATE UNIQUE INDEX ux_asset_placements_one_current_per_compartment
     ON asset_placements (compartment_id)
     WHERE removed_at IS NULL;
 
--- Décision en attente (CAT-02) : au plus un identifiant actif par type et par actif.
+-- Au plus un identifiant actif par type et par actif (CAT-02, décision du 28 octobre 2026).
 CREATE UNIQUE INDEX ux_asset_identifiers_one_active_per_type
     ON asset_identifiers (asset_id, identifier_type)
     WHERE active = true;
@@ -1512,7 +1512,7 @@ Quand plusieurs agrégats sont requis, le backend les verrouille dans cet ordre 
 7. `local_access_challenges`, si concerné;
 8. `anomalies`.
 
-Les lectures de garde utilisent `SELECT ... FOR UPDATE` sur les lignes existantes, sauf pour `users`, verrouillée par `SELECT ... FOR NO KEY UPDATE`. Ces parcours ne modifient jamais la clé d’un utilisateur, et ce mode n’entre pas en conflit avec le verrou `KEY SHARE` que la clé étrangère `fk_rest_idempotency_actor` prend sur la ligne de l’acteur à l’insertion de sa clé d’idempotence (§8.1). Avec `FOR UPDATE`, deux requêtes concurrentes du même utilisateur portant des clés différentes s’attendraient mutuellement jusqu’au deadlock, et une ligne `users` tenue ailleurs retarderait l’insertion d’une nouvelle clé. Le verrou de la ligne `lockers` sérialise le parcours physique; l’index partiel reste la barrière finale lorsqu’aucune opération ouverte n’existait encore.
+Les lectures de garde utilisent `SELECT ... FOR UPDATE` sur les lignes existantes, sauf pour `users`, verrouillée par `SELECT ... FOR NO KEY UPDATE`, et pour `compartments` lors d’un changement de placement, verrouillés de même dans l’ordre de leur identifiant : ce mode sérialise les placements visant un même compartiment sans bloquer le verrou `KEY SHARE` que prennent les clés étrangères vers lui. Ces parcours ne modifient jamais la clé d’un utilisateur, et ce mode n’entre pas en conflit avec le verrou `KEY SHARE` que la clé étrangère `fk_rest_idempotency_actor` prend sur la ligne de l’acteur à l’insertion de sa clé d’idempotence (§8.1). Avec `FOR UPDATE`, deux requêtes concurrentes du même utilisateur portant des clés différentes s’attendraient mutuellement jusqu’au deadlock, et une ligne `users` tenue ailleurs retarderait l’insertion d’une nouvelle clé. Le verrou de la ligne `lockers` sérialise le parcours physique; l’index partiel reste la barrière finale lorsqu’aucune opération ouverte n’existait encore.
 
 ### 7.2 Création d’une réservation
 
@@ -1786,7 +1786,7 @@ Découpage recommandé :
 | `V002__create_identity_and_catalog.sql` | `users`, `asset_models`, `assets`, `asset_identifiers`. |
 | `V002_1__create_rest_idempotency_keys.sql` | `rest_idempotency_keys` (§4.10), avancée depuis `V010` pour les routes du catalogue (document 09, §20.1). Ajoutée quand toutes les bases s’arrêtaient à `V002`. |
 | `V002_2__create_audit_events.sql` | `audit_events` (§4.9), avancée depuis `V009` pour auditer le catalogue avant `V003`, sans `operation_id`, `inbound_message_id` ni `physical_observation_id`; index `ix_audit_events_subject_time` et `ix_audit_events_time`; triggers append-only. Ajoutée quand les bases s’arrêtaient à `V002` ou `V002_1`. |
-| `V003__create_lockers_and_placements.sql` | `lockers`, `compartments`, `locker_devices`, `asset_placements`; `ux_asset_identifiers_one_active_per_type` sur `asset_identifiers` (décision en attente, CAT-02). |
+| `V003__create_lockers_and_placements.sql` | `lockers`, `compartments`, `locker_devices`, `asset_placements`; `ux_asset_identifiers_one_active_per_type` sur `asset_identifiers` (CAT-02, décision du 28 octobre 2026). |
 | `V004__create_operating_schedules.sql` | `operating_schedules`, `operating_windows` et leurs index. |
 | `V005__create_reservations.sql` | `reservations` et index d’unicité active `ux_reservations_one_active_per_asset` et `ux_reservations_one_active_per_user`. |
 | `V006__create_operations_and_loans.sql` | `locker_operations`, `loans`, FK circulaire ajoutée après les deux tables; `uq_loans_checkout_operation`; index partiels `ux_loans_one_open_per_asset` et `ux_locker_operations_one_open_per_locker`; `audit_events.operation_id`, `fk_audit_events_operation` et `ix_audit_events_operation_time`. Les index de lecture de §5.2 restent dans `V011`. |

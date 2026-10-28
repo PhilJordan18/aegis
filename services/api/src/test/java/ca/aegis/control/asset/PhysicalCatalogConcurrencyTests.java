@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -81,7 +82,7 @@ class PhysicalCatalogConcurrencyTests extends ApiIntegrationTest {
         for (int i = 0; i < ATTEMPTS; i++) {
             candidates.add(asset(model, "TAGRACE-" + i + "-" + suffix));
         }
-        String tag = "E300" + suffix;
+        String tag = "E300" + suffix.toUpperCase(Locale.ROOT);
 
         List<ApiError> outcomes = race(candidates.stream().<Supplier<?>>map(asset -> () -> identifiers.assign(
                 asset, new AssetIdentifierRequest("RFID_UHF", tag), actor)).toList());
