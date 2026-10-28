@@ -6,7 +6,8 @@
 **Version :** 2.0 — registre opérationnel et décisions explicites  
 **Mise à jour :** 23 septembre 2026 — ADR-011 et validation des choix logiciels 004 à 007 et 009  
 **Mise à jour :** 21 octobre 2026 — ADR-012 accepté : développement iOS sur le Mac local  
-**Mise à jour :** 21 octobre 2026 — ADR-013 accepté : backlog suivi dans GitHub Issues
+**Mise à jour :** 21 octobre 2026 — ADR-013 accepté : backlog suivi dans GitHub Issues  
+**Mise à jour :** 28 octobre 2026 — ADR-014 proposé : recherche `q` comptée en graphèmes, commune à l’API, au Web et à iOS
 **Références :** [scope](02-scope.md), documents 03–10 et [architecture physique](12-architecture-physique.md).
 
 ## 1. Portée et statuts
@@ -47,6 +48,7 @@ les POC matériels et le seuil numérique de fréquence des préparations QR res
 | 011 | [Évolution de l’estimation matérielle](../adr/ADR-011-evolution-estimation-materielle.md) | `ACCEPTED`, clarification demandée par Philippe; aucun achat approuvé | Philippe, achats à revoir avec Jimmy | Nomenclature complète; décision financière après inventaire et POC |
 | 012 | [Développement iOS sur le Mac local](../adr/ADR-012-developpement-ios-mac-local.md) | `ACCEPTED` — Philippe, 21 octobre 2026; builds et essais iOS en simulateur sur le Mac local, validations physiques à organiser; remplace la seule disposition de l’ADR-010 sur les Macs de l’école | Philippe, avec la session iOS | FND-02B (#16) et CI iOS (#67) |
 | 013 | [Backlog suivi dans GitHub Issues](../adr/ADR-013-backlog-github-issues.md) | `ACCEPTED` — Philippe, 21 octobre 2026; consigne sa décision du 5 octobre 2026; remplace le paragraphe Linear de l’ADR-010 | Philippe | Issues #6 à #75 et tableau `Aegis P0` en usage |
+| 014 | [Recherche `q` comptée en graphèmes, commune à l’API, au Web et à iOS](../adr/ADR-014-recherche-q-graphemes.md) | `PROPOSED` — consigne la décision commune du 28 octobre 2026; liste des espaces et corpus partagé à confirmer à la revue | Philippe, avec les sessions Web et iOS | PR coordonnées de #109 : API, Web et iOS sur le même corpus |
 
 Les pilotes préparent les preuves et recommandations; ils n’approuvent pas seuls un changement de scope. Les cibles pédagogiques sont précisées dans le document 14.
 
