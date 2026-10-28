@@ -396,10 +396,14 @@ docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml
 
 `down` conserve les volumes. Ne pas ajouter `--volumes` si les données locales
 doivent être conservées. Chaque démarrage de l'API applique les migrations
-en attente (`V001`, `V002` pour l'identité et le catalogue, `V002_1` pour les
-clés d'idempotence REST, puis `V002_2` pour `audit_events`) et valide
+en attente, dans l'ordre : `V001`, `V002` pour l'identité et le catalogue,
+`V002_1` pour les clés d'idempotence REST, `V002_2` pour `audit_events`,
+`V003` pour les lockers et les placements, `V004` pour les horaires, puis
+`V005` et `V006` pour les réservations, opérations et prêts. Il valide
 l'historique dans `public.flyway_schema_history` sans rejouer une migration
-déjà appliquée. Les tables métier sont dans le schéma `aegis`. Le callback
+déjà appliquée. Une table `aegis.flyway_schema_history` résiduelle peut
+exister dans une base locale ancienne : elle n'est pas lue, et une requête
+non qualifiée la trouve avant `public` à cause du `search_path`. Les tables métier sont dans le schéma `aegis`. Le callback
 `afterMigrate__grant_application_role.sql` s'exécute ensuite à chaque
 démarrage (voir « Rôles PostgreSQL »).
 
