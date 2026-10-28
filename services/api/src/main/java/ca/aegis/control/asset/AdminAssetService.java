@@ -110,7 +110,7 @@ class AdminAssetService {
 
     /**
      * Archival keeps the asset row, its identifier rows and every future reference to it. In the same transaction it
-     * revokes the active identifiers (pending decision), so that a tag can be reused, and ends the active placement,
+     * revokes the active identifiers (decided on 28 October 2026), so that a tag can be reused, and ends the active placement,
      * keeping its row, so the compartment is freed (document 03, section 4.8). Placement changes lock the asset row
      * first too, so no placement can start on an asset being archived. Archiving an archived asset
      * returns it unchanged and is audited as already applied. Reservations, loans and locker operations do not exist

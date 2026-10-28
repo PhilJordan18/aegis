@@ -1303,7 +1303,7 @@ CREATE UNIQUE INDEX ux_asset_placements_one_current_per_compartment
     ON asset_placements (compartment_id)
     WHERE removed_at IS NULL;
 
--- Décision en attente (CAT-02) : au plus un identifiant actif par type et par actif.
+-- Au plus un identifiant actif par type et par actif (CAT-02, décision du 28 octobre 2026).
 CREATE UNIQUE INDEX ux_asset_identifiers_one_active_per_type
     ON asset_identifiers (asset_id, identifier_type)
     WHERE active = true;
@@ -1512,7 +1512,7 @@ Quand plusieurs agrégats sont requis, le backend les verrouille dans cet ordre 
 7. `local_access_challenges`, si concerné;
 8. `anomalies`.
 
-Les lectures de garde utilisent `SELECT ... FOR UPDATE` sur les lignes existantes, sauf pour `users`, verrouillée par `SELECT ... FOR NO KEY UPDATE`. Ces parcours ne modifient jamais la clé d’un utilisateur, et ce mode n’entre pas en conflit avec le verrou `KEY SHARE` que la clé étrangère `fk_rest_idempotency_actor` prend sur la ligne de l’acteur à l’insertion de sa clé d’idempotence (§8.1). Avec `FOR UPDATE`, deux requêtes concurrentes du même utilisateur portant des clés différentes s’attendraient mutuellement jusqu’au deadlock, et une ligne `users` tenue ailleurs retarderait l’insertion d’une nouvelle clé. Le verrou de la ligne `lockers` sérialise le parcours physique; l’index partiel reste la barrière finale lorsqu’aucune opération ouverte n’existait encore.
+Les lectures de garde utilisent `SELECT ... FOR UPDATE` sur les lignes existantes, sauf pour `users`, verrouillée par `SELECT ... FOR NO KEY UPDATE`, et pour `compartments` lors d’un changement de placement, verrouillés de même dans l’ordre de leur identifiant : ce mode sérialise les placements visant un même compartiment sans bloquer le verrou `KEY SHARE` que prennent les clés étrangères vers lui. Ces parcours ne modifient jamais la clé d’un utilisateur, et ce mode n’entre pas en conflit avec le verrou `KEY SHARE` que la clé étrangère `fk_rest_idempotency_actor` prend sur la ligne de l’acteur à l’insertion de sa clé d’idempotence (§8.1). Avec `FOR UPDATE`, deux requêtes concurrentes du même utilisateur portant des clés différentes s’attendraient mutuellement jusqu’au deadlock, et une ligne `users` tenue ailleurs retarderait l’insertion d’une nouvelle clé. Le verrou de la ligne `lockers` sérialise le parcours physique; l’index partiel reste la barrière finale lorsqu’aucune opération ouverte n’existait encore.
 
 ### 7.2 Création d’une réservation
 
@@ -1786,7 +1786,7 @@ Découpage recommandé :
 | `V002__create_identity_and_catalog.sql` | `users`, `asset_models`, `assets`, `asset_identifiers`. |
 | `V002_1__create_rest_idempotency_keys.sql` | `rest_idempotency_keys` (§4.10), avancée depuis `V010` pour les routes du catalogue (document 09, §20.1). Ajoutée quand toutes les bases s’arrêtaient à `V002`. |
 | `V002_2__create_audit_events.sql` | `audit_events` (§4.9), avancée depuis `V009` pour auditer le catalogue avant `V003`, sans `operation_id`, `inbound_message_id` ni `physical_observation_id`; index `ix_audit_events_subject_time` et `ix_audit_events_time`; triggers append-only. Ajoutée quand les bases s’arrêtaient à `V002` ou `V002_1`. |
-| `V003__create_lockers_and_placements.sql` | `lockers`, `compartments`, `locker_devices`, `asset_placements`; `ux_asset_identifiers_one_active_per_type` sur `asset_identifiers` (décision en attente, CAT-02). |
+| `V003__create_lockers_and_placements.sql` | `lockers`, `compartments`, `locker_devices`, `asset_placements`; `ux_asset_identifiers_one_active_per_type` sur `asset_identifiers` (CAT-02, décision du 28 octobre 2026). |
 | `V004__create_operating_schedules.sql` | `operating_schedules`, `operating_windows` et leurs index. |
 | `V005__create_reservations.sql` | `reservations` et index d’unicité active `ux_reservations_one_active_per_asset` et `ux_reservations_one_active_per_user`. |
 | `V006__create_operations_and_loans.sql` | `locker_operations`, `loans`, FK circulaire ajoutée après les deux tables; `uq_loans_checkout_operation`; index partiels `ux_loans_one_open_per_asset` et `ux_locker_operations_one_open_per_locker`; `audit_events.operation_id`, `fk_audit_events_operation` et `ix_audit_events_operation_time`. Les index de lecture de §5.2 restent dans `V011`. |
@@ -1845,9 +1845,9 @@ L’application ne reçoit pas le droit de supprimer ou de modifier `audit_event
 | Rôle | Attributs | Droits |
 |---|---|---|
 | Propriétaire des migrations (`aegis_migrator` par défaut, ou le compte propriétaire actuel) | `LOGIN`, jamais superutilisateur dans un environnement cible | Possède le schéma `aegis`, ses objets et `public.flyway_schema_history`; exécute Flyway. |
-| Rôle applicatif (`aegis_app` par défaut) | `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS` | `CONNECT` sur la base; `USAGE` sur `aegis`; `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les tables métier; `SELECT` et `INSERT` seulement sur `audit_events`; `USAGE`, `SELECT` sur les séquences. Jamais `TRUNCATE`, `REFERENCES`, `TRIGGER`, ni `CREATE` sur le schéma. |
+| Rôle applicatif (`aegis_app` par défaut) | `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS` | `CONNECT` sur la base; `USAGE` sur `aegis`; `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les tables métier; `SELECT`, `INSERT` et `UPDATE`, sans `DELETE`, sur `reservations`, `locker_operations` et `loans`; `SELECT` et `INSERT` seulement sur `audit_events`; `USAGE`, `SELECT` sur les séquences. Jamais `TRUNCATE`, `REFERENCES`, `TRIGGER`, ni `CREATE` sur le schéma. |
 
-Les droits suivent le schéma : le callback `afterMigrate` de §11.1 les réapplique de façon idempotente après chaque migration, avec le nom du placeholder Flyway `application_role` (`AEGIS_DB_APPLICATION_ROLE`, `aegis_app` par défaut). Si le rôle n’existe pas, le callback ne fait rien; s’il est superutilisateur ou membre d’un propriétaire du schéma ou de ses objets, même sans héritage (une appartenance `WITH INHERIT FALSE` permet encore `SET ROLE`), il échoue, car révoquer les droits du propriétaire casserait le schéma. Une future table append-only s’ajoute à la liste `append_only` du callback.
+Les droits suivent le schéma : le callback `afterMigrate` de §11.1 les réapplique de façon idempotente après chaque migration, avec le nom du placeholder Flyway `application_role` (`AEGIS_DB_APPLICATION_ROLE`, `aegis_app` par défaut). Si le rôle n’existe pas, le callback ne fait rien; s’il est superutilisateur ou membre d’un propriétaire du schéma ou de ses objets, même sans héritage (une appartenance `WITH INHERIT FALSE` permet encore `SET ROLE`), il échoue, car révoquer les droits du propriétaire casserait le schéma. Une future table append-only s’ajoute à la liste `append_only` du callback. La liste `no_delete` retire `DELETE` sur `reservations`, `locker_operations` et `loans` : ces lignes changent d’état mais la chaîne de possession n’est jamais effacée (§1.1). Une future table d’historique de possession, de commande ou de preuve rejoint l’une de ces deux listes en même temps que la migration qui la crée; sinon le callback lui accorde `DELETE`.
 
 Le trigger de §4.9 n’est qu’une défense en profondeur. Ni lui ni ces droits ne protègent contre un superutilisateur ou le propriétaire de la table : la confiance envers ces comptes relève de l’exploitation (accès restreint, journalisation, sauvegardes).
 
@@ -1857,7 +1857,7 @@ Le trigger de §4.9 n’est qu’une défense en profondeur. Ni lui ni ces droit
 2. Fixer chaque mot de passe avec `\password aegis_app` (et `\password aegis_migrator`) dans `psql` : le client calcule le hachage SCRAM et le mot de passe en clair n’atteint ni le serveur ni ses journaux, contrairement à `ALTER ROLE ... PASSWORD '...'`.
 3. Redémarrer l’API une fois avec le compte propriétaire actuel pour Flyway : le callback accorde alors les droits à `aegis_app`.
 4. Basculer la source de données : `AEGIS_DB_USER=aegis_app` et son mot de passe, en conservant `AEGIS_DB_MIGRATION_USER` et `AEGIS_DB_MIGRATION_PASSWORD` sur le compte propriétaire. Sans ces deux variables, Flyway emprunte le compte de la source de données.
-5. Vérifier en tant que `aegis_app` que `UPDATE`, `DELETE` et `TRUNCATE` sur `aegis.audit_events` sont refusés avec `42501`.
+5. Vérifier en tant que `aegis_app` que `UPDATE`, `DELETE` et `TRUNCATE` sur `aegis.audit_events`, ainsi que `DELETE` et `TRUNCATE` sur `aegis.reservations`, `aegis.locker_operations` et `aegis.loans`, sont refusés avec `42501`.
 6. Facultatif, pour ne plus migrer en superutilisateur : transférer au rôle de migration la propriété du schéma `aegis`, de ses tables, séquences et fonctions et de `public.flyway_schema_history` (`ALTER ... OWNER TO aegis_migrator`), puis pointer `AEGIS_DB_MIGRATION_USER` vers lui. `pgcrypto` étant une extension de confiance, il suffit que ce rôle ait `CREATE` sur la base.
 
 Retour arrière : remettre `AEGIS_DB_USER` sur le compte propriétaire. Aucune donnée n’est modifiée par ces étapes.

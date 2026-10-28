@@ -6,8 +6,7 @@ import java.util.Locale;
 import org.springframework.http.HttpStatus;
 
 /**
- * Stable error codes of the REST contract (document 09, section 21). The identifier and compartment codes of CAT-02
- * are listed there as proposed until the contract is approved.
+ * Stable error codes of the REST contract (document 09, section 21).
  */
 public enum ApiError {
 
@@ -30,7 +29,7 @@ public enum ApiError {
     /** Unknown asset of the technician catalog (document 09, section 11.2). */
     ASSET_NOT_FOUND(HttpStatus.NOT_FOUND, "Actif introuvable",
             "L'actif demandé est absent du catalogue."),
-    /** Proposed by CFG-02: the locker exists but has no active operating schedule (document 09, section 13.1). */
+    /** The locker exists but has no active operating schedule (document 09, section 13.1). */
     OPERATING_SCHEDULE_NOT_CONFIGURED(HttpStatus.NOT_FOUND, "Horaire non configuré",
             "Aucun horaire d'exploitation actif n'est configuré pour ce locker."),
     ASSET_MODEL_IN_USE(HttpStatus.CONFLICT, "Modèle utilisé",

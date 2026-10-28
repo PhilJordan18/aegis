@@ -44,6 +44,10 @@ describe('labels', () => {
     const label = reasonLabel('CALIBRATION_EXPIRED', MM002, i18n('fr'))
     expect(label).toMatch(/8\u00A0sept\.\u00A02026, 00[\u00A0\u202F]h[\u00A0\u202F]00\u00A0HAE$/)
     expect(label.split(', ')).toHaveLength(2)
+    // The English date has its own comma, which must not break either.
+    const english = reasonLabel('CALIBRATION_EXPIRED', MM002, i18n('en'))
+    expect(english).toMatch(/Sep\u00A08,\u00A02026, 12:00[\u00A0\u202F]a\.m\.\u00A0EDT$/)
+    expect(english.split(', ')).toHaveLength(2)
   })
 
   it('uses the plain reason when an expired calibration carries no due instant', () => {

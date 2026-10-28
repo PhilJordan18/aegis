@@ -231,7 +231,13 @@ en garde finale); un type hors `RFID_UHF`, `NFC` et `QR` reçoit
 `422 IDENTIFIER_TYPE_UNSUPPORTED`. La révocation conserve la ligne; une
 révocation répétée est auditée `ALREADY_APPLIED`. Une attribution écrit
 `ASSET_IDENTIFIER_ASSIGNED` et une révocation `ASSET_UPDATED`, faute de type
-de révocation dans le document 08.
+de révocation dans le document 08. Décisions du 28 octobre 2026 : un actif
+porte au plus un identifiant actif par type (une nouvelle attribution du même
+type révoque l'ancienne dans la même transaction, index
+`ux_asset_identifiers_one_active_per_type` de `V003`), et l'archivage révoque
+les identifiants actifs de l'actif. La valeur, limitée à 255 caractères comme
+une observation du document 10, est comparée telle quelle, sans mise en
+majuscules; la normalisation des EPC RFID sera fixée avec PHY-02.
 
 `PUT /admin/assets/{assetId}/placement` termine le placement précédent au lieu
 de le supprimer et écrit `ASSET_PLACEMENT_CHANGED`. Il verrouille l'actif, puis
@@ -240,8 +246,9 @@ actif archivé, un compartiment inconnu (violation `COMPARTMENT_NOT_FOUND`),
 désactivé (`409 COMPARTMENT_DISABLED`) ou occupé par un autre actif
 (`409 COMPARTMENT_ALREADY_OCCUPIED`). Un `PUT` vers le compartiment actuel ne
 change rien. L'archivage d'un actif termine son placement actif dans sa
-transaction. Les nouveaux codes sont proposés dans le document 09 et attendent
-leur approbation. Les refus liés aux réservations, prêts et opérations
+transaction. Les codes `COMPARTMENT_*` ont été approuvés le 28 octobre 2026;
+`COMPARTMENT_DISABLED` vise la configuration du backend, pas le firmware. Les
+refus liés aux réservations, prêts et opérations
 viendront avec les tranches qui les créent. `AssetIdentifierApiTests`,
 `AssetPlacementApiTests` et `PhysicalCatalogConcurrencyTests` le vérifient.
 
@@ -299,8 +306,10 @@ réservés à `ADMIN`. Le `PUT` valide les sept jours, le fuseau IANA et les
 heures, verrouille le locker, archive la version active et en insère une
 nouvelle avec ses sept plages; il écrit un événement `SCHEDULE_UPDATED` par
 version. Un `PUT` identique ne crée rien. Un locker sans horaire actif
-retourne `404 OPERATING_SCHEDULE_NOT_CONFIGURED`. Ce code et les codes de
-violation de la section 13.2 sont proposés et attendent leur approbation.
+retourne `404 OPERATING_SCHEDULE_NOT_CONFIGURED`. Ce code et les quatre codes
+de violation de la section 13.2 sont approuvés depuis le 28 octobre 2026. Les
+fuseaux IANA à décalage fixe (`UTC`, `Etc/GMT+5`) sont acceptés mais ignorent
+l'heure d'été : un locker utilise une zone géographique.
 
 Le casier de démonstration n'a pas d'horaire au démarrage : sa version doit
 être créée par un administrateur, l'administrateur de démonstration par
@@ -309,6 +318,20 @@ règle de réservation du document 06, section 5.1, y compris les changements
 d'heure; aucune route ne l'appelle encore. `OperatingScheduleApiTests`,
 `OperatingScheduleConcurrencyTests`, `OperatingHoursTests` et
 `OperatingScheduleMigrationTests` le vérifient.
+
+## Réservations, opérations et prêts (DB-02)
+
+`V005` crée `reservations`; `V006` crée `locker_operations` et `loans`, leur
+clé étrangère circulaire et `audit_events.operation_id` (document 08,
+sections 4.6, 4.9 et 5.1). PostgreSQL refuse lui-même, avec `23505`, une
+deuxième réservation active par actif ou par technicien, un deuxième prêt
+ouvert par actif, une deuxième opération non terminale par locker et un
+deuxième prêt pour une même opération de retrait
+(`uq_loans_checkout_operation`); le service convertira ces refus en
+`CONFLICT` (section 7.2). Le rôle applicatif ne peut ni supprimer ni vider
+ces trois tables. Le catalogue les lit pour dériver la disponibilité (section
+suivante); aucune route ne les écrit encore. `CustodySchemaTests` vérifie les
+contraintes, cinq courses concurrentes et les droits.
 
 ## Catalogue technicien et readiness (RDY-01, RDY-02)
 
@@ -399,8 +422,9 @@ même compte `aegis`, et le rôle applicatif n'existe pas.
 
 Après chaque migration, le callback Flyway accorde au rôle applicatif, s'il
 existe : `USAGE` sur `aegis`, `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les
-tables métier, et seulement `SELECT` et `INSERT` sur `audit_events`; jamais
-`TRUNCATE`, `REFERENCES` ni `TRIGGER`. Il échoue si ce rôle est
+tables métier, `SELECT`, `INSERT` et `UPDATE` sans `DELETE` sur
+`reservations`, `locker_operations` et `loans`, et seulement `SELECT` et
+`INSERT` sur `audit_events`; jamais `TRUNCATE`, `REFERENCES` ni `TRIGGER`. Il échoue si ce rôle est
 superutilisateur ou membre d'un propriétaire du schéma, même sans héritage. Le trigger
 append-only de `audit_events` n'est qu'une défense en profondeur : le
 propriétaire de la table peut le désactiver et un superutilisateur le
@@ -425,7 +449,9 @@ aux environnements partagés dans cette carte :
    plaçant le compte propriétaire dans `AEGIS_DB_MIGRATION_USER` et
    `AEGIS_DB_MIGRATION_PASSWORD`;
 5. vérifier en tant que `aegis_app` que `UPDATE`, `DELETE` et `TRUNCATE` sur
-   `aegis.audit_events` échouent avec `42501`;
+   `aegis.audit_events`, ainsi que `DELETE` et `TRUNCATE` sur
+   `aegis.reservations`, `aegis.locker_operations` et `aegis.loans`, échouent
+   avec `42501`;
 6. facultatif : transférer la propriété du schéma `aegis`, de ses objets et de
    `public.flyway_schema_history` à `aegis_migrator`, puis migrer avec lui
    plutôt qu'avec un superutilisateur.
@@ -446,10 +472,14 @@ docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml
 
 `down` conserve les volumes. Ne pas ajouter `--volumes` si les données locales
 doivent être conservées. Chaque démarrage de l'API applique les migrations
-en attente (`V001`, `V002` pour l'identité et le catalogue, `V002_1` pour les
-clés d'idempotence REST, puis `V002_2` pour `audit_events`) et valide
+en attente, dans l'ordre : `V001`, `V002` pour l'identité et le catalogue,
+`V002_1` pour les clés d'idempotence REST, `V002_2` pour `audit_events`,
+`V003` pour les lockers et les placements, `V004` pour les horaires, puis
+`V005` et `V006` pour les réservations, opérations et prêts. Il valide
 l'historique dans `public.flyway_schema_history` sans rejouer une migration
-déjà appliquée. Les tables métier sont dans le schéma `aegis`. Le callback
+déjà appliquée. Une table `aegis.flyway_schema_history` résiduelle peut
+exister dans une base locale ancienne : elle n'est pas lue, et une requête
+non qualifiée la trouve avant `public` à cause du `search_path`. Les tables métier sont dans le schéma `aegis`. Le callback
 `afterMigrate__grant_application_role.sql` s'exécute ensuite à chaque
 démarrage (voir « Rôles PostgreSQL »).
 

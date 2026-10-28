@@ -2,6 +2,9 @@
 
 Mode : Discovery. Date : 23 septembre 2026 (révision 2).
 
+Mise à jour ciblée : 22 octobre 2026 — libellé « Réserver jusqu'à » et
+conséquences de l'heure choisie (décision de Philippe; `09` §14.1).
+
 **Statut : approuvé le 23 septembre 2026** (approbation humaine communiquée
 par Philippe dans la session de conception) pour :
 
@@ -198,7 +201,7 @@ guidée sont présentés dans le contexte de Mon activité.
 | Hiérarchie (liste) | Recherche → filtres (Prêt · Bloqué · À vérifier) → cartes : statut, puis identité (modèle, code) → raison principale ou cellule. Heure d'évaluation en pied de liste. |
 | Action principale | Ouvrir le détail. |
 | Détail | Identité (modèle, code, fabricant) et statut → toutes les raisons → calibration (date, fuseau du casier) → niveau d'accès requis → cellule (`A1`) → bouton **Réserver**, actif seulement si `READY`, sinon désactivé avec la raison. |
-| Feuille « Réserver » | Heure de retour (`reservedUntil`), rappel « Retirez l'équipement avant cette heure; la réservation n'ouvre aucune porte. » → **Confirmer la réservation**. La borne supérieure vient de `LockerStatusView.currentWindow.closesAt` (`09` §8.6, affichage seulement : le serveur revalide); un pas de 15 min n'est qu'un confort de saisie (U8). |
+| Feuille « Réserver » | « Réserver jusqu'à » (`reservedUntil`), puis « Retirez l'équipement avant cette heure. Elle sera aussi l'heure de retour prévue. » (décision du 22 octobre 2026, `09` §14.1) et le rappel que la réservation n'ouvre aucune porte → **Confirmer la réservation**. La borne supérieure vient de `LockerStatusView.currentWindow.closesAt` (`09` §8.6, affichage seulement : le serveur revalide); un pas de 15 min n'est qu'un confort de saisie (U8). |
 | Secondaires | Tirer pour actualiser; tri par code ou modèle. |
 | États défavorables | Chargement (squelette natif) · Vide : « Aucun équipement ne correspond. » · Hors ligne/serveur · `403 ASSET_ACCESS_DENIED` : « Votre niveau d'accès ne permet pas cet équipement. » · `422 ASSET_NOT_READY` : raison du moment · `409 ASSET_ALREADY_RESERVED` : « Quelqu'un vient de le réserver. » · `409 USER_ALREADY_HAS_ACTIVE_RESERVATION` : « Vous avez déjà une réservation active. » + lien Mon activité · `422 OUTSIDE_OPERATING_HOURS` : « Le casier est fermé. » · `422 RESERVATION_END_AFTER_CLOSING` : « Choisissez une heure avant la fermeture. » |
 | Contrats | ✔ `GET /assets` (q, readiness, availability, tri, §11.1), `GET /assets/{id}` (§11.2), `POST /reservations` (§14.1). ✔ heure de fermeture : `GET /lockers/{id}/status` → `currentWindow {timeZone, open, closesAt, nextOpensAt}` (§8.6, §16.1). ✔ actifs `RESTRICTED` visibles avec `ACCESS_DENIED` (§11.1, P1). |
@@ -418,7 +421,7 @@ non terminaux), le filtrage client obligerait à lire tout l'historique : un
 | U5 | Opérations physiques sur le Web | Onglet de Réservations et prêts, avec lien filtré depuis Casiers. |
 | U6 | Mauvais rôle pour l'application | Après connexion, sans charger de données : « Ce compte administrateur s'utilise dans Aegis Manager sur le Web. » / « Ce compte technicien s'utilise dans l'application Aegis. » |
 | U7 | Apparence | Système par défaut, Clair, Sombre; préférence locale par appareil ou navigateur. |
-| U8 | Sélecteur d'heure de retour | Pas de 15 min comme confort de saisie seulement; il ne remplace pas la borne serveur (`currentWindow.closesAt`, `09` §8.6, revalidée au `POST`). |
+| U8 | Sélecteur « Réserver jusqu'à » | Pas de 15 min comme confort de saisie seulement; il ne remplace pas la borne serveur (`currentWindow.closesAt`, `09` §8.6, revalidée au `POST`). |
 
 ## 9. Décisions produit et contrat
 
