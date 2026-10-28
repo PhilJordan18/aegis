@@ -284,6 +284,10 @@ test.describe('flow: équipements (production page, routed fakes)', () => {
     const before = requests.filter((request) => /assets\/[0-9a-f-]{36}$/.test(request)).length
     await page.keyboard.press('Enter')
     await expect.poll(() => requests.filter((request) => /assets\/[0-9a-f-]{36}$/.test(request)).length).toBeGreaterThan(before)
+    // This retry fails too: focus stays on the button, and the status region says so because the alert does not speak twice.
+    await expect(dossier.getByRole('status')).toHaveText('Données non actualisées.')
+    await expect(retry).toBeFocused()
+    await expect(retry).not.toHaveAttribute('aria-disabled')
   })
 
   test('flow: pagination keeps the address, resets the selection and keeps focus on the pager', async ({ page }) => {

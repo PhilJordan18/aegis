@@ -25,8 +25,13 @@ export class BootCounterError extends Error {
  * cannot lose each other's update (there is no file lock).
  */
 export function defaultBootCountFile(deviceKey: string, env: NodeJS.ProcessEnv = process.env): string {
+  return join(simulatorStateDirectory(env), `boot-count-${deviceKey}.json`);
+}
+
+/** `$XDG_STATE_HOME/aegis/hub-simulator`, or `~/.local/state/aegis/hub-simulator`: outside the repository. */
+export function simulatorStateDirectory(env: NodeJS.ProcessEnv = process.env): string {
   const stateHome = env.XDG_STATE_HOME && env.XDG_STATE_HOME.length > 0 ? env.XDG_STATE_HOME : join(homedir(), '.local', 'state');
-  return join(stateHome, 'aegis', 'hub-simulator', `boot-count-${deviceKey}.json`);
+  return join(stateHome, 'aegis', 'hub-simulator');
 }
 
 export function isValidBootCount(value: unknown): value is number {

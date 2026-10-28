@@ -15,8 +15,8 @@ export interface ReplaySelector {
    * Counts established connections only, those that published an ONLINE, over the
    * whole run across boots: 0 is the last one (the current connection while online),
    * 1 the one before. A failed attempt is never counted, so a reconnection that
-   * needed several attempts does not shift the index. Not applicable to
-   * DEVICE_RESTARTED, which carries no connectionId.
+   * needed several attempts does not shift the index. Only for HEARTBEAT and
+   * DEVICE_AVAILABILITY, the types that carry a connectionId.
    */
   readonly connectionsAgo?: number;
 }
@@ -29,6 +29,10 @@ export interface ReplaySelector {
 export const MAX_TRACKED_BOOTS = 16;
 export const MAX_TRACKED_CONNECTIONS = 32;
 export const MAX_TRACKED_FAILED_ATTEMPTS = 32;
+/** Operational events (acknowledgements, door, lock, RFID, display): the most recent ones. */
+export const MAX_TRACKED_EVENTS = 64;
+
+const BOOT_SCOPED_TYPES: readonly string[] = ['HEARTBEAT', 'DEVICE_AVAILABILITY', 'DEVICE_RESTARTED'];
 
 interface Entry {
   readonly message: OutboundMessage;
@@ -38,13 +42,18 @@ interface Entry {
 
 function connectionOf(message: OutboundMessage): string | undefined {
   const payload = message.payload;
-  return payload.type === 'DEVICE_RESTARTED' ? undefined : payload.connectionId;
+  return 'connectionId' in payload ? payload.connectionId : undefined;
+}
+
+function isOperationalEvent(entry: Entry): boolean {
+  return !BOOT_SCOPED_TYPES.includes(entry.message.payload.type);
 }
 
 /**
  * Remembers what the simulator emitted, Last Wills included, so that a scenario can
  * replay a late or duplicate delivery. Per connection it keeps the Will, ONLINE,
- * SHUTDOWN and only the last heartbeat; per boot it keeps DEVICE_RESTARTED. The Wills
+ * SHUTDOWN and only the last heartbeat; per boot it keeps DEVICE_RESTARTED; and it
+ * keeps the last operational events (acknowledgements, door, lock, RFID, display). The Wills
  * of attempts that never published ONLINE are kept within their own bound but are not
  * counted by `connectionsAgo`; a later Will is always a more recent match.
  */
@@ -81,6 +90,9 @@ export class EmissionLog {
       );
     }
     this.#entries.push(entry);
+    if (isOperationalEvent(entry) && this.#entries.filter(isOperationalEvent).length > MAX_TRACKED_EVENTS) {
+      this.#entries.splice(this.#entries.findIndex(isOperationalEvent), 1);
+    }
   }
 
   find(selector: ReplaySelector): OutboundMessage | undefined {

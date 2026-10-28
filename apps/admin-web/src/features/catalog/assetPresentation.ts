@@ -52,7 +52,12 @@ function dateOf(instant: string | null, { format }: I18n): string | null {
  */
 function dueOf(instant: string | null, { format }: I18n): string | null {
   const date = parsedInstant(instant)
-  return date === null ? null : format.dateTime(date, LAB_TIME_ZONE).replace(/(?<!,) /g, '\u00A0')
+  if (date === null) return null
+  // The time carries no comma, so the last one separates it from the date; an English date has its own comma.
+  const text = format.dateTime(date, LAB_TIME_ZONE)
+  const cut = text.lastIndexOf(', ')
+  const unbroken = (part: string) => part.replace(/ /g, '\u00A0')
+  return cut < 0 ? unbroken(text) : `${unbroken(text.slice(0, cut))}, ${unbroken(text.slice(cut + 2))}`
 }
 
 /** True when any enumeration of the unit is a value this client does not know (09 §3). */
