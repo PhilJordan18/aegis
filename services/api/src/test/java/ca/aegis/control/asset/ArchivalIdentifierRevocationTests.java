@@ -11,7 +11,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.ResultActions;
 
-/** Pending decision of CAT-02: archival revokes the asset's active identifiers and keeps their history. */
+/** CAT-02, decided on 28 October 2026: archival revokes the asset's active identifiers and keeps their history. */
 class ArchivalIdentifierRevocationTests extends CatalogApiTest {
 
     @Test
@@ -19,7 +19,7 @@ class ArchivalIdentifierRevocationTests extends CatalogApiTest {
         String model = createModel("Archivage tags " + suffix);
         String asset = createAsset(model, "ART-" + suffix);
         String other = createAsset(model, "ART-OTHER-" + suffix);
-        String rfid = id(assign(asset, "RFID_UHF", "E600" + suffix));
+        String rfid = id(assign(asset, "RFID_UHF", epc("E600")));
         String nfc = id(assign(asset, "NFC", "N600" + suffix));
         String early = id(assign(asset, "QR", "Q600" + suffix));
         mvc.perform(asAdmin(withKey(post(AssetIdentifierApiTests.identifiers(asset) + "/" + early + "/revoke"))))
@@ -45,7 +45,7 @@ class ArchivalIdentifierRevocationTests extends CatalogApiTest {
                 events(nfc));
         assertEquals(List.of("ASSET_IDENTIFIER_ASSIGNED ACCEPTED", "ASSET_UPDATED ACCEPTED " + START),
                 events(early));
-        assign(other, "RFID_UHF", "E600" + suffix).andExpect(status().isCreated());
+        assign(other, "RFID_UHF", epc("E600")).andExpect(status().isCreated());
     }
 
     private ResultActions assign(String asset, String type, String value) throws Exception {
