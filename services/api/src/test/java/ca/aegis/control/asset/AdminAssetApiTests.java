@@ -310,9 +310,14 @@ class AdminAssetApiTests extends CatalogApiTest {
         mvc.perform(asAdmin(get(ASSETS).param("q", "_")))
                 .andExpect(jsonPath("$.totalItems").value(0));
 
+        // Doc 09 §22.3 counts grapheme clusters: 100 ZWJ emoji are 500 UTF-16 units and remain a valid search.
+        String mechanic = "\uD83D\uDC69\u200D\uD83D\uDD27";
+        mvc.perform(asAdmin(get(ASSETS).param("q", "\u00A0" + mechanic.repeat(100) + "\u202F")))
+                .andExpect(status().isOk());
+
         for (String[] invalid : new String[][] {
-                {"q", "   "}, {"q", "q".repeat(101)}, {"sort", "serialNumber"}, {"sort", "assetCode,up"},
-                {"sort", "assetCode,asc,id"}, {"size", "500"}}) {
+                {"q", "   "}, {"q", "\u00A0\u202F"}, {"q", "q".repeat(101)}, {"q", mechanic.repeat(101)},
+                {"sort", "serialNumber"}, {"sort", "assetCode,up"}, {"sort", "assetCode,asc,id"}, {"size", "500"}}) {
             mvc.perform(asAdmin(get(ASSETS).param(invalid[0], invalid[1])))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
