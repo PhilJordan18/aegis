@@ -41,7 +41,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     ResponseEntity<Object> handleApiException(ApiException ex, HttpServletRequest request) {
-        return problems.entity(ex.error(), ex.error().status().value(), ex.headers(), request, ex.violations());
+        return problems.entity(ex.error(), ex.error().status().value(), ex.headers(), request, ex.reasons(),
+                ex.violations());
     }
 
     @ExceptionHandler(AccessDeniedException.class)
@@ -71,7 +72,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         ProblemResponse.Violation violation = switch (jacksonCause(ex)) {
-            case UnrecognizedPropertyException unknown -> new ProblemResponse.Violation(unknown.getPropertyName(),
+            case UnrecognizedPropertyException unknown -> new ProblemResponse.Violation(
+                    fieldName(unknown) != null ? fieldName(unknown) : unknown.getPropertyName(),
                     "UNKNOWN_FIELD", "Ce champ n'est pas reconnu.");
             case MismatchedInputException missing when isMissingRequiredProperty(missing) && fieldName(missing) != null ->
                     new ProblemResponse.Violation(fieldName(missing), "REQUIRED",
@@ -129,9 +131,20 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return message != null && message.startsWith("Missing required creator property");
     }
 
+    /**
+     * The whole JSON path of the value, written like a Bean Validation path ({@code windows[0].closesAt}), so that a
+     * violation inside an array element still names its element.
+     */
     private static String fieldName(JacksonException exception) {
-        List<JacksonException.Reference> path = exception.getPath();
-        return path.isEmpty() ? null : path.getLast().getPropertyName();
+        StringBuilder field = new StringBuilder();
+        for (JacksonException.Reference reference : exception.getPath()) {
+            if (reference.getPropertyName() != null) {
+                field.append(field.isEmpty() ? "" : ".").append(reference.getPropertyName());
+            } else if (reference.getIndex() >= 0) {
+                field.append('[').append(reference.getIndex()).append(']');
+            }
+        }
+        return field.isEmpty() ? null : field.toString();
     }
 
     static String violationCode(String constraint) {
