@@ -5,11 +5,14 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+
+import ca.aegis.control.shared.web.ApiError;
 
 /**
  * Custody facts of assets (document 03, section 5.2), from the stored states of document 08: a reservation counts
@@ -30,6 +33,35 @@ class AssetCustodyRepository {
 
     AssetCustodyRepository(JdbcClient jdbc) {
         this.jdbc = jdbc;
+    }
+
+    /**
+     * The custody that forbids archiving the asset (document 09, section 12.2), in the order the refusal reports it:
+     * an active reservation, an unfinished loan, then a non-terminal locker operation. The rows found are locked
+     * after the asset row, in the order of document 08, section 7.1, so that none of them ends or starts unseen
+     * while the archival decides.
+     */
+    Optional<ApiError> archivalBlocker(UUID assetId) {
+        if (exists("SELECT id FROM aegis.reservations WHERE asset_id = :id AND status = 'ACTIVE' FOR UPDATE",
+                assetId)) {
+            return Optional.of(ApiError.ASSET_ALREADY_RESERVED);
+        }
+        if (exists("""
+                SELECT id FROM aegis.loans WHERE asset_id = :id AND status IN ('ACTIVE', 'RETURN_PENDING') FOR UPDATE
+                """, assetId)) {
+            return Optional.of(ApiError.ASSET_HAS_OPEN_LOAN);
+        }
+        if (exists("""
+                SELECT id FROM aegis.locker_operations
+                WHERE asset_id = :id AND status NOT IN ('CONFIRMED', 'FAILED', 'EXPIRED', 'ANOMALY') FOR UPDATE
+                """, assetId)) {
+            return Optional.of(ApiError.ASSET_OPERATION_IN_PROGRESS);
+        }
+        return Optional.empty();
+    }
+
+    private boolean exists(String sql, UUID assetId) {
+        return !jdbc.sql(sql).param("id", assetId).query(UUID.class).list().isEmpty();
     }
 
     /** Custody of one asset, for a detail or a mutation result. */

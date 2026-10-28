@@ -10,7 +10,8 @@ import java.util.UUID;
 public enum IdempotentResource {
 
     ASSET_MODEL("/api/v1/admin/asset-models/"),
-    ASSET("/api/v1/admin/assets/");
+    ASSET("/api/v1/admin/assets/"),
+    RESERVATION("/api/v1/reservations/");
 
     private final String readRoutePrefix;
 
