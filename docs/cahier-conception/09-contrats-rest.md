@@ -245,6 +245,7 @@ Une violation contient field, code et message. Elle ne contient jamais la valeur
 | ASSET_MODEL_NOT_ACTIVE | `assetModelId` introuvable ou archivé (§12.2) |
 | REQUIRED_WHEN_CALIBRATION_REQUIRED | `calibrationDueAt` est `null` alors que `calibrationRequired=true` |
 | NOT_ALLOWED_WITHOUT_CALIBRATION | `calibrationDueAt` est fourni alors que `calibrationRequired=false` |
+| COMPARTMENT_NOT_FOUND | `compartmentId` inconnu (§12.4) |
 
 Un client traite un code de violation inconnu de façon générique : un message contrôlé pour le champ nommé, ou pour le formulaire si le champ lui est inconnu, avec le `traceId`. Un nouveau code de violation n’est pas une rupture de la v1.
 
