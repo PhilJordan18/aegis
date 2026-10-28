@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import tools.jackson.databind.JsonNode;
 
+import ca.aegis.control.identity.CurrentAccount;
 import ca.aegis.control.shared.idempotency.IdempotencyService;
 import ca.aegis.control.shared.idempotency.IdempotentRequest;
 import ca.aegis.control.shared.idempotency.IdempotentResource;
@@ -28,6 +30,7 @@ import ca.aegis.control.shared.web.SearchText;
 /**
  * Routes of document 09, section 12.2, reserved to administrators by {@code ApiRoutes}. Creation and archival are
  * idempotent mutations of section 20.1: {@link IdempotencyService} owns their transaction, which the service joins.
+ * The audited actor is always the authenticated account, never a value of the request.
  */
 @RestController
 @RequestMapping("/api/v1/admin/assets")
@@ -51,7 +54,7 @@ class AdminAssetController {
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<JsonNode> create(IdempotentRequest idempotentRequest, @Valid @RequestBody AssetRequest request) {
         return idempotency.execute(idempotentRequest, request, () -> {
-            AdminAssetView created = assets.create(request);
+            AdminAssetView created = assets.create(request, idempotentRequest.actorUserId());
             return IdempotentResult.created(IdempotentResource.ASSET, created.id(), created);
         });
     }
@@ -62,12 +65,14 @@ class AdminAssetController {
     }
 
     @PutMapping(path = "/{assetId}", consumes = MediaType.APPLICATION_JSON_VALUE)
-    AdminAssetView replace(@PathVariable UUID assetId, @Valid @RequestBody AssetRequest request) {
-        return assets.replace(assetId, request);
+    AdminAssetView replace(@AuthenticationPrincipal CurrentAccount actor, @PathVariable UUID assetId,
+            @Valid @RequestBody AssetRequest request) {
+        return assets.replace(assetId, request, actor.id());
     }
 
     @PostMapping("/{assetId}/archive")
     ResponseEntity<JsonNode> archive(IdempotentRequest idempotentRequest, @PathVariable UUID assetId) {
-        return idempotency.execute(idempotentRequest, () -> IdempotentResult.ok(assets.archive(assetId)));
+        return idempotency.execute(idempotentRequest, () -> IdempotentResult.ok(
+                assets.archive(assetId, idempotentRequest.actorUserId())));
     }
 }

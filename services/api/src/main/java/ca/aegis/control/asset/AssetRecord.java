@@ -6,7 +6,7 @@ import java.util.UUID;
 
 import ca.aegis.control.identity.AccessLevel;
 
-/** A row of {@code aegis.assets} with the summary of its model. */
+/** A row of {@code aegis.assets} with the summary of its model and its active placement, if any. */
 record AssetRecord(
         UUID id,
         AssetModelSummary model,
@@ -16,7 +16,8 @@ record AssetRecord(
         OperationalStatus operationalStatus,
         boolean calibrationRequired,
         Instant calibrationDueAt,
-        Instant archivedAt) {
+        Instant archivedAt,
+        PlacementSummary placement) {
 
     boolean archived() {
         return archivedAt != null;

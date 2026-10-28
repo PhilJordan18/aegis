@@ -8,7 +8,10 @@
 **Mise à jour ciblée :** 21 octobre 2026 — idempotence REST durable : contenu d’une réponse rejouée (§6.2, §20.2), attente bornée d’une clé en cours et code `IDEMPOTENCY_REQUEST_IN_PROGRESS` (§20.2, §21) (#64)  
 **Mise à jour ciblée :** 21 octobre 2026 — présence obligatoire des champs nullables du catalogue et violation `REQUIRED` (§12.1, §12.2) (#25), approuvée le 22 octobre 2026  
 **Mise à jour ciblée :** 22 octobre 2026 — catalogue administrateur décidé par Philippe (#25) : codes de violation (§7.1), `archivedAt` et `AssetModelView` (§8.9, §12.1), lectures paginées, unicités, refus d’une ressource archivée et archivage répété (§12.1, §12.2), codes `409` du catalogue (§21), caractères de contrôle (§23.2), tests (§26.6); comportement existant documenté  
-**Mise à jour ciblée :** 22 octobre 2026 — sens commun de `reservedUntil` et `dueAt` (§8.4, §14.1), valeurs et conditions de `availableActions` (§8.10, §26.8), règles approuvées par Philippe le 22 octobre 2026; aucun champ ajouté, règles de retour et d’annulation inchangées; deux questions restent ouvertes (§8.10) (#35)
+**Mise à jour ciblée :** 22 octobre 2026 — sens commun de `reservedUntil` et `dueAt` (§8.4, §14.1), valeurs et conditions de `availableActions` (§8.10, §26.8), règles approuvées par Philippe le 22 octobre 2026; aucun champ ajouté, règles de retour et d’annulation inchangées; deux questions restent ouvertes (§8.10) (#35)  
+**Mise à jour ciblée :** 28 octobre 2026 — identifiants et placement (#26), décisions du 28 octobre 2026 : un identifiant actif par type et remplacement atomique, révocation à l’archivage, comparaison exacte des valeurs (§12.2, §12.3), refus du placement et codes `COMPARTMENT_*` (§12.4, §21)  
+**Mise à jour ciblée :** 28 octobre 2026 — horaire d’exploitation (#28) : codes approuvés le 28 octobre 2026, `OPERATING_SCHEDULE_NOT_CONFIGURED` (§13.1, §21) et violations de l’horaire (§7.1, §13.2); chemin complet d’une erreur de lecture (§13.2); vue, audit et changements d’heure proposés (§13)  
+**Mise à jour ciblée :** 28 octobre 2026 — sous-objets `AssetModelSummary`, `CalibrationView` et `PlacementSummary` de `AssetView` (§8.2); sérialisation existante documentée; code `404 ASSET_NOT_FOUND` de §11.2 ajouté à §21 (#33, #34)
 
 ---
 
@@ -244,6 +247,11 @@ Une violation contient field, code et message. Elle ne contient jamais la valeur
 | ASSET_MODEL_NOT_ACTIVE | `assetModelId` introuvable ou archivé (§12.2) |
 | REQUIRED_WHEN_CALIBRATION_REQUIRED | `calibrationDueAt` est `null` alors que `calibrationRequired=true` |
 | NOT_ALLOWED_WITHOUT_CALIBRATION | `calibrationDueAt` est fourni alors que `calibrationRequired=false` |
+| COMPARTMENT_NOT_FOUND | `compartmentId` inconnu (§12.4) |
+| DUPLICATE_DAY_OF_WEEK | Jour déjà présent dans `windows` (§13.2) |
+| REQUIRED_WHEN_ENABLED | Heure absente pour un jour activé (§13.2) |
+| NOT_ALLOWED_WHEN_DISABLED | Heure fournie pour un jour fermé (§13.2) |
+| NOT_AFTER_OPENS_AT | `closesAt` égal ou antérieur à `opensAt` (§13.2) |
 
 Un client traite un code de violation inconnu de façon générique : un message contrôlé pour le champ nommé, ou pour le formulaire si le champ lui est inconnu, avec le `traceId`. Un nouveau code de violation n’est pas une rupture de la v1.
 
@@ -328,6 +336,36 @@ Exemple :
   }
 }
 ```
+
+Sous-objets de `AssetView`, sérialisation existante documentée. Un champ requis de type « ou null » est toujours présent, avec `null` explicite; un instant est en UTC, avec au plus six décimales de seconde. `AssetView` ne contient pas d’`availableActions`.
+
+`AssetModelSummary` :
+
+| Champ | Type | Requis |
+|---|---|---:|
+| id | UUID | oui |
+| name | string | oui |
+| manufacturer | string ou null | oui |
+| modelNumber | string ou null | oui |
+
+`CalibrationView` :
+
+| Champ | Type | Requis |
+|---|---|---:|
+| required | boolean | oui |
+| dueAt | instant ou null | oui |
+| status | NOT_REQUIRED, VALID, EXPIRED ou UNKNOWN | oui |
+
+`status` est calculé par le backend au même instant que la readiness (document 03, §5.4) : `NOT_REQUIRED` lorsque `required` vaut `false`, `UNKNOWN` lorsque la calibration est exigée sans échéance, `EXPIRED` dès que `evaluatedAt >= dueAt`, `VALID` sinon.
+
+`PlacementSummary`, placement attendu actif de l’actif (§12.4), ou `null` sans placement actif :
+
+| Champ | Type | Requis |
+|---|---|---:|
+| lockerId | UUID | oui |
+| lockerCode | string | oui |
+| compartmentId | UUID | oui |
+| compartmentCode | string | oui |
 
 ### 8.3 ReservationView
 
@@ -792,7 +830,9 @@ PUT /admin/asset-models/{modelId} retourne 200. Un PUT identique est un no-op m�
 
 POST /admin/asset-models/{modelId}/archive retourne 200. Il est refusé avec 409 ASSET_MODEL_IN_USE si un actif non archivé l’utilise. Un modèle déjà archivé suit la règle d’archivage répété ci-dessous.
 
-**Archivage répété** (modèle et actif). Archiver une ressource déjà archivée retourne `200` sans nouveau changement métier : `archivedAt` est conservé et aucune donnée n’est réécrite. Avec la même Idempotency-Key, la réponse initiale est rejouée (§20.2). Avec une nouvelle clé, la réponse est la représentation courante de la ressource archivée; pour un actif, ses champs dérivés (disponibilité, `operationalDiagnostic` et son `evaluatedAt`) peuvent être réévalués. Comme pour une réservation déjà annulée (§14.4), l’audit prévu enregistre ce cas avec le résultat `ALREADY_APPLIED`, sans second événement d’archivage.
+**Archivage répété** (modèle et actif). Archiver une ressource déjà archivée retourne `200` sans nouveau changement métier : `archivedAt` est conservé et aucune donnée n’est réécrite. Avec la même Idempotency-Key, la réponse initiale est rejouée (§20.2). Avec une nouvelle clé, la réponse est la représentation courante de la ressource archivée; pour un actif, ses champs dérivés (disponibilité, `operationalDiagnostic` et son `evaluatedAt`) peuvent être réévalués. Comme pour une réservation déjà annulée (§14.4), l’audit enregistre ce cas par un événement `ASSET_ARCHIVED` de résultat `ALREADY_APPLIED`, qui reprend l’`archivedAt` conservé; seul le premier archivage écrit un événement `ACCEPTED`. Le rejeu avec la même clé n’écrit aucun événement.
+
+**Audit du catalogue** (modèle et actif). Une création, une modification effective et un premier archivage écrivent chacun un seul événement d’audit (`ASSET_CREATED`, `ASSET_UPDATED` ou `ASSET_ARCHIVED`, `subjectType` `ASSET_MODEL` ou `ASSET`), dans la transaction de la mutation et avec l’instant qu’elle enregistre. L’acteur est le compte authentifié. Un rejeu de même clé, un PUT identique et une mutation refusée n’en écrivent aucun.
 
 ### 12.2 Asset
 
@@ -827,7 +867,7 @@ POST /admin/assets retourne 201 et exige Idempotency-Key.
 
 PUT /admin/assets/{assetId} retourne 200. La readiness n’est jamais acceptée dans la requête. Un PUT identique est un no-op métier. Un actif archivé ne se modifie plus : `409 ASSET_ARCHIVED`.
 
-POST /admin/assets/{assetId}/archive exige Idempotency-Key et retourne 200 avec la vue administrative. L’archivage est refusé lorsqu’une réservation active, un prêt ouvert ou une opération non terminale concerne l’actif. Un actif déjà archivé suit la règle d’archivage répété de §12.1.
+POST /admin/assets/{assetId}/archive exige Idempotency-Key et retourne 200 avec la vue administrative. L’archivage est refusé lorsqu’une réservation active, un prêt ouvert ou une opération non terminale concerne l’actif. Il termine le placement actif de l’actif (§12.4). Il révoque aussi les identifiants actifs de l’actif, en conservant leur historique, pour qu’un tag puisse être réutilisé (§12.3; décision du 28 octobre 2026). Un actif déjà archivé suit la règle d’archivage répété de §12.1.
 
 ### 12.3 Identifiant physique
 
@@ -850,6 +890,18 @@ Erreurs particulières :
 
 POST /admin/assets/{assetId}/identifiers/{identifierId}/revoke exige une clé d’idempotence. Une révocation ne supprime pas l’historique. Elle est refusée pendant une opération physique utilisant cet identifiant.
 
+**Comportement de la tranche CAT-02 (approuvé le 28 octobre 2026).**
+
+- `type` vaut `RFID_UHF`, `NFC` ou `QR` (document 03, §4.5). Un `type` absent ou vide retourne `400 VALIDATION_ERROR`; toute autre valeur, casse comprise, retourne `422 IDENTIFIER_TYPE_UNSUPPORTED`. `value` est requise, débarrassée de ses espaces extérieurs, limitée à 255 caractères comme un `identifierValue` observé (document 10, §12.1), sans caractère de contrôle, puis comparée telle quelle. Aucune mise en majuscules n’est appliquée, ni aux EPC RFID, ni aux valeurs NFC, QR ou opaques; la normalisation des EPC sera fixée avec PHY-02 avant le raccordement du lecteur réel.
+- Une paire `type + value` active appartient à un seul actif, le même actif compris : `409 IDENTIFIER_ALREADY_ASSIGNED`. Une valeur révoquée peut être attribuée de nouveau.
+- Un actif porte au plus un identifiant actif par type (décision du 28 octobre 2026). Attribuer un identifiant d’un type déjà actif sur l’actif révoque l’ancien dans la même transaction; la révocation et l’attribution sont auditées chacune.
+- Un actif archivé refuse l’attribution et la révocation : `409 ASSET_ARCHIVED`. Un actif inconnu, ou un identifiant qui n’appartient pas à l’actif du chemin, retourne `404 RESOURCE_NOT_FOUND`.
+- Les deux routes retournent un `AssetIdentifierView` : `id`, `assetId`, `type`, `value`, `active`, `assignedAt`, `revokedAt` (instant ou `null`). L’attribution retourne `201` avec un `Location` vers l’actif, car aucune route ne lit un identifiant seul; la révocation retourne `200`.
+- Révoquer un identifiant déjà révoqué suit la règle d’archivage répété de §12.1 : `200` avec la représentation courante, `revokedAt` conservé et un événement de résultat `ALREADY_APPLIED`.
+- Audit, avec `subjectType` `ASSET_IDENTIFIER` : une attribution écrit `ASSET_IDENTIFIER_ASSIGNED`. Le document 08 n’ayant pas de type de révocation, une révocation écrit `ASSET_UPDATED`. Un rejeu de même clé et une mutation refusée n’écrivent aucun événement.
+- L’archivage d’un actif (§12.2) révoque ses identifiants actifs dans la même transaction, sans supprimer leur historique, et écrit un événement `ASSET_UPDATED` par identifiant révoqué.
+- `409 ASSET_OPERATION_IN_PROGRESS` et le refus de révocation pendant une opération physique doivent être en place avant l’introduction des opérations physiques : la tranche qui crée les opérations les applique.
+
 ### 12.4 Placement attendu
 
 PUT /admin/assets/{assetId}/placement
@@ -869,6 +921,16 @@ La mutation est refusée si :
 - un autre actif possède déjà ce placement;
 - l’actif possède une réservation active, un prêt ouvert ou une opération non terminale;
 - le compartiment n’appartient pas au locker visé par la configuration.
+
+**Comportement de la tranche CAT-02 (approuvé le 28 octobre 2026).**
+
+- `compartmentId` est requis. `reason` est requis, débarrassé de ses espaces extérieurs et limité à 500 caractères sans caractère de contrôle.
+- La réponse est un `AssetPlacementView` : `id`, `assetId`, `lockerId`, `lockerCode`, `compartmentId`, `compartmentCode`, `assignedAt`, `reason`. `AdminAssetView.placement` (§8.9) présente le placement actif.
+- Un changement termine le placement précédent (`removedAt`) au lieu de le supprimer, et écrit un seul événement `ASSET_PLACEMENT_CHANGED` sur l’actif, avec l’ancien et le nouveau placement. Un PUT vers le compartiment actuel est un no-op : la réponse est le placement courant, motif compris, sans événement.
+- Refus vérifiables aujourd’hui : actif archivé, `409 ASSET_ARCHIVED`; compartiment inconnu, `400 VALIDATION_ERROR` avec la violation `{field: compartmentId, code: COMPARTMENT_NOT_FOUND}`; compartiment désactivé, `409 COMPARTMENT_DISABLED`; compartiment occupé par un autre actif, `409 COMPARTMENT_ALREADY_OCCUPIED`. `COMPARTMENT_DISABLED` vise un compartiment désactivé dans la configuration du backend; il ne définit aucun mécanisme de désactivation du firmware.
+- L’archivage d’un actif (§12.2) termine son placement actif dans la même transaction (décision approuvée le 22 octobre 2026, confirmée le 28 octobre 2026), conserve la ligne et écrit `ASSET_PLACEMENT_CHANGED` vers `null`.
+- Le refus pour réservation active, prêt ouvert ou opération non terminale sera appliqué par les tranches qui créent ces objets.
+- La condition « le compartiment n’appartient pas au locker visé par la configuration » n’est pas définie : aucune configuration ne désigne de locker cible. Elle n’est pas appliquée tant qu’elle n’est pas décidée.
 
 ---
 
@@ -905,6 +967,23 @@ Règles :
 - une nouvelle version d’horaire remplace la version active sans supprimer l’historique.
 
 Réponse 200 avec la nouvelle version active.
+
+**Comportement de la tranche CFG-02.** `404 OPERATING_SCHEDULE_NOT_CONFIGURED` et les violations `DUPLICATE_DAY_OF_WEEK`, `REQUIRED_WHEN_ENABLED`, `NOT_ALLOWED_WHEN_DISABLED` et `NOT_AFTER_OPENS_AT` sont approuvés depuis le 28 octobre 2026. Le reste de ce comportement (vue, audit, règle des changements d’heure, fuseaux acceptés) est proposé avec la tranche.
+
+- Les deux routes sont réservées à `ADMIN`. Le PUT ne prend pas d’`Idempotency-Key` (§20.1); une répétition identique ne crée aucun effet (§20.2).
+- Les deux routes retournent un `OperatingScheduleView` : `id` (la version), `lockerId`, `timeZone`, `createdAt`, `createdByUserId` et `windows`, sept objets `{dayOfWeek, enabled, opensAt, closesAt}` ordonnés de MONDAY à SUNDAY, heures locales au format `HH:mm:ss` ou `null` pour un jour fermé. Chaque changement crée une version immuable : `createdAt` et `createdByUserId` sont le `updatedAt` et le `updatedBy` du document 03, §4.10.
+- Un locker inconnu retourne `404 RESOURCE_NOT_FOUND`. Un locker existant sans horaire actif retourne, au GET, `404 OPERATING_SCHEDULE_NOT_CONFIGURED`, pour que le client distingue « rien de configuré » de « aucun locker ».
+- Validation, avec `400 VALIDATION_ERROR`. Les contraintes d’un champ seul sont signalées d’abord (§7.1) : `timeZone` vide, `NOT_BLANK`; `windows` absent, `NOT_NULL`; autre chose que sept éléments, `SIZE` sur `windows`; un élément `null`, `NOT_NULL` sur `windows[i]`; `dayOfWeek` ou `enabled` absent, `NOT_NULL`. Les règles qui combinent des champs sont ensuite signalées ensemble, triées par champ :
+  - `timeZone` absent de `ZoneId.getAvailableZoneIds()` de Java, casse exacte : `INVALID_VALUE`. Un décalage écrit (`Z`, `+01:00`, `UTC+1`) ou une abréviation absente de cette liste (`EST`) est refusé. Les identifiants IANA à décalage fixe, comme `UTC` ou `Etc/GMT+5`, en font partie et sont acceptés, mais ils ignorent l’heure d’été : un locker utilise une zone géographique comme `America/Toronto`;
+  - `windows[i].dayOfWeek` autre que MONDAY à SUNDAY en majuscules, nombre compris : `INVALID_VALUE`; un jour déjà présent : `DUPLICATE_DAY_OF_WEEK`;
+  - jour activé sans `opensAt` ou sans `closesAt` : `REQUIRED_WHEN_ENABLED` sur l’heure manquante; une heure omise vaut `null`;
+  - jour fermé avec une heure : `NOT_ALLOWED_WHEN_DISABLED` sur chaque heure fournie;
+  - `closesAt` égal ou antérieur à `opensAt`, plage traversant minuit comprise : `NOT_AFTER_OPENS_AT` sur `windows[i].closesAt`. La dernière fermeture possible est donc `23:59:59`;
+  - heure avec une fraction de seconde : `INVALID_VALUE`; une heure illisible, par exemple `24:00:00`, est une erreur de lecture `INVALID_VALUE` sur `windows[i].opensAt` ou `windows[i].closesAt`.
+- Le PUT verrouille la ligne du locker (`FOR UPDATE`, document 08, §7.1), archive la version active (`active = false`, `archivedAt`), puis insère la nouvelle version et ses sept plages, dans une transaction. L’index `ux_operating_schedules_one_active_per_locker` reste la garde finale. Aucune version n’est modifiée en place ni supprimée.
+- Un PUT dont le fuseau et les sept jours sont identiques à la version active, quel que soit l’ordre des jours ou la forme `09:00` ou `09:00:00`, ne crée ni version ni événement et retourne la version active.
+- Audit : un événement `SCHEDULE_UPDATED` par nouvelle version, `subjectType` `OPERATING_SCHEDULE` et `subjectId` la nouvelle version; `details` contient `previousScheduleId` (ou `null`), `before` (fuseau et sept jours de la version archivée, ou `null`) et `after`.
+- Lecture d’une plage pour une réservation (document 06, §5.1-5.2) : la plage est celle de la date locale de `now` dans le fuseau de l’horaire, ouverte de `opensAt` inclus à `closesAt` exclu, et `now < reservedUntil <= closesAt`. Une heure locale qui tombe dans le saut ou le recouvrement d’un changement d’heure a deux instants candidats : l’ouverture prend le plus tardif et la fermeture le plus tôt, si bien qu’un changement d’heure peut raccourcir une plage mais jamais l’allonger; une plage devenue vide compte comme fermée.
 
 ---
 
@@ -1278,6 +1357,8 @@ Les PUT sont idempotents par définition. Une répétition identique ne crée pa
 | 403 | FORBIDDEN | Rôle insuffisant |
 | 403 | ASSET_ACCESS_DENIED | Niveau d’accès insuffisant |
 | 404 | RESOURCE_NOT_FOUND | Ressource absente ou non visible |
+| 404 | ASSET_NOT_FOUND | Actif inconnu du catalogue technicien (§11.2) |
+| 404 | OPERATING_SCHEDULE_NOT_CONFIGURED | Locker existant sans horaire actif (§13.1) |
 | 409 | IDEMPOTENCY_KEY_REUSED | Clé réutilisée avec autre intention |
 | 409 | IDEMPOTENCY_REQUEST_IN_PROGRESS | Requête de même clé encore en cours, avec Retry-After |
 | 409 | CONCURRENT_MODIFICATION | Course détectée |
@@ -1294,10 +1375,14 @@ Les PUT sont idempotents par définition. Une répétition identique ne crée pa
 | 409 | ASSET_CODE_ALREADY_EXISTS | Code d’actif déjà utilisé, archives comprises (§12.2) |
 | 409 | ASSET_SERIAL_NUMBER_ALREADY_EXISTS | Numéro de série déjà utilisé, archives comprises (§12.2) |
 | 409 | ASSET_ARCHIVED | Modification d’un actif archivé (§12.2) |
+| 409 | IDENTIFIER_ALREADY_ASSIGNED | Paire type + valeur déjà active (§12.3) |
+| 409 | COMPARTMENT_DISABLED | Placement dans un compartiment désactivé (§12.4) |
+| 409 | COMPARTMENT_ALREADY_OCCUPIED | Compartiment déjà attribué à un autre actif (§12.4) |
 | 422 | ASSET_NOT_READY | Readiness autre que READY |
 | 422 | OUTSIDE_OPERATING_HOURS | Action hors plage |
 | 422 | RESERVATION_END_AFTER_CLOSING | Échéance trop tardive |
 | 422 | PHYSICAL_STATE_UNKNOWN | Preuve courante insuffisante |
+| 422 | IDENTIFIER_TYPE_UNSUPPORTED | Type d’identifiant hors RFID_UHF, NFC et QR (§12.3) |
 | 429 | RATE_LIMITED | Trop de requêtes |
 | 500 | INTERNAL_ERROR | Erreur inattendue corrélée |
 | 503 | LOCKER_OFFLINE | Locker temporairement indisponible |

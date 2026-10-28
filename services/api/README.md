@@ -5,7 +5,8 @@ API de CAT-01. Il fournit PostgreSQL, un broker MQTT local authentifié pour le
 simulateur, Spring Boot, Flyway, `GET /api/v1/system/health`, la connexion par
 comptes préparés (`POST /api/v1/auth/login`, `GET /api/v1/auth/me`), les
 contrôles de rôle et de niveau d'accès côté serveur et l'administration des
-modèles et des actifs (document 09, sections 12.1 et 12.2). Il n'implémente pas
+modèles et des actifs (document 09, sections 12.1 et 12.2), dont les mutations
+sont auditées (AUD-00). Il n'implémente pas
 encore les identifiants physiques, les placements ni l'ingestion MQTT. Les
 clients Web et iOS ont leur propre dossier sous `apps/`.
 
@@ -41,6 +42,7 @@ export AEGIS_JWT_SECRET="$(openssl rand -base64 48)"
 export AEGIS_DEMO_ACCOUNTS_ENABLED=true
 export AEGIS_DEMO_ADMIN_PASSWORD='choisir-un-mot-de-passe-admin'
 export AEGIS_DEMO_TECHNICIAN_PASSWORD='choisir-un-mot-de-passe-technicien'
+export AEGIS_DEMO_LOCKER_ENABLED=true
 ./mvnw spring-boot:run
 ```
 
@@ -190,15 +192,65 @@ actif non archivé ne peut pas être archivé (`409 ASSET_MODEL_IN_USE`).
 Les index uniques de `V002` restent la garde finale : code d'actif sans casse,
 numéro de série et nom de modèle actif sans casse donnent respectivement
 `409 ASSET_CODE_ALREADY_EXISTS`, `ASSET_SERIAL_NUMBER_ALREADY_EXISTS` et
-`ASSET_MODEL_NAME_ALREADY_EXISTS`. Ces codes ne figurent pas encore dans le
-document 09, section 21. Une création ou une modification d'actif verrouille
+`ASSET_MODEL_NAME_ALREADY_EXISTS`. Une création ou une modification d'actif verrouille
 le modèle en partage, et l'archivage d'un modèle le verrouille en exclusif :
 un actif non archivé ne peut donc jamais référencer un modèle archivé.
 
-La vue `AdminAssetView` ne contient aucune readiness. Tant que les
-réservations, les prêts, les placements et les observations n'existent pas, la
-disponibilité ne dépend que de l'archivage, la présence vaut `UNKNOWN` et le
-diagnostic contient donc toujours `UNKNOWN_PHYSICAL_STATE`.
+Chaque création, modification effective et premier archivage écrit un seul
+événement dans `audit_events`, dans la transaction de la mutation et avec
+l'instant qu'elle enregistre : `ASSET_CREATED`, `ASSET_UPDATED` ou
+`ASSET_ARCHIVED`, avec `subject_type` `ASSET_MODEL` ou `ASSET` et le compte
+authentifié comme acteur. `details` contient l'instantané des champs créés,
+les champs modifiés avec leurs valeurs avant et après, ou `archivedAt`. Un
+archivage répété avec une nouvelle clé écrit `ASSET_ARCHIVED` avec le
+résultat `ALREADY_APPLIED`; un rejeu de même clé, un `PUT` identique ou un
+refus n'écrit rien. `audit/AuditTrail` exige une transaction existante et
+refuse d'écrire hors de celle de la mutation. Les lignes antérieures à
+`V002_2` n'ont aucun événement reconstitué. `CatalogAuditTests` et
+`CatalogConcurrencyTests` le vérifient.
+
+La vue `AdminAssetView` ne contient aucune readiness. Sa disponibilité et sa
+présence viennent des mêmes sources que le catalogue technicien (voir
+« Catalogue technicien et readiness »). Tant qu'aucune observation n'existe, la
+présence vaut `UNKNOWN` et le diagnostic contient donc toujours
+`UNKNOWN_PHYSICAL_STATE`. Son champ `placement`
+présente le placement actif, lu dans la même requête que l'actif.
+
+## Identifiants physiques et placement (CAT-02)
+
+`V003` crée `lockers`, `compartments`, `locker_devices` et `asset_placements`
+tels que le document 08, sections 4.4 et 5.1, les définit. Aucune route ne crée
+de locker en P0 : le casier de démonstration est provisionné au démarrage
+(section suivante).
+
+`POST /admin/assets/{assetId}/identifiers` et
+`POST /admin/assets/{assetId}/identifiers/{identifierId}/revoke` exigent une
+`Idempotency-Key`. Une paire `type + valeur` active n'appartient qu'à un actif
+(`409 IDENTIFIER_ALREADY_ASSIGNED`, index `ux_asset_identifiers_active_value`
+en garde finale); un type hors `RFID_UHF`, `NFC` et `QR` reçoit
+`422 IDENTIFIER_TYPE_UNSUPPORTED`. La révocation conserve la ligne; une
+révocation répétée est auditée `ALREADY_APPLIED`. Une attribution écrit
+`ASSET_IDENTIFIER_ASSIGNED` et une révocation `ASSET_UPDATED`, faute de type
+de révocation dans le document 08. Décisions du 28 octobre 2026 : un actif
+porte au plus un identifiant actif par type (une nouvelle attribution du même
+type révoque l'ancienne dans la même transaction, index
+`ux_asset_identifiers_one_active_per_type` de `V003`), et l'archivage révoque
+les identifiants actifs de l'actif. La valeur, limitée à 255 caractères comme
+une observation du document 10, est comparée telle quelle, sans mise en
+majuscules; la normalisation des EPC RFID sera fixée avec PHY-02.
+
+`PUT /admin/assets/{assetId}/placement` termine le placement précédent au lieu
+de le supprimer et écrit `ASSET_PLACEMENT_CHANGED`. Il verrouille l'actif, puis
+les compartiments visé et quitté dans l'ordre de leur identifiant. Il refuse un
+actif archivé, un compartiment inconnu (violation `COMPARTMENT_NOT_FOUND`),
+désactivé (`409 COMPARTMENT_DISABLED`) ou occupé par un autre actif
+(`409 COMPARTMENT_ALREADY_OCCUPIED`). Un `PUT` vers le compartiment actuel ne
+change rien. L'archivage d'un actif termine son placement actif dans sa
+transaction. Les codes `COMPARTMENT_*` ont été approuvés le 28 octobre 2026;
+`COMPARTMENT_DISABLED` vise la configuration du backend, pas le firmware. Les
+refus liés aux réservations, prêts et opérations
+viendront avec les tranches qui les créent. `AssetIdentifierApiTests`,
+`AssetPlacementApiTests` et `PhysicalCatalogConcurrencyTests` le vérifient.
 
 ## Idempotence REST
 
@@ -234,6 +286,181 @@ d'accès et le statut d'un compte existant ne sont jamais modifiés. Un compte
 désactivé par un administrateur le reste donc après redémarrage. Aucun mot de
 passe en clair n'est versionné.
 
+## Casier de démonstration
+
+Avec `AEGIS_DEMO_LOCKER_ENABLED=true`, le démarrage crée le casier
+`AEGIS-DEMO-01` (`d46a74ae-39dc-460b-8af0-38fc791b376a`, topologie
+`HUB_CELL`) et ses cellules `A1` (`1ae77ae3-8490-4f09-9412-a7816b77bff9`) et
+`A2` (`5c1d0b7e-2f4a-4d3b-9a61-0e8b7c2d4f10`), aux adresses et ports 1 et 2.
+Ce sont les identifiants des documents 09 et 10 et du simulateur de hub. Le
+provisionnement crée seulement les lignes absentes et ne modifie jamais une
+ligne existante; aucun device n'est enregistré. Sans la variable, rien n'est
+créé.
+
+## Horaire d'exploitation (CFG-02)
+
+`V004` crée `operating_schedules` et `operating_windows` tels que le document
+08, sections 4.5 et 5.1, les définit. `GET` et `PUT
+/admin/lockers/{lockerId}/operating-schedule` (document 09, section 13) sont
+réservés à `ADMIN`. Le `PUT` valide les sept jours, le fuseau IANA et les
+heures, verrouille le locker, archive la version active et en insère une
+nouvelle avec ses sept plages; il écrit un événement `SCHEDULE_UPDATED` par
+version. Un `PUT` identique ne crée rien. Un locker sans horaire actif
+retourne `404 OPERATING_SCHEDULE_NOT_CONFIGURED`. Ce code et les quatre codes
+de violation de la section 13.2 sont approuvés depuis le 28 octobre 2026. Les
+fuseaux IANA à décalage fixe (`UTC`, `Etc/GMT+5`) sont acceptés mais ignorent
+l'heure d'été : un locker utilise une zone géographique.
+
+Le casier de démonstration n'a pas d'horaire au démarrage : sa version doit
+être créée par un administrateur, l'administrateur de démonstration par
+exemple, avec ce `PUT`. `OperatingHours.requireOpenOperatingWindow` porte la
+règle de réservation du document 06, section 5.1, y compris les changements
+d'heure; aucune route ne l'appelle encore. `OperatingScheduleApiTests`,
+`OperatingScheduleConcurrencyTests`, `OperatingHoursTests` et
+`OperatingScheduleMigrationTests` le vérifient.
+
+## Réservations, opérations et prêts (DB-02)
+
+`V005` crée `reservations`; `V006` crée `locker_operations` et `loans`, leur
+clé étrangère circulaire et `audit_events.operation_id` (document 08,
+sections 4.6, 4.9 et 5.1). PostgreSQL refuse lui-même, avec `23505`, une
+deuxième réservation active par actif ou par technicien, un deuxième prêt
+ouvert par actif, une deuxième opération non terminale par locker et un
+deuxième prêt pour une même opération de retrait
+(`uq_loans_checkout_operation`); le service convertira ces refus en
+`CONFLICT` (section 7.2). Le rôle applicatif ne peut ni supprimer ni vider
+ces trois tables. Le catalogue les lit pour dériver la disponibilité (section
+suivante); aucune route ne les écrit encore. `CustodySchemaTests` vérifie les
+contraintes, cinq courses concurrentes et les droits.
+
+## Catalogue technicien et readiness (RDY-01, RDY-02)
+
+`GET /api/v1/assets` et `GET /api/v1/assets/{assetId}` sont réservés au rôle
+`TECHNICIAN` : un `ADMIN` reçoit `403 FORBIDDEN`, un appel anonyme `401`.
+Chaque élément est un `AssetView` (document 09, §8.2) dont la `readiness` est
+calculée pour le compte authentifié, au même instant pour toute la réponse, par
+`asset/ReadinessEvaluator` (document 06, §4.3 à §4.5) : un blocage certain
+donne `BLOCKED` avec toutes ses raisons distinctes; une preuve physique
+insuffisante donne `UNKNOWN` / `UNKNOWN_PHYSICAL_STATE` seulement sans blocage;
+`READY` exige la présence `PRESENT`.
+
+Avant PHY-02, aucune observation n'est stockée : `asset/NoPhysicalProofPresence`
+répond `UNKNOWN` pour tout actif, donc un actif conforme est `UNKNOWN` et jamais
+`READY`. PHY-02 remplace ce composant derrière l'interface `PhysicalPresence`.
+La disponibilité vient de `asset/AssetCustodyRepository` (document 03, §5.2) :
+un prêt `ACTIVE` ou `RETURN_PENDING` donne `BORROWED`, même en retard; sinon une
+réservation `ACTIVE` donne `RESERVED`, y compris pour son titulaire hors de son
+retrait (`BLOCKED` / `NOT_AVAILABLE`); sinon l'archivage donne `UNAVAILABLE`.
+La vue administrative lit les mêmes sources : un administrateur et un
+technicien voient toujours la même disponibilité et la même présence.
+
+La liste exclut les actifs archivés, que l'archivage retire du catalogue actif
+(document 03, §4.4). Lu par son identifiant, un actif archivé retourne `200`
+avec `availability` `UNAVAILABLE` et `BLOCKED` / `NOT_AVAILABLE` (document 06,
+§4.4). Les filtres
+`readiness` et `availability` s'appliquent après l'évaluation de tout le
+catalogue correspondant, puis la page est découpée : `totalItems` et
+`totalPages` restent exacts. Ce choix vise la taille du catalogue P0. Un
+identifiant inconnu donne `404 ASSET_NOT_FOUND`.
+
+Avec l'API lancée comme ci-dessus et `AEGIS_DEMO_TECHNICIAN_PASSWORD` exporté :
+
+```bash
+TOKEN="$(curl -s -X POST http://127.0.0.1:8080/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"technician@aegis.demo\",\"password\":\"$AEGIS_DEMO_TECHNICIAN_PASSWORD\"}" \
+  | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p')"
+curl -s 'http://127.0.0.1:8080/api/v1/assets?size=20&sort=assetCode,asc' \
+  -H "Authorization: Bearer $TOKEN"
+curl -s 'http://127.0.0.1:8080/api/v1/assets?q=A2&readiness=BLOCKED' \
+  -H "Authorization: Bearer $TOKEN"
+curl -s "http://127.0.0.1:8080/api/v1/assets/<assetId>" -H "Authorization: Bearer $TOKEN"
+```
+
+`TechnicianCatalogApiTests`, `CatalogCustodyApiTests` et
+`ReadinessEvaluatorTests` vérifient ce comportement.
+
+### Jeu de démonstration
+
+`scripts/seed-demo-catalog.py` (Python 3, bibliothèque standard) crée quatre
+modèles et cinq actifs par l'API administrative : les règles du catalogue
+s'appliquent et l'audit est réel. L'API doit tourner avec
+`AEGIS_DEMO_ACCOUNTS_ENABLED=true` et `AEGIS_DEMO_LOCKER_ENABLED=true`. Le
+script peut être relancé : il réutilise ce qui existe déjà.
+
+```bash
+set -a; . ~/.config/aegis/local-api.env; set +a
+python3 -I scripts/seed-demo-catalog.py
+```
+
+Avec `AEGIS_DEMO_TECHNICIAN_PASSWORD` défini, il relit le catalogue technicien
+et échoue sur tout écart. Résultat attendu pour le technicien STANDARD, sans
+preuve physique avant PHY-02 :
+
+| Actif | Readiness | Placement |
+|---|---|---|
+| `AEG-DEMO-001` | `UNKNOWN` / `UNKNOWN_PHYSICAL_STATE` | A1 |
+| `AEG-DEMO-002` | `BLOCKED` / `CALIBRATION_EXPIRED` | A2 |
+| `AEG-DEMO-003` | `BLOCKED` / `ACCESS_DENIED` (niveau `RESTRICTED`) | aucun |
+| `AEG-DEMO-004` | `UNKNOWN` / `UNKNOWN_PHYSICAL_STATE` (sans calibration) | aucun |
+| `AEG-DEMO-005` | `BLOCKED` / `MAINTENANCE` | aucun |
+
+Aucun actif n'est `READY` tant qu'aucune preuve de présence n'existe
+(décision du 28 octobre 2026).
+
+## Rôles PostgreSQL
+
+Le document 08, section 12.1, sépare le propriétaire des migrations du rôle
+applicatif. En local et en CI, rien ne change : l'API et Flyway utilisent le
+même compte `aegis`, et le rôle applicatif n'existe pas.
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `AEGIS_DB_USER`, `AEGIS_DB_PASSWORD` | `aegis`, aucun | Compte de la source de données de l'API |
+| `AEGIS_DB_MIGRATION_USER`, `AEGIS_DB_MIGRATION_PASSWORD` | ceux de la source de données | Compte de Flyway, propriétaire du schéma |
+| `AEGIS_DB_APPLICATION_ROLE` | `aegis_app` | Rôle qui reçoit les droits applicatifs |
+
+Après chaque migration, le callback Flyway accorde au rôle applicatif, s'il
+existe : `USAGE` sur `aegis`, `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les
+tables métier, `SELECT`, `INSERT` et `UPDATE` sans `DELETE` sur
+`reservations`, `locker_operations` et `loans`, et seulement `SELECT` et
+`INSERT` sur `audit_events`; jamais `TRUNCATE`, `REFERENCES` ni `TRIGGER`. Il échoue si ce rôle est
+superutilisateur ou membre d'un propriétaire du schéma, même sans héritage. Le trigger
+append-only de `audit_events` n'est qu'une défense en profondeur : le
+propriétaire de la table peut le désactiver et un superutilisateur le
+contourne. Seuls les droits du rôle applicatif protègent l'audit.
+
+Mise en place par un opérateur sur un environnement cible, sans l'appliquer
+aux environnements partagés dans cette carte :
+
+1. créer les rôles, en superutilisateur, sans mot de passe dans la commande :
+
+   ```bash
+   psql -v ON_ERROR_STOP=1 -v app_role=aegis_app -v migration_role=aegis_migrator \
+     -d aegis -f infra/postgres/provision-roles.sql
+   ```
+
+2. dans `psql`, fixer les mots de passe avec `\password aegis_app` et
+   `\password aegis_migrator`; le client n'envoie qu'un vérificateur SCRAM,
+   alors qu'un `ALTER ROLE ... PASSWORD '...'` peut finir dans les journaux;
+3. redémarrer l'API avec le compte propriétaire actuel : le callback accorde
+   les droits à `aegis_app`;
+4. basculer `AEGIS_DB_USER` et `AEGIS_DB_PASSWORD` vers `aegis_app`, en
+   plaçant le compte propriétaire dans `AEGIS_DB_MIGRATION_USER` et
+   `AEGIS_DB_MIGRATION_PASSWORD`;
+5. vérifier en tant que `aegis_app` que `UPDATE`, `DELETE` et `TRUNCATE` sur
+   `aegis.audit_events`, ainsi que `DELETE` et `TRUNCATE` sur
+   `aegis.reservations`, `aegis.locker_operations` et `aegis.loans`, échouent
+   avec `42501`;
+6. facultatif : transférer la propriété du schéma `aegis`, de ses objets et de
+   `public.flyway_schema_history` à `aegis_migrator`, puis migrer avec lui
+   plutôt qu'avec un superutilisateur.
+
+Retour arrière : remettre `AEGIS_DB_USER` sur le compte propriétaire. Les tests
+utilisent toujours le compte du serveur de test pour Flyway et ignorent
+`AEGIS_DB_MIGRATION_*` et `AEGIS_DB_APPLICATION_ROLE`; `FlywayMigrationTests` vérifie les droits accordés et
+le trigger sur une base et un rôle jetables.
+
 ## Arrêt et reprise
 
 Depuis la racine du dépôt :
@@ -244,11 +471,17 @@ docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml
 ```
 
 `down` conserve les volumes. Ne pas ajouter `--volumes` si les données locales
-doivent être conservées. Chaque démarrage de l'API applique les migrations en
-attente (`V001`, `V002` pour l'identité et le catalogue, puis `V002_1` pour
-les clés d'idempotence REST) et valide
+doivent être conservées. Chaque démarrage de l'API applique les migrations
+en attente, dans l'ordre : `V001`, `V002` pour l'identité et le catalogue,
+`V002_1` pour les clés d'idempotence REST, `V002_2` pour `audit_events`,
+`V003` pour les lockers et les placements, `V004` pour les horaires, puis
+`V005` et `V006` pour les réservations, opérations et prêts. Il valide
 l'historique dans `public.flyway_schema_history` sans rejouer une migration
-déjà appliquée. Les tables métier sont dans le schéma `aegis`.
+déjà appliquée. Une table `aegis.flyway_schema_history` résiduelle peut
+exister dans une base locale ancienne : elle n'est pas lue, et une requête
+non qualifiée la trouve avant `public` à cause du `search_path`. Les tables métier sont dans le schéma `aegis`. Le callback
+`afterMigrate__grant_application_role.sql` s'exécute ensuite à chaque
+démarrage (voir « Rôles PostgreSQL »).
 
 PostgreSQL et Mosquitto sont publiés uniquement sur `127.0.0.1`. Le broker
 non chiffré est réservé au simulateur local isolé. Un hub réel, même au labo,
@@ -259,8 +492,8 @@ cette étape autorisent seulement l'identité fictive du contrat MQTT.
 
 - IAM-01 n'est pas terminé de bout en bout tant que les clients Web et iOS
   n'utilisent pas ces routes; CORS sera configuré avec le client Web.
-- La connexion et les mutations du catalogue ne sont pas encore auditées :
-  `audit_events` arrive avec `V009`.
+- La connexion n'est pas encore auditée, et aucune route ne lit encore
+  `audit_events` (AUD-01).
 - La limite de 5 tentatives par minute, par adresse TCP et par compte, est
   tenue en mémoire : elle suppose le déploiement P0 à instance unique.
   Plusieurs instances multiplieraient la limite et un redémarrage l'efface.
