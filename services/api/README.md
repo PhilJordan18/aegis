@@ -349,6 +349,34 @@ curl -s "http://127.0.0.1:8080/api/v1/assets/<assetId>" -H "Authorization: Beare
 `TechnicianCatalogApiTests` et `ReadinessEvaluatorTests` vérifient ce
 comportement.
 
+### Jeu de démonstration
+
+`scripts/seed-demo-catalog.py` (Python 3, bibliothèque standard) crée quatre
+modèles et cinq actifs par l'API administrative : les règles du catalogue
+s'appliquent et l'audit est réel. L'API doit tourner avec
+`AEGIS_DEMO_ACCOUNTS_ENABLED=true` et `AEGIS_DEMO_LOCKER_ENABLED=true`. Le
+script peut être relancé : il réutilise ce qui existe déjà.
+
+```bash
+set -a; . ~/.config/aegis/local-api.env; set +a
+python3 -I scripts/seed-demo-catalog.py
+```
+
+Avec `AEGIS_DEMO_TECHNICIAN_PASSWORD` défini, il relit le catalogue technicien
+et échoue sur tout écart. Résultat attendu pour le technicien STANDARD, sans
+preuve physique avant PHY-02 :
+
+| Actif | Readiness | Placement |
+|---|---|---|
+| `AEG-DEMO-001` | `UNKNOWN` / `UNKNOWN_PHYSICAL_STATE` | A1 |
+| `AEG-DEMO-002` | `BLOCKED` / `CALIBRATION_EXPIRED` | A2 |
+| `AEG-DEMO-003` | `BLOCKED` / `ACCESS_DENIED` (niveau `RESTRICTED`) | aucun |
+| `AEG-DEMO-004` | `UNKNOWN` / `UNKNOWN_PHYSICAL_STATE` (sans calibration) | aucun |
+| `AEG-DEMO-005` | `BLOCKED` / `MAINTENANCE` | aucun |
+
+Aucun actif n'est `READY` tant qu'aucune preuve de présence n'existe
+(décision du 28 octobre 2026).
+
 ## Rôles PostgreSQL
 
 Le document 08, section 12.1, sépare le propriétaire des migrations du rôle
