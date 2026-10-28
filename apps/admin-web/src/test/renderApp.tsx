@@ -8,6 +8,8 @@ import { AppearanceContext } from '../features/appearance/useAppearance'
 import { unconfiguredAuthGateway, type AuthGateway } from '../features/auth/authGateway'
 import { AuthGatewayContext } from '../features/auth/AuthGatewayContext'
 import { createSessionStore, SessionContext, type SessionStore } from '../features/auth/session'
+import { unconfiguredCatalogGateway, type CatalogGateway } from '../features/catalog/catalogGateway'
+import { CatalogGatewayContext } from '../features/catalog/CatalogGatewayContext'
 import { createLocaleController, type Locale, type LocaleController } from '../i18n/locale'
 import { LocaleContext } from '../i18n/useI18n'
 
@@ -15,6 +17,7 @@ export function renderWithProviders(
   ui: ReactNode,
   {
     gateway = unconfiguredAuthGateway,
+    catalogGateway = unconfiguredCatalogGateway,
     session = createSessionStore(),
     router = createHistoryRouter(window),
     queryClient = createQueryClient(),
@@ -22,6 +25,7 @@ export function renderWithProviders(
     localeController = createLocaleController(window, { initial: locale }),
   }: {
     gateway?: AuthGateway
+    catalogGateway?: CatalogGateway
     session?: SessionStore
     router?: Router
     queryClient?: QueryClient
@@ -38,7 +42,9 @@ export function renderWithProviders(
         <AppearanceContext value={appearance}>
           <LocaleContext value={localeController}>
             <SessionContext value={session}>
-              <AuthGatewayContext value={gateway}>{ui}</AuthGatewayContext>
+              <AuthGatewayContext value={gateway}>
+                <CatalogGatewayContext value={catalogGateway}>{ui}</CatalogGatewayContext>
+              </AuthGatewayContext>
             </SessionContext>
           </LocaleContext>
         </AppearanceContext>

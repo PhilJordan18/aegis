@@ -106,7 +106,7 @@ describe('catalog consistency (fr is the source of the shape)', () => {
 
   it('does not leave an English message identical to French, except a product name and words that really match', () => {
     // Product name and words that really are the same in both languages.
-    const shared = new Set(['pageTitle.landing', 'signIn.footerProduct', 'shell.sectionsLabel', 'shell.menuTitle', 'shell.sections.audit', 'shell.sections.anomalies'])
+    const shared = new Set(['pageTitle.landing', 'signIn.footerProduct', 'shell.sectionsLabel', 'shell.menuTitle', 'shell.sections.audit', 'shell.sections.anomalies', 'equipment.factCalibration', 'equipment.factPlacement', 'equipment.accessLevel.STANDARD'])
     const same = [...frLeaves]
       .filter(([key, leaf]) => typeof leaf === 'string' && enLeaves.get(key) === leaf && !shared.has(key))
       .map(([key]) => key)

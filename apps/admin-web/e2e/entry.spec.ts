@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { fileURLToPath } from 'node:url'
+import { openCatalog, waitForCatalogState } from './catalogFakes.ts'
 import { SCENARIOS, THEMES, VIEWPORTS } from './matrix.ts'
 import {
   APPEARANCE_STORAGE_KEY,
@@ -208,5 +209,124 @@ test.describe('flow:', () => {
     await expect(skip).toBeInViewport()
     await page.keyboard.press('Enter')
     await expect(page.locator('#contenu')).toBeFocused()
+  })
+})
+
+test.describe('flow: équipements (production page, routed fakes)', () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
+
+  async function openEquipment(page: import('@playwright/test').Page, mode: 'nominal' | 'paged' | 'long') {
+    await page.goto('/connexion')
+    await settle(page)
+    const requests = await openCatalog(page, mode)
+    await waitForCatalogState(page, mode)
+    return requests
+  }
+
+  test('flow: the list is read from the API, the first unit is selected and the page asks nothing else', async ({ page }) => {
+    const requests = await openEquipment(page, 'nominal')
+    await expect(page).toHaveTitle('Équipements — Aegis Manager')
+    await expect(page.getByRole('heading', { level: 2, name: '2 exemplaires' })).toBeVisible()
+    const rows = page.locator('.ag-list__items a')
+    await expect(rows).toHaveCount(2)
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true')
+    await expect(page.getByRole('heading', { level: 2, name: /Multimètre 1 · MM-001/ })).toBeVisible()
+    // No invented readiness or presence.
+    await expect(page.locator('main')).not.toContainText(/\bPrêt\b/)
+    await expect(page.locator('main')).toContainText('Présence inconnue')
+    await expect(page.locator('main')).toContainText('Aucun placement connu')
+    // Only the two catalog routes, through the routed fakes.
+    expect(requests.every((request) => /^GET \/api\/v1\/admin\/assets(\/[0-9a-f-]{36})?(\?|$)/.test(request))).toBe(true)
+  })
+
+  test('flow: keyboard selection with Tab and Enter changes the dossier, keeps the focus on the row and announces it', async ({ page }) => {
+    await openEquipment(page, 'nominal')
+    const second = page.locator('.ag-list__items a').nth(1)
+    await page.locator('.ag-list__items a').first().focus()
+    await page.keyboard.press('Tab')
+    await expect(second).toBeFocused()
+    // The focus ring is drawn, not removed.
+    expect(await second.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe('none')
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(/\/equipements\?exemplaire=00000000-0000-4000-8000-000000000002$/)
+    await expect(second).toHaveAttribute('aria-current', 'true')
+    await expect(second).toBeFocused()
+    await expect(page.getByRole('heading', { level: 2, name: /Multimètre 2 · MM-002/ })).toBeVisible()
+    await expect(page.locator('main')).toContainText('Calibration expirée depuis le 8 sept. 2026, 00 h 00 HAE')
+    await expect(page.getByRole('status').filter({ hasText: 'Exemplaire sélectionné : Multimètre 2, MM-002.' })).toHaveCount(1)
+    await page.goBack()
+    await expect(page.locator('.ag-list__items a').first()).toHaveAttribute('aria-current', 'true')
+  })
+
+  test('flow: on a stacked layout a selection moves the focus to the dossier', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openEquipment(page, 'nominal')
+    await page.locator('.ag-list__items a').nth(1).click()
+    await expect(page.getByRole('group', { name: /Multimètre 2 · MM-002/ })).toBeFocused()
+  })
+
+  test('flow: a stale dossier keeps the unit, says it is not up to date and retries from the keyboard', async ({ page }) => {
+    await page.goto('/connexion')
+    await settle(page)
+    const requests = await openCatalog(page, 'staleDossier')
+    await waitForCatalogState(page, 'staleDossier')
+    const dossier = page.locator('.ag-dossier')
+    await expect(dossier.getByRole('alert')).toContainText('Données non actualisées.')
+    await expect(dossier.getByRole('heading', { level: 2, name: /Multimètre 1 · MM-001/ })).toBeVisible()
+    // The list is not stale: only the dossier's refresh failed.
+    await expect(page.locator('.ag-list').getByRole('alert')).toHaveCount(0)
+    const retry = dossier.getByRole('button', { name: 'Réessayer' })
+    // Reached by keyboard, so the focus ring is the one a keyboard user sees.
+    await page.locator('.ag-dossier__scroll').focus()
+    await page.keyboard.press('Tab')
+    await expect(retry).toBeFocused()
+    expect(await retry.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe('none')
+    const before = requests.filter((request) => /assets\/[0-9a-f-]{36}$/.test(request)).length
+    await page.keyboard.press('Enter')
+    await expect.poll(() => requests.filter((request) => /assets\/[0-9a-f-]{36}$/.test(request)).length).toBeGreaterThan(before)
+    // This retry fails too: focus stays on the button, and the status region says so because the alert does not speak twice.
+    await expect(dossier.getByRole('status')).toHaveText('Données non actualisées.')
+    await expect(retry).toBeFocused()
+    await expect(retry).not.toHaveAttribute('aria-disabled')
+  })
+
+  test('flow: pagination keeps the address, resets the selection and keeps focus on the pager', async ({ page }) => {
+    const requests = await openEquipment(page, 'paged')
+    await expect(page.getByRole('heading', { level: 2, name: '25 exemplaires' })).toBeVisible()
+    await expect(page.locator('.ag-list__items a')).toHaveCount(20)
+    const pager = page.getByRole('navigation', { name: 'Pagination des exemplaires' })
+    await expect(pager.getByText('Page 1 sur 2')).toBeVisible()
+    await expect(pager.getByRole('button', { name: 'Précédent' })).toHaveAttribute('aria-disabled', 'true')
+    await pager.getByRole('button', { name: 'Suivant' }).click()
+    await expect(page).toHaveURL(/\/equipements\?page=2$/)
+    await expect(pager.getByText('Page 2 sur 2')).toBeVisible()
+    await expect(page.locator('.ag-list__items a')).toHaveCount(5)
+    await expect(pager.getByRole('button', { name: 'Suivant' })).toBeFocused()
+    await expect(pager.getByRole('button', { name: 'Suivant' })).toHaveAttribute('aria-disabled', 'true')
+    expect(requests.some((request) => request.includes('page=1&size=20&sort=assetCode%2Casc'))).toBe(true)
+  })
+
+  test('flow: the page offers no control that creates, edits, archives or saves', async ({ page }) => {
+    await openEquipment(page, 'nominal')
+    await expect(page.locator('main').getByRole('button')).toHaveCount(0)
+    await expect(page.locator('main').locator('input, select, textarea')).toHaveCount(0)
+  })
+
+  test('flow: the « Modèles » tab is a dormant, non-focusable tab announced as coming', async ({ page }) => {
+    await openEquipment(page, 'nominal')
+    const tabs = page.getByRole('navigation', { name: 'Vues des équipements' })
+    await expect(tabs.getByRole('link', { name: 'Exemplaires' })).toHaveAttribute('aria-current', 'page')
+    await expect(tabs.getByRole('link', { name: 'Modèles' })).toHaveCount(0)
+    await expect(tabs).toContainText('Modèles, à venir')
+  })
+
+  test('flow: long French content wraps without clipping or horizontal scroll at 200 % zoom', async ({ page }) => {
+    await page.setViewportSize({ width: 640, height: 400 })
+    await openEquipment(page, 'long')
+    await expectNoHorizontalScroll(page)
+    const clipped = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>('main a.ag-item, main .ag-dossier__scroll *')].filter((element) => element.scrollWidth > element.clientWidth + 1 && getComputedStyle(element).overflowX !== 'visible').length,
+    )
+    expect(clipped).toBe(0)
   })
 })
