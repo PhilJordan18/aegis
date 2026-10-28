@@ -305,8 +305,10 @@ réservés à `ADMIN`. Le `PUT` valide les sept jours, le fuseau IANA et les
 heures, verrouille le locker, archive la version active et en insère une
 nouvelle avec ses sept plages; il écrit un événement `SCHEDULE_UPDATED` par
 version. Un `PUT` identique ne crée rien. Un locker sans horaire actif
-retourne `404 OPERATING_SCHEDULE_NOT_CONFIGURED`. Ce code et les codes de
-violation de la section 13.2 sont proposés et attendent leur approbation.
+retourne `404 OPERATING_SCHEDULE_NOT_CONFIGURED`. Ce code et les quatre codes
+de violation de la section 13.2 sont approuvés depuis le 28 octobre 2026. Les
+fuseaux IANA à décalage fixe (`UTC`, `Etc/GMT+5`) sont acceptés mais ignorent
+l'heure d'été : un locker utilise une zone géographique.
 
 Le casier de démonstration n'a pas d'horaire au démarrage : sa version doit
 être créée par un administrateur, l'administrateur de démonstration par
