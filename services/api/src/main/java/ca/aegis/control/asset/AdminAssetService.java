@@ -25,24 +25,30 @@ class AdminAssetService {
 
     private final AssetRepository assets;
     private final AssetModelRepository models;
+    private final CatalogAudit audit;
     private final Clock clock;
 
-    AdminAssetService(AssetRepository assets, AssetModelRepository models, Clock clock) {
+    AdminAssetService(AssetRepository assets, AssetModelRepository models, CatalogAudit audit, Clock clock) {
         this.assets = assets;
         this.models = models;
+        this.audit = audit;
         this.clock = clock;
     }
 
     @Transactional
-    AdminAssetView create(AssetRequest request) {
+    AdminAssetView create(AssetRequest request, UUID actor) {
         requireCoherentCalibration(request);
         requireActiveModel(request.assetModelId());
+        Instant now = now();
+        UUID id;
         try {
-            UUID id = assets.insert(request, now());
-            return view(assets.find(id).orElseThrow());
+            id = assets.insert(request, now);
         } catch (DataIntegrityViolationException violation) {
             throw CatalogConflictException.translate(violation);
         }
+        AssetRecord created = assets.find(id).orElseThrow();
+        audit.assetCreated(created, actor, now);
+        return view(created);
     }
 
     @Transactional(readOnly = true)
@@ -61,7 +67,7 @@ class AdminAssetService {
 
     /** An identical replacement changes nothing, not even {@code updated_at}. */
     @Transactional
-    AdminAssetView replace(UUID id, AssetRequest request) {
+    AdminAssetView replace(UUID id, AssetRequest request, UUID actor) {
         requireCoherentCalibration(request);
         AssetRecord current = assets.lockForUpdate(id).orElseThrow(ResourceNotFoundException::new);
         if (current.archived()) {
@@ -71,26 +77,34 @@ class AdminAssetService {
         if (current.sameAs(request)) {
             return view(current);
         }
+        Instant now = now();
         try {
-            assets.update(id, request, now());
+            assets.update(id, request, now);
         } catch (DataIntegrityViolationException violation) {
             throw CatalogConflictException.translate(violation);
         }
-        return view(assets.find(id).orElseThrow());
+        AssetRecord updated = assets.find(id).orElseThrow();
+        audit.assetUpdated(current, updated, actor, now);
+        return view(updated);
     }
 
     /**
      * Archival keeps the asset row, its identifiers and every future reference to it. Archiving an archived asset
-     * returns it unchanged. Reservations, loans and locker operations do not exist yet; their slices must refuse
-     * archival here while one of them is open (document 09, section 12.2).
+     * returns it unchanged and is audited as already applied. Reservations, loans and locker operations do not exist
+     * yet; their slices must refuse archival here while one of them is open (document 09, section 12.2).
      */
     @Transactional
-    AdminAssetView archive(UUID id) {
+    AdminAssetView archive(UUID id, UUID actor) {
         AssetRecord current = assets.lockForUpdate(id).orElseThrow(ResourceNotFoundException::new);
-        if (!current.archived()) {
-            assets.archive(id, now());
+        Instant now = now();
+        if (current.archived()) {
+            audit.assetArchived(current, actor, now, true);
+            return view(current);
         }
-        return view(assets.find(id).orElseThrow());
+        assets.archive(id, now);
+        AssetRecord archived = assets.find(id).orElseThrow();
+        audit.assetArchived(archived, actor, now, false);
+        return view(archived);
     }
 
     /** Document 08, constraint {@code ck_assets_calibration_pair}, reported as a field error. */

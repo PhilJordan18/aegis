@@ -5,7 +5,8 @@ API de CAT-01. Il fournit PostgreSQL, un broker MQTT local authentifié pour le
 simulateur, Spring Boot, Flyway, `GET /api/v1/system/health`, la connexion par
 comptes préparés (`POST /api/v1/auth/login`, `GET /api/v1/auth/me`), les
 contrôles de rôle et de niveau d'accès côté serveur et l'administration des
-modèles et des actifs (document 09, sections 12.1 et 12.2). Il n'implémente pas
+modèles et des actifs (document 09, sections 12.1 et 12.2), dont les mutations
+sont auditées (AUD-00). Il n'implémente pas
 encore les identifiants physiques, les placements ni l'ingestion MQTT. Les
 clients Web et iOS ont leur propre dossier sous `apps/`.
 
@@ -195,6 +196,19 @@ document 09, section 21. Une création ou une modification d'actif verrouille
 le modèle en partage, et l'archivage d'un modèle le verrouille en exclusif :
 un actif non archivé ne peut donc jamais référencer un modèle archivé.
 
+Chaque création, modification effective et premier archivage écrit un seul
+événement dans `audit_events`, dans la transaction de la mutation et avec
+l'instant qu'elle enregistre : `ASSET_CREATED`, `ASSET_UPDATED` ou
+`ASSET_ARCHIVED`, avec `subject_type` `ASSET_MODEL` ou `ASSET` et le compte
+authentifié comme acteur. `details` contient l'instantané des champs créés,
+les champs modifiés avec leurs valeurs avant et après, ou `archivedAt`. Un
+archivage répété avec une nouvelle clé écrit `ASSET_ARCHIVED` avec le
+résultat `ALREADY_APPLIED`; un rejeu de même clé, un `PUT` identique ou un
+refus n'écrit rien. `audit/AuditTrail` exige une transaction existante et
+refuse d'écrire hors de celle de la mutation. Les lignes antérieures à
+`V002_2` n'ont aucun événement reconstitué. `CatalogAuditTests` et
+`CatalogConcurrencyTests` le vérifient.
+
 La vue `AdminAssetView` ne contient aucune readiness. Tant que les
 réservations, les prêts, les placements et les observations n'existent pas, la
 disponibilité ne dépend que de l'archivage, la présence vaut `UNKNOWN` et le
@@ -234,6 +248,56 @@ d'accès et le statut d'un compte existant ne sont jamais modifiés. Un compte
 désactivé par un administrateur le reste donc après redémarrage. Aucun mot de
 passe en clair n'est versionné.
 
+## Rôles PostgreSQL
+
+Le document 08, section 12.1, sépare le propriétaire des migrations du rôle
+applicatif. En local et en CI, rien ne change : l'API et Flyway utilisent le
+même compte `aegis`, et le rôle applicatif n'existe pas.
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `AEGIS_DB_USER`, `AEGIS_DB_PASSWORD` | `aegis`, aucun | Compte de la source de données de l'API |
+| `AEGIS_DB_MIGRATION_USER`, `AEGIS_DB_MIGRATION_PASSWORD` | ceux de la source de données | Compte de Flyway, propriétaire du schéma |
+| `AEGIS_DB_APPLICATION_ROLE` | `aegis_app` | Rôle qui reçoit les droits applicatifs |
+
+Après chaque migration, le callback Flyway accorde au rôle applicatif, s'il
+existe : `USAGE` sur `aegis`, `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les
+tables métier, et seulement `SELECT` et `INSERT` sur `audit_events`; jamais
+`TRUNCATE`, `REFERENCES` ni `TRIGGER`. Il échoue si ce rôle est
+superutilisateur ou membre d'un propriétaire du schéma, même sans héritage. Le trigger
+append-only de `audit_events` n'est qu'une défense en profondeur : le
+propriétaire de la table peut le désactiver et un superutilisateur le
+contourne. Seuls les droits du rôle applicatif protègent l'audit.
+
+Mise en place par un opérateur sur un environnement cible, sans l'appliquer
+aux environnements partagés dans cette carte :
+
+1. créer les rôles, en superutilisateur, sans mot de passe dans la commande :
+
+   ```bash
+   psql -v ON_ERROR_STOP=1 -v app_role=aegis_app -v migration_role=aegis_migrator \
+     -d aegis -f infra/postgres/provision-roles.sql
+   ```
+
+2. dans `psql`, fixer les mots de passe avec `\password aegis_app` et
+   `\password aegis_migrator`; le client n'envoie qu'un vérificateur SCRAM,
+   alors qu'un `ALTER ROLE ... PASSWORD '...'` peut finir dans les journaux;
+3. redémarrer l'API avec le compte propriétaire actuel : le callback accorde
+   les droits à `aegis_app`;
+4. basculer `AEGIS_DB_USER` et `AEGIS_DB_PASSWORD` vers `aegis_app`, en
+   plaçant le compte propriétaire dans `AEGIS_DB_MIGRATION_USER` et
+   `AEGIS_DB_MIGRATION_PASSWORD`;
+5. vérifier en tant que `aegis_app` que `UPDATE`, `DELETE` et `TRUNCATE` sur
+   `aegis.audit_events` échouent avec `42501`;
+6. facultatif : transférer la propriété du schéma `aegis`, de ses objets et de
+   `public.flyway_schema_history` à `aegis_migrator`, puis migrer avec lui
+   plutôt qu'avec un superutilisateur.
+
+Retour arrière : remettre `AEGIS_DB_USER` sur le compte propriétaire. Les tests
+utilisent toujours le compte du serveur de test pour Flyway et ignorent
+`AEGIS_DB_MIGRATION_*` et `AEGIS_DB_APPLICATION_ROLE`; `FlywayMigrationTests` vérifie les droits accordés et
+le trigger sur une base et un rôle jetables.
+
 ## Arrêt et reprise
 
 Depuis la racine du dépôt :
@@ -244,11 +308,13 @@ docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml
 ```
 
 `down` conserve les volumes. Ne pas ajouter `--volumes` si les données locales
-doivent être conservées. Chaque démarrage de l'API applique les migrations en
-attente (`V001`, `V002` pour l'identité et le catalogue, puis `V002_1` pour
-les clés d'idempotence REST) et valide
+doivent être conservées. Chaque démarrage de l'API applique les migrations
+en attente (`V001`, `V002` pour l'identité et le catalogue, `V002_1` pour les
+clés d'idempotence REST, puis `V002_2` pour `audit_events`) et valide
 l'historique dans `public.flyway_schema_history` sans rejouer une migration
-déjà appliquée. Les tables métier sont dans le schéma `aegis`.
+déjà appliquée. Les tables métier sont dans le schéma `aegis`. Le callback
+`afterMigrate__grant_application_role.sql` s'exécute ensuite à chaque
+démarrage (voir « Rôles PostgreSQL »).
 
 PostgreSQL et Mosquitto sont publiés uniquement sur `127.0.0.1`. Le broker
 non chiffré est réservé au simulateur local isolé. Un hub réel, même au labo,
@@ -259,8 +325,8 @@ cette étape autorisent seulement l'identité fictive du contrat MQTT.
 
 - IAM-01 n'est pas terminé de bout en bout tant que les clients Web et iOS
   n'utilisent pas ces routes; CORS sera configuré avec le client Web.
-- La connexion et les mutations du catalogue ne sont pas encore auditées :
-  `audit_events` arrive avec `V009`.
+- La connexion n'est pas encore auditée, et aucune route ne lit encore
+  `audit_events` (AUD-01).
 - La limite de 5 tentatives par minute, par adresse TCP et par compte, est
   tenue en mémoire : elle suppose le déploiement P0 à instance unique.
   Plusieurs instances multiplieraient la limite et un redémarrage l'efface.
