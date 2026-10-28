@@ -58,6 +58,7 @@ class AssetConditionsTests {
 
     private static AssetRecord asset(OperationalStatus status, Instant calibrationDueAt, Instant archivedAt) {
         return new AssetRecord(UUID.randomUUID(), new AssetModelSummary(UUID.randomUUID(), "Model", null, null),
-                "A1", null, AccessLevel.RESTRICTED, status, calibrationDueAt != null, calibrationDueAt, archivedAt);
+                "A1", null, AccessLevel.RESTRICTED, status, calibrationDueAt != null, calibrationDueAt, archivedAt,
+                null);
     }
 }

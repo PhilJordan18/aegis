@@ -4,5 +4,7 @@ package ca.aegis.control.audit;
 public enum AuditEventType {
     ASSET_CREATED,
     ASSET_UPDATED,
-    ASSET_ARCHIVED
+    ASSET_ARCHIVED,
+    ASSET_IDENTIFIER_ASSIGNED,
+    ASSET_PLACEMENT_CHANGED
 }

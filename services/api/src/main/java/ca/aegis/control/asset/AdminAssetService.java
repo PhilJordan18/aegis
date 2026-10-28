@@ -25,12 +25,17 @@ class AdminAssetService {
 
     private final AssetRepository assets;
     private final AssetModelRepository models;
+    private final AssetPlacementRepository placements;
+    private final AssetIdentifierRepository identifiers;
     private final CatalogAudit audit;
     private final Clock clock;
 
-    AdminAssetService(AssetRepository assets, AssetModelRepository models, CatalogAudit audit, Clock clock) {
+    AdminAssetService(AssetRepository assets, AssetModelRepository models, AssetPlacementRepository placements,
+            AssetIdentifierRepository identifiers, CatalogAudit audit, Clock clock) {
         this.assets = assets;
         this.models = models;
+        this.placements = placements;
+        this.identifiers = identifiers;
         this.audit = audit;
         this.clock = clock;
     }
@@ -89,7 +94,10 @@ class AdminAssetService {
     }
 
     /**
-     * Archival keeps the asset row, its identifiers and every future reference to it. Archiving an archived asset
+     * Archival keeps the asset row, its identifier rows and every future reference to it. In the same transaction it
+     * revokes the active identifiers (decided on 28 October 2026), so that a tag can be reused, and ends the active placement,
+     * keeping its row, so the compartment is freed (document 03, section 4.8). Placement changes lock the asset row
+     * first too, so no placement can start on an asset being archived. Archiving an archived asset
      * returns it unchanged and is audited as already applied. Reservations, loans and locker operations do not exist
      * yet; their slices must refuse archival here while one of them is open (document 09, section 12.2).
      */
@@ -104,7 +112,15 @@ class AdminAssetService {
         assets.archive(id, now);
         AssetRecord archived = assets.find(id).orElseThrow();
         audit.assetArchived(archived, actor, now, false);
-        return view(archived);
+        identifiers.lockActiveOfAsset(id).forEach(identifier -> {
+            identifiers.revoke(identifier.id(), now);
+            audit.identifierRevoked(identifiers.find(identifier.id()).orElseThrow(), actor, now, false);
+        });
+        placements.currentOf(id).ifPresent(placement -> {
+            placements.end(placement.id(), now);
+            audit.placementChanged(id, placement, null, actor, now);
+        });
+        return view(assets.find(id).orElseThrow());
     }
 
     /** Document 08, constraint {@code ck_assets_calibration_pair}, reported as a field error. */

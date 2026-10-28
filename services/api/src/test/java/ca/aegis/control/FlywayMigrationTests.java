@@ -31,6 +31,8 @@ import ca.aegis.control.support.TestDatabases;
 /** Applies the real migrations to a new empty PostgreSQL database with the application's Flyway settings. */
 class FlywayMigrationTests {
 
+    private static final List<String> ALL_VERSIONS = List.of("001", "002", "002.1", "002.2", "003");
+
     private final TestDatabases databases = TestDatabases.shared();
     private final TestDatabaseServer server = databases.server();
 
@@ -53,15 +55,15 @@ class FlywayMigrationTests {
 
     @Test
     void migratesAnEmptyDatabaseOnceAndValidatesAfterwards() {
-        assertEquals(4, flyway(null).migrate().migrationsExecuted);
+        assertEquals(5, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
 
-        assertEquals(List.of("001", "002", "002.1", "002.2"), appliedVersions());
-        assertEquals(List.of("asset_identifiers", "asset_models", "assets", "audit_events", "rest_idempotency_keys",
-                "users"), jdbc.sql("""
+        assertEquals(ALL_VERSIONS, appliedVersions());
+        assertEquals(List.of("asset_identifiers", "asset_models", "asset_placements", "assets", "audit_events",
+                "compartments", "locker_devices", "lockers", "rest_idempotency_keys", "users"), jdbc.sql("""
                 SELECT table_name FROM information_schema.tables
-                WHERE table_schema = 'aegis' ORDER BY table_name
+                WHERE table_schema = 'aegis' ORDER BY table_name COLLATE "C"
                 """).query(String.class).list());
     }
 
@@ -70,8 +72,8 @@ class FlywayMigrationTests {
         assertEquals(1, flyway("001").migrate().migrationsExecuted);
         assertEquals(List.of("001"), appliedVersions());
 
-        assertEquals(3, flyway(null).migrate().migrationsExecuted);
-        assertEquals(List.of("001", "002", "002.1", "002.2"), appliedVersions());
+        assertEquals(4, flyway(null).migrate().migrationsExecuted);
+        assertEquals(ALL_VERSIONS, appliedVersions());
     }
 
     /** Dev databases stood at V002_1 when V002_2 was added; existing rows get no backfilled event. */
@@ -81,10 +83,10 @@ class FlywayMigrationTests {
         UUID user = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
         UUID model = insertModel("Oscilloscope");
 
-        assertEquals(1, flyway(null).migrate().migrationsExecuted);
+        assertEquals(2, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
-        assertEquals(List.of("001", "002", "002.1", "002.2"), appliedVersions());
+        assertEquals(ALL_VERSIONS, appliedVersions());
         assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis.asset_models WHERE id = :id").param("id", model)
                 .query(Long.class).single());
         assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis.users WHERE id = :id").param("id", user)
@@ -161,7 +163,7 @@ class FlywayMigrationTests {
         jdbc.sql("CREATE ROLE " + role + " NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS")
                 .update();
         try {
-            assertEquals(4, flyway(null, role).migrate().migrationsExecuted);
+            assertEquals(5, flyway(null, role).migrate().migrationsExecuted);
             assertEquals(0, flyway(null, role).migrate().migrationsExecuted);
             assertTrue(flyway(null, role).validateWithResult().validationSuccessful);
             UUID actor = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
@@ -170,6 +172,9 @@ class FlywayMigrationTests {
             assertEquals(List.of("assets:DELETE,INSERT,SELECT,UPDATE"), privileges(role, "assets"));
             assertEquals(List.of("rest_idempotency_keys:DELETE,INSERT,SELECT,UPDATE"),
                     privileges(role, "rest_idempotency_keys"));
+            for (String table : List.of("lockers", "compartments", "locker_devices", "asset_placements")) {
+                assertEquals(List.of(table + ":DELETE,INSERT,SELECT,UPDATE"), privileges(role, table));
+            }
 
             try (SingleConnectionDataSource session = session()) {
                 JdbcClient application = JdbcClient.create(session);
@@ -249,15 +254,106 @@ class FlywayMigrationTests {
         UUID user = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
         UUID model = insertModel("Oscilloscope");
 
-        assertEquals(2, flyway(null).migrate().migrationsExecuted);
+        assertEquals(3, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
-        assertEquals(List.of("001", "002", "002.1", "002.2"), appliedVersions());
+        assertEquals(ALL_VERSIONS, appliedVersions());
         assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis.users WHERE id = :id").param("id", user)
                 .query(Long.class).single());
         assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis.asset_models WHERE id = :id").param("id", model)
                 .query(Long.class).single());
         assertEquals(0, jdbc.sql("SELECT count(*) FROM aegis.rest_idempotency_keys").query(Long.class).single());
+    }
+
+    /** Dev databases stood at V002_2 when V003 was added: their history and rows are kept as they were. */
+    @Test
+    void upgradesADatabaseAtTheAuditMigrationWithoutRewritingItsHistory() {
+        assertEquals(4, flyway("2.2").migrate().migrationsExecuted);
+        UUID model = insertModel("Oscilloscope");
+        UUID asset = insertAsset(model, "AEG-001", false, null);
+        insertIdentifier(asset, "RFID_UHF", "E200-0001");
+        insertEvent(null, "ASSET_CREATED", "ASSET", "ACCEPTED");
+        List<Map<String, Object>> history = history();
+
+        assertEquals(1, flyway(null).migrate().migrationsExecuted);
+        assertEquals(0, flyway(null).migrate().migrationsExecuted);
+        assertTrue(flyway(null).validateWithResult().validationSuccessful);
+        assertEquals(ALL_VERSIONS, appliedVersions());
+        assertEquals(history, history().subList(0, history.size()));
+        assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis.asset_identifiers WHERE asset_id = :id")
+                .param("id", asset).query(Long.class).single());
+        assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis.audit_events").query(Long.class).single());
+        assertEquals(0, jdbc.sql("SELECT count(*) FROM aegis.asset_placements").query(Long.class).single());
+    }
+
+    @Test
+    void lockersAndPlacementsEnforceTheirInvariants() {
+        flyway(null).migrate();
+        UUID locker = insertLocker("AEGIS-DEMO-01");
+        assertViolation("23505", "ux_lockers_code_ci", () -> insertLocker("aegis-demo-01"));
+        assertViolation("23514", "ck_lockers_topology", () -> jdbc.sql(
+                "INSERT INTO aegis.lockers (code, name, topology) VALUES ('L2', 'Casier', 'RING')").update());
+        assertEquals("UNKNOWN", jdbc.sql("SELECT status FROM aegis.lockers WHERE id = :id").param("id", locker)
+                .query(String.class).single());
+
+        UUID first = insertCompartment(locker, "A1", 1, 1);
+        UUID second = insertCompartment(locker, "A2", 2, 2);
+        assertViolation("23505", "ux_compartments_locker_code", () -> insertCompartment(locker, "A1", 3, 3));
+        assertViolation("23505", "ux_compartments_locker_address", () -> insertCompartment(locker, "A3", 1, 3));
+        assertViolation("23505", "uq_compartments_hub_port", () -> insertCompartment(locker, "A3", 3, 1));
+        assertViolation("23514", "ck_compartments_local_address", () -> insertCompartment(locker, "A3", 248, 3));
+        assertViolation("23514", "compartments_hub_port_check", () -> insertCompartment(locker, "A3", 3, 0));
+        assertViolation("23503", "fk_compartments_locker", () -> insertCompartment(UUID.randomUUID(), "B1", 1, 1));
+
+        insertDevice(locker, "sim-a");
+        assertViolation("23505", "ux_locker_devices_one_active_per_locker", () -> insertDevice(locker, "sim-b"));
+        assertViolation("23505", "ux_locker_devices_device_key", () -> insertDevice(insertLocker("L2"), "sim-a"));
+        assertViolation("23514", "ck_locker_devices_session_pair", () -> jdbc.sql("""
+                UPDATE aegis.locker_devices SET boot_count = 1 WHERE device_key = 'sim-a'
+                """).update());
+        assertViolation("23514", "ck_locker_devices_heartbeat_reference", () -> jdbc.sql("""
+                UPDATE aegis.locker_devices
+                SET device_session_id = gen_random_uuid(), boot_count = 1,
+                    heartbeat_connection_id = gen_random_uuid(), heartbeat_sequence = 0, last_valid_heartbeat_at = now()
+                WHERE device_key = 'sim-a'
+                """).update());
+
+        UUID model = insertModel("Multimeter");
+        UUID asset = insertAsset(model, "AEG-001", false, null);
+        UUID other = insertAsset(model, "AEG-002", false, null);
+        UUID placement = insertPlacement(asset, first);
+        assertViolation("23505", "ux_asset_placements_one_current_per_asset", () -> insertPlacement(asset, second));
+        assertViolation("23505", "ux_asset_placements_one_current_per_compartment",
+                () -> insertPlacement(other, first));
+        assertViolation("23503", "fk_asset_placements_compartment", () -> insertPlacement(other, UUID.randomUUID()));
+        assertViolation("23503", "fk_asset_placements_asset", () -> insertPlacement(UUID.randomUUID(), second));
+        assertViolation("23514", "ck_asset_placements_dates", () -> jdbc.sql(
+                "UPDATE aegis.asset_placements SET removed_at = assigned_at - interval '1 second' WHERE id = :id")
+                .param("id", placement).update());
+        assertViolation("23514", "ck_asset_placements_reason_non_blank", () -> jdbc.sql("""
+                INSERT INTO aegis.asset_placements (asset_id, compartment_id, reason) VALUES (:asset, :compartment, ' ')
+                """).param("asset", other).param("compartment", second).update());
+
+        jdbc.sql("UPDATE aegis.asset_placements SET removed_at = now() WHERE id = :id").param("id", placement)
+                .update();
+        insertPlacement(other, first);
+        insertPlacement(asset, second);
+        assertEquals(3, jdbc.sql("SELECT count(*) FROM aegis.asset_placements").query(Long.class).single());
+    }
+
+    /** CAT-02, decided on 28 October 2026: an asset carries at most one active identifier of each type. */
+    @Test
+    void anAssetCarriesAtMostOneActiveIdentifierOfEachType() {
+        flyway(null).migrate();
+        UUID asset = insertAsset(insertModel("Multimeter"), "AEG-001", false, null);
+        UUID tag = insertIdentifier(asset, "RFID_UHF", "E200-0001");
+        insertIdentifier(asset, "NFC", "N-0001");
+
+        assertViolation("23505", "ux_asset_identifiers_one_active_per_type",
+                () -> insertIdentifier(asset, "RFID_UHF", "E200-0002"));
+        jdbc.sql("UPDATE aegis.asset_identifiers SET active = false, revoked_at = now() WHERE id = :id")
+                .param("id", tag).update();
+        insertIdentifier(asset, "RFID_UHF", "E200-0002");
     }
 
     @Test
@@ -404,6 +500,42 @@ class FlywayMigrationTests {
     private List<String> appliedVersions() {
         return jdbc.sql("SELECT version FROM public.flyway_schema_history WHERE success ORDER BY installed_rank")
                 .query(String.class).list();
+    }
+
+    private List<Map<String, Object>> history() {
+        return jdbc.sql("""
+                SELECT installed_rank, version, script, checksum, installed_by, installed_on, success
+                FROM public.flyway_schema_history ORDER BY installed_rank
+                """).query().listOfRows();
+    }
+
+    private UUID insertLocker(String code) {
+        return jdbc.sql("INSERT INTO aegis.lockers (code, name, topology) VALUES (:code, 'Casier', 'HUB_CELL') "
+                + "RETURNING id").param("code", code).query(UUID.class).single();
+    }
+
+    private UUID insertCompartment(UUID locker, String code, int address, int port) {
+        return jdbc.sql("""
+                INSERT INTO aegis.compartments (locker_id, code, local_address, hub_port)
+                VALUES (:locker, :code, :address, :port)
+                RETURNING id
+                """).param("locker", locker).param("code", code).param("address", address).param("port", port)
+                .query(UUID.class).single();
+    }
+
+    private void insertDevice(UUID locker, String deviceKey) {
+        jdbc.sql("""
+                INSERT INTO aegis.locker_devices (locker_id, device_key, firmware_version)
+                VALUES (:locker, :key, '0.1.0-sim')
+                """).param("locker", locker).param("key", deviceKey).update();
+    }
+
+    private UUID insertPlacement(UUID asset, UUID compartment) {
+        return jdbc.sql("""
+                INSERT INTO aegis.asset_placements (asset_id, compartment_id, reason)
+                VALUES (:asset, :compartment, 'Affectation initiale')
+                RETURNING id
+                """).param("asset", asset).param("compartment", compartment).query(UUID.class).single();
     }
 
     private UUID insertUser(String displayName, String email, String role, String level, String passwordHash) {

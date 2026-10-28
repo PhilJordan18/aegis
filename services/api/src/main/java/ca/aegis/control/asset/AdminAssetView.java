@@ -29,7 +29,7 @@ public record AdminAssetView(
         return new AdminAssetView(asset.id(), asset.assetCode(), asset.serialNumber(), asset.model(),
                 asset.requiredAccessLevel(), asset.operationalStatus(),
                 new CalibrationView(asset.calibrationRequired(), asset.calibrationDueAt(), conditions.calibration()),
-                conditions.availability(), conditions.presence(), null,
+                conditions.availability(), conditions.presence(), asset.placement(),
                 new OperationalDiagnostic(evaluatedAt, conditions.diagnosticReasons()), asset.archivedAt());
     }
 }
