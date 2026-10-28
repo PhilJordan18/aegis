@@ -341,7 +341,7 @@ class FlywayMigrationTests {
         assertEquals(3, jdbc.sql("SELECT count(*) FROM aegis.asset_placements").query(Long.class).single());
     }
 
-    /** Pending decision of CAT-02: an asset carries at most one active identifier of each type. */
+    /** CAT-02, decided on 28 October 2026: an asset carries at most one active identifier of each type. */
     @Test
     void anAssetCarriesAtMostOneActiveIdentifierOfEachType() {
         flyway(null).migrate();
