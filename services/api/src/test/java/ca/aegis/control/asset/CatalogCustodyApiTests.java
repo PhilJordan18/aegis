@@ -123,6 +123,32 @@ class CatalogCustodyApiTests extends CatalogApiTest {
                 .andExpect(jsonPath("$.readiness.result").value("UNKNOWN"));
     }
 
+    @Test
+    void administratorsAndTechniciansAlwaysSeeTheSameAvailability() throws Exception {
+        expectSameAvailability(Availability.AVAILABLE);
+        UUID reservation = reserve(accounts.technician().id(), "ACTIVE");
+        expectSameAvailability(Availability.RESERVED);
+        jdbc.sql("UPDATE aegis.reservations SET status = 'CANCELLED', cancelled_at = :at WHERE id = :id")
+                .param("at", utc(CONFIRMED)).param("id", reservation).update();
+        lend(accounts.technician().id(), "RETURN_PENDING", START.minus(Duration.ofHours(2)));
+        expectSameAvailability(Availability.BORROWED);
+        mvc.perform(asAdmin(get(ASSETS + "/" + asset)))
+                .andExpect(jsonPath("$.operationalDiagnostic.reasons").value(
+                        contains("NOT_AVAILABLE", "UNKNOWN_PHYSICAL_STATE")));
+    }
+
+    private void expectSameAvailability(Availability availability) throws Exception {
+        String value = availability.name();
+        mvc.perform(asTechnician(get(CATALOG + "/" + asset))).andExpect(jsonPath("$.availability").value(value));
+        mvc.perform(asTechnician(get(CATALOG).param("q", suffix)))
+                .andExpect(jsonPath("$.items[0].availability").value(value));
+        mvc.perform(asAdmin(get(ASSETS + "/" + asset)))
+                .andExpect(jsonPath("$.availability").value(value))
+                .andExpect(jsonPath("$.presence").value("UNKNOWN"));
+        mvc.perform(asAdmin(get(ASSETS).param("q", suffix)))
+                .andExpect(jsonPath("$.items[0].availability").value(value));
+    }
+
     private void expectBlockedAs(Availability availability, String token) throws Exception {
         mvc.perform(get(CATALOG + "/" + asset).header(AUTHORIZATION, bearer(token)))
                 .andExpect(status().isOk())

@@ -3,11 +3,14 @@ package ca.aegis.control.asset;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import ca.aegis.control.shared.web.ApiError;
@@ -27,15 +30,20 @@ class AdminAssetService {
     private final AssetModelRepository models;
     private final AssetPlacementRepository placements;
     private final AssetIdentifierRepository identifiers;
+    private final AssetCustodyRepository custody;
+    private final PhysicalPresence presence;
     private final CatalogAudit audit;
     private final Clock clock;
 
     AdminAssetService(AssetRepository assets, AssetModelRepository models, AssetPlacementRepository placements,
-            AssetIdentifierRepository identifiers, CatalogAudit audit, Clock clock) {
+            AssetIdentifierRepository identifiers, AssetCustodyRepository custody, PhysicalPresence presence,
+            CatalogAudit audit, Clock clock) {
         this.assets = assets;
         this.models = models;
         this.placements = placements;
         this.identifiers = identifiers;
+        this.custody = custody;
+        this.presence = presence;
         this.audit = audit;
         this.clock = clock;
     }
@@ -56,17 +64,24 @@ class AdminAssetService {
         return view(created);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     AdminAssetView get(UUID id) {
         return assets.find(id).map(this::view).orElseThrow(ResourceNotFoundException::new);
     }
 
-    /** Every item of a page is evaluated at the same instant (document 09, section 24). */
-    @Transactional(readOnly = true)
+    /**
+     * Every item of a page is evaluated at the same instant, and its custody read in the same snapshot as the asset
+     * rows (document 09, section 24).
+     */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     PageResponse<AdminAssetView> list(PageQuery page, Optional<String> pattern, AssetSort sort) {
         Instant evaluatedAt = evaluationInstant();
-        return PageResponse.of(assets.page(page, pattern, sort).stream()
-                .map(asset -> AdminAssetView.of(asset, evaluatedAt))
+        List<AssetRecord> rows = assets.page(page, pattern, sort);
+        Map<UUID, Custody> custodies = custody.of(rows);
+        Map<UUID, Presence> presences = presence.of(rows.stream().map(AssetRecord::id).toList(), evaluatedAt);
+        return PageResponse.of(rows.stream()
+                .map(asset -> AdminAssetView.of(asset, custodies.get(asset.id()), presences.get(asset.id()),
+                        evaluatedAt))
                 .toList(), page, assets.count(pattern));
     }
 
@@ -145,7 +160,9 @@ class AdminAssetService {
     }
 
     private AdminAssetView view(AssetRecord asset) {
-        return AdminAssetView.of(asset, evaluationInstant());
+        Instant evaluatedAt = evaluationInstant();
+        Presence current = presence.of(List.of(asset.id()), evaluatedAt).get(asset.id());
+        return AdminAssetView.of(asset, custody.of(asset), current, evaluatedAt);
     }
 
     private Instant evaluationInstant() {
