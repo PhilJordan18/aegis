@@ -1116,6 +1116,8 @@ CREATE TABLE anomalies (
 
 L’audit est append-only du point de vue de l’application. `from_state` et `to_state` sont renseignés pour les transitions; les événements de consultation ou d’authentification peuvent les laisser nuls.
 
+Une création n’a pas d’état de départ, et `ck_audit_events_state_pair` refuse un `to_state` sans `from_state` : `RESERVATION_CREATED` laisse donc les deux nuls et porte l’état initial dans `details` (`assetId`, `status`, `reservedFrom`, `reservedUntil`). C’est la règle de la tranche RES-01 (décision du 28 octobre 2026); l’enregistrer dans `to_state` exigerait une nouvelle migration.
+
 La table est créée par `V002_2` (§11.1), avant les tables que référencent `operation_id`, `inbound_message_id` et `physical_observation_id`. Ces trois colonnes n’y figurent donc pas encore : chacune arrive avec sa FK, et `ix_audit_events_operation_time` avec `operation_id`, dans la migration qui crée la table référencée (`V006` pour `locker_operations`, `V008` pour `inbound_device_messages` et `physical_observations`). Aucune colonne de référence n’existe sans sa FK. Le DDL ci-dessous reste le schéma cible complet. Aucun événement n’est reconstitué pour les lignes antérieures à la table.
 
 `V002_2` ajoute deux triggers qui refusent `UPDATE` et `DELETE` ligne par ligne et `TRUNCATE` par instruction (`aegis.refuse_audit_event_change`, SQLSTATE `23001`). C’est une défense en profondeur seulement : le propriétaire de la table peut désactiver ou supprimer ces triggers, et un superutilisateur les contourne, par exemple avec `session_replication_role = replica`. La protection réelle est l’absence de ces droits pour le rôle applicatif (§12.1).
@@ -1524,11 +1526,12 @@ Dans une seule transaction :
 1. calculer `now` une seule fois côté backend;
 2. prendre la clé REST et son `request_hash`;
 3. verrouiller l’utilisateur (`FOR NO KEY UPDATE`, §7.1) puis l’actif;
-4. charger et verrouiller la réservation active éventuelle et le prêt ouvert éventuel;
-5. vérifier rôle, horaire, accès, calibration, présence, statut opérationnel et readiness;
-6. insérer `reservations` et `audit_events`;
-7. enregistrer la réponse dans `rest_idempotency_keys`;
-8. valider la transaction.
+4. relire l’actif et son placement courant après ce verrou, car une requête qui a attendu le verrou garde sinon les lignes jointes lues avant l’attente;
+5. charger et verrouiller la réservation active éventuelle et le prêt ouvert éventuel;
+6. vérifier, dans l’ordre du document 09, §14.1 : rôle, réservations actives, prêt ouvert, horaire du locker du placement courant, niveau d’accès, puis readiness;
+7. insérer `reservations` et `audit_events`;
+8. enregistrer la réponse dans `rest_idempotency_keys`;
+9. valider la transaction.
 
 Une violation `23505` sur un index d’invariant est convertie en `CONFLICT`; la transaction est annulée et aucune réservation partielle ne reste visible.
 

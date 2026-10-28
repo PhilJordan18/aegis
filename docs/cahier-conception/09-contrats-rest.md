@@ -12,7 +12,8 @@
 **Mise à jour ciblée :** 28 octobre 2026 — identifiants et placement (#26), décisions du 28 octobre 2026 : un identifiant actif par type et remplacement atomique, révocation à l’archivage, comparaison exacte des valeurs (§12.2, §12.3), refus du placement et codes `COMPARTMENT_*` (§12.4, §21)  
 **Mise à jour ciblée :** 28 octobre 2026 — horaire d’exploitation (#28) : codes approuvés le 28 octobre 2026, `OPERATING_SCHEDULE_NOT_CONFIGURED` (§13.1, §21) et violations de l’horaire (§7.1, §13.2); chemin complet d’une erreur de lecture (§13.2); vue, audit et changements d’heure proposés (§13)  
 **Mise à jour ciblée :** 28 octobre 2026 — sous-objets `AssetModelSummary`, `CalibrationView` et `PlacementSummary` de `AssetView` (§8.2); sérialisation existante documentée; code `404 ASSET_NOT_FOUND` de §11.2 ajouté à §21 (#33, #34)  
-**Mise à jour ciblée :** 28 octobre 2026 — décisions de Philippe pour #33 et #34 : ordre stable des raisons et raison principale choisie par la convention de présentation, jamais par `reasons[0]` (§8.1); actif archivé exclu de la liste mais lisible par son identifiant (§11.1, §11.2)
+**Mise à jour ciblée :** 28 octobre 2026 — décisions de Philippe pour #33 et #34 : ordre stable des raisons et raison principale choisie par la convention de présentation, jamais par `reasons[0]` (§8.1); actif archivé exclu de la liste mais lisible par son identifiant (§11.1, §11.2)  
+**Mise à jour ciblée :** 28 octobre 2026 — réservation (RES-01, #37), décisions de Philippe du 28 octobre 2026 : ordre des contrôles implémenté, `reservedUntil` non postérieur à l’instant courant, locker sans horaire, horaire du placement courant et actif inconnu (§14.1); `availableActions` vide tant que ses actions ne sont pas implémentées (§8.10); codes de refus de l’archivage (§12.2); `ACTIVE_RESERVATION_NOT_FOUND` et `ASSET_OPERATION_IN_PROGRESS` ajoutés à §21
 
 ---
 
@@ -519,6 +520,8 @@ Le serveur n’émet que les valeurs suivantes; leur ordre n’a pas de sens et 
 | `CANCEL` | `ReservationView` | `POST /reservations/{id}/cancel` (§14.4) | Réservation `ACTIVE` du demandeur; instant antérieur à `reservedUntil`; aucune tentative de retrait de cette réservation n’a été autorisée, quelle que soit son issue (§14.4, `06` §5.5; question ouverte Q1); aucune incertitude physique, c’est-à-dire aucune tentative `ANOMALY` dont l’anomalie n’est pas `RESOLVED`. Une tentative `AWAITING_LOCAL_PROOF` laisse `CANCEL` : l’annulation la termine (§14.4). L’horaire et la connexion du locker n’interviennent pas. |
 | `RETURN` | `LoanView` | `POST /loans/{id}/return` (§15.2) | Prêt `ACTIVE` du titulaire; plage d’exploitation ouverte; aucune opération physique non terminale sur le locker, y compris une tentative de ce prêt; gardes communes et de retour satisfaites (`06` §6.1, §6.3), donc hub `ONLINE`. `overdue` n’intervient pas. |
 
+Le serveur n’émet une valeur que lorsque sa mutation est implémentée. Tant que l’annulation (§14.4), le retrait (§15.1) et le retour (§15.2) ne le sont pas, `availableActions` est vide, même si les conditions ci-dessus sont réunies; un client n’affiche donc pas ces boutons (décision du 28 octobre 2026, RES-01).
+
 À partir de `reservedUntil`, une réservation encore `ACTIVE` (expiration différée par un retrait autorisé, ou pas encore appliquée) n’expose aucune action : les règles temporelles sont réévaluées au début de chaque action (`06` §14). La limitation de fréquence des préparations (§15.5) n’est pas reflétée; elle se manifeste par `429` avec `Retry-After`.
 
 Pour un prêt `RETURN_PENDING`, `05` §4.3 et `06` §6.3 n’admettent une nouvelle tentative de récupération que si l’opération précédente est terminale **et** si la procédure de récupération l’autorise. Cette procédure n’est pas encore définie : tant qu’elle ne l’est pas, `RETURN` n’est pas émis pour un prêt `RETURN_PENDING` (question ouverte Q2). Cette lecture n’ajoute aucune règle de retour.
@@ -874,7 +877,7 @@ POST /admin/assets retourne 201 et exige Idempotency-Key.
 
 PUT /admin/assets/{assetId} retourne 200. La readiness n’est jamais acceptée dans la requête. Un PUT identique est un no-op métier. Un actif archivé ne se modifie plus : `409 ASSET_ARCHIVED`.
 
-POST /admin/assets/{assetId}/archive exige Idempotency-Key et retourne 200 avec la vue administrative. L’archivage est refusé lorsqu’une réservation active, un prêt ouvert ou une opération non terminale concerne l’actif. Il termine le placement actif de l’actif (§12.4). Il révoque aussi les identifiants actifs de l’actif, en conservant leur historique, pour qu’un tag puisse être réutilisé (§12.3; décision du 28 octobre 2026). Un actif déjà archivé suit la règle d’archivage répété de §12.1.
+POST /admin/assets/{assetId}/archive exige Idempotency-Key et retourne 200 avec la vue administrative. L’archivage est refusé lorsqu’une réservation active (`409 ASSET_ALREADY_RESERVED`), un prêt ouvert (`409 ASSET_HAS_OPEN_LOAN`) ou une opération non terminale (`409 ASSET_OPERATION_IN_PROGRESS`, §12.3) concerne l’actif; ces gardes sont lues sous le verrou de l’actif, celui que prend aussi la création d’une réservation (§14.1). Il termine le placement actif de l’actif (§12.4). Il révoque aussi les identifiants actifs de l’actif, en conservant leur historique, pour qu’un tag puisse être réutilisé (§12.3; décision du 28 octobre 2026). Un actif déjà archivé suit la règle d’archivage répété de §12.1.
 
 ### 12.3 Identifiant physique
 
@@ -1009,16 +1012,19 @@ Requête :
 }
 ```
 
-Le backend :
+Le backend applique ces contrôles dans cet ordre; le premier refus est retourné et la demande refusée n’écrit rien :
 
-1. utilise son horloge pour reservedFrom;
-2. verrouille l’utilisateur et l’actif;
-3. vérifie l’unique réservation active du technicien et de l’actif;
-4. vérifie l’absence de prêt ouvert;
-5. traduit reservedUntil dans le fuseau du locker;
-6. vérifie qu’elle se situe dans la plage ouverte courante;
-7. recalcule la readiness;
-8. crée la réservation et l’audit dans la même transaction.
+1. utilise son horloge pour reservedFrom; un `reservedUntil` qui n’est pas postérieur à cet instant retourne `400 VALIDATION_ERROR`, violation `reservedUntil` / `INVALID_VALUE` (§7.1), avant tout verrou;
+2. verrouille l’utilisateur, puis l’actif; un `assetId` inconnu retourne `404 ASSET_NOT_FOUND`, comme §11.2;
+3. vérifie l’unique réservation active du technicien (`409 USER_ALREADY_HAS_ACTIVE_RESERVATION`), puis celle de l’actif (`409 ASSET_ALREADY_RESERVED`);
+4. vérifie l’absence de prêt ouvert (`409 ASSET_HAS_OPEN_LOAN`);
+5. relit le placement courant de l’actif une fois son verrou acquis et retient l’horaire actif du locker de ce placement; un locker sans horaire actif n’a aucune plage ouverte;
+6. vérifie que l’instant courant appartient à une plage ouverte (`422 OUTSIDE_OPERATING_HOURS`), traduit reservedUntil dans le fuseau du locker et vérifie qu’elle ne dépasse pas la fermeture de cette plage (`422 RESERVATION_END_AFTER_CLOSING`);
+7. vérifie le niveau d’accès (`403 ASSET_ACCESS_DENIED`);
+8. recalcule la readiness dans le contexte d’une nouvelle réservation; un résultat autre que `READY` retourne `422 ASSET_NOT_READY` avec ses `reasons` (§7);
+9. crée la réservation et l’audit dans la même transaction.
+
+Un actif sans placement courant n’a ni locker, ni horaire, ni compartiment où prouver sa présence : les étapes 5 et 6 ne s’appliquent pas et la demande retourne `422 ASSET_NOT_READY` avec `UNKNOWN_PHYSICAL_STATE`. Ces décisions du 28 octobre 2026 décrivent l’ordre implémenté et testé (RES-01); les documents 06 (§5) et 08 (§7.2) le suivent.
 
 `reservedUntil` est la seule échéance que choisit le technicien; il n’existe pas d’échéance de retour indépendante. Elle a deux effets :
 
@@ -1039,7 +1045,9 @@ Erreurs particulières :
 
 | Statut | Code |
 |---:|---|
+| 400 | VALIDATION_ERROR (`reservedUntil` / `INVALID_VALUE`) |
 | 403 | ASSET_ACCESS_DENIED |
+| 404 | ASSET_NOT_FOUND |
 | 409 | USER_ALREADY_HAS_ACTIVE_RESERVATION |
 | 409 | ASSET_ALREADY_RESERVED |
 | 409 | ASSET_HAS_OPEN_LOAN |
@@ -1364,7 +1372,8 @@ Les PUT sont idempotents par définition. Une répétition identique ne crée pa
 | 403 | FORBIDDEN | Rôle insuffisant |
 | 403 | ASSET_ACCESS_DENIED | Niveau d’accès insuffisant |
 | 404 | RESOURCE_NOT_FOUND | Ressource absente ou non visible |
-| 404 | ASSET_NOT_FOUND | Actif inconnu du catalogue technicien (§11.2) |
+| 404 | ASSET_NOT_FOUND | Actif inconnu du catalogue technicien (§11.2, §14.1) |
+| 404 | ACTIVE_RESERVATION_NOT_FOUND | Aucune réservation ACTIVE du technicien (§14.2) |
 | 404 | OPERATING_SCHEDULE_NOT_CONFIGURED | Locker existant sans horaire actif (§13.1) |
 | 409 | IDEMPOTENCY_KEY_REUSED | Clé réutilisée avec autre intention |
 | 409 | IDEMPOTENCY_REQUEST_IN_PROGRESS | Requête de même clé encore en cours, avec Retry-After |
@@ -1382,6 +1391,7 @@ Les PUT sont idempotents par définition. Une répétition identique ne crée pa
 | 409 | ASSET_CODE_ALREADY_EXISTS | Code d’actif déjà utilisé, archives comprises (§12.2) |
 | 409 | ASSET_SERIAL_NUMBER_ALREADY_EXISTS | Numéro de série déjà utilisé, archives comprises (§12.2) |
 | 409 | ASSET_ARCHIVED | Modification d’un actif archivé (§12.2) |
+| 409 | ASSET_OPERATION_IN_PROGRESS | Opération physique non terminale sur l’actif : archivage ou identifiant refusés (§12.2, §12.3) |
 | 409 | IDENTIFIER_ALREADY_ASSIGNED | Paire type + valeur déjà active (§12.3) |
 | 409 | COMPARTMENT_DISABLED | Placement dans un compartiment désactivé (§12.4) |
 | 409 | COMPARTMENT_ALREADY_OCCUPIED | Compartiment déjà attribué à un autre actif (§12.4) |
