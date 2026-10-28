@@ -209,10 +209,11 @@ refuse d'écrire hors de celle de la mutation. Les lignes antérieures à
 `V002_2` n'ont aucun événement reconstitué. `CatalogAuditTests` et
 `CatalogConcurrencyTests` le vérifient.
 
-La vue `AdminAssetView` ne contient aucune readiness. Tant que les
-réservations, les prêts et les observations n'existent pas, la disponibilité
-ne dépend que de l'archivage, la présence vaut `UNKNOWN` et le diagnostic
-contient donc toujours `UNKNOWN_PHYSICAL_STATE`. Son champ `placement`
+La vue `AdminAssetView` ne contient aucune readiness. Sa disponibilité et sa
+présence viennent des mêmes sources que le catalogue technicien (voir
+« Catalogue technicien et readiness »). Tant qu'aucune observation n'existe, la
+présence vaut `UNKNOWN` et le diagnostic contient donc toujours
+`UNKNOWN_PHYSICAL_STATE`. Son champ `placement`
 présente le placement actif, lu dans la même requête que l'actif.
 
 ## Identifiants physiques et placement (CAT-02)
@@ -323,10 +324,17 @@ insuffisante donne `UNKNOWN` / `UNKNOWN_PHYSICAL_STATE` seulement sans blocage;
 Avant PHY-02, aucune observation n'est stockée : `asset/NoPhysicalProofPresence`
 répond `UNKNOWN` pour tout actif, donc un actif conforme est `UNKNOWN` et jamais
 `READY`. PHY-02 remplace ce composant derrière l'interface `PhysicalPresence`.
-La disponibilité vient de `asset/AssetCustodyRepository`.
+La disponibilité vient de `asset/AssetCustodyRepository` (document 03, §5.2) :
+un prêt `ACTIVE` ou `RETURN_PENDING` donne `BORROWED`, même en retard; sinon une
+réservation `ACTIVE` donne `RESERVED`, y compris pour son titulaire hors de son
+retrait (`BLOCKED` / `NOT_AVAILABLE`); sinon l'archivage donne `UNAVAILABLE`.
+La vue administrative lit les mêmes sources : un administrateur et un
+technicien voient toujours la même disponibilité et la même présence.
 
-La liste exclut les actifs archivés (document 03, §4.4); lu par son
-identifiant, un actif archivé reste `BLOCKED` / `NOT_AVAILABLE`. Les filtres
+La liste exclut les actifs archivés, que l'archivage retire du catalogue actif
+(document 03, §4.4). Lu par son identifiant, un actif archivé retourne `200`
+avec `availability` `UNAVAILABLE` et `BLOCKED` / `NOT_AVAILABLE` (document 06,
+§4.4). Les filtres
 `readiness` et `availability` s'appliquent après l'évaluation de tout le
 catalogue correspondant, puis la page est découpée : `totalItems` et
 `totalPages` restent exacts. Ce choix vise la taille du catalogue P0. Un
@@ -346,8 +354,8 @@ curl -s 'http://127.0.0.1:8080/api/v1/assets?q=A2&readiness=BLOCKED' \
 curl -s "http://127.0.0.1:8080/api/v1/assets/<assetId>" -H "Authorization: Bearer $TOKEN"
 ```
 
-`TechnicianCatalogApiTests` et `ReadinessEvaluatorTests` vérifient ce
-comportement.
+`TechnicianCatalogApiTests`, `CatalogCustodyApiTests` et
+`ReadinessEvaluatorTests` vérifient ce comportement.
 
 ### Jeu de démonstration
 
