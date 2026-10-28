@@ -247,9 +247,11 @@ désactivé (`409 COMPARTMENT_DISABLED`) ou occupé par un autre actif
 (`409 COMPARTMENT_ALREADY_OCCUPIED`). Un `PUT` vers le compartiment actuel ne
 change rien. L'archivage d'un actif termine son placement actif dans sa
 transaction. Les codes `COMPARTMENT_*` ont été approuvés le 28 octobre 2026;
-`COMPARTMENT_DISABLED` vise la configuration du backend, pas le firmware. Les
-refus liés aux réservations, prêts et opérations
-viendront avec les tranches qui les créent. `AssetIdentifierApiTests`,
+`COMPARTMENT_DISABLED` vise la configuration du backend, pas le firmware.
+L'archivage d'un actif est refusé tant qu'il a une réservation active
+(`409 ASSET_ALREADY_RESERVED`), un prêt ouvert (`ASSET_HAS_OPEN_LOAN`) ou une
+opération non terminale (`ASSET_OPERATION_IN_PROGRESS`); voir « Réservations
+(RES-01) ». `AssetIdentifierApiTests`,
 `AssetPlacementApiTests` et `PhysicalCatalogConcurrencyTests` le vérifient.
 
 ## Idempotence REST
@@ -315,7 +317,7 @@ Le casier de démonstration n'a pas d'horaire au démarrage : sa version doit
 être créée par un administrateur, l'administrateur de démonstration par
 exemple, avec ce `PUT`. `OperatingHours.requireOpenOperatingWindow` porte la
 règle de réservation du document 06, section 5.1, y compris les changements
-d'heure; aucune route ne l'appelle encore. `OperatingScheduleApiTests`,
+d'heure; `POST /reservations` l'applique. `OperatingScheduleApiTests`,
 `OperatingScheduleConcurrencyTests`, `OperatingHoursTests` et
 `OperatingScheduleMigrationTests` le vérifient.
 
@@ -330,7 +332,8 @@ deuxième prêt pour une même opération de retrait
 (`uq_loans_checkout_operation`); le service convertira ces refus en
 `CONFLICT` (section 7.2). Le rôle applicatif ne peut ni supprimer ni vider
 ces trois tables. Le catalogue les lit pour dériver la disponibilité (section
-suivante); aucune route ne les écrit encore. `CustodySchemaTests` vérifie les
+suivante); seule la création de réservation (RES-01) écrit dans
+`reservations`. `CustodySchemaTests` vérifie les
 contraintes, cinq courses concurrentes et les droits.
 
 ## Catalogue technicien et readiness (RDY-01, RDY-02)
@@ -407,6 +410,47 @@ preuve physique avant PHY-02 :
 
 Aucun actif n'est `READY` tant qu'aucune preuve de présence n'existe
 (décision du 28 octobre 2026).
+
+## Réservations (RES-01)
+
+`POST /api/v1/reservations`, `GET /api/v1/me/reservation` et
+`GET /api/v1/reservations/{reservationId}` (document 09, sections 14.1 à 14.3)
+sont réservés au rôle `TECHNICIAN`. La création exige `Idempotency-Key` et
+rejoint la transaction de la clé : `reservedFrom` vient de l'horloge du
+serveur; l'utilisateur est verrouillé (`FOR NO KEY UPDATE`), puis l'actif
+(`FOR UPDATE`), puis la réservation active et le prêt ouvert éventuels. Les
+refus suivent l'ordre de la section 14.1 :
+
+| Ordre | Condition | Réponse |
+|---:|---|---|
+| 1 | `reservedUntil` non postérieur à l'instant courant | `400 VALIDATION_ERROR`, violation `reservedUntil` / `INVALID_VALUE` |
+| 2 | Actif inconnu | `404 ASSET_NOT_FOUND` |
+| 3 | Réservation active du technicien | `409 USER_ALREADY_HAS_ACTIVE_RESERVATION` |
+| 4 | Réservation active de l'actif | `409 ASSET_ALREADY_RESERVED` |
+| 5 | Prêt `ACTIVE` ou `RETURN_PENDING` | `409 ASSET_HAS_OPEN_LOAN` |
+| 6 | Locker du placement sans horaire actif, ou instant hors plage | `422 OUTSIDE_OPERATING_HOURS` |
+| 7 | `reservedUntil` après la fermeture de la plage courante | `422 RESERVATION_END_AFTER_CLOSING` |
+| 8 | Niveau d'accès insuffisant | `403 ASSET_ACCESS_DENIED` |
+| 9 | Readiness autre que `READY`, ou actif sans placement | `422 ASSET_NOT_READY` avec `reasons` |
+
+Une fin égale à la fermeture est acceptée. La réservation et son événement
+`RESERVATION_CREATED` (`subject_type` `RESERVATION`, `details` : `assetId`,
+`status`, `reservedFrom`, `reservedUntil`) sont écrits dans la même
+transaction; un refus n'écrit rien et n'est pas enregistré pour la clé. Un
+`23505` sur `ux_reservations_one_active_per_asset` ou `_per_user` devient le
+`409` correspondant. Une réservation n'ouvre aucun compartiment, ne crée
+aucune opération et ne publie rien.
+
+Tant que la présence de production est `NoPhysicalProofPresence`, aucune
+readiness n'est `READY` : toute création reçoit `422 ASSET_NOT_READY` /
+`UNKNOWN_PHYSICAL_STATE` jusqu'à PHY-02 (décision du 28 octobre 2026). Seuls
+les tests importent `PresentAssetsConfiguration`, qui déclare chaque actif
+présent. `availableActions` reste vide tant que l'annulation (RES-02) et le
+retrait (CHK-01) n'existent pas. Un technicien ne lit que ses réservations :
+celle d'un autre donne `404 RESOURCE_NOT_FOUND`, l'absence de réservation
+active `404 ACTIVE_RESERVATION_NOT_FOUND`. `ReservationApiTests`,
+`ReservationConcurrencyTests` et `ReservationProductionPresenceTests` le
+vérifient.
 
 ## Rôles PostgreSQL
 
