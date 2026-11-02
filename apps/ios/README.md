@@ -12,6 +12,11 @@ le casier.
   (`docs/design/mobile-entree/`, #35), session au Keychain, expiration,
   401, 429, déconnexion, reprise hors ligne et refus du compte
   administrateur, en français et en anglais.
+- RDY-02 (#34) : catalogue du technicien (onglet « Équipements ») et fiche
+  d'équipement selon le handoff `docs/design/mobile-parcours/` (#35), sur
+  `GET /assets` et `GET /assets/{assetId}` (doc 09 §8.1, §8.2, §11). L'API
+  technicien n'existe pas encore sur `dev` : la recette live a été passée
+  contre la branche API `33-feat-readiness` (RDY-01, #33), pas contre `dev`.
 
 ## Environnement vérifié
 
@@ -36,12 +41,13 @@ l'ouvrir.
 **Cible minimale : iOS 17.0** (`Config/Shared.xcconfig`), à ne pas confondre
 avec les versions réellement testées :
 
-| Configuration | Recette | Résultat (21 octobre 2026, branche #36) |
+| Configuration | Recette | Résultat (28 octobre 2026, branche #34) |
 |---|---|---|
-| iPhone 17, iOS 26.3.1 (simulateur) | `standalone` | 93 réussis, 0 ignoré; audits d'accessibilité réussis; catalogue cohérent (71 clés) |
-| iPhone 17, iOS 26.3.1 (simulateur) | `live`, API locale de `dev` (34c056c), comptes de démonstration | 8 réussis, 0 ignoré |
-| Release, simulateur générique | compilation | aucun symbole de couverture, aucun hook de test dans le binaire |
-| iPhone SE (3e génération), iOS 17.5 (simulateur) | `standalone` | 93 réussis, 0 ignoré; audits réussis; catalogue cohérent |
+| iPhone 17, iOS 26.3.1 (simulateur) | `standalone` | 159 réussis, 0 ignoré; audits d'accessibilité réussis; catalogue cohérent (125 clés, fr + en) |
+| iPhone 17, iOS 26.3.1 (simulateur) | `live`, API de la branche `33-feat-readiness` (5788607), comptes et catalogue de démonstration | 10 réussis, 0 ignoré |
+| Release, simulateur générique | compilation | aucun symbole de couverture, aucun hook ni donnée fictive de test dans le binaire |
+| iPhone SE (3e génération), iOS 17.5 (simulateur) | `standalone` | 159 réussis, 0 ignoré; audits réussis (taille de texte : voir la limite du catalogue); catalogue cohérent |
+| iPhone SE (3e génération), iOS 17.5 (simulateur) | `live`, même API | 10 réussis, 0 ignoré |
 | iOS 17.0 exact, iOS 18.x, iOS 26.0 | — | non testés (pas de runtime 17.0; autres runtimes non exécutés) |
 | iPhone 12 (Philippe), iPhone 15 Plus (Jimmy) | — | non testés; versions déclarées non confirmées (voir plus bas) |
 
@@ -105,14 +111,18 @@ versionné utilisé pour démarrer l'API, sans être affichés :
 (set -a; . ~/.config/aegis/local-api.env; set +a; AEGIS_LIVE_API_BASE_URL=http://localhost:8080/api/v1 AEGIS_LIVE_TECHNICIAN_PASSWORD="$AEGIS_DEMO_TECHNICIAN_PASSWORD" AEGIS_LIVE_ADMIN_PASSWORD="$AEGIS_DEMO_ADMIN_PASSWORD" scripts/ios-test.sh live)
 ```
 
-- Santé et authentification par le client (`LiveAPIIntegrationTests`,
-  `LiveAuthIntegrationTests`), puis par l'application lancée : santé,
+- Santé, authentification et catalogue par le client
+  (`LiveAPIIntegrationTests`, `LiveAuthIntegrationTests`,
+  `LiveCatalogIntegrationTests`), puis par l'application lancée : santé,
   connexion du technicien, reprise depuis le Keychain après relance,
-  déconnexion, refus du compte administrateur (`SignInLiveUITests`).
+  déconnexion, refus du compte administrateur, catalogue réel filtré sur
+  « Bloqué » et fiche avec ses raisons (`SignInLiveUITests`).
 - Échoue (code 1) si l'adresse ou un des deux mots de passe manque, si
-  `/system/health` est injoignable, ou si les 8 tests ne réussissent pas
-  tous; un test ignoré est un échec. Ces refus ont été vérifiés le
-  21 octobre 2026.
+  `/system/health` est injoignable, ou si les 10 tests ne réussissent pas
+  tous; un test ignoré est un échec. Sans `GET /assets` (cas de `dev`
+  aujourd'hui), les deux tests du catalogue échouent : la recette échoue
+  explicitement. Le test UI du catalogue demande au moins un équipement
+  `BLOCKED` dans les données de démonstration.
 - `AEGIS_LIVE_TECHNICIAN_EMAIL` et `AEGIS_LIVE_ADMIN_EMAIL` remplacent les
   adresses par défaut (`technician@aegis.demo`, `admin@aegis.demo`).
 
@@ -194,8 +204,69 @@ xcrun simctl launch booted com.example.aegis.mobile
 **Hooks de test (Debug uniquement, absents de Release)** : variables de
 lancement `AEGIS_UI_SCENARIO` (réponses d'API scriptées et session en
 mémoire, voir `App/UITestHooks.swift`), `AEGIS_RESET_SESSION=1`,
-`AEGIS_START_SCREEN=health` et `AEGIS_UI_FOCUS`. Ils servent aux tests UI et
-aux captures; seule la recette live prouve l'intégration.
+`AEGIS_START_SCREEN=health`, `AEGIS_START_TAB=account` et `AEGIS_UI_FOCUS`.
+Ils servent aux tests UI et aux captures; seule la recette live prouve
+l'intégration.
+
+## Catalogue et fiche d'équipement (#34)
+
+Après la connexion, le technicien arrive sur l'onglet **Équipements**; l'onglet
+**Compte** garde la déconnexion et l'écran « Service Aegis ». « Mon activité »
+et « Réserver » appartiennent à #37 et #38 : ils ne sont pas affichés.
+
+| Situation | Comportement |
+|---|---|
+| Chargement | Cartes neutres, sans couleur d'état |
+| Liste | Pile de navigation native; une carte ouvre la fiche, retour natif; pages de 20, la suivante en fin de liste; tirer pour actualiser |
+| Recherche | `q` sans espaces de bord, 1 à 100 caractères (UTF-16), jamais envoyé vide; appliquée à la validation, retirée quand le champ est vidé |
+| Filtres | Tous / Prêt / Bloqué / À vérifier envoient rien / `READY` / `BLOCKED` / `UNKNOWN`; cibles de 44 pt; menu « Filtre : Tous » aux tailles d'accessibilité |
+| Vide | « Aucun équipement ne correspond. » avec « Effacer les filtres », ou « Aucun équipement n'est encore disponible. » sans filtre |
+| Erreur sans liste | Message contrôlé (réseau, service avec identifiant de suivi, 403) et Réessayer |
+| Actualisation impossible | La dernière liste reste, sous un avis « Informations non actualisées depuis <heure de réception> » avec Réessayer; les puces deviennent « Dernier état : X », en couleurs neutres; pas de page suivante sur une liste périmée |
+| 401 | Fin de session par le parcours existant (#36) |
+| 400 (`q`, `size`) ou code inconnu | Traitement générique (doc 09 §7.1) : message contrôlé et identifiant de suivi, jamais le texte du serveur |
+| Fiche | Puce d'état, « Pourquoi il est bloqué » avec chaque raison et sa suite, calibration, niveau d'accès requis, cellule |
+| Fiche 404 | « Cet équipement n'est plus disponible. » et « Retour à la liste » (`ASSET_NOT_FOUND` ou `RESOURCE_NOT_FOUND`) |
+| Fiche hors ligne | Dernière fiche reçue, « Dernier état » et note de non-actualisation |
+
+- La readiness n'est jamais calculée par l'app : elle est affichée telle que
+  le serveur l'a évaluée. Un équipement `BORROWED` n'est jamais « Prêt ».
+- Une valeur d'énumération inconnue est décodée, journalisée (catégorie
+  `contract`) et affichée « État indisponible », jamais comme une valeur
+  connue ni comme prête.
+- `identifierValue` et tout identifiant RFID ne sont ni décodés, ni gardés, ni
+  affichés : seuls les champs du contrat sont lus.
+- Chaque état porte un symbole et un texte; la couleur n'est jamais seule.
+
+**Heures.** L'échéance de calibration s'affiche avec la date, l'heure et le
+fuseau `America/Toronto` (convention du laboratoire P0, décision du
+22 octobre 2026, `docs/localisation/convention.md`), indépendamment du
+placement et sans règle « minuit »; son état vient du serveur. Le pied
+« État évalué à X, heure du casier. » utilise la plus ancienne évaluation de
+la liste, dans le même fuseau, l'API n'exposant pas encore le fuseau du
+casier. L'heure de réception des données hors ligne est un instant technique,
+dans le fuseau de l'appareil. Les formats viennent de `FormatStyle` : iOS
+produit « 21 oct. 2026 à 15:20 HAE » et « Oct 21, 2026 at 3:20 PM EDT » là où
+la convention, calculée avec `Intl`, montre « 21 oct. 2026, 15 h 20 HAE » et
+« Oct 21, 2026, 3:20 p.m. EDT ». L'écart est signalé, pas corrigé à la main.
+
+**Preuves.** `docs/evidence/catalog/live-*.png` sont des captures de la
+recette live du 28 octobre 2026 contre la branche API `33-feat-readiness`
+(5788607) : catalogue réel et fiche AEG-DEMO-002 bloquée par sa calibration,
+sur iPhone 17 (iOS 26.3.1) et iPhone SE (iOS 17.5). Les captures des tests UI
+sur données fictives restent dans les résultats `xcresult`.
+
+**Limite connue.** Sur un écran de 375 pt, le grand titre système
+« Équipements » est tronqué aux plus grandes tailles d'accessibilité; l'onglet
+et VoiceOver le donnent en entier. Avant iOS 26, l'audit de taille de texte de
+Xcode lit le remplacement des filtres par le menu comme une taille non prise
+en charge : il n'est appliqué que sur iOS 26, et le test AX5 rend et audite la
+liste à la plus grande taille sur les deux versions.
+
+**Données fictives.** `App/UITestCatalogFixtures.swift` (Debug seulement)
+sert cinq équipements FICTIFS aux scénarios `catalog`, `catalog-empty`,
+`catalog-offline`, `catalog-detail-offline` et `catalog-detail-gone`. Ce n'est
+jamais un repli de l'application : sans scénario, l'app appelle l'API.
 
 ## Français et anglais
 

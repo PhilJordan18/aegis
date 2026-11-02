@@ -36,14 +36,14 @@ final class SignInLiveUITests: XCTestCase {
         let app = makeApp(live, resetSession: true)
         app.launch()
         submit(app, email: live.technicianEmail, password: live.technicianPassword)
-        XCTAssertTrue(app.descendants(matching: .any)["account.name"].firstMatch.waitForExistence(timeout: 30))
+        openAccount(app)
         XCTAssertTrue(app.descendants(matching: .any)["account.role"].firstMatch.label.contains("Technicien"))
 
         // A new launch resumes from the Keychain once GET /auth/me accepts the token.
         app.terminate()
         let resumed = makeApp(live, resetSession: false)
         resumed.launch()
-        XCTAssertTrue(resumed.descendants(matching: .any)["account.name"].firstMatch.waitForExistence(timeout: 30))
+        openAccount(resumed)
 
         resumed.buttons["account.signOut"].tap()
         let confirm = resumed.buttons.matching(identifier: "account.confirmSignOut").firstMatch
@@ -58,6 +58,44 @@ final class SignInLiveUITests: XCTestCase {
         XCTAssertTrue(afterSignOut.textFields["signin.email"].waitForExistence(timeout: 30))
     }
 
+    /// Catalogue of the real API (#34): the cards and reasons are whatever the
+    /// server evaluated; the test needs at least one BLOCKED asset in the seed.
+    @MainActor
+    func testTechnicianBrowsesTheRealCatalogueAndReadsWhyAnAssetIsBlocked() throws {
+        let live = try Live()
+        let app = makeApp(live, resetSession: true)
+        app.launch()
+        submit(app, email: live.technicianEmail, password: live.technicianPassword)
+
+        let cards = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'asset.card.'"))
+        XCTAssertTrue(cards.firstMatch.waitForExistence(timeout: 30))
+        XCTAssertTrue(app.navigationBars["Équipements"].exists)
+        attach(app, "live-fr-catalog-light")
+
+        app.buttons["catalog.filter.blocked"].tap()
+        XCTAssertTrue(app.buttons["catalog.filter.blocked"].isSelected)
+        let blocked = cards.firstMatch
+        XCTAssertTrue(blocked.waitForExistence(timeout: 15))
+        XCTAssertTrue(blocked.label.contains("Bloqué"))
+        blocked.tap()
+
+        XCTAssertTrue(app.descendants(matching: .any)["asset.name"].firstMatch.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Pourquoi il est bloqué"].exists)
+        XCTAssertGreaterThan(app.descendants(matching: .any).matching(identifier: "asset.reason").count, 0)
+        attach(app, "live-fr-sheet-blocked-light")
+
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.buttons["catalog.filter.blocked"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    private func attach(_ app: XCUIApplication, _ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     @MainActor
     func testAdministratorIsRefusedByTheApp() throws {
         let live = try Live()
@@ -66,6 +104,14 @@ final class SignInLiveUITests: XCTestCase {
         submit(app, email: live.adminEmail, password: live.adminPassword)
 
         XCTAssertTrue(app.staticTexts["Accès réservé aux techniciens"].waitForExistence(timeout: 30))
+    }
+
+    @MainActor
+    private func openAccount(_ app: XCUIApplication) {
+        let tab = app.tabBars.buttons["Compte"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 30))
+        tab.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["account.name"].firstMatch.waitForExistence(timeout: 10))
     }
 
     @MainActor

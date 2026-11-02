@@ -60,9 +60,13 @@ echo "$captures" | while read -r name lang scenario theme size focus; do
     [ "$lang" = en ] && locale=en_CA
     env_scenario=""
     [ "$scenario" = none ] || env_scenario="$scenario"
+    # A signed-in technician lands on the catalogue: account captures open
+    # the Account tab directly.
+    start_tab=""
+    case "$name" in *-account-*) start_tab=account ;; esac
     # Without a scenario the real Keychain is used: start from no session.
     SIMCTL_CHILD_AEGIS_UI_SCENARIO="$env_scenario" SIMCTL_CHILD_AEGIS_UI_FOCUS="${focus:-}" \
-        SIMCTL_CHILD_AEGIS_RESET_SESSION=1 \
+        SIMCTL_CHILD_AEGIS_RESET_SESSION=1 SIMCTL_CHILD_AEGIS_START_TAB="$start_tab" \
         xcrun simctl launch "$udid" "$bundle_id" -AppleLanguages "($lang)" -AppleLocale "$locale" >/dev/null
     sleep 6
     xcrun simctl io "$udid" screenshot "$out/$name.png" >/dev/null 2>&1

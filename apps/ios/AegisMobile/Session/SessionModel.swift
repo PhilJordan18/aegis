@@ -265,6 +265,24 @@ final class SessionModel {
         discardSession(prefill: profile.email, notice: Self.notice(forUnauthorized: code))
     }
 
+    /// Token for an authenticated read, only while the session is verified and
+    /// not locally expired. Read from the store for each request; never cached.
+    func accessToken() -> String? {
+        guard case .signedIn = phase, let expiresAt, expiresAt > now(),
+              let stored = try? store.load(), !stored.accessToken.isEmpty else { return nil }
+        return stored.accessToken
+    }
+
+    /// No usable token while signed in: the local expiry passed, or the
+    /// stored item disappeared. Either way the session ends.
+    func handleMissingToken() {
+        if let expiresAt, expiresAt <= now() {
+            checkExpiry()
+        } else {
+            handleUnauthorized(code: nil)
+        }
+    }
+
     /// Checks the local expiry, for example when the app returns to the foreground.
     func checkExpiry() {
         guard case let .signedIn(profile) = phase, let expiresAt, expiresAt <= now() else { return }
@@ -345,7 +363,7 @@ final class SessionModel {
 
     /// Trace identifiers are shown verbatim; anything else a proxy might send
     /// is dropped rather than displayed.
-    static func displayableTraceId(_ value: String) -> String? {
+    nonisolated static func displayableTraceId(_ value: String) -> String? {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-"))
         guard (1...64).contains(value.count), value.unicodeScalars.allSatisfy(allowed.contains),
               value.allSatisfy(\.isASCII) else { return nil }
@@ -367,3 +385,5 @@ final class SessionModel {
         return nil
     }
 }
+
+extension SessionModel: SessionAccess {}
