@@ -69,13 +69,14 @@ docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml
 
 ### 4. Base de recette, créée si absente
 
-Cette commande ne supprime jamais rien.
+Cette commande ne supprime jamais rien. Elle est écrite en entier, sans variable, pour fonctionner aussi dans zsh, le shell par défaut de macOS.
 
 ```bash
 cd ~/Projects/aegis-recette
-dc="docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml"
-$dc exec -T postgres psql -U aegis -d aegis -tAc "SELECT 1 FROM pg_database WHERE datname = 'aegis_recette'" | grep -q 1 \
-  || $dc exec -T postgres createdb -U aegis aegis_recette
+docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml exec -T postgres \
+  psql -U aegis -d aegis -tAc "SELECT 1 FROM pg_database WHERE datname = 'aegis_recette'" | grep -q 1 \
+  || docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml exec -T postgres \
+  createdb -U aegis aegis_recette
 ```
 
 ### 5. API
@@ -283,7 +284,9 @@ Une recette échoue si un test est ignoré.
 | `standalone` | fixtures Debug, sans backend | iPhone 17, iOS 26.3.1 | 159 réussis sur 159, 0 ignoré, au commit `4272123` |
 | `standalone` | fixtures Debug, sans backend | iPhone SE (3e génération), iOS 17.5 | 159 réussis sur 159, 0 ignoré, au commit `4272123` |
 | `live` | API de la branche `33-feat-readiness` (`5788607`), avant fusion | iPhone 17 et iPhone SE | 10 réussis sur 10, le 28 octobre 2026 |
-| `live` | API construite depuis `dev` après #105, base `aegis_recette` | iPhone 17 et iPhone SE | à exécuter après la fusion de #105 |
+| `live` | API de `dev` `c1366b3` (après #105), base `aegis_recette`, migrations `001 002 002.1 002.2 003 004 005 006`, jeu de démonstration : 5 lignes `ok` ; iOS : branche de #107 au commit `dbd405d`, c'est-à-dire `210302f` avec `dev` `c1366b3` fusionnée | iPhone 17, iOS 26.3.1 | 10 réussis sur 10, 0 ignoré, le 2 novembre 2026 |
+| `live` | même API et même commit iOS | iPhone SE (3e génération), iOS 17.5 | non exécuté sur `dev` |
+| Suite API (étape 9) | `dev` `c1366b3` | — | 273 tests, 0 échec, 0 erreur, `BUILD SUCCESS`, le 2 novembre 2026 |
 | Build Release | — | simulateur générique | aucun hook, scénario ou fixture de test dans le binaire |
 
 La recette `live` automatise les étapes 2 à 9 du parcours, sans l'anglais ni
