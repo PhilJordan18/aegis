@@ -46,16 +46,19 @@ class OperatingScheduleMigrationTests {
         databases.drop(database);
     }
 
-    /** Databases standing at V003 keep their history rows and data; V004 only adds the two empty tables. */
+    /**
+     * Databases standing at V003 keep their history rows and data; V004 only adds the two empty tables. The target
+     * stops at V004 so that later migrations do not change what this test describes.
+     */
     @Test
     void upgradesADatabaseAtTheLockerMigrationWithoutRewritingItsHistory() {
         assertEquals(5, flyway("3").migrate().migrationsExecuted);
         UUID locker = insertLocker("AEGIS-DEMO-01");
         List<Map<String, Object>> history = history();
 
-        assertEquals(1, flyway(null).migrate().migrationsExecuted);
-        assertEquals(0, flyway(null).migrate().migrationsExecuted);
-        assertTrue(flyway(null).validateWithResult().validationSuccessful);
+        assertEquals(1, flyway("4").migrate().migrationsExecuted);
+        assertEquals(0, flyway("4").migrate().migrationsExecuted);
+        assertTrue(flyway("4").validateWithResult().validationSuccessful);
         assertEquals(List.of("001", "002", "002.1", "002.2", "003", "004"), jdbc.sql(
                 "SELECT version FROM public.flyway_schema_history WHERE success ORDER BY installed_rank")
                 .query(String.class).list());
@@ -130,7 +133,7 @@ class OperatingScheduleMigrationTests {
         jdbc.sql("CREATE ROLE " + role + " NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS")
                 .update();
         try {
-            assertEquals(6, flyway(null, role).migrate().migrationsExecuted);
+            assertEquals(6, flyway("4", role).migrate().migrationsExecuted);
             for (String table : List.of("operating_schedules", "operating_windows")) {
                 assertEquals(List.of(table + ":DELETE,INSERT,SELECT,UPDATE"), privileges(role, table));
             }

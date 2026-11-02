@@ -644,6 +644,10 @@ CREATE TABLE locker_operations (
 
 `return_requested_at` est conservé même après un échec sûr ramenant le prêt à `ACTIVE`; `return_operation_id` n’est renseigné qu’après confirmation.
 
+`uq_loans_checkout_operation` porte l’index unique sur lequel s’appuie le §7.4 : une opération de checkout crée au plus un prêt, même si deux confirmations se concurrencent ou si une confirmation est rejouée après la fin du prêt.
+
+`fk_loans_checkout_operation` est composite (décision du 28 octobre 2026) : l’opération de checkout d’un prêt porte le même actif et le même titulaire que lui, grâce à `uq_locker_operations_id_asset_user`. PostgreSQL ne vérifie pas que cette opération est de type `CHECKOUT`, ni que `return_operation_id` désigne un retour de ce prêt : ces deux contrôles restent explicites dans les services de confirmation (§7.4 et §7.5) et dans leurs tests.
+
 ```sql
 CREATE TABLE loans (
     id                    uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
@@ -663,9 +667,12 @@ CREATE TABLE loans (
     CONSTRAINT fk_loans_holder
         FOREIGN KEY (holder_user_id) REFERENCES users (id),
     CONSTRAINT fk_loans_checkout_operation
-        FOREIGN KEY (checkout_operation_id) REFERENCES locker_operations (id),
+        FOREIGN KEY (checkout_operation_id, asset_id, holder_user_id)
+        REFERENCES locker_operations (id, asset_id, user_id),
     CONSTRAINT fk_loans_return_operation
         FOREIGN KEY (return_operation_id) REFERENCES locker_operations (id),
+    CONSTRAINT uq_loans_checkout_operation
+        UNIQUE (checkout_operation_id),
     CONSTRAINT ck_loans_status
         CHECK (status IN ('ACTIVE', 'RETURN_PENDING', 'COMPLETED')),
     CONSTRAINT ck_loans_dates
@@ -1784,8 +1791,8 @@ Découpage recommandé :
 | `V002_2__create_audit_events.sql` | `audit_events` (§4.9), avancée depuis `V009` pour auditer le catalogue avant `V003`, sans `operation_id`, `inbound_message_id` ni `physical_observation_id`; index `ix_audit_events_subject_time` et `ix_audit_events_time`; triggers append-only. Ajoutée quand les bases s’arrêtaient à `V002` ou `V002_1`. |
 | `V003__create_lockers_and_placements.sql` | `lockers`, `compartments`, `locker_devices`, `asset_placements`; `ux_asset_identifiers_one_active_per_type` sur `asset_identifiers` (CAT-02, décision du 28 octobre 2026). |
 | `V004__create_operating_schedules.sql` | `operating_schedules`, `operating_windows` et leurs index. |
-| `V005__create_reservations.sql` | `reservations` et index d’unicité active. |
-| `V006__create_operations_and_loans.sql` | `locker_operations`, `loans`, FK circulaire ajoutée après les deux tables; `audit_events.operation_id`, `fk_audit_events_operation` et `ix_audit_events_operation_time`. |
+| `V005__create_reservations.sql` | `reservations` et index d’unicité active `ux_reservations_one_active_per_asset` et `ux_reservations_one_active_per_user`. |
+| `V006__create_operations_and_loans.sql` | `locker_operations`, `loans`, FK circulaire ajoutée après les deux tables; `fk_loans_checkout_operation` composite et `uq_loans_checkout_operation`; index partiels `ux_loans_one_open_per_asset` et `ux_locker_operations_one_open_per_locker`; `audit_events.operation_id`, `fk_audit_events_operation` et `ix_audit_events_operation_time`. Les index de lecture de §5.2 restent dans `V011`. |
 | `V007__create_command_outbox.sql` | `command_outbox`, `local_access_challenges`, `hub_display_outbox` et index de claim, si aucune migration n’a encore été appliquée. |
 | `V008__create_device_messages_and_observations.sql` | `inbound_device_messages`, `physical_observations`; `audit_events.inbound_message_id`, `audit_events.physical_observation_id` et leurs FK `fk_audit_events_message` et `fk_audit_events_observation`. |
 | `V009__create_anomalies.sql` | `anomalies`. `audit_events` a été déplacée vers `V002_2`; aucune migration n’est renumérotée. |
@@ -1841,9 +1848,9 @@ L’application ne reçoit pas le droit de supprimer ou de modifier `audit_event
 | Rôle | Attributs | Droits |
 |---|---|---|
 | Propriétaire des migrations (`aegis_migrator` par défaut, ou le compte propriétaire actuel) | `LOGIN`, jamais superutilisateur dans un environnement cible | Possède le schéma `aegis`, ses objets et `public.flyway_schema_history`; exécute Flyway. |
-| Rôle applicatif (`aegis_app` par défaut) | `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS` | `CONNECT` sur la base; `USAGE` sur `aegis`; `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les tables métier; `SELECT` et `INSERT` seulement sur `audit_events`; `USAGE`, `SELECT` sur les séquences. Jamais `TRUNCATE`, `REFERENCES`, `TRIGGER`, ni `CREATE` sur le schéma. |
+| Rôle applicatif (`aegis_app` par défaut) | `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS` | `CONNECT` sur la base; `USAGE` sur `aegis`; `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les tables métier; `SELECT`, `INSERT` et `UPDATE`, sans `DELETE`, sur `reservations`, `locker_operations` et `loans`; `SELECT` et `INSERT` seulement sur `audit_events`; `USAGE`, `SELECT` sur les séquences. Jamais `TRUNCATE`, `REFERENCES`, `TRIGGER`, ni `CREATE` sur le schéma. |
 
-Les droits suivent le schéma : le callback `afterMigrate` de §11.1 les réapplique de façon idempotente après chaque migration, avec le nom du placeholder Flyway `application_role` (`AEGIS_DB_APPLICATION_ROLE`, `aegis_app` par défaut). Si le rôle n’existe pas, le callback ne fait rien; s’il est superutilisateur ou membre d’un propriétaire du schéma ou de ses objets, même sans héritage (une appartenance `WITH INHERIT FALSE` permet encore `SET ROLE`), il échoue, car révoquer les droits du propriétaire casserait le schéma. Une future table append-only s’ajoute à la liste `append_only` du callback.
+Les droits suivent le schéma : le callback `afterMigrate` de §11.1 les réapplique de façon idempotente après chaque migration, avec le nom du placeholder Flyway `application_role` (`AEGIS_DB_APPLICATION_ROLE`, `aegis_app` par défaut). Si le rôle n’existe pas, le callback ne fait rien; s’il est superutilisateur ou membre d’un propriétaire du schéma ou de ses objets, même sans héritage (une appartenance `WITH INHERIT FALSE` permet encore `SET ROLE`), il échoue, car révoquer les droits du propriétaire casserait le schéma. Une future table append-only s’ajoute à la liste `append_only` du callback. La liste `no_delete` retire `DELETE` sur `reservations`, `locker_operations` et `loans` : ces lignes changent d’état mais la chaîne de possession n’est jamais effacée (§1.1). Une future table d’historique de possession, de commande ou de preuve rejoint l’une de ces deux listes en même temps que la migration qui la crée; sinon le callback lui accorde `DELETE`.
 
 Le trigger de §4.9 n’est qu’une défense en profondeur. Ni lui ni ces droits ne protègent contre un superutilisateur ou le propriétaire de la table : la confiance envers ces comptes relève de l’exploitation (accès restreint, journalisation, sauvegardes).
 
@@ -1853,7 +1860,7 @@ Le trigger de §4.9 n’est qu’une défense en profondeur. Ni lui ni ces droit
 2. Fixer chaque mot de passe avec `\password aegis_app` (et `\password aegis_migrator`) dans `psql` : le client calcule le hachage SCRAM et le mot de passe en clair n’atteint ni le serveur ni ses journaux, contrairement à `ALTER ROLE ... PASSWORD '...'`.
 3. Redémarrer l’API une fois avec le compte propriétaire actuel pour Flyway : le callback accorde alors les droits à `aegis_app`.
 4. Basculer la source de données : `AEGIS_DB_USER=aegis_app` et son mot de passe, en conservant `AEGIS_DB_MIGRATION_USER` et `AEGIS_DB_MIGRATION_PASSWORD` sur le compte propriétaire. Sans ces deux variables, Flyway emprunte le compte de la source de données.
-5. Vérifier en tant que `aegis_app` que `UPDATE`, `DELETE` et `TRUNCATE` sur `aegis.audit_events` sont refusés avec `42501`.
+5. Vérifier en tant que `aegis_app` que `UPDATE`, `DELETE` et `TRUNCATE` sur `aegis.audit_events`, ainsi que `DELETE` et `TRUNCATE` sur `aegis.reservations`, `aegis.locker_operations` et `aegis.loans`, sont refusés avec `42501`.
 6. Facultatif, pour ne plus migrer en superutilisateur : transférer au rôle de migration la propriété du schéma `aegis`, de ses tables, séquences et fonctions et de `public.flyway_schema_history` (`ALTER ... OWNER TO aegis_migrator`), puis pointer `AEGIS_DB_MIGRATION_USER` vers lui. `pgcrypto` étant une extension de confiance, il suffit que ce rôle ait `CREATE` sur la base.
 
 Retour arrière : remettre `AEGIS_DB_USER` sur le compte propriétaire. Aucune donnée n’est modifiée par ces étapes.
