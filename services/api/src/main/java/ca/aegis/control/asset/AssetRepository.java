@@ -18,7 +18,10 @@ import org.springframework.stereotype.Repository;
 import ca.aegis.control.identity.AccessLevel;
 import ca.aegis.control.shared.web.PageQuery;
 
-/** Assets are always read with their model in one query, for a page as for a single asset. */
+/**
+ * Assets are always read with their model and their active placement in one query, for a page as for a single
+ * asset; {@code ux_asset_placements_one_current_per_asset} keeps that join to one row per asset.
+ */
 @Repository
 class AssetRepository {
 
@@ -26,9 +29,14 @@ class AssetRepository {
             SELECT a.id, a.asset_code, a.serial_number, a.required_access_level, a.operational_status,
                    a.calibration_required, a.calibration_due_at, a.archived_at,
                    m.id AS model_id, m.name AS model_name, m.manufacturer AS model_manufacturer,
-                   m.model_number AS model_model_number
+                   m.model_number AS model_model_number,
+                   l.id AS placement_locker_id, l.code AS placement_locker_code,
+                   c.id AS placement_compartment_id, c.code AS placement_compartment_code
             FROM aegis.assets a
             JOIN aegis.asset_models m ON m.id = a.asset_model_id
+            LEFT JOIN aegis.asset_placements p ON p.asset_id = a.id AND p.removed_at IS NULL
+            LEFT JOIN aegis.compartments c ON c.id = p.compartment_id
+            LEFT JOIN aegis.lockers l ON l.id = c.locker_id
             """;
     private static final String SEARCH =
             "WHERE (lower(a.asset_code) LIKE :pattern ESCAPE '\\' OR lower(m.name) LIKE :pattern ESCAPE '\\') ";
@@ -97,6 +105,21 @@ class AssetRepository {
                 .list();
     }
 
+    /**
+     * Technician catalog: archived assets leave the active catalog (document 03, section 4.4). The list is not paged
+     * here because its readiness and availability filters only exist after evaluation.
+     */
+    List<AssetRecord> listActive(Optional<String> pattern, AssetSort sort) {
+        String search = pattern.isPresent()
+                ? "AND (lower(a.asset_code) LIKE :pattern ESCAPE '\\' OR lower(m.name) LIKE :pattern ESCAPE '\\') "
+                : "";
+        JdbcClient.StatementSpec statement = jdbc.sql(
+                SELECT_ASSET + "WHERE a.archived_at IS NULL " + search + "ORDER BY " + sort.orderBy());
+        return pattern.map(value -> statement.param("pattern", value)).orElse(statement)
+                .query(AssetRepository::map)
+                .list();
+    }
+
     long count(Optional<String> pattern) {
         String select = "SELECT count(*) FROM aegis.assets a JOIN aegis.asset_models m ON m.id = a.asset_model_id ";
         return search(select, pattern, "").query(Long.class).single();
@@ -130,6 +153,13 @@ class AssetRepository {
                 OperationalStatus.valueOf(row.getString("operational_status")),
                 row.getBoolean("calibration_required"),
                 instant(row, "calibration_due_at"),
-                instant(row, "archived_at"));
+                instant(row, "archived_at"),
+                placement(row));
+    }
+
+    private static PlacementSummary placement(ResultSet row) throws SQLException {
+        UUID compartment = row.getObject("placement_compartment_id", UUID.class);
+        return compartment == null ? null : new PlacementSummary(row.getObject("placement_locker_id", UUID.class),
+                row.getString("placement_locker_code"), compartment, row.getString("placement_compartment_code"));
     }
 }
