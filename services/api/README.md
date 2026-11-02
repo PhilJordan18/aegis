@@ -209,10 +209,11 @@ refuse d'écrire hors de celle de la mutation. Les lignes antérieures à
 `V002_2` n'ont aucun événement reconstitué. `CatalogAuditTests` et
 `CatalogConcurrencyTests` le vérifient.
 
-La vue `AdminAssetView` ne contient aucune readiness. Tant que les
-réservations, les prêts et les observations n'existent pas, la disponibilité
-ne dépend que de l'archivage, la présence vaut `UNKNOWN` et le diagnostic
-contient donc toujours `UNKNOWN_PHYSICAL_STATE`. Son champ `placement`
+La vue `AdminAssetView` ne contient aucune readiness. Sa disponibilité et sa
+présence viennent des mêmes sources que le catalogue technicien (voir
+« Catalogue technicien et readiness »). Tant qu'aucune observation n'existe, la
+présence vaut `UNKNOWN` et le diagnostic contient donc toujours
+`UNKNOWN_PHYSICAL_STATE`. Son champ `placement`
 présente le placement actif, lu dans la même requête que l'actif.
 
 ## Identifiants physiques et placement (CAT-02)
@@ -328,9 +329,84 @@ ouvert par actif, une deuxième opération non terminale par locker et un
 deuxième prêt pour une même opération de retrait
 (`uq_loans_checkout_operation`); le service convertira ces refus en
 `CONFLICT` (section 7.2). Le rôle applicatif ne peut ni supprimer ni vider
-ces trois tables. Aucun service ni aucune route ne les utilise encore;
-`CustodySchemaTests` vérifie les contraintes, cinq courses concurrentes et
-les droits.
+ces trois tables. Le catalogue les lit pour dériver la disponibilité (section
+suivante); aucune route ne les écrit encore. `CustodySchemaTests` vérifie les
+contraintes, cinq courses concurrentes et les droits.
+
+## Catalogue technicien et readiness (RDY-01, RDY-02)
+
+`GET /api/v1/assets` et `GET /api/v1/assets/{assetId}` sont réservés au rôle
+`TECHNICIAN` : un `ADMIN` reçoit `403 FORBIDDEN`, un appel anonyme `401`.
+Chaque élément est un `AssetView` (document 09, §8.2) dont la `readiness` est
+calculée pour le compte authentifié, au même instant pour toute la réponse, par
+`asset/ReadinessEvaluator` (document 06, §4.3 à §4.5) : un blocage certain
+donne `BLOCKED` avec toutes ses raisons distinctes; une preuve physique
+insuffisante donne `UNKNOWN` / `UNKNOWN_PHYSICAL_STATE` seulement sans blocage;
+`READY` exige la présence `PRESENT`.
+
+Avant PHY-02, aucune observation n'est stockée : `asset/NoPhysicalProofPresence`
+répond `UNKNOWN` pour tout actif, donc un actif conforme est `UNKNOWN` et jamais
+`READY`. PHY-02 remplace ce composant derrière l'interface `PhysicalPresence`.
+La disponibilité vient de `asset/AssetCustodyRepository` (document 03, §5.2) :
+un prêt `ACTIVE` ou `RETURN_PENDING` donne `BORROWED`, même en retard; sinon une
+réservation `ACTIVE` donne `RESERVED`, y compris pour son titulaire hors de son
+retrait (`BLOCKED` / `NOT_AVAILABLE`); sinon l'archivage donne `UNAVAILABLE`.
+La vue administrative lit les mêmes sources : un administrateur et un
+technicien voient toujours la même disponibilité et la même présence.
+
+La liste exclut les actifs archivés, que l'archivage retire du catalogue actif
+(document 03, §4.4). Lu par son identifiant, un actif archivé retourne `200`
+avec `availability` `UNAVAILABLE` et `BLOCKED` / `NOT_AVAILABLE` (document 06,
+§4.4). Les filtres
+`readiness` et `availability` s'appliquent après l'évaluation de tout le
+catalogue correspondant, puis la page est découpée : `totalItems` et
+`totalPages` restent exacts. Ce choix vise la taille du catalogue P0. Un
+identifiant inconnu donne `404 ASSET_NOT_FOUND`.
+
+Avec l'API lancée comme ci-dessus et `AEGIS_DEMO_TECHNICIAN_PASSWORD` exporté :
+
+```bash
+TOKEN="$(curl -s -X POST http://127.0.0.1:8080/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"technician@aegis.demo\",\"password\":\"$AEGIS_DEMO_TECHNICIAN_PASSWORD\"}" \
+  | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p')"
+curl -s 'http://127.0.0.1:8080/api/v1/assets?size=20&sort=assetCode,asc' \
+  -H "Authorization: Bearer $TOKEN"
+curl -s 'http://127.0.0.1:8080/api/v1/assets?q=A2&readiness=BLOCKED' \
+  -H "Authorization: Bearer $TOKEN"
+curl -s "http://127.0.0.1:8080/api/v1/assets/<assetId>" -H "Authorization: Bearer $TOKEN"
+```
+
+`TechnicianCatalogApiTests`, `CatalogCustodyApiTests` et
+`ReadinessEvaluatorTests` vérifient ce comportement.
+
+### Jeu de démonstration
+
+`scripts/seed-demo-catalog.py` (Python 3, bibliothèque standard) crée quatre
+modèles et cinq actifs par l'API administrative : les règles du catalogue
+s'appliquent et l'audit est réel. L'API doit tourner avec
+`AEGIS_DEMO_ACCOUNTS_ENABLED=true` et `AEGIS_DEMO_LOCKER_ENABLED=true`. Le
+script peut être relancé : il réutilise ce qui existe déjà.
+
+```bash
+set -a; . ~/.config/aegis/local-api.env; set +a
+python3 -I scripts/seed-demo-catalog.py
+```
+
+Avec `AEGIS_DEMO_TECHNICIAN_PASSWORD` défini, il relit le catalogue technicien
+et échoue sur tout écart. Résultat attendu pour le technicien STANDARD, sans
+preuve physique avant PHY-02 :
+
+| Actif | Readiness | Placement |
+|---|---|---|
+| `AEG-DEMO-001` | `UNKNOWN` / `UNKNOWN_PHYSICAL_STATE` | A1 |
+| `AEG-DEMO-002` | `BLOCKED` / `CALIBRATION_EXPIRED` | A2 |
+| `AEG-DEMO-003` | `BLOCKED` / `ACCESS_DENIED` (niveau `RESTRICTED`) | aucun |
+| `AEG-DEMO-004` | `UNKNOWN` / `UNKNOWN_PHYSICAL_STATE` (sans calibration) | aucun |
+| `AEG-DEMO-005` | `BLOCKED` / `MAINTENANCE` | aucun |
+
+Aucun actif n'est `READY` tant qu'aucune preuve de présence n'existe
+(décision du 28 octobre 2026).
 
 ## Rôles PostgreSQL
 

@@ -27,8 +27,7 @@ class AssetConditionsTests {
 
     @Test
     void serviceableAssetWithoutObservationIsOnlyOfUnknownPhysicalState() {
-        AssetConditions conditions = AssetConditions.of(asset(OperationalStatus.SERVICEABLE, NOW.plusSeconds(60), null),
-                NOW);
+        AssetConditions conditions = conditions(asset(OperationalStatus.SERVICEABLE, NOW.plusSeconds(60), null));
 
         assertEquals(Availability.AVAILABLE, conditions.availability());
         assertEquals(Presence.UNKNOWN, conditions.presence());
@@ -37,8 +36,8 @@ class AssetConditionsTests {
 
     @Test
     void reasonsAccumulateInDocumentedOrderAndNeverDenyAccess() {
-        AssetConditions conditions = AssetConditions.of(
-                asset(OperationalStatus.DAMAGED, NOW.minus(Duration.ofDays(1)), NOW.minusSeconds(10)), NOW);
+        AssetConditions conditions = conditions(
+                asset(OperationalStatus.DAMAGED, NOW.minus(Duration.ofDays(1)), NOW.minusSeconds(10)));
 
         assertEquals(Availability.UNAVAILABLE, conditions.availability());
         assertEquals(List.of(ReadinessReason.NOT_AVAILABLE, ReadinessReason.DAMAGED,
@@ -54,6 +53,10 @@ class AssetConditionsTests {
         AssetConditions clear = new AssetConditions(OperationalStatus.SERVICEABLE, CalibrationStatus.NOT_REQUIRED,
                 Availability.AVAILABLE, Presence.PRESENT);
         assertEquals(List.of(), clear.diagnosticReasons());
+    }
+
+    private static AssetConditions conditions(AssetRecord asset) {
+        return AssetConditions.of(asset, Custody.archivalOnly(asset.archived()), Presence.UNKNOWN, NOW);
     }
 
     private static AssetRecord asset(OperationalStatus status, Instant calibrationDueAt, Instant archivedAt) {

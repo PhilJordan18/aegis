@@ -24,8 +24,8 @@ public record AdminAssetView(
         OperationalDiagnostic operationalDiagnostic,
         Instant archivedAt) {
 
-    static AdminAssetView of(AssetRecord asset, Instant evaluatedAt) {
-        AssetConditions conditions = AssetConditions.of(asset, evaluatedAt);
+    static AdminAssetView of(AssetRecord asset, Custody custody, Presence presence, Instant evaluatedAt) {
+        AssetConditions conditions = AssetConditions.of(asset, custody, presence, evaluatedAt);
         return new AdminAssetView(asset.id(), asset.assetCode(), asset.serialNumber(), asset.model(),
                 asset.requiredAccessLevel(), asset.operationalStatus(),
                 new CalibrationView(asset.calibrationRequired(), asset.calibrationDueAt(), conditions.calibration()),

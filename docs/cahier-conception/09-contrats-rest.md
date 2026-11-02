@@ -10,7 +10,9 @@
 **Mise à jour ciblée :** 22 octobre 2026 — catalogue administrateur décidé par Philippe (#25) : codes de violation (§7.1), `archivedAt` et `AssetModelView` (§8.9, §12.1), lectures paginées, unicités, refus d’une ressource archivée et archivage répété (§12.1, §12.2), codes `409` du catalogue (§21), caractères de contrôle (§23.2), tests (§26.6); comportement existant documenté  
 **Mise à jour ciblée :** 22 octobre 2026 — sens commun de `reservedUntil` et `dueAt` (§8.4, §14.1), valeurs et conditions de `availableActions` (§8.10, §26.8), règles approuvées par Philippe le 22 octobre 2026; aucun champ ajouté, règles de retour et d’annulation inchangées; deux questions restent ouvertes (§8.10) (#35)  
 **Mise à jour ciblée :** 28 octobre 2026 — identifiants et placement (#26), décisions du 28 octobre 2026 : un identifiant actif par type et remplacement atomique, révocation à l’archivage, comparaison exacte des valeurs (§12.2, §12.3), refus du placement et codes `COMPARTMENT_*` (§12.4, §21)  
-**Mise à jour ciblée :** 28 octobre 2026 — horaire d’exploitation (#28) : codes approuvés le 28 octobre 2026, `OPERATING_SCHEDULE_NOT_CONFIGURED` (§13.1, §21) et violations de l’horaire (§7.1, §13.2); chemin complet d’une erreur de lecture (§13.2); vue, audit et changements d’heure proposés (§13)
+**Mise à jour ciblée :** 28 octobre 2026 — horaire d’exploitation (#28) : codes approuvés le 28 octobre 2026, `OPERATING_SCHEDULE_NOT_CONFIGURED` (§13.1, §21) et violations de l’horaire (§7.1, §13.2); chemin complet d’une erreur de lecture (§13.2); vue, audit et changements d’heure proposés (§13)  
+**Mise à jour ciblée :** 28 octobre 2026 — sous-objets `AssetModelSummary`, `CalibrationView` et `PlacementSummary` de `AssetView` (§8.2); sérialisation existante documentée; code `404 ASSET_NOT_FOUND` de §11.2 ajouté à §21 (#33, #34)  
+**Mise à jour ciblée :** 28 octobre 2026 — décisions de Philippe pour #33 et #34 : ordre stable des raisons et raison principale choisie par la convention de présentation, jamais par `reasons[0]` (§8.1); actif archivé exclu de la liste mais lisible par son identifiant (§11.1, §11.2)
 
 ---
 
@@ -282,6 +284,8 @@ ReadinessReason :
 
 Plusieurs raisons peuvent coexister. READY exige un tableau reasons vide.
 
+`reasons` ne contient aucun doublon et suit toujours l’ordre de la liste ci-dessus. `BLOCKED` porte seulement des raisons certaines, sans `UNKNOWN_PHYSICAL_STATE`; `UNKNOWN` porte seulement `UNKNOWN_PHYSICAL_STATE`, car une incertitude ne masque jamais un blocage certain (`06` §4). Cet ordre rend la réponse stable; il ne désigne pas la raison principale. Un client choisit la raison à mettre en avant selon la convention de présentation partagée (`docs/design/asset-lifecycle/sections.md` §1.3), jamais d’après `reasons[0]`, et la fiche les liste toutes.
+
 ### 8.2 AssetView du technicien
 
 | Champ | Type | Requis |
@@ -335,6 +339,36 @@ Exemple :
   }
 }
 ```
+
+Sous-objets de `AssetView`, sérialisation existante documentée. Un champ requis de type « ou null » est toujours présent, avec `null` explicite; un instant est en UTC, avec au plus six décimales de seconde. `AssetView` ne contient pas d’`availableActions`.
+
+`AssetModelSummary` :
+
+| Champ | Type | Requis |
+|---|---|---:|
+| id | UUID | oui |
+| name | string | oui |
+| manufacturer | string ou null | oui |
+| modelNumber | string ou null | oui |
+
+`CalibrationView` :
+
+| Champ | Type | Requis |
+|---|---|---:|
+| required | boolean | oui |
+| dueAt | instant ou null | oui |
+| status | NOT_REQUIRED, VALID, EXPIRED ou UNKNOWN | oui |
+
+`status` est calculé par le backend au même instant que la readiness (document 03, §5.4) : `NOT_REQUIRED` lorsque `required` vaut `false`, `UNKNOWN` lorsque la calibration est exigée sans échéance, `EXPIRED` dès que `evaluatedAt >= dueAt`, `VALID` sinon.
+
+`PlacementSummary`, placement attendu actif de l’actif (§12.4), ou `null` sans placement actif :
+
+| Champ | Type | Requis |
+|---|---|---:|
+| lockerId | UUID | oui |
+| lockerCode | string | oui |
+| compartmentId | UUID | oui |
+| compartmentCode | string | oui |
 
 ### 8.3 ReservationView
 
@@ -731,6 +765,8 @@ Paramètres :
 
 Chaque élément est un AssetView évalué pour l’utilisateur authentifié. La réponse inclut evaluatedAt; le client ne réutilise pas une readiness ancienne pour décider une action.
 
+Les actifs archivés n’y figurent pas, quel que soit le filtre (§11.2).
+
 Dans le déploiement mono-institution P0, le catalogue montre les actifs de l’institution, y compris ceux dont le niveau requis dépasse celui du technicien. Ils portent notamment la raison `ACCESS_DENIED`; leur visibilité ne donne aucun droit de réservation. Les données d’un autre titulaire et les identifiants matériels restent exclus.
 
 Réponse :
@@ -748,6 +784,8 @@ Réponse :
 ### 11.2 GET /assets/{assetId}
 
 Retourne 200 avec AssetView. Erreurs : 404 ASSET_NOT_FOUND.
+
+Un actif archivé reste lisible par son identifiant, sous les mêmes contrôles d’accès : `200`, `availability` `UNAVAILABLE` et readiness `BLOCKED` avec `NOT_AVAILABLE` (`06` §4.4), plus toute autre raison certaine. `AssetView` n’expose pas `archivedAt`. Un historique ou un lien ancien reste ainsi lisible sans rendre l’actif réservable.
 
 La présence d’un actif dans le catalogue ne signifie pas qu’il est réservable. La propriété readiness fournit la décision courante.
 
@@ -1326,6 +1364,7 @@ Les PUT sont idempotents par définition. Une répétition identique ne crée pa
 | 403 | FORBIDDEN | Rôle insuffisant |
 | 403 | ASSET_ACCESS_DENIED | Niveau d’accès insuffisant |
 | 404 | RESOURCE_NOT_FOUND | Ressource absente ou non visible |
+| 404 | ASSET_NOT_FOUND | Actif inconnu du catalogue technicien (§11.2) |
 | 404 | OPERATING_SCHEDULE_NOT_CONFIGURED | Locker existant sans horaire actif (§13.1) |
 | 409 | IDEMPOTENCY_KEY_REUSED | Clé réutilisée avec autre intention |
 | 409 | IDEMPOTENCY_REQUEST_IN_PROGRESS | Requête de même clé encore en cours, avec Retry-After |
