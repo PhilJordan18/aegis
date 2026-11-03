@@ -140,10 +140,13 @@ class ReservationService {
      * Document 06, section 5.5 and document 09, section 14.4, inside the transaction of the idempotency key. Locks
      * follow document 06, section 3.3: the holder, the asset, the reservation, then the lockers and attempts that the
      * cancellation ends. A refusal writes nothing.
+     * <p>
+     * The instant of the decision is read once the holder, asset and reservation are locked: a transaction that held
+     * them may have committed an attempt or a challenge later than the moment this request arrived, and every date
+     * this cancellation writes must not precede them.
      */
     @Transactional
     ReservationView cancel(UUID actorId, UUID reservationId) {
-        Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
         LockedUser holder = reservations.lockUser(actorId)
                 .filter(found -> found.status() == AccountStatus.ACTIVE && found.role() == Role.TECHNICIAN)
                 .orElseThrow(() -> new ReservationRefusedException(ApiError.FORBIDDEN));
@@ -152,6 +155,7 @@ class ReservationService {
                 .map(ReservationRow::assetId).orElseThrow(ResourceNotFoundException::new);
         assets.lockForCustody(assetId);
         ReservationRow reservation = reservations.lock(reservationId).orElseThrow();
+        Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
 
         switch (reservation.status()) {
             case CANCELLED -> {

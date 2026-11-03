@@ -102,16 +102,19 @@ class ReservationExpiry {
     }
 
     /**
-     * Decides one reservation at {@code now}. It joins the caller's transaction if there is one, so a test can roll a
-     * whole decision back.
+     * Decides one reservation at {@code now} or later. It joins the caller's transaction if there is one, so a test
+     * can roll a whole decision back.
      *
+     * @param now the instant the caller observed; the decision uses the later of it and the clock read under the
+     *            locks, since a transaction that held them may have committed an attempt or a challenge after
+     *            {@code now}, and no date written here may precede them
      * @param wait whether to wait for the asset lock, or to skip an asset that another transaction holds
      */
     Outcome expire(UUID reservationId, Instant now, boolean wait) {
         return transactions.execute(status -> decide(reservationId, now, wait));
     }
 
-    private Outcome decide(UUID reservationId, Instant now, boolean wait) {
+    private Outcome decide(UUID reservationId, Instant observed, boolean wait) {
         UUID assetId = reservations.assetOf(reservationId).orElse(null);
         if (assetId == null) {
             return Outcome.UNCHANGED;
@@ -121,6 +124,8 @@ class ReservationExpiry {
             return Outcome.SKIPPED;
         }
         ReservationRow reservation = reservations.lock(reservationId).orElseThrow();
+        Instant underLocks = now();
+        Instant now = underLocks.isAfter(observed) ? underLocks : observed;
         if (reservation.status() != ReservationStatus.ACTIVE || now.isBefore(reservation.reservedUntil())) {
             return Outcome.UNCHANGED;
         }

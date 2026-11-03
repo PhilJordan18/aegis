@@ -355,6 +355,57 @@ class ReservationExpiryTests extends ApiIntegrationTest {
                 """, reservation));
     }
 
+    /**
+     * A cancellation and an expiry that waited for the asset lock date their writes from the clock read under that
+     * lock: an attempt and its challenge committed while they waited, later than the instant they started at, end no
+     * earlier than they were created (ck_locker_operations_terminal_date, ck_local_challenge_dates).
+     */
+    @Test
+    void anActionThatWaitedForItsLocksNeverDatesAWriteBeforeWhatWasCommittedMeanwhile() throws Exception {
+        for (boolean cancelling : new boolean[] {true, false}) {
+            UUID asset = fixtures.asset(fixtures.scheduledLocker(accounts.admin().id()));
+            TestAccount holder = accounts.technician();
+            UUID reservation = fixtures.reservation(asset, holder.id(), "ACTIVE", FROM, UNTIL);
+            Instant started = cancelling ? UNTIL.minusSeconds(60) : UNTIL;
+            Instant prepared = started.plusSeconds(10);
+            Instant decided = prepared.plusSeconds(1);
+            clock.set(started);
+            List<CompletableFuture<Object>> action = new ArrayList<>();
+            List<UUID> created = new ArrayList<>();
+
+            new TransactionTemplate(transactionManager).executeWithoutResult(transaction -> {
+                jdbc.sql("SELECT id FROM aegis.assets WHERE id = :id FOR UPDATE").param("id", asset)
+                        .query(UUID.class).single();
+                action.add(CompletableFuture.<Object>supplyAsync(() -> cancelling
+                        ? reservations.cancel(holder.id(), reservation)
+                        : expiry.expire(reservation, started, true), executor));
+                pause();
+                assertFalse(action.getFirst().isDone(), "the action should wait for the asset lock");
+                UUID attempt = fixtures.attempt(asset, holder.id(), reservation, "AWAITING_LOCAL_PROOF", false,
+                        prepared);
+                created.add(attempt);
+                created.add(fixtures.challenge(attempt, prepared, false));
+                clock.set(decided);
+            });
+            action.getFirst().get(30, TimeUnit.SECONDS);
+
+            String label = cancelling ? "cancel" : "expiry";
+            assertEquals(1L, jdbc.sql("""
+                    SELECT count(*) FROM aegis.locker_operations WHERE id = :id AND status = :status AND terminal_at = :at
+                    """).param("id", created.get(0)).param("status", cancelling ? "FAILED" : "EXPIRED")
+                    .param("at", ReservationFixtures.utc(decided)).query(Long.class).single(), label);
+            assertEquals(1L, jdbc.sql("""
+                    SELECT count(*) FROM aegis.local_access_challenges WHERE id = :id AND status = :status
+                      AND closed_at = :at
+                    """).param("id", created.get(1)).param("status", cancelling ? "INVALIDATED" : "EXPIRED")
+                    .param("at", ReservationFixtures.utc(decided)).query(Long.class).single(), label);
+            assertEquals(1L, jdbc.sql("SELECT count(*) FROM aegis.reservations WHERE id = :id AND "
+                    + (cancelling ? "cancelled_at" : "expired_at") + " = :at")
+                    .param("id", reservation).param("at", ReservationFixtures.utc(decided))
+                    .query(Long.class).single(), label);
+        }
+    }
+
     /** A pass of the job never waits behind a transaction that holds the asset: it skips it for a later pass. */
     @Test
     void theJobSkipsAnAssetThatAnotherTransactionHolds() throws Exception {
