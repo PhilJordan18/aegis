@@ -282,6 +282,8 @@ final class CatalogUITests: XCTestCase {
     ///   sizes (checked by `testLargestTextUsesTheFilterMenu`).
     /// `atLargestSize` skips the Dynamic Type check when the text already uses
     /// the largest accessibility size and cannot grow further.
+    /// The audit waits for a still screen, and is run again only when XCTest
+    /// abandons it before completion (`performCompletedAccessibilityAudit`).
     /// Height above the floating tab bar covered by its scroll-edge fade.
     private let fadeHeight: CGFloat = 120
 
@@ -318,7 +320,7 @@ final class CatalogUITests: XCTestCase {
         // the list at the largest size.
         if ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26 { types.remove(.dynamicType) }
         var unhandled: [String] = []
-        try app.performAccessibilityAudit(for: types) { issue in
+        try app.performCompletedAccessibilityAudit(for: types) { issue in
             let tolerated: Bool
             if let target = issue.element {
                 let center = CGPoint(x: target.frame.midX, y: target.frame.midY)
