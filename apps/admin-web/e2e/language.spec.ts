@@ -121,6 +121,7 @@ const SCENARIOS: readonly EnglishScenario[] = [
       ['noSchedule', 'no-schedule'],
       ['faulted', 'exceptions'],
       ['long', 'long-content'],
+      ['empty', 'no-locker'],
       ['loading', 'loading'],
       ['notFound', 'not-found'],
       ['serviceError', 'service-error'],

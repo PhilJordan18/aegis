@@ -87,7 +87,7 @@ export function LockersPage({ sessionProfile }: { readonly sessionProfile: UserP
             <div className="ag-list__empty">
               <p className="ag-list__empty-title">{m.lockers.emptyTitle}</p>
               <p className="ag-list__empty-body">{m.lockers.emptyBody}</p>
-              <p>
+              <p className="ag-lk__empty-action">
                 <Link className="ag-link" to={pathOf('equipment')}>
                   {m.lockers.emptyAction}
                 </Link>

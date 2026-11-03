@@ -7,7 +7,7 @@ import { PREVIEW_EMAIL, PREVIEW_PASSWORD } from './support.ts'
  * in the demo locker (how the page finds it), and `GET /api/v1/lockers/{id}/status`. The live recipe is
  * api.spec.ts, run by `npm run test:e2e:api`.
  */
-export type LockerMode = 'nominal' | 'offline' | 'unknown' | 'closed' | 'noSchedule' | 'faulted' | 'long' | 'code20' | 'code24' | 'codeUnbroken' | 'offlineLong' | 'loading' | 'notFound' | 'serviceError' | 'unreachable' | 'stale'
+export type LockerMode = 'nominal' | 'offline' | 'unknown' | 'closed' | 'noSchedule' | 'faulted' | 'long' | 'code20' | 'code24' | 'codeUnbroken' | 'offlineLong' | 'empty' | 'loading' | 'notFound' | 'serviceError' | 'unreachable' | 'stale'
 
 export const DEMO_LOCKER_ID = 'd46a74ae-39dc-460b-8af0-38fc791b376a'
 const TRACE_ID = '5f4bc22e-66a4-48ef-8bf3-6e7184d71c30'
@@ -136,7 +136,9 @@ export async function routeLockers(page: Page, mode: LockerMode): Promise<string
   }
   await page.route('**/api/v1/admin/assets**', (route) => {
     record(route)
-    return json(route, 200, { items: [PLACED_UNIT], page: 0, size: 20, totalItems: 1, totalPages: 1 })
+    // empty: the only unit is not placed, so discovery finds no locker and the page shows its empty state.
+    const unit = mode === 'empty' ? { ...PLACED_UNIT, placement: null } : PLACED_UNIT
+    return json(route, 200, { items: [unit], page: 0, size: 20, totalItems: 1, totalPages: 1 })
   })
   // stale: the reads succeed until `makeStatusStale` breaks the service, so a later refresh leaves the data stale.
   await page.route('**/api/v1/lockers/*/status', (route) => {
@@ -180,6 +182,9 @@ export async function waitForLockerState(page: Page, mode: LockerMode, { english
     case 'serviceError':
     case 'unreachable':
       await page.getByRole('alert').waitFor(long)
+      break
+    case 'empty':
+      await page.locator('.ag-list__empty-title').waitFor(long)
       break
     case 'stale':
       await page.locator('.ag-lk__title').waitFor()

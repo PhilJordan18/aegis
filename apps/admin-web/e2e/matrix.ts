@@ -82,6 +82,7 @@ const LOCKER_STATES: readonly (readonly [LockerMode, string])[] = [
   ['code24', 'code-24-caracteres'],
   ['codeUnbroken', 'code-sans-coupure'],
   ['offlineLong', 'hors-ligne-contenu-long'],
+  ['empty', 'aucun-casier'],
   ['loading', 'chargement'],
   ['notFound', 'introuvable'],
   ['serviceError', 'erreur-service'],

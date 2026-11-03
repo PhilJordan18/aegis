@@ -8,6 +8,7 @@
 .ag-lk { overflow: visible; min-height: auto; }
 .ag-lockers:focus-visible { outline-offset: -2px; }
 .ag-lockers--empty { overflow: visible; }
+.ag-lk__empty-action { margin-top: 6px; }
 
 .ag-lk__body { padding: 24px 32px 20px; }
 .ag-lk__alert, .ag-lk__skel { padding: 24px 32px; display: grid; gap: 14px; align-content: start; }
