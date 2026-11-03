@@ -63,7 +63,7 @@ class CustodySchemaTests {
     void migratedDatabase() {
         database = databases.create("custody");
         jdbc = JdbcClient.create(new DriverManagerDataSource(server.url(database), server.user(), server.password()));
-        assertEquals(9, flyway(absentRole).migrate().migrationsExecuted);
+        assertEquals(10, flyway(absentRole).migrate().migrationsExecuted);
         model = jdbc.sql("INSERT INTO aegis.asset_models (name) VALUES ('Multimeter') RETURNING id")
                 .query(UUID.class).single();
     }

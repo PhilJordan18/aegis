@@ -1,11 +1,13 @@
 package ca.aegis.control;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
@@ -15,6 +17,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.flywaydb.core.Flyway;
@@ -33,13 +40,13 @@ import ca.aegis.control.support.TestDatabaseServer;
 import ca.aegis.control.support.TestDatabases;
 
 /**
- * V007, document 08, sections 4.6, 4.7, 5.1 and 9: local access challenges, the display outbox and the command
- * outbox. Every refusal below comes from PostgreSQL itself; each invalid row breaks exactly one constraint so that the
- * name is certain.
+ * V007 and V008, document 08, sections 4.6 to 4.8, 5.1, 8.2 and 9: local access challenges, the display outbox, the
+ * command outbox, inbound device messages, physical observations and their audit references. Every refusal below
+ * comes from PostgreSQL itself; each invalid row breaks exactly one constraint so that the name is certain.
  */
 class IotEvidenceSchemaTests {
 
-    private static final int MIGRATIONS = 9;
+    private static final int MIGRATIONS = 10;
     private static final OffsetDateTime CREATED = OffsetDateTime.of(2026, 11, 2, 13, 0, 0, 0, ZoneOffset.UTC);
     private static final OffsetDateTime DISPLAYED = CREATED.plusSeconds(5);
     private static final OffsetDateTime CONSUMED = CREATED.plusSeconds(20);
@@ -120,6 +127,22 @@ class IotEvidenceSchemaTests {
                 "ck_command_outbox_topic_non_blank:c", "ck_command_outbox_type:c", "command_outbox_pkey:p",
                 "fk_command_outbox_compartment_locker:f", "fk_command_outbox_operation:f",
                 "uq_command_outbox_message:u", "uq_command_outbox_operation:u"), constraints("command_outbox"));
+        assertEquals(List.of(
+                "ck_inbound_messages_accepted_envelope:c", "ck_inbound_messages_availability_status:c",
+                "ck_inbound_messages_boot_count:c", "ck_inbound_messages_command_correlation:c",
+                "ck_inbound_messages_connection:c", "ck_inbound_messages_display_correlation:c",
+                "ck_inbound_messages_error:c", "ck_inbound_messages_schema_non_blank:c",
+                "ck_inbound_messages_sequence:c", "ck_inbound_messages_status:c",
+                "ck_inbound_messages_status_without_operation:c", "ck_inbound_messages_topic_non_blank:c",
+                "ck_inbound_messages_type:c", "fk_inbound_messages_command:f", "fk_inbound_messages_device:f",
+                "fk_inbound_messages_display:f", "fk_inbound_messages_operation:f", "inbound_device_messages_pkey:p",
+                "uq_inbound_messages_device_message:u"), constraints("inbound_device_messages"));
+        assertEquals(List.of(
+                "ck_physical_observations_compartment:c", "ck_physical_observations_confidence:c",
+                "ck_physical_observations_identifier:c", "ck_physical_observations_type:c",
+                "fk_physical_observations_compartment_locker:f", "fk_physical_observations_message:f",
+                "fk_physical_observations_operation:f", "physical_observations_pkey:p"),
+                constraints("physical_observations"));
 
         // No cascade anywhere: command and proof history is never deleted through a parent row.
         assertEquals(List.of(
@@ -136,8 +159,25 @@ class IotEvidenceSchemaTests {
                 "fk_local_challenge_operation FOREIGN KEY (operation_id, locker_id) "
                         + "REFERENCES locker_operations(id, locker_id)"),
                 foreignKeys("local_access_challenges", "hub_display_outbox", "command_outbox"));
+        assertEquals(List.of(
+                "fk_audit_events_actor FOREIGN KEY (actor_user_id) REFERENCES users(id)",
+                "fk_audit_events_message FOREIGN KEY (inbound_message_id) REFERENCES inbound_device_messages(id)",
+                "fk_audit_events_observation FOREIGN KEY (physical_observation_id) "
+                        + "REFERENCES physical_observations(id)",
+                "fk_audit_events_operation FOREIGN KEY (operation_id) REFERENCES locker_operations(id)",
+                "fk_inbound_messages_command FOREIGN KEY (command_message_id) REFERENCES command_outbox(message_id)",
+                "fk_inbound_messages_device FOREIGN KEY (locker_device_id) REFERENCES locker_devices(id)",
+                "fk_inbound_messages_display FOREIGN KEY (display_message_id) "
+                        + "REFERENCES hub_display_outbox(message_id)",
+                "fk_inbound_messages_operation FOREIGN KEY (operation_id) REFERENCES locker_operations(id)",
+                "fk_physical_observations_compartment_locker FOREIGN KEY (compartment_id, locker_id) "
+                        + "REFERENCES compartments(id, locker_id)",
+                "fk_physical_observations_message FOREIGN KEY (inbound_message_id) "
+                        + "REFERENCES inbound_device_messages(id)",
+                "fk_physical_observations_operation FOREIGN KEY (operation_id) REFERENCES locker_operations(id)"),
+                foreignKeys("inbound_device_messages", "physical_observations", "audit_events"));
 
-        // Invariant, expiry and claim indexes only; the read indexes of section 5.2 are left to V011.
+        // Invariant, expiry, claim and deduplication indexes only; the read indexes of section 5.2 are left to V011.
         assertEquals(List.of("ix_local_challenges_pending_expiry", "local_access_challenges_operation_id_key",
                 "local_access_challenges_pkey", "local_access_challenges_token_hash_key",
                 "uq_local_challenge_id_operation"), indexes("local_access_challenges"));
@@ -145,6 +185,9 @@ class IotEvidenceSchemaTests {
                 "uq_display_revision", "ux_display_one_challenge_per_operation"), indexes("hub_display_outbox"));
         assertEquals(List.of("command_outbox_pkey", "ix_command_outbox_claimable", "uq_command_outbox_message",
                 "uq_command_outbox_operation"), indexes("command_outbox"));
+        assertEquals(List.of("inbound_device_messages_pkey", "uq_inbound_messages_device_message"),
+                indexes("inbound_device_messages"));
+        assertEquals(List.of("physical_observations_pkey"), indexes("physical_observations"));
         assertEquals("CREATE UNIQUE INDEX ux_display_one_challenge_per_operation ON aegis.hub_display_outbox "
                 + "USING btree (operation_id) WHERE (message_type = 'DISPLAY_ACCESS_CHALLENGE'::text)",
                 indexDefinition("ux_display_one_challenge_per_operation"));
@@ -260,7 +303,7 @@ class IotEvidenceSchemaTests {
         PSQLException missing = assertInstanceOf(PSQLException.class, unversioned.getMostSpecificCause());
         assertEquals("23502", missing.getSQLState(), missing::getMessage);
         assertEquals("schema_version", missing.getServerErrorMessage().getColumn(), missing::getMessage);
-        assertEquals(List.of("command_outbox", "hub_display_outbox"), jdbc.sql("""
+        assertEquals(List.of("command_outbox", "hub_display_outbox", "inbound_device_messages"), jdbc.sql("""
                 SELECT table_name FROM information_schema.columns
                 WHERE table_schema = 'aegis' AND column_name = 'schema_version' AND is_nullable = 'NO'
                   AND column_default IS NULL
@@ -467,6 +510,288 @@ class IotEvidenceSchemaTests {
     }
 
     /**
+     * Section 8.2: one canonical row per (locker_device_id, message_id). A redelivery is never reinserted: the
+     * ingestion meets the unique key and records nothing. The same message id from another hub is another message.
+     */
+    @Test
+    void anInboundMessageIsRecordedOncePerDevice() {
+        Site site = site("A");
+        Site other = site("B");
+        Map<String, Object> heartbeat = inbound(site, "HEARTBEAT", 1);
+        UUID recorded = insert("inbound_device_messages", with(heartbeat, "processing_status", null));
+        Map<String, Object> defaults = jdbc.sql("""
+                SELECT processing_status, received_at FROM aegis.inbound_device_messages WHERE id = :id
+                """).param("id", recorded).query().singleRow();
+        assertEquals("RECEIVED", defaults.get("processing_status"));
+        assertNotNull(defaults.get("received_at"));
+
+        Map<String, Object> redelivery = with(heartbeat, "sequence", 2L, "raw_payload", randomBytes(24));
+        assertViolation("23505", "uq_inbound_messages_device_message",
+                () -> insert("inbound_device_messages", redelivery));
+        assertEquals(Optional.empty(), ingest(jdbc, redelivery));
+        UUID elsewhere = ingest(jdbc, with(heartbeat, "locker_device_id", other.device(), "device_session_id",
+                other.session())).orElseThrow();
+
+        assertEquals(List.of(recorded + ":1", elsewhere + ":1"), jdbc.sql("""
+                SELECT id::text || ':' || sequence FROM aegis.inbound_device_messages
+                WHERE message_id = :message ORDER BY locker_device_id = :device DESC
+                """).param("message", heartbeat.get("message_id")).param("device", site.device())
+                .query(String.class).list());
+    }
+
+    /**
+     * Two deliveries of the same message race in READ COMMITTED: the second ingestion waits on the first
+     * transaction's key, then finds the committed row and inserts nothing, without an error to retry.
+     */
+    @Test
+    void aConcurrentRedeliveryIsIgnoredOnceTheFirstCommits() throws Exception {
+        Site site = site("A");
+        Map<String, Object> delivery = inbound(site, "DEVICE_RESTARTED", 1);
+        byte[] firstPayload = (byte[]) delivery.get("raw_payload");
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        UUID recorded;
+        try (SingleConnectionDataSource firstSession = transaction();
+                SingleConnectionDataSource secondSession = transaction()) {
+            JdbcClient firstIngestion = JdbcClient.create(firstSession);
+            JdbcClient secondIngestion = JdbcClient.create(secondSession);
+            int firstPid = firstIngestion.sql("SELECT pg_backend_pid()").query(Integer.class).single();
+            int secondPid = secondIngestion.sql("SELECT pg_backend_pid()").query(Integer.class).single();
+            recorded = ingest(firstIngestion, delivery).orElseThrow();
+
+            CountDownLatch secondStarted = new CountDownLatch(1);
+            Future<Optional<UUID>> redelivery = executor.submit(() -> {
+                secondStarted.countDown();
+                return ingest(secondIngestion, with(delivery, "raw_payload", randomBytes(24)));
+            });
+            assertTrue(secondStarted.await(10, TimeUnit.SECONDS));
+            awaitBlocked(secondPid, firstPid);
+            firstSession.getConnection().commit();
+
+            assertEquals(Optional.empty(), redelivery.get(10, TimeUnit.SECONDS));
+            secondSession.getConnection().commit();
+        } finally {
+            executor.shutdownNow();
+        }
+        Map<String, Object> kept = jdbc.sql("""
+                SELECT id, raw_payload FROM aegis.inbound_device_messages WHERE message_id = :message
+                """).param("message", delivery.get("message_id")).query().singleRow();
+        assertEquals(recorded, kept.get("id"));
+        assertArrayEquals(firstPayload, (byte[]) kept.get("raw_payload"));
+    }
+
+    /**
+     * Section 4.8: an accepted message carries its envelope (document 10, section 15.3), a status message carries its
+     * connection and no operation, and an acknowledgement or display report carries its correlation. A message
+     * rejected before extraction keeps none of them but states its error.
+     */
+    @Test
+    void anInboundMessageKeepsItsEnvelopeAndCorrelationsCoherent() {
+        Site site = site("A");
+        UUID operation = operation(site, "AUTHORIZED");
+        Map<String, Object> command = command(site, operation);
+        insert("command_outbox", command);
+        UUID challenge = insert("local_access_challenges", challenge(site, operation));
+        Map<String, Object> instruction = display(site, operation, challenge, 1);
+        insert("hub_display_outbox", instruction);
+
+        Map<String, Object> heartbeat = inbound(site, "HEARTBEAT", 1);
+        Map<String, Object> availability = inbound(site, "DEVICE_AVAILABILITY", 2);
+        Map<String, Object> door = with(inbound(site, "DOOR_OPENED", 3), "operation_id", operation);
+        Map<String, Object> acknowledged = with(inbound(site, "COMMAND_ACKNOWLEDGED", 4), "operation_id", operation,
+                "command_message_id", command.get("message_id"));
+        Map<String, Object> displayed = with(inbound(site, "ACCESS_CHALLENGE_DISPLAYED", 5), "operation_id",
+                operation, "display_message_id", instruction.get("message_id"));
+        for (Map<String, Object> accepted : List.of(heartbeat, availability, door, acknowledged, displayed,
+                inbound(site, "DEVICE_ERROR", 6))) {
+            insert("inbound_device_messages", accepted);
+        }
+        insert("inbound_device_messages", with(inbound(site, "DEVICE_AVAILABILITY", 7), "device_session_id", null,
+                "boot_count", null, "sequence", null, "connection_id", null, "availability_status", null,
+                "parsed_payload", null, "processing_status", "REJECTED", "processing_error", "UNSUPPORTED_SCHEMA"));
+
+        assertViolation("23514", "ck_inbound_messages_topic_non_blank",
+                () -> insert("inbound_device_messages", renewed(door, "topic", " ")));
+        assertViolation("23514", "ck_inbound_messages_type",
+                () -> insert("inbound_device_messages", renewed(door, "message_type", "DOOR_SLAMMED")));
+        assertViolation("23514", "ck_inbound_messages_schema_non_blank",
+                () -> insert("inbound_device_messages", renewed(door, "schema_version", " ")));
+        assertViolation("23514", "ck_inbound_messages_status",
+                () -> insert("inbound_device_messages", renewed(door, "processing_status", "IGNORED")));
+        assertViolation("23514", "ck_inbound_messages_error",
+                () -> insert("inbound_device_messages", renewed(door, "processing_status", "REJECTED")));
+        assertViolation("23514", "ck_inbound_messages_status_without_operation",
+                () -> insert("inbound_device_messages", renewed(heartbeat, "operation_id", operation)));
+        assertViolation("23514", "ck_inbound_messages_command_correlation",
+                () -> insert("inbound_device_messages", renewed(door, "message_type", "COMMAND_ACKNOWLEDGED")));
+        assertViolation("23514", "ck_inbound_messages_command_correlation", () -> insert("inbound_device_messages",
+                renewed(door, "command_message_id", command.get("message_id"))));
+        assertViolation("23514", "ck_inbound_messages_display_correlation", () -> insert("inbound_device_messages",
+                renewed(door, "message_type", "ACCESS_CHALLENGE_DISPLAYED")));
+        assertViolation("23514", "ck_inbound_messages_display_correlation",
+                () -> insert("inbound_device_messages", renewed(displayed, "operation_id", null)));
+        assertViolation("23514", "ck_inbound_messages_display_correlation", () -> insert("inbound_device_messages",
+                renewed(door, "display_message_id", instruction.get("message_id"))));
+        assertViolation("23514", "ck_inbound_messages_boot_count",
+                () -> insert("inbound_device_messages", renewed(door, "boot_count", 0L)));
+        assertViolation("23514", "ck_inbound_messages_boot_count",
+                () -> insert("inbound_device_messages", renewed(door, "boot_count", 4_294_967_296L)));
+        assertViolation("23514", "ck_inbound_messages_sequence",
+                () -> insert("inbound_device_messages", renewed(door, "sequence", -1L)));
+        assertViolation("23514", "ck_inbound_messages_accepted_envelope",
+                () -> insert("inbound_device_messages", renewed(door, "device_session_id", null)));
+        assertViolation("23514", "ck_inbound_messages_accepted_envelope", () -> insert("inbound_device_messages",
+                renewed(door, "processing_status", "RECEIVED", "sequence", null)));
+        assertViolation("23514", "ck_inbound_messages_connection",
+                () -> insert("inbound_device_messages", renewed(heartbeat, "connection_id", null)));
+        assertViolation("23514", "ck_inbound_messages_connection",
+                () -> insert("inbound_device_messages", renewed(door, "connection_id", UUID.randomUUID())));
+        assertViolation("23514", "ck_inbound_messages_availability_status",
+                () -> insert("inbound_device_messages", renewed(availability, "availability_status", null)));
+        assertViolation("23514", "ck_inbound_messages_availability_status", () -> insert("inbound_device_messages",
+                renewed(availability, "availability_status", "DEGRADED")));
+        assertViolation("23514", "ck_inbound_messages_availability_status",
+                () -> insert("inbound_device_messages", renewed(heartbeat, "availability_status", "ONLINE")));
+
+        assertViolation("23503", "fk_inbound_messages_device", () -> insert("inbound_device_messages",
+                renewed(door, "locker_device_id", UUID.randomUUID())));
+        assertViolation("23503", "fk_inbound_messages_operation",
+                () -> insert("inbound_device_messages", renewed(door, "operation_id", UUID.randomUUID())));
+        assertViolation("23503", "fk_inbound_messages_command", () -> insert("inbound_device_messages",
+                renewed(acknowledged, "command_message_id", UUID.randomUUID())));
+        assertViolation("23503", "fk_inbound_messages_display", () -> insert("inbound_device_messages",
+                renewed(displayed, "display_message_id", UUID.randomUUID())));
+    }
+
+    /**
+     * Section 4.8: an observation is a fact normalized from a recorded message, in a compartment of its locker unless
+     * it reports a restart of the hub; an identifier detection names the identifier read.
+     */
+    @Test
+    void aPhysicalObservationIsAFactOfARecordedMessage() {
+        Site site = site("A");
+        Site elsewhere = site("B");
+        UUID operation = operation(site, "AUTHORIZED");
+        UUID opened = insert("inbound_device_messages", with(inbound(site, "DOOR_OPENED", 1), "operation_id",
+                operation));
+        UUID scanned = insert("inbound_device_messages", with(inbound(site, "RFID_SCAN_COMPLETED", 2),
+                "operation_id", operation));
+        UUID restarted = insert("inbound_device_messages", inbound(site, "DEVICE_RESTARTED", 3));
+
+        Map<String, Object> door = with(observation(site, opened, "DOOR_OPENED"), "operation_id", operation,
+                "value_json", json("true"));
+        insert("physical_observations", door);
+        UUID detected = insert("physical_observations", with(observation(site, scanned, "ASSET_IDENTIFIER_DETECTED"),
+                "operation_id", operation, "identifier_value", "E200-A", "confidence", new BigDecimal("0.9876")));
+        insert("physical_observations", with(observation(site, scanned, "ASSET_PRESENT"), "operation_id", operation,
+                "value_json", json("true"), "confidence", BigDecimal.ONE));
+        insert("physical_observations", with(observation(site, restarted, "DEVICE_RESTARTED"), "compartment_id",
+                null));
+        Map<String, Object> stored = jdbc.sql("""
+                SELECT confidence, created_at FROM aegis.physical_observations WHERE id = :id
+                """).param("id", detected).query().singleRow();
+        assertEquals(new BigDecimal("0.9876"), stored.get("confidence"));
+        assertNotNull(stored.get("created_at"));
+
+        assertViolation("23514", "ck_physical_observations_type",
+                () -> insert("physical_observations", with(door, "type", "DOOR_SLAMMED")));
+        assertViolation("23514", "ck_physical_observations_compartment",
+                () -> insert("physical_observations", with(door, "compartment_id", null)));
+        assertViolation("23514", "ck_physical_observations_identifier", () -> insert("physical_observations",
+                observation(site, scanned, "ASSET_IDENTIFIER_DETECTED")));
+        assertViolation("23514", "ck_physical_observations_confidence",
+                () -> insert("physical_observations", with(door, "confidence", new BigDecimal("1.0001"))));
+        assertViolation("23514", "ck_physical_observations_confidence",
+                () -> insert("physical_observations", with(door, "confidence", new BigDecimal("-0.0001"))));
+        assertViolation("23503", "fk_physical_observations_compartment_locker", () -> insert(
+                "physical_observations", with(door, "compartment_id", elsewhere.compartment())));
+        assertViolation("23503", "fk_physical_observations_message",
+                () -> insert("physical_observations", with(door, "inbound_message_id", UUID.randomUUID())));
+        assertViolation("23503", "fk_physical_observations_operation",
+                () -> insert("physical_observations", with(door, "operation_id", UUID.randomUUID())));
+    }
+
+    /**
+     * V008 completes audit_events as V002_2 announced: each reference column arrives with its foreign key, and the
+     * table stays append-only.
+     */
+    @Test
+    void anAuditEventReferencesTheMessageAndObservationItRecords() {
+        Site site = site("A");
+        UUID message = insert("inbound_device_messages", inbound(site, "DOOR_OPENED", 1));
+        UUID observation = insert("physical_observations", observation(site, message, "DOOR_OPENED"));
+        Map<String, Object> received = auditEvent("OBSERVATION_RECEIVED", "PHYSICAL_OBSERVATION", observation,
+                message, observation);
+        UUID event = insert("audit_events", received);
+        insert("audit_events", auditEvent("MQTT_MESSAGE_DUPLICATE_IGNORED", "INBOUND_DEVICE_MESSAGE", message,
+                message, null));
+        assertEquals(message + ":" + observation, jdbc.sql("""
+                SELECT inbound_message_id::text || ':' || physical_observation_id FROM aegis.audit_events
+                WHERE id = :id
+                """).param("id", event).query(String.class).single());
+
+        assertViolation("23503", "fk_audit_events_message",
+                () -> insert("audit_events", with(received, "inbound_message_id", UUID.randomUUID())));
+        assertViolation("23503", "fk_audit_events_observation",
+                () -> insert("audit_events", with(received, "physical_observation_id", UUID.randomUUID())));
+        assertRefused("23001", () -> jdbc.sql("UPDATE aegis.audit_events SET inbound_message_id = NULL WHERE id = :id")
+                .param("id", event).update());
+    }
+
+    /**
+     * Section 12.1: the application role records device messages and marks them processed or rejected (section 8.2),
+     * appends observations it can never rewrite, and deletes neither.
+     */
+    @Test
+    void theApplicationRoleAppendsObservationsAndNeverDeletesDeviceMessages() {
+        String role = "aegis_test_app_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        jdbc.sql("CREATE ROLE " + role + " NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS")
+                .update();
+        try {
+            assertEquals(0, flyway(role).migrate().migrationsExecuted);
+            assertEquals(List.of("inbound_device_messages:INSERT,SELECT,UPDATE"),
+                    privileges(role, "inbound_device_messages"));
+            assertEquals(List.of("physical_observations:INSERT,SELECT"), privileges(role, "physical_observations"));
+            Site site = site("A");
+            Map<String, Object> delivery = with(inbound(site, "DOOR_OPENED", 1), "processing_status", "RECEIVED");
+            Map<String, UUID> rows = new LinkedHashMap<>();
+
+            try (SingleConnectionDataSource session = new SingleConnectionDataSource(server.url(database),
+                    server.user(), server.password(), true)) {
+                JdbcClient application = JdbcClient.create(session);
+                application.sql("SET ROLE " + role).update();
+
+                UUID message = ingest(application, delivery).orElseThrow();
+                assertEquals(Optional.empty(), ingest(application, delivery));
+                UUID observation = insert(application, "physical_observations",
+                        observation(site, message, "DOOR_OPENED"));
+                update(application, "inbound_device_messages", message, Map.of("processing_status", "PROCESSED"));
+                insert(application, "audit_events", auditEvent("OBSERVATION_RECEIVED", "PHYSICAL_OBSERVATION",
+                        observation, message, observation));
+                assertRefused("42501", () -> application.sql("""
+                        UPDATE aegis.physical_observations SET confidence = 1 WHERE id = :id
+                        """).param("id", observation).update());
+                rows.put("inbound_device_messages", message);
+                rows.put("physical_observations", observation);
+
+                for (Map.Entry<String, UUID> row : rows.entrySet()) {
+                    assertRefused("42501", () -> application.sql("DELETE FROM aegis." + row.getKey()
+                            + " WHERE id = :id").param("id", row.getValue()).update());
+                    assertRefused("42501", () -> application.sql("TRUNCATE aegis." + row.getKey()).update());
+                }
+                application.sql("RESET ROLE").update();
+            }
+            assertEquals("PROCESSED", jdbc.sql("""
+                    SELECT processing_status FROM aegis.inbound_device_messages WHERE id = :id
+                    """).param("id", rows.get("inbound_device_messages")).query(String.class).single());
+            assertEquals(1, jdbc.sql("SELECT count(*) FROM aegis.physical_observations WHERE id = :id")
+                    .param("id", rows.get("physical_observations")).query(Long.class).single());
+        } finally {
+            jdbc.sql("DROP OWNED BY " + role).update();
+            jdbc.sql("DROP ROLE " + role).update();
+        }
+    }
+
+    /**
      * Command and proof history is never destructively erased (AGENTS.md, document 08, section 12.1): the
      * application role records challenges, display instructions and commands, takes the claim lock and moves their
      * states forward, but cannot delete or truncate them.
@@ -522,6 +847,18 @@ class IotEvidenceSchemaTests {
         } finally {
             jdbc.sql("DROP OWNED BY " + role).update();
             jdbc.sql("DROP ROLE " + role).update();
+        }
+    }
+
+    /** Waits until PostgreSQL reports the waiter as blocked by the holder, proving the two writes overlap. */
+    private void awaitBlocked(int waiter, int holder) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (!jdbc.sql("SELECT :holder = ANY (pg_blocking_pids(:waiter))").param("holder", holder)
+                .param("waiter", waiter).query(Boolean.class).single()) {
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError("Session " + waiter + " was never blocked by session " + holder);
+            }
+            Thread.sleep(20);
         }
     }
 
@@ -678,6 +1015,67 @@ class IotEvidenceSchemaTests {
         return columns;
     }
 
+    /**
+     * A message of the site's hub accepted and processed, with the envelope of document 10, section 15.3: status
+     * messages carry their connection, and an availability report says ONLINE.
+     */
+    private static Map<String, Object> inbound(Site site, String type, long sequence) {
+        boolean status = type.equals("HEARTBEAT") || type.equals("DEVICE_AVAILABILITY");
+        Map<String, Object> columns = new LinkedHashMap<>();
+        columns.put("locker_device_id", site.device());
+        columns.put("message_id", UUID.randomUUID());
+        columns.put("topic", "aegis/v1/lockers/" + site.locker() + (status ? "/status" : "/events"));
+        columns.put("message_type", type);
+        columns.put("schema_version", "2.0");
+        columns.put("device_session_id", site.session());
+        columns.put("boot_count", 1L);
+        columns.put("sequence", sequence);
+        if (status) {
+            columns.put("connection_id", UUID.randomUUID());
+        }
+        if (type.equals("DEVICE_AVAILABILITY")) {
+            columns.put("availability_status", "ONLINE");
+        }
+        columns.put("occurred_at", CREATED);
+        columns.put("raw_payload", randomBytes(48));
+        columns.put("parsed_payload", json("{\"type\": \"" + type + "\"}"));
+        columns.put("processing_status", "PROCESSED");
+        return columns;
+    }
+
+    /** The same message under a new message id, so that only the given changes can break a constraint. */
+    private static Map<String, Object> renewed(Map<String, Object> message, Object... changes) {
+        return with(with(message, "message_id", UUID.randomUUID()), changes);
+    }
+
+    /** An observation of the message in the site's compartment, without operation, value or confidence. */
+    private static Map<String, Object> observation(Site site, UUID message, String type) {
+        Map<String, Object> columns = new LinkedHashMap<>();
+        columns.put("inbound_message_id", message);
+        columns.put("locker_id", site.locker());
+        columns.put("compartment_id", site.compartment());
+        columns.put("type", type);
+        columns.put("observed_at", CREATED);
+        return columns;
+    }
+
+    /** An audit event of the subject, with its message and observation references; a null reference is omitted. */
+    private static Map<String, Object> auditEvent(String type, String subjectType, UUID subject, UUID message,
+            UUID observation) {
+        Map<String, Object> columns = new LinkedHashMap<>();
+        columns.put("event_type", type);
+        columns.put("subject_type", subjectType);
+        columns.put("subject_id", subject);
+        if (message != null) {
+            columns.put("inbound_message_id", message);
+        }
+        if (observation != null) {
+            columns.put("physical_observation_id", observation);
+        }
+        columns.put("result", "ACCEPTED");
+        return columns;
+    }
+
     private static PGobject json(String value) {
         PGobject json = new PGobject();
         json.setType("jsonb");
@@ -713,14 +1111,26 @@ class IotEvidenceSchemaTests {
     }
 
     private static UUID insert(JdbcClient client, String table, Map<String, Object> columns) {
+        return insertion(client, table, columns, " RETURNING id").query(UUID.class).single();
+    }
+
+    /** The ingestion of section 8.2, step 4: a message already recorded for its device inserts nothing. */
+    private static Optional<UUID> ingest(JdbcClient client, Map<String, Object> columns) {
+        return insertion(client, "inbound_device_messages", columns,
+                " ON CONFLICT ON CONSTRAINT uq_inbound_messages_device_message DO NOTHING RETURNING id")
+                .query(UUID.class).optional();
+    }
+
+    private static JdbcClient.StatementSpec insertion(JdbcClient client, String table, Map<String, Object> columns,
+            String suffix) {
         JdbcClient.StatementSpec statement = client.sql("INSERT INTO aegis." + table + " ("
                 + String.join(", ", columns.keySet()) + ") VALUES ("
                 + columns.keySet().stream().map(column -> ":" + column).collect(Collectors.joining(", "))
-                + ") RETURNING id");
+                + ")" + suffix);
         for (Map.Entry<String, Object> column : columns.entrySet()) {
             statement = statement.param(column.getKey(), column.getValue());
         }
-        return statement.query(UUID.class).single();
+        return statement;
     }
 
     private void update(String table, UUID id, Map<String, Object> columns) {

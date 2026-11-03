@@ -32,7 +32,7 @@ import ca.aegis.control.support.TestDatabases;
 class FlywayMigrationTests {
 
     private static final List<String> ALL_VERSIONS = List.of("001", "002", "002.1", "002.2", "003", "004", "005",
-            "006", "007");
+            "006", "007", "008");
 
     private final TestDatabases databases = TestDatabases.shared();
     private final TestDatabaseServer server = databases.server();
@@ -56,15 +56,15 @@ class FlywayMigrationTests {
 
     @Test
     void migratesAnEmptyDatabaseOnceAndValidatesAfterwards() {
-        assertEquals(9, flyway(null).migrate().migrationsExecuted);
+        assertEquals(10, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
 
         assertEquals(ALL_VERSIONS, appliedVersions());
         assertEquals(List.of("asset_identifiers", "asset_models", "asset_placements", "assets", "audit_events",
-                "command_outbox", "compartments", "hub_display_outbox", "loans", "local_access_challenges",
-                "locker_devices", "locker_operations", "lockers", "operating_schedules", "operating_windows",
-                "reservations", "rest_idempotency_keys", "users"), jdbc.sql("""
+                "command_outbox", "compartments", "hub_display_outbox", "inbound_device_messages", "loans",
+                "local_access_challenges", "locker_devices", "locker_operations", "lockers", "operating_schedules",
+                "operating_windows", "physical_observations", "reservations", "rest_idempotency_keys", "users"), jdbc.sql("""
                 SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'aegis' ORDER BY table_name COLLATE "C"
                 """).query(String.class).list());
@@ -75,7 +75,7 @@ class FlywayMigrationTests {
         assertEquals(1, flyway("001").migrate().migrationsExecuted);
         assertEquals(List.of("001"), appliedVersions());
 
-        assertEquals(8, flyway(null).migrate().migrationsExecuted);
+        assertEquals(9, flyway(null).migrate().migrationsExecuted);
         assertEquals(ALL_VERSIONS, appliedVersions());
     }
 
@@ -86,7 +86,7 @@ class FlywayMigrationTests {
         UUID user = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
         UUID model = insertModel("Oscilloscope");
 
-        assertEquals(6, flyway(null).migrate().migrationsExecuted);
+        assertEquals(7, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -99,7 +99,8 @@ class FlywayMigrationTests {
 
     /**
      * The three proof references of document 08, section 4.9, arrive with the tables they reference (V006, V008),
-     * so no reference column exists without its foreign key: operation_id is appended by V006.
+     * so no reference column exists without its foreign key: operation_id is appended by V006, then
+     * inbound_message_id and physical_observation_id by V008.
      */
     @Test
     void auditEventsEnforceTheirConstraintsWithoutReferencesToMissingTables() {
@@ -107,7 +108,8 @@ class FlywayMigrationTests {
         UUID actor = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
 
         assertEquals(List.of("id", "event_type", "actor_user_id", "subject_type", "subject_id", "from_state",
-                "to_state", "result", "reason", "details", "occurred_at", "operation_id"), jdbc.sql("""
+                "to_state", "result", "reason", "details", "occurred_at", "operation_id",
+                "inbound_message_id", "physical_observation_id"), jdbc.sql("""
                 SELECT column_name FROM information_schema.columns
                 WHERE table_schema = 'aegis' AND table_name = 'audit_events' ORDER BY ordinal_position
                 """).query(String.class).list());
@@ -166,7 +168,7 @@ class FlywayMigrationTests {
         jdbc.sql("CREATE ROLE " + role + " NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS")
                 .update();
         try {
-            assertEquals(9, flyway(null, role).migrate().migrationsExecuted);
+            assertEquals(10, flyway(null, role).migrate().migrationsExecuted);
             assertEquals(0, flyway(null, role).migrate().migrationsExecuted);
             assertTrue(flyway(null, role).validateWithResult().validationSuccessful);
             UUID actor = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
@@ -257,7 +259,7 @@ class FlywayMigrationTests {
         UUID user = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
         UUID model = insertModel("Oscilloscope");
 
-        assertEquals(7, flyway(null).migrate().migrationsExecuted);
+        assertEquals(8, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -278,7 +280,7 @@ class FlywayMigrationTests {
         insertEvent(null, "ASSET_CREATED", "ASSET", "ACCEPTED");
         List<Map<String, Object>> history = history();
 
-        assertEquals(5, flyway(null).migrate().migrationsExecuted);
+        assertEquals(6, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -312,7 +314,7 @@ class FlywayMigrationTests {
                 """;
         List<Map<String, Object>> events = jdbc.sql(priorEvents).query().listOfRows();
 
-        assertEquals(3, flyway(null).migrate().migrationsExecuted);
+        assertEquals(4, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -330,8 +332,9 @@ class FlywayMigrationTests {
     }
 
     /**
-     * Databases stand at V006 when V007 is added: history rows, custody rows and audit events are kept as they were,
-     * and no challenge, display instruction or command is invented for an existing operation.
+     * Databases stand at V006 when V007 and V008 are added: history rows, custody rows and audit events are kept as
+     * they were, no challenge, display instruction, command, device message or observation is invented for an
+     * existing operation, and the prior events gain null message and observation references.
      */
     @Test
     void upgradesADatabaseAtTheCustodyMigrationWithoutRewritingItsHistory() {
@@ -376,7 +379,7 @@ class FlywayMigrationTests {
                 """;
         List<Map<String, Object>> operations = jdbc.sql(custody).query().listOfRows();
 
-        assertEquals(1, flyway(null).migrate().migrationsExecuted);
+        assertEquals(2, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -386,6 +389,12 @@ class FlywayMigrationTests {
         assertEquals(0, jdbc.sql("""
                 SELECT (SELECT count(*) FROM aegis.local_access_challenges)
                        + (SELECT count(*) FROM aegis.hub_display_outbox) + (SELECT count(*) FROM aegis.command_outbox)
+                       + (SELECT count(*) FROM aegis.inbound_device_messages)
+                       + (SELECT count(*) FROM aegis.physical_observations)
+                """).query(Long.class).single());
+        assertEquals(0, jdbc.sql("""
+                SELECT count(*) FROM aegis.audit_events
+                WHERE inbound_message_id IS NOT NULL OR physical_observation_id IS NOT NULL
                 """).query(Long.class).single());
     }
 
