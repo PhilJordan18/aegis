@@ -22,19 +22,29 @@ class CheckoutAttemptRepository {
     }
 
     /**
-     * An attempt that was ever authorized, whatever its outcome, or that ended in {@code ANOMALY}. Document 09, section
-     * 8.10, open question Q1, read literally: the reservation can no longer be cancelled.
+     * An attempt in {@code ANOMALY} whose physical outcome stays uncertain: its anomaly is not {@code RESOLVED}
+     * (document 09, section 8.10). An {@code ANOMALY} attempt without any anomaly row breaks document 08, section 7.5,
+     * and counts as uncertain too. Every writer of an attempt's anomalies must take the asset lock first, as the
+     * order of document 08, section 7.1 requires; the caller holds it, so this read sees a settled state.
      */
-    private static final String EVER_AUTHORIZED_OR_ANOMALY = "(authorized_at IS NOT NULL OR status = 'ANOMALY')";
+    private static final String UNCERTAIN = """
+            (o.status = 'ANOMALY'
+             AND (EXISTS (SELECT 1 FROM aegis.anomalies a
+                          WHERE a.locker_operation_id = o.id AND a.status IN ('OPEN', 'ACKNOWLEDGED'))
+                  OR NOT EXISTS (SELECT 1 FROM aegis.anomalies a WHERE a.locker_operation_id = o.id)))
+            """;
     /**
-     * An authorized attempt not yet classified, or one whose physical outcome stays uncertain (document 06, section
-     * 14.1): the expiry of the reservation waits for it. Until the anomaly table exists, every {@code ANOMALY} attempt
-     * counts as uncertain.
+     * An attempt that was ever authorized, whatever its outcome, or an uncertain one. Document 09, section 8.10, open
+     * question Q1, read literally: the reservation can no longer be cancelled.
+     */
+    private static final String EVER_AUTHORIZED_OR_UNCERTAIN = "(o.authorized_at IS NOT NULL OR " + UNCERTAIN + ")";
+    /**
+     * An authorized attempt not yet classified, or an uncertain one (document 06, section 14.1): the expiry of the
+     * reservation waits for it.
      */
     private static final String AUTHORIZED_OPEN_OR_UNCERTAIN = """
-            ((authorized_at IS NOT NULL AND status NOT IN ('CONFIRMED', 'FAILED', 'EXPIRED', 'ANOMALY'))
-             OR status = 'ANOMALY')
-            """;
+            ((o.authorized_at IS NOT NULL AND o.status NOT IN ('CONFIRMED', 'FAILED', 'EXPIRED', 'ANOMALY'))
+             OR """ + UNCERTAIN + ")";
     private static final String BEFORE_AUTHORIZATION = "status IN ('REQUESTED', 'AWAITING_LOCAL_PROOF')";
 
     private final JdbcClient jdbc;
@@ -44,7 +54,7 @@ class CheckoutAttemptRepository {
     }
 
     boolean blocksCancellation(UUID reservationId) {
-        return exists(EVER_AUTHORIZED_OR_ANOMALY, reservationId);
+        return exists(EVER_AUTHORIZED_OR_UNCERTAIN, reservationId);
     }
 
     boolean defersExpiry(UUID reservationId) {
@@ -91,8 +101,8 @@ class CheckoutAttemptRepository {
     }
 
     private boolean exists(String condition, UUID reservationId) {
-        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM aegis.locker_operations WHERE type = 'CHECKOUT' "
-                + "AND reservation_id = :id AND " + condition + ")")
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM aegis.locker_operations o WHERE o.type = 'CHECKOUT' "
+                + "AND o.reservation_id = :id AND " + condition + ")")
                 .param("id", reservationId).query(Boolean.class).single();
     }
 }
