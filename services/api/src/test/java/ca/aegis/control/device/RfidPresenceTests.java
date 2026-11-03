@@ -545,6 +545,25 @@ class RfidPresenceTests extends ApiIntegrationTest {
         assertEquals("UNKNOWN", read(view, "$.readiness.result"));
     }
 
+    /**
+     * Review 3, LOW 2: a report of the cell at another address is incoherent, as at ingestion, so it does not show
+     * the cell connected and closed.
+     */
+    @Test
+    void aHeartbeatReportingTheCellAtAnotherAddressVoidsTheScan() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        clock.advance(Duration.ofSeconds(1));
+        ingest(session.heartbeat(clock.instant(), List.of(
+                cell(cellA, 7, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED"),
+                cell(cellB, 2, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED"))));
+        clock.advance(Duration.ofSeconds(1));
+        heartbeat("HEALTHY", "HEALTHY");
+
+        String view = technicianView(assetA);
+        assertEquals("UNKNOWN", read(view, "$.presence"));
+        assertEquals("UNKNOWN", read(view, "$.readiness.result"));
+    }
+
     /** No validity period is defined: on an unbroken connection reporting the cell connected and closed it holds. */
     @Test
     void aScanStaysValidWhileTheConnectionReportsTheCellConnectedAndClosed() throws Exception {

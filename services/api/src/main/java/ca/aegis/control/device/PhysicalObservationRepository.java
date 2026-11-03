@@ -195,18 +195,19 @@ class PhysicalObservationRepository {
     }
 
     /**
-     * For each of {@code compartmentIds}, the heartbeats of the device's current session from {@code fromSequence} on
-     * that do not report it {@code CONNECTED} with its door {@code CLOSED}.
+     * For each of {@code compartmentIds} of the locker, the heartbeats of the device's current session from
+     * {@code fromSequence} on that do not report it at its address, {@code CONNECTED} with its door {@code CLOSED}. A
+     * report at another address is incoherent, as at ingestion, and shows nothing of the cell.
      */
-    List<UnobservedCell> unobservedCells(UUID deviceId, DeviceProjection projection, Instant provisionedAt,
-            long fromSequence, Collection<UUID> compartmentIds) {
+    List<UnobservedCell> unobservedCells(UUID lockerId, UUID deviceId, DeviceProjection projection,
+            Instant provisionedAt, long fromSequence, Collection<UUID> compartmentIds) {
         if (compartmentIds.isEmpty()) {
             return List.of();
         }
         return jdbc.sql("""
                 SELECT m.sequence, m.occurred_at, wanted.id AS compartment_id
                 FROM aegis.inbound_device_messages m
-                JOIN aegis.compartments wanted ON wanted.id IN (:cells)
+                JOIN aegis.compartments wanted ON wanted.id IN (:cells) AND wanted.locker_id = :locker
                 WHERE m.locker_device_id = :device AND m.device_session_id = :session AND m.boot_count = :boot
                   AND m.message_type = 'HEARTBEAT' AND m.processing_status <> 'REJECTED'
                   AND m.received_at >= :provisionedAt AND m.sequence >= :from
@@ -215,9 +216,11 @@ class PhysicalObservationRepository {
                           WHEN jsonb_typeof(m.parsed_payload -> 'compartments') = 'array'
                           THEN m.parsed_payload -> 'compartments' ELSE '[]'::jsonb END) AS cell
                       WHERE cell ->> 'compartmentId' = CAST(wanted.id AS text)
+                        AND cell -> 'cellAddress' = to_jsonb(wanted.local_address)
                         AND cell ->> 'connectionStatus' = 'CONNECTED' AND cell ->> 'doorState' = 'CLOSED')
                 """)
                 .param("cells", List.copyOf(compartmentIds))
+                .param("locker", lockerId)
                 .param("device", deviceId)
                 .param("session", projection.deviceSessionId())
                 .param("boot", projection.bootCount())

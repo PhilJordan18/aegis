@@ -128,8 +128,8 @@ public class PresenceEvidence {
                 .map(start -> new LockerFacts(start,
                         observations.events(device.id(), device.projection(), device.provisionedAt(),
                                 start.sequence()),
-                        observations.unobservedCells(device.id(), device.projection(), device.provisionedAt(),
-                                start.sequence(), compartmentIds),
+                        observations.unobservedCells(lockerId, device.id(), device.projection(),
+                                device.provisionedAt(), start.sequence(), compartmentIds),
                         rejected(device, start)));
     }
 
