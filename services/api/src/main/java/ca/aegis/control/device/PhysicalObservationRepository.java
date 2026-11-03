@@ -62,7 +62,7 @@ class PhysicalObservationRepository {
      * A heartbeat of the session in which a cell is not seen connected with its door closed: reported otherwise, left
      * out, or in a payload that could not be parsed.
      */
-    record UnobservedCell(long sequence, UUID compartmentId) {
+    record UnobservedCell(long sequence, Instant occurredAt, UUID compartmentId) {
     }
 
     private final JdbcClient jdbc;
@@ -204,7 +204,7 @@ class PhysicalObservationRepository {
             return List.of();
         }
         return jdbc.sql("""
-                SELECT m.sequence, wanted.id AS compartment_id
+                SELECT m.sequence, m.occurred_at, wanted.id AS compartment_id
                 FROM aegis.inbound_device_messages m
                 JOIN aegis.compartments wanted ON wanted.id IN (:cells)
                 WHERE m.locker_device_id = :device AND m.device_session_id = :session AND m.boot_count = :boot
@@ -223,22 +223,23 @@ class PhysicalObservationRepository {
                 .param("boot", projection.bootCount())
                 .param("provisionedAt", utc(provisionedAt))
                 .param("from", fromSequence)
-                .query((row, number) -> new UnobservedCell(row.getLong("sequence"),
+                .query((row, number) -> new UnobservedCell(row.getLong("sequence"), instant(row, "occurred_at"),
                         row.getObject("compartment_id", UUID.class)))
                 .list();
     }
 
     /**
      * A heartbeat, door or scan message of the device that was rejected: it keeps no session, sequence or parsed
-     * payload, so its cells are unknown and its order is only what its raw payload claims, when that can be read.
+     * payload, so its cells are unknown and its order is only what its raw payload claims, when that can be read, and
+     * the instant of its {@code timestamp}.
      */
-    record RejectedMessage(Instant receivedAt, Optional<InboundMessages.Position> claimed) {
+    record RejectedMessage(Instant receivedAt, Instant occurredAt, Optional<InboundMessages.Position> claimed) {
     }
 
     /** The device's heartbeat, door and scan messages rejected since {@code since}. */
     List<RejectedMessage> rejectedPhysicalMessages(UUID deviceId, Instant provisionedAt, Instant since) {
         return jdbc.sql("""
-                SELECT received_at, raw_payload FROM aegis.inbound_device_messages
+                SELECT received_at, occurred_at, raw_payload FROM aegis.inbound_device_messages
                 WHERE locker_device_id = :device AND processing_status = 'REJECTED'
                   AND message_type IN ('HEARTBEAT', 'RFID_SCAN_COMPLETED', 'DOOR_OPENED', 'DOOR_CLOSED')
                   AND received_at >= :provisionedAt AND received_at >= :since
@@ -246,7 +247,7 @@ class PhysicalObservationRepository {
                 .param("device", deviceId)
                 .param("provisionedAt", utc(provisionedAt))
                 .param("since", utc(since))
-                .query((row, number) -> new RejectedMessage(instant(row, "received_at"),
+                .query((row, number) -> new RejectedMessage(instant(row, "received_at"), instant(row, "occurred_at"),
                         InboundMessages.claimedPosition(row.getBytes("raw_payload"))))
                 .list();
     }

@@ -482,6 +482,69 @@ class RfidPresenceTests extends ApiIntegrationTest {
         assertEquals("UNKNOWN", read(view, "$.readiness.result"));
     }
 
+    /**
+     * Review 3, MEDIUM 1: the scan window follows the door closing (document 10, section 12.2; document 03, section
+     * 4.16), so a heartbeat made inside it that reports the door open voids the scan, whatever its sequence.
+     */
+    @Test
+    void aHeartbeatInsideTheScanWindowReportingTheDoorOpenVoidsTheScan() throws Exception {
+        Instant now = clock.instant();
+        Map<String, Object> during = session.heartbeat(now.minusSeconds(2), List.of(
+                cell(cellA, 1, "CONNECTED", "HEALTHY", "OPEN", "UNLOCKED"),
+                cell(cellB, 2, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED")));
+        Map<String, Object> scanned = session.scan(now, cellA, "HEALTHY", now.minusSeconds(4), now.minusSeconds(1),
+                reads(tagA, 3));
+        ingest(during);
+        ingest(scanned);
+        clock.advance(Duration.ofSeconds(1));
+        heartbeat("HEALTHY", "HEALTHY");
+
+        String view = technicianView(assetA);
+        assertEquals("UNKNOWN", read(view, "$.presence"));
+        assertEquals("UNKNOWN", read(view, "$.readiness.result"));
+    }
+
+    /** Review 3, MEDIUM 1: a heartbeat inside the scan window that reports the cell disconnected voids the scan. */
+    @Test
+    void aHeartbeatInsideTheScanWindowReportingTheCellDisconnectedVoidsTheScan() throws Exception {
+        Instant now = clock.instant();
+        Map<String, Object> during = session.heartbeat(now.minusSeconds(2), List.of(
+                cell(cellA, 1, "DISCONNECTED", "UNKNOWN", "UNKNOWN", "UNKNOWN"),
+                cell(cellB, 2, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED")));
+        Map<String, Object> scanned = session.scan(now, cellA, "HEALTHY", now.minusSeconds(4), now.minusSeconds(1),
+                reads(tagA, 3));
+        ingest(during);
+        ingest(scanned);
+        clock.advance(Duration.ofSeconds(1));
+        heartbeat("HEALTHY", "HEALTHY");
+
+        String view = technicianView(assetA);
+        assertEquals("UNKNOWN", read(view, "$.presence"));
+        assertEquals("UNKNOWN", read(view, "$.readiness.result"));
+    }
+
+    /** Review 3, MEDIUM 1: rejected door events made inside the scan window void it, even when received before it. */
+    @Test
+    void rejectedDoorEventsInsideTheScanWindowVoidTheScan() throws Exception {
+        Instant now = clock.instant();
+        Map<String, Object> opened = session.door("DOOR_OPENED", now.minusSeconds(3), cellA);
+        opened.put("operationId", UUID.randomUUID().toString());
+        Map<String, Object> closed = session.door("DOOR_CLOSED", now.minusSeconds(2), cellA);
+        closed.put("operationId", UUID.randomUUID().toString());
+        Map<String, Object> scanned = session.scan(now, cellA, "HEALTHY", now.minusSeconds(4), now.minusSeconds(1),
+                reads(tagA, 3));
+        assertEquals(Outcome.REJECTED, ingestion.ingest(events(), bytes(opened)));
+        assertEquals(Outcome.REJECTED, ingestion.ingest(events(), bytes(closed)));
+        clock.advance(Duration.ofMillis(10));
+        ingest(scanned);
+        clock.advance(Duration.ofSeconds(1));
+        heartbeat("HEALTHY", "HEALTHY");
+
+        String view = technicianView(assetA);
+        assertEquals("UNKNOWN", read(view, "$.presence"));
+        assertEquals("UNKNOWN", read(view, "$.readiness.result"));
+    }
+
     /** No validity period is defined: on an unbroken connection reporting the cell connected and closed it holds. */
     @Test
     void aScanStaysValidWhileTheConnectionReportsTheCellConnectedAndClosed() throws Exception {

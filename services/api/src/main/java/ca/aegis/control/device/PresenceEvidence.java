@@ -54,13 +54,15 @@ public class PresenceEvidence {
 
     /**
      * A rejected heartbeat, door or scan message, which may have reported the door moving in any cell. It voids every
-     * scan received at or before it, and every scan not after the sequence it claims in the current session: neither
-     * the reception order nor a claimed sequence alone can prove that the scan came after it.
+     * scan received at or before it, every scan not after the sequence it claims in the current session, and every
+     * scan whose window it was made in or before: none of the reception order, a claimed sequence or the device
+     * instant alone proves that the scan came after it. A missing instant voids the scan.
      */
-    private record Rejected(Instant receivedAt, Long sequence) {
+    private record Rejected(Instant receivedAt, Instant occurredAt, Long sequence) {
 
         boolean voids(PhysicalEvent scan) {
-            return !receivedAt.isBefore(scan.receivedAt()) || (sequence != null && sequence >= scan.sequence());
+            return !receivedAt.isBefore(scan.receivedAt()) || (sequence != null && sequence >= scan.sequence())
+                    || occurredAt == null || !occurredAt.isBefore(scan.windowStartedAt());
         }
     }
 
@@ -136,7 +138,7 @@ public class PresenceEvidence {
         DeviceProjection projection = device.projection();
         return observations.rejectedPhysicalMessages(device.id(), device.provisionedAt(), start.receivedAt())
                 .stream()
-                .map(message -> new Rejected(message.receivedAt(), message.claimed()
+                .map(message -> new Rejected(message.receivedAt(), message.occurredAt(), message.claimed()
                         .filter(claimed -> claimed.bootCount() == projection.bootCount()
                                 && claimed.deviceSessionId().equals(projection.deviceSessionId()))
                         .map(InboundMessages.Position::sequence).orElse(null)))
@@ -148,9 +150,9 @@ public class PresenceEvidence {
      * and its door closed now; the scan is healthy, made inside the current connection after the asset became
      * expected, and no door event of the cell follows it or falls inside its window. Document 04, section 13, and
      * document 06, sections 4.4 and 9.3: stored evidence that the door may have moved since also voids it, namely a
-     * later heartbeat of the session that does not report the cell connected with its door closed (while the cell's
-     * link is down its door is not observed), or a rejected heartbeat, door or scan message of the device, whose cell
-     * is unknown, that may have followed the scan.
+     * heartbeat of the session, later or made inside the scan window, that does not report the cell connected with its
+     * door closed (while the cell's link is down its door is not observed), or a rejected heartbeat, door or scan
+     * message of the device, whose cell is unknown, that may have followed the scan or fallen inside its window.
      */
     private static Optional<PhysicalEvent> usableScan(Expectation expectation, CompartmentState cell,
             LockerFacts facts) {
@@ -181,8 +183,12 @@ public class PresenceEvidence {
                         || (event.type() == InboundMessageType.DOOR_OPENED
                                 && !event.occurredAt().isBefore(scan.windowStartedAt()))
                         || event.occurredAt().isAfter(scan.windowStartedAt()));
+        // Document 10, section 12.2, and document 03, section 4.16: the window follows the door closing, so a
+        // heartbeat made inside it counts whatever its sequence.
         boolean unobservedSince = facts.unobserved().stream()
-                .anyMatch(report -> report.sequence() > scan.sequence() && report.compartmentId().equals(cell.id()));
+                .anyMatch(report -> report.compartmentId().equals(cell.id())
+                        && (report.sequence() > scan.sequence() || report.occurredAt() == null
+                                || !report.occurredAt().isBefore(scan.windowStartedAt())));
         boolean rejectedSince = facts.rejected().stream().anyMatch(rejected -> rejected.voids(scan));
         return doorMovedSince || unobservedSince || rejectedSince ? Optional.empty() : Optional.of(scan);
     }
