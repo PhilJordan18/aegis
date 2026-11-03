@@ -7,6 +7,7 @@ temporary directory; nothing in the checkout is modified.
 """
 
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -326,6 +327,16 @@ class WorkflowWiringTests(unittest.TestCase):
         result = self.text[self.text.index("  result:\n"):]
         self.assertIn("if: always()", result)
         self.assertIn(".github/scripts/ci-result.py", result)
+
+    def test_every_required_job_reaches_the_aggregator(self):
+        result = self.text[self.text.index("  result:\n"):]
+        needs = re.search(r"needs: \[([^\]]*)\]", result).group(1)
+        for job in (name.strip() for name in needs.split(",")):
+            if job == "changes":
+                self.assertIn("${{ needs.changes.result }}", result)
+                continue
+            with self.subTest(job=job):
+                self.assertIn(f"${{{{ needs.changes.outputs.{job} }}}}:${{{{ needs.{job}.result }}}}", result)
 
 
 if __name__ == "__main__":

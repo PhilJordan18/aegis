@@ -115,8 +115,9 @@ jobs:
         run: python3 ../../.github/scripts/test-report.py "Web tests" "$RUNNER_TEMP/web-reports/unit.xml"
       - run: npm run build
 
-  # The jobs below are not required yet (#67): they stay outside the `needs` of
-  # `CI result` until they meet the promotion criteria recorded in that issue.
+  # Simulator tests and the agent setup validator are in the `needs` of
+  # `CI result` (#67, docs/qualite/ci-02/). The ADR guard, iOS standalone and
+  # CI script tests stay outside it until they meet the criteria of #67.
   simulator:
     name: Simulator tests
     needs: changes
@@ -137,13 +138,6 @@ jobs:
           cache-dependency-path: tools/hub-simulator/package-lock.json
       - run: npm ci --ignore-scripts
       - run: npm run typecheck
-      - name: CI-02 deliberate failing test
-        # CI-02 QUALIFICATION ONLY (#67): deliberate defect, created on the runner and never committed to the component. Removed by the next commit.
-        run: |
-          cat > test/unit/ci02-deliberate-failure.test.ts <<'TS'
-          import { expect, test } from 'vitest';
-          test('CI-02 deliberate failure (#67)', () => expect(1).toBe(2));
-          TS
       - name: Unit tests
         # Through the repository's npm scripts, so only the locked vitest runs (never an on-demand npx install).
         run: npm test -- --reporter=default --reporter=junit --outputFile.junit="$RUNNER_TEMP/simulator-reports/unit.xml"
@@ -186,9 +180,6 @@ jobs:
         with:
           python-version: '3.12'
       - run: python3 --version
-      - name: CI-02 deliberate broken link
-        # CI-02 QUALIFICATION ONLY (#67): deliberate defect, created on the runner and never committed to the component. Removed by the next commit.
-        run: mkdir -p docs/qualite/ci-02 && printf '[absent](ci02-absent-target.md)\n' > docs/qualite/ci-02/ci02-broken-link.md
       - run: python3 .claude/skills/aegis-delivery/scripts/validate_agent_setup.py
 
   adrs:
@@ -207,22 +198,6 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.sha }}
         run: python3 .github/scripts/check-accepted-adrs.py
-      - name: CI-02 deliberate accepted ADR edit
-        # CI-02 QUALIFICATION ONLY (#67): deliberate defect, created on the runner and never committed to the component. Removed by the next commit.
-        # A throwaway repository holds a fixture ADR; no ADR of this repository
-        # is edited, even in the runner's checkout.
-        run: |
-          fixture="$RUNNER_TEMP/ci02-adr-fixture"
-          git init -q -b main "$fixture"
-          mkdir -p "$fixture/.githooks" "$fixture/docs/adr"
-          cp .githooks/check-accepted-adrs "$fixture/.githooks/"
-          printf '# ADR-901\n\n**Statut :** ACCEPTED\n' > "$fixture/docs/adr/ADR-901-fixture.md"
-          cd "$fixture"
-          git add -A && git -c user.name=ci02 -c user.email=ci02@example.invalid commit -q -m base
-          base=$(git rev-parse HEAD)
-          printf 'CI-02 deliberate edit.\n' >> docs/adr/ADR-901-fixture.md
-          git -c user.name=ci02 -c user.email=ci02@example.invalid commit -q -am edit
-          BASE_SHA=$base HEAD_SHA=$(git rev-parse HEAD) python3 "$GITHUB_WORKSPACE/.github/scripts/check-accepted-adrs.py"
 
   ios:
     name: iOS standalone tests
@@ -263,18 +238,6 @@ jobs:
           esac
           echo "IOS_DESTINATION=$destination" >> "$GITHUB_ENV"
           echo "Simulator $(cat build/results/destination.txt)" >> "$GITHUB_STEP_SUMMARY"
-      - name: CI-02 deliberate failing test
-        # CI-02 QUALIFICATION ONLY (#67): deliberate defect, created on the runner and never committed to the component. Removed by the next commit.
-        run: |
-          cat > AegisMobileTests/CI02DeliberateFailureTests.swift <<'SWIFT'
-          import Testing
-
-          struct CI02DeliberateFailureTests {
-              @Test func ci02DeliberateFailure() {
-                  Issue.record("CI-02 deliberate failure (#67)")
-              }
-          }
-          SWIFT
       - name: Standalone recipe
         run: scripts/ios-test.sh standalone
       - name: Result summary
@@ -306,7 +269,7 @@ jobs:
   # the change filter, and a skipped job must neither block nor hide a failure.
   result:
     name: CI result
-    needs: [changes, api, web, simulator, agents, adrs, ios]
+    needs: [changes, api, web, simulator, agents]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -321,9 +284,7 @@ jobs:
           WEB: ${{ needs.changes.outputs.web }}:${{ needs.web.result }}
           SIMULATOR: ${{ needs.changes.outputs.simulator }}:${{ needs.simulator.result }}
           AGENTS: ${{ needs.changes.outputs.agents }}:${{ needs.agents.result }}
-          ADRS: ${{ needs.changes.outputs.adrs }}:${{ needs.adrs.result }}
-          IOS: ${{ needs.changes.outputs.ios }}:${{ needs.ios.result }}
         run: >-
           python3 .github/scripts/ci-result.py "$CHANGES"
           "API tests=$API" "Web checks=$WEB" "Simulator tests=$SIMULATOR"
-          "Agent setup validator=$AGENTS" "Accepted ADR guard=$ADRS" "iOS standalone tests=$IOS"
+          "Agent setup validator=$AGENTS"
