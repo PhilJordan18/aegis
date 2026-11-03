@@ -1187,7 +1187,7 @@ class IotEvidenceSchemaTests {
         columns.put("message_type", challenge != null ? "DISPLAY_ACCESS_CHALLENGE" : "DISPLAY_OPERATION_STATUS");
         columns.put("display_revision", revision);
         columns.put("topic", "aegis/v1/lockers/" + site.locker() + "/display");
-        columns.put("schema_version", "2.0");
+        columns.put("schema_version", "3.0");
         columns.put("encrypted_payload", randomBytes(64));
         columns.put("encryption_key_id", "display-key-1");
         columns.put("issued_at", CREATED);
@@ -1210,12 +1210,12 @@ class IotEvidenceSchemaTests {
         columns.put("compartment_id", site.compartment());
         columns.put("command_type", "UNLOCK_COMPARTMENT");
         columns.put("topic", "aegis/v1/lockers/" + site.locker() + "/commands");
-        columns.put("schema_version", "2.0");
+        columns.put("schema_version", "3.0");
         columns.put("issued_at", AUTHORIZED);
         columns.put("expires_at", AUTHORIZED.plusSeconds(120));
         columns.put("payload", json("""
                 {"messageId": "%s", "operationId": "%s", "lockerId": "%s", "compartmentId": "%s",
-                 "type": "UNLOCK_COMPARTMENT", "issuedAt": "%s", "expiresAt": "%s", "schemaVersion": "2.0"}
+                 "type": "UNLOCK_COMPARTMENT", "issuedAt": "%s", "expiresAt": "%s", "schemaVersion": "3.0"}
                 """.formatted(message, operation, site.locker(), site.compartment(), AUTHORIZED,
                 AUTHORIZED.plusSeconds(120))));
         return columns;
@@ -1232,7 +1232,7 @@ class IotEvidenceSchemaTests {
         columns.put("message_id", UUID.randomUUID());
         columns.put("topic", "aegis/v1/lockers/" + site.locker() + (status ? "/status" : "/events"));
         columns.put("message_type", type);
-        columns.put("schema_version", "2.0");
+        columns.put("schema_version", "3.0");
         columns.put("device_session_id", site.session());
         columns.put("boot_count", 1L);
         columns.put("sequence", sequence);
