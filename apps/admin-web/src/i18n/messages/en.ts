@@ -284,7 +284,8 @@ export const en: Messages = {
       OFFLINE: 'The locker is no longer sending a valid signal.',
       UNKNOWN: 'No valid signal has been received yet: the locker status is not known.',
     },
-    lastSignal: ({ time }) => `Last signal ${time}`,
+    /** Approved mobile wording (docs/design/mobile-parcours/proposition.md): « Locker last seen at 2:28 PM EDT ». */
+    lastSignal: ({ time }) => `Last seen at ${time}`,
     neverSignal: 'No signal received',
     evaluatedNote: ({ time }) => `Evaluated by the server at ${time}. This reading authorizes no opening.`,
     readOnlyNote: 'Read only: no command is sent to the locker from this screen.',

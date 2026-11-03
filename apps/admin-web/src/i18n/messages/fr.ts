@@ -335,7 +335,7 @@ export const fr = {
       OFFLINE: "Le casier n'envoie plus de signal valide.",
       UNKNOWN: `Aucun signal valide n'a encore été reçu${NBSP}: l'état du casier n'est pas connu.`,
     },
-    lastSignal: ({ time }: { time: string }) => `Dernier signal ${time}`,
+    lastSignal: ({ time }: { time: string }) => `Dernier signal${NBSP}: ${time}`,
     neverSignal: 'Aucun signal reçu',
     evaluatedNote: ({ time }: { time: string }) => `Évalué par le serveur à ${time}. Cette lecture n'autorise aucune ouverture.`,
     readOnlyNote: `Lecture seule${NBSP}: aucune commande n'est envoyée au casier depuis cet écran.`,
