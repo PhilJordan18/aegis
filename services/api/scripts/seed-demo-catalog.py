@@ -17,14 +17,16 @@ The API must run with AEGIS_DEMO_ACCOUNTS_ENABLED=true and
 AEGIS_DEMO_LOCKER_ENABLED=true, so that compartments A1 and A2 exist.
 """
 
-import json
 import os
 import sys
 import urllib.error
-import urllib.request
 import uuid
 
-API = os.environ.get("AEGIS_API_URL", "http://127.0.0.1:8080/api/v1").rstrip("/")
+# python3 -I leaves the script directory out of sys.path; it is appended after
+# the standard library so that the shared client loads without shadowing it.
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from aegis_http import API, send  # noqa: E402
+
 SEED_NAMESPACE = uuid.UUID("6f1c2a52-3b7e-4d0a-9c59-2f8e1d7a4b30")
 
 # Fixed by the demo locker provisioning (AEGIS-DEMO-01).
@@ -80,27 +82,10 @@ class ApiError(Exception):
 
 
 def call(method, path, token=None, body=None, key=None):
-    request = urllib.request.Request(API + path, method=method)
-    request.add_header("Accept", "application/json")
-    if token:
-        request.add_header("Authorization", "Bearer " + token)
-    if key:
-        request.add_header("Idempotency-Key", key)
-    data = None
-    if body is not None:
-        data = json.dumps(body).encode("utf-8")
-        request.add_header("Content-Type", "application/json")
-    try:
-        with urllib.request.urlopen(request, data, timeout=10) as response:
-            raw = response.read()
-            return json.loads(raw) if raw else None
-    except urllib.error.HTTPError as error:
-        raw = error.read()
-        try:
-            payload = json.loads(raw) if raw else {}
-        except ValueError:
-            payload = {}
-        raise ApiError(error.code, payload) from None
+    status, payload = send(method, path, token, body, key)
+    if status >= 400:
+        raise ApiError(status, payload)
+    return payload
 
 
 def seed_key(*parts):

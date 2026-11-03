@@ -113,8 +113,9 @@ class AdminAssetService {
      * revokes the active identifiers (decided on 28 October 2026), so that a tag can be reused, and ends the active placement,
      * keeping its row, so the compartment is freed (document 03, section 4.8). Placement changes lock the asset row
      * first too, so no placement can start on an asset being archived. Archiving an archived asset
-     * returns it unchanged and is audited as already applied. Reservations, loans and locker operations do not exist
-     * yet; their slices must refuse archival here while one of them is open (document 09, section 12.2).
+     * returns it unchanged and is audited as already applied. An active reservation, an unfinished loan or a
+     * non-terminal locker operation refuses the archival (document 09, section 12.2); reservation creation locks the
+     * asset row too, so none can start while the archival decides.
      */
     @Transactional
     AdminAssetView archive(UUID id, UUID actor) {
@@ -124,6 +125,9 @@ class AdminAssetService {
             audit.assetArchived(current, actor, now, true);
             return view(current);
         }
+        custody.archivalBlocker(id).ifPresent(blocker -> {
+            throw new CatalogConflictException(blocker);
+        });
         assets.archive(id, now);
         AssetRecord archived = assets.find(id).orElseThrow();
         audit.assetArchived(archived, actor, now, false);

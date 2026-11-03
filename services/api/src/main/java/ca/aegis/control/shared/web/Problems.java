@@ -30,9 +30,14 @@ public class Problems {
 
     public ProblemResponse body(ApiError error, int status, HttpServletRequest request,
             List<ProblemResponse.Violation> violations) {
+        return body(error, status, request, null, violations);
+    }
+
+    public ProblemResponse body(ApiError error, int status, HttpServletRequest request, List<String> reasons,
+            List<ProblemResponse.Violation> violations) {
         return new ProblemResponse(error.type(), error.title(), status, error.name(), error.detail(),
                 request.getRequestURI(), RequestIdFilter.requestId(request),
-                clock.instant().truncatedTo(ChronoUnit.SECONDS), null, violations);
+                clock.instant().truncatedTo(ChronoUnit.SECONDS), reasons, violations);
     }
 
     public ResponseEntity<Object> entity(ApiError error, HttpServletRequest request) {
@@ -41,10 +46,15 @@ public class Problems {
 
     public ResponseEntity<Object> entity(ApiError error, int status, HttpHeaders headers, HttpServletRequest request,
             List<ProblemResponse.Violation> violations) {
+        return entity(error, status, headers, request, null, violations);
+    }
+
+    public ResponseEntity<Object> entity(ApiError error, int status, HttpHeaders headers, HttpServletRequest request,
+            List<String> reasons, List<ProblemResponse.Violation> violations) {
         HttpHeaders problemHeaders = new HttpHeaders();
         problemHeaders.addAll(headers);
         problemHeaders.setContentType(MediaType.APPLICATION_PROBLEM_JSON);
-        return ResponseEntity.status(status).headers(problemHeaders).body(body(error, status, request, violations));
+        return ResponseEntity.status(status).headers(problemHeaders).body(body(error, status, request, reasons, violations));
     }
 
     public void write(HttpServletRequest request, HttpServletResponse response, ApiError error) throws IOException {
