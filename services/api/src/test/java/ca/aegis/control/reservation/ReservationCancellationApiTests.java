@@ -15,7 +15,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -349,6 +356,41 @@ class ReservationCancellationApiTests extends ApiIntegrationTest {
                 """, reservation));
         assertEquals(0L, cancellationEvents(reservation, "ACCEPTED"));
         availability(due, asset, "AVAILABLE");
+    }
+
+    /**
+     * Two cancellations of the same reservation by its holder under different keys, at the same time: the holder lock
+     * serializes them, so one cancels and the other finds it already cancelled. Both answer 200 {@code CANCELLED};
+     * exactly one transition is audited.
+     */
+    @Test
+    void twoConcurrentCancellationsUnderDifferentKeysCancelOnce() throws Exception {
+        UUID reservation = reserve();
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<MvcResult>> cancellations = new ArrayList<>();
+            for (int i = 0; i < 2; i++) {
+                String key = key();
+                cancellations.add(executor.submit(() -> {
+                    start.await();
+                    return mvc.perform(cancelRequest(token, key, reservation)).andReturn();
+                }));
+            }
+            start.countDown();
+            for (Future<MvcResult> cancellation : cancellations) {
+                MvcResult result = cancellation.get(30, TimeUnit.SECONDS);
+                assertEquals(200, result.getResponse().getStatus());
+                assertEquals("CANCELLED", JsonPath.read(
+                        result.getResponse().getContentAsString(StandardCharsets.UTF_8), "$.status"));
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertEquals(1L, cancellationEvents(reservation, "ACCEPTED"));
+        assertEquals(1L, cancellationEvents(reservation, "ALREADY_APPLIED"));
+        assertEquals("CANCELLED", fixtures.reservationStatus(reservation));
     }
 
     @Test
