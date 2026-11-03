@@ -28,11 +28,15 @@ changed() {
 }
 
 api=$(changed '^(services/api/|infra/docker/)')
-# The Web token test reads the design handoff's tokens.css.
+# No Web test reads docs/design/manager-entree/ any more (tokens moved to
+# src/styles/); the path stays, which only runs Web more often than needed.
 web=$(changed '^(apps/admin-web/|docs/design/manager-entree/)')
 simulator=$(changed '^(tools/hub-simulator/|infra/mqtt/|infra/docker/)')
 # The validator also checks the references written in Markdown documents.
 agents=$(changed '^(\.claude/|\.codex/|\.agents/|AGENTS\.md$|CLAUDE\.md$)|\.md$')
+# Deleting or renaming any file can break a Markdown link to it.
+removed=$(git diff --name-only --diff-filter=DR "$BASE_SHA" "$HEAD_SHA") || all true
+[ -z "$removed" ] || agents=true
 adrs=$(changed '^(docs/adr/|docs/cahier-conception/13-registre-adrs-proposes\.md$|\.githooks/check-accepted-adrs$)')
 ios=$(changed '^apps/ios/')
 # A change under .github/scripts/ or to ci.yml already took the full run above.
