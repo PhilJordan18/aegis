@@ -395,7 +395,8 @@ test.describe('flow: casiers (production page, routed fakes)', () => {
     await expect(panel.getByRole('heading', { level: 2, name: /AEGIS-DEMO-01/ })).toBeVisible()
     await expect(panel.getByRole('table')).toBeVisible()
     const retry = panel.getByRole('button', { name: 'Réessayer' })
-    await page.locator('.ag-lockers').focus()
+    // From the page heading, the next stops are the controls of the page: here the retry button, with no empty stop before it.
+    await page.getByRole('heading', { level: 1, name: 'Casiers' }).focus()
     await page.keyboard.press('Tab')
     await expect(retry).toBeFocused()
     expect(await retry.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe('none')
@@ -415,7 +416,7 @@ test.describe('flow: casiers (production page, routed fakes)', () => {
     await openLockerPage(page, 'long')
     await expectNoHorizontalScroll(page)
     const rows = page.getByRole('row')
-    await expect(rows).toHaveCount(5)
+    await expect(rows).toHaveCount(7)
     // The column labels are repeated inside each row, hidden from the accessibility tree.
     await expect(page.locator('.ag-lk-table__label').first()).toBeVisible()
     await expect(page.locator('.ag-lk-table__label').first()).toHaveAttribute('aria-hidden', 'true')
@@ -432,6 +433,31 @@ test.describe('flow: casiers (production page, routed fakes)', () => {
     await page.setViewportSize({ width: 640, height: 400 })
     await openLockerPage(page, 'long')
     await expectNoHorizontalScroll(page)
+  })
+
+  test('flow: the list of panels is a tab stop only while it scrolls', async ({ page }) => {
+    await openLockerPage(page, 'nominal')
+    // Everything fits: no scrolling region, so no stop and no role.
+    await expect(page.locator('.ag-lockers')).not.toHaveAttribute('tabindex', /.*/)
+    await expect(page.locator('.ag-lockers')).not.toHaveAttribute('role', /.*/)
+  })
+
+  test('flow: a long list of cells makes the region scroll, and then it is reachable by keyboard with a name', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 640 })
+    await openLockerPage(page, 'long')
+    await expect(page.locator('.ag-lockers')).toHaveAttribute('tabindex', '0')
+    await expect(page.getByRole('group', { name: 'Casiers' })).toBeVisible()
+    // On a phone the page scrolls, not the region: the stop goes away.
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect(page.locator('.ag-lockers')).not.toHaveAttribute('tabindex', /.*/)
+  })
+
+  test('flow: a short locker code is never broken at its hyphens on a phone', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 720 })
+    await openLockerPage(page, 'nominal')
+    const code = page.locator('.ag-lk__title .ag-nowrap')
+    await expect(code).toHaveText('AEGIS-DEMO-01')
+    expect((await code.boundingBox())?.height ?? 99).toBeLessThan(40)
   })
 
   test('flow: at desktop width the compartments are a real table with column headers', async ({ page }) => {

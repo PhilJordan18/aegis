@@ -2,7 +2,10 @@
  * Casiers: read-only locker status (PHY-01 #29). Same opaque surfaces and hairlines as Équipements;
  * panels, diagnostic block, facts and skeleton bars come from equipment.css. Opaque, no glass, no gradient.
  */
-.ag-lockers { flex: 1; min-height: 0; display: grid; align-content: start; gap: 20px; overflow: auto; padding: 4px; }
+.ag-lockers { flex: 1; min-height: 0; display: grid; grid-auto-rows: max-content; align-content: start; gap: 20px; overflow: auto; padding: 4px; }
+/* A locker panel is as tall as its content and the list scrolls: `.ag-panel` clips (overflow: hidden, min-height: 0), which
+   would cut the cells off in a short window instead of letting the list scroll. */
+.ag-lk { overflow: visible; min-height: auto; }
 .ag-lockers:focus-visible { outline-offset: -2px; }
 .ag-lockers--empty { overflow: visible; }
 

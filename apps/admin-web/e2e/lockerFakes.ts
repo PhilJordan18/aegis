@@ -63,7 +63,7 @@ function status(mode: LockerMode) {
         ...base,
         name: 'Laboratoire de maintenance et d’inspection des équipements de mesure de précision, aile nord',
         code: 'AEGIS-LABORATOIRE-MAINTENANCE-ET-INSPECTION-DEMO-0001',
-        compartments: ['A1', 'A2', 'B1', 'B2'].map((code, index) =>
+        compartments: ['A1', 'A2', 'A3', 'B1', 'B2', 'B3'].map((code, index) =>
           compartment(code, index % 2 === 0 ? { doorState: 'OPEN', lockState: 'UNLOCKED', rfidReaderStatus: 'FAULTED' } : { connectionStatus: 'DISCONNECTED', enabled: false, lastObservedAt: null }),
         ),
       }

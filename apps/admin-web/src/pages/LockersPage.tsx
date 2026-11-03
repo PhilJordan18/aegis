@@ -8,16 +8,18 @@ import { useSessionStore } from '../features/auth/session'
 import { useCurrentAdminProfile } from '../features/auth/useCurrentAdminProfile'
 import { CatalogAlert } from '../features/catalog/CatalogAlert'
 import { classifyCatalogFailure } from '../features/catalog/catalogFailure'
+import { LIST_QUERY_BASE } from '../features/catalog/contract'
 import { useAssetList } from '../features/catalog/useCatalogQueries'
 import { lockerIdFromSearch, lockerIdsFromPlacements } from '../features/lockers/knownLockers'
 import { LockerStatusPanel } from '../features/lockers/LockerStatusPanel'
+import { useScrollable } from '../features/lockers/useScrollable'
 import { useI18n } from '../i18n/useI18n'
 import '../app/page.css'
 import '../features/catalog/equipment.css'
 import '../features/lockers/locker-status.css'
 
-// The same first page as Équipements: both screens share one cached request.
-const KNOWN_LOCKERS_QUERY = { page: 0, size: 20, sort: 'assetCode,asc' } as const
+// The same first page as Équipements, from the same definition: both screens share one cached request.
+const KNOWN_LOCKERS_QUERY = { ...LIST_QUERY_BASE, page: 0 } as const
 
 /**
  * Protected Casiers page (PHY-01 #29), read only: the status of each locker as the server evaluated it.
@@ -37,6 +39,8 @@ export function LockersPage({ sessionProfile }: { readonly sessionProfile: UserP
   const lockerIds = named !== null ? [named] : lockerIdsFromPlacements(catalog.data?.items ?? [])
   const catalogFailure = named === null && catalog.isError && catalog.data === undefined ? classifyCatalogFailure(catalog.error) : null
   const searching = named === null && catalog.isPending
+  // The list of panels scrolls on its own on a wide screen: it is a tab stop only while it does.
+  const [scrollRef, scrollable] = useScrollable<HTMLDivElement>(lockerIds.join())
   // The retry button of the catalog alert leaves the page while the request runs: the page takes focus, never the body.
   const mainRef = useRef<HTMLElement>(null)
   function retryCatalog() {
@@ -87,7 +91,7 @@ export function LockersPage({ sessionProfile }: { readonly sessionProfile: UserP
         )}
 
         {lockerIds.length > 0 && (
-          <div className="ag-lockers" tabIndex={0} role="group" aria-label={m.lockers.heading}>
+          <div className="ag-lockers" ref={scrollRef} tabIndex={scrollable ? 0 : undefined} role={scrollable ? 'group' : undefined} aria-label={scrollable ? m.lockers.heading : undefined}>
             {lockerIds.map((lockerId) => (
               <LockerStatusPanel key={lockerId} lockerId={lockerId} />
             ))}
