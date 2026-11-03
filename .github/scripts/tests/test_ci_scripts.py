@@ -107,12 +107,28 @@ class ChangedComponentsTests(unittest.TestCase):
         self.assertNotIn("ios", self.detect())
         self.assertNotIn("web", self.detect())
 
-    def test_ci_change_runs_every_component(self):
-        for path in (".github/workflows/ci.yml", ".github/scripts/test-report.py"):
+    def test_workflow_or_unknown_ci_script_runs_every_component(self):
+        for path in (".github/workflows/ci.yml", ".github/scripts/new-helper.py"):
             with self.subTest(path=path):
                 self.base = self.repo.git("rev-parse", "HEAD")
                 self.repo.commit({path: f"{path}\n"})
                 self.assertEqual(self.detect(), set(COMPONENTS))
+
+    def test_known_ci_script_runs_its_tests_and_the_jobs_that_execute_it(self):
+        cases = {
+            ".github/scripts/tests/test_ci_scripts.py": {"ci"},
+            ".github/scripts/changed-components.sh": {"ci"},
+            ".github/scripts/ci-result.py": {"ci"},
+            ".github/scripts/test-report.py": {"ci", "api", "web", "simulator"},
+            ".github/scripts/xcresult-summary.py": {"ci", "ios"},
+            ".github/scripts/check-accepted-adrs.py": {"ci", "adrs"},
+            "docs/qualite/ci-02/mesures/xcresult_mesures.py": {"ci"},
+        }
+        for path, expected in cases.items():
+            with self.subTest(path=path):
+                self.base = self.repo.git("rev-parse", "HEAD")
+                self.repo.commit({path: f"{path}\n"})
+                self.assertEqual(self.detect(), expected)
 
     def test_push_runs_everything_except_the_pull_request_guard(self):
         self.repo.commit({"docs/notes.md": "x\n"})
