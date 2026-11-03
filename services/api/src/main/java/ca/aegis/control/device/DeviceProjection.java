@@ -27,9 +27,14 @@ record DeviceProjection(UUID deviceSessionId, Long bootCount, UUID heartbeatConn
                 lastValidHeartbeatAt, closedAt, firstValidHeartbeatAt, lastSeenAt);
     }
 
+    /**
+     * A valid heartbeat of the current session, reference or not: it ends UNKNOWN even when its connection is
+     * already closed (document 10, section 15.3, R1).
+     */
     DeviceProjection seenAt(Instant receivedAt) {
         Instant seen = lastSeenAt == null || receivedAt.isAfter(lastSeenAt) ? receivedAt : lastSeenAt;
         return new DeviceProjection(deviceSessionId, bootCount, heartbeatConnectionId, heartbeatSequence,
-                lastValidHeartbeatAt, heartbeatConnectionClosedAt, firstValidHeartbeatAt, seen);
+                lastValidHeartbeatAt, heartbeatConnectionClosedAt,
+                firstValidHeartbeatAt == null ? receivedAt : firstValidHeartbeatAt, seen);
     }
 }

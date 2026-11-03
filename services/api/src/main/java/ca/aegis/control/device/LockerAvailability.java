@@ -14,7 +14,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class LockerAvailability {
 
-    /** {@code lastSeenAt} is the latest valid heartbeat of the current session, or null before the first one. */
+    /**
+     * {@code lastSeenAt} is the reception of the latest valid heartbeat since provisioning that belonged to the
+     * current session when it arrived, including one from a closed connection; a new session keeps it. It is null
+     * before the first one.
+     */
     public record Availability(ConnectionStatus status, Instant lastSeenAt) {
 
         static final Availability NOT_PROVISIONED = new Availability(ConnectionStatus.UNKNOWN, null);

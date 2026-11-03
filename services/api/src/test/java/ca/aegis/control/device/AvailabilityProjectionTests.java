@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 import org.junit.jupiter.api.Test;
 
@@ -100,14 +101,30 @@ class AvailabilityProjectionTests {
         assertEquals(before, projection);
     }
 
+    /** R1: after any valid heartbeat since provisioning the state is ONLINE or OFFLINE, never UNKNOWN. */
+    @Test
+    void aFirstValidHeartbeatOfAnAlreadyClosedConnectionGivesOfflineNotUnknown() {
+        Session session = new Session(1);
+        Outcome outcome = apply(session.heartbeat(T0, "CLOSED"), T0, connection -> true);
+
+        assertFalse(outcome.newReference());
+        assertEquals(ConnectionStatus.OFFLINE, AvailabilityProjection.evaluate(projection, T0));
+        assertEquals(T0, projection.lastSeenAt());
+    }
+
     private Outcome apply(Map<String, Object> message, Instant receivedAt) {
+        return apply(message, receivedAt, connection -> false);
+    }
+
+    private Outcome apply(Map<String, Object> message, Instant receivedAt,
+            Predicate<UUID> closedConnection) {
         Storable storable = (Storable) InboundMessages.inspect(TOPIC, bytes(message), receivedAt);
         if (storable.rejection() != null) {
             storable = (Storable) InboundMessages.inspect(InboundTopic.parse(DevicePayloads.EVENTS).orElseThrow(),
                     bytes(message), receivedAt);
         }
         Outcome outcome = AvailabilityProjection.apply(projection, storable.type(), storable.fact(), receivedAt,
-                connection -> false);
+                closedConnection);
         projection = outcome.projection();
         return outcome;
     }
