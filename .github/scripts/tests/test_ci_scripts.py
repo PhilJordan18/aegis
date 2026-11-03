@@ -38,7 +38,7 @@ class GitRepository:
             raise AssertionError(result.stderr)
         return result.stdout.strip()
 
-    def commit(self, files, delete=()):
+    def commit(self, files, delete=(), message="change"):
         for path, text in files.items():
             target = self.folder / path
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -46,7 +46,7 @@ class GitRepository:
         for path in delete:
             (self.folder / path).unlink()
         self.git("add", "-A")
-        self.git("commit", "-q", "--allow-empty", "-m", "change")
+        self.git("commit", "-q", "--allow-empty", "-m", message)
         return self.git("rev-parse", "HEAD")
 
 
@@ -59,9 +59,11 @@ class ChangedComponentsTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def detect(self, event="pull_request", base=None, head=None):
+    def detect(self, event="pull_request", base=None, head=None, summary=None):
         env = {"EVENT_NAME": event, "BASE_SHA": self.base if base is None else base,
                "HEAD_SHA": head or self.repo.git("rev-parse", "HEAD")}
+        if summary is not None:
+            env["GITHUB_STEP_SUMMARY"] = str(summary)
         result = run(["sh", str(SCRIPTS / "changed-components.sh")], cwd=self.repo.folder, env=env)
         self.assertEqual(result.returncode, 0, result.stderr)
         outputs = dict(line.split("=", 1) for line in result.stdout.splitlines())
@@ -117,6 +119,21 @@ class ChangedComponentsTests(unittest.TestCase):
         for event in ("push", "workflow_dispatch"):
             with self.subTest(event=event):
                 self.assertEqual(self.detect(event=event), set(COMPONENTS) - {"adrs"})
+
+    def test_stacked_pull_request_names_the_commits_that_select_ios(self):
+        summary = Path(self.temp.name) / "summary.md"
+        prerequisite = self.repo.commit({"apps/ios/AegisMobile/View.swift": "a\n"}, message="fix(ios): prerequisite")
+        self.repo.commit({"docs/notes.md": "x\n"}, message="docs: own change")
+        self.assertEqual(self.detect(summary=summary), {"ios", "agents"})
+        text = summary.read_text(encoding="utf-8")
+        self.assertIn(f"- {prerequisite[:7]} fix(ios): prerequisite", text)
+        self.assertNotIn("own change", text)
+
+    def test_no_ios_attribution_without_an_ios_change(self):
+        summary = Path(self.temp.name) / "summary.md"
+        self.repo.commit({"docs/notes.md": "x\n"})
+        self.assertEqual(self.detect(summary=summary), {"agents"})
+        self.assertFalse(summary.exists())
 
     def test_unreadable_pull_request_diff_runs_everything(self):
         self.repo.commit({"docs/notes.md": "x\n"})
@@ -331,6 +348,25 @@ class WorkflowWiringTests(unittest.TestCase):
     def test_ios_uses_the_shared_destination_script(self):
         self.assertIn("scripts/ios-destination.sh", self.text)
         self.assertNotIn("simctl list devices available -j", self.text)
+
+    def test_concurrency_groups_by_branch_and_keeps_pushes_apart(self):
+        block = self.text[self.text.index("concurrency:\n"):self.text.index("\njobs:")]
+        # Pull request and manual runs of one branch share a group: they never
+        # run side by side. The pull request number would separate them.
+        self.assertIn("github.head_ref || github.ref_name", block)
+        self.assertIn("github.event.pull_request.head.repo.full_name || github.repository", block)
+        self.assertNotIn("pull_request.number", block)
+        self.assertIn("github.event_name == 'push' && 'push' || 'branch'", block)
+        self.assertIn("cancel-in-progress: ${{ github.event_name == 'pull_request' }}", block)
+
+    def test_ios_boots_the_simulator_within_a_bound_before_the_tests(self):
+        ios = self.text[self.text.index("  ios:\n"):self.text.index("  scripts:\n")]
+        boot = ios.index("- name: Boot the simulator")
+        self.assertLess(ios.index("- name: Choose a simulator"), boot)
+        self.assertLess(boot, ios.index("- name: Standalone recipe"))
+        step = ios[boot:ios.index("- name: Standalone recipe")]
+        self.assertIn("timeout-minutes: 8", step)
+        self.assertIn("xcrun simctl bootstatus", step)
 
     def test_ci_result_always_runs_and_uses_the_aggregator(self):
         result = self.text[self.text.index("  result:\n"):]

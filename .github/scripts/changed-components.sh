@@ -39,6 +39,15 @@ removed=$(git diff --name-only --diff-filter=DR "$BASE_SHA" "$HEAD_SHA") || all 
 [ -z "$removed" ] || agents=true
 adrs=$(changed '^(docs/adr/|docs/cahier-conception/13-registre-adrs-proposes\.md$|\.githooks/check-accepted-adrs$)')
 ios=$(changed '^apps/ios/')
+# A stacked pull request also carries its prerequisite's commits: they still
+# land on the base with it, so they still select iOS. The summary names the
+# commits that do, so a reviewer can tell them from the pull request's own.
+if [ "$ios" = true ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+  {
+    echo "iOS selected by these commits (not on the base):"
+    git log --no-merges --format='- %h %s' "$BASE_SHA..$HEAD_SHA" -- apps/ios || echo "- (history unreadable)"
+  } >>"$GITHUB_STEP_SUMMARY"
+fi
 # A change under .github/scripts/ or to ci.yml already took the full run above.
 ci=false
 printf 'api=%s\nweb=%s\nsimulator=%s\nagents=%s\nadrs=%s\nios=%s\nci=%s\n' \
