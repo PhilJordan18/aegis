@@ -2,7 +2,8 @@
 
 Application React/TypeScript des administrateurs (ADR-010). Elle couvre
 l'accueil, la connexion avec tous ses états, le shell d'Aegis Manager et un
-aperçu statique de l'écran Équipements (WEB-00). Depuis WEB-01, la connexion
+aperçu statique de l'écran Équipements (WEB-00), puis la lecture seule du
+catalogue et du statut des casiers. Depuis WEB-01, la connexion
 et la session passent par l'API (`POST /api/v1/auth/login`,
 `GET /api/v1/auth/me`) hors du mode aperçu.
 
@@ -217,6 +218,68 @@ la passerelle HTTP (`features/auth/httpAuthGateway.ts`) remplace la
 passerelle d'aperçu, et l'Équipements protégé (`/equipements`) remplace
 l'aperçu statique.
 
+## Casiers : statut en lecture seule (PHY-01 #29)
+
+Page protégée `/casiers`, la quatrième section de l'ordre approuvé de la barre
+latérale (`docs/design/asset-lifecycle/sections.md` §5.4; l'entrée « Casiers »
+existait déjà, marquée « à venir »). C'est le **minimum lisible** de la section :
+le statut d'un casier tel que le serveur l'a évalué. Elle ne reprend ni la
+modification de l'horaire, ni l'équipement placé, ni les opérations du casier
+(`sections.md` §5.4), qui restent à faire. Aucune nouvelle identité : shell,
+panneau, bloc de diagnostic, pastille de statut (`StatusChip`), alerte et
+avis de données périmées (`StaleNotice`) sont ceux d'Équipements.
+
+- **Source** : `GET /api/v1/lockers/{lockerId}/status` (09 §8.6, §16.1;
+  `src/features/lockers/`). Le type reprend le contrat; `contractParsers.ts` est
+  strict comme celui du catalogue : un champ manquant ou mal typé rejette toute la
+  réponse (erreur de service avec identifiant de suivi), une valeur d'énumération
+  inconnue devient `UNRECOGNIZED` et s'affiche « État indisponible », jamais comme
+  un état sain (09 §3).
+- **Quel casier ?** P0 n'a pas de route de liste de casiers. La page prend
+  `?casier=<uuid>` (UUID validé, sinon ignoré) ou, à défaut, les casiers où le
+  catalogue place des exemplaires (`placement.lockerId`, première page, la même
+  requête que Équipements). Aucun identifiant n'est écrit en dur. Sans exemplaire
+  placé, elle dit « Aucun casier connu ».
+- **Contenu** : code et nom; pastille « En ligne », « Hors ligne » ou « État
+  inconnu » (libellés approuvés du prototype, avec un symbole distinct par état);
+  « Dernier signal » (`lastSeenAt`, ou « Aucun signal reçu »); heure d'évaluation;
+  horaire d'exploitation (ouvert avec la fermeture, fermé avec la prochaine
+  ouverture, ou « Aucun horaire d'ouverture ») dans le fuseau du casier avec son
+  abréviation; tableau des cellules (activée, liaison, lecteur RFID, porte,
+  serrure, dernière observation). Les instants techniques (signal, observation,
+  évaluation) sont dans le fuseau de l'appareil, comme le diagnostic des
+  équipements; les instants métier (fermeture, ouverture) dans celui du casier.
+- **Le serveur seul décide** : `ONLINE`, `OFFLINE`, `UNKNOWN` et `open` viennent de
+  la réponse. Le navigateur ne dérive rien d'un horodatage (test avec un
+  `lastSeenAt` vieux de six ans pour un casier `ONLINE`).
+- **Lecture seule** : aucun bouton, champ ni formulaire de la page ne change un
+  état, ne force un état prêt, n'ouvre une cellule ni n'envoie une commande; la
+  passerelle (`LockerGateway`) n'a qu'une méthode, `getStatus` (09 §17, §25). Un
+  test le vérifie sur le rendu et sur la passerelle.
+- **Rafraîchissement** : TanStack Query, toutes les 15 s (`LOCKER_STATUS_REFRESH_MS`;
+  le hub émet toutes les 10 s, le seuil du serveur est de 30 s) et au retour sur la
+  fenêtre; en pause quand l'onglet est caché. Un échec garde les dernières données
+  avec l'avis « Données non actualisées. » et un bouton « Réessayer »; un 403 ou un
+  404 au rafraîchissement retire les données au lieu de les garder. Un 401 termine
+  la session et ramène à `/connexion`.
+- **Annonces** : une zone `role="status"` dit une fois « Casier AEGIS-DEMO-01 : En
+  ligne. », puis seulement quand l'état de connexion change; un rafraîchissement
+  identique ne relit rien.
+- **Tableau** : un vrai `<table>` avec ses rôles écrits; sous 760 px de largeur de
+  conteneur, les lignes s'empilent en « libellé : valeur » (libellés répétés,
+  masqués aux lecteurs d'écran). Un état normal est du texte; chaque exception
+  (déconnectée, en défaut, ouverte, déverrouillée, inconnue) est une pastille avec
+  symbole et texte, jamais la couleur seule.
+- **Tests** : `src/features/lockers/*.test.ts`, `src/pages/LockersPage.test.tsx`
+  (états : chargement, nominal, hors ligne, jamais vu, sans horaire, fermé, 404,
+  403, 401, erreur réseau, réponse hors contrat, données périmées, intervalle,
+  absence d'action d'écriture, FR et EN); Playwright : scénarios `casiers` de la
+  matrice (français) et `lockers` de `language.spec.ts` (anglais), et les parcours
+  `flow: casiers`, avec les mêmes faux routés que le catalogue
+  (`e2e/lockerFakes.ts`). `npm run capture -- --grep casiers` (français) et
+  `npm run capture -- --grep "en-lockers"` (anglais) écrivent les captures dans
+  `test-results/captures/`. `npm run test:e2e:api` ne couvre pas encore cette page.
+
 ## Routage
 
 `src/app/routes.ts` et `src/app/router.ts` forment une interface
@@ -228,6 +291,7 @@ sera remplacée par le routeur choisi à l'intégration.
 | `/` | Accueil (textes [P] du handoff §7) |
 | `/connexion` | Connexion |
 | `/equipements` | Équipements, protégé : session administrateur exigée, sinon `/connexion`. Arrivée après la connexion hors aperçu |
+| `/casiers` | Casiers (statut en lecture seule), protégé comme `/equipements`. `?casier=<uuid>` désigne un casier |
 | `/apercu/equipements` | Aperçu seulement; « Page introuvable » ailleurs |
 | autre | Page introuvable |
 
