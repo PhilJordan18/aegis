@@ -115,9 +115,9 @@ jobs:
         run: python3 ../../.github/scripts/test-report.py "Web tests" "$RUNNER_TEMP/web-reports/unit.xml"
       - run: npm run build
 
-  # Simulator tests and the agent setup validator are in the `needs` of
-  # `CI result` (#67, docs/qualite/ci-02/). The ADR guard, iOS standalone and
-  # CI script tests stay outside it until they meet the criteria of #67.
+  # Simulator tests, the agent setup validator and the accepted ADR guard are in
+  # the `needs` of `CI result` (#67, docs/qualite/ci-02/). iOS standalone and CI
+  # script tests stay outside it until they meet the criteria of #67.
   simulator:
     name: Simulator tests
     needs: changes
@@ -269,7 +269,7 @@ jobs:
   # the change filter, and a skipped job must neither block nor hide a failure.
   result:
     name: CI result
-    needs: [changes, api, web, simulator, agents]
+    needs: [changes, api, web, simulator, agents, adrs]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -284,7 +284,8 @@ jobs:
           WEB: ${{ needs.changes.outputs.web }}:${{ needs.web.result }}
           SIMULATOR: ${{ needs.changes.outputs.simulator }}:${{ needs.simulator.result }}
           AGENTS: ${{ needs.changes.outputs.agents }}:${{ needs.agents.result }}
+          ADRS: ${{ needs.changes.outputs.adrs }}:${{ needs.adrs.result }}
         run: >-
           python3 .github/scripts/ci-result.py "$CHANGES"
           "API tests=$API" "Web checks=$WEB" "Simulator tests=$SIMULATOR"
-          "Agent setup validator=$AGENTS"
+          "Agent setup validator=$AGENTS" "Accepted ADR guard=$ADRS"
