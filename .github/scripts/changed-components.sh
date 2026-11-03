@@ -33,7 +33,8 @@ changed() {
   if printf '%s\n' "$files" | grep -Eq "$1"; then echo true; else echo false; fi
 }
 
-api=$(changed '^(services/api/|infra/docker/)')
+# The API broker tests read the Mosquitto ACL and accounts of infra/mqtt/.
+api=$(changed '^(services/api/|infra/docker/|infra/mqtt/)')
 # No Web test reads docs/design/manager-entree/ any more (tokens moved to
 # src/styles/); the path stays, which only runs Web more often than needed.
 web=$(changed '^(apps/admin-web/|docs/design/manager-entree/)')

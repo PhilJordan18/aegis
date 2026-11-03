@@ -77,7 +77,7 @@ class ChangedComponentsTests(unittest.TestCase):
             "apps/admin-web/src/App.tsx": {"web"},
             "docs/design/manager-entree/tokens.css": {"web"},
             "tools/hub-simulator/src/cli.ts": {"simulator"},
-            "infra/mqtt/acl": {"simulator"},
+            "infra/mqtt/acl": {"api", "simulator"},
             "infra/docker/compose.yaml": {"api", "simulator"},
             ".claude/agents/role.json": {"agents"},
             "docs/notes.md": {"agents"},
@@ -383,6 +383,13 @@ class WorkflowWiringTests(unittest.TestCase):
         step = ios[boot:ios.index("- name: Standalone recipe")]
         self.assertIn("timeout-minutes: 8", step)
         self.assertIn("xcrun simctl bootstatus", step)
+
+    def test_api_tests_start_the_development_broker_first(self):
+        api = self.text.split("\n  api:\n", 1)[1].split("\n  web:\n", 1)[0]
+        broker = api.index("up -d --wait mosquitto")
+        self.assertIn("--env-file infra/docker/.env.example", api)
+        self.assertLess(broker, api.index("./mvnw -B -ntp test"))
+        self.assertIn("logs mosquitto", api)
 
     def test_ci_result_always_runs_and_uses_the_aggregator(self):
         result = self.text[self.text.index("  result:\n"):]
