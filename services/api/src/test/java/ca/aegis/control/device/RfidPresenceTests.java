@@ -397,6 +397,21 @@ class RfidPresenceTests extends ApiIntegrationTest {
         assertEquals("UNKNOWN", read(view, "$.readiness.result"));
     }
 
+    /** Review LOW 3: a control character in an identifier is rejected and stored, never lost with its payload. */
+    @Test
+    void anIdentifierWithAControlCharacterIsStoredRejected() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        clock.advance(Duration.ofSeconds(1));
+        Map<String, Object> nul = scan(cellA, "HEALTHY", reads("E2\u0000X", 3));
+
+        assertEquals(Outcome.REJECTED, ingestion.ingest(events(), bytes(nul)));
+        Map<String, Object> row = message(nul);
+        assertEquals("REJECTED", row.get("processing_status"));
+        assertEquals("REQUIRED_FIELD_MISSING", row.get("processing_error"));
+        assertEquals(List.of(), observations(nul));
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"));
+    }
+
     /** A scan proves only what was expected when it was made: a later binding of the tag needs a new scan. */
     @Test
     void aScanMadeBeforeTheTagWasBoundProvesNothingForTheNewBinding() throws Exception {

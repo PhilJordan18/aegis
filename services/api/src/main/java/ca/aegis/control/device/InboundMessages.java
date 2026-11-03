@@ -232,8 +232,11 @@ final class InboundMessages {
             }
             requiredValue(entry, "identifierType", Set.of(RfidScan.IDENTIFIER_TYPE));
             String value = text(entry, "identifierValue");
+            // A control character cannot be an EPC, and PostgreSQL text refuses NUL: rejecting it here stores the
+            // message REJECTED instead of failing the observation insert and losing the raw payload.
             if (value == null || value.isEmpty()
-                    || value.codePointCount(0, value.length()) > RfidScan.MAX_IDENTIFIER_LENGTH) {
+                    || value.codePointCount(0, value.length()) > RfidScan.MAX_IDENTIFIER_LENGTH
+                    || value.codePoints().anyMatch(Character::isISOControl)) {
                 throw new Rejection(ProcessingError.REQUIRED_FIELD_MISSING);
             }
             identifiers.add(new RfidScan.ObservedIdentifier(value,
