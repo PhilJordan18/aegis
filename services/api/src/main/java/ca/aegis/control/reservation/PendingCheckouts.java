@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.UUID;
 
 import org.springframework.stereotype.Component;
@@ -29,7 +30,7 @@ class PendingCheckouts {
     /** Document 06, section 5.5. */
     static final String RESERVATION_CANCELLED = "RESERVATION_CANCELLED";
     /**
-     * Document 05, section 5.4 ends the attempt {@code EXPIRED} when the reservation ends; no document names the
+     * Document 05, section 5.4 ends the attempt when the reservation expires; no document names the
      * {@code failure_reason} that {@code ck_locker_operations_failure_reason} then requires.
      */
     static final String RESERVATION_EXPIRED = "RESERVATION_EXPIRED";
@@ -47,22 +48,32 @@ class PendingCheckouts {
     /** {@code FAILED} with {@link #RESERVATION_CANCELLED}, by the holder who cancels. */
     @Transactional(propagation = Propagation.MANDATORY)
     List<UUID> endForCancellation(UUID reservationId, UUID holder, Instant now) {
-        return end(reservationId, holder, LockerOperationStatus.FAILED, AuditEventType.OPERATION_FAILED,
-                LocalChallengeStatus.INVALIDATED, AuditEventType.LOCAL_CHALLENGE_INVALIDATED, RESERVATION_CANCELLED,
-                now);
+        return end(reservationId, holder, attempt -> LockerOperationStatus.FAILED, LocalChallengeStatus.INVALIDATED,
+                AuditEventType.LOCAL_CHALLENGE_INVALIDATED, RESERVATION_CANCELLED, now);
     }
 
-    /** {@code EXPIRED} with {@link #RESERVATION_EXPIRED}, by the backend. */
+    /**
+     * By the backend, with {@link #RESERVATION_EXPIRED}: an attempt waiting for its QR becomes {@code EXPIRED}; a
+     * {@code REQUESTED} attempt becomes {@code FAILED}, the only end document 05, section 5.4 allows it.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     List<UUID> endForExpiry(UUID reservationId, Instant now) {
-        return end(reservationId, null, LockerOperationStatus.EXPIRED, AuditEventType.OPERATION_EXPIRED,
-                LocalChallengeStatus.EXPIRED, AuditEventType.LOCAL_CHALLENGE_EXPIRED, RESERVATION_EXPIRED, now);
+        return end(reservationId, null, PendingCheckouts::expiredEnd, LocalChallengeStatus.EXPIRED,
+                AuditEventType.LOCAL_CHALLENGE_EXPIRED, RESERVATION_EXPIRED, now);
     }
 
-    private List<UUID> end(UUID reservationId, UUID actor, LockerOperationStatus terminal, AuditEventType type,
+    private static LockerOperationStatus expiredEnd(PendingAttempt attempt) {
+        return attempt.status() == LockerOperationStatus.REQUESTED ? LockerOperationStatus.FAILED
+                : LockerOperationStatus.EXPIRED;
+    }
+
+    private List<UUID> end(UUID reservationId, UUID actor, Function<PendingAttempt, LockerOperationStatus> terminalOf,
             LocalChallengeStatus closed, AuditEventType challengeType, String reason, Instant now) {
         List<PendingAttempt> pending = attempts.lockBeforeAuthorization(reservationId);
         for (PendingAttempt attempt : pending) {
+            LockerOperationStatus terminal = terminalOf.apply(attempt);
+            AuditEventType type = terminal == LockerOperationStatus.FAILED ? AuditEventType.OPERATION_FAILED
+                    : AuditEventType.OPERATION_EXPIRED;
             Optional<UUID> challenge = challenges.lockPending(attempt.id());
             attempts.end(attempt, terminal, reason, now);
             audit.record(AuditEvent.transition(type, actor, AuditSubjectType.LOCKER_OPERATION, attempt.id(),

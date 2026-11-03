@@ -156,6 +156,32 @@ class ReservationExpiryTests extends ApiIntegrationTest {
         assertEquals("EXPIRED", fixtures.reservationStatus(reservation));
     }
 
+    /** Document 05, section 5.4: an attempt still {@code REQUESTED} can only fail, so the expiry ends it FAILED. */
+    @Test
+    void aRequestedAttemptFailsWhenItsReservationExpires() {
+        UUID asset = fixtures.asset(locker);
+        UUID reservation = fixtures.reservation(asset, technician.id(), "ACTIVE", FROM, UNTIL);
+        UUID attempt = fixtures.attempt(asset, technician.id(), reservation, "REQUESTED", false,
+                UNTIL.minusSeconds(30));
+
+        assertEquals(Outcome.EXPIRED, expiry.expire(reservation, UNTIL, false));
+
+        assertEquals(1L, fixtures.count("""
+                SELECT count(*) FROM aegis.locker_operations
+                WHERE id = :id AND status = 'FAILED' AND failure_reason = 'RESERVATION_EXPIRED'
+                  AND terminal_at = '2026-09-28T15:30:00Z'
+                """, attempt));
+        assertEquals(1L, fixtures.count("""
+                SELECT count(*) FROM aegis.audit_events
+                WHERE operation_id = :id AND event_type = 'OPERATION_FAILED' AND actor_user_id IS NULL
+                  AND from_state = 'REQUESTED' AND to_state = 'FAILED' AND reason = 'RESERVATION_EXPIRED'
+                """, attempt));
+        assertEquals(0L, fixtures.count("""
+                SELECT count(*) FROM aegis.audit_events WHERE operation_id = :id AND event_type = 'OPERATION_EXPIRED'
+                """, attempt));
+        assertEquals("EXPIRED", fixtures.reservationStatus(reservation));
+    }
+
     /**
      * Document 06, section 14.1 and document 08, section 4.6: the pending challenge of a QR wait expires with the
      * reservation and its display instruction stops with its ciphertext purged; a sendable instruction becomes
