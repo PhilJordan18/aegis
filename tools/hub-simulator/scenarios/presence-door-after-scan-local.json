@@ -1,0 +1,17 @@
+{
+  "steps": [
+    { "do": "waitOnline", "timeoutMs": 10000 },
+    { "do": "putTag", "code": "A1", "identifier": "E20034120123456789000001" },
+    { "do": "scanRfid", "code": "A1" },
+    { "do": "putTag", "code": "A2", "identifier": "E20034120123456789000002" },
+    { "do": "scanRfid", "code": "A2" },
+    { "wait": 30000 },
+    { "do": "openDoor", "code": "A1", "forced": true },
+    { "wait": 20000 },
+    { "do": "closeDoor", "code": "A1" },
+    { "wait": 25000 },
+    { "do": "scanRfid", "code": "A1" },
+    { "wait": 30000 },
+    { "do": "stop" }
+  ]
+}
