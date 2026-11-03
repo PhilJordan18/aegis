@@ -3,7 +3,6 @@ package ca.aegis.control.reservation;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 
 /**
@@ -13,7 +12,6 @@ import org.springframework.scheduling.annotation.Scheduled;
  * turn it off with {@code aegis.reservations.expiry.scheduled=false} and call {@link ReservationExpiry} themselves.
  */
 @Configuration(proxyBeanMethods = false)
-@EnableScheduling
 @ConditionalOnProperty(name = "aegis.reservations.expiry.scheduled", havingValue = "true", matchIfMissing = true)
 class ReservationExpiryJob {
 
@@ -27,7 +25,7 @@ class ReservationExpiryJob {
 
     /**
      * One pass over every due reservation, read in pages of {@code batch-size}; a pass never overlaps another in this
-     * instance.
+     * instance. Scheduling itself is enabled by {@code SchedulingConfiguration}, not by this conditional job.
      */
     @Scheduled(fixedDelayString = "${aegis.reservations.expiry.interval:PT15S}",
             initialDelayString = "${aegis.reservations.expiry.interval:PT15S}")
