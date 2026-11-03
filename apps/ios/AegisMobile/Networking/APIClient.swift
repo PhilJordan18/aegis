@@ -33,6 +33,9 @@ struct APIProblem: Decodable, Equatable, Sendable {
     let detail: String
     let traceId: String?
     var violations: [Violation]? = nil
+    /// Controlled business reasons, such as the readiness reasons of
+    /// `422 ASSET_NOT_READY` (§7, §14.1). Kept raw: the caller maps known ones.
+    var reasons: [String]? = nil
 }
 
 enum APIError: Error, Equatable {
@@ -54,10 +57,12 @@ struct Endpoint<Response: Decodable & Sendable>: Sendable {
     let path: String
     var query: [URLQueryItem] = []
     var body: Data? = nil
+    var headers: [String: String] = [:]
 
-    static func json(method: String, path: String, body: some Encodable) -> Endpoint {
+    static func json(method: String, path: String, body: some Encodable,
+                     headers: [String: String] = [:]) -> Endpoint {
         // Encoding a plain request DTO cannot fail.
-        Endpoint(method: method, path: path, body: try! JSONEncoder().encode(body))
+        Endpoint(method: method, path: path, body: try! APIClient.encoder.encode(body), headers: headers)
     }
 }
 
@@ -83,6 +88,9 @@ struct APIClient: Sendable {
         if let body = endpoint.body {
             request.httpBody = body
             request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        }
+        for (field, value) in endpoint.headers {
+            request.setValue(value, forHTTPHeaderField: field)
         }
         if let token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -151,6 +159,13 @@ struct APIClient: Sendable {
         Date.ISO8601FormatStyle(includingFractionalSeconds: true),
         Date.ISO8601FormatStyle(),
     ]
+
+    /// Instants are sent as RFC 3339 UTC without fractional seconds (doc 09 §3).
+    static let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }()
 
     static let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
