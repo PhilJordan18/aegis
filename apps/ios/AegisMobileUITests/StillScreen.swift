@@ -31,3 +31,26 @@ extension XCUIApplication {
         return lines
     }
 }
+
+extension XCUIApplication {
+    /// Runs the accessibility audit; when XCTest abandons the audit itself
+    /// ("Audit failed to complete in time", seen on loaded CI runners), runs
+    /// it once more on a still screen. Issues found by a completed audit are
+    /// never retried away, and a second timeout fails. This is not a
+    /// tolerance on findings: an abandoned audit produced none, so the
+    /// retry only obtains the measurement the test asks for.
+    @MainActor
+    func performCompletedAccessibilityAudit(
+        for types: XCUIAccessibilityAuditType,
+        _ issueHandler: ((XCUIAccessibilityAuditIssue) throws -> Bool)?
+    ) throws {
+        do {
+            try performAccessibilityAudit(for: types, issueHandler)
+        } catch let error as NSError where error.domain == "com.apple.xcode.xctest.accessibilityAudit"
+                                            && error.code == -56 {
+            XCTContext.runActivity(named: "Audit did not complete in time; auditing again") { _ in }
+            _ = waitForStillScreen()
+            try performAccessibilityAudit(for: types, issueHandler)
+        }
+    }
+}
