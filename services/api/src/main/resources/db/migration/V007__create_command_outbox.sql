@@ -52,8 +52,9 @@ CREATE TABLE aegis.local_access_challenges (
 
 -- The application encrypts the display payload (authenticated encryption, key outside PostgreSQL); the envelope of
 -- ciphertext, nonce and tag lives in encrypted_payload and is purged once the challenge is consumed, expired or
--- invalidated. schema_version has no default, as in command_outbox: the producer states the MQTT schema of document
--- 10 it encodes, and a default would silently go stale when that schema changes; the hub rejects a wrong version.
+-- invalidated. schema_version has no default and may not be blank, as in command_outbox: the producer states the MQTT
+-- schema of document 10 it encodes, and a default would silently go stale when that schema changes; the hub rejects
+-- a wrong version.
 CREATE TABLE aegis.hub_display_outbox (
     id uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
     message_id uuid NOT NULL UNIQUE,
@@ -90,6 +91,7 @@ CREATE TABLE aegis.hub_display_outbox (
     CONSTRAINT ck_display_challenge
         CHECK ((message_type = 'DISPLAY_ACCESS_CHALLENGE') = (challenge_id IS NOT NULL)),
     CONSTRAINT ck_display_dates CHECK (expires_at > issued_at),
+    CONSTRAINT ck_display_schema_non_blank CHECK (btrim(schema_version) <> ''),
     CONSTRAINT ck_display_status
         CHECK (status IN ('PENDING', 'CLAIMED', 'DISPATCHED', 'ACKNOWLEDGED', 'REJECTED', 'CANCELLED')),
     CONSTRAINT ck_display_claim

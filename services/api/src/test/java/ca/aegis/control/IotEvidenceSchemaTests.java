@@ -117,8 +117,9 @@ class IotEvidenceSchemaTests {
                 "local_access_challenges_token_hash_key:u", "uq_local_challenge_id_operation:u"),
                 constraints("local_access_challenges"));
         assertEquals(List.of(
-                "ck_display_challenge:c", "ck_display_claim:c", "ck_display_dates:c", "ck_display_sendable_payload:c",
-                "ck_display_status:c", "ck_display_type:c", "fk_display_challenge:f", "fk_display_device:f",
+                "ck_display_challenge:c", "ck_display_claim:c", "ck_display_dates:c", "ck_display_schema_non_blank:c",
+                "ck_display_sendable_payload:c", "ck_display_status:c", "ck_display_type:c", "fk_display_challenge:f",
+                "fk_display_device:f",
                 "fk_display_operation:f", "hub_display_outbox_attempt_count_check:c",
                 "hub_display_outbox_display_revision_check:c", "hub_display_outbox_encryption_key_id_check:c",
                 "hub_display_outbox_message_id_key:u", "hub_display_outbox_pkey:p", "hub_display_outbox_topic_check:c",
@@ -367,6 +368,8 @@ class IotEvidenceSchemaTests {
                 with(next, "challenge_id", abandonedChallenge)));
         assertViolation("23514", "ck_display_dates", () -> insert("hub_display_outbox",
                 with(next, "expires_at", CREATED)));
+        assertViolation("23514", "ck_display_schema_non_blank", () -> insert("hub_display_outbox",
+                with(next, "schema_version", " ")));
         assertViolation("23514", "ck_display_status", () -> insert("hub_display_outbox",
                 with(next, "status", "SENT")));
         assertViolation("23514", "ck_display_claim", () -> insert("hub_display_outbox",
