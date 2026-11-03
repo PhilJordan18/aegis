@@ -9,7 +9,7 @@ import Foundation
 ///   before launch.
 /// - `AEGIS_START_SCREEN=health`: opens the diagnostic screen directly.
 /// - `AEGIS_UI_FOCUS=email|password`: focuses a field (keyboard captures).
-/// - `AEGIS_START_TAB=account`: opens the Account tab once signed in.
+/// - `AEGIS_START_TAB=account|activity`: opens that tab once signed in.
 ///
 /// Catalogue answers come from `UITestCatalogFixtures`: fictional data for UI
 /// tests and captures only, never a fallback of the real app.
@@ -29,8 +29,10 @@ struct UITestHooks {
         if environment["AEGIS_START_SCREEN"] == "health" {
             startScreen = .health
         }
-        if environment["AEGIS_START_TAB"] == "account" {
-            tab = .account
+        switch environment["AEGIS_START_TAB"] {
+        case "account": tab = .account
+        case "activity": tab = .activity
+        default: break
         }
         switch environment["AEGIS_UI_FOCUS"] {
         case "email": focus = .email

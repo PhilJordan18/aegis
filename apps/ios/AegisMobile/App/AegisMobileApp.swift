@@ -11,6 +11,9 @@ struct AegisMobileApp: App {
     }
 }
 
+/// Everything the signed-in technician reads or changes; `APIClient` conforms.
+typealias TechnicianService = AssetCatalogService & ActivityService & ReservationService
+
 /// Composition root: the real network and Keychain, replaced only by the
 /// Debug-only UI-test hooks of `UITestHooks`.
 @MainActor
@@ -20,7 +23,7 @@ struct AppDependencies {
     let health: HealthViewModel
     /// Nil when the build has no usable API address.
     let session: SessionModel?
-    let catalog: (any AssetCatalogService)?
+    let catalog: (any TechnicianService)?
     let startScreen: StartScreen
     let initialFocus: SessionModel.Field?
     let initialTab: SignedInView.Tab
@@ -63,7 +66,7 @@ struct RootView: View {
 struct SessionRootView: View {
     let session: SessionModel
     let health: HealthViewModel
-    let catalog: any AssetCatalogService
+    let catalog: any TechnicianService
     let initialFocus: SessionModel.Field?
     let initialTab: SignedInView.Tab
 
@@ -94,38 +97,58 @@ struct SessionRootView: View {
     }
 }
 
-/// Signed-in technician. The approved navigation has three tabs; « Mon
-/// activité » arrives with RES-01/RES-02 (#37, #38) and is not shown empty.
+/// Signed-in technician: the three approved tabs (handoff §2).
 struct SignedInView: View {
-    enum Tab: Hashable { case equipment, account }
+    enum Tab: Hashable { case equipment, activity, account }
 
     let session: SessionModel
     let profile: UserProfile
     let health: HealthViewModel
-    let catalogService: any AssetCatalogService
+    let catalogService: any TechnicianService
 
     @State private var catalog: CatalogViewModel
+    @State private var activity: ActivityViewModel
     @State private var tab: Tab
 
     init(session: SessionModel, profile: UserProfile, health: HealthViewModel,
-         catalog: any AssetCatalogService, initialTab: Tab) {
+         catalog: any TechnicianService, initialTab: Tab) {
         self.session = session
         self.profile = profile
         self.health = health
         catalogService = catalog
         _catalog = State(initialValue: CatalogViewModel(service: catalog, session: session))
+        _activity = State(initialValue: ActivityViewModel(service: catalog, session: session))
         _tab = State(initialValue: initialTab)
     }
 
     var body: some View {
         TabView(selection: $tab) {
-            CatalogScreen(model: catalog, makeSheet: makeSheet)
+            CatalogScreen(model: catalog, makeSheet: makeSheet, reservations: reservations)
                 .tabItem { Label("Équipements", systemImage: "shippingbox") }
                 .tag(Tab.equipment)
+            ActivityScreen(model: activity, browseEquipment: { tab = .equipment })
+                .tabItem { Label("Mon activité", systemImage: "checklist") }
+                .tag(Tab.activity)
             AccountView(session: session, profile: profile, health: health)
                 .tabItem { Label("Compte", systemImage: "person.crop.circle") }
                 .tag(Tab.account)
         }
+        // Read once at sign-in, so the asset sheet can name the technician's own reservation.
+        .task { await activity.loadIfNeeded() }
+    }
+
+    private var reservations: ReservationContext {
+        ReservationContext(
+            activity: activity,
+            makeSheet: { [catalogService, session] asset in
+                ReservationSheetViewModel(asset: asset, service: catalogService, session: session)
+            },
+            reserved: { [activity, catalog] reservation in
+                activity.accept(created: reservation)
+                tab = .activity
+                Task { await catalog.reload() }
+            },
+            showActivity: { tab = .activity })
     }
 
     private func makeSheet(_ id: UUID) -> AssetSheetViewModel {

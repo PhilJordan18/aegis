@@ -10,6 +10,7 @@ struct AssetRoute: Hashable {
 struct CatalogScreen: View {
     @Bindable var model: CatalogViewModel
     let makeSheet: (UUID) -> AssetSheetViewModel
+    var reservations: ReservationContext?
     private static let minimumRefresh = Duration.milliseconds(800)
 
     var body: some View {
@@ -41,7 +42,7 @@ struct CatalogScreen: View {
             }
             .task(id: model.criteria) { await model.loadIfNeeded() }
             .navigationDestination(for: AssetRoute.self) { route in
-                AssetSheetScreen(model: makeSheet(route.id))
+                AssetSheetScreen(model: makeSheet(route.id), reservations: reservations)
             }
         }
     }
