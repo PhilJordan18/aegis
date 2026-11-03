@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -40,13 +41,14 @@ import ca.aegis.control.support.TestDatabaseServer;
 import ca.aegis.control.support.TestDatabases;
 
 /**
- * V007 and V008, document 08, sections 4.6 to 4.8, 5.1, 8.2 and 9: local access challenges, the display outbox, the
- * command outbox, inbound device messages, physical observations and their audit references. Every refusal below
- * comes from PostgreSQL itself; each invalid row breaks exactly one constraint so that the name is certain.
+ * V007 to V009, document 08, sections 4.6 to 4.9, 5.1, 8.2 and 9: local access challenges, the display outbox, the
+ * command outbox, inbound device messages, physical observations, their audit references and anomalies. Every
+ * refusal below comes from PostgreSQL itself; each invalid row breaks exactly one constraint so that the name is
+ * certain, except where a comment says which constraint PostgreSQL reports first.
  */
 class IotEvidenceSchemaTests {
 
-    private static final int MIGRATIONS = 10;
+    private static final int MIGRATIONS = 11;
     private static final OffsetDateTime CREATED = OffsetDateTime.of(2026, 11, 2, 13, 0, 0, 0, ZoneOffset.UTC);
     private static final OffsetDateTime DISPLAYED = CREATED.plusSeconds(5);
     private static final OffsetDateTime CONSUMED = CREATED.plusSeconds(20);
@@ -143,6 +145,12 @@ class IotEvidenceSchemaTests {
                 "fk_physical_observations_compartment_locker:f", "fk_physical_observations_message:f",
                 "fk_physical_observations_operation:f", "physical_observations_pkey:p"),
                 constraints("physical_observations"));
+        assertEquals(List.of(
+                "anomalies_pkey:p", "ck_anomalies_acknowledgement_note:c", "ck_anomalies_dates:c",
+                "ck_anomalies_lifecycle:c", "ck_anomalies_resolution_note:c", "ck_anomalies_severity:c",
+                "ck_anomalies_status:c", "ck_anomalies_type:c", "fk_anomalies_acknowledger:f", "fk_anomalies_asset:f",
+                "fk_anomalies_compartment:f", "fk_anomalies_operation:f", "fk_anomalies_resolution_observation:f"),
+                constraints("anomalies"));
 
         // No cascade anywhere: command and proof history is never deleted through a parent row.
         assertEquals(List.of(
@@ -176,6 +184,13 @@ class IotEvidenceSchemaTests {
                         + "REFERENCES inbound_device_messages(id)",
                 "fk_physical_observations_operation FOREIGN KEY (operation_id) REFERENCES locker_operations(id)"),
                 foreignKeys("inbound_device_messages", "physical_observations", "audit_events"));
+        assertEquals(List.of(
+                "fk_anomalies_acknowledger FOREIGN KEY (acknowledged_by_user_id) REFERENCES users(id)",
+                "fk_anomalies_asset FOREIGN KEY (asset_id) REFERENCES assets(id)",
+                "fk_anomalies_compartment FOREIGN KEY (compartment_id) REFERENCES compartments(id)",
+                "fk_anomalies_operation FOREIGN KEY (locker_operation_id) REFERENCES locker_operations(id)",
+                "fk_anomalies_resolution_observation FOREIGN KEY (resolution_evidence_observation_id) "
+                        + "REFERENCES physical_observations(id)"), foreignKeys("anomalies"));
 
         // Invariant, expiry, claim and deduplication indexes only; the read indexes of section 5.2 are left to V011.
         assertEquals(List.of("ix_local_challenges_pending_expiry", "local_access_challenges_operation_id_key",
@@ -188,6 +203,11 @@ class IotEvidenceSchemaTests {
         assertEquals(List.of("inbound_device_messages_pkey", "uq_inbound_messages_device_message"),
                 indexes("inbound_device_messages"));
         assertEquals(List.of("physical_observations_pkey"), indexes("physical_observations"));
+        assertEquals(List.of("anomalies_pkey", "ux_anomalies_one_open_per_operation"), indexes("anomalies"));
+        assertEquals("CREATE UNIQUE INDEX ux_anomalies_one_open_per_operation ON aegis.anomalies USING btree "
+                + "(locker_operation_id) WHERE ((locker_operation_id IS NOT NULL) "
+                + "AND (status = ANY (ARRAY['OPEN'::text, 'ACKNOWLEDGED'::text])))",
+                indexDefinition("ux_anomalies_one_open_per_operation"));
         assertEquals("CREATE UNIQUE INDEX ux_display_one_challenge_per_operation ON aegis.hub_display_outbox "
                 + "USING btree (operation_id) WHERE (message_type = 'DISPLAY_ACCESS_CHALLENGE'::text)",
                 indexDefinition("ux_display_one_challenge_per_operation"));
@@ -792,6 +812,189 @@ class IotEvidenceSchemaTests {
     }
 
     /**
+     * Section 4.9: an anomaly is acknowledged by a named user with a note, which never resolves it, and is resolved
+     * only with the observation that proves the resolution, acknowledged first or not.
+     */
+    @Test
+    void anAnomalyIsResolvedOnlyByAnObservation() {
+        Site site = site("A");
+        UUID operation = operation(site, "AUTHORIZED");
+        UUID evidence = evidence(site, operation);
+        UUID unattached = insert("anomalies", with(anomaly(site, null, "INCONSISTENT_PHYSICAL_STATE"),
+                "detected_at", null));
+        Map<String, Object> defaults = jdbc.sql("""
+                SELECT status, detected_at, details::text AS details FROM aegis.anomalies WHERE id = :id
+                """).param("id", unattached).query().singleRow();
+        assertEquals("OPEN", defaults.get("status"));
+        assertNotNull(defaults.get("detected_at"));
+        assertEquals("{}", defaults.get("details"));
+
+        UUID anomaly = insert("anomalies", anomaly(site, operation, "EXPECTED_ASSET_NOT_OBSERVED"));
+        update("anomalies", anomaly, acknowledgement(site));
+        update("anomalies", anomaly, resolution(evidence));
+        insert("anomalies", with(anomaly(site, null, "UNEXPECTED_ASSET_OBSERVED"), resolution(evidence)));
+        assertEquals(List.of("RESOLVED:3", "RESOLVED:0"), jdbc.sql("""
+                SELECT status || ':' || num_nonnulls(acknowledged_at, acknowledged_by_user_id, acknowledgement_note)
+                FROM aegis.anomalies WHERE resolution_evidence_observation_id = :evidence
+                ORDER BY acknowledged_at NULLS LAST
+                """).param("evidence", evidence).query(String.class).list());
+
+        Map<String, Object> open = anomaly(site, null, "EXPECTED_ASSET_NOT_OBSERVED");
+        Map<String, Object> acknowledged = with(open, acknowledgement(site));
+        Map<String, Object> resolved = with(open, resolution(evidence));
+        assertViolation("23514", "ck_anomalies_type",
+                () -> insert("anomalies", with(open, "type", "DOOR_JAMMED")));
+        assertViolation("23514", "ck_anomalies_severity",
+                () -> insert("anomalies", with(open, "severity", "CRITICAL")));
+        assertViolation("23514", "ck_anomalies_acknowledgement_note", () -> insert("anomalies",
+                with(with(resolved, acknowledgement(site)), "status", "RESOLVED", "acknowledgement_note", " ")));
+        assertViolation("23514", "ck_anomalies_lifecycle",
+                () -> insert("anomalies", with(open, "acknowledged_at", CREATED.plusMinutes(1))));
+        assertViolation("23514", "ck_anomalies_lifecycle",
+                () -> insert("anomalies", with(acknowledged, "acknowledged_by_user_id", null)));
+        assertViolation("23514", "ck_anomalies_lifecycle",
+                () -> insert("anomalies", with(acknowledged, "resolved_at", CREATED.plusMinutes(2))));
+        assertViolation("23514", "ck_anomalies_lifecycle",
+                () -> insert("anomalies", with(resolved, "resolution_evidence_observation_id", null)));
+        assertViolation("23514", "ck_anomalies_lifecycle",
+                () -> insert("anomalies", with(resolved, "acknowledged_at", CREATED.plusMinutes(1))));
+        // An unknown status and a blank resolution note also break the lifecycle, which PostgreSQL checks first
+        // (constraints are checked in name order): ck_anomalies_status and ck_anomalies_resolution_note restate it.
+        assertViolation("23514", "ck_anomalies_lifecycle",
+                () -> insert("anomalies", with(open, "status", "CLOSED")));
+        assertViolation("23514", "ck_anomalies_lifecycle",
+                () -> insert("anomalies", with(resolved, "resolution_note", " ")));
+        assertViolation("23514", "ck_anomalies_dates",
+                () -> insert("anomalies", with(acknowledged, "acknowledged_at", CREATED.minusSeconds(1))));
+        assertViolation("23514", "ck_anomalies_dates",
+                () -> insert("anomalies", with(resolved, "resolved_at", CREATED.minusSeconds(1))));
+
+        assertViolation("23503", "fk_anomalies_operation",
+                () -> insert("anomalies", with(open, "locker_operation_id", UUID.randomUUID())));
+        assertViolation("23503", "fk_anomalies_asset",
+                () -> insert("anomalies", with(open, "asset_id", UUID.randomUUID())));
+        assertViolation("23503", "fk_anomalies_compartment",
+                () -> insert("anomalies", with(open, "compartment_id", UUID.randomUUID())));
+        assertViolation("23503", "fk_anomalies_acknowledger",
+                () -> insert("anomalies", with(acknowledged, "acknowledged_by_user_id", UUID.randomUUID())));
+        assertViolation("23503", "fk_anomalies_resolution_observation", () -> insert("anomalies",
+                with(resolved, "resolution_evidence_observation_id", UUID.randomUUID())));
+    }
+
+    /**
+     * Section 5.1, invariant 5: an open or acknowledged anomaly holds its operation, on insert and on update alike; a
+     * resolved one frees it. Anomalies outside any operation are not limited.
+     */
+    @Test
+    void anOperationHoldsAtMostOneActiveAnomaly() {
+        Site site = site("A");
+        UUID operation = operation(site, "AUTHORIZED");
+        UUID evidence = evidence(site, operation);
+        UUID first = insert("anomalies", anomaly(site, operation, "EXPECTED_ASSET_NOT_OBSERVED"));
+        Map<String, Object> another = anomaly(site, operation, "DOOR_NOT_CLOSED_BEFORE_EXPIRY");
+        assertViolation("23505", "ux_anomalies_one_open_per_operation", () -> insert("anomalies", another));
+        update("anomalies", first, acknowledgement(site));
+        assertViolation("23505", "ux_anomalies_one_open_per_operation", () -> insert("anomalies", another));
+        update("anomalies", first, resolution(evidence));
+        insert("anomalies", another);
+        assertViolation("23505", "ux_anomalies_one_open_per_operation", () -> jdbc.sql("""
+                UPDATE aegis.anomalies
+                SET status = 'OPEN', acknowledged_at = NULL, acknowledged_by_user_id = NULL,
+                    acknowledgement_note = NULL, resolved_at = NULL, resolution_evidence_observation_id = NULL,
+                    resolution_note = NULL
+                WHERE id = :id
+                """).param("id", first).update());
+        insert("anomalies", anomaly(site, null, "ASSET_PRESENT_WITH_ACTIVE_LOAN"));
+        insert("anomalies", anomaly(site, null, "ASSET_PRESENT_WITH_ACTIVE_LOAN"));
+
+        assertEquals(List.of("OPEN:1", "RESOLVED:1"), jdbc.sql("""
+                SELECT status || ':' || count(*) FROM aegis.anomalies WHERE locker_operation_id = :operation
+                GROUP BY status ORDER BY status
+                """).param("operation", operation).query(String.class).list());
+    }
+
+    /**
+     * Two detectors pass the application check in READ COMMITTED, since neither sees the other's uncommitted row; the
+     * second insert waits on the first one's index entry, then PostgreSQL refuses it and one active anomaly remains.
+     */
+    @Test
+    void twoDetectorsCannotOpenTwoAnomaliesForOneOperation() throws Exception {
+        Site site = site("A");
+        UUID operation = operation(site, "AUTHORIZED");
+        String precheck = """
+                SELECT count(*) FROM aegis.anomalies
+                WHERE locker_operation_id = :operation AND status IN ('OPEN', 'ACKNOWLEDGED')
+                """;
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try (SingleConnectionDataSource firstSession = transaction();
+                SingleConnectionDataSource secondSession = transaction()) {
+            JdbcClient firstDetector = JdbcClient.create(firstSession);
+            JdbcClient secondDetector = JdbcClient.create(secondSession);
+            assertEquals(0, firstDetector.sql(precheck).param("operation", operation).query(Long.class).single());
+            assertEquals(0, secondDetector.sql(precheck).param("operation", operation).query(Long.class).single());
+            int firstPid = firstDetector.sql("SELECT pg_backend_pid()").query(Integer.class).single();
+            int secondPid = secondDetector.sql("SELECT pg_backend_pid()").query(Integer.class).single();
+            insert(firstDetector, "anomalies", anomaly(site, operation, "EXPECTED_ASSET_NOT_OBSERVED"));
+
+            CountDownLatch secondStarted = new CountDownLatch(1);
+            Future<UUID> secondInsert = executor.submit(() -> {
+                secondStarted.countDown();
+                return insert(secondDetector, "anomalies", anomaly(site, operation, "DOOR_NOT_CLOSED_BEFORE_EXPIRY"));
+            });
+            assertTrue(secondStarted.await(10, TimeUnit.SECONDS));
+            awaitBlocked(secondPid, firstPid);
+            firstSession.getConnection().commit();
+
+            ExecutionException failure = assertThrows(ExecutionException.class,
+                    () -> secondInsert.get(10, TimeUnit.SECONDS));
+            DataAccessException refusal = assertInstanceOf(DataAccessException.class, failure.getCause());
+            PSQLException cause = assertInstanceOf(PSQLException.class, refusal.getMostSpecificCause());
+            assertEquals("23505", cause.getSQLState(), cause::getMessage);
+            assertEquals("ux_anomalies_one_open_per_operation", cause.getServerErrorMessage().getConstraint(),
+                    cause::getMessage);
+            secondSession.getConnection().rollback();
+        } finally {
+            executor.shutdownNow();
+        }
+        assertEquals(1, jdbc.sql(precheck).param("operation", operation).query(Long.class).single());
+    }
+
+    /** Section 12.1: the application role opens, acknowledges and resolves anomalies but never deletes them. */
+    @Test
+    void theApplicationRoleMovesAnomaliesForwardButNeverDeletesThem() {
+        String role = "aegis_test_app_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        jdbc.sql("CREATE ROLE " + role + " NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS")
+                .update();
+        try {
+            assertEquals(0, flyway(role).migrate().migrationsExecuted);
+            assertEquals(List.of("anomalies:INSERT,SELECT,UPDATE"), privileges(role, "anomalies"));
+            Site site = site("A");
+            UUID operation = operation(site, "AUTHORIZED");
+            UUID evidence = evidence(site, operation);
+            UUID anomaly;
+
+            try (SingleConnectionDataSource session = new SingleConnectionDataSource(server.url(database),
+                    server.user(), server.password(), true)) {
+                JdbcClient application = JdbcClient.create(session);
+                application.sql("SET ROLE " + role).update();
+
+                anomaly = insert(application, "anomalies", anomaly(site, operation, "EXPECTED_ASSET_NOT_OBSERVED"));
+                update(application, "anomalies", anomaly, acknowledgement(site));
+                update(application, "anomalies", anomaly, resolution(evidence));
+                assertRefused("42501", () -> application.sql("DELETE FROM aegis.anomalies WHERE id = :id")
+                        .param("id", anomaly).update());
+                assertRefused("42501", () -> application.sql("TRUNCATE aegis.anomalies").update());
+                application.sql("RESET ROLE").update();
+            }
+            assertEquals("RESOLVED", jdbc.sql("SELECT status FROM aegis.anomalies WHERE id = :id")
+                    .param("id", anomaly).query(String.class).single());
+        } finally {
+            jdbc.sql("DROP OWNED BY " + role).update();
+            jdbc.sql("DROP ROLE " + role).update();
+        }
+    }
+
+    /**
      * Command and proof history is never destructively erased (AGENTS.md, document 08, section 12.1): the
      * application role records challenges, display instructions and commands, takes the claim lock and moves their
      * states forward, but cannot delete or truncate them.
@@ -1076,6 +1279,48 @@ class IotEvidenceSchemaTests {
         return columns;
     }
 
+    /** An open anomaly detected at CREATED on the site's asset and compartment, within the operation if given. */
+    private static Map<String, Object> anomaly(Site site, UUID operation, String type) {
+        Map<String, Object> columns = new LinkedHashMap<>();
+        columns.put("type", type);
+        columns.put("severity", "HIGH");
+        if (operation != null) {
+            columns.put("locker_operation_id", operation);
+        }
+        columns.put("asset_id", site.asset());
+        columns.put("compartment_id", site.compartment());
+        columns.put("detected_at", CREATED);
+        return columns;
+    }
+
+    /** The acknowledgement of an anomaly by the site's user, one minute after its detection. */
+    private static Map<String, Object> acknowledgement(Site site) {
+        Map<String, Object> columns = new LinkedHashMap<>();
+        columns.put("status", "ACKNOWLEDGED");
+        columns.put("acknowledged_at", CREATED.plusMinutes(1));
+        columns.put("acknowledged_by_user_id", site.user());
+        columns.put("acknowledgement_note", "Cellule inspectée, actif absent");
+        return columns;
+    }
+
+    /** The resolution of an anomaly by the observation that proves it, two minutes after its detection. */
+    private static Map<String, Object> resolution(UUID evidence) {
+        Map<String, Object> columns = new LinkedHashMap<>();
+        columns.put("status", "RESOLVED");
+        columns.put("resolved_at", CREATED.plusMinutes(2));
+        columns.put("resolution_evidence_observation_id", evidence);
+        columns.put("resolution_note", "Actif replacé et détecté");
+        return columns;
+    }
+
+    /** An identifier detection in the site's compartment during the operation, recorded from a new RFID scan. */
+    private UUID evidence(Site site, UUID operation) {
+        UUID scan = insert("inbound_device_messages", with(inbound(site, "RFID_SCAN_COMPLETED", 1), "operation_id",
+                operation));
+        return insert("physical_observations", with(observation(site, scan, "ASSET_IDENTIFIER_DETECTED"),
+                "operation_id", operation, "identifier_value", "E200-0001"));
+    }
+
     private static PGobject json(String value) {
         PGobject json = new PGobject();
         json.setType("jsonb");
@@ -1091,6 +1336,13 @@ class IotEvidenceSchemaTests {
         byte[] bytes = new byte[length];
         RANDOM.nextBytes(bytes);
         return bytes;
+    }
+
+    /** A copy with the given columns added or replaced. */
+    private static Map<String, Object> with(Map<String, Object> columns, Map<String, Object> changes) {
+        Map<String, Object> copy = new LinkedHashMap<>(columns);
+        copy.putAll(changes);
+        return copy;
     }
 
     /** A copy with the given column values; a null value removes the column, so its default or NULL applies. */

@@ -11,7 +11,7 @@ DECLARE
     application_role CONSTANT text := '${application_role}';
     append_only CONSTANT text[] := ARRAY['audit_events', 'physical_observations'];
     no_delete CONSTANT text[] := ARRAY['reservations', 'locker_operations', 'loans',
-        'local_access_challenges', 'hub_display_outbox', 'command_outbox', 'inbound_device_messages'];
+        'local_access_challenges', 'hub_display_outbox', 'command_outbox', 'inbound_device_messages', 'anomalies'];
     relation record;
 BEGIN
     IF application_role !~ '^[a-z_][a-z0-9_]{0,62}$' THEN

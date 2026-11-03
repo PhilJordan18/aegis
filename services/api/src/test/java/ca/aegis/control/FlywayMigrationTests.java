@@ -32,7 +32,7 @@ import ca.aegis.control.support.TestDatabases;
 class FlywayMigrationTests {
 
     private static final List<String> ALL_VERSIONS = List.of("001", "002", "002.1", "002.2", "003", "004", "005",
-            "006", "007", "008");
+            "006", "007", "008", "009");
 
     private final TestDatabases databases = TestDatabases.shared();
     private final TestDatabaseServer server = databases.server();
@@ -56,15 +56,16 @@ class FlywayMigrationTests {
 
     @Test
     void migratesAnEmptyDatabaseOnceAndValidatesAfterwards() {
-        assertEquals(10, flyway(null).migrate().migrationsExecuted);
+        assertEquals(11, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
 
         assertEquals(ALL_VERSIONS, appliedVersions());
-        assertEquals(List.of("asset_identifiers", "asset_models", "asset_placements", "assets", "audit_events",
-                "command_outbox", "compartments", "hub_display_outbox", "inbound_device_messages", "loans",
-                "local_access_challenges", "locker_devices", "locker_operations", "lockers", "operating_schedules",
-                "operating_windows", "physical_observations", "reservations", "rest_idempotency_keys", "users"), jdbc.sql("""
+        assertEquals(List.of("anomalies", "asset_identifiers", "asset_models", "asset_placements", "assets",
+                "audit_events", "command_outbox", "compartments", "hub_display_outbox", "inbound_device_messages",
+                "loans", "local_access_challenges", "locker_devices", "locker_operations", "lockers",
+                "operating_schedules", "operating_windows", "physical_observations", "reservations",
+                "rest_idempotency_keys", "users"), jdbc.sql("""
                 SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'aegis' ORDER BY table_name COLLATE "C"
                 """).query(String.class).list());
@@ -75,7 +76,7 @@ class FlywayMigrationTests {
         assertEquals(1, flyway("001").migrate().migrationsExecuted);
         assertEquals(List.of("001"), appliedVersions());
 
-        assertEquals(9, flyway(null).migrate().migrationsExecuted);
+        assertEquals(10, flyway(null).migrate().migrationsExecuted);
         assertEquals(ALL_VERSIONS, appliedVersions());
     }
 
@@ -86,7 +87,7 @@ class FlywayMigrationTests {
         UUID user = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
         UUID model = insertModel("Oscilloscope");
 
-        assertEquals(7, flyway(null).migrate().migrationsExecuted);
+        assertEquals(8, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -168,7 +169,7 @@ class FlywayMigrationTests {
         jdbc.sql("CREATE ROLE " + role + " NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS")
                 .update();
         try {
-            assertEquals(10, flyway(null, role).migrate().migrationsExecuted);
+            assertEquals(11, flyway(null, role).migrate().migrationsExecuted);
             assertEquals(0, flyway(null, role).migrate().migrationsExecuted);
             assertTrue(flyway(null, role).validateWithResult().validationSuccessful);
             UUID actor = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
@@ -259,7 +260,7 @@ class FlywayMigrationTests {
         UUID user = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
         UUID model = insertModel("Oscilloscope");
 
-        assertEquals(8, flyway(null).migrate().migrationsExecuted);
+        assertEquals(9, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -280,7 +281,7 @@ class FlywayMigrationTests {
         insertEvent(null, "ASSET_CREATED", "ASSET", "ACCEPTED");
         List<Map<String, Object>> history = history();
 
-        assertEquals(6, flyway(null).migrate().migrationsExecuted);
+        assertEquals(7, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -314,7 +315,7 @@ class FlywayMigrationTests {
                 """;
         List<Map<String, Object>> events = jdbc.sql(priorEvents).query().listOfRows();
 
-        assertEquals(4, flyway(null).migrate().migrationsExecuted);
+        assertEquals(5, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -332,9 +333,9 @@ class FlywayMigrationTests {
     }
 
     /**
-     * Databases stand at V006 when V007 and V008 are added: history rows, custody rows and audit events are kept as
-     * they were, no challenge, display instruction, command, device message or observation is invented for an
-     * existing operation, and the prior events gain null message and observation references.
+     * Databases stand at V006 when V007 to V009 are added: history rows, custody rows and audit events are kept as
+     * they were, no challenge, display instruction, command, device message, observation or anomaly is invented for
+     * an existing operation, and the prior events gain null message and observation references.
      */
     @Test
     void upgradesADatabaseAtTheCustodyMigrationWithoutRewritingItsHistory() {
@@ -379,7 +380,7 @@ class FlywayMigrationTests {
                 """;
         List<Map<String, Object>> operations = jdbc.sql(custody).query().listOfRows();
 
-        assertEquals(2, flyway(null).migrate().migrationsExecuted);
+        assertEquals(3, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -390,7 +391,7 @@ class FlywayMigrationTests {
                 SELECT (SELECT count(*) FROM aegis.local_access_challenges)
                        + (SELECT count(*) FROM aegis.hub_display_outbox) + (SELECT count(*) FROM aegis.command_outbox)
                        + (SELECT count(*) FROM aegis.inbound_device_messages)
-                       + (SELECT count(*) FROM aegis.physical_observations)
+                       + (SELECT count(*) FROM aegis.physical_observations) + (SELECT count(*) FROM aegis.anomalies)
                 """).query(Long.class).single());
         assertEquals(0, jdbc.sql("""
                 SELECT count(*) FROM aegis.audit_events
