@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { fileURLToPath } from 'node:url'
 import { openCatalog, waitForCatalogState, type CatalogMode } from './catalogFakes.ts'
+import { openLockers, waitForLockerState, type LockerMode } from './lockerFakes.ts'
 import { THEMES, VIEWPORTS } from './matrix.ts'
 import { expectNoAxeViolations, expectNoHorizontalScroll, settle, PREVIEW_EMAIL } from './support.ts'
 
@@ -14,7 +15,7 @@ const LANGUAGE_KEY = 'aegis.manager.language' // src/i18n/locale.ts
 const APPEARANCE_KEY = 'aegis.manager.appearance'
 
 // A catalog key rendered instead of its text would look like « signIn.heading ».
-const KEY_PATH = /\b(?:brand|language|appearance|pageTitle|shell|landing|signIn|equipment|notFound)\.[a-zA-Z]+/
+const KEY_PATH = /\b(?:brand|language|appearance|pageTitle|shell|landing|signIn|equipment|lockers|notFound)\.[a-zA-Z]+/
 
 interface EnglishScenario {
   readonly route: string
@@ -111,11 +112,39 @@ const SCENARIOS: readonly EnglishScenario[] = [
       },
     }),
   ),
+  ...(
+    [
+      ['nominal', 'nominal'],
+      ['offline', 'offline'],
+      ['unknown', 'unknown'],
+      ['closed', 'closed'],
+      ['noSchedule', 'no-schedule'],
+      ['faulted', 'exceptions'],
+      ['long', 'long-content'],
+      ['loading', 'loading'],
+      ['notFound', 'not-found'],
+      ['serviceError', 'service-error'],
+      ['unreachable', 'unreachable'],
+      ['stale', 'stale'],
+    ] as const satisfies readonly (readonly [LockerMode, string])[]
+  ).map(
+    ([mode, state]): EnglishScenario => ({
+      route: 'lockers',
+      state,
+      path: '/connexion',
+      title: 'Lockers — Aegis Manager',
+      inShell: true,
+      reach: async (page) => {
+        await openLockers(page, mode, { english: true })
+        await waitForLockerState(page, mode, { english: true })
+      },
+    }),
+  ),
   { route: 'not-found', state: 'default', path: '/nulle-part', title: 'Page not found — Aegis Manager' },
 ]
 
 // Words that only the French catalog contains, for pages that must be fully English.
-const FRENCH_PROBES = /Se connecter|Connexion|Adresse courriel|Mot de passe|Accueil|Équipements|Réessayez|Garanties|garanties|Autorisé|Langue/
+const FRENCH_PROBES = /Se connecter|Connexion|Adresse courriel|Mot de passe|Accueil|Équipements|Réessayez|Garanties|garanties|Autorisé|Langue|Casier|Hors ligne|En ligne|Dernier signal|Cellule|Serrure|Porte/
 
 test.describe('English accessibility matrix', () => {
   test.use({ locale: 'en-CA' })
