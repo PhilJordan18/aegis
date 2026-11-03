@@ -31,11 +31,12 @@ RESULTS_DIR=${IOS_RESULTS_DIR:-build/results}
 LIVE_TESTS=(
     "AegisMobileTests/LiveAPIIntegrationTests"
     "AegisMobileTests/LiveAuthIntegrationTests"
+    "AegisMobileTests/LiveCatalogIntegrationTests"
     "AegisMobileUITests/HealthScreenUITests/testLiveServiceShowsHealth"
     "AegisMobileUITests/SignInLiveUITests"
 )
-# 1 health + 4 authentication client tests, 1 health + 2 sign-in UI tests.
-LIVE_TEST_COUNT=8
+# 1 health + 4 authentication + 1 catalogue client tests, 1 health + 3 sign-in and catalogue UI tests.
+LIVE_TEST_COUNT=10
 
 usage() {
     echo "usage: $0 standalone|live" >&2
