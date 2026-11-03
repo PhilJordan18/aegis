@@ -30,6 +30,17 @@ class ReservationProductionPresenceTests extends ApiIntegrationTest {
     @Autowired
     ApplicationContext context;
 
+    /** The test-only presence that reservation classes import never reaches the context of the other classes. */
+    @Test
+    void theProductionContextWiresOnlyTheObservedPresence() throws Exception {
+        Class<?> presence = Class.forName("ca.aegis.control.asset.PhysicalPresence");
+        Class<?> present = Class.forName("ca.aegis.control.asset.PresentAssetsConfiguration");
+
+        assertEquals(1, context.getBeanNamesForType(presence).length);
+        assertEquals("ObservedPhysicalPresence", AopUtils.getTargetClass(context.getBean(presence)).getSimpleName());
+        assertEquals(0, context.getBeanNamesForType(present).length);
+    }
+
     @Test
     void withoutPhysicalProofAnEligibleAssetIsNotReady() throws Exception {
         Class<?> presence = Class.forName("ca.aegis.control.asset.PhysicalPresence");

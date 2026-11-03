@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -74,6 +75,16 @@ class RfidPresenceTests extends ApiIntegrationTest {
         technician = accessToken(accounts.technician());
         heartbeat("HEALTHY", "HEALTHY");
         clock.advance(Duration.ofSeconds(5));
+    }
+
+    /** Other classes list the shared catalog: these assets must not stay present with proof after the test. */
+    @AfterEach
+    void endPlacements() {
+        jdbc.sql("""
+                UPDATE aegis.asset_placements SET removed_at = :now
+                WHERE asset_id IN (:assets) AND removed_at IS NULL
+                """).param("now", DeviceTestSupport.utc(clock.instant())).param("assets", List.of(assetA, assetB))
+                .update();
     }
 
     @Test
