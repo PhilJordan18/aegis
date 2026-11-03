@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -44,6 +45,11 @@ abstract class CatalogApiTest extends ApiIntegrationTest {
         admin = accounts.admin();
         adminToken = accessToken(admin);
         suffix = UUID.randomUUID().toString().substring(0, 8);
+    }
+
+    /** An RFID EPC in the uppercase hexadecimal form of document 10, section 12.1, unique to the test. */
+    String epc(String prefix) {
+        return prefix + suffix.toUpperCase(Locale.ROOT);
     }
 
     static Map<String, Object> modelBody(String name) {

@@ -15,12 +15,12 @@ record AssetConditions(
         Availability availability,
         Presence presence) {
 
-    static AssetConditions of(AssetRecord asset, Instant now) {
+    /** Custody and presence come from the same sources as the technician catalog, so both views agree. */
+    static AssetConditions of(AssetRecord asset, Custody custody, Presence presence, Instant now) {
         return new AssetConditions(asset.operationalStatus(),
                 calibration(asset.calibrationRequired(), asset.calibrationDueAt(), now),
-                availability(asset),
-                // No physical observation is stored before the locker slices, so presence cannot be established.
-                Presence.UNKNOWN);
+                custody.availability(),
+                presence);
     }
 
     /** A required calibration is expired from its due instant onwards (document 06: {@code now >= dueAt}). */
@@ -32,14 +32,6 @@ record AssetConditions(
             return CalibrationStatus.UNKNOWN;
         }
         return now.isBefore(dueAt) ? CalibrationStatus.VALID : CalibrationStatus.EXPIRED;
-    }
-
-    /**
-     * Rules 3 and 4 of document 03, section 5.2. Reservations and loans do not exist yet; their slices add rules 1
-     * and 2 here, ahead of archival.
-     */
-    private static Availability availability(AssetRecord asset) {
-        return asset.archived() ? Availability.UNAVAILABLE : Availability.AVAILABLE;
     }
 
     /** Reasons of document 09, section 8.9, in their documented order; never {@code ACCESS_DENIED}. */
