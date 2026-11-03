@@ -35,10 +35,11 @@ LIVE_TESTS=(
     "AegisMobileTests/LiveReservationIntegrationTests"
     "AegisMobileUITests/HealthScreenUITests/testLiveServiceShowsHealth"
     "AegisMobileUITests/SignInLiveUITests"
+    "AegisMobileUITests/ReservationLiveUITests"
 )
-# 1 health + 4 authentication + 1 catalogue + 2 reservation client tests, 1 health + 3 sign-in and
-# catalogue UI tests.
-LIVE_TEST_COUNT=12
+# 1 health + 4 authentication + 1 catalogue + 3 reservation client tests, 1 health + 3 sign-in and
+# catalogue + 1 reservation UI tests.
+LIVE_TEST_COUNT=14
 
 usage() {
     echo "usage: $0 standalone|live" >&2
