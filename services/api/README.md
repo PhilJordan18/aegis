@@ -419,7 +419,9 @@ la fenêtre. `ASSET_PRESENT` exige au moins 3 lectures de l'étiquette;
 `ASSET_ABSENT`, son absence de toute la fenêtre; 1 ou 2 lectures ne donnent
 aucun verdict. Un lecteur `FAULTED` ou `UNKNOWN` ne confirme rien, mais son
 état est projeté sur la cellule, sauf si un scan plus récent de la cellule est
-déjà enregistré.
+déjà enregistré, même si le heartbeat arrivé en retard devient la référence.
+Un identifiant qui contient un caractère de contrôle est refusé
+(`REQUIRED_FIELD_MISSING`) et le message est conservé.
 
 `asset/ObservedPhysicalPresence` remplace `NoPhysicalProofPresence` derrière
 `PhysicalPresence`. La présence est recalculée à chaque lecture par
@@ -434,6 +436,13 @@ seulement si toutes ces conditions tiennent :
   l'attribution de l'étiquette;
 - aucun événement de porte de la cellule ne le suit ni ne tombe dans sa
   fenêtre;
+- aucun heartbeat ultérieur de la session ne rapporte sa porte autrement que
+  `CLOSED`;
+- aucun message de porte ou de scan du hub n'a été refusé après lui. Un message
+  refusé ne garde pas sa cellule : il vaut pour toutes les cellules du casier.
+  Il est ordonné par la session, le boot et la `sequence` que son contenu brut
+  annonce, si bien qu'un scan plus ancien rejoué après lui reste sans valeur;
+  sinon, par son instant de réception;
 - l'étiquette n'est vue dans aucune autre cellule par une détection que nul
   scan sain ultérieur de cette cellule n'a remplacée;
 - pour `ABSENT` seulement, la porte a été ouverte puis fermée avant la
