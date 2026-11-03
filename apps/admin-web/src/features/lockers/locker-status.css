@@ -19,6 +19,9 @@
   font-weight: var(--ag-type-title-lg-weight); letter-spacing: var(--ag-type-title-lg-track); overflow-wrap: anywhere;
 }
 .ag-lk__title:focus-visible { outline-offset: 4px; }
+/* The code moves whole to its own line when it fits there, and breaks only when it is longer than a line: a fixed no-wrap
+   overflowed a narrow panel for codes of 20 characters (WCAG 1.4.10). */
+.ag-lk__code { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
 .ag-lk__top { margin-top: 16px; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 20px 32px; align-items: start; }
 .ag-lk__top .ag-diag { margin-top: 0; }
 .ag-lk__signal { font-size: 0.875rem; font-weight: 500; color: var(--ag-text); }

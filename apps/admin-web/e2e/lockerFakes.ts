@@ -7,7 +7,7 @@ import { PREVIEW_EMAIL, PREVIEW_PASSWORD } from './support.ts'
  * in the demo locker (how the page finds it), and `GET /api/v1/lockers/{id}/status`. The live recipe is
  * api.spec.ts, run by `npm run test:e2e:api`.
  */
-export type LockerMode = 'nominal' | 'offline' | 'unknown' | 'closed' | 'noSchedule' | 'faulted' | 'long' | 'loading' | 'notFound' | 'serviceError' | 'unreachable' | 'stale'
+export type LockerMode = 'nominal' | 'offline' | 'unknown' | 'closed' | 'noSchedule' | 'faulted' | 'long' | 'code20' | 'code24' | 'loading' | 'notFound' | 'serviceError' | 'unreachable' | 'stale'
 
 export const DEMO_LOCKER_ID = 'd46a74ae-39dc-460b-8af0-38fc791b376a'
 const TRACE_ID = '5f4bc22e-66a4-48ef-8bf3-6e7184d71c30'
@@ -57,6 +57,10 @@ function status(mode: LockerMode) {
       return { ...base, currentWindow: { timeZone: null, open: false, closesAt: null, nextOpensAt: null } }
     case 'faulted':
       return { ...base, compartments: [compartment('A1', { doorState: 'OPEN', lockState: 'UNLOCKED' }), compartment('A2', { rfidReaderStatus: 'FAULTED', enabled: false })] }
+    case 'code20':
+      return { ...base, code: 'LAB-NORD-CASIER-0001' }
+    case 'code24':
+      return { ...base, code: 'LAB-NORD-CASIER-PRINC-01' }
     case 'long':
       // Long French content: a name that wraps, a code with no break point, many compartments with every exception.
       return {

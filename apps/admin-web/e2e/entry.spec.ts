@@ -452,13 +452,25 @@ test.describe('flow: casiers (production page, routed fakes)', () => {
     await expect(page.locator('.ag-lockers')).not.toHaveAttribute('tabindex', /.*/)
   })
 
-  test('flow: a short locker code is never broken at its hyphens on a phone', async ({ page }) => {
+  test('flow: AEGIS-DEMO-01 stays on one line on a phone', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 720 })
     await openLockerPage(page, 'nominal')
-    const code = page.locator('.ag-lk__title .ag-nowrap')
+    const code = page.locator('.ag-lk__title .ag-lk__code')
     await expect(code).toHaveText('AEGIS-DEMO-01')
     expect((await code.boundingBox())?.height ?? 99).toBeLessThan(40)
   })
+
+  for (const [mode, width] of [['code20', 320], ['code20', 390], ['code24', 320], ['code24', 390]] as const) {
+    test(`flow: a ${mode === 'code20' ? 20 : 24}-character code does not overflow at ${width} px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 720 })
+      await openLockerPage(page, mode)
+      await expectNoHorizontalScroll(page)
+      const code = page.locator('.ag-lk__title .ag-lk__code')
+      const box = await code.boundingBox()
+      const panel = await page.locator('.ag-lk').boundingBox()
+      expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual((panel?.x ?? 0) + (panel?.width ?? 0))
+    })
+  }
 
   test('flow: at desktop width the compartments are a real table with column headers', async ({ page }) => {
     await openLockerPage(page, 'nominal')

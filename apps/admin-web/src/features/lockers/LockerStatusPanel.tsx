@@ -24,9 +24,6 @@ import {
 } from './lockerPresentation'
 import { useLockerStatus } from './useLockerStatus'
 
-/** A locker code that fits a phone line is never broken at its hyphens; a longer one may wrap rather than overflow. */
-const MAX_UNBROKEN_CODE = 24
-
 /**
  * Read-only status of one locker (PHY-01 #29, 09 §8.6, §16.1): connection, operating window and compartments,
  * exactly as the server evaluated them. There is no control here that changes a state, forces a readiness,
@@ -116,7 +113,7 @@ function LockerBody({ locker, titleId, stale, retrying, onRetry, returnFocus }: 
       <p className="ag-overline">{m.lockers.statusLabel}</p>
       <h2 className="ag-lk__title" id={titleId} tabIndex={-1}>
         {locker.name !== '' && <>{locker.name} · </>}
-        <span className={locker.code.length <= MAX_UNBROKEN_CODE ? 'ag-tnum ag-nowrap' : 'ag-tnum'}>{locker.code}</span>
+        <span className="ag-tnum ag-lk__code">{locker.code}</span>
       </h2>
 
       <div className="ag-lk__top">
