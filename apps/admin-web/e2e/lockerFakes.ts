@@ -7,7 +7,7 @@ import { PREVIEW_EMAIL, PREVIEW_PASSWORD } from './support.ts'
  * in the demo locker (how the page finds it), and `GET /api/v1/lockers/{id}/status`. The live recipe is
  * api.spec.ts, run by `npm run test:e2e:api`.
  */
-export type LockerMode = 'nominal' | 'offline' | 'unknown' | 'closed' | 'noSchedule' | 'faulted' | 'long' | 'code20' | 'code24' | 'loading' | 'notFound' | 'serviceError' | 'unreachable' | 'stale'
+export type LockerMode = 'nominal' | 'offline' | 'unknown' | 'closed' | 'noSchedule' | 'faulted' | 'long' | 'code20' | 'code24' | 'codeUnbroken' | 'offlineLong' | 'loading' | 'notFound' | 'serviceError' | 'unreachable' | 'stale'
 
 export const DEMO_LOCKER_ID = 'd46a74ae-39dc-460b-8af0-38fc791b376a'
 const TRACE_ID = '5f4bc22e-66a4-48ef-8bf3-6e7184d71c30'
@@ -57,6 +57,24 @@ function status(mode: LockerMode) {
       return { ...base, currentWindow: { timeZone: null, open: false, closesAt: null, nextOpensAt: null } }
     case 'faulted':
       return { ...base, compartments: [compartment('A1', { doorState: 'OPEN', lockState: 'UNLOCKED' }), compartment('A2', { rfidReaderStatus: 'FAULTED', enabled: false })] }
+    case 'codeUnbroken':
+      // The longest kind of valid code: free text with no break point at all.
+      return { ...base, code: 'LABORATOIRENORDCASIERPRINCIPALDEMAINTENANCEETINSPECTIONDESEQUIPEMENTSDEMESUREDEPRECISION0001' }
+    case 'offlineLong': {
+      // Offline, with everything long at once: the code, the name, the cell codes, and faults the server kept from its last heartbeat.
+      const kept = { lastObservedAt: '2026-11-03T18:31:50Z' }
+      return {
+        ...base,
+        name: 'Laboratoire de maintenance et d’inspection des équipements de mesure de précision, aile nord',
+        code: 'LAB-NORD-CASIER-PRINC-01',
+        connectionStatus: 'OFFLINE',
+        lastSeenAt: '2026-11-03T18:32:00Z',
+        compartments: [
+          compartment('CELLULE-GAUCHE-SUPERIEURE-AVEC-UN-CODE-TRES-LONG-0001', { ...kept, rfidReaderStatus: 'FAULTED', doorState: 'OPEN', lockState: 'UNLOCKED', connectionStatus: 'DISCONNECTED' }),
+          compartment('CELLULE-DROITE-INFERIEURE-AVEC-UN-CODE-TRES-LONG-0002', { ...kept, enabled: false, rfidReaderStatus: 'FAULTED' }),
+        ],
+      }
+    }
     case 'code20':
       return { ...base, code: 'LAB-NORD-CASIER-0001' }
     case 'code24':

@@ -442,6 +442,30 @@ test.describe('flow: casiers (production page, routed fakes)', () => {
     await expect(page.locator('.ag-lockers')).not.toHaveAttribute('role', /.*/)
   })
 
+  // Rendered evidence for the longest valid codes, long cell codes and faults, and the last-known note: the page never
+  // scrolls sideways at 320 px, 390 px or at 200 % zoom (640x400). Numbers go to the log; shots and the accessibility read
+  // go to test-results/casiers-reflow/ (ignored by Git).
+  for (const mode of ['code20', 'code24', 'long', 'codeUnbroken', 'offlineLong'] as const) {
+    for (const [width, height, label] of [[320, 720, '320'], [390, 844, '390'], [640, 400, 'zoom200']] as const) {
+      test(`flow: reflow evidence, ${mode} at ${label}`, async ({ page }) => {
+        await page.setViewportSize({ width, height })
+        await openLockerPage(page, mode)
+        const widths = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }))
+        console.log(`REFLOW ${mode} ${label}: scrollWidth ${widths.scrollWidth} <= clientWidth ${widths.clientWidth}`)
+        const dir = fileURLToPath(new URL('../test-results/casiers-reflow/', import.meta.url))
+        await page.screenshot({ path: `${dir}${mode}-${label}.png`, fullPage: true, animations: 'disabled' })
+        if (mode === 'offlineLong' && label === '320') {
+          const { writeFile, mkdir } = await import('node:fs/promises')
+          await mkdir(dir, { recursive: true })
+          await writeFile(`${dir}offlineLong-320.aria.txt`, await page.locator('main').ariaSnapshot())
+        }
+        expect(widths.scrollWidth, `${mode} at ${label}`).toBeLessThanOrEqual(widths.clientWidth)
+        await expectNoHorizontalScroll(page)
+        await expectNoAxeViolations(page)
+      })
+    }
+  }
+
   test('flow: a long list of cells makes the region scroll, and then it is reachable by keyboard with a name', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 640 })
     await openLockerPage(page, 'long')
