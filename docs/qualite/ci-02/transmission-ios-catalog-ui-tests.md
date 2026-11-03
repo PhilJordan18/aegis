@@ -73,3 +73,35 @@ Repères dans le code (lecture seule de CI-02) :
    automatique qui masquerait un échec.
 3. Livrer par une PR vers `dev`; CI-02 comptera de nouveau les succès iOS à
    partir du premier run vert sur `dev` qui suivra.
+
+## Mise à jour du 3 novembre 2026
+
+Cette section remplace les points 1 et 2 ci-dessus. Les mesures sont dans
+`diagnostic-duree-ios.md`.
+
+Les décisions humaines du 3 novembre s'appliquent :
+
+- **La tolérance Dynamic Type est refusée.** La bande de 60 pt du commit 27ee03f doit
+  être retirée.
+- **Le découpage de l'audit en trois passes est aussi à retirer.** Il double environ la
+  durée de chaque audit (catalogue : 11,6 à 20,5 s, contre 6,1 à 8,7 s) et n'a pas
+  empêché le -56.
+- **La disposition réelle de la carte « Last known: Blocked » doit être vérifiée**
+  avant toute conclusion sur l'audit, en grande taille et en AX5 : défilement, safe
+  areas, libellé lisible. Un défaut produit n'est pas exclu.
+
+Autres observations :
+
+- **Le deuxième tap sur « Réessayer »** de `testOfflineRefreshKeepsTheLastListThenTryAgainRecovers`
+  est sollicité dans 12 itérations sur 14 mesurées. Un premier tap ignoré peut être un
+  défaut produit, par exemple un rafraîchissement encore en cours ; il est à reproduire
+  avant de garder ce second tap.
+- **Le timeout de lancement de `testEmptyCatalogueOffersNoFilterToClear`** (run
+  41620501772) suit un -56 dont l'app n'était pas encore terminée. La corrélation est
+  observée une seule fois.
+- **Le commit 4084695 de #116 relance l'audit après un abandon de XCTest.** C'est une
+  reprise automatique, que la règle « pas de retry masquant un défaut » exclut sans
+  preuve que la cause est dans XCTest.
+
+La session cloud ne modifie plus `CatalogUITests` ni `StillScreen`. La consolidation
+de #116 et #117 appartient à la session iOS.

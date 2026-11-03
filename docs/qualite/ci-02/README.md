@@ -257,11 +257,29 @@ GitHub Claude n'était pas reliée au dépôt). L'accès a été rétabli le
 3 novembre 2026; les branches ont été poussées sans force et les PR ouvertes
 vers `dev` : #110 (incrément 1) et #111 (incrément 2, brouillon).
 
+## Coût du job iOS
+
+Le diagnostic mesuré des runs hébergés, avec les durées par phase, par test UI et par
+audit et le classement des constats, est dans
+[diagnostic-duree-ios.md](diagnostic-duree-ios.md). Les scripts qui le reproduisent à
+partir des bundles xcresult sont dans [mesures/](mesures/).
+
+La branche `67-ci-ios-run-cost` (incrément 3) contient trois changements :
+
+- la concurrence par branche, sans run manuel parallèle à un run de PR ;
+- l'attribution des commits iOS dans les PR empilées ;
+- un démarrage explicite et borné du simulateur.
+
 ## Ordre de fusion
 
 1. PR de l'incrément 1 (`67-ci-qualify-controls` vers `dev`).
-2. PR de l'incrément 2 (`67-ci-promote-qualified-jobs` vers `dev`), après le
+2. PR de l'incrément 3 (`67-ci-ios-run-cost` vers `dev`), empilée sur
+   l'incrément 1.
+3. PR de l'incrément 2 (`67-ci-promote-qualified-jobs` vers `dev`), après le
    run rouge du commit de qualification et un run vert du commit final.
+
+La correction des CatalogUITests (#116, #117) appartient à la session iOS ; elle est
+indépendante de cet ordre.
 
 Aucune règle de ruleset n'est à modifier : `CI result` reste le seul check
 requis.
