@@ -232,7 +232,10 @@ avis de données périmées (`StaleNotice`) sont ceux d'Équipements.
 - **Source** : `GET /api/v1/lockers/{lockerId}/status` (09 §8.6, §16.1;
   `src/features/lockers/`). Le type reprend le contrat; `contractParsers.ts` est
   strict comme celui du catalogue : un champ manquant ou mal typé rejette toute la
-  réponse (erreur de service avec identifiant de suivi), une valeur d'énumération
+  réponse (erreur de service avec identifiant de suivi), de même qu'un identifiant
+  qui n'est pas un UUID ou un instant qui n'est pas un RFC 3339 UTC réel (les
+  microsecondes de l'API sont acceptées, un 30 février ne l'est pas), de sorte
+  qu'aucun formateur ne peut lever d'exception au rendu. Une valeur d'énumération
   inconnue devient `UNRECOGNIZED` et s'affiche « État indisponible », jamais comme
   un état sain (09 §3).
 - **Quel casier ?** Il n'existe pas encore de liste de casiers utilisable : le
@@ -247,13 +250,23 @@ avis de données périmées (`StaleNotice`) sont ceux d'Équipements.
   équipements placés » et indique que `?casier=` désigne un casier directement.
 - **Contenu** : code et nom; pastille « En ligne », « Hors ligne » ou « État
   inconnu » (libellés approuvés du prototype, avec un symbole distinct par état);
-  « Dernier signal » (`lastSeenAt`, ou « Aucun signal reçu »); heure d'évaluation;
+  « Dernier signal : … » (`lastSeenAt`; « Last seen at … » en anglais; ou « Aucun signal reçu »); heure d'évaluation;
   horaire d'exploitation (ouvert avec la fermeture, fermé avec la prochaine
   ouverture, ou « Aucun horaire d'ouverture ») dans le fuseau du casier avec son
   abréviation; tableau des cellules (activée, liaison, lecteur RFID, porte,
   serrure, dernière observation). Les instants techniques (signal, observation,
   évaluation) sont dans le fuseau de l'appareil, comme le diagnostic des
   équipements; les instants métier (fermeture, ouverture) dans celui du casier.
+- **Casier hors ligne** : le serveur garde sur les cellules les valeurs du dernier
+  signal tant que le casier n'est pas en ligne (elles ne sont mises à jour que par
+  les signaux; PHY-01). « Hors ligne » peut donc surmonter des cellules qui disent
+  « Connectée », « En bon état », « Fermée », « Verrouillée ». Chaque cellule qui a
+  une observation est alors dessinée en texte neutre, sous la note « Dernier état
+  connu, à la dernière observation » [P] : la valeur du serveur reste visible,
+  inchangée, mais n'est jamais présentée comme une santé ou un défaut actuels. Rien
+  n'est dérivé côté navigateur. Une cellule jamais observée garde son état inconnu.
+  Que le serveur renvoie plutôt des cellules « inconnues » hors ligne est une
+  décision à prendre côté API.
 - **Le serveur seul décide** : `ONLINE`, `OFFLINE`, `UNKNOWN` et `open` viennent de
   la réponse. Le navigateur ne dérive rien d'un horodatage (test avec un
   `lastSeenAt` vieux de six ans pour un casier `ONLINE`).
@@ -272,7 +285,11 @@ avis de données périmées (`StaleNotice`) sont ceux d'Équipements.
   identique ne relit rien.
 - **Tableau** : un vrai `<table>` avec ses rôles écrits; sous 760 px de largeur de
   conteneur, les lignes s'empilent en « libellé : valeur » (libellés répétés,
-  masqués aux lecteurs d'écran). Un état normal est du texte; chaque exception
+  masqués aux lecteurs d'écran). La liste de panneaux n'est un arrêt de tabulation
+  (groupe nommé) que lorsqu'elle défile. Le focus ne tombe jamais sur le corps :
+  après « Réessayer » d'une alerte de premier chargement, ou d'un avis de données
+  périmées dont la réponse est 403 ou 404, le panneau le prend; pour l'alerte du
+  catalogue, la page. Un état normal est du texte; chaque exception
   (déconnectée, en défaut, ouverte, déverrouillée, inconnue) est une pastille avec
   symbole et texte, jamais la couleur seule.
 - **Tests** : `src/features/lockers/*.test.ts`, `src/pages/LockersPage.test.tsx`
