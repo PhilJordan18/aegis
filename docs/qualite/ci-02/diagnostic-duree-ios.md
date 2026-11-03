@@ -2,7 +2,7 @@
 
 Établi le 3 novembre 2026 à partir des résultats hébergés existants. Aucun nouveau
 run n'a été lancé pour ce diagnostic. Les mesures sont reproductibles avec les
-scripts de `mesures/` sur les artefacts `ios-standalone-results` (conservés 7 jours).
+outils de [mesures/](mesures/README.md) sur les artefacts `ios-standalone-results` (conservés 7 jours).
 
 Sources :
 
@@ -100,7 +100,7 @@ avec 41620521054.
   idle ».
 - **Audits d'accessibilité.** XCTest ne les enregistre pas comme activités. Leur
   fenêtre est donc mesurée entre la dernière requête qui précède l'audit et la capture
-  qui le suit (`mesures/xcresult-audits.py`) :
+  qui le suit (`xcresult_mesures.py audits`) :
 
   | Variante | Runs | Écran catalogue | Fiche | Total |
   |---|---|---:|---:|---:|
