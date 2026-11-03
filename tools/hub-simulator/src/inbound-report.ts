@@ -34,7 +34,9 @@ export function inboundReportDetail(
  * Doc 10 §13.2 reporting limit (proposal of #98, awaiting confirmation): at most one
  * report per (channel, issue) per window, so at most four per minute whatever the
  * flood. Kept in RAM and recreated at every boot, like the firmware's counters, which
- * are never written to NVS. The clock stands for the hub's monotonic clock.
+ * are never written to NVS. The firmware measures the window on its monotonic clock;
+ * the simulator reads the host wall clock, so a backward step ends the window instead of
+ * silencing reports until the clock catches up.
  */
 export class InboundReportLimiter {
   readonly #windowMs: number;
@@ -48,7 +50,7 @@ export class InboundReportLimiter {
   admit(channel: InboundChannel, issue: InboundIssue, nowMs: number): { readonly suppressed: number } | undefined {
     const key = `${channel}/${issue}`;
     const state = this.#keys.get(key);
-    if (state && nowMs - state.reportedAtMs < this.#windowMs) {
+    if (state && nowMs >= state.reportedAtMs && nowMs - state.reportedAtMs < this.#windowMs) {
       state.suppressed += 1;
       return undefined;
     }

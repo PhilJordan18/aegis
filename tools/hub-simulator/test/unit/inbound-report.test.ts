@@ -210,6 +210,14 @@ describe('InboundReportLimiter and inboundReportDetail', () => {
     expect(limiter.admit('commands', 'UNCORRELATABLE', 1_000)).toEqual({ suppressed: 1 });
   });
 
+  it('ends the window when the clock steps back, so reports are never silenced until it catches up', () => {
+    const limiter = new InboundReportLimiter(60_000);
+    expect(limiter.admit('commands', 'UNCORRELATABLE', 3_600_000)).toEqual({ suppressed: 0 });
+    expect(limiter.admit('commands', 'UNCORRELATABLE', 3_600_001)).toBeUndefined();
+    expect(limiter.admit('commands', 'UNCORRELATABLE', 0)).toEqual({ suppressed: 1 });
+    expect(limiter.admit('commands', 'UNCORRELATABLE', 59_999)).toBeUndefined();
+  });
+
   it('stays within the bounded detail, whatever the count', () => {
     const detail = inboundReportDetail('display', 'UNCORRELATABLE', 'CORRELATION_MISSING', Number.MAX_SAFE_INTEGER);
     expect(detail.length).toBeLessThanOrEqual(DETAIL_MAX_LENGTH);

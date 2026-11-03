@@ -223,7 +223,8 @@ remplace l'écran pour 30 s au plus, sans accusé positif.
 Un message non corrélable (sans `messageId`, `operationId` ou `compartmentId`
 valides) ou retenu n'est pas affiché et est signalé comme une commande (voir
 ci-dessous). Une instruction 2.0 reçoit `INVALID_DISPLAY_PAYLOAD`. Le token et
-l'URI du QR ne sont jamais journalisés ni publiés.
+l'URI du QR ne sont jamais journalisés ni publiés. Seul l'accesseur `screen` de
+l'API les expose, pour qu'un test de bout en bout puisse « scanner » le QR.
 
 ## Messages entrants invalides
 
@@ -244,8 +245,8 @@ topic et par cas (retenu, non corrélable) par fenêtre de 60 s, soit quatre par
 minute au plus. Les messages suivants sont comptés; le signalement suivant du même
 couple indique leur nombre dans `detail`. Le compteur repart à zéro à chaque
 démarrage. Une commande ou une instruction corrélable mais invalide, 2.0 comprise,
-garde son rejet habituel. Seul l'accesseur `screen` de l'API les
-expose, pour qu'un test de bout en bout puisse « scanner » le QR.
+garde son rejet habituel. Le simulateur mesure la fenêtre sur l'horloge de l'hôte
+(le firmware, sur son horloge monotone) : un recul de l'horloge clôt la fenêtre.
 
 ## Observations physiques
 
