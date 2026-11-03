@@ -50,7 +50,7 @@ describe('connection setup (doc 10 §4, §7.1, §15.2)', () => {
     expect(t.will.delivery).toEqual({ qos: 1, retain: true });
     const will = JSON.parse(t.will.body);
     expect(will).toMatchObject({
-      schemaVersion: '2.0',
+      schemaVersion: '3.0',
       type: 'DEVICE_AVAILABILITY',
       status: 'OFFLINE',
       reason: 'CONNECTION_LOST',
@@ -82,7 +82,7 @@ describe('on connect (doc 10 §15.1, §13.1, §18)', () => {
     expect(t.published[1]!.payload).toMatchObject({ resetReason: 'POWER_ON', firmwareVersion: '0.1.0-sim' });
     expect(t.published.map((p) => p.payload.sequence)).toEqual([1, 2, 3]);
     expect(new Set(t.published.map((p) => p.payload.deviceSessionId))).toEqual(new Set([sim.deviceSessionId]));
-    expect(t.published.map((p) => p.payload.schemaVersion)).toEqual(['2.0', '2.0', '2.0']);
+    expect(t.published.map((p) => p.payload.schemaVersion)).toEqual(['3.0', '3.0', '3.0']);
     expect(t.published.map((p) => p.payload.bootCount)).toEqual([7, 7, 7]);
     expect(sim.state).toBe('online');
   });

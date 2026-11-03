@@ -93,7 +93,7 @@ export interface CommandFields {
 export function command(overrides: Partial<CommandFields> & Record<string, unknown> = {}): CommandFields & { body: string } {
   const now = Date.now();
   const fields = {
-    schemaVersion: '2.0',
+    schemaVersion: '3.0',
     messageId: randomUUID(),
     type: 'UNLOCK_COMPARTMENT',
     operationId: randomUUID(),
@@ -125,7 +125,7 @@ export function challenge(
   const now = Date.now();
   const challengeId = overrides.challengeId ?? randomUUID();
   const fields = {
-    schemaVersion: overrides.schemaVersion ?? '2.0',
+    schemaVersion: overrides.schemaVersion ?? '3.0',
     messageId: overrides.messageId ?? randomUUID(),
     type: 'DISPLAY_ACCESS_CHALLENGE',
     lockerId: overrides.lockerId ?? LOCKER,
@@ -147,7 +147,7 @@ export function operationStatus(
 ): { body: string; messageId: string } {
   const now = Date.now();
   const fields = {
-    schemaVersion: '2.0',
+    schemaVersion: '3.0',
     messageId: overrides.messageId ?? randomUUID(),
     type: 'DISPLAY_OPERATION_STATUS',
     lockerId: LOCKER,

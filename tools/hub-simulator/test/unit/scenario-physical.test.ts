@@ -22,12 +22,14 @@ describe('parsing of the SIM-02 steps', () => {
         { do: 'armFault', fault: 'LOCK_ACTUATION_FAILED' },
         { do: 'waitUnlocked', code: 'A1', timeoutMs: 1000 },
         { do: 'receiveCommand', ref: 'c1', compartment: 'A1', operation: 'op', expiresInMs: -1, issuedInMs: -2, schemaVersion: '1.0' },
+        { do: 'receiveCommand', ref: 'c2', compartment: 'A1', retained: true },
+        { do: 'receiveRaw', channel: 'display', body: '{not json', retained: false },
         { do: 'redeliverCommand', ref: 'c1' },
         { do: 'restart', offlineMs: 5000 },
         { do: 'replay', type: 'DOOR_OPENED', bootsAgo: 0 },
       ],
     });
-    expect(scenario.steps).toHaveLength(13);
+    expect(scenario.steps).toHaveLength(15);
   });
 
   it.each([
@@ -44,6 +46,10 @@ describe('parsing of the SIM-02 steps', () => {
     [{ do: 'receiveCommand', ref: 'c1', compartment: 'A1', lockerId: 'other' }, 'lockerId must be'],
     [{ do: 'receiveCommand', ref: 'c1', compartment: 'A1', token: 'x' }, 'unknown receiveCommand field'],
     [{ do: 'redeliverCommand' }, 'ref must be'],
+    [{ do: 'receiveCommand', ref: 'c1', compartment: 'A1', retained: 'yes' }, 'retained must be a boolean'],
+    [{ do: 'receiveRaw', channel: 'status', body: '{}' }, 'channel must be commands or display'],
+    [{ do: 'receiveRaw', channel: 'commands', body: {} }, 'body must be a string'],
+    [{ do: 'receiveRaw', channel: 'commands', body: '{}', topic: 'x' }, 'unknown receiveRaw field'],
     [{ do: 'restart', offlineMs: -1 }, 'offlineMs must be'],
     [{ do: 'replay', type: 'COMMAND_ACKNOWLEDGED', connectionsAgo: 0 }, 'carries no connectionId'],
   ])('rejects %o', (step, message) => {
@@ -78,7 +84,8 @@ async function runFile(name: string) {
     () => (done = true),
     (error: unknown) => ((failure = error), (done = true)),
   );
-  for (let i = 0; i < 600 && !done; i++) await vi.advanceTimersByTimeAsync(100);
+  // Up to two minutes of simulated time, for scenarios that wait out the reporting window.
+  for (let i = 0; i < 1200 && !done; i++) await vi.advanceTimersByTimeAsync(100);
   expect(failure).toBeUndefined();
   expect(done).toBe(true);
   const events = instances
@@ -156,6 +163,29 @@ describe('committed local scenarios (no backend)', () => {
     expect(scans[2]!.messageId).toBe(scans[1]!.messageId);
     expect(scans[0]!.operationId).toBeDefined();
     expect(scans[1]).not.toHaveProperty('operationId');
+  });
+
+  it('invalid-inbound-local.json: retained and uncorrelatable messages reported within the limit, a 2.0 command refused', async () => {
+    const { events, actuations, sim } = await runFile('invalid-inbound-local.json');
+    expect(events.map((e) => `${e.type}:${e.errorCode ?? e.reason ?? e.result}`)).toEqual([
+      'DEVICE_ERROR:INBOUND_MESSAGE_INVALID', // retained command
+      'DEVICE_ERROR:INBOUND_MESSAGE_INVALID', // unreadable command; the next one is suppressed
+      'DEVICE_ERROR:INBOUND_MESSAGE_INVALID', // uncorrelatable display instruction
+      'COMMAND_REJECTED:UNSUPPORTED_SCHEMA', // 2.0 command
+      'DEVICE_ERROR:INBOUND_MESSAGE_INVALID', // after the window, with the suppressed count
+      'COMMAND_ACKNOWLEDGED:ACCEPTED', // the retained command's operation was never consumed
+      'LOCK_UNLOCKED:undefined',
+      'LOCK_LOCKED:undefined',
+    ]);
+    const reported = events.filter((e) => e.type === 'DEVICE_ERROR');
+    expect(reported.map((e) => e.compartmentId)).toEqual([A1, undefined, undefined, undefined]);
+    for (const e of reported) {
+      expect(e).toMatchObject({ severity: 'WARNING' });
+      expect(e).not.toHaveProperty('operationId');
+    }
+    expect(reported[3]!.detail).toContain('1 similar message(s) not reported');
+    expect(actuations).toEqual([A1]);
+    expect(sim.state).toBe('stopped');
   });
 
   it('restart-mid-operation-local.json: uncertainty instead of a second actuation, and a lost operation after reboot', async () => {
