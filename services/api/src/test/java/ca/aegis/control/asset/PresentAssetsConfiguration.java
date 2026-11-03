@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Primary;
 
 /**
  * Test-only physical presence: every asset is {@code PRESENT}. A test class imports it explicitly to reach
- * {@code READY}; production keeps {@link NoPhysicalProofPresence} until PHY-02 (decision of 28 October 2026).
+ * {@code READY} without staging scans; production evaluates stored observations ({@link ObservedPhysicalPresence}).
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class PresentAssetsConfiguration {

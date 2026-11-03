@@ -2,6 +2,7 @@ package ca.aegis.control.device;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,13 +28,20 @@ final class DevicePayloads {
     /** One boot of the hub: a session, a connection and a sequence counter. */
     static final class Session {
 
+        final UUID lockerId;
         final UUID deviceSessionId = UUID.randomUUID();
         final long bootCount;
         UUID connectionId = UUID.randomUUID();
         long sequence;
 
         Session(long bootCount) {
+            this(bootCount, LOCKER);
+        }
+
+        /** A session of another locker, for tests that call the ingestion directly rather than through the broker. */
+        Session(long bootCount, UUID lockerId) {
             this.bootCount = bootCount;
+            this.lockerId = lockerId;
         }
 
         Map<String, Object> envelope(String type, Instant timestamp) {
@@ -41,7 +49,7 @@ final class DevicePayloads {
             message.put("schemaVersion", "3.0");
             message.put("messageId", UUID.randomUUID().toString());
             message.put("type", type);
-            message.put("lockerId", LOCKER.toString());
+            message.put("lockerId", lockerId.toString());
             message.put("timestamp", timestamp.toString());
             message.put("deviceSessionId", deviceSessionId.toString());
             message.put("bootCount", bootCount);
@@ -57,6 +65,46 @@ final class DevicePayloads {
             message.put("compartments", List.of(
                     cell(CELL_A1, 1, "CONNECTED", "HEALTHY", doorA1, "LOCKED"),
                     cell(CELL_A2, 2, "CONNECTED", "FAULTED", "CLOSED", "LOCKED")));
+            return message;
+        }
+
+        Map<String, Object> heartbeat(Instant timestamp, List<Map<String, Object>> compartments) {
+            Map<String, Object> message = envelope("HEARTBEAT", timestamp);
+            message.put("connectionId", connectionId.toString());
+            message.put("firmwareVersion", "0.1.0-sim");
+            message.put("clockSynchronized", true);
+            message.put("compartments", compartments);
+            return message;
+        }
+
+        /** {@code DOOR_OPENED} or {@code DOOR_CLOSED} outside any operation. */
+        Map<String, Object> door(String type, Instant timestamp, UUID compartmentId) {
+            Map<String, Object> message = envelope(type, timestamp);
+            message.put("compartmentId", compartmentId.toString());
+            message.put("doorState", type.equals("DOOR_OPENED") ? "OPEN" : "CLOSED");
+            return message;
+        }
+
+        /**
+         * {@code RFID_SCAN_COMPLETED} outside any operation (section 12.1); {@code reads} maps each observed UHF
+         * identifier to its read count, in order.
+         */
+        Map<String, Object> scan(Instant timestamp, UUID compartmentId, String readerStatus, Instant windowStartedAt,
+                Instant windowEndedAt, Map<String, Integer> reads) {
+            Map<String, Object> message = envelope("RFID_SCAN_COMPLETED", timestamp);
+            message.put("compartmentId", compartmentId.toString());
+            message.put("windowStartedAt", windowStartedAt.toString());
+            message.put("windowEndedAt", windowEndedAt.toString());
+            message.put("readerStatus", readerStatus);
+            List<Map<String, Object>> identifiers = new ArrayList<>();
+            reads.forEach((value, count) -> {
+                Map<String, Object> identifier = new LinkedHashMap<>();
+                identifier.put("identifierType", "RFID_UHF");
+                identifier.put("identifierValue", value);
+                identifier.put("readCount", count);
+                identifiers.add(identifier);
+            });
+            message.put("observedIdentifiers", identifiers);
             return message;
         }
 

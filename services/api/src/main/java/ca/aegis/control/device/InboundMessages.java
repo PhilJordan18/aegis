@@ -155,6 +155,7 @@ final class InboundMessages {
         String availabilityStatus = null;
         boolean heartbeatValid = false;
         List<CompartmentReport> compartments = List.of();
+        RfidScan rfidScan = null;
         switch (type) {
             case HEARTBEAT -> {
                 boolean clockSynchronized = bool(root, "clockSynchronized");
@@ -168,6 +169,7 @@ final class InboundMessages {
             case DOOR_CLOSED -> requireValue(root, "doorState", "CLOSED");
             case LOCK_UNLOCKED -> requireValue(root, "lockState", "UNLOCKED");
             case LOCK_LOCKED -> requireValue(root, "lockState", "LOCKED");
+            case RFID_SCAN_COMPLETED -> rfidScan = rfidScan(root, occurredAt);
             default -> {
                 // DEVICE_RESTARTED: a resetReason outside the list counts as UNKNOWN (section 13.1). The bodies of
                 // the operational types are validated by the workflows that interpret them.
@@ -179,7 +181,55 @@ final class InboundMessages {
         }
         return new Fact(deviceSessionId, bootCount, sequence, connectionId, availabilityStatus, operationId,
                 compartmentId, commandMessageId, displayMessageId, heartbeatValid, compartments, errorCode,
-                parsedJson);
+                parsedJson, rfidScan);
+    }
+
+    /**
+     * Section 12.1. A scan the contract does not allow is rejected rather than kept as weaker evidence: its window
+     * must end no later than the message and last at most ten seconds, and one identifier is reported once.
+     */
+    private static RfidScan rfidScan(JsonNode root, Instant occurredAt) {
+        Instant started = requiredInstant(root, "windowStartedAt");
+        Instant ended = requiredInstant(root, "windowEndedAt");
+        if (ended.isBefore(started) || ended.isAfter(occurredAt)
+                || Duration.between(started, ended).compareTo(RfidScan.MAX_WINDOW) > 0) {
+            throw new Rejection(ProcessingError.TIMESTAMP_OUT_OF_RANGE);
+        }
+        String readerStatus = requiredValue(root, "readerStatus", READER);
+        JsonNode array = value(root, "observedIdentifiers");
+        if (array == null || !array.isArray() || array.size() > RfidScan.MAX_IDENTIFIERS) {
+            throw new Rejection(ProcessingError.REQUIRED_FIELD_MISSING);
+        }
+        List<RfidScan.ObservedIdentifier> identifiers = new ArrayList<>(array.size());
+        for (JsonNode entry : array) {
+            if (!entry.isObject()) {
+                throw new Rejection(ProcessingError.REQUIRED_FIELD_MISSING);
+            }
+            requiredValue(entry, "identifierType", Set.of(RfidScan.IDENTIFIER_TYPE));
+            String value = text(entry, "identifierValue");
+            if (value == null || value.isEmpty()
+                    || value.codePointCount(0, value.length()) > RfidScan.MAX_IDENTIFIER_LENGTH) {
+                throw new Rejection(ProcessingError.REQUIRED_FIELD_MISSING);
+            }
+            identifiers.add(new RfidScan.ObservedIdentifier(value,
+                    (int) integer(entry, "readCount", 1, RfidScan.MAX_READ_COUNT)));
+        }
+        if (identifiers.stream().map(RfidScan.ObservedIdentifier::value).distinct().count() != identifiers.size()) {
+            throw new Rejection(ProcessingError.REQUIRED_FIELD_MISSING);
+        }
+        return new RfidScan(started, ended, readerStatus, identifiers);
+    }
+
+    private static Instant requiredInstant(JsonNode root, String field) {
+        String text = text(root, field);
+        if (text == null) {
+            throw new Rejection(ProcessingError.REQUIRED_FIELD_MISSING);
+        }
+        Instant instant = instant(text);
+        if (instant == null) {
+            throw new Rejection(ProcessingError.TIMESTAMP_INVALID);
+        }
+        return instant;
     }
 
     private static String deviceError(JsonNode root) {

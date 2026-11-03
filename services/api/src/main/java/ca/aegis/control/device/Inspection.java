@@ -32,9 +32,11 @@ sealed interface Inspection {
      * PostgreSQL {@code jsonb} cannot store.
      *
      * @param heartbeatValid for a heartbeat only: clock synchronized and timestamp within the window of section 15.3
+     * @param rfidScan for an {@code RFID_SCAN_COMPLETED} only, its validated body (section 12.1)
      */
     record Fact(UUID deviceSessionId, long bootCount, long sequence, UUID connectionId, String availabilityStatus,
             UUID operationId, UUID compartmentId, UUID commandMessageId, UUID displayMessageId,
-            boolean heartbeatValid, List<CompartmentReport> compartments, String errorCode, String parsedJson) {
+            boolean heartbeatValid, List<CompartmentReport> compartments, String errorCode, String parsedJson,
+            RfidScan rfidScan) {
     }
 }
