@@ -59,10 +59,10 @@ class PhysicalObservationRepository {
     }
 
     /**
-     * A heartbeat of the session that reports a cell's door other than {@code CLOSED}; {@code compartmentId} is null
-     * when its payload could not be parsed, and it then counts against every cell.
+     * A heartbeat of the session in which a cell is not seen connected with its door closed: reported otherwise, left
+     * out, or in a payload that could not be parsed.
      */
-    record DoorReport(long sequence, UUID compartmentId) {
+    record UnobservedCell(long sequence, UUID compartmentId) {
     }
 
     private final JdbcClient jdbc;
@@ -194,36 +194,37 @@ class PhysicalObservationRepository {
                 .list();
     }
 
-    /** Heartbeats of the device's current session from {@code fromSequence} on that report a door not closed. */
-    List<DoorReport> doorsNotClosed(UUID deviceId, DeviceProjection projection, Instant provisionedAt,
-            long fromSequence) {
+    /**
+     * For each of {@code compartmentIds}, the heartbeats of the device's current session from {@code fromSequence} on
+     * that do not report it {@code CONNECTED} with its door {@code CLOSED}.
+     */
+    List<UnobservedCell> unobservedCells(UUID deviceId, DeviceProjection projection, Instant provisionedAt,
+            long fromSequence, Collection<UUID> compartmentIds) {
+        if (compartmentIds.isEmpty()) {
+            return List.of();
+        }
         return jdbc.sql("""
-                SELECT m.sequence, cell ->> 'compartmentId' AS compartment_id
+                SELECT m.sequence, wanted.id AS compartment_id
                 FROM aegis.inbound_device_messages m
-                CROSS JOIN LATERAL jsonb_array_elements(CASE
-                    WHEN jsonb_typeof(m.parsed_payload -> 'compartments') = 'array'
-                    THEN m.parsed_payload -> 'compartments' ELSE '[]'::jsonb END) AS cell
+                JOIN aegis.compartments wanted ON wanted.id IN (:cells)
                 WHERE m.locker_device_id = :device AND m.device_session_id = :session AND m.boot_count = :boot
                   AND m.message_type = 'HEARTBEAT' AND m.processing_status <> 'REJECTED'
                   AND m.received_at >= :provisionedAt AND m.sequence >= :from
-                  AND cell ->> 'doorState' IS DISTINCT FROM 'CLOSED'
-                UNION ALL
-                SELECT m.sequence, NULL
-                FROM aegis.inbound_device_messages m
-                WHERE m.locker_device_id = :device AND m.device_session_id = :session AND m.boot_count = :boot
-                  AND m.message_type = 'HEARTBEAT' AND m.processing_status <> 'REJECTED'
-                  AND m.received_at >= :provisionedAt AND m.sequence >= :from AND m.parsed_payload IS NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM jsonb_array_elements(CASE
+                          WHEN jsonb_typeof(m.parsed_payload -> 'compartments') = 'array'
+                          THEN m.parsed_payload -> 'compartments' ELSE '[]'::jsonb END) AS cell
+                      WHERE cell ->> 'compartmentId' = CAST(wanted.id AS text)
+                        AND cell ->> 'connectionStatus' = 'CONNECTED' AND cell ->> 'doorState' = 'CLOSED')
                 """)
+                .param("cells", List.copyOf(compartmentIds))
                 .param("device", deviceId)
                 .param("session", projection.deviceSessionId())
                 .param("boot", projection.bootCount())
                 .param("provisionedAt", utc(provisionedAt))
                 .param("from", fromSequence)
-                .query((row, number) -> {
-                    String compartment = row.getString("compartment_id");
-                    return new DoorReport(row.getLong("sequence"),
-                            compartment == null ? null : Uuids.canonical(compartment).orElse(null));
-                })
+                .query((row, number) -> new UnobservedCell(row.getLong("sequence"),
+                        row.getObject("compartment_id", UUID.class)))
                 .list();
     }
 

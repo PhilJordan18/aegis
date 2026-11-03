@@ -408,6 +408,58 @@ class RfidPresenceTests extends ApiIntegrationTest {
         assertEquals("UNKNOWN", read(view, "$.readiness.result"));
     }
 
+    /** Review 2, HIGH 1: while the cell's link to the hub is down its door is not observed, so the scan is void. */
+    @Test
+    void aCellThatLostItsHubLinkAfterTheScanNeedsANewScan() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        ingest(scan(cellB, "HEALTHY", reads(tagB, 3)));
+        clock.advance(Duration.ofSeconds(1));
+        ingest(session.heartbeat(clock.instant(), List.of(
+                cell(cellA, 1, "DISCONNECTED", "HEALTHY", "CLOSED", "LOCKED"),
+                cell(cellB, 2, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED"))));
+        clock.advance(Duration.ofSeconds(1));
+        heartbeat("HEALTHY", "HEALTHY");
+
+        String view = technicianView(assetA);
+        assertEquals("UNKNOWN", read(view, "$.presence"));
+        assertEquals("UNKNOWN", read(view, "$.readiness.result"));
+        assertEquals("PRESENT", read(technicianView(assetB), "$.presence"), "B stayed connected and closed");
+        clock.advance(Duration.ofSeconds(4));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"), "a new scan after the link is back");
+    }
+
+    /** Review 2, HIGH 1: a heartbeat that leaves the cell out says nothing of its door, so the scan is void. */
+    @Test
+    void aCellLeftOutOfAHeartbeatAfterTheScanNeedsANewScan() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        ingest(scan(cellB, "HEALTHY", reads(tagB, 3)));
+        clock.advance(Duration.ofSeconds(1));
+        ingest(session.heartbeat(clock.instant(), List.of(
+                cell(cellB, 2, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED"))));
+        clock.advance(Duration.ofSeconds(1));
+        heartbeat("HEALTHY", "HEALTHY");
+
+        String view = technicianView(assetA);
+        assertEquals("UNKNOWN", read(view, "$.presence"));
+        assertEquals("UNKNOWN", read(view, "$.readiness.result"));
+        assertEquals("PRESENT", read(technicianView(assetB), "$.presence"), "B was reported connected and closed");
+    }
+
+    /** No validity period is defined: on an unbroken connection reporting the cell connected and closed it holds. */
+    @Test
+    void aScanStaysValidWhileTheConnectionReportsTheCellConnectedAndClosed() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        for (int i = 0; i < 5; i++) {
+            clock.advance(Duration.ofSeconds(10));
+            heartbeat("HEALTHY", "HEALTHY");
+        }
+
+        String view = technicianView(assetA);
+        assertEquals("PRESENT", read(view, "$.presence"));
+        assertEquals("READY", read(view, "$.readiness.result"));
+    }
+
     /** Review LOW 3: a control character in an identifier is rejected and stored, never lost with its payload. */
     @Test
     void anIdentifierWithAControlCharacterIsStoredRejected() throws Exception {

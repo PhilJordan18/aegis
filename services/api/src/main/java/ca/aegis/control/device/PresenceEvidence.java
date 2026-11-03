@@ -20,10 +20,10 @@ import ca.aegis.control.device.LockerDeviceRepository.ActiveDevice;
 import ca.aegis.control.device.PhysicalObservationRepository.CompartmentState;
 import ca.aegis.control.device.PhysicalObservationRepository.ConnectionStart;
 import ca.aegis.control.device.PhysicalObservationRepository.Detection;
-import ca.aegis.control.device.PhysicalObservationRepository.DoorReport;
 import ca.aegis.control.device.PhysicalObservationRepository.Observation;
 import ca.aegis.control.device.PhysicalObservationRepository.PhysicalEvent;
 import ca.aegis.control.device.PhysicalObservationRepository.Type;
+import ca.aegis.control.device.PhysicalObservationRepository.UnobservedCell;
 
 /**
  * Whether an expected tag is in its cell now, derived at every read from stored facts (document 04, section 13:
@@ -48,7 +48,7 @@ public class PresenceEvidence {
     }
 
     /** The facts of one locker that every expectation in it shares. */
-    private record LockerFacts(ConnectionStart start, List<PhysicalEvent> events, List<DoorReport> doorsNotClosed,
+    private record LockerFacts(ConnectionStart start, List<PhysicalEvent> events, List<UnobservedCell> unobserved,
             List<Rejected> rejected) {
     }
 
@@ -81,9 +81,10 @@ public class PresenceEvidence {
                         .map(Expectation::compartmentId).collect(Collectors.toSet())).stream()
                 .collect(Collectors.toMap(CompartmentState::id, Function.identity()));
         Map<UUID, Optional<LockerFacts>> lockers = new HashMap<>();
-        for (CompartmentState cell : cells.values()) {
-            lockers.computeIfAbsent(cell.lockerId(), locker -> lockerFacts(locker, now));
-        }
+        cells.values().stream()
+                .collect(Collectors.groupingBy(CompartmentState::lockerId,
+                        Collectors.mapping(CompartmentState::id, Collectors.toList())))
+                .forEach((locker, compartments) -> lockers.put(locker, lockerFacts(locker, compartments, now)));
         Map<String, Set<UUID>> standing = observations.standingDetections(expectations.stream()
                         .map(Expectation::rfidValue).collect(Collectors.toSet())).stream()
                 .collect(Collectors.groupingBy(Detection::identifierValue,
@@ -113,7 +114,7 @@ public class PresenceEvidence {
     }
 
     /** Facts of the current connection of an ONLINE locker; empty otherwise, which leaves its cells UNKNOWN. */
-    private Optional<LockerFacts> lockerFacts(UUID lockerId, Instant now) {
+    private Optional<LockerFacts> lockerFacts(UUID lockerId, List<UUID> compartmentIds, Instant now) {
         Optional<ActiveDevice> active = devices.active(lockerId);
         if (active.isEmpty()
                 || AvailabilityProjection.evaluate(active.get().projection(), now) != ConnectionStatus.ONLINE) {
@@ -124,8 +125,8 @@ public class PresenceEvidence {
                 .map(start -> new LockerFacts(start,
                         observations.events(device.id(), device.projection(), device.provisionedAt(),
                                 start.sequence()),
-                        observations.doorsNotClosed(device.id(), device.projection(), device.provisionedAt(),
-                                start.sequence()),
+                        observations.unobservedCells(device.id(), device.projection(), device.provisionedAt(),
+                                start.sequence(), compartmentIds),
                         rejected(device, start)));
     }
 
@@ -151,9 +152,9 @@ public class PresenceEvidence {
      * and its door closed now; the scan is healthy, made inside the current connection after the asset became
      * expected, and no door event of the cell follows it or falls inside its window. Document 04, section 13, and
      * document 06, sections 4.4 and 9.3: stored evidence that the door may have moved since also voids it, namely a
-     * later heartbeat of the session reporting the door other than closed, or a door or scan message of the device
-     * rejected after the scan, whose cell is unknown: after it in the sequence its payload claims, or received after
-     * it when no sequence can be read.
+     * later heartbeat of the session that does not report the cell connected with its door closed (while the cell's
+     * link is down its door is not observed), or a door or scan message of the device rejected after the scan, whose
+     * cell is unknown: after it in the sequence its payload claims, or received after it when no sequence can be read.
      */
     private static Optional<PhysicalEvent> usableScan(Expectation expectation, CompartmentState cell,
             LockerFacts facts) {
@@ -184,11 +185,10 @@ public class PresenceEvidence {
                         || (event.type() == InboundMessageType.DOOR_OPENED
                                 && !event.occurredAt().isBefore(scan.windowStartedAt()))
                         || event.occurredAt().isAfter(scan.windowStartedAt()));
-        boolean doorReportedSince = facts.doorsNotClosed().stream()
-                .anyMatch(report -> report.sequence() > scan.sequence()
-                        && (report.compartmentId() == null || report.compartmentId().equals(cell.id())));
+        boolean unobservedSince = facts.unobserved().stream()
+                .anyMatch(report -> report.sequence() > scan.sequence() && report.compartmentId().equals(cell.id()));
         boolean rejectedSince = facts.rejected().stream().anyMatch(rejected -> rejected.voids(scan));
-        return doorMovedSince || doorReportedSince || rejectedSince ? Optional.empty() : Optional.of(scan);
+        return doorMovedSince || unobservedSince || rejectedSince ? Optional.empty() : Optional.of(scan);
     }
 
     private static Verdict verdict(Expectation expectation, PhysicalEvent scan, LockerFacts facts,
