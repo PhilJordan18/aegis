@@ -90,18 +90,58 @@ Les décisions humaines du 3 novembre s'appliquent :
   avant toute conclusion sur l'audit, en grande taille et en AX5 : défilement, safe
   areas, libellé lisible. Un défaut produit n'est pas exclu.
 
-Autres observations :
+Références exactes. Les lignes renvoient à `apps/ios/AegisMobileUITests/` ; les durées
+et les comptes viennent de `diagnostic-duree-ios.md`.
 
-- **Le deuxième tap sur « Réessayer »** de `testOfflineRefreshKeepsTheLastListThenTryAgainRecovers`
-  est sollicité dans 12 itérations sur 14 mesurées. Un premier tap ignoré peut être un
-  défaut produit, par exemple un rafraîchissement encore en cours ; il est à reproduire
-  avant de garder ce second tap.
-- **Le timeout de lancement de `testEmptyCatalogueOffersNoFilterToClear`** (run
-  41620501772) suit un -56 dont l'app n'était pas encore terminée. La corrélation est
-  observée une seule fois.
-- **Le commit 4084695 de #116 relance l'audit après un abandon de XCTest.** C'est une
-  reprise automatique, que la règle « pas de retry masquant un défaut » exclut sans
-  preuve que la cause est dans XCTest.
+1. **Premier appui sur « Réessayer » perdu.**
+   - Test : `CatalogUITests.testOfflineRefreshKeepsTheLastListThenTryAgainRecovers`.
+   - Code : `CatalogUITests.swift:141-151` sur `dev` 639ada8, et `:151` dans 27ee03f
+     (#117). Le second `retry.tap()` est conditionné par
+     `notice.waitForNonExistence(timeout: 5)`.
+   - Observé dans 20 itérations sur 22, sur les runs 41620521054, 41620501772,
+     41588098193, 41586558351, 41622125076 et 41629351716 : chaque fois, le bouton
+     `catalog.retry` a reçu deux taps.
+   - Le commentaire du test dit « seen once ». **Pas de second appui automatique** :
+     reproduire, puis corriger la cause, dans l'app ou dans l'attente du test.
+2. **Retour vers la liste.**
+   - Code : `CatalogUITests.swift:71-72` sur `dev`.
+   - Run 41586558351, FR sombre : le tap sur `navigationBars.buttons.firstMatch`
+     n'a pas ramené la carte MM-002 en 10 s, alors que `BackButton` était présent et
+     touchable en (16, 62).
+   - #117 ajoute `waitForStillScreen()` à `:73`. Ce n'est à garder que si un test
+     prouve que le tap pendant la transition est bien la cause.
+3. **Dynamic Type.**
+   - Constat : « partially unsupported » sur « Last known: Blocked », cadre
+     (51, 646, 172, 18), pour une zone visible de (0, 0, 402, 671).
+   - Runs 41577913719, 41584155476 et 41588098193.
+   - Code de l'audit : `CatalogUITests.swift:313-334` sur `dev`. La bande `growthBand`
+     de 27ee03f (`:287-308`) est refusée.
+   - Vérifier la mise en page réelle en grande taille et en AX5. **Pas de tolérance
+     générale de 60 pt.**
+4. **Timeouts d'audit (-56).**
+   - Runs 41515528716 et 41586555809 : test hors ligne, fenêtre de 17 s.
+   - Run 41620501772 : catalogue EN clair, fenêtre de 41 s, suivi du timeout de
+     lancement de `testEmptyCatalogueOffersNoFilterToClear`.
+   - Les trois passes de 27ee03f (`:338-342`) sont à retirer.
+5. **Nouvelle tentative de #116.**
+   - Code : `StillScreen.swift`, `performCompletedAccessibilityAudit`, dans 4084695 ;
+     appelée à `CatalogUITests.swift:323`.
+   - **Ce n'est pas une suppression de constat** : elle ne relance que sur -56, un audit
+     interrompu n'a rendu aucun constat, et un second -56 échoue.
+   - **Mais elle double le coût de l'audit et peut masquer l'instabilité.** Elle doit
+     être visible dans le résumé du job, et pas seulement comme activité du bundle.
+     Elle doit aussi être justifiée et traitée.
+   - Le run vert 41622125076 ne l'a pas déclenchée : il ne la valide pas.
+
+Les recettes de suites rapide et étendue sont attendues de la session iOS
+(`suites-ios.md`) :
+
+- les deux recettes dans `ios-test.sh` ;
+- la sélection par nom ;
+- le nombre attendu et l'unité comptée ;
+- la liste des chemins visuels.
+
+La session cloud les branchera dans `ci.yml`.
 
 La session cloud ne modifie plus `CatalogUITests` ni `StillScreen`. La consolidation
 de #116 et #117 appartient à la session iOS.

@@ -1,7 +1,7 @@
 # Diagnostic mesuré du job iOS standalone (CI-02, #67)
 
-Établi le 3 novembre 2026 à partir des résultats hébergés existants. Aucun nouveau
-run n'a été lancé pour ce diagnostic. Les mesures sont reproductibles avec les
+Établi le 3 novembre 2026 à partir des résultats hébergés existants ; la section 7
+ajoute le run de #120. Les mesures sont reproductibles avec les
 outils de [mesures/](mesures/README.md) sur les artefacts `ios-standalone-results` (conservés 7 jours).
 
 Sources :
@@ -124,7 +124,7 @@ avec 41620521054.
 | 4.1 | « Audit failed to complete in time » (-56) | Runs 41515528716 et 41586555809 (test hors ligne, fenêtre de 17 s), et 41620501772 (EN clair, catalogue : 34 s sans aucune activité, puis -56 après 41 s de fenêtre) | **Hypothèse non prouvée.** Le -56 survient après 17 s comme après 41 s : ce n'est pas un simple budget de temps. Le découpage ne l'a pas évité. La cause reste inconnue : app jamais inactive pendant l'audit, simulateur saturé, ou limite interne de XCTest. |
 | 4.2 | Dynamic Type « partially unsupported » sur « Last known: Blocked », cadre (51, 646, 172, 18) | Runs 41577913719, 41584155476 et 41588098193 ; zone visible mesurée (0, 0, 402, 671) | **Hypothèse non prouvée.** L'explication par le fondu de la barre d'onglets n'est pas démontrée, et la mise en page n'a pas été vérifiée. **Un défaut produit n'est pas exclu** : il peut s'agir d'un libellé tronqué ou rendu inaccessible en grande taille. La bande de tolérance de 60 pt est retirée de la proposition. |
 | 4.3 | « Timed out while launching application via Xcode » sur `testEmptyCatalogueOffersNoFilterToClear` (83 s) | Run 41620501772. Le test précédent s'est terminé sur un -56, l'app encore active (pid 7561). La terminaison a été demandée à 10:43:47 ; xcodebuild n'en a reçu l'avis qu'à 10:44:11 ; le lancement a expiré à 10:44:53. Le même test dure 33 s et 50 s dans 41586555809 et 41584155476, contre 8 à 15 s ailleurs. | **Démarrage ou disponibilité du simulateur, consécutif à 4.1.** La corrélation est observée dans un seul run ; elle n'est pas prouvée en général. |
-| 4.4 | Le premier tap sur « Réessayer » ne fait pas disparaître le bandeau en 5 s : un deuxième tap est fait | 12 itérations sur 14 dans les runs 41620521054, 41620501772, 41588098193 et 41586558351. Le commentaire du test dit pourtant « seen once ». | **Défaut produit possible ou fragilité de test, non tranché.** Cela contrevient à la décision « pas de taps répétés » : le deuxième tap peut masquer un premier tap ignoré par l'app, par exemple un rafraîchissement encore en cours (`ignoresADuplicateRefreshWhileOneIsInFlight`). |
+| 4.4 | Le premier tap sur « Réessayer » ne fait pas disparaître le bandeau en 5 s : un deuxième tap est fait | 20 itérations sur 22 dans les runs 41620521054, 41620501772, 41588098193, 41586558351, puis 41622125076 et 41629351716 (8 taps de `catalog.retry` pour 4 itérations). Le commentaire du test dit pourtant « seen once ». | **Défaut produit possible ou fragilité de test, non tranché.** Cela contrevient à la décision « pas de taps répétés » : le deuxième tap peut masquer un premier tap ignoré par l'app, par exemple un rafraîchissement encore en cours (`ignoresADuplicateRefreshWhileOneIsInFlight`). |
 | 4.5 | Tap « retour » perdu à `:72`, écran de fiche toujours affiché | Run 41586558351 (FR sombre). Bouton `BackButton` présent et touchable en (16, 62). | **Fragilité de test probable**, avec un tap pendant une transition. Non prouvé. Un run vert sur 27ee03f ne démontre pas la correction. |
 | 4.6 | 150 à 240 s avant le premier test, sur un simulateur « booted » en 2 s | Tous les runs (section 2) | **Démarrage ou disponibilité du simulateur, prouvé par les horodatages.** Aucun lien avec le code de l'app. |
 | 4.7 | Changement d'apparence de 17 à 38 s | Runs 41620521054 et 41588098193 | **Simulateur** (SpringBoard occupé). |
@@ -152,8 +152,8 @@ décisions du 3 novembre ; le détail se trouve dans
 4. Ne garder l'attente d'écran immobile avant le tap « retour » que si un test prouve
    le comportement attendu.
 5. Le commit 4084695 de #116 (« audit again when XCTest abandons the catalogue audit »)
-   est une reprise d'audit. Il tombe sous l'interdiction des « retries cachant un
-   défaut », sauf si une preuve montre que le -56 vient de XCTest et non de l'app.
+   refait un audit interrompu. Ce n'est pas une suppression de constat, mais il
+   augmente le coût et peut masquer une instabilité ; voir la section 7.
 6. Pistes de durée sans perte de couverture :
    - éviter de relancer l'app quand seule l'apparence change, en passant le changement
      d'apparence sur l'app déjà lancée et en vérifiant que l'écran suit ;
@@ -201,9 +201,86 @@ et leurs tests.
   - pas de runner payant, pas de cache, pas de parallélisation ;
   - aucun test, aucune langue et aucune vérification ne sont retirés.
 
-Budget d'expérience : un seul run hébergé de cette branche, puis, s'il passe, un run
-complet sur le même code. Ce run complet n'est jamais lancé en parallèle d'un run de PR
-identique. En cas d'échec, une analyse précède toute nouvelle tentative.
+Budget d'expérience : le run de PR 41629351716 a exécuté la recette complète, et il
+compte comme le run complet. Le run manuel identique mis en file derrière lui a été
+annulé (section 7). Un nouvel essai macOS doit répondre à une hypothèse précise ; une
+correction Python ou de documentation n'en justifie pas.
+
+## 7. Résultat du run de #120 et concurrence observée
+
+**Run 41629351716** (PR #120, 8a0aa6e) :
+
+- Il exécute la recette `standalone` complète, car `ci.yml` modifié sélectionne tout
+  le code iOS de `dev`. Il compte donc comme le run complet du budget.
+- Résultat : succès, 249 exécutions de cas sur 249, sans échec ; le résumé
+  `xcresulttool` annonce 160 tests sur 160.
+- Le job iOS dure 21 min 51 s.
+
+Ses phases sont successives et ne se chevauchent pas :
+
+| Phase | Durée |
+|---|---:|
+| Préparation et outils | 28 s |
+| Démarrage du simulateur (nouvelle étape) : « booted » en 4 s, puis prêt 102 s plus tard (« Waiting on Data Migration ») | 108 s |
+| Recette | 1 137 s |
+| … dont compilation | 124 s |
+| … dont session → premier test unitaire | 96 s |
+| … dont tests unitaires | 17 s |
+| … dont fenêtre UI | 767 s |
+| Résumé et artefact | 7 s |
+
+Comparaison du coût de premier démarrage, du début de session au premier test
+unitaire :
+
+| Run | Code iOS | Étape de démarrage | Session → 1er test | Total |
+|---|---|---:|---:|---:|
+| 41622125076 (#116 4084695) | #116 | — | 242 s | 242 s |
+| 41629351716 (#120) | `dev` | 108 s | 96 s | 204 s |
+| Six runs de la section 2 | divers | — | 109 à 241 s | 109 à 241 s |
+
+L'étape déplace le coût hors de la recette et le rend visible. Elle échouerait
+proprement si le simulateur ne démarrait pas. **Aucun gain net n'est démontré** : le
+total reste dans la plage observée sans l'étape, et sur un seul échantillon. Elle est
+gardée pour la mesure et l'isolement de l'échec, pas pour la durée.
+
+Elle n'agit pas sur les 767 s de tests UI ; c'est la suite rapide
+([suites-ios.md](suites-ios.md)) qui vise cette durée.
+
+**Concurrence**, en partie hébergée et en partie seulement testée :
+
+- **Run manuel et run de PR identiques : vérifié en hébergé.**
+  - Le run manuel 41629358068 a été créé à 11:40:02 et ses jobs ont commencé à
+    12:02:00, après la fin du run de PR. Ils n'ont pas tourné en parallèle.
+  - Mais la file a ensuite exécuté une recette identique, sur le même SHA : environ
+    14 min de macOS, jusqu'à son annulation manuelle à 12:16:38.
+  - **Une file d'attente sérialise les doublons, elle ne les supprime pas.** Règle
+    retenue : pas de lancement manuel sur une branche qui a une PR ouverte ; relancer
+    le run de la PR à la place.
+- **Nouvelle révision d'une PR : non observé avec la nouvelle clé.**
+  - `cancel-in-progress` n'est vrai que pour `pull_request`, ce que vérifie un test de
+    configuration.
+  - Avec l'ancienne clé de `dev`, le run 41633303702 de #119 a bien été annulé par le
+    run 41634195510 de la révision suivante.
+- **Deux branches : clé distincte par branche.** Ce point est vérifié par le test de
+  configuration. Les runs de #118 et #119 ont tourné pendant ceux de #120 sans être
+  annulés, mais ils utilisaient le `ci.yml` de `dev`.
+- **Une demande en attente devenue obsolète n'est pas annulée seule** si elle n'est pas
+  remplacée par une plus récente du même groupe. C'est le cas ci-dessus, d'où la règle.
+
+**Tentative de #116 après un audit interrompu.** `performCompletedAccessibilityAudit`
+(`apps/ios/AegisMobileUITests/StillScreen.swift`, commit 4084695) refait l'audit une
+seule fois, et seulement sur l'erreur -56.
+
+- **Ce n'est pas une suppression de constat** : un audit interrompu n'a rendu aucun
+  constat, les constats d'un audit terminé échouent toujours, et un second -56 échoue.
+- **Elle double le coût de l'audit concerné et peut masquer une instabilité.** Elle
+  laisse une activité « Audit did not complete in time; auditing again » dans le
+  bundle, mais rien dans le résumé du job.
+- **Dans le run vert 41622125076, cette activité est absente** : la nouvelle tentative
+  n'a pas servi, et ce run ne la valide donc pas.
+
+C'est à la session iOS de la rendre visible dans le résumé, de la justifier et de la
+traiter.
 
 ## Limites
 

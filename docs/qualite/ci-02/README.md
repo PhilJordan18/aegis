@@ -264,22 +264,41 @@ audit et le classement des constats, est dans
 [diagnostic-duree-ios.md](diagnostic-duree-ios.md). Les scripts qui le reproduisent à
 partir des bundles xcresult sont dans [mesures/](mesures/).
 
-La branche `67-ci-ios-run-cost` (incrément 3) contient trois changements :
+La branche `67-ci-ios-run-cost` (incrément 3, #120) apporte :
 
-- la concurrence par branche, sans run manuel parallèle à un run de PR ;
-- l'attribution des commits iOS dans les PR empilées ;
-- un démarrage explicite et borné du simulateur.
+- **Concurrence par branche.** Un run manuel attend le run de PR au lieu de tourner à
+  côté, mais une file sérialise les doublons sans les supprimer.
+- **PR empilées.** Le résumé nomme les commits iOS hérités d'une PR prérequise.
+- **Démarrage borné du simulateur.** L'étape mesure le coût et isole l'échec ; aucun
+  gain de durée n'est démontré.
+- **Filtre des scripts CI.** Un script connu ne relance que ses tests et les jobs qui
+  l'exécutent. `ci.yml` modifié ou un script inconnu relance toujours tout.
+- **Broker du job API.** Le job API démarre le Mosquitto de développement avant les
+  tests, et `infra/mqtt/` le sélectionne. C'est le prérequis des tests de broker de
+  #115.
+- **Outil de mesure xcresult.** Il lit les bundles en lecture seule et sans sortir du
+  bundle ; il couvre les quatre alertes Sonar.
+
+La proposition de suites iOS rapide et étendue est dans [suites-ios.md](suites-ios.md).
+Le déclenchement n'est pas encore modifié : il attend les recettes de la session iOS.
 
 ## Ordre de fusion
 
-1. PR de l'incrément 1 (`67-ci-qualify-controls` vers `dev`).
-2. PR de l'incrément 3 (`67-ci-ios-run-cost` vers `dev`), empilée sur
-   l'incrément 1.
-3. PR de l'incrément 2 (`67-ci-promote-qualified-jobs` vers `dev`), après le
-   run rouge du commit de qualification et un run vert du commit final.
+1. #110 (`67-ci-qualify-controls` vers `dev`).
+2. #120 (`67-ci-ios-run-cost` vers `dev`), empilée sur #110.
+3. #111 (`67-ci-promote-qualified-jobs` vers `dev`), après le run rouge du commit de
+   qualification et un run vert du commit final.
 
-La correction des CatalogUITests (#116, #117) appartient à la session iOS ; elle est
-indépendante de cet ordre.
+   Vérifié localement le 3 novembre : la fusion de #111 avec #120 est sans conflit,
+   46 tests sur 46 passent, et le résultat garde la concurrence, l'étape de démarrage
+   du simulateur, le filtre et les deux brokers.
+
+   Après la fusion de #120, #111 reprend `dev` par un commit de fusion, sans rebase.
+4. #115 ne peut passer qu'une fois #120 dans `dev` : ses tests de broker échouent
+   sans le broker du job API.
+
+La correction des CatalogUITests (#116, #117) appartient à la session iOS. Elle ne
+dépend pas de cet ordre, mais les suites rapide et étendue attendent ses recettes.
 
 Aucune règle de ruleset n'est à modifier : `CI result` reste le seul check
 requis.
