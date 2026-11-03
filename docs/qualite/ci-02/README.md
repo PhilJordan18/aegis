@@ -82,8 +82,8 @@ commit de promotion :
   commentaire périmé du filtre Web (le chemin `docs/design/manager-entree/` est
   conservé, il ne fait que lancer Web plus souvent).
 - Restant : « CI script tests » n'est pas requis, donc une régression de
-  `ci-result.py` qui renverrait toujours 0 ne serait pas bloquée; il sera
-  promu selon les mêmes critères.
+  `ci-result.py` qui renverrait toujours 0 ne serait pas bloquée. Voir son
+  plan de qualification plus bas.
 
 ## Incrément 2 : promotion
 
@@ -97,6 +97,24 @@ Branche `67-ci-promote-qualified-jobs`, empilée sur l'incrément 1.
 2. Commit suivant : retire tout le dispositif, garde **Simulator tests** et
    **Agent setup validator** dans les `needs`, ajoute un test vérifiant que
    chaque job des `needs` est bien transmis à `ci-result.py`.
+
+### État rouge de `1ab1203` : à ne jamais fusionner
+
+`1ab1203432a0c8f4ea9ab58973c988efbd545e40` est la fusion du commit de
+qualification `78a8380b2979aeadff094b03de72848ecc8c6e9f` avec la documentation;
+son `ci.yml` contient les quatre étapes `CI-02 deliberate …` :
+
+| Job | Défaut créé sur le runner | Résultat attendu |
+|---|---|---|
+| Simulator tests | `tools/hub-simulator/test/unit/ci02-deliberate-failure.test.ts`, `expect(1).toBe(2)` | « Unit tests » rouge; « Test counts » : `1 failed` et rapport d'intégration absent |
+| Agent setup validator | `docs/qualite/ci-02/ci02-broken-link.md`, lien vers un fichier absent | `Broken local link …`, `1 error(s)` |
+| Accepted ADR guard | dépôt jetable `$RUNNER_TEMP/ci02-adr-fixture`, ADR-901 `ACCEPTED` modifié | `Accepted ADRs are immutable … ADR-901-fixture.md (accepted ADR)` |
+| iOS standalone tests | `apps/ios/AegisMobileTests/CI02DeliberateFailureTests.swift`, `Issue.record` | `error: failures`, 1 échec de plus que la suite |
+| CI result | quatre jobs dans `needs` | rouge, une ligne `::error::` par job |
+
+Le commit `134db89a834a6d425b53cc3cbb7536db03096bce` retire ces quatre étapes
+et ramène les `needs` à `changes, api, web, simulator, agents`. Seule la tête
+de la branche est fusionnable, et seulement après les preuves.
 
 Exécutions rouges attendues sur le commit 1 : simulateur (`1 failed`, rapport
 d'intégration absent), validateur (`Broken local link`), garde ADR (`Accepted
@@ -118,6 +136,31 @@ d'erreur par job.
 Lorsque le run rouge du commit de qualification existe, simulateur et validateur
 satisfont tous les critères; la PR de l'incrément 2 peut alors sortir du
 brouillon.
+
+## Plan de qualification de « CI script tests »
+
+Ce job protège `ci-result.py`, `changed-components.sh` et `test-report.py`, donc
+la règle même de `CI result`. Il ne peut pas rester non requis indéfiniment.
+
+- **Déclenchement** : `ci=true` sur toute PR qui modifie `ci.yml` ou
+  `.github/scripts/`, et sur tout push. Le filtre ne l'omet donc jamais
+  lorsqu'un script qu'il protège change.
+- **Critère 1** : après fusion de l'incrément 1, chaque push sur `dev` le lance;
+  le premier succès sur `dev` compte.
+- **Critère 2** : cinq succès consécutifs hébergés sur au moins deux branches
+  (l'incrément 1, l'incrément 2 et `dev` en fournissent trois).
+- **Critère 3** : un commit de qualification qui, sur le runner seulement,
+  remplace `return 1 if errors else 0` par `return 0` dans `ci-result.py` avant
+  `unittest`. Attendu : « CI script tests » rouge (tests `CiResultTests`), et
+  `CI result` rouge lorsque le job est dans ses `needs`. Ce commit est retiré par
+  le suivant, comme pour l'incrément 2.
+- **Critère 4** : `unittest -v` affiche chaque test et `Ran N tests`; un nombre
+  nul de tests fait échouer `unittest discover` (code 5).
+- **Critères 5 à 7** : Python 3.12 par `setup-python` épinglé, moins d'une
+  minute, bibliothèque standard, aucun secret.
+- **En attendant** : toute PR qui modifie `.github/scripts/` ou `ci.yml` n'est
+  fusionnée qu'avec « CI script tests » vert, vérifié à la revue et noté dans la
+  PR.
 
 ## Points ouverts à décider
 
@@ -146,7 +189,9 @@ Les deux derniers pushs `dev` échouent; le code avait passé sur la PR
 
 Le premier cas ressemble à une limite de temps du runner, le second à un vrai
 constat d'accessibilité sur iPhone 17 iOS 26.5, la configuration hébergée
-(distincte du Mac de Philippe, iOS 26.3.1). Correction hors de ce périmètre, pour
+(distincte du Mac de Philippe, iOS 26.3.1). Détails, liens et logs pour la session iOS dans
+[transmission-ios-catalog-ui-tests.md](transmission-ios-catalog-ui-tests.md).
+Correction hors de ce périmètre, pour
 la session iOS : `apps/ios/AegisMobileUITests/CatalogUITests.swift` et la vue du
 libellé concerné. La règle « aucun test ignoré » ne doit pas être assouplie.
 Le défaut ne dépend pas de l'incrément 1, qui ne change que le choix du
@@ -192,7 +237,7 @@ que le conteneur tourne en root; il passe sur chaque run hébergé (non-root).
 
 Le push depuis la session cloud est refusé (HTTP 403 : l'application GitHub
 Claude n'est pas reliée à ce dépôt pour ce compte). Les deux branches existent
-en commits locaux; aucun run hébergé de ces commits n'a donc eu lieu, et aucune
+en commits locaux (livrées par un bundle Git); aucun run hébergé de ces commits n'a donc eu lieu, et aucune
 preuve de leurs runs n'est présentée. Un humain disposant du droit de push doit
 pousser les branches et ouvrir les PR vers `dev`.
 
