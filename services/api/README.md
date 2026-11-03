@@ -6,8 +6,9 @@ simulateur, Spring Boot, Flyway, `GET /api/v1/system/health`, la connexion par
 comptes préparés (`POST /api/v1/auth/login`, `GET /api/v1/auth/me`), les
 contrôles de rôle et de niveau d'accès côté serveur et l'administration des
 modèles et des actifs (document 09, sections 12.1 et 12.2), dont les mutations
-sont auditées (AUD-00). Il n'implémente pas
-encore les identifiants physiques, les placements ni l'ingestion MQTT. Les
+sont auditées (AUD-00). Les sections suivantes décrivent les tranches
+ajoutées depuis : identifiants physiques et placements, horaires, catalogue
+technicien et readiness, réservations, ingestion MQTT et état du casier. Les
 clients Web et iOS ont leur propre dossier sous `apps/`.
 
 ## Prérequis
@@ -392,9 +393,10 @@ docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml
 ```
 
 Le conteneur `mqtt-auth-init` ajoute alors le compte au fichier de mots de
-passe existant. Un fichier `infra/docker/.env` local doit d'abord recevoir
-`AEGIS_MQTT_TEST_DEVICE_PASSWORD`, sinon Compose refuse de démarrer. Le compte
-et le simulateur du casier de démonstration ne changent pas.
+passe existant. Sans `AEGIS_MQTT_TEST_DEVICE_PASSWORD` dans le fichier
+d'environnement, la pile démarre sans ce compte et les tests du broker
+échouent : ajoutez la variable pour les exécuter. Le compte et le simulateur du
+casier de démonstration ne changent pas.
 
 ## Catalogue technicien et readiness (RDY-01, RDY-02)
 
