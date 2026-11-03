@@ -39,13 +39,14 @@ class ReservationExpirySchedulingTests {
                 .run(started -> assertThat(started).doesNotHaveBean(ReservationExpiryJob.class));
     }
 
+    /** The paging through every due reservation belongs to the pass itself, so a run is exactly one pass. */
     @Test
-    void aPassContinuesWhileABatchIsFullAndStopsAfterAPartialOne() {
+    void aRunIsOnePassPagedByTheBatchSize() {
         ReservationExpiry expiry = mock(ReservationExpiry.class);
-        when(expiry.expireDue(2)).thenReturn(2, 2, 1);
+        when(expiry.expireDue(2)).thenReturn(5);
 
         new ReservationExpiryJob(expiry, 2).run();
 
-        verify(expiry, times(3)).expireDue(2);
+        verify(expiry, times(1)).expireDue(2);
     }
 }

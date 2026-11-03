@@ -122,15 +122,25 @@ class ReservationRepository {
         end(id, "EXPIRED", "expired_at", at);
     }
 
+    /** A due reservation and its position in the order of a pass. */
+    record Due(UUID id, Instant reservedUntil) {
+    }
+
     /**
-     * Active reservations whose end has been reached at {@code now}, oldest end first, read without lock: each one is
-     * then decided in its own transaction, under its locks.
+     * Up to {@code limit} {@code ACTIVE} reservations due at {@code now}, in the order {@code (reserved_until, id)},
+     * strictly after {@code after} when it is not null: a pass pages through them with this keyset, so the
+     * reservations it defers, skips or fails on never hide the later ones.
      */
-    List<UUID> dueAt(Instant now, int limit) {
-        return jdbc.sql("""
-                SELECT id FROM aegis.reservations WHERE status = 'ACTIVE' AND reserved_until <= :now
-                ORDER BY reserved_until, id LIMIT :limit
-                """).param("now", utc(now)).param("limit", limit).query(UUID.class).list();
+    List<Due> dueAfter(Instant now, Due after, int limit) {
+        String keyset = after == null ? "" : " AND (reserved_until, id) > (:afterUntil, :afterId)";
+        var query = jdbc.sql("SELECT id, reserved_until FROM aegis.reservations WHERE status = 'ACTIVE' "
+                + "AND reserved_until <= :now" + keyset + " ORDER BY reserved_until, id LIMIT :limit")
+                .param("now", utc(now)).param("limit", limit);
+        if (after != null) {
+            query = query.param("afterUntil", utc(after.reservedUntil())).param("afterId", after.id());
+        }
+        return query.query((row, number) -> new Due(row.getObject("id", UUID.class),
+                instant(row, "reserved_until"))).list();
     }
 
     /** The active reservations of a technician or of an asset that are due at {@code now}. */

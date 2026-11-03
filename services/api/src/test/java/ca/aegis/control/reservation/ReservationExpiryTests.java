@@ -2,11 +2,14 @@ package ca.aegis.control.reservation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -303,6 +306,41 @@ class ReservationExpiryTests extends ApiIntegrationTest {
         assertEquals(1L, fixtures.count("SELECT count(*) FROM aegis.loans WHERE id = :id AND status = 'ACTIVE'",
                 loan));
         assertEquals("BORROWED", availability(asset));
+    }
+
+    /**
+     * A pass pages past what it cannot expire: an earlier reservation whose decision fails, then one deferred by an
+     * unresolved anomaly, each filling a page of one, never stop a later due reservation from expiring in the same
+     * pass, and the pass ends. The failure rolls back its whole decision.
+     */
+    @Test
+    void aPassExpiresALaterReservationPastAFailingAndADeferredOne() throws Exception {
+        clock.set(UNTIL.plusSeconds(600));
+        UUID failingAsset = fixtures.asset(fixtures.scheduledLocker(accounts.admin().id()));
+        UUID failing = fixtures.reservation(failingAsset, technician.id(), "ACTIVE", FROM, UNTIL.minusSeconds(120));
+        // Created after the pass's instant: ending it then would break ck_locker_operations_terminal_date.
+        UUID future = fixtures.attempt(failingAsset, technician.id(), failing, "AWAITING_LOCAL_PROOF", false,
+                UNTIL.plusSeconds(1200));
+        UUID deferredAsset = fixtures.asset(fixtures.scheduledLocker(accounts.admin().id()));
+        UUID deferredHolder = accounts.technician().id();
+        UUID deferred = fixtures.reservation(deferredAsset, deferredHolder, "ACTIVE", FROM, UNTIL.minusSeconds(60));
+        fixtures.anomaly(fixtures.attempt(deferredAsset, deferredHolder, deferred, "ANOMALY", true,
+                UNTIL.minusSeconds(300)), "OPEN", UNTIL.minusSeconds(240));
+        UUID later = fixtures.reservation(fixtures.asset(locker), accounts.technician().id(), "ACTIVE", FROM, UNTIL);
+
+        int expired = assertTimeoutPreemptively(Duration.ofSeconds(60), () -> expiry.expireDue(1));
+
+        assertTrue(expired >= 1, "the later reservation counts as expired");
+        assertEquals("EXPIRED", fixtures.reservationStatus(later));
+        assertEquals(1L, expiredEvents(later));
+        assertEquals("ACTIVE", fixtures.reservationStatus(failing));
+        assertEquals("AWAITING_LOCAL_PROOF", fixtures.operationStatus(future));
+        assertEquals(0L, expiredEvents(failing));
+        assertEquals("ACTIVE", fixtures.reservationStatus(deferred));
+
+        // Once the clock passes the attempt's creation, a later decision succeeds; nothing stays stuck in the database.
+        assertEquals(Outcome.EXPIRED, expiry.expire(failing, UNTIL.plusSeconds(1300), false));
+        assertEquals("EXPIRED", fixtures.operationStatus(future));
     }
 
     @Test

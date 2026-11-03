@@ -25,12 +25,13 @@ class ReservationExpiryJob {
         this.batchSize = batchSize;
     }
 
-    /** A pass that finds a full batch starts the next one at once; a pass never overlaps another in this instance. */
+    /**
+     * One pass over every due reservation, read in pages of {@code batch-size}; a pass never overlaps another in this
+     * instance.
+     */
     @Scheduled(fixedDelayString = "${aegis.reservations.expiry.interval:PT15S}",
             initialDelayString = "${aegis.reservations.expiry.interval:PT15S}")
     void run() {
-        while (expiry.expireDue(batchSize) == batchSize) {
-            // Deferred or skipped reservations do not count, so this loop ends once nothing more can expire now.
-        }
+        expiry.expireDue(batchSize);
     }
 }

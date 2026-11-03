@@ -20,6 +20,7 @@ import ca.aegis.control.audit.AuditEvent;
 import ca.aegis.control.audit.AuditEventType;
 import ca.aegis.control.audit.AuditSubjectType;
 import ca.aegis.control.audit.AuditTrail;
+import ca.aegis.control.reservation.ReservationRepository.Due;
 import ca.aegis.control.reservation.ReservationRepository.ReservationRow;
 
 /**
@@ -46,7 +47,7 @@ class ReservationExpiry {
         DEFERRED,
         /** Not {@code ACTIVE}, or not due yet, once its locks were held. */
         UNCHANGED,
-        /** Another transaction held the asset; a later pass decides. */
+        /** Another transaction held the asset, or the decision failed and was rolled back; a later pass decides. */
         SKIPPED
     }
 
@@ -74,20 +75,45 @@ class ReservationExpiry {
     }
 
     /**
-     * One pass of the job: up to {@code limit} due reservations, each in its own transaction. An asset held by another
-     * transaction is skipped rather than awaited ({@code SKIP LOCKED}).
+     * One pass of the job over every reservation due at the start of the pass, read in pages of {@code pageSize}
+     * along {@code (reserved_until, id)}, each decided in its own transaction. An asset held by another transaction
+     * is skipped rather than awaited ({@code SKIP LOCKED}). A reservation that is deferred, skipped or whose decision
+     * fails is passed over, so it never holds back the later ones; the keyset only moves forward, so the pass ends.
      *
      * @return the number of reservations expired by this pass
      */
-    int expireDue(int limit) {
+    int expireDue(int pageSize) {
+        if (pageSize < 1) {
+            throw new IllegalArgumentException("A pass needs a positive page size: " + pageSize);
+        }
         Instant now = now();
         int expired = 0;
-        for (UUID id : reservations.dueAt(now, limit)) {
-            if (expire(id, now, false) == Outcome.EXPIRED) {
-                expired++;
+        Due after = null;
+        List<Due> page;
+        do {
+            page = reservations.dueAfter(now, after, pageSize);
+            for (Due due : page) {
+                if (expireIsolated(due.id(), now) == Outcome.EXPIRED) {
+                    expired++;
+                }
             }
-        }
+            after = page.isEmpty() ? after : page.getLast();
+        } while (page.size() == pageSize);
         return expired;
+    }
+
+    /**
+     * A failure is logged with the reservation id and the exception type only, since a database message may quote
+     * row values; its transaction is rolled back and a later pass decides again.
+     */
+    private Outcome expireIsolated(UUID reservationId, Instant now) {
+        try {
+            return expire(reservationId, now, false);
+        } catch (RuntimeException failure) {
+            log.warn("Expiry of reservation {} failed ({}); a later pass retries it", reservationId,
+                    failure.getClass().getName());
+            return Outcome.SKIPPED;
+        }
     }
 
     /**
