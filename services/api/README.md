@@ -238,7 +238,8 @@ type révoque l'ancienne dans la même transaction, index
 `ux_asset_identifiers_one_active_per_type` de `V003`), et l'archivage révoque
 les identifiants actifs de l'actif. La valeur, limitée à 255 caractères comme
 une observation du document 10, est comparée telle quelle, sans mise en
-majuscules; la normalisation des EPC RFID sera fixée avec PHY-02.
+majuscules. PHY-02 la compare aussi telle quelle à la valeur scannée : aucune
+normalisation des EPC n'est fixée par le document 10.
 
 `PUT /admin/assets/{assetId}/placement` termine le placement précédent au lieu
 de le supprimer et écrit `ASSET_PLACEMENT_CHANGED`. Il verrouille l'actif, puis
@@ -398,6 +399,60 @@ d'environnement, la pile démarre sans ce compte et les tests du broker
 échouent : ajoutez la variable pour les exécuter. Le compte et le simulateur du
 casier de démonstration ne changent pas.
 
+## Présence RFID (PHY-02)
+
+Un `RFID_SCAN_COMPLETED` accepté (document 10, §12) est normalisé dans la
+transaction qui l'enregistre : une ligne `ASSET_IDENTIFIER_DETECTED` par
+identifiant observé dans `physical_observations`, puis, si l'actif attendu dans
+la cellule est connu, au plus un verdict `ASSET_PRESENT` ou `ASSET_ABSENT`. La
+table reste en insertion seule; le `raw_payload` du message est conservé. Hors
+opération, le message passe à `PROCESSED`; dans une opération, il reste
+`RECEIVED` pour le flux de retrait ou de retour (CHK/RET), qui n'est pas dans
+ce lot. Une observation ne modifie ni prêt, ni réservation, ni opération. Un
+scan qui nomme une cellule d'un autre casier est refusé
+(`REQUIRED_FIELD_MISSING`, faute de code au §21).
+
+Un verdict n'est écrit que pour un scan stable : lecteur `HEALTHY`, fenêtre
+d'au moins 3 s, horodatage au plus 5 s en avance et réception au plus 30 s
+après (§17.2), et identifiant de l'actif lié à la cellule avant le début de
+la fenêtre. `ASSET_PRESENT` exige au moins 3 lectures de l'étiquette;
+`ASSET_ABSENT`, son absence de toute la fenêtre; 1 ou 2 lectures ne donnent
+aucun verdict. Un lecteur `FAULTED` ou `UNKNOWN` ne confirme rien, mais son
+état est projeté sur la cellule, sauf si un scan plus récent de la cellule est
+déjà enregistré.
+
+`asset/ObservedPhysicalPresence` remplace `NoPhysicalProofPresence` derrière
+`PhysicalPresence`. La présence est recalculée à chaque lecture par
+`device/PresenceEvidence`, sans rien écrire. Elle vaut `PRESENT` ou `ABSENT`
+seulement si toutes ces conditions tiennent :
+
+- le casier est `ONLINE` maintenant (même règle des 30 s que PHY-01);
+- la cellule est active, `CONNECTED`, son lecteur `HEALTHY` et sa porte
+  `CLOSED` selon le heartbeat de référence;
+- le dernier scan de la cellule (plus grande `sequence` de la session) est
+  sain, fait dans la session et la connexion courantes, après le placement et
+  l'attribution de l'étiquette;
+- aucun événement de porte de la cellule ne le suit ni ne tombe dans sa
+  fenêtre;
+- l'étiquette n'est vue dans aucune autre cellule par une détection que nul
+  scan sain ultérieur de cette cellule n'a remplacée;
+- pour `ABSENT` seulement, la porte a été ouverte puis fermée avant la
+  fenêtre (document 03, §4.16).
+
+Dans tous les autres cas, la présence vaut `UNKNOWN`. C'est le cas sans
+aucun scan, après un redémarrage ou une reconnexion tant qu'aucun nouveau scan
+n'est arrivé, et pour un message manquant, qui ne prouve jamais l'absence. Une
+présence observée pendant un prêt laisse l'actif `BORROWED`. L'anomalie
+`ASSET_PRESENT_WITH_ACTIVE_LOAN` du document 06, §12.4 relève d'ANO-01 (#52).
+
+Les documents ne fixent ni le moment où le hub scanne hors opération, ni une
+durée de validité d'un scan. Aucune n'est inventée : un scan reste valable
+tant que rien ci-dessus ne l'invalide. `RfidPresenceTests` (PostgreSQL) et
+`RfidPresenceBrokerTests` (Mosquitto, compte du hub de test) vérifient ces
+règles. Le scénario `tools/hub-simulator/scenarios/presence-demo-local.json`
+pose les étiquettes de démonstration dans A1 et A2, les scanne, puis garde le
+hub en ligne dix minutes.
+
 ## Catalogue technicien et readiness (RDY-01, RDY-02)
 
 `GET /api/v1/assets` et `GET /api/v1/assets/{assetId}` sont réservés au rôle
@@ -409,9 +464,8 @@ donne `BLOCKED` avec toutes ses raisons distinctes; une preuve physique
 insuffisante donne `UNKNOWN` / `UNKNOWN_PHYSICAL_STATE` seulement sans blocage;
 `READY` exige la présence `PRESENT`.
 
-Avant PHY-02, aucune observation n'est stockée : `asset/NoPhysicalProofPresence`
-répond `UNKNOWN` pour tout actif, donc un actif conforme est `UNKNOWN` et jamais
-`READY`. PHY-02 remplace ce composant derrière l'interface `PhysicalPresence`.
+La présence vient des scans RFID enregistrés (voir PHY-02) : sans preuve
+physique valable, un actif conforme est `UNKNOWN` et jamais `READY`.
 La disponibilité vient de `asset/AssetCustodyRepository` (document 03, §5.2) :
 un prêt `ACTIVE` ou `RETURN_PENDING` donne `BORROWED`, même en retard; sinon une
 réservation `ACTIVE` donne `RESERVED`, y compris pour son titulaire hors de son
@@ -459,19 +513,21 @@ python3 -I scripts/seed-demo-catalog.py
 ```
 
 Avec `AEGIS_DEMO_TECHNICIAN_PASSWORD` défini, il relit le catalogue technicien
-et échoue sur tout écart. Résultat attendu pour le technicien STANDARD, sans
-preuve physique avant PHY-02 :
+et échoue sur tout écart. Résultat attendu pour le technicien STANDARD :
 
 | Actif | Readiness | Placement |
 |---|---|---|
-| `AEG-DEMO-001` | `UNKNOWN` / `UNKNOWN_PHYSICAL_STATE` | A1 |
+| `AEG-DEMO-001` | `UNKNOWN` / `UNKNOWN_PHYSICAL_STATE`, `READY` après un scan | A1 |
 | `AEG-DEMO-002` | `BLOCKED` / `CALIBRATION_EXPIRED` | A2 |
 | `AEG-DEMO-003` | `BLOCKED` / `ACCESS_DENIED` (niveau `RESTRICTED`) | aucun |
 | `AEG-DEMO-004` | `UNKNOWN` / `UNKNOWN_PHYSICAL_STATE` (sans calibration) | aucun |
 | `AEG-DEMO-005` | `BLOCKED` / `MAINTENANCE` | aucun |
 
-Aucun actif n'est `READY` tant qu'aucune preuve de présence n'existe
-(décision du 28 octobre 2026).
+Seul `AEG-DEMO-001` peut devenir `READY`, après un scan stable de son
+étiquette `E20034120123456789000001` dans A1, par exemple avec le scénario
+`presence-demo-local.json` du simulateur. `AEG-DEMO-002` reste `BLOCKED` /
+`CALIBRATION_EXPIRED` même présent. Aucune route ni aucun champ ne force la
+présence.
 
 ## Réservations (RES-01)
 
@@ -503,11 +559,9 @@ transaction; un refus n'écrit rien et n'est pas enregistré pour la clé. Un
 `409` correspondant. Une réservation n'ouvre aucun compartiment, ne crée
 aucune opération et ne publie rien.
 
-Tant que la présence de production est `NoPhysicalProofPresence`, aucune
-readiness n'est `READY` : toute création reçoit `422 ASSET_NOT_READY` /
-`UNKNOWN_PHYSICAL_STATE` jusqu'à PHY-02 (décision du 28 octobre 2026). Seuls
-les tests importent `PresentAssetsConfiguration`, qui déclare chaque actif
-présent. `availableActions` reste vide tant que l'annulation (RES-02) et le
+Sans scan valable, la présence de production vaut `UNKNOWN` : la création
+reçoit `422 ASSET_NOT_READY` / `UNKNOWN_PHYSICAL_STATE`. Seuls les tests
+importent `PresentAssetsConfiguration`, qui déclare chaque actif présent. `availableActions` reste vide tant que l'annulation (RES-02) et le
 retrait (CHK-01) n'existent pas. Un technicien ne lit que ses réservations :
 celle d'un autre donne `404 RESOURCE_NOT_FOUND`, l'absence de réservation
 active `404 ACTIVE_RESERVATION_NOT_FOUND`. `ReservationApiTests`,
