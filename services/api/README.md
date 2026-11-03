@@ -642,6 +642,29 @@ suivant décide de nouveau. Les tests d'intégration désactivent le job
 `ReservationCancellationApiTests`, `ReservationExpiryTests` et
 `ReservationExpirySchedulingTests` le vérifient.
 
+## Recette présence et réservation
+
+Ce parcours valide le logiciel avec des observations simulées; il ne qualifie
+ni le RFID réel ni le casier. Avec l'API sur une base de recette dédiée, le
+jeu de démonstration et le simulateur qui joue
+`scenarios/presence-demo-local.json` :
+
+```bash
+set -a; . ~/.config/aegis/local-api.env; set +a
+AEGIS_RECIPE_DB_NAME=<base de recette> python3 -I scripts/check-presence-reservation.py
+```
+
+La phase `online` vérifie le hub `ONLINE`, `AEG-DEMO-001` présent et `READY`,
+`AEG-DEMO-002` bloqué par sa calibration, puis réserve, annule et rejoue
+l'annulation, laisse le serveur expirer une réservation de 20 s sans toucher
+l'horloge du Mac et lit l'audit. Sans horaire actif, elle pose un horaire de
+test sur toute la journée par l'API d'administration. Après l'arrêt du
+simulateur et plus de 30 s d'attente, `--phase offline` vérifie que
+`AEG-DEMO-001` redevient `UNKNOWN` et n'est plus réservable. L'audit n'a pas de
+route de lecture : le script le lit dans une transaction PostgreSQL en
+lecture seule. Une API, un broker ou une base absente fait échouer la
+recette. La fiche manuelle est `docs/qualite/recette-presence-reservation.md`.
+
 ## Rôles PostgreSQL
 
 Le document 08, section 12.1, sépare le propriétaire des migrations du rôle
