@@ -53,13 +53,14 @@ public class PresenceEvidence {
     }
 
     /**
-     * A rejected door or scan message that may void a scan: when it claims a sequence of the current session it voids
-     * the scans not after that sequence, whenever it arrived; otherwise it voids the scans received before it.
+     * A rejected heartbeat, door or scan message, which may have reported the door moving in any cell. It voids every
+     * scan received at or before it, and every scan not after the sequence it claims in the current session: neither
+     * the reception order nor a claimed sequence alone can prove that the scan came after it.
      */
     private record Rejected(Instant receivedAt, Long sequence) {
 
         boolean voids(PhysicalEvent scan) {
-            return sequence != null ? sequence >= scan.sequence() : !receivedAt.isBefore(scan.receivedAt());
+            return !receivedAt.isBefore(scan.receivedAt()) || (sequence != null && sequence >= scan.sequence());
         }
     }
 
@@ -130,16 +131,11 @@ public class PresenceEvidence {
                         rejected(device, start)));
     }
 
-    /**
-     * Rejected messages since the connection started. One from an earlier boot was made before every scan of this
-     * one and is ignored; one that claims no readable position of this boot cannot be ordered by sequence.
-     */
+    /** Rejected messages since the connection started; a sequence claimed outside the current session is ignored. */
     private List<Rejected> rejected(ActiveDevice device, ConnectionStart start) {
         DeviceProjection projection = device.projection();
-        return observations.rejectedDoorOrScanMessages(device.id(), device.provisionedAt(), start.receivedAt())
+        return observations.rejectedPhysicalMessages(device.id(), device.provisionedAt(), start.receivedAt())
                 .stream()
-                .filter(message -> message.claimed()
-                        .map(claimed -> claimed.bootCount() >= projection.bootCount()).orElse(true))
                 .map(message -> new Rejected(message.receivedAt(), message.claimed()
                         .filter(claimed -> claimed.bootCount() == projection.bootCount()
                                 && claimed.deviceSessionId().equals(projection.deviceSessionId()))
@@ -153,8 +149,8 @@ public class PresenceEvidence {
      * expected, and no door event of the cell follows it or falls inside its window. Document 04, section 13, and
      * document 06, sections 4.4 and 9.3: stored evidence that the door may have moved since also voids it, namely a
      * later heartbeat of the session that does not report the cell connected with its door closed (while the cell's
-     * link is down its door is not observed), or a door or scan message of the device rejected after the scan, whose
-     * cell is unknown: after it in the sequence its payload claims, or received after it when no sequence can be read.
+     * link is down its door is not observed), or a rejected heartbeat, door or scan message of the device, whose cell
+     * is unknown, that may have followed the scan.
      */
     private static Optional<PhysicalEvent> usableScan(Expectation expectation, CompartmentState cell,
             LockerFacts facts) {

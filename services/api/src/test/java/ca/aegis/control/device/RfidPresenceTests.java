@@ -446,6 +446,42 @@ class RfidPresenceTests extends ApiIntegrationTest {
         assertEquals("PRESENT", read(technicianView(assetB), "$.presence"), "B was reported connected and closed");
     }
 
+    /** Review 2, LOW 2: a rejected heartbeat may have reported the door open; its cells are unknown, so all count. */
+    @Test
+    void aRejectedHeartbeatAfterTheScanMakesPresenceUnknown() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        clock.advance(Duration.ofSeconds(1));
+        Map<String, Object> rejected = session.heartbeat(clock.instant(), List.of(
+                cell(cellA, 1, "CONNECTED", "HEALTHY", "OPEN", "UNLOCKED"),
+                cell(cellB, 2, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED")));
+        rejected.put("clockSynchronized", "yes");
+        assertEquals(Outcome.REJECTED, ingestion.ingest("aegis/v1/lockers/" + locker + "/status", bytes(rejected)));
+        assertEquals("REQUIRED_FIELD_MISSING", message(rejected).get("processing_error"));
+        clock.advance(Duration.ofSeconds(1));
+        heartbeat("HEALTHY", "HEALTHY");
+
+        String view = technicianView(assetA);
+        assertEquals("UNKNOWN", read(view, "$.presence"));
+        assertEquals("UNKNOWN", read(view, "$.readiness.result"));
+    }
+
+    /** Review 2, LOW 3: a rejected message received after the scan voids it whatever sequence it claims. */
+    @Test
+    void aRejectedDoorEventClaimingAnOlderSequenceStillVoidsTheScan() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        clock.advance(Duration.ofSeconds(1));
+        Map<String, Object> opened = session.door("DOOR_OPENED", clock.instant(), cellA);
+        opened.put("operationId", UUID.randomUUID().toString());
+        opened.put("sequence", 0);
+        assertEquals(Outcome.REJECTED, ingestion.ingest(events(), bytes(opened)));
+        clock.advance(Duration.ofSeconds(1));
+        heartbeat("HEALTHY", "HEALTHY");
+
+        String view = technicianView(assetA);
+        assertEquals("UNKNOWN", read(view, "$.presence"));
+        assertEquals("UNKNOWN", read(view, "$.readiness.result"));
+    }
+
     /** No validity period is defined: on an unbroken connection reporting the cell connected and closed it holds. */
     @Test
     void aScanStaysValidWhileTheConnectionReportsTheCellConnectedAndClosed() throws Exception {

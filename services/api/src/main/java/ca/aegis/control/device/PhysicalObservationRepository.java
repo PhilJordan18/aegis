@@ -229,18 +229,18 @@ class PhysicalObservationRepository {
     }
 
     /**
-     * A door or scan message of the device that was rejected: it keeps no session, sequence or parsed payload, so its
-     * cell is unknown and its order is only what its raw payload claims, when that can be read.
+     * A heartbeat, door or scan message of the device that was rejected: it keeps no session, sequence or parsed
+     * payload, so its cells are unknown and its order is only what its raw payload claims, when that can be read.
      */
     record RejectedMessage(Instant receivedAt, Optional<InboundMessages.Position> claimed) {
     }
 
-    /** The device's door and scan messages rejected since {@code since}. */
-    List<RejectedMessage> rejectedDoorOrScanMessages(UUID deviceId, Instant provisionedAt, Instant since) {
+    /** The device's heartbeat, door and scan messages rejected since {@code since}. */
+    List<RejectedMessage> rejectedPhysicalMessages(UUID deviceId, Instant provisionedAt, Instant since) {
         return jdbc.sql("""
                 SELECT received_at, raw_payload FROM aegis.inbound_device_messages
                 WHERE locker_device_id = :device AND processing_status = 'REJECTED'
-                  AND message_type IN ('RFID_SCAN_COMPLETED', 'DOOR_OPENED', 'DOOR_CLOSED')
+                  AND message_type IN ('HEARTBEAT', 'RFID_SCAN_COMPLETED', 'DOOR_OPENED', 'DOOR_CLOSED')
                   AND received_at >= :provisionedAt AND received_at >= :since
                 """)
                 .param("device", deviceId)
