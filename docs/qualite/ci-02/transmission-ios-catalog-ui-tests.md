@@ -14,6 +14,10 @@ recette `standalone` refuse les tests ignorés, et c'est voulu.
 |---|---|---|---|---|
 | [41515528716](https://github.com/PhilJordan18/aegis/actions/runs/41515528716/job/125518105362) | `007c584` | 160 total, 158 passed, 2 failed, 0 skipped; 902 s de tests | id `13174734842`, 132 Mo | 2026-11-09 |
 | [41577913719](https://github.com/PhilJordan18/aegis/actions/runs/41577913719/job/125725657291) | `639ada8` | 160 total, 159 passed, 1 failed, 0 skipped; 1147 s de tests | id `13204199573`, 140 Mo | 2026-11-10 |
+| [41584155476](https://github.com/PhilJordan18/aegis/actions/runs/41584155476/job/125745679169) | `aeedc49` (PR #110, documentation seule) | 160 total, 159 passed, 1 failed, 0 skipped; 1136 s de tests | id `13208121522`, 141 Mo | 2026-11-10 |
+
+Le même code passe sur `997e3ec` ([41581805590](https://github.com/PhilJordan18/aegis/actions/runs/41581805590/job/125738163048), 160/160) et sur `a3f917c`
+([41584158843](https://github.com/PhilJordan18/aegis/actions/runs/41584158843/job/125745782915), 160/160) : l'échec est **intermittent** sur la configuration hébergée.
 
 Le log du job est en mode `-quiet` : il ne donne que `** TEST FAILED **`, la
 ligne `tests: …` et `error: failures`. Les noms et messages ci-dessous viennent
@@ -27,6 +31,7 @@ de la base `standalone.xcresult/database.sqlite3` de chaque artefact (table
 | `41515528716` | `CatalogUITests/testCatalogueFilterSheetAndBackInBothLanguagesAndAppearances()` | 113,7 s | `failed: caught error: "Error Domain=com.apple.xcode.xctest.accessibilityAudit Code=-56 "Audit failed to complete in time"` |
 | `41515528716` | `CatalogUITests/testOfflineRefreshKeepsTheLastListThenTryAgainRecovers()` | 43,3 s | même erreur, code -56 |
 | `41577913719` | `CatalogUITests/testOfflineRefreshKeepsTheLastListThenTryAgainRecovers()` | 182,3 s | `Accessibility audit: Dynamic Type font sizes are partially unsupported — XCUIElementType(rawValue: 48) 'Last known: Blocked' id= frame=(51.33, 646.0, 172.0, 18.0) — User will not be able to change the font size of this SwiftUI.AccessibilityNode` |
+| `41584155476` | `CatalogUITests/testOfflineRefreshKeepsTheLastListThenTryAgainRecovers()` | 146,4 s | même constat Dynamic Type sur 'Last known: Blocked', frame=(51.33, 646.0, 172.0, 18.0) |
 
 Repères dans le code (lecture seule de CI-02) :
 
