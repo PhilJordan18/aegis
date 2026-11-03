@@ -40,27 +40,35 @@ export function LockerStatusPanel({ lockerId }: { readonly lockerId: string }) {
   const locker = gone ? undefined : query.data
   const stale = query.isRefetchError && !gone
 
-  // The stale notice that had focus is gone: its target exists only after this commit.
+  // The panel itself is the stable place focus goes to when the control that had it leaves the page: the retry button of a
+  // first-load alert (the skeleton replaces it while it runs), or a stale notice whose refresh is answered 403 or 404.
+  const sectionRef = useRef<HTMLElement>(null)
+  // The stale notice that had focus is gone: its target exists only after this commit, the title when the locker is still
+  // shown and the panel when the answer took the data away.
   const focusLost = useRef(false)
   useLayoutEffect(() => {
     if (!focusLost.current) return
     focusLost.current = false
-    document.getElementById(titleId)?.focus()
+    ;(document.getElementById(titleId) ?? sectionRef.current)?.focus()
   })
+  function retryFromAlert() {
+    sectionRef.current?.focus()
+    void query.refetch()
+  }
 
   // Announced once, then only when the connection state changes: the same text on a refresh is not read again.
   const connectionLabel = locker === undefined ? null : connectionChip(locker.connectionStatus, i18n).label
   const announcement = locker !== undefined && connectionLabel !== null ? m.lockers.announce({ code: locker.code, connection: connectionLabel }) : query.isPending ? m.lockers.loadingStatus : ''
 
   return (
-    <section className="ag-panel ag-lk" {...(locker === undefined ? { 'aria-label': m.lockers.statusLabel } : { 'aria-labelledby': titleId })} aria-busy={query.isPending || undefined}>
+    <section ref={sectionRef} tabIndex={-1} className="ag-panel ag-lk" {...(locker === undefined ? { 'aria-label': m.lockers.statusLabel } : { 'aria-labelledby': titleId })} aria-busy={query.isPending || undefined}>
       <p className="ag-sr-only" role="status">
         {announcement}
       </p>
       {locker === undefined ? (
         failure !== null ? (
           <div className="ag-lk__alert">
-            <LockerAlert failure={failure} onRetry={() => void query.refetch()} />
+            <LockerAlert failure={failure} onRetry={retryFromAlert} />
           </div>
         ) : (
           <div className="ag-lk__skel" aria-hidden="true">

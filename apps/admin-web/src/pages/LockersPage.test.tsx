@@ -358,6 +358,56 @@ describe('Casiers — loading and failures', () => {
   })
 })
 
+describe('Casiers — focus never falls to the body', () => {
+  it('after « Réessayer » in the first-load alert, while the retry runs and after it answers', async () => {
+    let answer: (value: ReturnType<typeof ok>) => void = () => {}
+    const gateway = fakeLockerGateway({ [DEMO_LOCKER_ID]: [offline] })
+    renderLockers(gateway)
+    const alert = await screen.findByRole('alert')
+    gateway.getStatus.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)))
+    await userEvent.setup().click(within(alert).getByRole('button', { name: 'Réessayer' }))
+    // The button is gone (the skeleton replaced the alert): the panel holds focus.
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect(document.activeElement).toBe(screen.getByRole('region', { name: 'Statut du casier' }))
+    await act(async () => answer(ok(lockerStatus())))
+    await screen.findByRole('heading', { level: 2, name: SECTION })
+    expect(document.activeElement).not.toBe(document.body)
+  })
+
+  it('after a retry of the stale notice that is answered 404 or 403, the panel holds focus', async () => {
+    for (const [status, code] of [[404, 'RESOURCE_NOT_FOUND'], [403, 'FORBIDDEN']] as const) {
+      const gateway = fakeLockerGateway({ [DEMO_LOCKER_ID]: [ok(lockerStatus())] })
+      const { queryClient, unmount } = renderLockers(gateway)
+      await screen.findByRole('heading', { level: 2, name: SECTION })
+      gateway.getStatus.mockResolvedValue(offline)
+      await act(async () => {
+        await queryClient.refetchQueries({ queryKey: queryKeys.lockers.status(DEMO_LOCKER_ID) })
+      })
+      const notice = await within(panel()).findByRole('alert')
+      gateway.getStatus.mockResolvedValueOnce(failure(status, code))
+      await userEvent.setup().click(within(notice).getByRole('button', { name: 'Réessayer' }))
+      await waitFor(() => expect(screen.queryByRole('table')).toBeNull())
+      expect(screen.getByRole('alert')).toBeDefined()
+      expect(document.activeElement).toBe(screen.getByRole('region', { name: 'Statut du casier' }))
+      unmount()
+    }
+  })
+
+  it('after « Réessayer » in the catalog alert, the page holds focus while the catalog loads', async () => {
+    const catalogGateway = fakeCatalogGateway({ pages: [offline] })
+    renderLockers(fakeLockerGateway({ [DEMO_LOCKER_ID]: [ok(lockerStatus())] }), { catalogGateway })
+    const alert = await screen.findByRole('alert')
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    catalogGateway.listAssets.mockImplementationOnce(async () => (await gate, catalogOk(pageOf([PLACED]))))
+    await userEvent.setup().click(within(alert).getByRole('button', { name: 'Réessayer' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect(document.activeElement).toBe(screen.getByRole('main'))
+    act(() => release())
+    expect(await screen.findByRole('heading', { level: 2, name: SECTION })).toBeDefined()
+  })
+})
+
 describe('Casiers — stale data and refresh', () => {
   async function renderLoaded(locale: Locale = 'fr') {
     const gateway = fakeLockerGateway({ [DEMO_LOCKER_ID]: [ok(lockerStatus())] })

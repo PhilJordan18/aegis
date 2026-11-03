@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { PageHeading } from '../app/PageHeading'
 import { useLocation, useRouter } from '../app/router'
 import { pathOf } from '../app/routes'
@@ -36,6 +37,12 @@ export function LockersPage({ sessionProfile }: { readonly sessionProfile: UserP
   const lockerIds = named !== null ? [named] : lockerIdsFromPlacements(catalog.data?.items ?? [])
   const catalogFailure = named === null && catalog.isError && catalog.data === undefined ? classifyCatalogFailure(catalog.error) : null
   const searching = named === null && catalog.isPending
+  // The retry button of the catalog alert leaves the page while the request runs: the page takes focus, never the body.
+  const mainRef = useRef<HTMLElement>(null)
+  function retryCatalog() {
+    mainRef.current?.focus()
+    void catalog.refetch()
+  }
 
   function signOut() {
     sessionStore.signOut()
@@ -44,7 +51,7 @@ export function LockersPage({ sessionProfile }: { readonly sessionProfile: UserP
 
   return (
     <ManagerShell currentPath={pathOf('lockers')} profile={profile} onSignOut={signOut}>
-      <main id="contenu" className="ag-page" tabIndex={-1}>
+      <main id="contenu" className="ag-page" tabIndex={-1} ref={mainRef}>
         <header className="ag-page__head">
           <div className="ag-page__titles">
             <PageHeading className="ag-page__title">{m.lockers.heading}</PageHeading>
@@ -66,7 +73,7 @@ export function LockersPage({ sessionProfile }: { readonly sessionProfile: UserP
 
         {catalogFailure !== null && (
           <div className="ag-lk__alert">
-            <CatalogAlert failure={catalogFailure} onRetry={() => void catalog.refetch()} />
+            <CatalogAlert failure={catalogFailure} onRetry={retryCatalog} />
           </div>
         )}
 
