@@ -3,6 +3,7 @@ package ca.aegis.control.reservation;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.stereotype.Component;
@@ -18,7 +19,9 @@ import ca.aegis.control.reservation.CheckoutAttemptRepository.PendingAttempt;
 /**
  * Ends the checkout attempts of a reservation that never reached their authorization, in the transaction that ends the
  * reservation (document 06, sections 5.5 and 14.1; document 05, section 5.4). No lock command was ever issued for
- * them, so ending them is physically safe.
+ * them, so ending them is physically safe. Their pending challenge closes with them and its QR stops being
+ * distributed; the terminal screen message of the hub is not enqueued here, as no producer of hub display
+ * instructions exists yet.
  */
 @Component
 class PendingCheckouts {
@@ -32,10 +35,12 @@ class PendingCheckouts {
     static final String RESERVATION_EXPIRED = "RESERVATION_EXPIRED";
 
     private final CheckoutAttemptRepository attempts;
+    private final LocalChallengeRepository challenges;
     private final AuditTrail audit;
 
-    PendingCheckouts(CheckoutAttemptRepository attempts, AuditTrail audit) {
+    PendingCheckouts(CheckoutAttemptRepository attempts, LocalChallengeRepository challenges, AuditTrail audit) {
         this.attempts = attempts;
+        this.challenges = challenges;
         this.audit = audit;
     }
 
@@ -43,23 +48,32 @@ class PendingCheckouts {
     @Transactional(propagation = Propagation.MANDATORY)
     List<UUID> endForCancellation(UUID reservationId, UUID holder, Instant now) {
         return end(reservationId, holder, LockerOperationStatus.FAILED, AuditEventType.OPERATION_FAILED,
-                RESERVATION_CANCELLED, now);
+                LocalChallengeStatus.INVALIDATED, AuditEventType.LOCAL_CHALLENGE_INVALIDATED, RESERVATION_CANCELLED,
+                now);
     }
 
     /** {@code EXPIRED} with {@link #RESERVATION_EXPIRED}, by the backend. */
     @Transactional(propagation = Propagation.MANDATORY)
     List<UUID> endForExpiry(UUID reservationId, Instant now) {
         return end(reservationId, null, LockerOperationStatus.EXPIRED, AuditEventType.OPERATION_EXPIRED,
-                RESERVATION_EXPIRED, now);
+                LocalChallengeStatus.EXPIRED, AuditEventType.LOCAL_CHALLENGE_EXPIRED, RESERVATION_EXPIRED, now);
     }
 
     private List<UUID> end(UUID reservationId, UUID actor, LockerOperationStatus terminal, AuditEventType type,
-            String reason, Instant now) {
+            LocalChallengeStatus closed, AuditEventType challengeType, String reason, Instant now) {
         List<PendingAttempt> pending = attempts.lockBeforeAuthorization(reservationId);
         for (PendingAttempt attempt : pending) {
+            Optional<UUID> challenge = challenges.lockPending(attempt.id());
             attempts.end(attempt, terminal, reason, now);
             audit.record(AuditEvent.transition(type, actor, AuditSubjectType.LOCKER_OPERATION, attempt.id(),
                     attempt.id(), attempt.status(), terminal, reason, Map.of("reservationId", reservationId), now));
+            if (challenge.isPresent()) {
+                challenges.close(challenge.get(), closed, now);
+                int stopped = challenges.stopDisplay(challenge.get());
+                audit.record(AuditEvent.transition(challengeType, actor, AuditSubjectType.LOCAL_ACCESS_CHALLENGE,
+                        challenge.get(), attempt.id(), LocalChallengeStatus.PENDING, closed, reason,
+                        Map.of("reservationId", reservationId, "displayInstructionsStopped", stopped), now));
+            }
         }
         return pending.stream().map(PendingAttempt::id).toList();
     }

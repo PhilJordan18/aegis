@@ -1,5 +1,6 @@
 package ca.aegis.control.reservation;
 
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -19,6 +20,8 @@ final class ReservationFixtures {
     static final String CLOSES_AT = "17:00";
     /** Before every test clock, so that a revocation or a placement end at the test instant stays chronological. */
     static final Instant PAST = Instant.parse("2026-01-01T00:00:00Z");
+
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private final JdbcClient jdbc;
     private final String suffix = UUID.randomUUID().toString().substring(0, 8);
@@ -150,12 +153,13 @@ final class ReservationFixtures {
     /**
      * A checkout attempt in {@code status}, created at {@code at}. An {@code authorized} attempt was authorized ten
      * seconds later and carries the milestones its status requires; {@code REQUESTED} and
-     * {@code AWAITING_LOCAL_PROOF} never are. A terminal attempt ended a minute after creation.
+     * {@code AWAITING_LOCAL_PROOF} never are; an authorized {@code ANOMALY} attempt had its command sent. A terminal
+     * attempt ended a minute after creation.
      */
     UUID attempt(UUID asset, UUID user, UUID reservation, String status, boolean authorized, Instant at) {
         boolean confirmed = status.equals("CONFIRMED");
         boolean terminal = List.of("CONFIRMED", "FAILED", "EXPIRED", "ANOMALY").contains(status);
-        boolean sent = confirmed || List.of("COMMAND_SENT", "ANOMALY").contains(status);
+        boolean sent = authorized && (confirmed || List.of("COMMAND_SENT", "ANOMALY").contains(status));
         Instant authorizedAt = authorized ? at.plusSeconds(10) : null;
         Instant sentAt = sent ? at.plusSeconds(11) : null;
         return jdbc.sql("""
@@ -188,6 +192,124 @@ final class ReservationFixtures {
                 .param("reason", terminal && !confirmed ? "TEST_" + status : null)
                 .query(UUID.class)
                 .single();
+    }
+
+    /**
+     * The {@code PENDING} local challenge of {@code attempt}, created at {@code at} for the hub of the attempt's
+     * locker, with the 60-second window of ADR-009. A {@code displayed} challenge was shown five seconds later.
+     */
+    UUID challenge(UUID attempt, Instant at, boolean displayed) {
+        UUID locker = jdbc.sql("SELECT locker_id FROM aegis.locker_operations WHERE id = :id").param("id", attempt)
+                .query(UUID.class).single();
+        UUID device = hub(locker);
+        UUID session = jdbc.sql("SELECT device_session_id FROM aegis.locker_devices WHERE id = :id")
+                .param("id", device).query(UUID.class).single();
+        byte[] hash = new byte[32];
+        RANDOM.nextBytes(hash);
+        return jdbc.sql("""
+                INSERT INTO aegis.local_access_challenges (operation_id, locker_id, locker_device_id,
+                                                           target_device_session_id, token_hash, created_at,
+                                                           expires_at, displayed_at)
+                VALUES (:operation, :locker, :device, :session, :hash, :created, :expires, :displayed)
+                RETURNING id
+                """)
+                .param("operation", attempt).param("locker", locker).param("device", device)
+                .param("session", session).param("hash", hash).param("created", utc(at))
+                .param("expires", utc(at.plusSeconds(60)))
+                .param("displayed", displayed ? utc(at.plusSeconds(5)) : null)
+                .query(UUID.class).single();
+    }
+
+    /**
+     * The encrypted display instruction of {@code challenge} in {@code status}: {@code CLAIMED} holds a lease, and
+     * {@code ACKNOWLEDGED} was published and acknowledged. The payload is random bytes standing for the envelope.
+     */
+    UUID display(UUID challenge, String status, Instant at) {
+        byte[] payload = new byte[64];
+        RANDOM.nextBytes(payload);
+        boolean published = status.equals("ACKNOWLEDGED") || status.equals("DISPATCHED");
+        return jdbc.sql("""
+                INSERT INTO aegis.hub_display_outbox (message_id, operation_id, locker_id, locker_device_id,
+                    target_device_session_id, challenge_id, message_type, display_revision, topic, schema_version,
+                    encrypted_payload, encryption_key_id, issued_at, expires_at, status, claim_until, published_at,
+                    acknowledged_at)
+                SELECT :message, c.operation_id, c.locker_id, c.locker_device_id, c.target_device_session_id, c.id,
+                       'DISPLAY_ACCESS_CHALLENGE', :revision, 'aegis/v1/lockers/' || c.locker_id || '/display', '2.0',
+                       :payload, 'display-key-test', c.created_at, c.expires_at, :status, :claim, :published,
+                       :acknowledged
+                FROM aegis.local_access_challenges c
+                WHERE c.id = :challenge
+                RETURNING id
+                """)
+                .param("message", UUID.randomUUID()).param("revision", (long) next()).param("payload", payload)
+                .param("status", status)
+                .param("claim", status.equals("CLAIMED") ? utc(at.plusSeconds(30)) : null)
+                .param("published", published ? utc(at.plusSeconds(1)) : null)
+                .param("acknowledged", status.equals("ACKNOWLEDGED") ? utc(at.plusSeconds(2)) : null)
+                .param("challenge", challenge)
+                .query(UUID.class).single();
+    }
+
+    /**
+     * An anomaly of {@code attempt}, detected at {@code at}: {@code OPEN}, or {@code RESOLVED} a minute later by an
+     * identifier detection that a new RFID scan of the attempt's locker recorded.
+     */
+    UUID anomaly(UUID attempt, String status, Instant at) {
+        UUID evidence = null;
+        if (status.equals("RESOLVED")) {
+            UUID device = hub(jdbc.sql("SELECT locker_id FROM aegis.locker_operations WHERE id = :id")
+                    .param("id", attempt).query(UUID.class).single());
+            UUID scan = jdbc.sql("""
+                    INSERT INTO aegis.inbound_device_messages (locker_device_id, message_id, topic, message_type,
+                        operation_id, schema_version, device_session_id, boot_count, sequence, occurred_at,
+                        raw_payload, processing_status)
+                    VALUES (:device, :message, 'aegis/v1/lockers/test/events', 'RFID_SCAN_COMPLETED', :id, '2.0',
+                            :session, 1, 1, :at, :raw, 'PROCESSED')
+                    RETURNING id
+                    """).param("device", device).param("message", UUID.randomUUID()).param("id", attempt)
+                    .param("session", UUID.randomUUID()).param("at", utc(at.plusSeconds(60)))
+                    .param("raw", new byte[] {1}).query(UUID.class).single();
+            evidence = jdbc.sql("""
+                    INSERT INTO aegis.physical_observations (inbound_message_id, locker_id, compartment_id,
+                                                             operation_id, type, observed_at, identifier_value)
+                    SELECT :scan, o.locker_id, o.compartment_id, o.id, 'ASSET_IDENTIFIER_DETECTED', :at,
+                           i.identifier_value
+                    FROM aegis.locker_operations o
+                    JOIN aegis.asset_identifiers i ON i.id = o.expected_asset_identifier_id
+                    WHERE o.id = :id
+                    RETURNING id
+                    """).param("scan", scan).param("at", utc(at.plusSeconds(60))).param("id", attempt)
+                    .query(UUID.class).single();
+        }
+        boolean resolved = evidence != null;
+        return jdbc.sql("""
+                INSERT INTO aegis.anomalies (type, severity, status, locker_operation_id, asset_id, compartment_id,
+                                             detected_at, resolved_at, resolution_evidence_observation_id,
+                                             resolution_note)
+                SELECT 'EXPECTED_ASSET_NOT_OBSERVED', 'HIGH', :status, o.id, o.asset_id, o.compartment_id, :at,
+                       :resolvedAt, :evidence, :note
+                FROM aegis.locker_operations o
+                WHERE o.id = :id
+                RETURNING id
+                """)
+                .param("status", status).param("id", attempt).param("at", utc(at))
+                .param("resolvedAt", resolved ? utc(at.plusSeconds(60)) : null)
+                .param("evidence", evidence)
+                .param("note", resolved ? "Actif détecté dans sa cellule" : null)
+                .query(UUID.class).single();
+    }
+
+    /** The active hub of {@code locker}, provisioned with a session on first use. */
+    UUID hub(UUID locker) {
+        return jdbc.sql("SELECT id FROM aegis.locker_devices WHERE locker_id = :locker AND disabled_at IS NULL")
+                .param("locker", locker).query(UUID.class).optional()
+                .orElseGet(() -> jdbc.sql("""
+                        INSERT INTO aegis.locker_devices (locker_id, device_key, firmware_version, device_session_id,
+                                                          boot_count)
+                        VALUES (:locker, :key, '0.1.0-test', :session, 1)
+                        RETURNING id
+                        """).param("locker", locker).param("key", "hub-" + suffix + "-" + next())
+                        .param("session", UUID.randomUUID()).query(UUID.class).single());
     }
 
     String operationStatus(UUID operation) {

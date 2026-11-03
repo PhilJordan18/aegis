@@ -205,6 +205,93 @@ class ReservationCancellationApiTests extends ApiIntegrationTest {
     }
 
     /**
+     * Document 06, section 5.5 and document 08, section 4.6: the cancellation invalidates the pending challenge of the
+     * attempt it ends, releases the claim of its display instruction and purges its ciphertext, in the same
+     * transaction. A refusal leaves the challenge usable, and a replay changes nothing more.
+     */
+    @Test
+    void aCancellationInvalidatesTheQrChallengeAndStopsItsDisplay() throws Exception {
+        UUID reservation = fixtures.reservation(asset, technician.id(), "ACTIVE", START.minusSeconds(600), UNTIL);
+        UUID attempt = fixtures.attempt(asset, technician.id(), reservation, "AWAITING_LOCAL_PROOF", false,
+                START.minusSeconds(30));
+        UUID challenge = fixtures.challenge(attempt, START.minusSeconds(30), true);
+        UUID display = fixtures.display(challenge, "CLAIMED", START.minusSeconds(30));
+
+        TestAccount stranger = accounts.technician();
+        expectProblem(cancel(accessToken(stranger), key(), reservation), 404, "RESOURCE_NOT_FOUND");
+        assertEquals(1L, fixtures.count("""
+                SELECT count(*) FROM aegis.local_access_challenges
+                WHERE id = :id AND status = 'PENDING' AND closed_at IS NULL
+                """, challenge));
+        assertEquals(1L, fixtures.count("""
+                SELECT count(*) FROM aegis.hub_display_outbox
+                WHERE id = :id AND status = 'CLAIMED' AND claim_until IS NOT NULL AND encrypted_payload IS NOT NULL
+                """, display));
+
+        String key = key();
+        cancel(token, key, reservation).andExpect(status().isOk());
+        cancel(token, key, reservation).andExpect(status().isOk())
+                .andExpect(header().string("Idempotency-Replayed", "true"));
+
+        assertEquals(1L, fixtures.count("""
+                SELECT count(*) FROM aegis.local_access_challenges
+                WHERE id = :id AND status = 'INVALIDATED' AND closed_at = '2026-09-28T13:00:00Z'
+                  AND consumed_at IS NULL
+                """, challenge));
+        assertEquals(1L, fixtures.count("""
+                SELECT count(*) FROM aegis.hub_display_outbox
+                WHERE id = :id AND status = 'CANCELLED' AND claim_until IS NULL AND encrypted_payload IS NULL
+                  AND message_type = 'DISPLAY_ACCESS_CHALLENGE' AND encryption_key_id = 'display-key-test'
+                """, display));
+        assertEquals(1L, jdbc.sql("""
+                SELECT count(*) FROM aegis.audit_events
+                WHERE subject_id = :challenge AND subject_type = 'LOCAL_ACCESS_CHALLENGE'
+                  AND event_type = 'LOCAL_CHALLENGE_INVALIDATED' AND operation_id = :attempt
+                  AND actor_user_id = :actor AND from_state = 'PENDING' AND to_state = 'INVALIDATED'
+                  AND reason = 'RESERVATION_CANCELLED' AND result = 'ACCEPTED'
+                  AND (details ->> 'displayInstructionsStopped')::int = 1
+                  AND occurred_at = '2026-09-28T13:00:00Z'
+                """).param("challenge", challenge).param("attempt", attempt).param("actor", technician.id())
+                .query(Long.class).single());
+        assertEquals("FAILED", fixtures.operationStatus(attempt));
+    }
+
+    /**
+     * Document 09, section 8.10: only an anomaly that is not {@code RESOLVED} is a physical uncertainty. An attempt
+     * never authorized whose anomaly is resolved leaves the cancellation open; one that was authorized still blocks
+     * it (Q1, read literally), and an attempt in {@code ANOMALY} without any anomaly row stays uncertain.
+     */
+    @Test
+    void onlyAnUnresolvedAnomalyIsAPhysicalUncertaintyForTheCancellation() throws Exception {
+        record Case(boolean authorized, String anomaly, boolean cancellable) {
+        }
+        for (Case c : new Case[] {new Case(false, "OPEN", false), new Case(false, null, false),
+                new Case(true, "RESOLVED", false), new Case(false, "RESOLVED", true)}) {
+            UUID placed = fixtures.asset(fixtures.scheduledLocker(accounts.admin().id()));
+            TestAccount holder = accounts.technician();
+            String holderToken = accessToken(holder);
+            UUID reservation = fixtures.reservation(placed, holder.id(), "ACTIVE", START.minusSeconds(600), UNTIL);
+            UUID attempt = fixtures.attempt(placed, holder.id(), reservation, "ANOMALY", c.authorized(),
+                    START.minusSeconds(300));
+            if (c.anomaly() != null) {
+                fixtures.anomaly(attempt, c.anomaly(), START.minusSeconds(240));
+            }
+
+            if (c.cancellable()) {
+                read(holderToken, reservation).andExpect(jsonPath("$.availableActions").value(contains("CANCEL")));
+                cancel(holderToken, key(), reservation).andExpect(status().isOk());
+                assertEquals("CANCELLED", fixtures.reservationStatus(reservation), c.toString());
+            } else {
+                read(holderToken, reservation).andExpect(jsonPath("$.availableActions").value(empty()));
+                expectProblem(cancel(holderToken, key(), reservation), 409, "RESERVATION_NOT_CANCELLABLE");
+                assertEquals("ACTIVE", fixtures.reservationStatus(reservation), c.toString());
+                assertEquals(0L, auditEventsOf(holder.id()), c.toString());
+            }
+            assertEquals("ANOMALY", fixtures.operationStatus(attempt));
+        }
+    }
+
+    /**
      * Document 09, section 8.10, open question Q1, read literally: once an attempt was authorized, whatever its
      * outcome, the reservation can no longer be cancelled; an authorized attempt in progress or in anomaly blocks it
      * too. Each refusal writes nothing.

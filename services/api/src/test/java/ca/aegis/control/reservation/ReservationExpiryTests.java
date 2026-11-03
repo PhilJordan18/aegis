@@ -104,6 +104,7 @@ class ReservationExpiryTests extends ApiIntegrationTest {
         UUID reservation = fixtures.reservation(asset, technician.id(), "ACTIVE", FROM, UNTIL);
         UUID attempt = fixtures.attempt(asset, technician.id(), reservation, "AWAITING_LOCAL_PROOF", false,
                 UNTIL.minusSeconds(30));
+        UUID challenge = fixtures.challenge(attempt, UNTIL.minusSeconds(30), false);
         clock.set(UNTIL.plusSeconds(5));
 
         // A crash after the decision but before the commit: everything it wrote goes back.
@@ -119,12 +120,17 @@ class ReservationExpiryTests extends ApiIntegrationTest {
         assertEquals("AWAITING_LOCAL_PROOF", fixtures.operationStatus(attempt));
         assertEquals(0L, expiredEvents(reservation));
         assertEquals(0L, fixtures.count("SELECT count(*) FROM aegis.audit_events WHERE operation_id = :id", attempt));
+        assertEquals("PENDING", challengeStatus(challenge));
 
         expiry.expireDue(100);
         expiry.expireDue(100);
 
         assertEquals("EXPIRED", fixtures.reservationStatus(reservation));
         assertEquals(1L, expiredEvents(reservation));
+        assertEquals("EXPIRED", challengeStatus(challenge));
+        assertEquals(1L, fixtures.count("""
+                SELECT count(*) FROM aegis.audit_events WHERE subject_id = :id AND event_type = 'LOCAL_CHALLENGE_EXPIRED'
+                """, challenge));
     }
 
     /** Document 05, section 5.7: a QR wait does not defer the expiry; both end in the same transaction. */
@@ -148,6 +154,83 @@ class ReservationExpiryTests extends ApiIntegrationTest {
                   AND from_state = 'AWAITING_LOCAL_PROOF' AND to_state = 'EXPIRED'
                 """, attempt));
         assertEquals("EXPIRED", fixtures.reservationStatus(reservation));
+    }
+
+    /**
+     * Document 06, section 14.1 and document 08, section 4.6: the pending challenge of a QR wait expires with the
+     * reservation and its display instruction stops with its ciphertext purged; a sendable instruction becomes
+     * {@code CANCELLED}, an acknowledged one keeps its status. A challenge already closed stays as it is.
+     */
+    @Test
+    void aPendingQrChallengeExpiresWithItsReservationAndItsCiphertextIsPurged() {
+        for (String displayStatus : new String[] {"PENDING", "ACKNOWLEDGED"}) {
+            UUID asset = fixtures.asset(fixtures.scheduledLocker(accounts.admin().id()));
+            UUID holder = accounts.technician().id();
+            UUID reservation = fixtures.reservation(asset, holder, "ACTIVE", FROM, UNTIL);
+            UUID attempt = fixtures.attempt(asset, holder, reservation, "AWAITING_LOCAL_PROOF", false,
+                    UNTIL.minusSeconds(30));
+            UUID challenge = fixtures.challenge(attempt, UNTIL.minusSeconds(30), true);
+            UUID display = fixtures.display(challenge, displayStatus, UNTIL.minusSeconds(30));
+
+            assertEquals(Outcome.EXPIRED, expiry.expire(reservation, UNTIL, false), displayStatus);
+
+            assertEquals(1L, fixtures.count("""
+                    SELECT count(*) FROM aegis.local_access_challenges
+                    WHERE id = :id AND status = 'EXPIRED' AND closed_at = '2026-09-28T15:30:00Z'
+                    """, challenge), displayStatus);
+            assertEquals(1L, jdbc.sql("""
+                    SELECT count(*) FROM aegis.hub_display_outbox
+                    WHERE id = :id AND status = :status AND encrypted_payload IS NULL AND claim_until IS NULL
+                    """).param("id", display)
+                    .param("status", displayStatus.equals("PENDING") ? "CANCELLED" : "ACKNOWLEDGED")
+                    .query(Long.class).single(), displayStatus);
+            assertEquals(1L, jdbc.sql("""
+                    SELECT count(*) FROM aegis.audit_events
+                    WHERE subject_id = :challenge AND subject_type = 'LOCAL_ACCESS_CHALLENGE'
+                      AND event_type = 'LOCAL_CHALLENGE_EXPIRED' AND operation_id = :attempt AND actor_user_id IS NULL
+                      AND from_state = 'PENDING' AND to_state = 'EXPIRED' AND reason = 'RESERVATION_EXPIRED'
+                      AND occurred_at = '2026-09-28T15:30:00Z'
+                    """).param("challenge", challenge).param("attempt", attempt).query(Long.class).single(),
+                    displayStatus);
+        }
+
+        UUID asset = fixtures.asset(locker);
+        UUID reservation = fixtures.reservation(asset, technician.id(), "ACTIVE", FROM, UNTIL);
+        UUID attempt = fixtures.attempt(asset, technician.id(), reservation, "AWAITING_LOCAL_PROOF", false,
+                UNTIL.minusSeconds(90));
+        UUID challenge = fixtures.challenge(attempt, UNTIL.minusSeconds(90), false);
+        jdbc.sql("""
+                UPDATE aegis.local_access_challenges SET status = 'EXPIRED', closed_at = expires_at WHERE id = :id
+                """).param("id", challenge).update();
+
+        assertEquals(Outcome.EXPIRED, expiry.expire(reservation, UNTIL, false));
+        assertEquals("EXPIRED", fixtures.operationStatus(attempt));
+        assertEquals(1L, fixtures.count("""
+                SELECT count(*) FROM aegis.local_access_challenges
+                WHERE id = :id AND status = 'EXPIRED' AND closed_at = '2026-09-28T15:29:30Z'
+                """, challenge));
+        assertEquals(0L, fixtures.count("SELECT count(*) FROM aegis.audit_events WHERE subject_id = :id", challenge));
+    }
+
+    /**
+     * Document 09, section 8.10: an attempt in anomaly defers the expiry only while its anomaly is not
+     * {@code RESOLVED}; once resolved, the reservation expires and frees its asset.
+     */
+    @Test
+    void onlyAnUnresolvedAnomalyDefersTheExpiry() throws Exception {
+        for (String anomaly : new String[] {"OPEN", "RESOLVED"}) {
+            UUID asset = fixtures.asset(fixtures.scheduledLocker(accounts.admin().id()));
+            UUID holder = accounts.technician().id();
+            UUID reservation = fixtures.reservation(asset, holder, "ACTIVE", FROM, UNTIL);
+            UUID attempt = fixtures.attempt(asset, holder, reservation, "ANOMALY", true, UNTIL.minusSeconds(300));
+            fixtures.anomaly(attempt, anomaly, UNTIL.minusSeconds(240));
+
+            boolean resolved = anomaly.equals("RESOLVED");
+            assertEquals(resolved ? Outcome.EXPIRED : Outcome.DEFERRED,
+                    expiry.expire(reservation, UNTIL.plusSeconds(600), true), anomaly);
+            assertEquals(resolved ? "EXPIRED" : "ACTIVE", fixtures.reservationStatus(reservation), anomaly);
+            assertEquals("ANOMALY", fixtures.operationStatus(attempt));
+        }
     }
 
     /**
@@ -324,5 +407,10 @@ class ReservationExpiryTests extends ApiIntegrationTest {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(interrupted);
         }
+    }
+
+    private String challengeStatus(UUID challenge) {
+        return jdbc.sql("SELECT status FROM aegis.local_access_challenges WHERE id = :id").param("id", challenge)
+                .query(String.class).single();
     }
 }
