@@ -182,15 +182,42 @@ describe('Casiers — where the locker comes from', () => {
 })
 
 describe('Casiers — states of the connection', () => {
-  it('OFFLINE: says it, explains it, and shows the last signal and the compartments as the server sent them', async () => {
+  it('OFFLINE as the server sends it: the cells keep the last heartbeat values, shown as the last known state and never as current health', async () => {
     renderLockers(fakeLockerGateway({ [DEMO_LOCKER_ID]: [ok(OFFLINE)] }))
     await screen.findByRole('heading', { level: 2, name: SECTION })
     const text = plain(panel().textContent)
     expect(text).toContain('Hors ligne')
     expect(text).toContain("Le casier n'envoie plus de signal valide.")
-    expect(text).toMatch(/Dernier signal 3 nov\. 2026, \d+ h 32/)
-    expect(text).toContain('Déconnectée')
+    expect(text).toMatch(/Dernier signal\D{0,3}3 nov\. 2026, \d+ h 32/)
     expect(text).not.toContain('En ligne')
+    // The server's values stay visible, exactly...
+    for (const value of ['Connectée', 'En bon état', 'Fermée', 'Verrouillée']) expect(text).toContain(value)
+    // ...under a note that says they are a memory, and without any chip that would present them as health or fault.
+    expect(text).toContain("Dernier état connu, à la dernière observation : le casier n'est pas en ligne, ces valeurs ne sont pas l'état actuel.")
+    const table = within(panel()).getByRole('table')
+    expect(table.querySelectorAll('.ag-chip')).toHaveLength(0)
+    expect(table.getAttribute('aria-describedby')).toBe(panel().querySelector('.ag-lk__lastknown')?.id)
+  })
+
+  it('OFFLINE with a faulted or open cell: still the last known value, neutral, and the value is not hidden', async () => {
+    const status = lockerStatus({
+      ...OFFLINE,
+      compartments: [compartment({ ...A1, doorState: 'OPEN', rfidReaderStatus: 'FAULTED', lastObservedAt: '2026-11-03T14:31:50Z' }), A2],
+    })
+    renderLockers(fakeLockerGateway({ [DEMO_LOCKER_ID]: [ok(status)] }))
+    await screen.findByRole('heading', { level: 2, name: SECTION })
+    const table = within(panel()).getByRole('table')
+    expect(table.querySelectorAll('.ag-chip')).toHaveLength(0)
+    expect(plain(table.textContent)).toContain('En défaut')
+    expect(plain(table.textContent)).toContain('Ouverte')
+  })
+
+  it('ONLINE: no last-known note, and an exception keeps its chip', async () => {
+    const status = lockerStatus({ compartments: [compartment({ ...A1, doorState: 'OPEN' })] })
+    renderLockers(fakeLockerGateway({ [DEMO_LOCKER_ID]: [ok(status)] }))
+    await screen.findByRole('heading', { level: 2, name: SECTION })
+    expect(panel().querySelector('.ag-lk__lastknown')).toBeNull()
+    expect(within(panel()).getByRole('table').querySelectorAll('.ag-chip')).toHaveLength(1)
   })
 
   it('UNKNOWN (never seen): says no signal was ever received, and shows no compartment as healthy', async () => {
@@ -202,6 +229,9 @@ describe('Casiers — states of the connection', () => {
     expect(text).toContain("Aucun signal valide n'a encore été reçu")
     expect(text).toContain('Aucune observation')
     expect(text).not.toMatch(/En ligne|Connectée|En bon état|Fermée|Verrouillée/)
+    // Nothing was ever observed, so there is no last known state to describe: the cells keep their own unknown chips.
+    expect(text).not.toContain('Dernier état connu')
+    expect(within(panel()).getByRole('table').querySelectorAll('.ag-chip').length).toBeGreaterThan(0)
   })
 
   it('never derives ONLINE from the timestamps: the status field is the only authority', async () => {

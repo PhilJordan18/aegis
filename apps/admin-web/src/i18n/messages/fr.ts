@@ -333,12 +333,12 @@ export const fr = {
     },
     connectionNote: {
       OFFLINE: "Le casier n'envoie plus de signal valide.",
-      UNKNOWN: "Aucun signal valide n'a encore été reçu : l'état du casier n'est pas connu.",
+      UNKNOWN: `Aucun signal valide n'a encore été reçu${NBSP}: l'état du casier n'est pas connu.`,
     },
     lastSignal: ({ time }: { time: string }) => `Dernier signal ${time}`,
     neverSignal: 'Aucun signal reçu',
     evaluatedNote: ({ time }: { time: string }) => `Évalué par le serveur à ${time}. Cette lecture n'autorise aucune ouverture.`,
-    readOnlyNote: "Lecture seule : aucune commande n'est envoyée au casier depuis cet écran.",
+    readOnlyNote: `Lecture seule${NBSP}: aucune commande n'est envoyée au casier depuis cet écran.`,
 
     windowTitle: "Horaire d'exploitation",
     windowOpen: 'Ouvert',
@@ -360,6 +360,8 @@ export const fr = {
     colDoor: 'Porte',
     colLock: 'Serrure',
     colLastObservation: 'Dernière observation',
+    /** [P] The server keeps the last heartbeat's values on the cells while the locker is not online. */
+    lastKnownNote: `Dernier état connu, à la dernière observation${NBSP}: le casier n'est pas en ligne, ces valeurs ne sont pas l'état actuel.`,
     noObservation: 'Aucune observation',
     link: {
       CONNECTED: 'Connectée',

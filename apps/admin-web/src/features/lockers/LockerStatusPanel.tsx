@@ -7,6 +7,7 @@ import { StaleNotice } from '../catalog/StaleNotice'
 import type { CompartmentStatus, LockerStatus } from './contract'
 import { LockerAlert } from './LockerAlert'
 import {
+  asLastKnown,
   chipRole,
   connectionChip,
   connectionNote,
@@ -182,9 +183,19 @@ function WindowFacts({ view }: { readonly view: ReturnType<typeof windowView> })
 function CompartmentTable({ locker }: { readonly locker: LockerStatus }) {
   const { m } = useI18n()
   const t = m.lockers
+  const noteId = useId()
+  // The server keeps the last heartbeat's values on the cells while the locker is not ONLINE. A cell with an observation
+  // is then a memory, not a current fact; a cell never observed has nothing to remember and keeps its own state.
+  const lastKnown = (compartment: CompartmentStatus) => locker.connectionStatus !== 'ONLINE' && compartment.lastObservedAt !== null
+  const anyLastKnown = locker.compartments.some(lastKnown)
   return (
     <div className="ag-lk-table-wrap">
-      <table className="ag-lk-table" role="table">
+      {anyLastKnown && (
+        <p className="ag-lk__lastknown" id={noteId}>
+          {t.lastKnownNote}
+        </p>
+      )}
+      <table className="ag-lk-table" role="table" aria-describedby={anyLastKnown ? noteId : undefined}>
         <caption className="ag-sr-only">{t.compartmentsCaption({ code: locker.code })}</caption>
         <thead role="rowgroup">
           <tr role="row">
@@ -197,7 +208,7 @@ function CompartmentTable({ locker }: { readonly locker: LockerStatus }) {
         </thead>
         <tbody role="rowgroup">
           {locker.compartments.map((compartment) => (
-            <CompartmentRow key={compartment.id} compartment={compartment} />
+            <CompartmentRow key={compartment.id} compartment={compartment} lastKnown={lastKnown(compartment)} />
           ))}
         </tbody>
       </table>
@@ -205,20 +216,21 @@ function CompartmentTable({ locker }: { readonly locker: LockerStatus }) {
   )
 }
 
-function CompartmentRow({ compartment }: { readonly compartment: CompartmentStatus }) {
+function CompartmentRow({ compartment, lastKnown }: { readonly compartment: CompartmentStatus; readonly lastKnown: boolean }) {
   const i18n = useI18n()
   const t = i18n.m.lockers
   const observed = technicalInstantLabel(compartment.lastObservedAt, i18n)
+  const state = (view: StateView) => (lastKnown ? asLastKnown(view) : view)
   return (
     <tr role="row" className={compartment.enabled ? undefined : 'ag-lk-table__off'}>
       <th scope="row" role="rowheader" className="ag-lk-table__code ag-tnum">
         {compartment.code}
       </th>
       <Cell label={t.colEnabled} state={enabledState(compartment.enabled, i18n)} />
-      <Cell label={t.colLink} state={linkState(compartment.connectionStatus, i18n)} />
-      <Cell label={t.colReader} state={readerState(compartment.rfidReaderStatus, i18n)} />
-      <Cell label={t.colDoor} state={doorState(compartment.doorState, i18n)} />
-      <Cell label={t.colLock} state={lockState(compartment.lockState, i18n)} />
+      <Cell label={t.colLink} state={state(linkState(compartment.connectionStatus, i18n))} />
+      <Cell label={t.colReader} state={state(readerState(compartment.rfidReaderStatus, i18n))} />
+      <Cell label={t.colDoor} state={state(doorState(compartment.doorState, i18n))} />
+      <Cell label={t.colLock} state={state(lockState(compartment.lockState, i18n))} />
       <td role="cell">
         <span className="ag-lk-table__label" aria-hidden="true">
           {t.colLastObservation}

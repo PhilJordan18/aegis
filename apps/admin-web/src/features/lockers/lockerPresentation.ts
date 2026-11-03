@@ -19,6 +19,15 @@ export interface StateView {
 
 const TONE_ROLE: Record<Exclude<StateTone, 'ok' | 'neutral'>, StatusRole> = { info: 'info', blocked: 'blocked', unknown: 'unknown' }
 
+/**
+ * The value of a cell the hub has not confirmed lately: the server keeps the last heartbeat's values on the cells while the
+ * locker is OFFLINE, so « Fermée » above « Hors ligne » is a memory, not a current fact. Drawn neutral, in plain text: no
+ * « healthy » or « exception » treatment. The value itself is the server's, unchanged; nothing is derived.
+ */
+export function asLastKnown(view: StateView): StateView {
+  return { ...view, tone: 'neutral' }
+}
+
 export function chipRole(tone: StateTone): StatusRole | null {
   return tone === 'ok' || tone === 'neutral' ? null : TONE_ROLE[tone]
 }

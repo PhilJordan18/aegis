@@ -374,6 +374,10 @@ test.describe('flow: casiers (production page, routed fakes)', () => {
     await expect(panel).not.toContainText('En ligne')
     // The status is a chip with a symbol, not a colour.
     await expect(panel.locator('.ag-diag .ag-chip svg')).toHaveCount(1)
+    // As the server sends it: the cells keep the last heartbeat values, shown as a memory and not as current health.
+    await expect(panel).toContainText('Dernier état connu, à la dernière observation')
+    await expect(panel.getByRole('table')).toContainText('Connectée')
+    await expect(panel.getByRole('table').locator('.ag-chip')).toHaveCount(0)
   })
 
   test('flow: never seen shows « État inconnu » and no signal', async ({ page }) => {

@@ -37,13 +37,15 @@ export function lockerStatus(overrides: Partial<LockerStatus> = {}): LockerStatu
   }
 }
 
+/**
+ * OFFLINE as the server sends it: compartments are updated only from heartbeats (PHY-01), so they keep the values
+ * of the last heartbeat. Every cell still reads CONNECTED, HEALTHY, CLOSED and LOCKED above an « Hors ligne » locker,
+ * and its observation is not later than the hub's last signal.
+ */
 export const OFFLINE = lockerStatus({
   connectionStatus: 'OFFLINE',
   lastSeenAt: '2026-11-03T14:32:00Z',
-  compartments: [
-    compartment({ ...A1, connectionStatus: 'DISCONNECTED', doorState: 'UNKNOWN', lockState: 'UNKNOWN', rfidReaderStatus: 'UNKNOWN' }),
-    compartment({ ...A2, connectionStatus: 'DISCONNECTED', doorState: 'UNKNOWN', lockState: 'UNKNOWN', rfidReaderStatus: 'UNKNOWN' }),
-  ],
+  compartments: [compartment({ ...A1, lastObservedAt: '2026-11-03T14:31:50Z' }), compartment({ ...A2, lastObservedAt: '2026-11-03T14:31:50Z' })],
 })
 
 /** Never seen: no heartbeat since provisioning. */

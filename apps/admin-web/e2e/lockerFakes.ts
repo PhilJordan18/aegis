@@ -43,8 +43,9 @@ function status(mode: LockerMode) {
   }
   switch (mode) {
     case 'offline': {
-      const lost = { connectionStatus: 'DISCONNECTED', rfidReaderStatus: 'UNKNOWN', doorState: 'UNKNOWN', lockState: 'UNKNOWN' }
-      return { ...base, connectionStatus: 'OFFLINE', lastSeenAt: '2026-11-03T18:32:00Z', compartments: [compartment('A1', lost), compartment('A2', lost)] }
+      // As the server sends it: the cells keep the values of the last heartbeat, which is also the hub's last signal.
+      const kept = { lastObservedAt: '2026-11-03T18:31:50Z' }
+      return { ...base, connectionStatus: 'OFFLINE', lastSeenAt: '2026-11-03T18:32:00Z', compartments: [compartment('A1', kept), compartment('A2', kept)] }
     }
     case 'unknown': {
       const never = { connectionStatus: 'UNKNOWN', rfidReaderStatus: 'UNKNOWN', doorState: 'UNKNOWN', lockState: 'UNKNOWN', lastObservedAt: null }

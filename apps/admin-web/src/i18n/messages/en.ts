@@ -308,6 +308,7 @@ export const en: Messages = {
     colDoor: 'Door',
     colLock: 'Lock',
     colLastObservation: 'Last observed',
+    lastKnownNote: 'Last known state, as of the last observation: the locker is not online, so these values are not the current state.',
     noObservation: 'No observation',
     link: {
       CONNECTED: 'Connected',

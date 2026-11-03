@@ -4,6 +4,7 @@ import { MESSAGES } from '../../i18n/messages'
 import type { I18n } from '../../i18n/useI18n'
 import { UNRECOGNIZED } from '../catalog/contract'
 import {
+  asLastKnown,
   chipRole,
   connectionChip,
   connectionNote,
@@ -42,6 +43,17 @@ describe('connection chip', () => {
     expect(connectionNote('OFFLINE', fr)).toContain('signal')
     expect(connectionNote('UNKNOWN', fr)).toContain("n'est pas connu")
     expect(connectionNote(UNRECOGNIZED, fr)).toBeNull()
+  })
+})
+
+describe('last known state', () => {
+  it('draws any value neutral and keeps its text and symbol, whatever the tone it had', () => {
+    for (const view of [linkState('DISCONNECTED', fr), readerState('FAULTED', fr), doorState('OPEN', fr), lockState('UNKNOWN', fr), doorState('CLOSED', fr)]) {
+      const known = asLastKnown(view)
+      expect(known.tone).toBe('neutral')
+      expect(chipRole(known.tone)).toBeNull()
+      expect(known.label).toBe(view.label)
+    }
   })
 })
 
