@@ -263,6 +263,7 @@ final class ReservationUITests: XCTestCase {
     /// `atLargestSize` skips the Dynamic Type check: the text cannot grow.
     @MainActor
     private func audit(_ app: XCUIApplication, atLargestSize: Bool = false) throws {
+        XCTAssertTrue(app.waitForStillScreen(), "The screen kept changing; the audit needs a still screen.")
         let tabBar = app.tabBars.firstMatch
         let window = app.windows.firstMatch.frame
         var visible = window
@@ -278,7 +279,7 @@ final class ReservationUITests: XCTestCase {
         var types = XCUIAccessibilityAuditType.all
         if atLargestSize { types.remove(.dynamicType) }
         var unhandled: [String] = []
-        try app.performAccessibilityAudit(for: types) { issue in
+        try app.performCompletedAccessibilityAudit(for: types) { issue in
             let tolerated: Bool
             if let target = issue.element {
                 let center = CGPoint(x: target.frame.midX, y: target.frame.midY)
