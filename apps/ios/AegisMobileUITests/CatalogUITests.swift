@@ -287,6 +287,7 @@ final class CatalogUITests: XCTestCase {
 
     @MainActor
     private func audit(_ app: XCUIApplication, atLargestSize: Bool = false) throws {
+        XCTAssertTrue(app.waitForStillScreen(), "The screen kept changing; the audit needs a still screen.")
         let tabBar = app.tabBars.firstMatch
         let window = app.windows.firstMatch.frame
         var visible = window
