@@ -136,12 +136,13 @@ struct ActivityContractTests {
     }
 
     @Test func anExpiredSessionIsReported() async {
-        let (client, _) = client(problem(401, "TOKEN_EXPIRED"))
+        let (client, _) = client(problem(401, "AUTH_TOKEN_EXPIRED"))
         let error = await #expect(throws: APIError.self) { _ = try await client.currentLoan(bearer: "t") }
-        guard case .http(status: 401, problem: _, retryAfter: _) = error else {
-            Issue.record("Expected a 401, got \(String(describing: error))")
+        guard case .http(status: 401, problem: let problem?, retryAfter: _) = error else {
+            Issue.record("Expected a 401 problem, got \(String(describing: error))")
             return
         }
+        #expect(problem.code == "AUTH_TOKEN_EXPIRED")
     }
 }
 
