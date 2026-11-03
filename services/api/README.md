@@ -505,24 +505,30 @@ qu'elle termine.
 
 | Situation | Réponse |
 |---|---|
-| Réservation `ACTIVE` du demandeur, avant `reservedUntil`, aucune tentative de retrait autorisée ni en anomalie | `200`, `CANCELLED`, audit `RESERVATION_CANCELLED` (`ACTIVE` → `CANCELLED`) |
+| Réservation `ACTIVE` du demandeur, avant `reservedUntil`, aucune tentative de retrait autorisée, ni en `ANOMALY` dont l'anomalie n'est pas `RESOLVED` (document 09, section 8.10) | `200`, `CANCELLED`, audit `RESERVATION_CANCELLED` (`ACTIVE` → `CANCELLED`) |
 | Même clé et même requête | Réponse originale rejouée, `Idempotency-Replayed: true`, aucun effet |
 | Réservation déjà `CANCELLED`, nouvelle clé | `200`, audit `ALREADY_APPLIED` |
 | Réservation d'un autre technicien ou inconnue | `404 RESOURCE_NOT_FOUND` |
-| `FULFILLED`, `EXPIRED`, `reservedUntil` atteint, ou tentative autorisée une fois, quelle qu'en soit l'issue | `409 RESERVATION_NOT_CANCELLABLE` |
+| `FULFILLED`, `EXPIRED`, `reservedUntil` atteint, tentative autorisée une fois, quelle qu'en soit l'issue, ou tentative en `ANOMALY` dont l'anomalie n'est pas `RESOLVED` | `409 RESERVATION_NOT_CANCELLABLE` |
 
 Un refus n'écrit rien. Une tentative encore `REQUESTED` ou
 `AWAITING_LOCAL_PROOF` se termine `FAILED` (`RESERVATION_CANCELLED`) dans la
-même transaction, avec un audit `OPERATION_FAILED`. La lecture littérale de la
-question ouverte Q1 (document 09, section 8.10) est appliquée : une tentative
-autorisée puis terminée bloque l'annulation.
+même transaction, avec un audit `OPERATION_FAILED`. Son défi QR encore
+`PENDING` devient `INVALIDATED`, avec un audit `LOCAL_CHALLENGE_INVALIDATED`;
+son instruction d'affichage est arrêtée et son chiffré purgé (document 08,
+section 4.6). L'effacement de l'écran du hub n'est pas encore émis (LOC-01
+#43, IOT-01 #40). La lecture littérale de la question ouverte Q1 (document 09,
+section 8.10) est appliquée : une tentative autorisée puis terminée bloque
+l'annulation.
 
 `ReservationExpiry` (document 06, section 14.1) traite chaque réservation
 `ACTIVE` échue (`reservedUntil <= now`) dans sa propre transaction courte :
 verrou de l'actif, puis de la réservation, nouvelle vérification, puis
 `EXPIRED` et audit `RESERVATION_EXPIRED` sans acteur. Elle est différée tant
-qu'une tentative autorisée n'est pas classée ou qu'une tentative est en
-`ANOMALY`; une attente QR ne la diffère pas et se termine `EXPIRED` avec elle.
+qu'une tentative autorisée n'est pas classée ou qu'une tentative en `ANOMALY`
+a une anomalie non `RESOLVED`; une attente QR ne la diffère pas et se termine
+`EXPIRED` avec elle, son défi QR `PENDING` devient `EXPIRED` (audit
+`LOCAL_CHALLENGE_EXPIRED`) et son instruction d'affichage est purgée.
 Une réservation `FULFILLED` n'expire jamais, donc un prêt ouvert garde l'actif
 `BORROWED`. La disponibilité est dérivée à nouveau à la lecture suivante.
 
