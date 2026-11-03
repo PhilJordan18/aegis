@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { Link } from '../app/Link'
 import { PageHeading } from '../app/PageHeading'
 import { useLocation, useRouter } from '../app/router'
 import { pathOf } from '../app/routes'
@@ -86,6 +87,11 @@ export function LockersPage({ sessionProfile }: { readonly sessionProfile: UserP
             <div className="ag-list__empty">
               <p className="ag-list__empty-title">{m.lockers.emptyTitle}</p>
               <p className="ag-list__empty-body">{m.lockers.emptyBody}</p>
+              <p>
+                <Link className="ag-link" to={pathOf('equipment')}>
+                  {m.lockers.emptyAction}
+                </Link>
+              </p>
             </div>
           </section>
         )}

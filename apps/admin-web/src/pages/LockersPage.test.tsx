@@ -127,7 +127,7 @@ describe('Casiers — nominal', () => {
     const text = plain(document.body.textContent)
     expect(document.title).toBe('Lockers — Aegis Manager')
     expect(text).toContain('Online')
-    expect(text).toMatch(/Last seen at Nov 3, 2026, \d+:\d\d [ap]\.m\. [A-Z]+/)
+    expect(text).toMatch(/Last seen: Nov 3, 2026, \d+:\d\d [ap]\.m\. [A-Z]+/)
     expect(text).toContain('Operating hours')
     expect(text).toContain('Locker time zone: America/Toronto')
     expect(text).toMatch(/Closes\s*Nov 3, 2026, 5:00 p\.m\. EST/)
@@ -162,11 +162,14 @@ describe('Casiers — where the locker comes from', () => {
     expect(gateway.getStatus).toHaveBeenCalledTimes(1)
   })
 
-  it('says no locker was found among the placed units, hints at ?casier=, and reads no status', async () => {
+  it('says no locker was found among the placed units, points to the existing Équipements page, and reads no status', async () => {
     const gateway = fakeLockerGateway()
     renderLockers(gateway, { catalogGateway: fakeCatalogGateway({ pages: [catalogOk(pageOf([asset({ id: 'x', assetCode: 'X-1' })]))] }) })
     expect(await screen.findByText('Aucun casier trouvé parmi les équipements placés.')).toBeDefined()
-    expect(plain(document.body.textContent)).toContain('/casiers?casier=identifiant')
+    // An instruction and an existing page, never a raw address as the way forward.
+    expect(plain(document.body.textContent)).not.toContain('?casier=')
+    const action = screen.getByRole('link', { name: 'Ouvrir Équipements' })
+    expect(action.getAttribute('href')).toBe('/equipements')
     expect(gateway.getStatus).not.toHaveBeenCalled()
   })
 

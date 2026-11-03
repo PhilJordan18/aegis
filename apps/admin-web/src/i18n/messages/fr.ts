@@ -321,7 +321,8 @@ export const fr = {
     /** Announced once, then only when the connection state changes. */
     announce: ({ code, connection }: { code: string; connection: string }) => `Casier ${code}${NBSP}: ${connection}.`,
     emptyTitle: 'Aucun casier trouvé parmi les équipements placés.',
-    emptyBody: `Un casier apparaît ici quand un exemplaire y est placé. Vous pouvez aussi ouvrir un casier par son identifiant${NBSP}: /casiers?casier=identifiant.`,
+    emptyBody: 'Un casier apparaît ici dès qu\'un exemplaire y est placé. Les placements se consultent dans Équipements.',
+    emptyAction: 'Ouvrir Équipements',
     notFoundTitle: 'Casier introuvable.',
     notFoundBody: "Ce casier n'existe pas ou n'est plus accessible.",
     forbiddenTitle: "Votre compte n'a pas accès au statut des casiers.",

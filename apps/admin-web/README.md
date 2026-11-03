@@ -247,10 +247,12 @@ avis de données périmées (`StaleNotice`) sont ceux d'Équipements.
   Équipements). C'est un moyen au mieux : un casier sans exemplaire placé, ou placé
   après la première page, n'est pas trouvé ainsi. Aucun identifiant n'est écrit en
   dur. Sans exemplaire placé, la page dit « Aucun casier trouvé parmi les
-  équipements placés » et indique que `?casier=` désigne un casier directement.
+  équipements placés », une consigne (les placements se consultent dans
+  Équipements) et un lien vers la page Équipements existante : l'adresse
+  `?casier=` reste un moyen direct, mais n'est jamais la seule voie affichée.
 - **Contenu** : code et nom; pastille « En ligne », « Hors ligne » ou « État
   inconnu » (libellés approuvés du prototype, avec un symbole distinct par état);
-  « Dernier signal : … » (`lastSeenAt`; « Last seen at … » en anglais; ou « Aucun signal reçu »); heure d'évaluation;
+  « Dernier signal : … » (`lastSeenAt`; « Last seen: … » en anglais (décision de Philippe, #118); ou « Aucun signal reçu »); heure d'évaluation;
   horaire d'exploitation (ouvert avec la fermeture, fermé avec la prochaine
   ouverture, ou « Aucun horaire d'ouverture ») dans le fuseau du casier avec son
   abréviation; tableau des cellules (activée, liaison, lecteur RFID, porte,

@@ -270,7 +270,8 @@ export const en: Messages = {
     loadingStatus: 'Loading the locker status…',
     announce: ({ code, connection }) => `Locker ${code}: ${connection}.`,
     emptyTitle: 'No locker found among the placed equipment.',
-    emptyBody: 'A locker appears here when a unit is placed in it. You can also open a locker by its identifier: /casiers?casier=identifier.',
+    emptyBody: 'A locker appears here as soon as a unit is placed in it. Placements are listed under Equipment.',
+    emptyAction: 'Open Equipment',
     notFoundTitle: 'Locker not found.',
     notFoundBody: 'This locker does not exist or can no longer be accessed.',
     forbiddenTitle: 'Your account has no access to locker status.',
@@ -284,8 +285,8 @@ export const en: Messages = {
       OFFLINE: 'The locker is no longer sending a valid signal.',
       UNKNOWN: 'No valid signal has been received yet: the locker status is not known.',
     },
-    /** Approved mobile wording (docs/design/mobile-parcours/proposition.md): « Locker last seen at 2:28 PM EDT ». */
-    lastSignal: ({ time }) => `Last seen at ${time}`,
+    /** Philippe's decision (#118): « Last seen: … », without an imposed « at » before a full date; the French reads « Dernier signal : … ». */
+    lastSignal: ({ time }) => `Last seen: ${time}`,
     neverSignal: 'No signal received',
     evaluatedNote: ({ time }) => `Evaluated by the server at ${time}. This reading authorizes no opening.`,
     readOnlyNote: 'Read only: no command is sent to the locker from this screen.',
