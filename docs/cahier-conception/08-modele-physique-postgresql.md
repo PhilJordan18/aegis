@@ -1615,7 +1615,7 @@ L’identité d’un message entrant est `(locker_device_id, message_id)`. Le `l
 Dans une transaction :
 
 1. authentifier le device et vérifier le topic autorisé;
-2. parser le minimum nécessaire pour obtenir `message_id`, `message_type`, la version, `command_message_id` pour un accusé de commande et, en schéma MQTT 2.0, `device_session_id`, `boot_count`, `sequence`, `connection_id` et `availability_status` (doc 10 §15.3);
+2. parser le minimum nécessaire pour obtenir `message_id`, `message_type`, la version, `command_message_id` pour un accusé de commande et, depuis le schéma MQTT 2.0, `device_session_id`, `boot_count`, `sequence`, `connection_id` et `availability_status` (doc 10 §15.3);
 3. insérer `inbound_device_messages`;
 4. si la contrainte `uq_inbound_messages_device_message` est en conflit, ne produire aucune observation ni transition et, si utile, ajouter `MQTT_MESSAGE_DUPLICATE_IGNORED`;
 5. pour un nouveau message, conserver `raw_payload`, normaliser les observations, mettre à jour la projection de santé (règles du doc 10 §15.3) et appliquer au plus une progression de machine à états;
