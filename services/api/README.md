@@ -436,13 +436,16 @@ seulement si toutes ces conditions tiennent :
   l'attribution de l'étiquette;
 - aucun événement de porte de la cellule ne le suit ni ne tombe dans sa
   fenêtre;
-- aucun heartbeat ultérieur de la session ne rapporte sa porte autrement que
-  `CLOSED`;
-- aucun message de porte ou de scan du hub n'a été refusé après lui. Un message
-  refusé ne garde pas sa cellule : il vaut pour toutes les cellules du casier.
-  Il est ordonné par la session, le boot et la `sequence` que son contenu brut
-  annonce, si bien qu'un scan plus ancien rejoué après lui reste sans valeur;
-  sinon, par son instant de réception;
+- chaque heartbeat ultérieur de la session rapporte la cellule `CONNECTED`
+  avec sa porte `CLOSED`. Une cellule rapportée autrement, absente du
+  heartbeat ou dans un heartbeat illisible annule le scan : tant que son lien
+  avec le hub est coupé, sa porte n'est pas observée;
+- aucun heartbeat, message de porte ou scan du hub refusé ne peut l'avoir
+  suivi. Un message refusé ne garde pas sa cellule : il vaut pour toutes les
+  cellules du casier. Il annule le scan s'il a été reçu au même instant ou
+  après lui, ou si la `sequence` que son contenu brut annonce dans la session
+  courante est égale ou supérieure à la sienne; un scan plus ancien rejoué
+  après lui reste donc sans valeur;
 - l'étiquette n'est vue dans aucune autre cellule par une détection que nul
   scan sain ultérieur de cette cellule n'a remplacée;
 - pour `ABSENT` seulement, la porte a été ouverte puis fermée avant la
@@ -450,13 +453,24 @@ seulement si toutes ces conditions tiennent :
 
 Dans tous les autres cas, la présence vaut `UNKNOWN`. C'est le cas sans
 aucun scan, après un redémarrage ou une reconnexion tant qu'aucun nouveau scan
-n'est arrivé, et pour un message manquant, qui ne prouve jamais l'absence. Une
+n'est arrivé, et pour un message manquant, qui ne prouve jamais l'absence.
+
+Limite contractuelle : un message que le backend ne peut pas enregistrer du
+tout (JSON illisible, `messageId` invalide, `type` ou `timestamp` absent,
+charge trop grande) ne laisse aucune trace dans `inbound_device_messages`. Il
+ne peut donc annuler aucun scan, comme un message perdu : l'absence de
+message ne constitue jamais une preuve (document 10, §12.1). Seuls les
+messages enregistrés, acceptés ou refusés, comptent. Une
 présence observée pendant un prêt laisse l'actif `BORROWED`. L'anomalie
 `ASSET_PRESENT_WITH_ACTIVE_LOAN` du document 06, §12.4 relève d'ANO-01 (#52).
 
 Les documents ne fixent ni le moment où le hub scanne hors opération, ni une
-durée de validité d'un scan. Aucune n'est inventée : un scan reste valable
-tant que rien ci-dessus ne l'invalide. `RfidPresenceTests` (PostgreSQL) et
+durée de validité d'un scan (le document 06, §4.2 cite la fraîcheur des
+observations sans valeur; les bornes de 5 s et 30 s du document 10, §17.2
+portent sur l'horodatage des événements). Aucune n'est inventée : un scan reste
+valable sur une connexion ininterrompue et saine tant que rien ci-dessus ne
+l'invalide. **Décision ouverte pour Philippe** : faut-il une durée maximale de
+validité d'un scan, ou un scan périodique du hub, et laquelle? `RfidPresenceTests` (PostgreSQL) et
 `RfidPresenceBrokerTests` (Mosquitto, compte du hub de test) vérifient ces
 règles. Le scénario `tools/hub-simulator/scenarios/presence-demo-local.json`
 pose les étiquettes de démonstration dans A1 et A2, les scanne, puis garde le
