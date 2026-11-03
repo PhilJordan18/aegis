@@ -16,6 +16,8 @@ import { createHttpAuthGateway } from './features/auth/httpAuthGateway'
 import { createSessionStore, SessionContext } from './features/auth/session'
 import { CatalogGatewayContext } from './features/catalog/CatalogGatewayContext'
 import { createHttpCatalogGateway } from './features/catalog/httpCatalogGateway'
+import { createHttpLockerGateway } from './features/lockers/httpLockerGateway'
+import { LockerGatewayContext } from './features/lockers/LockerGatewayContext'
 import { createLocaleController } from './i18n/locale'
 import { LocaleContext } from './i18n/useI18n'
 import { PreviewContext, type PreviewControls } from './preview/PreviewContext'
@@ -40,6 +42,8 @@ if (__AEGIS_PREVIEW__) {
 
 // The catalog has no preview scenario: design-review captures route /api/v1/admin/assets themselves.
 const catalogGateway = createHttpCatalogGateway()
+// Same for the locker status: design-review captures route /api/v1/lockers/{id}/status themselves.
+const lockerGateway = createHttpLockerGateway()
 
 const container = document.getElementById('root')
 if (!container) throw new Error('Missing #root element')
@@ -53,9 +57,11 @@ createRoot(container).render(
             <SessionContext value={session}>
               <AuthGatewayContext value={gateway}>
                 <CatalogGatewayContext value={catalogGateway}>
-                  <PreviewContext value={previewControls}>
-                    <App />
-                  </PreviewContext>
+                  <LockerGatewayContext value={lockerGateway}>
+                    <PreviewContext value={previewControls}>
+                      <App />
+                    </PreviewContext>
+                  </LockerGatewayContext>
                 </CatalogGatewayContext>
               </AuthGatewayContext>
             </SessionContext>

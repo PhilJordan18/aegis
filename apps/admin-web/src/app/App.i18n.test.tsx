@@ -214,7 +214,7 @@ describe.each<Locale>(['fr', 'en'])('screens in %s', (locale) => {
       `${m.shell.sections.overview}${m.shell.soonSuffix}`,
       m.shell.sections.equipment,
       `${m.shell.sections.reservationsLoans}${m.shell.soonSuffix}`,
-      `${m.shell.sections.lockers}${m.shell.soonSuffix}`,
+      m.shell.sections.lockers,
       `${m.shell.sections.anomalies}${m.shell.soonSuffix}`,
       `${m.shell.sections.audit}${m.shell.soonSuffix}`,
     ])
