@@ -30,7 +30,7 @@ il durcit leurs scripts, mesure leurs preuves et propose une promotion.
 | Agent setup validator | PR touchant `.claude/`, `.codex/`, `.agents/`, `AGENTS.md`, `CLAUDE.md`, `*.md`; tout push | `validate_agent_setup.py`, Python 3.12.15 | 47 succès consécutifs, 14 branches, 12 push `dev`; « 0 warning(s) » | aucun échec volontaire hébergé |
 | Accepted ADR guard | **PR seulement**, touchant `docs/adr/`, le registre 13 ou le hook | `check-accepted-adrs.py` sur base..head de la PR | 5 succès sur 3 branches | critère « push sur `dev` » inapplicable en l'état (voir plus bas); aucun échec volontaire hébergé |
 | iOS standalone tests | PR touchant `apps/ios/`; tout push | `ios-test.sh standalone`, macos-26, Xcode 26.3 (17C529) | 19 succès, 10 push `dev` | **deux échecs consécutifs sur push `dev`** (`007c584`, `639ada8`, tests UI du catalogue); durée proche de 20 min; sélection du simulateur dupliquée (corrigé) |
-| CI script tests (nouveau) | changement de `ci.yml` ou de `.github/scripts/`; tout push | `python3 -m unittest discover -s .github/scripts/tests` | 29 tests locaux, aucun run hébergé | tout est à faire : reste non requis |
+| CI script tests (nouveau) | changement de `ci.yml` ou de `.github/scripts/`; tout push | `python3 -m unittest discover -s .github/scripts/tests` | 30 tests locaux, aucun run hébergé | tout est à faire : reste non requis |
 
 Les jobs filtrés ne tournent que lorsque leur composant change : sur les PR
 `37-feat-reservation` (runs `41577162962`, `41577565271`), seuls API et le
@@ -61,9 +61,29 @@ Branche `67-ci-qualify-controls`.
   est vide (auparavant seul le total comptait). API et Web publient désormais
   leurs comptes (Surefire et JUnit vitest) avec la même règle; aucun test API ou
   Web n'est ignoré aujourd'hui (Web local : 549 run, 0 skipped).
+- **Validateur et suppressions** : une PR qui supprime ou renomme un fichier,
+  quel qu'il soit, lance le validateur, car il refuse tout lien Markdown vers un
+  fichier absent. Avant, supprimer un fichier HTML lié depuis un document
+  laissait le validateur `skipped` sur la PR puis rouge sur `dev` (constat de la
+  revue indépendante, reproduit dans un clone de travail).
 - **Tests des scripts** : `.github/scripts/tests/test_ci_scripts.py`
   (`unittest`, bibliothèque standard), exécuté par le job non requis « CI script
   tests ».
+
+## Revue indépendante
+
+Revue en lecture seule (rôle `qa-reliability-engineer`) de l'incrément 1 et du
+commit de promotion :
+
+- `>-`, sorties absentes de `changes`, étape iOS sous `bash -e`, rapports JUnit
+  Web et Surefire, défauts injectés : vérifiés, sans défaut.
+- Corrigés : validateur ignoré sur suppression ou renommage (ci-dessus); test de
+  câblage qui ne vérifiait pas la ligne de commande de `ci-result.py`;
+  commentaire périmé du filtre Web (le chemin `docs/design/manager-entree/` est
+  conservé, il ne fait que lancer Web plus souvent).
+- Restant : « CI script tests » n'est pas requis, donc une régression de
+  `ci-result.py` qui renverrait toujours 0 ne serait pas bloquée; il sera
+  promu selon les mêmes critères.
 
 ## Incrément 2 : promotion
 
@@ -158,7 +178,7 @@ et Sonar restent hors de cette mission (#67, rubriques « deferred »).
 
 | Commande | Résultat |
 |---|---|
-| `python3 -m unittest discover -v -s .github/scripts/tests` | 29 tests OK (30 sur l'incrément 2) |
+| `python3 -m unittest discover -v -s .github/scripts/tests` | 30 tests OK (31 sur l'incrément 2) |
 | `actionlint` 1.7.7 sur `ci.yml` | seule remarque : l'étiquette `macos-26`, inconnue de cette version d'actionlint (déjà présente sur `dev`) |
 | Étape « Choose a simulator » avec un faux `xcrun` | iPhone 17 iOS 26.5 choisi parmi deux runtimes; sans iPhone : échec explicite, rien dans `GITHUB_ENV` |
 | Web `npm test` + reporter JUnit + `test-report.py` | 549 run, 549 passed, 0 skipped |
