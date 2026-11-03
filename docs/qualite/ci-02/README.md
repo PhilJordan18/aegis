@@ -28,7 +28,7 @@ il durcit leurs scripts, mesure leurs preuves et propose une promotion.
 | Web checks (requis) | PR touchant `apps/admin-web/`, `docs/design/manager-entree/`; tout push | `npm ci`, typecheck, lint, `npm test`, build | 33 succès, 0 échec, 15 push `dev` | aucun compte de tests : ajouté (incrément 1) |
 | Simulator tests | PR touchant `tools/hub-simulator/`, `infra/mqtt/`, `infra/docker/`; tout push | typecheck, `npm test`, broker Mosquitto isolé, `npm run test:integration`, `test-report.py` | 19 succès consécutifs, 5 branches, 12 push `dev`; comptes exacts (267 run, 0 skipped) | aucun échec volontaire hébergé |
 | Agent setup validator | PR touchant `.claude/`, `.codex/`, `.agents/`, `AGENTS.md`, `CLAUDE.md`, `*.md`; tout push | `validate_agent_setup.py`, Python 3.12.15 | 47 succès consécutifs, 14 branches, 12 push `dev`; « 0 warning(s) » | aucun échec volontaire hébergé |
-| Accepted ADR guard | **PR seulement**, touchant `docs/adr/`, le registre 13 ou le hook | `check-accepted-adrs.py` sur base..head de la PR | 5 succès sur 3 branches | critère « push sur `dev` » inapplicable en l'état (voir plus bas); aucun échec volontaire hébergé |
+| Accepted ADR guard | **PR seulement**, touchant `docs/adr/`, le registre 13 ou le hook | `check-accepted-adrs.py` sur base..head de la PR | 5 succès sur 3 branches, tous sur des PR vers `dev` (#92, #94, #96) | critère 1 remplacé par « succès sur une PR vers `dev` » (décision ci-dessous); aucun échec volontaire hébergé |
 | iOS standalone tests | PR touchant `apps/ios/`; tout push | `ios-test.sh standalone`, macos-26, Xcode 26.3 (17C529) | 19 succès, 10 push `dev` | **deux échecs consécutifs sur push `dev`** (`007c584`, `639ada8`, tests UI du catalogue); durée proche de 20 min; sélection du simulateur dupliquée (corrigé) |
 | CI script tests (nouveau) | changement de `ci.yml` ou de `.github/scripts/`; tout push | `python3 -m unittest discover -s .github/scripts/tests` | 30 tests locaux, aucun run hébergé | tout est à faire : reste non requis |
 
@@ -129,12 +129,12 @@ d'erreur par job.
 | Web checks | requis (inchangé) | hors de cette promotion; comptes ajoutés |
 | Simulator tests | **non qualifié : une preuve manque** | critères 1, 2, 4, 5, 6, 7 satisfaits (médiane 0,8 min); critère 3 : run rouge hébergé du commit de qualification non exécuté |
 | Agent setup validator | **non qualifié : une preuve manque** | critères 1, 2, 5, 6, 7 satisfaits (médiane 0,1 min); critère 4 adapté : sa preuve est « N error(s), N warning(s) » et la version Python, pas un nombre de tests; critère 3 : run rouge hébergé non exécuté |
-| Accepted ADR guard | non qualifié | critère 1 à clarifier (voir plus bas); critère 3 non exécuté; critère 2 atteint juste (5 succès, 3 branches) |
+| Accepted ADR guard | non qualifié : une preuve manque | critère 1 remplacé (décision ci-dessous) et satisfait : 5 succès sur des PR vers `dev`; critère 2 atteint juste (5 succès consécutifs, 3 branches, aucune relance); critère 4 adapté : sa preuve est le message « No accepted ADR changed », pas un nombre de tests; critère 3 : run rouge hébergé non exécuté |
 | iOS standalone tests | non qualifié | critère 2 remis à zéro par deux échecs sur `dev` (`007c584`, `639ada8`); critère 6 dépassé sur la suite actuelle; critère 3 non exécuté |
 | CI script tests | non qualifié | nouveau, aucun run hébergé |
 
-Lorsque le run rouge du commit de qualification existe, simulateur et validateur
-satisfont tous les critères; la PR de l'incrément 2 peut alors sortir du
+Lorsque le run rouge du commit de qualification existe, simulateur, validateur et
+garde ADR satisfont tous les critères; la PR de l'incrément 2 peut alors sortir du
 brouillon.
 
 ## Plan de qualification de « CI script tests »
@@ -164,16 +164,21 @@ la règle même de `CI result`. Il ne peut pas rester non requis indéfiniment.
 
 ## Points ouverts à décider
 
-### Garde ADR et critère « push sur `dev` »
+### Garde ADR et critère « push sur `dev` » : décidé
 
-Le critère 1 exige un succès sur un push `dev`. La garde compare une PR à sa
-base; un push n'a pas de base de PR, et le job ne tourne donc jamais sur `dev`.
-Ce critère est **inapplicable en l'état** et n'est pas simulé ici. Options :
+La garde compare une PR à sa base. Un push n'a pas de base de PR, et le job ne
+tourne donc jamais sur `dev` : le critère 1 lui est inapplicable tel qu'écrit.
 
-- (a) décider par écrit dans #67 que, pour ce job, le critère 1 est remplacé par
-  « succès sur une PR vers `dev` après fusion du job »;
-- (b) faire tourner la garde sur push avec `github.event.before..github.sha` :
-  elle détecterait après coup un ADR modifié sur `dev`, sans l'empêcher.
+**Décision humaine du 3 novembre 2026 (Philippe), option (a)** : pour ce job
+seulement, le critère 1 « succès sur un push `dev` » est remplacé par « succès
+hébergé sur une PR vers `dev` ». L'option (b), un contrôle sur push avec
+`github.event.before..github.sha`, est écartée : elle constaterait après coup un
+ADR modifié sur `dev`, sans l'empêcher. Les autres critères de #67 restent
+inchangés pour ce job, y compris le run rouge volontaire.
+
+Preuve du critère remplacé : les runs listés dans
+[l'historique](historique-runs.md#accepted-adr-guard) sont des PR vers `dev`
+(#92, #94, #96), `run_attempt` = 1.
 
 ### iOS : tests UI du catalogue rouges sur `dev`
 
@@ -235,11 +240,10 @@ que le conteneur tourne en root; il passe sur chaque run hébergé (non-root).
 
 ## Limite de cette session
 
-Le push depuis la session cloud est refusé (HTTP 403 : l'application GitHub
-Claude n'est pas reliée à ce dépôt pour ce compte). Les deux branches existent
-en commits locaux (livrées par un bundle Git); aucun run hébergé de ces commits n'a donc eu lieu, et aucune
-preuve de leurs runs n'est présentée. Un humain disposant du droit de push doit
-pousser les branches et ouvrir les PR vers `dev`.
+Le push depuis la session cloud a d'abord été refusé (HTTP 403 : l'application
+GitHub Claude n'était pas reliée au dépôt). L'accès a été rétabli le
+3 novembre 2026; les branches ont été poussées sans force et les PR ouvertes
+vers `dev` : #110 (incrément 1) et #111 (incrément 2, brouillon).
 
 ## Ordre de fusion
 
