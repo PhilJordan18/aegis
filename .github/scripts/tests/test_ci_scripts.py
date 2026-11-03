@@ -346,7 +346,11 @@ class WorkflowWiringTests(unittest.TestCase):
                 self.assertIn("${{ needs.changes.result }}", result)
                 continue
             with self.subTest(job=job):
-                self.assertIn(f"${{{{ needs.changes.outputs.{job} }}}}:${{{{ needs.{job}.result }}}}", result)
+                value = f"${{{{ needs.changes.outputs.{job} }}}}:${{{{ needs.{job}.result }}}}"
+                variable = re.search(rf"^ +(\w+): {re.escape(value)}$", result, re.M)
+                self.assertIsNotNone(variable, f"{job} is not exported to the aggregator step")
+                command = result[result.index("run:"):]
+                self.assertRegex(command, rf'"[^"=]+=\${variable.group(1)}"', f"{job} is not passed to ci-result.py")
 
 
 if __name__ == "__main__":
