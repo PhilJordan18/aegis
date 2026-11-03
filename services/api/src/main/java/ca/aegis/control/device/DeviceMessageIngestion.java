@@ -1,5 +1,6 @@
 package ca.aegis.control.device;
 
+import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -9,8 +10,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.postgresql.util.PSQLException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -76,7 +79,34 @@ public class DeviceMessageIngestion {
             return Outcome.LOGGED;
         }
         Storable storable = (Storable) inspection;
-        return transactions.execute(status -> store(inbound, storable, payload, receivedAt));
+        try {
+            return transactions.execute(status -> store(inbound, storable, payload, receivedAt));
+        } catch (DataIntegrityViolationException refused) {
+            // Deterministic: a redelivery would be refused again. PgJDBC's own message quotes the failing row,
+            // hence the payload, so only the SQLState and the constraint name are logged.
+            log.error("Device message refused by a database constraint and not stored: lockerId={}, messageId={}, "
+                    + "sqlState={}, constraint={}", inbound.lockerId(), storable.messageId(), sqlState(refused),
+                    constraint(refused));
+            return Outcome.LOGGED;
+        }
+    }
+
+    private static String sqlState(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof SQLException sql) {
+                return sql.getSQLState();
+            }
+        }
+        return null;
+    }
+
+    private static String constraint(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof PSQLException postgres && postgres.getServerErrorMessage() != null) {
+                return postgres.getServerErrorMessage().getConstraint();
+            }
+        }
+        return null;
     }
 
     private Outcome store(InboundTopic topic, Storable message, byte[] payload, Instant receivedAt) {
