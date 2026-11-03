@@ -91,6 +91,16 @@ class ChangedComponentsTests(unittest.TestCase):
                 self.repo.commit({path: f"{path}\n"})
                 self.assertEqual(self.detect(), expected)
 
+    def test_deleted_or_renamed_file_runs_the_link_validator(self):
+        self.repo.commit({"docs/diagrams/view.html": "<html/>\n", "firmware/a.ino": "a\n"})
+        self.base = self.repo.git("rev-parse", "HEAD")
+        self.repo.commit({}, delete=["docs/diagrams/view.html"])
+        self.assertEqual(self.detect(), {"agents"})
+        self.base = self.repo.git("rev-parse", "HEAD")
+        self.repo.git("mv", "firmware/a.ino", "firmware/b.ino")
+        self.repo.commit({})
+        self.assertEqual(self.detect(), {"agents"})
+
     def test_untouched_components_are_skipped(self):
         self.repo.commit({"services/api/pom.xml": "<project/>\n"})
         self.assertNotIn("ios", self.detect())
