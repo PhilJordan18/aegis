@@ -64,6 +64,49 @@ describe('parseLockerStatus (09 §8.6, §16.1)', () => {
     expect(parseLockerStatus(body)).toBeNull()
   })
 
+  describe('instants and ids (nothing unparseable reaches a formatter)', () => {
+    it('accepts the microseconds the live body sends', () => {
+      const body = wire()
+      body.lastSeenAt = '2026-11-03T14:59:55.123456Z'
+      body.evaluatedAt = '2026-11-03T15:00:00.5Z'
+      const [first, ...rest] = body.compartments as Record<string, unknown>[]
+      body.compartments = [{ ...first, lastObservedAt: '2026-11-03T14:59:50.000001Z' }, ...rest]
+      expect(parseLockerStatus(body)?.lastSeenAt).toBe('2026-11-03T14:59:55.123456Z')
+    })
+
+    it.each(['garbage', '', '2026-11-03', '2026-11-03T15:00:00', '2026-11-03T15:00:00+00:00', '2026-11-03 15:00:00Z', '2026-13-03T15:00:00Z', '2026-02-30T15:00:00Z', '2026-11-03T25:00:00Z', 1730646000])(
+      'rejects %j as evaluatedAt',
+      (value) => {
+        expect(parseLockerStatus({ ...wire(), evaluatedAt: value })).toBeNull()
+      },
+    )
+
+    it.each(['garbage', '2026-13-03T15:00:00Z', '2026-11-03T15:00:00'])('rejects %j as lastSeenAt', (value) => {
+      expect(parseLockerStatus({ ...wire(), lastSeenAt: value })).toBeNull()
+    })
+
+    it.each(['garbage', '2026-13-03T15:00:00Z', '2026-11-03T15:00:00'])('rejects %j as a compartment lastObservedAt', (value) => {
+      const body = wire()
+      const [first, ...rest] = body.compartments as Record<string, unknown>[]
+      body.compartments = [{ ...first, lastObservedAt: value }, ...rest]
+      expect(parseLockerStatus(body)).toBeNull()
+    })
+
+    it.each(['garbage', 'not-a-uuid', '12345678-1234-1234-1234-12345678901', '../auth/me'])('rejects %j as lockerId and as a compartment id', (value) => {
+      expect(parseLockerStatus({ ...wire(), lockerId: value })).toBeNull()
+      const body = wire()
+      const [first, ...rest] = body.compartments as Record<string, unknown>[]
+      body.compartments = [{ ...first, id: value }, ...rest]
+      expect(parseLockerStatus(body)).toBeNull()
+    })
+
+    it.each(['closesAt', 'nextOpensAt'])('rejects garbage in the window %s', (field) => {
+      const body = wire()
+      body.currentWindow = { timeZone: 'America/Toronto', open: true, closesAt: null, nextOpensAt: null, [field]: 'garbage' }
+      expect(parseLockerStatus(body)).toBeNull()
+    })
+  })
+
   it.each([null, undefined, 'ONLINE', 42, [], [wire()]])('rejects a body that is not an object: %j', (body) => {
     expect(parseLockerStatus(body)).toBeNull()
   })

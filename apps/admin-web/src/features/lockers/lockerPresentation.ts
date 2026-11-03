@@ -142,8 +142,9 @@ export function technicalInstantLabel(instant: string | null, i18n: I18n): strin
 }
 
 /** Time of day of the evaluation, for the stale notice. */
-export function evaluatedTimeLabel(locker: LockerStatus, { format }: I18n): string {
-  return format.time(new Date(locker.evaluatedAt))
+export function evaluatedTimeLabel(locker: LockerStatus, { format }: I18n): string | null {
+  const date = parsedInstant(locker.evaluatedAt)
+  return date === null ? null : format.time(date)
 }
 
 export interface WindowView {
