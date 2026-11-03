@@ -97,6 +97,9 @@ Branche `67-ci-promote-qualified-jobs`, empilée sur l'incrément 1.
 2. Commit suivant : retire tout le dispositif, garde **Simulator tests** et
    **Agent setup validator** dans les `needs`, ajoute un test vérifiant que
    chaque job des `needs` est bien transmis à `ci-result.py`.
+3. Après la décision (a) sur la garde ADR : **Accepted ADR guard** rejoint les
+   `needs`. Sur push et sur une PR qui ne touche aucun ADR, `adrs=false` et la
+   garde `skipped` ne bloque pas.
 
 ### État rouge de `1ab1203` : à ne jamais fusionner
 
