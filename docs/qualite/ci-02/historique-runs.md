@@ -148,4 +148,6 @@ Retour au [bilan](README.md).
 | [41581846591](https://github.com/PhilJordan18/aegis/actions/runs/41581846591/job/125738312992) | pull_request | `67-ci-promote-qualified-jobs` | `1ab1203` | failure | 20.2 | 161 total, 160 passed, 1 failed, 0 skipped — **échec volontaire CI-02** |
 | [41584155476](https://github.com/PhilJordan18/aegis/actions/runs/41584155476/job/125745679169) | pull_request | `67-ci-qualify-controls` | `aeedc49` | failure | 19.9 | 160 total, 159 passed, 1 failed, 0 skipped |
 | [41584158843](https://github.com/PhilJordan18/aegis/actions/runs/41584158843/job/125745782915) | pull_request | `67-ci-promote-qualified-jobs` | `a3f917c` | success | 14.0 | 160 total, 160 passed, 0 failed, 0 skipped |
+| [41586555809](https://github.com/PhilJordan18/aegis/actions/runs/41586555809/job/125753337711) | pull_request | `67-ci-qualify-controls` | `ec9c36a` | failure | 18.6 | 160 total, 159 passed, 1 failed, 0 skipped |
+| [41586558351](https://github.com/PhilJordan18/aegis/actions/runs/41586558351/job/125753344732) | pull_request | `67-ci-promote-qualified-jobs` | `6fedac9` | failure | 15.3 | 160 total, 159 passed, 1 failed, 0 skipped |
 
