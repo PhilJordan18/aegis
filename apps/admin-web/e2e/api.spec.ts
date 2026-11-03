@@ -278,6 +278,14 @@ async function expectPageShows(page: Page, status: LiveStatus) {
   }
   if (currentWindow.timeZone !== null) await expect(panel).toContainText(currentWindow.timeZone)
 
+  // While the locker is not ONLINE, an observed cell is its last known state: the note says so and the table points to it.
+  const lastKnown = status.connectionStatus !== 'ONLINE' && status.compartments.some((compartment) => compartment.lastObservedAt !== null)
+  const note = panel.locator('.ag-lk__lastknown')
+  if (lastKnown) {
+    await expect(note).toContainText('Dernier état connu')
+    await expect(panel.locator('table.ag-lk-table')).toHaveAttribute('aria-describedby', (await note.getAttribute('id')) ?? 'missing')
+  } else await expect(note).toHaveCount(0)
+
   const rows = panel.getByRole('row')
   await expect(rows).toHaveCount(status.compartments.length + 1)
   for (const compartment of status.compartments) {
@@ -291,6 +299,9 @@ async function expectPageShows(page: Page, status: LiveStatus) {
     await expect(cells.nth(4)).toContainText(word(WORDS.lock, compartment.lockState))
     if (compartment.lastObservedAt === null) await expect(cells.nth(5)).toContainText('Aucune observation')
     else await expect(cells.nth(5)).not.toContainText('Aucune observation')
+    if (lastKnown && compartment.lastObservedAt !== null) {
+      for (const column of [1, 2, 3, 4]) await expect(cells.nth(column).locator('.ag-chip')).toHaveCount(0)
+    }
   }
 }
 
