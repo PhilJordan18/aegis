@@ -40,12 +40,13 @@ extension Endpoint where Response == ReservationView {
 /// `OperatingWindowView` (§8.6), computed by the server at `evaluatedAt`.
 /// It helps choose an end time; it never authorizes anything.
 struct OperatingWindow: Decodable, Hashable, Sendable {
-    let timeZone: String
+    /// Null when the locker has no schedule (then closed, without instants).
+    let timeZone: String?
     let open: Bool
     let closesAt: Date?
     let nextOpensAt: Date?
 
-    var zone: TimeZone? { TimeZone(identifier: timeZone) }
+    var zone: TimeZone? { timeZone.flatMap(TimeZone.init(identifier:)) }
 }
 
 /// The part of `LockerStatusView` (§8.6) the reservation sheet uses. The

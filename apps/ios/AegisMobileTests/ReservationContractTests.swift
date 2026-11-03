@@ -96,9 +96,10 @@ struct ReservationContractTests {
 
     @Test func readsAWindowWithoutSchedule() throws {
         let status = CatalogFixtures.decode(Self.lockerStatus(
-            window: #"{"timeZone":"America/Toronto","open":false,"closesAt":null,"nextOpensAt":null}"#),
+            window: #"{"timeZone":null,"open":false,"closesAt":null,"nextOpensAt":null}"#),
             as: LockerStatus.self)
 
+        #expect(status.currentWindow.zone == nil)
         #expect(!status.currentWindow.open)
         #expect(status.currentWindow.closesAt == nil)
         #expect(status.currentWindow.nextOpensAt == nil)

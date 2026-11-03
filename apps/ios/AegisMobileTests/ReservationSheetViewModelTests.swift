@@ -67,6 +67,19 @@ struct ReservationSheetViewModelTests {
         #expect(!model.canConfirm)
     }
 
+    /// PHY-01: no schedule is closed, without zone or instants.
+    @Test func aLockerWithoutScheduleIsClosedInTheLaboratoryZone() async {
+        let model = model(ScriptedReservationService(status: .success(CatalogFixtures.decode(
+            ReservationContractTests.lockerStatus(
+                window: #"{"timeZone":null,"open":false,"closesAt":null,"nextOpensAt":null}"#)))))
+
+        await model.loadHours()
+
+        #expect(model.hours == .closed(nextOpensAt: nil))
+        #expect(model.zone == AegisTime.laboratoryZone)
+        #expect(!model.canConfirm)
+    }
+
     @Test func anAssetWithoutPlacementDoesNotReadAnyLocker() async {
         let service = ScriptedReservationService()
         let model = model(service, asset: CatalogFixtures.asset(1, placement: "null"))
@@ -213,6 +226,15 @@ struct ReservationSheetViewModelTests {
         #expect(ReservationProblem.Refusal.lockerClosed.message == String(localized: "Le casier est fermé."))
         #expect(ReservationProblem.Refusal.endAfterClosing.message
                 == String(localized: "Choisissez une heure avant la fermeture."))
+    }
+
+    @Test(arguments: [
+        (409, "RESERVATION_NOT_CANCELLABLE", ReservationProblem.Refusal.notCancellable),
+        (404, "RESOURCE_NOT_FOUND", .reservationGone),
+        (409, "IDEMPOTENCY_KEY_REUSED", .other(traceId: SessionModel.displayableTraceId("trace-1"))),
+    ])
+    func eachCancelRefusalHasItsMessage(_ status: Int, _ code: String, _ expected: ReservationProblem.Refusal) {
+        #expect(ReservationProblem(ActivityDoubles.refusal(status, code), mutation: .cancel) == .refused(expected))
     }
 
     @Test func aPastEndIsAValidationRefusal() {

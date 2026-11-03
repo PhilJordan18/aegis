@@ -64,7 +64,7 @@ enum ReservationProblem: Equatable, Sendable {
         case (.create, 404, _): .assetGone
         // §14.4: FULFILLED or EXPIRED, an authorized checkout or a physical
         // uncertainty. The card is read again and follows its new actions.
-        case (.cancel, 409, _): .notCancellable
+        case (.cancel, 409, "RESERVATION_NOT_CANCELLABLE"): .notCancellable
         case (.cancel, 403, _), (.cancel, 404, _): .reservationGone
         default: .other(traceId: traceId)
         }
