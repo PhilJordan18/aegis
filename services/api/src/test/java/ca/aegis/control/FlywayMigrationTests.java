@@ -32,7 +32,7 @@ import ca.aegis.control.support.TestDatabases;
 class FlywayMigrationTests {
 
     private static final List<String> ALL_VERSIONS = List.of("001", "002", "002.1", "002.2", "003", "004", "005",
-            "006");
+            "006", "007");
 
     private final TestDatabases databases = TestDatabases.shared();
     private final TestDatabaseServer server = databases.server();
@@ -56,14 +56,15 @@ class FlywayMigrationTests {
 
     @Test
     void migratesAnEmptyDatabaseOnceAndValidatesAfterwards() {
-        assertEquals(8, flyway(null).migrate().migrationsExecuted);
+        assertEquals(9, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
 
         assertEquals(ALL_VERSIONS, appliedVersions());
         assertEquals(List.of("asset_identifiers", "asset_models", "asset_placements", "assets", "audit_events",
-                "compartments", "loans", "locker_devices", "locker_operations", "lockers", "operating_schedules",
-                "operating_windows", "reservations", "rest_idempotency_keys", "users"), jdbc.sql("""
+                "command_outbox", "compartments", "hub_display_outbox", "loans", "local_access_challenges",
+                "locker_devices", "locker_operations", "lockers", "operating_schedules", "operating_windows",
+                "reservations", "rest_idempotency_keys", "users"), jdbc.sql("""
                 SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'aegis' ORDER BY table_name COLLATE "C"
                 """).query(String.class).list());
@@ -74,7 +75,7 @@ class FlywayMigrationTests {
         assertEquals(1, flyway("001").migrate().migrationsExecuted);
         assertEquals(List.of("001"), appliedVersions());
 
-        assertEquals(7, flyway(null).migrate().migrationsExecuted);
+        assertEquals(8, flyway(null).migrate().migrationsExecuted);
         assertEquals(ALL_VERSIONS, appliedVersions());
     }
 
@@ -85,7 +86,7 @@ class FlywayMigrationTests {
         UUID user = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
         UUID model = insertModel("Oscilloscope");
 
-        assertEquals(5, flyway(null).migrate().migrationsExecuted);
+        assertEquals(6, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -165,7 +166,7 @@ class FlywayMigrationTests {
         jdbc.sql("CREATE ROLE " + role + " NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS")
                 .update();
         try {
-            assertEquals(8, flyway(null, role).migrate().migrationsExecuted);
+            assertEquals(9, flyway(null, role).migrate().migrationsExecuted);
             assertEquals(0, flyway(null, role).migrate().migrationsExecuted);
             assertTrue(flyway(null, role).validateWithResult().validationSuccessful);
             UUID actor = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
@@ -256,7 +257,7 @@ class FlywayMigrationTests {
         UUID user = insertUser("Administratrice", "admin@aegis.test", "ADMIN", "STANDARD", "{bcrypt}$2a$10$x");
         UUID model = insertModel("Oscilloscope");
 
-        assertEquals(6, flyway(null).migrate().migrationsExecuted);
+        assertEquals(7, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -277,7 +278,7 @@ class FlywayMigrationTests {
         insertEvent(null, "ASSET_CREATED", "ASSET", "ACCEPTED");
         List<Map<String, Object>> history = history();
 
-        assertEquals(4, flyway(null).migrate().migrationsExecuted);
+        assertEquals(5, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -311,7 +312,7 @@ class FlywayMigrationTests {
                 """;
         List<Map<String, Object>> events = jdbc.sql(priorEvents).query().listOfRows();
 
-        assertEquals(2, flyway(null).migrate().migrationsExecuted);
+        assertEquals(3, flyway(null).migrate().migrationsExecuted);
         assertEquals(0, flyway(null).migrate().migrationsExecuted);
         assertTrue(flyway(null).validateWithResult().validationSuccessful);
         assertEquals(ALL_VERSIONS, appliedVersions());
@@ -325,6 +326,66 @@ class FlywayMigrationTests {
         assertEquals(0, jdbc.sql("""
                 SELECT (SELECT count(*) FROM aegis.reservations) + (SELECT count(*) FROM aegis.locker_operations)
                        + (SELECT count(*) FROM aegis.loans)
+                """).query(Long.class).single());
+    }
+
+    /**
+     * Databases stand at V006 when V007 is added: history rows, custody rows and audit events are kept as they were,
+     * and no challenge, display instruction or command is invented for an existing operation.
+     */
+    @Test
+    void upgradesADatabaseAtTheCustodyMigrationWithoutRewritingItsHistory() {
+        assertEquals(8, flyway("6").migrate().migrationsExecuted);
+        UUID technician = insertUser("Technicien", "technician@aegis.test", "TECHNICIAN", "STANDARD",
+                "{bcrypt}$2a$10$x");
+        UUID asset = insertAsset(insertModel("Oscilloscope"), "AEG-001", false, null);
+        UUID identifier = insertIdentifier(asset, "RFID_UHF", "E200-0001");
+        UUID locker = insertLocker("AEGIS-DEMO-01");
+        UUID compartment = insertCompartment(locker, "A1", 1, 1);
+        insertPlacement(asset, compartment);
+        UUID reservation = jdbc.sql("""
+                INSERT INTO aegis.reservations (asset_id, user_id, reserved_from, reserved_until)
+                VALUES (:asset, :user, now(), now() + interval '1 hour')
+                RETURNING id
+                """).param("asset", asset).param("user", technician).query(UUID.class).single();
+        UUID operation = jdbc.sql("""
+                INSERT INTO aegis.locker_operations (type, status, user_id, asset_id, locker_id, compartment_id,
+                                                     reservation_id, expected_asset_identifier_id)
+                VALUES ('CHECKOUT', 'AWAITING_LOCAL_PROOF', :user, :asset, :locker, :compartment, :reservation,
+                        :identifier)
+                RETURNING id
+                """).param("user", technician).param("asset", asset).param("locker", locker)
+                .param("compartment", compartment).param("reservation", reservation).param("identifier", identifier)
+                .query(UUID.class).single();
+        jdbc.sql("""
+                INSERT INTO aegis.audit_events (event_type, actor_user_id, subject_type, subject_id, operation_id,
+                                                from_state, to_state, result)
+                VALUES ('OPERATION_REQUESTED', :actor, 'LOCKER_OPERATION', :operation, :operation,
+                        'NONE', 'AWAITING_LOCAL_PROOF', 'ACCEPTED')
+                """).param("actor", technician).param("operation", operation).update();
+        List<Map<String, Object>> history = history();
+        String priorEvents = """
+                SELECT id, event_type, actor_user_id, subject_type, subject_id, operation_id, from_state, to_state,
+                       result, reason, details::text AS details, occurred_at
+                FROM aegis.audit_events ORDER BY id
+                """;
+        List<Map<String, Object>> events = jdbc.sql(priorEvents).query().listOfRows();
+        String custody = """
+                SELECT o.id, o.status, o.created_at, r.status AS reservation_status
+                FROM aegis.locker_operations o JOIN aegis.reservations r ON r.id = o.reservation_id ORDER BY o.id
+                """;
+        List<Map<String, Object>> operations = jdbc.sql(custody).query().listOfRows();
+
+        assertEquals(1, flyway(null).migrate().migrationsExecuted);
+        assertEquals(0, flyway(null).migrate().migrationsExecuted);
+        assertTrue(flyway(null).validateWithResult().validationSuccessful);
+        assertEquals(ALL_VERSIONS, appliedVersions());
+        assertEquals(history, history().subList(0, history.size()));
+        assertEquals(events, jdbc.sql(priorEvents).query().listOfRows());
+        assertEquals(operations, jdbc.sql(custody).query().listOfRows());
+        assertEquals(0, jdbc.sql("""
+                SELECT (SELECT count(*) FROM aegis.local_access_challenges)
+                       + (SELECT count(*) FROM aegis.hub_display_outbox) + (SELECT count(*) FROM aegis.command_outbox)
                 """).query(Long.class).single());
     }
 
