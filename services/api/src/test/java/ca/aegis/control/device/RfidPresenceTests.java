@@ -412,6 +412,26 @@ class RfidPresenceTests extends ApiIntegrationTest {
         assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"));
     }
 
+    /** Review LOW 4: a late heartbeat that still becomes the reference does not undo a newer scan's reader status. */
+    @Test
+    void aLateReferenceHeartbeatKeepsTheReaderStatusOfANewerScan() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        Map<String, Object> late = session.heartbeat(clock.instant(), List.of(
+                cell(cellA, 1, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED"),
+                cell(cellB, 2, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED")));
+        Map<String, Object> faulted = scan(cellA, "FAULTED", reads());
+        ingest(faulted);
+        assertEquals("FAULTED", cellState(cellA).get("rfid_reader_status"));
+
+        ingest(late);
+        assertEquals(((Number) late.get("sequence")).longValue(), jdbc.sql("""
+                SELECT heartbeat_sequence FROM aegis.locker_devices WHERE locker_id = :id
+                """).param("id", locker).query(Long.class).single(), "the late heartbeat is the reference");
+        assertEquals("FAULTED", cellState(cellA).get("rfid_reader_status"));
+        assertEquals("HEALTHY", cellState(cellB).get("rfid_reader_status"));
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"));
+    }
+
     /** A scan proves only what was expected when it was made: a later binding of the tag needs a new scan. */
     @Test
     void aScanMadeBeforeTheTagWasBoundProvesNothingForTheNewBinding() throws Exception {

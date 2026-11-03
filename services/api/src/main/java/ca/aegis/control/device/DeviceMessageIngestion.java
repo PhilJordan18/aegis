@@ -228,7 +228,7 @@ public class DeviceMessageIngestion {
         if (outcome.newReference()) {
             List<UUID> applied = new ArrayList<>();
             for (CompartmentReport report : fact.compartments()) {
-                if (devices.applyCompartment(device.lockerId(), report, receivedAt)) {
+                if (devices.applyCompartment(device, fact, report, receivedAt)) {
                     applied.add(report.compartmentId());
                 } else {
                     log.warn("Heartbeat cell ignored: lockerId={}, messageId={}, compartmentId={} is not a cell "
