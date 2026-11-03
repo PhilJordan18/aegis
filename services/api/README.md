@@ -436,16 +436,19 @@ seulement si toutes ces conditions tiennent :
   l'attribution de l'étiquette;
 - aucun événement de porte de la cellule ne le suit ni ne tombe dans sa
   fenêtre;
-- chaque heartbeat ultérieur de la session rapporte la cellule `CONNECTED`
-  avec sa porte `CLOSED`. Une cellule rapportée autrement, absente du
-  heartbeat ou dans un heartbeat illisible annule le scan : tant que son lien
-  avec le hub est coupé, sa porte n'est pas observée;
+- chaque heartbeat de la session ultérieur au scan ou fait dans sa fenêtre
+  rapporte la cellule à son adresse, `CONNECTED` avec sa porte `CLOSED`. Une
+  cellule rapportée autrement ou à une autre adresse, absente du heartbeat ou
+  dans un heartbeat illisible annule le scan : tant que son lien avec le hub
+  est coupé, sa porte n'est pas observée, et la fenêtre suit la fermeture de
+  la porte (document 10, §12.2);
 - aucun heartbeat, message de porte ou scan du hub refusé ne peut l'avoir
   suivi. Un message refusé ne garde pas sa cellule : il vaut pour toutes les
   cellules du casier. Il annule le scan s'il a été reçu au même instant ou
-  après lui, ou si la `sequence` que son contenu brut annonce dans la session
-  courante est égale ou supérieure à la sienne; un scan plus ancien rejoué
-  après lui reste donc sans valeur;
+  après lui, si la `sequence` que son contenu brut annonce dans la session
+  courante est égale ou supérieure à la sienne, ou si son horodatage tombe au
+  début de la fenêtre ou après; un scan plus ancien rejoué après lui reste donc
+  sans valeur;
 - l'étiquette n'est vue dans aucune autre cellule par une détection que nul
   scan sain ultérieur de cette cellule n'a remplacée;
 - pour `ABSENT` seulement, la porte a été ouverte puis fermée avant la
