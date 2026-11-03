@@ -1,9 +1,13 @@
 # Historique des exécutions hébergées (CI-02)
 
 Relevé du 3 novembre 2026 par l'API GitHub Actions, workflow `CI`, runs
-`39711005595` (premier run des quatre jobs, PR #92) à `41577913719`. Seuls
-les jobs **exécutés** sont listés : un job `skipped` par le filtre n'est pas
-une preuve. Aucun run n'a de seconde tentative (`run_attempt` = 1 partout).
+`39711005595` (premier run des quatre jobs, PR #92) à `41585549537` (relevé
+complété après l'ouverture de #110 et #111). Seuls les jobs **exécutés** sont
+listés : un job `skipped` par le filtre n'est pas une preuve. Le run
+`41581846591` (`1ab1203`) est l'échec volontaire de CI-02 : il prouve que chaque
+job bloque, et n'interrompt pas les séries de succès. Un seul run a une seconde
+tentative : `41579245986` (`38-feat-ios-my-activity`, iOS seulement, relancé par
+sa session et toujours en échec); partout ailleurs `run_attempt` = 1.
 Les annulations viennent de `cancel-in-progress` (nouveau commit sur la PR).
 Retour au [bilan](README.md).
 
@@ -30,6 +34,12 @@ Retour au [bilan](README.md).
 | [41505916014](https://github.com/PhilJordan18/aegis/actions/runs/41505916014/job/125486875416) | push | `dev` | `c1366b3` | success | 1.6 | 267 run, 267 passed, 0 failed, 0 skipped |
 | [41515528716](https://github.com/PhilJordan18/aegis/actions/runs/41515528716/job/125518105385) | push | `dev` | `007c584` | success | 0.8 | 267 run, 267 passed, 0 failed, 0 skipped |
 | [41577913719](https://github.com/PhilJordan18/aegis/actions/runs/41577913719/job/125725657330) | push | `dev` | `639ada8` | success | 0.8 | 267 run, 267 passed, 0 failed, 0 skipped |
+| [41581805590](https://github.com/PhilJordan18/aegis/actions/runs/41581805590/job/125738163102) | pull_request | `67-ci-qualify-controls` | `997e3ec` | success | 0.9 | 267 run, 267 passed, 0 failed, 0 skipped |
+| [41581846591](https://github.com/PhilJordan18/aegis/actions/runs/41581846591/job/125738312961) | pull_request | `67-ci-promote-qualified-jobs` | `1ab1203` | failure | 0.4 | 259 run, 258 passed, 1 failed, 0 skipped — **échec volontaire CI-02** |
+| [41582652376](https://github.com/PhilJordan18/aegis/actions/runs/41582652376/job/125740846343) | pull_request | `98-feat-mqtt-schema-3` | `c38f13f` | success | 0.8 | 293 run, 293 passed, 0 failed, 0 skipped |
+| [41583716102](https://github.com/PhilJordan18/aegis/actions/runs/41583716102/job/125744237552) | pull_request | `98-feat-mqtt-schema-3` | `8d21f98` | success | 0.8 | 294 run, 294 passed, 0 failed, 0 skipped |
+| [41584155476](https://github.com/PhilJordan18/aegis/actions/runs/41584155476/job/125745679338) | pull_request | `67-ci-qualify-controls` | `aeedc49` | success | 0.8 | 267 run, 267 passed, 0 failed, 0 skipped |
+| [41584158843](https://github.com/PhilJordan18/aegis/actions/runs/41584158843/job/125745782840) | pull_request | `67-ci-promote-qualified-jobs` | `a3f917c` | success | 0.8 | 267 run, 267 passed, 0 failed, 0 skipped |
 
 ## Agent setup validator
 
@@ -82,6 +92,14 @@ Retour au [bilan](README.md).
 | [41577162962](https://github.com/PhilJordan18/aegis/actions/runs/41577162962/job/125723289553) | pull_request | `37-feat-reservation` | `c7ed3a0` | success | 0.1 | passed with 0 warning(s) |
 | [41577565271](https://github.com/PhilJordan18/aegis/actions/runs/41577565271/job/125724562024) | pull_request | `37-feat-reservation` | `29af946` | success | 0.2 | passed with 0 warning(s) |
 | [41577913719](https://github.com/PhilJordan18/aegis/actions/runs/41577913719/job/125725657354) | push | `dev` | `639ada8` | success | 0.1 | passed with 0 warning(s) |
+| [41581805590](https://github.com/PhilJordan18/aegis/actions/runs/41581805590/job/125738163137) | pull_request | `67-ci-qualify-controls` | `997e3ec` | success | 0.1 | passed with 0 warning(s) |
+| [41581846591](https://github.com/PhilJordan18/aegis/actions/runs/41581846591/job/125738313034) | pull_request | `67-ci-promote-qualified-jobs` | `1ab1203` | failure | 0.1 | failed: 1 error(s), 0 warning(s) — **échec volontaire CI-02** |
+| [41582652376](https://github.com/PhilJordan18/aegis/actions/runs/41582652376/job/125740846324) | pull_request | `98-feat-mqtt-schema-3` | `c38f13f` | success | 0.1 | passed with 0 warning(s) |
+| [41583716102](https://github.com/PhilJordan18/aegis/actions/runs/41583716102/job/125744237629) | pull_request | `98-feat-mqtt-schema-3` | `8d21f98` | success | 0.1 | passed with 0 warning(s) |
+| [41584155476](https://github.com/PhilJordan18/aegis/actions/runs/41584155476/job/125745679362) | pull_request | `67-ci-qualify-controls` | `aeedc49` | success | 0.1 | passed with 0 warning(s) |
+| [41584158843](https://github.com/PhilJordan18/aegis/actions/runs/41584158843/job/125745782949) | pull_request | `67-ci-promote-qualified-jobs` | `a3f917c` | success | 0.1 | passed with 0 warning(s) |
+| [41585187083](https://github.com/PhilJordan18/aegis/actions/runs/41585187083/job/125748951639) | pull_request | `29-feat-iot-evidence-schema` | `dfda477` | success | 0.1 | passed with 0 warning(s) |
+| [41585549537](https://github.com/PhilJordan18/aegis/actions/runs/41585549537/job/125750094880) | pull_request | `38-feat-reservation-lifecycle` | `fa88351` | success | 0.2 | passed with 0 warning(s) |
 
 ## Accepted ADR guard
 
@@ -92,6 +110,10 @@ Retour au [bilan](README.md).
 | [39842225293](https://github.com/PhilJordan18/aegis/actions/runs/39842225293/job/120046053536) | pull_request | `25-feat-asset-catalog` | `8109f4d` | success | 0.1 | No accepted ADR changed |
 | [39865839275](https://github.com/PhilJordan18/aegis/actions/runs/39865839275/job/120127743880) | pull_request | `35-docs-ios-technician-flows` | `485ab9a` | success | 0.1 | No accepted ADR changed |
 | [39872972407](https://github.com/PhilJordan18/aegis/actions/runs/39872972407/job/120151674770) | pull_request | `35-docs-ios-technician-flows` | `0d13443` | success | 0.1 | No accepted ADR changed |
+| [41581805590](https://github.com/PhilJordan18/aegis/actions/runs/41581805590/job/125738163111) | pull_request | `67-ci-qualify-controls` | `997e3ec` | success | 0.1 | No accepted ADR changed |
+| [41581846591](https://github.com/PhilJordan18/aegis/actions/runs/41581846591/job/125738313017) | pull_request | `67-ci-promote-qualified-jobs` | `1ab1203` | failure | 0.1 | Accepted ADRs are immutable (ADR-901, dépôt jetable) — **échec volontaire CI-02** |
+| [41584155476](https://github.com/PhilJordan18/aegis/actions/runs/41584155476/job/125745679278) | pull_request | `67-ci-qualify-controls` | `aeedc49` | success | 0.1 | No accepted ADR changed |
+| [41584158843](https://github.com/PhilJordan18/aegis/actions/runs/41584158843/job/125745782943) | pull_request | `67-ci-promote-qualified-jobs` | `a3f917c` | success | 0.1 | No accepted ADR changed |
 
 ## iOS standalone tests
 
@@ -121,4 +143,9 @@ Retour au [bilan](README.md).
 | [41515528716](https://github.com/PhilJordan18/aegis/actions/runs/41515528716/job/125518105362) | push | `dev` | `007c584` | failure | 16.6 | 160 total, 158 passed, 2 failed, 0 skipped |
 | [41577913719](https://github.com/PhilJordan18/aegis/actions/runs/41577913719/job/125725657291) | push | `dev` | `639ada8` | failure | 20.2 | 160 total, 159 passed, 1 failed, 0 skipped |
 | [41578010941](https://github.com/PhilJordan18/aegis/actions/runs/41578010941/job/125725986951) | pull_request | `38-feat-ios-my-activity` | `418134a` | cancelled | 14.2 |  |
+| [41579245986](https://github.com/PhilJordan18/aegis/actions/runs/41579245986/job/125736236692) | pull_request | `38-feat-ios-my-activity` | `ce1022e` | failure | 21.3 | 171 total, 170 passed, 1 failed, 0 skipped — tentative 2 |
+| [41581805590](https://github.com/PhilJordan18/aegis/actions/runs/41581805590/job/125738163048) | pull_request | `67-ci-qualify-controls` | `997e3ec` | success | 22.9 | 160 total, 160 passed, 0 failed, 0 skipped |
+| [41581846591](https://github.com/PhilJordan18/aegis/actions/runs/41581846591/job/125738312992) | pull_request | `67-ci-promote-qualified-jobs` | `1ab1203` | failure | 20.2 | 161 total, 160 passed, 1 failed, 0 skipped — **échec volontaire CI-02** |
+| [41584155476](https://github.com/PhilJordan18/aegis/actions/runs/41584155476/job/125745679169) | pull_request | `67-ci-qualify-controls` | `aeedc49` | failure | 19.9 | 160 total, 159 passed, 1 failed, 0 skipped |
+| [41584158843](https://github.com/PhilJordan18/aegis/actions/runs/41584158843/job/125745782915) | pull_request | `67-ci-promote-qualified-jobs` | `a3f917c` | success | 14.0 | 160 total, 160 passed, 0 failed, 0 skipped |
 

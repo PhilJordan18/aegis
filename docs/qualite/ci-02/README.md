@@ -2,7 +2,8 @@
 
 Référence de #67. Relevé du 3 novembre 2026 sur `dev` `639ada8`, à partir de
 l'historique GitHub Actions du workflow `CI` (runs `39711005595` à
-`41577913719`, job iOS de ce dernier compris). Le détail par exécution est dans
+`41577913719`, job iOS de ce dernier compris), complété après l'ouverture des
+PR #110 et #111 jusqu'au run `41585549537`. Le détail par exécution est dans
 [historique-runs.md](historique-runs.md).
 
 Le texte de #67 (« prepared, not implemented ») est antérieur à #92 : les
@@ -119,10 +120,17 @@ Le commit `134db89a834a6d425b53cc3cbb7536db03096bce` retire ces quatre étapes
 et ramène les `needs` à `changes, api, web, simulator, agents`. Seule la tête
 de la branche est fusionnable, et seulement après les preuves.
 
-Exécutions rouges attendues sur le commit 1 : simulateur (`1 failed`, rapport
-d'intégration absent), validateur (`Broken local link`), garde ADR (`Accepted
-ADRs are immutable`), iOS (`failures`), puis `CI result` en échec avec une ligne
-d'erreur par job.
+### Preuves hébergées des deux incréments
+
+| Run | SHA | Rôle | Résultat |
+|---|---|---|---|
+| [41581805590](https://github.com/PhilJordan18/aegis/actions/runs/41581805590) | `997e3ec` | incrément 1 (#110) | tout vert, iOS compris (160/160); API : 301 run, 0 skipped (premier compte Surefire hébergé) |
+| [41581846591](https://github.com/PhilJordan18/aegis/actions/runs/41581846591) | `1ab1203` | **échec volontaire** (#111) | simulateur `1 failed` (258/259); validateur `Broken local link … ci02-absent-target.md`, `1 error(s)`; garde ADR `Accepted ADRs are immutable … ADR-901-fixture.md`; iOS 160/161, l'échec injecté; `CI result` rouge avec une ligne `::error::` par job; API, Web, CI script tests verts |
+| [41584155476](https://github.com/PhilJordan18/aegis/actions/runs/41584155476) | `aeedc49` | incrément 1 (#110), décision ADR | `CI result` vert; iOS rouge (159/160, `CatalogUITests`, voir plus bas), hors `needs` |
+| [41584158843](https://github.com/PhilJordan18/aegis/actions/runs/41584158843) | `a3f917c` | tête de l'incrément 2 (#111) | tout vert; `CI result` attend simulateur, validateur et garde ADR, tous `success` |
+
+Chaque run est une première tentative. L'artefact `ios-standalone-results` du
+run `41584155476`, en échec, contient bien `destination.txt` (lot 2).
 
 ## Qualification
 
@@ -130,15 +138,15 @@ d'erreur par job.
 |---|---|---|
 | API tests | requis (inchangé) | hors de cette promotion; comptes ajoutés |
 | Web checks | requis (inchangé) | hors de cette promotion; comptes ajoutés |
-| Simulator tests | **non qualifié : une preuve manque** | critères 1, 2, 4, 5, 6, 7 satisfaits (médiane 0,8 min); critère 3 : run rouge hébergé du commit de qualification non exécuté |
-| Agent setup validator | **non qualifié : une preuve manque** | critères 1, 2, 5, 6, 7 satisfaits (médiane 0,1 min); critère 4 adapté : sa preuve est « N error(s), N warning(s) » et la version Python, pas un nombre de tests; critère 3 : run rouge hébergé non exécuté |
-| Accepted ADR guard | non qualifié : une preuve manque | critère 1 remplacé (décision ci-dessous) et satisfait : 5 succès sur des PR vers `dev`; critère 2 atteint juste (5 succès consécutifs, 3 branches, aucune relance); critère 4 adapté : sa preuve est le message « No accepted ADR changed », pas un nombre de tests; critère 3 : run rouge hébergé non exécuté |
-| iOS standalone tests | non qualifié | critère 2 remis à zéro par deux échecs sur `dev` (`007c584`, `639ada8`); critère 6 dépassé sur la suite actuelle; critère 3 non exécuté |
-| CI script tests | non qualifié | nouveau, aucun run hébergé |
+| Simulator tests | **qualifié** | critère 1 : 12 succès sur push `dev`; critère 2 : 24 succès consécutifs sur 8 branches (`dev` compris), aucune relance; critère 3 : échec volontaire `41581846591`; critère 4 : comptes observés (267 run, 0 skipped sur la tête); critères 5 à 7 : médiane 0,8 min, versions fixées, aucun secret |
+| Agent setup validator | **qualifié** | critère 1 : 12 succès sur push `dev`; critère 2 : 54 succès consécutifs sur 19 branches (`dev` compris), aucune relance; critère 3 : échec volontaire `41581846591`; critère 4 adapté : « N error(s), N warning(s) » et Python 3.12.15, pas un nombre de tests; médiane 0,1 min |
+| Accepted ADR guard | **qualifié, critère 1 remplacé** | critère 1 remplacé par décision humaine (ci-dessous) : succès sur des PR vers `dev` (#92, #94, #96, #110, #111); critère 2 : 8 succès consécutifs sur 5 branches, aucune relance; critère 3 : échec volontaire `41581846591`; critère 4 adapté : message « No accepted ADR changed » |
+| iOS standalone tests | non qualifié | instable : `CatalogUITests` échoue sur `007c584`, `639ada8` (`dev`) et `aeedc49` (commit de documentation seule), passe sur `997e3ec` et `a3f917c`; critère 6 dépassé (14,0 à 22,9 min); reste hors `needs` |
+| CI script tests | non qualifié | 4 succès hébergés sur 2 branches (#110, #111); manquent un 5e succès, un succès sur push `dev` (après fusion de #110) et l'échec volontaire du plan ci-dessous |
 
-Lorsque le run rouge du commit de qualification existe, simulateur, validateur et
-garde ADR satisfont tous les critères; la PR de l'incrément 2 peut alors sortir du
-brouillon.
+Simulateur, validateur et garde ADR remplissent tous les critères (le critère 1
+de la garde selon la décision (a)). La PR de l'incrément 2 peut sortir du
+brouillon sur décision humaine, après la fusion de l'incrément 1.
 
 ## Plan de qualification de « CI script tests »
 
@@ -183,7 +191,7 @@ Preuve du critère remplacé : les runs listés dans
 [l'historique](historique-runs.md#accepted-adr-guard) sont des PR vers `dev`
 (#92, #94, #96), `run_attempt` = 1.
 
-### iOS : tests UI du catalogue rouges sur `dev`
+### iOS : tests UI du catalogue instables
 
 Les deux derniers pushs `dev` échouent; le code avait passé sur la PR
 (`41507526895`, `12c8776`, 160/160). Les noms viennent des bundles
@@ -194,6 +202,10 @@ Les deux derniers pushs `dev` échouent; le code avait passé sur la PR
 | `41515528716` | `007c584` | 158/160 | `CatalogUITests/testCatalogueFilterSheetAndBackInBothLanguagesAndAppearances()` | `Audit failed to complete in time` (audit d'accessibilité, code -56) |
 | `41515528716` | `007c584` | | `CatalogUITests/testOfflineRefreshKeepsTheLastListThenTryAgainRecovers()` | idem |
 | `41577913719` | `639ada8` | 159/160 | `CatalogUITests/testOfflineRefreshKeepsTheLastListThenTryAgainRecovers()` | `Dynamic Type font sizes are partially unsupported` sur le libellé « Last known: Blocked » |
+| `41584155476` | `aeedc49` (PR #110) | 159/160 | `CatalogUITests/testOfflineRefreshKeepsTheLastListThenTryAgainRecovers()` | même constat Dynamic Type, 146,4 s |
+
+Le même test passe sur `997e3ec` et sur `a3f917c` : l'échec est intermittent,
+et `aeedc49` ne change que de la documentation.
 
 Le premier cas ressemble à une limite de temps du runner, le second à un vrai
 constat d'accessibilité sur iPhone 17 iOS 26.5, la configuration hébergée
@@ -223,7 +235,7 @@ et Sonar restent hors de cette mission (#67, rubriques « deferred »).
 | Java / Node / Python | Temurin 21; Node 24; Python 3.12.15 (validateur et tests des scripts) |
 | Xcode | 26.3 (17C529) via `DEVELOPER_DIR`; simulateur iPhone 17 iOS 26.5, SDK 26.2 |
 | Actions | `checkout` v7.0.1, `setup-java` v6.1.0, `setup-node` v7.1.0, `setup-python` v7.0.0, `upload-artifact` v7.0.2, toutes fixées par commit |
-| Médianes observées | API 1,4 min; Web 0,7; simulateur 0,8; validateur 0,1; garde ADR 0,1; iOS 12,9 |
+| Médianes observées | API 1,4 min; Web 0,7; simulateur 0,8; validateur 0,1; garde ADR 0,1; iOS 12,9 (14,0 à 22,9 sur les runs de #110 et #111) |
 | Coût | dépôt public : minutes hébergées sans facturation; le run iOS est le seul long |
 | Secrets | aucun; seulement `infra/docker/.env.example` et des valeurs jetables |
 
