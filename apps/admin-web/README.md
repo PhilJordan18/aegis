@@ -235,11 +235,16 @@ avis de données périmées (`StaleNotice`) sont ceux d'Équipements.
   réponse (erreur de service avec identifiant de suivi), une valeur d'énumération
   inconnue devient `UNRECOGNIZED` et s'affiche « État indisponible », jamais comme
   un état sain (09 §3).
-- **Quel casier ?** P0 n'a pas de route de liste de casiers. La page prend
-  `?casier=<uuid>` (UUID validé, sinon ignoré) ou, à défaut, les casiers où le
-  catalogue place des exemplaires (`placement.lockerId`, première page, la même
-  requête que Équipements). Aucun identifiant n'est écrit en dur. Sans exemplaire
-  placé, elle dit « Aucun casier connu ».
+- **Quel casier ?** Il n'existe pas encore de liste de casiers utilisable : le
+  document 09 §12 prévoit `GET /admin/lockers` et `ApiRoutes` l'autorise pour les
+  administrateurs, mais aucun contrôleur ne le sert et le contrat ne lui donne pas
+  de schéma de réponse. La page ne l'appelle donc pas. Elle prend `?casier=<uuid>`
+  (UUID validé, sinon ignoré) ou, à défaut, les casiers où le catalogue place des
+  exemplaires (`placement.lockerId`, première page, la même requête que
+  Équipements). C'est un moyen au mieux : un casier sans exemplaire placé, ou placé
+  après la première page, n'est pas trouvé ainsi. Aucun identifiant n'est écrit en
+  dur. Sans exemplaire placé, la page dit « Aucun casier trouvé parmi les
+  équipements placés » et indique que `?casier=` désigne un casier directement.
 - **Contenu** : code et nom; pastille « En ligne », « Hors ligne » ou « État
   inconnu » (libellés approuvés du prototype, avec un symbole distinct par état);
   « Dernier signal » (`lastSeenAt`, ou « Aucun signal reçu »); heure d'évaluation;

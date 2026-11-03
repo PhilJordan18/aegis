@@ -162,10 +162,11 @@ describe('Casiers — where the locker comes from', () => {
     expect(gateway.getStatus).toHaveBeenCalledTimes(1)
   })
 
-  it('says no locker is known when no unit is placed, and reads no status', async () => {
+  it('says no locker was found among the placed units, hints at ?casier=, and reads no status', async () => {
     const gateway = fakeLockerGateway()
     renderLockers(gateway, { catalogGateway: fakeCatalogGateway({ pages: [catalogOk(pageOf([asset({ id: 'x', assetCode: 'X-1' })]))] }) })
-    expect(await screen.findByText('Aucun casier connu.')).toBeDefined()
+    expect(await screen.findByText('Aucun casier trouvé parmi les équipements placés.')).toBeDefined()
+    expect(plain(document.body.textContent)).toContain('/casiers?casier=identifiant')
     expect(gateway.getStatus).not.toHaveBeenCalled()
   })
 

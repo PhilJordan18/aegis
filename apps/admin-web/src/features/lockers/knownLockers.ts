@@ -9,8 +9,11 @@ export function lockerIdFromSearch(search: string): string | null {
 }
 
 /**
- * P0 has no « list of lockers » route (09 §16 serves one locker by id). The lockers the Manager knows are the ones
- * the catalog places units in (`placement.lockerId`, 09 §8.2), in the order the units come, each once.
+ * There is no usable « list of lockers » yet. Document 09 lists `GET /admin/lockers` (section 12, « Liste des lockers») and
+ * ApiRoutes authorizes it for administrators, but no controller serves it and the contract gives it no response schema,
+ * so this client does not call it. The lockers the Manager can name are the ones the catalog places units in
+ * (`placement.lockerId`, 09 §8.2), in the order the units come, each once. That is a best effort: a locker with no placed
+ * unit, or one placed past the first page of the catalog, is not found this way; `?casier=` names it directly.
  */
 export function lockerIdsFromPlacements(assets: readonly AdminAssetView[]): readonly string[] {
   const ids: string[] = []
