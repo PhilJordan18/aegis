@@ -94,6 +94,8 @@ class DeviceMessageIngestionTests extends ApiIntegrationTest {
         Map<String, Object> report = session.deviceError(clock.instant(), "INBOUND_MESSAGE_INVALID", "WARNING");
         report.put("compartmentId", DevicePayloads.CELL_A1.toString());
         Map<String, Object> device = db.device();
+        // Other test classes leave anomalies in the shared database: only this ingestion's delta counts.
+        long anomaliesBefore = jdbc.sql("SELECT count(*) FROM aegis.anomalies").query(Long.class).single();
 
         assertEquals(Outcome.ACCEPTED, ingestion.ingest(EVENTS, bytes(report)));
 
@@ -104,8 +106,8 @@ class DeviceMessageIngestionTests extends ApiIntegrationTest {
                         WHERE id = :id AND operation_id IS NOT NULL) AS operation,
                        (SELECT count(*) FROM aegis.physical_observations WHERE inbound_message_id = :id)
                            AS observations,
-                       (SELECT count(*) FROM aegis.anomalies) AS anomalies
-                """).param("id", row.get("id")).query().singleRow());
+                       (SELECT count(*) FROM aegis.anomalies) - :anomaliesBefore AS anomalies
+                """).param("id", row.get("id")).param("anomaliesBefore", anomaliesBefore).query().singleRow());
         assertEquals(device.get("heartbeat_sequence"), db.device().get("heartbeat_sequence"));
         assertEquals("UNKNOWN", db.device().get("connection_status"));
     }
