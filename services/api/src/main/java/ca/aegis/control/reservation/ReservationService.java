@@ -166,8 +166,7 @@ class ReservationService {
             }
             case FULFILLED, EXPIRED -> throw new ReservationRefusedException(ApiError.RESERVATION_NOT_CANCELLABLE);
             case ACTIVE -> {
-                // From reservedUntil the reservation is due: only its expiry may end it (document 06, section 14).
-                if (!now.isBefore(reservation.reservedUntil()) || attempts.blocksCancellation(reservationId)) {
+                if (!cancellable(reservation, now)) {
                     throw new ReservationRefusedException(ApiError.RESERVATION_NOT_CANCELLABLE);
                 }
             }
@@ -264,8 +263,16 @@ class ReservationService {
      * does not exist (decision of 28 October 2026).
      */
     private List<String> availableActions(ReservationRow row, Instant now) {
-        boolean cancellable = row.status() == ReservationStatus.ACTIVE && now.isBefore(row.reservedUntil())
+        return cancellable(row, now) ? List.of(ReservationAction.CANCEL.name()) : List.of();
+    }
+
+    /**
+     * The single rule of document 06, section 5.5 and document 09, section 8.10 that both {@link #cancel} and
+     * {@code availableActions} apply: an {@code ACTIVE} reservation before its {@code reservedUntil} (from then on it
+     * is due, and only its expiry may end it, document 06, section 14) with no attempt that blocks the cancellation.
+     */
+    private boolean cancellable(ReservationRow row, Instant now) {
+        return row.status() == ReservationStatus.ACTIVE && now.isBefore(row.reservedUntil())
                 && !attempts.blocksCancellation(row.id());
-        return cancellable ? List.of(ReservationAction.CANCEL.name()) : List.of();
     }
 }
