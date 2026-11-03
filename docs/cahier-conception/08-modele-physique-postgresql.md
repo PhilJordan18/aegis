@@ -772,7 +772,7 @@ CREATE TABLE hub_display_outbox (
     message_type text NOT NULL,
     display_revision bigint NOT NULL CHECK (display_revision > 0),
     topic text NOT NULL CHECK (btrim(topic) <> ''),
-    schema_version text NOT NULL DEFAULT '1.0',
+    schema_version text NOT NULL,
     encrypted_payload bytea NULL,
     encryption_key_id text NOT NULL CHECK (btrim(encryption_key_id) <> ''),
     issued_at timestamptz NOT NULL,
