@@ -797,6 +797,7 @@ CREATE TABLE hub_display_outbox (
     CONSTRAINT ck_display_challenge
         CHECK ((message_type = 'DISPLAY_ACCESS_CHALLENGE') = (challenge_id IS NOT NULL)),
     CONSTRAINT ck_display_dates CHECK (expires_at > issued_at),
+    CONSTRAINT ck_display_schema_non_blank CHECK (btrim(schema_version) <> ''),
     CONSTRAINT ck_display_status
         CHECK (status IN ('PENDING', 'CLAIMED', 'DISPATCHED', 'ACKNOWLEDGED', 'REJECTED', 'CANCELLED')),
     CONSTRAINT ck_display_claim
