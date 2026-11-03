@@ -136,7 +136,7 @@ class ReservationExpiry {
         details.put("reservedUntil", reservation.reservedUntil());
         details.put("endedOperationIds", endedAttempts);
         audit.record(AuditEvent.transition(AuditEventType.RESERVATION_EXPIRED, null, AuditSubjectType.RESERVATION,
-                reservationId, null, ReservationStatus.ACTIVE, ReservationStatus.EXPIRED, "RESERVED_UNTIL_REACHED",
+                reservationId, null, ReservationStatus.ACTIVE, ReservationStatus.EXPIRED, null,
                 details, now));
         log.info("Reservation {} expired", reservationId);
         return Outcome.EXPIRED;
