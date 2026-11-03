@@ -40,7 +40,7 @@ class PhysicalObservationRepository {
     }
 
     /** The first message of a connection: the lowest sequence and its device instant. */
-    record ConnectionStart(long sequence, Instant occurredAt) {
+    record ConnectionStart(long sequence, Instant occurredAt, Instant receivedAt) {
     }
 
     /**
@@ -56,6 +56,13 @@ class PhysicalObservationRepository {
     }
 
     record Detection(UUID compartmentId, String identifierValue) {
+    }
+
+    /**
+     * A heartbeat of the session that reports a cell's door other than {@code CLOSED}; {@code compartmentId} is null
+     * when its payload could not be parsed, and it then counts against every cell.
+     */
+    record DoorReport(long sequence, UUID compartmentId) {
     }
 
     private final JdbcClient jdbc;
@@ -146,7 +153,7 @@ class PhysicalObservationRepository {
 
     Optional<ConnectionStart> connectionStart(UUID deviceId, DeviceProjection projection, Instant provisionedAt) {
         return jdbc.sql("""
-                SELECT sequence, occurred_at FROM aegis.inbound_device_messages
+                SELECT sequence, occurred_at, received_at FROM aegis.inbound_device_messages
                 WHERE locker_device_id = :device AND device_session_id = :session AND boot_count = :boot
                   AND connection_id = :connection AND processing_status <> 'REJECTED'
                   AND received_at >= :provisionedAt
@@ -158,7 +165,8 @@ class PhysicalObservationRepository {
                 .param("boot", projection.bootCount())
                 .param("connection", projection.heartbeatConnectionId())
                 .param("provisionedAt", utc(provisionedAt))
-                .query((row, number) -> new ConnectionStart(row.getLong("sequence"), instant(row, "occurred_at")))
+                .query((row, number) -> new ConnectionStart(row.getLong("sequence"), instant(row, "occurred_at"),
+                        instant(row, "received_at")))
                 .optional();
     }
 
@@ -183,6 +191,62 @@ class PhysicalObservationRepository {
                 .param("provisionedAt", utc(provisionedAt))
                 .param("from", fromSequence)
                 .query(PhysicalObservationRepository::event)
+                .list();
+    }
+
+    /** Heartbeats of the device's current session from {@code fromSequence} on that report a door not closed. */
+    List<DoorReport> doorsNotClosed(UUID deviceId, DeviceProjection projection, Instant provisionedAt,
+            long fromSequence) {
+        return jdbc.sql("""
+                SELECT m.sequence, cell ->> 'compartmentId' AS compartment_id
+                FROM aegis.inbound_device_messages m
+                CROSS JOIN LATERAL jsonb_array_elements(CASE
+                    WHEN jsonb_typeof(m.parsed_payload -> 'compartments') = 'array'
+                    THEN m.parsed_payload -> 'compartments' ELSE '[]'::jsonb END) AS cell
+                WHERE m.locker_device_id = :device AND m.device_session_id = :session AND m.boot_count = :boot
+                  AND m.message_type = 'HEARTBEAT' AND m.processing_status <> 'REJECTED'
+                  AND m.received_at >= :provisionedAt AND m.sequence >= :from
+                  AND cell ->> 'doorState' IS DISTINCT FROM 'CLOSED'
+                UNION ALL
+                SELECT m.sequence, NULL
+                FROM aegis.inbound_device_messages m
+                WHERE m.locker_device_id = :device AND m.device_session_id = :session AND m.boot_count = :boot
+                  AND m.message_type = 'HEARTBEAT' AND m.processing_status <> 'REJECTED'
+                  AND m.received_at >= :provisionedAt AND m.sequence >= :from AND m.parsed_payload IS NULL
+                """)
+                .param("device", deviceId)
+                .param("session", projection.deviceSessionId())
+                .param("boot", projection.bootCount())
+                .param("provisionedAt", utc(provisionedAt))
+                .param("from", fromSequence)
+                .query((row, number) -> {
+                    String compartment = row.getString("compartment_id");
+                    return new DoorReport(row.getLong("sequence"),
+                            compartment == null ? null : Uuids.canonical(compartment).orElse(null));
+                })
+                .list();
+    }
+
+    /**
+     * A door or scan message of the device that was rejected: it keeps no session, sequence or parsed payload, so its
+     * cell is unknown and its order is only what its raw payload claims, when that can be read.
+     */
+    record RejectedMessage(Instant receivedAt, Optional<InboundMessages.Position> claimed) {
+    }
+
+    /** The device's door and scan messages rejected since {@code since}. */
+    List<RejectedMessage> rejectedDoorOrScanMessages(UUID deviceId, Instant provisionedAt, Instant since) {
+        return jdbc.sql("""
+                SELECT received_at, raw_payload FROM aegis.inbound_device_messages
+                WHERE locker_device_id = :device AND processing_status = 'REJECTED'
+                  AND message_type IN ('RFID_SCAN_COMPLETED', 'DOOR_OPENED', 'DOOR_CLOSED')
+                  AND received_at >= :provisionedAt AND received_at >= :since
+                """)
+                .param("device", deviceId)
+                .param("provisionedAt", utc(provisionedAt))
+                .param("since", utc(since))
+                .query((row, number) -> new RejectedMessage(instant(row, "received_at"),
+                        InboundMessages.claimedPosition(row.getBytes("raw_payload"))))
                 .list();
     }
 

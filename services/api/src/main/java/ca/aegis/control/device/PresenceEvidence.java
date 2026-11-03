@@ -20,6 +20,7 @@ import ca.aegis.control.device.LockerDeviceRepository.ActiveDevice;
 import ca.aegis.control.device.PhysicalObservationRepository.CompartmentState;
 import ca.aegis.control.device.PhysicalObservationRepository.ConnectionStart;
 import ca.aegis.control.device.PhysicalObservationRepository.Detection;
+import ca.aegis.control.device.PhysicalObservationRepository.DoorReport;
 import ca.aegis.control.device.PhysicalObservationRepository.Observation;
 import ca.aegis.control.device.PhysicalObservationRepository.PhysicalEvent;
 import ca.aegis.control.device.PhysicalObservationRepository.Type;
@@ -47,7 +48,19 @@ public class PresenceEvidence {
     }
 
     /** The facts of one locker that every expectation in it shares. */
-    private record LockerFacts(ConnectionStart start, List<PhysicalEvent> events) {
+    private record LockerFacts(ConnectionStart start, List<PhysicalEvent> events, List<DoorReport> doorsNotClosed,
+            List<Rejected> rejected) {
+    }
+
+    /**
+     * A rejected door or scan message that may void a scan: when it claims a sequence of the current session it voids
+     * the scans not after that sequence, whenever it arrived; otherwise it voids the scans received before it.
+     */
+    private record Rejected(Instant receivedAt, Long sequence) {
+
+        boolean voids(PhysicalEvent scan) {
+            return sequence != null ? sequence >= scan.sequence() : !receivedAt.isBefore(scan.receivedAt());
+        }
     }
 
     private final LockerDeviceRepository devices;
@@ -108,14 +121,39 @@ public class PresenceEvidence {
         }
         ActiveDevice device = active.get();
         return observations.connectionStart(device.id(), device.projection(), device.provisionedAt())
-                .map(start -> new LockerFacts(start, observations.events(device.id(), device.projection(),
-                        device.provisionedAt(), start.sequence())));
+                .map(start -> new LockerFacts(start,
+                        observations.events(device.id(), device.projection(), device.provisionedAt(),
+                                start.sequence()),
+                        observations.doorsNotClosed(device.id(), device.projection(), device.provisionedAt(),
+                                start.sequence()),
+                        rejected(device, start)));
+    }
+
+    /**
+     * Rejected messages since the connection started. One from an earlier boot was made before every scan of this
+     * one and is ignored; one that claims no readable position of this boot cannot be ordered by sequence.
+     */
+    private List<Rejected> rejected(ActiveDevice device, ConnectionStart start) {
+        DeviceProjection projection = device.projection();
+        return observations.rejectedDoorOrScanMessages(device.id(), device.provisionedAt(), start.receivedAt())
+                .stream()
+                .filter(message -> message.claimed()
+                        .map(claimed -> claimed.bootCount() >= projection.bootCount()).orElse(true))
+                .map(message -> new Rejected(message.receivedAt(), message.claimed()
+                        .filter(claimed -> claimed.bootCount() == projection.bootCount()
+                                && claimed.deviceSessionId().equals(projection.deviceSessionId()))
+                        .map(InboundMessages.Position::sequence).orElse(null)))
+                .toList();
     }
 
     /**
      * The latest scan of the cell, when it can still speak for it: the cell is enabled, connected, its reader healthy
      * and its door closed now; the scan is healthy, made inside the current connection after the asset became
-     * expected, and no door event of the cell follows it or falls inside its window.
+     * expected, and no door event of the cell follows it or falls inside its window. Document 04, section 13, and
+     * document 06, sections 4.4 and 9.3: stored evidence that the door may have moved since also voids it, namely a
+     * later heartbeat of the session reporting the door other than closed, or a door or scan message of the device
+     * rejected after the scan, whose cell is unknown: after it in the sequence its payload claims, or received after
+     * it when no sequence can be read.
      */
     private static Optional<PhysicalEvent> usableScan(Expectation expectation, CompartmentState cell,
             LockerFacts facts) {
@@ -146,7 +184,11 @@ public class PresenceEvidence {
                         || (event.type() == InboundMessageType.DOOR_OPENED
                                 && !event.occurredAt().isBefore(scan.windowStartedAt()))
                         || event.occurredAt().isAfter(scan.windowStartedAt()));
-        return doorMovedSince ? Optional.empty() : Optional.of(scan);
+        boolean doorReportedSince = facts.doorsNotClosed().stream()
+                .anyMatch(report -> report.sequence() > scan.sequence()
+                        && (report.compartmentId() == null || report.compartmentId().equals(cell.id())));
+        boolean rejectedSince = facts.rejected().stream().anyMatch(rejected -> rejected.voids(scan));
+        return doorMovedSince || doorReportedSince || rejectedSince ? Optional.empty() : Optional.of(scan);
     }
 
     private static Verdict verdict(Expectation expectation, PhysicalEvent scan, LockerFacts facts,

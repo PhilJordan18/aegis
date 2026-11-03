@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -118,6 +119,30 @@ final class InboundMessages {
             return new Storable(messageId, type, schemaVersion, occurredAt, null, fact);
         } catch (Rejection rejection) {
             return Storable.rejected(messageId, type, schemaVersion, occurredAt, rejection.error);
+        }
+    }
+
+    /** Where a message claims to sit in its device's sequence. */
+    record Position(UUID deviceSessionId, long bootCount, long sequence) {
+    }
+
+    /**
+     * The position a stored payload claims, read with the same limits as {@link #inspect}; empty when it cannot be
+     * read. A rejected message keeps only its raw payload, and this is what still orders it against accepted ones.
+     */
+    static Optional<Position> claimedPosition(byte[] payload) {
+        if (payload == null || payload.length > MAX_PAYLOAD_BYTES) {
+            return Optional.empty();
+        }
+        try {
+            JsonNode root = MAPPER.readTree(payload);
+            if (root == null || !root.isObject()) {
+                return Optional.empty();
+            }
+            return Optional.of(new Position(requiredUuid(root, "deviceSessionId"),
+                    integer(root, "bootCount", 1, MAX_BOOT_COUNT), integer(root, "sequence", 0, Long.MAX_VALUE)));
+        } catch (JacksonException | IllegalArgumentException | Rejection unreadable) {
+            return Optional.empty();
         }
     }
 

@@ -259,6 +259,144 @@ class RfidPresenceTests extends ApiIntegrationTest {
         assertEquals("PRESENT", read(technicianView(assetA), "$.presence"));
     }
 
+    /**
+     * Review HIGH 1 (a): door messages the backend rejects still show that the door may have moved, and so does a
+     * later heartbeat reporting it open, even once a closed one follows.
+     */
+    @Test
+    void rejectedDoorMessagesOrAnOpenDoorHeartbeatAfterTheScanMakePresenceUnknown() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"));
+
+        clock.advance(Duration.ofSeconds(1));
+        Map<String, Object> opened = session.door("DOOR_OPENED", clock.instant(), cellA);
+        opened.put("operationId", UUID.randomUUID().toString());
+        assertEquals(Outcome.REJECTED, ingestion.ingest(events(), bytes(opened)));
+        assertEquals("OPERATION_NOT_FOUND", message(opened).get("processing_error"));
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"), "rejected opening");
+        ingest(session.heartbeat(clock.instant(), List.of(
+                cell(cellA, 1, "CONNECTED", "HEALTHY", "OPEN", "UNLOCKED"),
+                cell(cellB, 2, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED"))));
+        clock.advance(Duration.ofSeconds(1));
+        Map<String, Object> closed = session.door("DOOR_CLOSED", clock.instant(), cellA);
+        closed.put("operationId", UUID.randomUUID().toString());
+        assertEquals(Outcome.REJECTED, ingestion.ingest(events(), bytes(closed)));
+        heartbeat("HEALTHY", "HEALTHY");
+
+        String view = technicianView(assetA);
+        assertEquals("UNKNOWN", read(view, "$.presence"));
+        assertEquals("UNKNOWN", read(view, "$.readiness.result"));
+        clock.advance(Duration.ofSeconds(5));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"), "a new scan after the movement");
+    }
+
+    /** Review HIGH 1 (b): without any door event, a heartbeat reporting the door open voids the earlier scan. */
+    @Test
+    void aHeartbeatReportingTheDoorOpenAfterTheScanMakesPresenceUnknownUntilANewScan() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        ingest(scan(cellB, "HEALTHY", reads(tagB, 3)));
+        clock.advance(Duration.ofSeconds(1));
+        ingest(session.heartbeat(clock.instant(), List.of(
+                cell(cellA, 1, "CONNECTED", "HEALTHY", "OPEN", "UNLOCKED"),
+                cell(cellB, 2, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED"))));
+        clock.advance(Duration.ofSeconds(1));
+        heartbeat("HEALTHY", "HEALTHY");
+
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"));
+        assertEquals("PRESENT", read(technicianView(assetB), "$.presence"), "B's door was reported closed");
+        clock.advance(Duration.ofSeconds(4));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"));
+    }
+
+    /** Review HIGH 1: a newer scan the backend rejects leaves the cell's state unproven, not the older proof. */
+    @Test
+    void aRejectedNewerScanMakesPresenceUnknown() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        clock.advance(Duration.ofSeconds(1));
+        Map<String, Integer> many = new LinkedHashMap<>();
+        many.put(tagA, 3);
+        for (int i = 0; i < 32; i++) {
+            many.put("E2-OTHER-" + i, 3);
+        }
+        Map<String, Object> tooMany = scan(cellA, "HEALTHY", many);
+        assertEquals(Outcome.REJECTED, ingestion.ingest(events(), bytes(tooMany)));
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"), "33 identifiers");
+
+        clock.advance(Duration.ofSeconds(5));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"));
+        clock.advance(Duration.ofSeconds(1));
+        Map<String, Object> duplicated = scan(cellA, "HEALTHY", reads(tagA, 3));
+        @SuppressWarnings("unchecked")
+        List<Object> identifiers = (List<Object>) duplicated.get("observedIdentifiers");
+        duplicated.put("observedIdentifiers", List.of(identifiers.get(0), identifiers.get(0)));
+        assertEquals(Outcome.REJECTED, ingestion.ingest(events(), bytes(duplicated)));
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"), "a duplicated identifier");
+    }
+
+    /** An older scan replayed after a door event never restores presence. */
+    @Test
+    void anOlderScanReplayedAfterADoorEventLeavesPresenceUnknown() throws Exception {
+        Map<String, Object> older = scan(cellA, "HEALTHY", reads(tagA, 3));
+        clock.advance(Duration.ofSeconds(1));
+        ingest(session.door("DOOR_OPENED", clock.instant(), cellA));
+        ingest(older);
+
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"));
+    }
+
+    /** An older scan replayed after a heartbeat reported the door open never restores presence. */
+    @Test
+    void anOlderScanReplayedAfterAnOpenDoorHeartbeatLeavesPresenceUnknown() throws Exception {
+        Map<String, Object> older = scan(cellA, "HEALTHY", reads(tagA, 3));
+        clock.advance(Duration.ofSeconds(1));
+        ingest(session.heartbeat(clock.instant(), List.of(
+                cell(cellA, 1, "CONNECTED", "HEALTHY", "OPEN", "UNLOCKED"),
+                cell(cellB, 2, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED"))));
+        clock.advance(Duration.ofSeconds(1));
+        heartbeat("HEALTHY", "HEALTHY");
+        ingest(older);
+
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"));
+    }
+
+    /**
+     * An older scan replayed after a rejected door event never restores presence: the rejected message is ordered by
+     * the sequence its payload claims, not by when it arrived.
+     */
+    @Test
+    void anOlderScanReplayedAfterARejectedDoorEventLeavesPresenceUnknown() throws Exception {
+        Map<String, Object> older = scan(cellA, "HEALTHY", reads(tagA, 3));
+        clock.advance(Duration.ofSeconds(1));
+        Map<String, Object> opened = session.door("DOOR_OPENED", clock.instant(), cellA);
+        opened.put("operationId", UUID.randomUUID().toString());
+        assertEquals(Outcome.REJECTED, ingestion.ingest(events(), bytes(opened)));
+        ingest(older);
+
+        String view = technicianView(assetA);
+        assertEquals("UNKNOWN", read(view, "$.presence"));
+        assertEquals("UNKNOWN", read(view, "$.readiness.result"));
+    }
+
+    /** A scan the backend rejects is no evidence, even when it is the only scan of the cell. */
+    @Test
+    void aRejectedScanAloneLeavesPresenceUnknown() throws Exception {
+        Map<String, Integer> many = new LinkedHashMap<>();
+        many.put(tagA, 3);
+        for (int i = 0; i < 32; i++) {
+            many.put("E2-OTHER-" + i, 3);
+        }
+        Map<String, Object> tooMany = scan(cellA, "HEALTHY", many);
+        assertEquals(Outcome.REJECTED, ingestion.ingest(events(), bytes(tooMany)));
+
+        assertEquals(List.of(), observations(tooMany));
+        String view = technicianView(assetA);
+        assertEquals("UNKNOWN", read(view, "$.presence"));
+        assertEquals("UNKNOWN", read(view, "$.readiness.result"));
+    }
+
     /** A scan proves only what was expected when it was made: a later binding of the tag needs a new scan. */
     @Test
     void aScanMadeBeforeTheTagWasBoundProvesNothingForTheNewBinding() throws Exception {

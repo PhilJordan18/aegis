@@ -71,6 +71,9 @@ class RfidPresenceBrokerTests extends ApiIntegrationTest {
     void connectedHubOnAFreshlyProvisionedDevice() throws Exception {
         started = subscriber;
         subscriber.awaitSubscribed(Duration.ofSeconds(20));
+        // Rejected messages that other classes leave on the shared test hub void any scan received after them;
+        // provisioning an hour after their instants keeps them out of this class's evidence.
+        clock.set(START.plus(Duration.ofHours(1)));
         db = new DeviceTestSupport(jdbc);
         db.provisionTestHub(clock.instant());
         hub = BROKER.device();
