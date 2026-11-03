@@ -636,7 +636,7 @@ l’un des deux cas suivants (#98) :
   ailleurs. Ce cas prime sur le suivant;
 - **message non corrélable** : plus de 16 KiB (§3.3), JSON illisible ou autre chose
   qu’un objet, ou `messageId`, `operationId` ou `compartmentId` absent ou qui n’est pas
-  un UUID canonique (§9.1 étapes 1 à 3, §20).
+  un UUID canonique (§9.1 étapes 1 et 3, §20).
 
 Un message corrélable mais invalide, y compris d’une major non supportée, reçoit son
 `COMMAND_REJECTED` ou son `DISPLAY_REJECTED` (§10.2, §27.2), jamais ce code. Un doublon
@@ -656,8 +656,8 @@ Le signalement :
   ni aucune de ses valeurs, en particulier le token ou l’URI du QR (§4.3, §22.1).
 
 Il n’exécute, n’affiche ni ne journalise rien (§16.1) : il ne consomme aucun
-`messageId` ni `operationId`. Le backend le conserve comme un fait technique du hub,
-sans PhysicalObservation ni transition (§19.2); sa présentation dans
+`messageId` ni `operationId`. Le backend l’accepte et le conserve comme un fait technique
+du hub, sans PhysicalObservation ni transition (§19.1, §23.3 point 8); sa présentation dans
 l’administration relève de l’ingestion (PHY-01, #29).
 
 Exemple (commande retenue visant une cellule connue) :
@@ -1191,7 +1191,7 @@ Les logs n’incluent aucun secret, mot de passe ou payload complet par défaut.
 12. Un journal saturé d’entrées protégées refuse la nouvelle commande par `INTERNAL_DEVICE_ERROR` sans actionnement.
 13. Une commande ou une instruction d’écran non corrélable (JSON illisible, trop volumineuse, sans `messageId`, `operationId` ou `compartmentId` valide) n’actionne et n’affiche rien et produit un `DEVICE_ERROR` `INBOUND_MESSAGE_INVALID` `WARNING`, QoS 1, sans retain.
 14. Ce signalement ne contient ni `operationId`, ni le payload reçu, ni aucune de ses valeurs, ni le token ou l’URI du QR; il porte `compartmentId` seulement si ce champ désigne une cellule du hub.
-15. Une rafale de messages invalides donne au plus un signalement par topic et par cas en 60 secondes; le suivant compte les messages non signalés (§13.2).
+15. Une rafale de messages invalides donne au plus un signalement par topic et par cas en 60 secondes; le suivant compte les messages non signalés (§13.2, proposition #98 à confirmer).
 16. Une commande 2.0 est rejetée `UNSUPPORTED_SCHEMA`, une instruction d’écran 2.0 `INVALID_DISPLAY_PAYLOAD`, sans actionnement ni affichage.
 
 ### 23.3 Événements
