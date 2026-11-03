@@ -9,12 +9,16 @@ import java.util.UUID;
 
 import tools.jackson.databind.json.JsonMapper;
 
-/** Schema 3.0 hub messages of document 10, sections 8.1 and 13 to 15, for the demo locker and its two cells. */
+/**
+ * Schema 3.0 hub messages of document 10, sections 8.1 and 13 to 15, for the fictitious test hub of
+ * {@code infra/mqtt/acl}. The tests never use the demo hub's identity: a development API sharing the broker would
+ * take their messages as its demo locker's.
+ */
 final class DevicePayloads {
 
-    static final UUID LOCKER = UUID.fromString("d46a74ae-39dc-460b-8af0-38fc791b376a");
-    static final UUID CELL_A1 = UUID.fromString("1ae77ae3-8490-4f09-9412-a7816b77bff9");
-    static final UUID CELL_A2 = UUID.fromString("5c1d0b7e-2f4a-4d3b-9a61-0e8b7c2d4f10");
+    static final UUID LOCKER = UUID.fromString("f08e3bc1-a0c6-4870-a6f6-55d9e9ddd502");
+    static final UUID CELL_A1 = UUID.fromString("f6e3bedc-19de-42df-b5e2-3b3dffab33fe");
+    static final UUID CELL_A2 = UUID.fromString("ff3341eb-6202-4597-b35c-6266ff9e51a7");
     static final String EVENTS = "aegis/v1/lockers/" + LOCKER + "/events";
     static final String STATUS = "aegis/v1/lockers/" + LOCKER + "/status";
 

@@ -11,7 +11,7 @@ import java.util.function.Supplier;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 
-/** Database checks shared by the ingestion tests; every query is scoped to the demo locker or a message id. */
+/** Database checks shared by the ingestion tests; every query is scoped to the test locker or a message id. */
 final class DeviceTestSupport {
 
     private final JdbcClient jdbc;
@@ -20,8 +20,35 @@ final class DeviceTestSupport {
         this.jdbc = jdbc;
     }
 
-    /** Document 08, section 4.4: re-provisioning resets the session and the reference heartbeat. */
-    void reprovisionDemoDevice(Instant now) {
+    /**
+     * The test locker, its two cells and its hub device, created once in the test database. Document 08, section
+     * 4.4: re-provisioning then resets the session and the reference heartbeat.
+     */
+    void provisionTestHub(Instant now) {
+        jdbc.sql("""
+                INSERT INTO aegis.lockers (id, code, name, topology)
+                VALUES (:locker, 'AEGIS-TEST-HUB', 'Casier de test MQTT', 'HUB_CELL')
+                ON CONFLICT (id) DO NOTHING
+                """).param("locker", DevicePayloads.LOCKER).update();
+        int address = 1;
+        for (UUID cell : new UUID[] {DevicePayloads.CELL_A1, DevicePayloads.CELL_A2}) {
+            jdbc.sql("""
+                    INSERT INTO aegis.compartments (id, locker_id, code, local_address, hub_port)
+                    VALUES (:id, :locker, :code, :address, :address)
+                    ON CONFLICT (id) DO NOTHING
+                    """).param("id", cell).param("locker", DevicePayloads.LOCKER).param("code", "A" + address)
+                    .param("address", address).update();
+            address++;
+        }
+        jdbc.sql("""
+                INSERT INTO aegis.locker_devices (locker_id, device_key, firmware_version)
+                SELECT :locker, :key, 'test'
+                WHERE NOT EXISTS (SELECT 1 FROM aegis.locker_devices WHERE locker_id = :locker)
+                """).param("locker", DevicePayloads.LOCKER).param("key", "test-" + DevicePayloads.LOCKER).update();
+        reprovision(now);
+    }
+
+    private void reprovision(Instant now) {
         jdbc.sql("""
                 UPDATE aegis.locker_devices
                 SET provisioned_at = :now, device_session_id = NULL, boot_count = NULL,
@@ -85,7 +112,11 @@ final class DeviceTestSupport {
     }
 
     static <T> T await(Supplier<Optional<T>> probe, String what) {
-        Instant deadline = Instant.now().plus(Duration.ofSeconds(15));
+        return await(probe, what, Duration.ofSeconds(15));
+    }
+
+    static <T> T await(Supplier<Optional<T>> probe, String what, Duration timeout) {
+        Instant deadline = Instant.now().plus(timeout);
         while (Instant.now().isBefore(deadline)) {
             Optional<T> value = probe.get();
             if (value.isPresent()) {

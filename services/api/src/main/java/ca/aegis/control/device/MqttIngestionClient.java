@@ -1,5 +1,6 @@
 package ca.aegis.control.device;
 
+import java.sql.SQLException;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -7,6 +8,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.eclipse.paho.client.mqttv3.IMqttActionListener;
@@ -21,19 +25,24 @@ import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
-import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * The backend subscriber of {@code aegis/v1/lockers/+/events} and {@code +/status} (document 10, sections 6.2 and
- * 7), on MQTT 3.1.1 with QoS 1. A delivery is acknowledged only after its ingestion transaction has committed, so a
- * delivery the database could not take stays unacknowledged and the broker delivers it again to the persistent
- * session after a reconnection. The broker is never awaited inside a transaction.
+ * 7), on MQTT 3.1.1 with QoS 1 and a persistent session. A delivery is acknowledged only after its ingestion
+ * transaction has committed; the broker is never awaited inside a transaction.
+ *
+ * <p>MQTT 3.1.1 redelivers an unacknowledged message only when the session resumes, so a delivery that still fails
+ * after its retries starts a recovery: every later delivery is left unacknowledged, and the client disconnects then
+ * reconnects with a growing delay. The broker then resends the held deliveries in their original order, and the
+ * ingestion's deduplication absorbs any that had already committed. Disconnecting happens on the connector thread,
+ * never inside a Paho callback.
  */
 public class MqttIngestionClient implements SmartLifecycle, MqttCallbackExtended {
 
     private static final Logger log = LoggerFactory.getLogger(MqttIngestionClient.class);
     private static final int KEEP_ALIVE_SECONDS = 30;
     private static final long[] INGESTION_RETRY_MILLIS = {200, 1000};
+    private static final long MAX_DELAY_SECONDS = 30;
     private static final int SUBSCRIPTION_FAILURE = 0x80;
 
     private final MqttProperties properties;
@@ -42,6 +51,10 @@ public class MqttIngestionClient implements SmartLifecycle, MqttCallbackExtended
     private final ScheduledExecutorService connector;
     private final AtomicReference<CompletableFuture<Void>> subscribed =
             new AtomicReference<>(new CompletableFuture<>());
+    private final AtomicBoolean recovering = new AtomicBoolean();
+    private final AtomicInteger consecutiveRecoveries = new AtomicInteger();
+    private final AtomicLong recoveries = new AtomicLong();
+    private final AtomicBoolean closed = new AtomicBoolean();
     private volatile boolean running;
 
     MqttIngestionClient(MqttProperties properties, DeviceMessageIngestion ingestion) {
@@ -64,12 +77,15 @@ public class MqttIngestionClient implements SmartLifecycle, MqttCallbackExtended
     @Override
     public void start() {
         running = true;
-        connect(0);
+        connector.execute(() -> connect(0));
     }
 
     @Override
     public void stop() {
         running = false;
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
         connector.shutdownNow();
         try {
             if (client.isConnected()) {
@@ -99,6 +115,12 @@ public class MqttIngestionClient implements SmartLifecycle, MqttCallbackExtended
         return subscribed.get().isDone();
     }
 
+    /** How many recoveries have reconnected so far. */
+    long recoveries() {
+        return recoveries.get();
+    }
+
+    /** Runs on the connector thread only, so that a connection and a recovery never overlap. */
     private void connect(int attempt) {
         if (!running) {
             return;
@@ -107,10 +129,10 @@ public class MqttIngestionClient implements SmartLifecycle, MqttCallbackExtended
         options.setMqttVersion(MqttConnectOptions.MQTT_VERSION_3_1_1);
         options.setUserName(properties.username());
         options.setPassword(properties.password().toCharArray());
-        options.setCleanSession(properties.cleanSession());
+        options.setCleanSession(false);
         options.setKeepAliveInterval(KEEP_ALIVE_SECONDS);
-        options.setAutomaticReconnect(true);
-        options.setMaxReconnectDelay(30_000);
+        // Reconnection is ours: Paho's own timer could resume the session in the middle of a recovery.
+        options.setAutomaticReconnect(false);
         try {
             client.connect(options, null, new IMqttActionListener() {
                 @Override
@@ -124,17 +146,19 @@ public class MqttIngestionClient implements SmartLifecycle, MqttCallbackExtended
                 }
             });
         } catch (MqttException failure) {
+            if (failure.getReasonCode() == MqttException.REASON_CODE_CLIENT_CONNECTED
+                    || failure.getReasonCode() == MqttException.REASON_CODE_CONNECT_IN_PROGRESS) {
+                return;
+            }
             retryConnect(attempt, failure);
         }
     }
 
-    /** Paho reconnects by itself only after a first success; the first connection follows section 18's backoff. */
+    /** Section 18: the delay doubles from 1 s up to 30 s. */
     private void retryConnect(int attempt, Throwable failure) {
-        long delay = Math.min(30, 1L << Math.min(attempt, 5));
+        long delay = delaySeconds(attempt);
         log.warn("MQTT connection failed ({}); next attempt in {} s", reason(failure), delay);
-        if (running) {
-            connector.schedule(() -> connect(attempt + 1), delay, TimeUnit.SECONDS);
-        }
+        schedule(() -> connect(attempt + 1), delay);
     }
 
     @Override
@@ -170,34 +194,73 @@ public class MqttIngestionClient implements SmartLifecycle, MqttCallbackExtended
     public void connectionLost(Throwable cause) {
         subscribed.set(new CompletableFuture<>());
         log.warn("MQTT connection lost ({}); reconnecting", reason(cause));
+        if (!recovering.get()) {
+            schedule(() -> connect(0), 0);
+        }
     }
 
     @Override
     public void messageArrived(String topic, MqttMessage message) {
+        if (recovering.get()) {
+            // Left unacknowledged: the broker resends it, in order, once the recovery has reconnected.
+            return;
+        }
         for (int attempt = 0; ; attempt++) {
             try {
                 ingestion.ingest(topic, message.getPayload());
-                acknowledge(message);
-                return;
-            } catch (DataIntegrityViolationException refused) {
-                // Deterministic: the same delivery would be refused again, so it is logged and acknowledged.
-                log.error("Device message refused by a database constraint and dropped: mqttMessageId={}",
-                        message.getId(), refused);
+                consecutiveRecoveries.set(0);
                 acknowledge(message);
                 return;
             } catch (RuntimeException failure) {
                 if (attempt >= INGESTION_RETRY_MILLIS.length) {
-                    log.error("Device message left unacknowledged after {} attempts: mqttMessageId={}",
-                            attempt + 1, message.getId(), failure);
+                    log.error("Device message ingestion failed after {} attempts ({}); holding the deliveries "
+                            + "until the session is resumed: mqttMessageId={}", attempt + 1, cause(failure),
+                            message.getId());
+                    startRecovery();
                     return;
                 }
                 try {
                     Thread.sleep(INGESTION_RETRY_MILLIS[attempt]);
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
+                    startRecovery();
                     return;
                 }
             }
+        }
+    }
+
+    private void startRecovery() {
+        if (recovering.compareAndSet(false, true)) {
+            schedule(this::recover, delaySeconds(consecutiveRecoveries.getAndIncrement()));
+        }
+    }
+
+    private void recover() {
+        subscribed.set(new CompletableFuture<>());
+        try {
+            if (client.isConnected()) {
+                client.disconnect(5000).waitForCompletion(10_000);
+            }
+        } catch (MqttException failure) {
+            log.warn("MQTT disconnection for recovery failed ({}); closing the network connection",
+                    reason(failure));
+            try {
+                client.disconnectForcibly(0, 1000, false);
+            } catch (MqttException ignored) {
+                // The connection is already gone.
+            }
+        }
+        // Cleared only once disconnected, so that no delivery of the resumed session can be skipped.
+        recovering.set(false);
+        recoveries.incrementAndGet();
+        log.info("MQTT session resuming to receive the held deliveries again");
+        connect(0);
+    }
+
+    private void schedule(Runnable task, long delaySeconds) {
+        if (running && !connector.isShutdown()) {
+            connector.schedule(task, delaySeconds, TimeUnit.SECONDS);
         }
     }
 
@@ -212,6 +275,20 @@ public class MqttIngestionClient implements SmartLifecycle, MqttCallbackExtended
     @Override
     public void deliveryComplete(IMqttDeliveryToken token) {
         // The ingestion publishes nothing.
+    }
+
+    private static long delaySeconds(int attempt) {
+        return Math.min(MAX_DELAY_SECONDS, 1L << Math.min(attempt, 5));
+    }
+
+    /** The failure class and SQLState only: a driver message can quote the values of the row. */
+    private static String cause(Throwable failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof SQLException sql) {
+                return failure.getClass().getSimpleName() + ", sqlState=" + sql.getSQLState();
+            }
+        }
+        return failure.getClass().getSimpleName();
     }
 
     private static String reason(Throwable failure) {

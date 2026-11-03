@@ -18,14 +18,14 @@ import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 
 /**
- * The development Mosquitto of {@code infra/docker/compose.yaml}. {@code AEGIS_TEST_MQTT_*} variables override the
- * local example values of {@code infra/docker/.env.example}; only a loopback broker is accepted, and a missing broker
- * fails the tests instead of skipping them.
+ * The development Mosquitto of {@code infra/docker/compose.yaml}, with the test hub account. {@code AEGIS_TEST_MQTT_*}
+ * variables override the local example values of {@code infra/docker/.env.example}; only a loopback broker is
+ * accepted, and a missing broker fails the tests instead of skipping them.
  */
 final class TestBroker {
 
     static final String API_USER = "aegis_api";
-    /** The only device account of the ACL: it may publish on the demo locker's events and status, nothing else. */
+    /** The test hub account of the ACL: it may publish on the test locker's events and status, nothing else. */
     static final String DEVICE_USER = DevicePayloads.LOCKER.toString();
 
     private static final Path EXAMPLE = Path.of("../../infra/docker/.env.example");
@@ -49,7 +49,7 @@ final class TestBroker {
         }
         return new TestBroker("tcp://" + host + ":" + port,
                 value("AEGIS_TEST_MQTT_API_PASSWORD", example.get("AEGIS_MQTT_API_PASSWORD"), example),
-                value("AEGIS_TEST_MQTT_DEVICE_PASSWORD", example.get("AEGIS_MQTT_DEVICE_PASSWORD"), example));
+                value("AEGIS_TEST_MQTT_DEVICE_PASSWORD", example.get("AEGIS_MQTT_TEST_DEVICE_PASSWORD"), example));
     }
 
     /** A hub connection with the device account; QoS 1 and never retained, so no test leaves a message behind. */
@@ -66,6 +66,24 @@ final class TestBroker {
             return new Device(client);
         } catch (MqttException unreachable) {
             throw new IllegalStateException("The development MQTT broker at " + url + " is required", unreachable);
+        }
+    }
+
+    /** Ends the persistent session a test subscriber left on the broker, with its queued messages. */
+    void discardSession(String clientId) {
+        try {
+            MqttClient client = new MqttClient(url, clientId, new MemoryPersistence());
+            MqttConnectOptions options = new MqttConnectOptions();
+            options.setMqttVersion(MqttConnectOptions.MQTT_VERSION_3_1_1);
+            options.setCleanSession(true);
+            options.setUserName(API_USER);
+            options.setPassword(apiPassword.toCharArray());
+            options.setConnectionTimeout(5);
+            client.connect(options);
+            client.disconnect();
+            client.close();
+        } catch (MqttException unreachable) {
+            throw new IllegalStateException("Could not discard the test session " + clientId, unreachable);
         }
     }
 

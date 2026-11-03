@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -39,26 +41,27 @@ import ca.aegis.control.reservation.ReservationFixtures;
 import ca.aegis.control.support.ApiIntegrationTest;
 
 /**
- * PHY-01 (#29) end to end through the development Mosquitto: the test publishes as the demo hub with the device
- * account and the application consumes with the backend account. No message is retained. The boot counters are
- * far above any the simulator reaches, so a simulator running at the same time only sends older sessions.
+ * PHY-01 (#29) end to end through the development Mosquitto: the test publishes with the test hub account and the
+ * application consumes with the backend account, on a persistent session of its own that the class discards at the
+ * end. No message is retained, and the demo hub's account and topics are never used.
  */
 @ExtendWith(OutputCaptureExtension.class)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class MqttIngestionBrokerTests extends ApiIntegrationTest {
 
     private static final TestBroker BROKER = TestBroker.fromEnvironment();
-    private static final AtomicLong BOOTS = new AtomicLong(4_000_000_000L);
+    private static final String CLIENT_ID = "aegis-api-test-" + UUID.randomUUID();
+    private static final AtomicLong BOOTS = new AtomicLong(1_000);
     private static final String LOCKER_STATUS = "/api/v1/lockers/" + LOCKER + "/status";
+    private static volatile MqttIngestionClient started;
 
     @DynamicPropertySource
-    static void brokerAndDemoLocker(DynamicPropertyRegistry registry) {
-        registry.add("aegis.lockers.demo-locker.enabled", () -> "true");
+    static void broker(DynamicPropertyRegistry registry) {
         registry.add("aegis.mqtt.enabled", () -> "true");
         registry.add("aegis.mqtt.url", () -> BROKER.url);
         registry.add("aegis.mqtt.username", () -> TestBroker.API_USER);
         registry.add("aegis.mqtt.password", () -> BROKER.apiPassword);
-        registry.add("aegis.mqtt.client-id", () -> "aegis-api-test-" + UUID.randomUUID());
-        registry.add("aegis.mqtt.clean-session", () -> "true");
+        registry.add("aegis.mqtt.client-id", () -> CLIENT_ID);
     }
 
     @Autowired
@@ -73,16 +76,87 @@ class MqttIngestionBrokerTests extends ApiIntegrationTest {
 
     @BeforeEach
     void connectedHubOnAFreshlyProvisionedDevice() throws Exception {
+        started = subscriber;
         subscriber.awaitSubscribed(Duration.ofSeconds(20));
         db = new DeviceTestSupport(jdbc);
-        db.reprovisionDemoDevice(clock.instant());
+        db.provisionTestHub(clock.instant());
         hub = BROKER.device();
         session = new Session(BOOTS.incrementAndGet());
     }
 
     @AfterEach
     void disconnectHub() throws Exception {
-        hub.close();
+        if (hub != null) {
+            hub.close();
+        }
+    }
+
+    @AfterAll
+    static void discardTheSubscriberSession() {
+        if (started != null) {
+            started.stop();
+            BROKER.discardSession(CLIENT_ID);
+        }
+    }
+
+    /**
+     * MEDIUM-1 of the #115 review: the database refuses one delivery long enough to exhaust its retries. It and the
+     * delivery after it are held, then ingested exactly once and in order after the database recovers.
+     */
+    @Test
+    void aDeliveryThatKeepsFailingIsHeldThenIngestedOnceInOrderAfterRecovery() {
+        Map<String, Object> first = session.heartbeat(clock.instant(), "OPEN");
+        Map<String, Object> second = session.heartbeat(clock.instant(), "CLOSED");
+        long recoveriesBefore = subscriber.recoveries();
+        jdbc.sql("""
+                CREATE TABLE public.test_injected_failures (message_id uuid PRIMARY KEY);
+                CREATE TABLE public.test_ingestion_order (n bigserial PRIMARY KEY, message_id uuid NOT NULL);
+                CREATE FUNCTION public.test_inbound_insert() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM public.test_injected_failures WHERE message_id = NEW.message_id) THEN
+                        RAISE EXCEPTION 'injected failure' USING ERRCODE = '08006';
+                    END IF;
+                    INSERT INTO public.test_ingestion_order (message_id) VALUES (NEW.message_id);
+                    RETURN NEW;
+                END $$;
+                CREATE TRIGGER test_inbound_insert BEFORE INSERT ON aegis.inbound_device_messages
+                    FOR EACH ROW EXECUTE FUNCTION public.test_inbound_insert();
+                """).update();
+        try {
+            jdbc.sql("INSERT INTO public.test_injected_failures VALUES (CAST(:id AS uuid))")
+                    .param("id", first.get("messageId")).update();
+            hub.publish(STATUS, bytes(first));
+            hub.publish(STATUS, bytes(second));
+
+            DeviceTestSupport.await(() -> subscriber.recoveries() > recoveriesBefore
+                    ? java.util.Optional.of(true) : java.util.Optional.empty(), "a recovery",
+                    Duration.ofSeconds(30));
+            assertEquals(0, db.messageCount(first.get("messageId")));
+            assertEquals(0, db.messageCount(second.get("messageId")), "the next delivery waits for the first");
+
+            jdbc.sql("DELETE FROM public.test_injected_failures").update();
+            DeviceTestSupport.await(() -> db.message(second.get("messageId")), "the held deliveries",
+                    Duration.ofSeconds(60));
+
+            assertEquals(1, db.messageCount(first.get("messageId")));
+            assertEquals(1, db.messageCount(second.get("messageId")));
+            // The probe runs before ON CONFLICT, so it also sees redelivered duplicates that store nothing.
+            List<String> attempts = jdbc.sql("""
+                    SELECT message_id::text FROM public.test_ingestion_order GROUP BY message_id ORDER BY min(n)
+                    """).query(String.class).list();
+            assertEquals(List.of(first.get("messageId").toString(), second.get("messageId").toString()),
+                    attempts.stream().filter(id -> id.equals(first.get("messageId"))
+                            || id.equals(second.get("messageId"))).toList());
+            attempts.forEach(id -> assertEquals(1, db.messageCount(id), id));
+            assertEquals(second.get("sequence"), db.device().get("heartbeat_sequence"));
+            assertEquals("CLOSED", db.cell(CELL_A1).get("door_state"));
+        } finally {
+            jdbc.sql("""
+                    DROP TRIGGER IF EXISTS test_inbound_insert ON aegis.inbound_device_messages;
+                    DROP FUNCTION IF EXISTS public.test_inbound_insert();
+                    DROP TABLE IF EXISTS public.test_injected_failures, public.test_ingestion_order;
+                    """).update();
+        }
     }
 
     @Test

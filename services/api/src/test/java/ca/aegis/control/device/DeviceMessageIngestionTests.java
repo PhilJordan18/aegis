@@ -18,8 +18,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 
 import ca.aegis.control.device.DeviceMessageIngestion.Outcome;
 import ca.aegis.control.device.DevicePayloads.Session;
@@ -27,14 +25,9 @@ import ca.aegis.control.support.ApiIntegrationTest;
 
 /**
  * The ingestion pipeline against PostgreSQL, called as the MQTT callback calls it: concurrent deliveries and the
- * cases a broker cannot produce for the demo account (another locker's topic).
+ * cases a broker cannot produce for the test hub account (another locker's topic).
  */
 class DeviceMessageIngestionTests extends ApiIntegrationTest {
-
-    @DynamicPropertySource
-    static void demoLocker(DynamicPropertyRegistry registry) {
-        registry.add("aegis.lockers.demo-locker.enabled", () -> "true");
-    }
 
     @Autowired
     DeviceMessageIngestion ingestion;
@@ -48,7 +41,7 @@ class DeviceMessageIngestionTests extends ApiIntegrationTest {
     @BeforeEach
     void freshlyProvisionedDevice() {
         db = new DeviceTestSupport(jdbc);
-        db.reprovisionDemoDevice(clock.instant());
+        db.provisionTestHub(clock.instant());
     }
 
     @Test
@@ -115,6 +108,19 @@ class DeviceMessageIngestionTests extends ApiIntegrationTest {
                 """).param("id", row.get("id")).query().singleRow());
         assertEquals(device.get("heartbeat_sequence"), db.device().get("heartbeat_sequence"));
         assertEquals("UNKNOWN", db.device().get("connection_status"));
+    }
+
+    /** Review L2: the closing is read from the stored OFFLINE, as no reference heartbeat exists yet. */
+    @Test
+    void aFirstValidHeartbeatOfAConnectionAlreadyClosedLeavesTheLockerOffline() {
+        assertEquals(Outcome.ACCEPTED,
+                ingestion.ingest(STATUS, bytes(session.availability(clock.instant(), "OFFLINE", "CONNECTION_LOST"))));
+        assertEquals(Outcome.ACCEPTED, ingestion.ingest(STATUS, bytes(session.heartbeat(clock.instant(), "OPEN"))));
+
+        Map<String, Object> device = db.device();
+        assertEquals("OFFLINE", device.get("connection_status"));
+        assertEquals(null, device.get("heartbeat_connection_id"));
+        assertEquals("UNKNOWN", db.cell(DevicePayloads.CELL_A1).get("door_state"), "not a reference heartbeat");
     }
 
     @Test

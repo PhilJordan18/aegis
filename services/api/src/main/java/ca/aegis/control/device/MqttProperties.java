@@ -9,12 +9,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * The backend MQTT account (document 10, sections 4.2, 4.3 and 6.2), from configuration only. The password is never
  * logged; {@link #toString()} leaves it out.
  *
- * @param cleanSession false in production, so that the broker keeps the QoS 1 deliveries of a backend restart
  * @param allowInsecureRemote permits {@code tcp://} to a non-loopback broker, for an isolated Docker network only
  */
 @ConfigurationProperties("aegis.mqtt")
 public record MqttProperties(boolean enabled, String url, String username, String password, String clientId,
-        boolean cleanSession, boolean allowInsecureRemote) {
+        boolean allowInsecureRemote) {
 
     private static final Set<String> LOOPBACK = Set.of("localhost", "127.0.0.1", "[::1]", "::1");
 
@@ -44,7 +43,7 @@ public record MqttProperties(boolean enabled, String url, String username, Strin
 
     @Override
     public String toString() {
-        return "MqttProperties[enabled=%s, url=%s, username=%s, clientId=%s, cleanSession=%s]"
-                .formatted(enabled, url, username, clientId, cleanSession);
+        return "MqttProperties[enabled=%s, url=%s, username=%s, clientId=%s]"
+                .formatted(enabled, url, username, clientId);
     }
 }
