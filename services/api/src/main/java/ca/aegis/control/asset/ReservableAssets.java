@@ -57,6 +57,24 @@ public class ReservableAssets {
     }
 
     /**
+     * Locks the asset row only ({@code FOR UPDATE}), for a transition of one of its reservations, which reads no asset
+     * fact. {@code false} when the asset is unknown.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean lockForCustody(UUID assetId) {
+        return assets.lockForUpdate(assetId).isPresent();
+    }
+
+    /**
+     * {@link #lockForCustody} without waiting ({@code SKIP LOCKED}): a background job leaves an asset that another
+     * transaction holds to its next pass instead of queueing behind it.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean tryLockForCustody(UUID assetId) {
+        return assets.tryLockForUpdate(assetId);
+    }
+
+    /**
      * Readiness recomputed for the creation of a reservation (document 06, sections 4.5 and 5.2), from stored facts
      * only: the asset, its custody and its physical presence at {@code now}.
      */

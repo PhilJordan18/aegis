@@ -6,5 +6,6 @@ public enum AuditSubjectType {
     ASSET,
     ASSET_IDENTIFIER,
     OPERATING_SCHEDULE,
-    RESERVATION
+    RESERVATION,
+    LOCKER_OPERATION
 }

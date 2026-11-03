@@ -3,6 +3,7 @@ package ca.aegis.control.reservation;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -143,16 +144,29 @@ final class ReservationFixtures {
 
     /** A checkout attempt: {@code CONFIRMED} with every milestone, or {@code REQUESTED}, still non-terminal. */
     UUID checkout(UUID asset, UUID user, UUID reservation, String status, Instant at) {
+        return attempt(asset, user, reservation, status, status.equals("CONFIRMED"), at);
+    }
+
+    /**
+     * A checkout attempt in {@code status}, created at {@code at}. An {@code authorized} attempt was authorized ten
+     * seconds later and carries the milestones its status requires; {@code REQUESTED} and
+     * {@code AWAITING_LOCAL_PROOF} never are. A terminal attempt ended a minute after creation.
+     */
+    UUID attempt(UUID asset, UUID user, UUID reservation, String status, boolean authorized, Instant at) {
         boolean confirmed = status.equals("CONFIRMED");
+        boolean terminal = List.of("CONFIRMED", "FAILED", "EXPIRED", "ANOMALY").contains(status);
+        boolean sent = confirmed || List.of("COMMAND_SENT", "ANOMALY").contains(status);
+        Instant authorizedAt = authorized ? at.plusSeconds(10) : null;
+        Instant sentAt = sent ? at.plusSeconds(11) : null;
         return jdbc.sql("""
                 INSERT INTO aegis.locker_operations
                     (type, status, user_id, asset_id, locker_id, compartment_id, reservation_id,
                      expected_asset_identifier_id, created_at, authorized_at, local_proof_validated_at, expires_at,
                      command_sent_at, acknowledged_at, door_opened_at, observation_received_at, confirmed_at,
-                     terminal_at)
+                     terminal_at, failure_reason)
                 SELECT 'CHECKOUT', :status, :user, :asset, c.locker_id, c.id, :reservation, i.id,
-                       :created, :authorized, :authorized, :expires, :authorized, :authorized, :authorized,
-                       :authorized, :confirmed, :confirmed
+                       :created, :authorized, :authorized, :expires, :sent, :opened, :opened, :observed, :confirmed,
+                       :terminal, :reason
                 FROM aegis.asset_placements p
                 JOIN aegis.compartments c ON c.id = p.compartment_id
                 JOIN aegis.asset_identifiers i ON i.asset_id = p.asset_id AND i.active
@@ -164,11 +178,26 @@ final class ReservationFixtures {
                 .param("asset", asset)
                 .param("reservation", reservation)
                 .param("created", utc(at))
-                .param("authorized", confirmed ? utc(at.plusSeconds(10)) : null)
-                .param("expires", confirmed ? utc(at.plusSeconds(130)) : null)
+                .param("authorized", utc(authorizedAt))
+                .param("expires", authorized ? utc(authorizedAt.plusSeconds(120)) : null)
+                .param("sent", utc(sentAt))
+                .param("opened", sent ? utc(sentAt) : null)
+                .param("observed", confirmed ? utc(sentAt) : null)
                 .param("confirmed", confirmed ? utc(at.plusSeconds(60)) : null)
+                .param("terminal", terminal ? utc(at.plusSeconds(60)) : null)
+                .param("reason", terminal && !confirmed ? "TEST_" + status : null)
                 .query(UUID.class)
                 .single();
+    }
+
+    String operationStatus(UUID operation) {
+        return jdbc.sql("SELECT status FROM aegis.locker_operations WHERE id = :id").param("id", operation)
+                .query(String.class).single();
+    }
+
+    String reservationStatus(UUID reservation) {
+        return jdbc.sql("SELECT status FROM aegis.reservations WHERE id = :id").param("id", reservation)
+                .query(String.class).single();
     }
 
     long count(String sql, UUID id) {
