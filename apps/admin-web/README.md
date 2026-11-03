@@ -278,7 +278,19 @@ avis de données périmées (`StaleNotice`) sont ceux d'Équipements.
   `flow: casiers`, avec les mêmes faux routés que le catalogue
   (`e2e/lockerFakes.ts`). `npm run capture -- --grep casiers` (français) et
   `npm run capture -- --grep "en-lockers"` (anglais) écrivent les captures dans
-  `test-results/captures/`. `npm run test:e2e:api` ne couvre pas encore cette page.
+  `test-results/captures/`.
+- **Recette contre l'API réelle** : `npm run test:e2e:api` ouvre `/casiers` deux
+  fois, par la découverte du catalogue puis avec `?casier=<id du casier de
+  démonstration>` (`AEGIS_DEMO_LOCKER_ID` le remplace). Dans le même test, il lit
+  directement `GET /lockers/{id}/status` avec le même jeton et vérifie que la
+  pastille de connexion, l'horaire et chaque ligne de cellule montrent exactement
+  ce que l'API renvoie; aucun état n'est écrit en dur dans le test, seuls les
+  énumérations et « vu ou jamais vu » sont comparés (les horodatages bougent à
+  chaque signal). Il vérifie aussi que la page n'émet aucune requête d'écriture
+  (hors la connexion) et écrit deux captures du rendu réel dans
+  `test-results/live/` (1440 clair, 390 sombre). Comme le reste du fichier, il
+  échoue sans API. Le limiteur de débit de l'API compte chaque connexion : ne pas
+  enchaîner deux exécutions en moins d'une minute.
 
 ## Routage
 
