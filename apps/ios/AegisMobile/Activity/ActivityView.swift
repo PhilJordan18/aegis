@@ -98,17 +98,20 @@ struct ActivityScreen: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("activity.cancelling")
             } else if model.canCancel {
-                Button("Annuler la réservation") { confirmingCancel = true }
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Color.brandAccent)
-                    .frame(minHeight: 44)
-                    .accessibilityIdentifier("activity.cancel")
+                Button { confirmingCancel = true } label: {
+                    Text("Annuler la réservation").frame(minHeight: 44)
+                }
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Color.brandAccent)
+                .accessibilityIdentifier("activity.cancel")
             }
             Button("Actualiser") { Task { await model.refresh() } }
                 .buttonStyle(CompactButtonStyle())
                 .allowsHitTesting(!model.isLoading)
                 .accessibilityIdentifier("activity.refresh")
         }
+        // A container, so the identifier does not replace its children's.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("activity.reservation")
         .confirmationDialog(
             String(localized: "Annuler la réservation de \(reservation.asset.model.name) ?"),
@@ -193,8 +196,10 @@ private struct LoanCard: View {
             .font(.body.weight(.semibold))
             .foregroundStyle(Color.brandText)
             .fixedSize(horizontal: false, vertical: true)
+            .accessibilityElement(children: .combine)
             .accessibilityIdentifier("activity.loan.due")
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("activity.loan")
     }
 }
