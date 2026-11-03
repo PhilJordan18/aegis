@@ -41,7 +41,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     ResponseEntity<Object> handleApiException(ApiException ex, HttpServletRequest request) {
-        return problems.entity(ex.error(), ex.error().status().value(), ex.headers(), request, ex.violations());
+        return problems.entity(ex.error(), ex.error().status().value(), ex.headers(), request, ex.reasons(),
+                ex.violations());
     }
 
     @ExceptionHandler(AccessDeniedException.class)

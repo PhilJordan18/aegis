@@ -5,6 +5,7 @@
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de révision :** 16 septembre 2026
 **Mise à jour ciblée :** 23 septembre 2026 — outbox et protections QR approuvées.
+**Mise à jour ciblée :** 28 octobre 2026 — création d’une réservation (RES-01, #37) : horaire du placement courant, locker sans horaire et ordre des contrôles implémenté (§5.1, §5.2), décisions de Philippe du 28 octobre 2026.
 **Version :** 1.2 — contrôle local QR et étoile
 
 ---
@@ -248,7 +249,8 @@ Une réservation P0 est immédiate. `reservedFrom` correspond à l’instant d�
 La demande est admissible seulement si :
 
 - l’utilisateur est actif et possède le rôle `TECHNICIAN`;
-- le locker possède un horaire actif;
+- l’actif possède un placement courant : son locker est celui de ce placement, relu une fois le verrou de l’actif acquis;
+- ce locker possède un horaire actif;
 - l’instant courant appartient à une plage ouverte;
 - `reservedUntil` est postérieur à l’instant courant;
 - `reservedUntil` ne dépasse pas la fermeture de cette même plage;
@@ -256,6 +258,8 @@ La demande est admissible seulement si :
 - l’actif ne possède aucune réservation `ACTIVE`;
 - l’actif ne possède aucun prêt non terminé;
 - la readiness vaut `READY` dans le contexte d’une nouvelle réservation.
+
+Un locker sans horaire actif n’a aucune plage ouverte : la demande est refusée comme hors plage (`OUTSIDE_OPERATING_HOURS`). Un actif sans placement courant n’a ni locker, ni horaire, ni compartiment où prouver sa présence : la demande est refusée comme non prête (`ASSET_NOT_READY` / `UNKNOWN_PHYSICAL_STATE`). Ces règles et l’ordre de §5.2 sont ceux qu’implémente et teste RES-01 (décisions du 28 octobre 2026); le document 09, §14.1, en donne les codes HTTP.
 
 ### 5.2 Pseudocode transactionnel
 
@@ -267,18 +271,25 @@ function createReservation(userId, assetId, requestedUntil, requestKey):
         return existing result
 
     begin transaction
+        require now < requestedUntil                 // before any lock
         lock user then asset
+        reread asset and its current placement      // the placement may have changed while waiting for the lock
 
         require active TECHNICIAN
-        window = requireOpenOperatingWindow(asset.lockerId, now)
-        require now < requestedUntil <= window.closesAt
+        require asset exists
 
         require no ACTIVE reservation for user
         require no ACTIVE reservation for asset
         require no non-completed loan for asset
 
+        if asset has a current placement:
+            window = requireOpenOperatingWindow(placement.lockerId, now)   // no active schedule: no open window
+            require requestedUntil <= window.closesAt
+
+        require user access level permits asset.requiredAccessLevel
         readiness = evaluateReadiness(asset, user, RESERVATION, now)
         require readiness.result == READY
+        require asset has a current placement        // otherwise NOT READY, UNKNOWN_PHYSICAL_STATE
 
         create Reservation(
             status = ACTIVE,
@@ -286,7 +297,7 @@ function createReservation(userId, assetId, requestedUntil, requestKey):
             reservedUntil = requestedUntil
         )
 
-        append AuditEvent(RESERVATION_CREATED)
+        append AuditEvent(RESERVATION_CREATED)    // fromState and toState null, initial state in details
         save requestKey result
     commit
 
