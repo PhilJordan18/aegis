@@ -772,7 +772,7 @@ CREATE TABLE hub_display_outbox (
     message_type text NOT NULL,
     display_revision bigint NOT NULL CHECK (display_revision > 0),
     topic text NOT NULL CHECK (btrim(topic) <> ''),
-    schema_version text NOT NULL DEFAULT '1.0',
+    schema_version text NOT NULL,
     encrypted_payload bytea NULL,
     encryption_key_id text NOT NULL CHECK (btrim(encryption_key_id) <> ''),
     issued_at timestamptz NOT NULL,
@@ -797,6 +797,7 @@ CREATE TABLE hub_display_outbox (
     CONSTRAINT ck_display_challenge
         CHECK ((message_type = 'DISPLAY_ACCESS_CHALLENGE') = (challenge_id IS NOT NULL)),
     CONSTRAINT ck_display_dates CHECK (expires_at > issued_at),
+    CONSTRAINT ck_display_schema_non_blank CHECK (btrim(schema_version) <> ''),
     CONSTRAINT ck_display_status
         CHECK (status IN ('PENDING', 'CLAIMED', 'DISPATCHED', 'ACKNOWLEDGED', 'REJECTED', 'CANCELLED')),
     CONSTRAINT ck_display_claim
@@ -814,6 +815,13 @@ Une seule instruction de défi par opération; les retries conservent le même `
 #### `command_outbox`
 
 Cette table est la matérialisation de `D8`. Une ligne correspond à une commande d’ouverture durable, avec un `message_id` qui ne change jamais lors des reprises.
+
+Seul le compartiment attendu s’ouvre : la clé composite `fk_command_outbox_operation` refuse une commande dont le casier ou le compartiment n’est pas celui de son opération, y compris un autre compartiment du même casier. Elle s’appuie sur `UNIQUE (id, locker_id, compartment_id)` de `locker_operations`, ajoutée par `V007` parce que `V006` est déjà appliquée (décision du 4 novembre 2026). La garantie ne repose donc pas seulement sur le producteur de commandes.
+
+```sql
+ALTER TABLE locker_operations
+    ADD CONSTRAINT uq_locker_operations_id_target UNIQUE (id, locker_id, compartment_id);
+```
 
 ```sql
 CREATE TABLE command_outbox (
@@ -839,7 +847,8 @@ CREATE TABLE command_outbox (
     created_at      timestamptz NOT NULL DEFAULT now(),
 
     CONSTRAINT fk_command_outbox_operation
-        FOREIGN KEY (operation_id) REFERENCES locker_operations (id),
+        FOREIGN KEY (operation_id, locker_id, compartment_id)
+        REFERENCES locker_operations (id, locker_id, compartment_id),
     CONSTRAINT fk_command_outbox_compartment_locker
         FOREIGN KEY (compartment_id, locker_id)
         REFERENCES compartments (id, locker_id),
@@ -1615,7 +1624,7 @@ L’identité d’un message entrant est `(locker_device_id, message_id)`. Le `l
 Dans une transaction :
 
 1. authentifier le device et vérifier le topic autorisé;
-2. parser le minimum nécessaire pour obtenir `message_id`, `message_type`, la version, `command_message_id` pour un accusé de commande et, en schéma MQTT 2.0, `device_session_id`, `boot_count`, `sequence`, `connection_id` et `availability_status` (doc 10 §15.3);
+2. parser le minimum nécessaire pour obtenir `message_id`, `message_type`, la version, `command_message_id` pour un accusé de commande et, depuis le schéma MQTT 2.0, `device_session_id`, `boot_count`, `sequence`, `connection_id` et `availability_status` (doc 10 §15.3);
 3. insérer `inbound_device_messages`;
 4. si la contrainte `uq_inbound_messages_device_message` est en conflit, ne produire aucune observation ni transition et, si utile, ajouter `MQTT_MESSAGE_DUPLICATE_IGNORED`;
 5. pour un nouveau message, conserver `raw_payload`, normaliser les observations, mettre à jour la projection de santé (règles du doc 10 §15.3) et appliquer au plus une progression de machine à états;
@@ -1796,9 +1805,9 @@ Découpage recommandé :
 | `V004__create_operating_schedules.sql` | `operating_schedules`, `operating_windows` et leurs index. |
 | `V005__create_reservations.sql` | `reservations` et index d’unicité active `ux_reservations_one_active_per_asset` et `ux_reservations_one_active_per_user`. |
 | `V006__create_operations_and_loans.sql` | `locker_operations`, `loans`, FK circulaire ajoutée après les deux tables; `fk_loans_checkout_operation` composite et `uq_loans_checkout_operation`; index partiels `ux_loans_one_open_per_asset` et `ux_locker_operations_one_open_per_locker`; `audit_events.operation_id`, `fk_audit_events_operation` et `ix_audit_events_operation_time`. Les index de lecture de §5.2 restent dans `V011`. |
-| `V007__create_command_outbox.sql` | `command_outbox`, `local_access_challenges`, `hub_display_outbox` et index de claim, si aucune migration n’a encore été appliquée. |
-| `V008__create_device_messages_and_observations.sql` | `inbound_device_messages`, `physical_observations`; `audit_events.inbound_message_id`, `audit_events.physical_observation_id` et leurs FK `fk_audit_events_message` et `fk_audit_events_observation`. |
-| `V009__create_anomalies.sql` | `anomalies`. `audit_events` a été déplacée vers `V002_2`; aucune migration n’est renumérotée. |
+| `V007__create_command_outbox.sql` | `local_access_challenges`, `hub_display_outbox`, `command_outbox`; contrainte `uq_locker_operations_id_target` sur `locker_operations`, cible de la clé composite `fk_command_outbox_operation` (§4.7); index d’invariant `ux_display_one_challenge_per_operation`, index d’expiration `ix_local_challenges_pending_expiry` et index de claim `ix_display_claimable` et `ix_command_outbox_claimable`. Les trois tables rejoignent la liste `no_delete` du callback (§12.1). Les index de lecture de §5.2 restent dans `V011`. |
+| `V008__create_device_messages_and_observations.sql` | `inbound_device_messages`, `physical_observations`; `audit_events.inbound_message_id`, `audit_events.physical_observation_id` et leurs FK `fk_audit_events_message` et `fk_audit_events_observation`, sans reconstitution des événements antérieurs. `inbound_device_messages` rejoint la liste `no_delete` du callback et `physical_observations` la liste `append_only` (§12.1). Les index de lecture de §5.2 restent dans `V011`. |
+| `V009__create_anomalies.sql` | `anomalies` et son index d’invariant `ux_anomalies_one_open_per_operation` (§5.1). `anomalies` rejoint la liste `no_delete` du callback (§12.1). `audit_events` a été déplacée vers `V002_2`; aucune migration n’est renumérotée. Les index de lecture de §5.2 restent dans `V011`. |
 | `V010__create_rest_idempotency.sql` | Déplacée vers `V002_1`; numéro laissé inutilisé, aucune migration n’est renumérotée. |
 | `V011__create_read_indexes.sql` | Index de lecture et index partiels restant. |
 | `V012__seed_demo_reference_data.sql` | Facultatif et réservé à l’environnement de démonstration; comptes et UUIDs fixes documentés. |
@@ -1851,9 +1860,9 @@ L’application ne reçoit pas le droit de supprimer ou de modifier `audit_event
 | Rôle | Attributs | Droits |
 |---|---|---|
 | Propriétaire des migrations (`aegis_migrator` par défaut, ou le compte propriétaire actuel) | `LOGIN`, jamais superutilisateur dans un environnement cible | Possède le schéma `aegis`, ses objets et `public.flyway_schema_history`; exécute Flyway. |
-| Rôle applicatif (`aegis_app` par défaut) | `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS` | `CONNECT` sur la base; `USAGE` sur `aegis`; `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les tables métier; `SELECT`, `INSERT` et `UPDATE`, sans `DELETE`, sur `reservations`, `locker_operations` et `loans`; `SELECT` et `INSERT` seulement sur `audit_events`; `USAGE`, `SELECT` sur les séquences. Jamais `TRUNCATE`, `REFERENCES`, `TRIGGER`, ni `CREATE` sur le schéma. |
+| Rôle applicatif (`aegis_app` par défaut) | `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS` | `CONNECT` sur la base; `USAGE` sur `aegis`; `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les tables métier; `SELECT`, `INSERT` et `UPDATE`, sans `DELETE`, sur `reservations`, `locker_operations`, `loans`, `local_access_challenges`, `hub_display_outbox`, `command_outbox`, `inbound_device_messages` et `anomalies`; `SELECT` et `INSERT` seulement sur `audit_events` et `physical_observations`; `USAGE`, `SELECT` sur les séquences. Jamais `TRUNCATE`, `REFERENCES`, `TRIGGER`, ni `CREATE` sur le schéma. |
 
-Les droits suivent le schéma : le callback `afterMigrate` de §11.1 les réapplique de façon idempotente après chaque migration, avec le nom du placeholder Flyway `application_role` (`AEGIS_DB_APPLICATION_ROLE`, `aegis_app` par défaut). Si le rôle n’existe pas, le callback ne fait rien; s’il est superutilisateur ou membre d’un propriétaire du schéma ou de ses objets, même sans héritage (une appartenance `WITH INHERIT FALSE` permet encore `SET ROLE`), il échoue, car révoquer les droits du propriétaire casserait le schéma. Une future table append-only s’ajoute à la liste `append_only` du callback. La liste `no_delete` retire `DELETE` sur `reservations`, `locker_operations` et `loans` : ces lignes changent d’état mais la chaîne de possession n’est jamais effacée (§1.1). Une future table d’historique de possession, de commande ou de preuve rejoint l’une de ces deux listes en même temps que la migration qui la crée; sinon le callback lui accorde `DELETE`.
+Les droits suivent le schéma : le callback `afterMigrate` de §11.1 les réapplique de façon idempotente après chaque migration, avec le nom du placeholder Flyway `application_role` (`AEGIS_DB_APPLICATION_ROLE`, `aegis_app` par défaut). Si le rôle n’existe pas, le callback ne fait rien; s’il est superutilisateur ou membre d’un propriétaire du schéma ou de ses objets, même sans héritage (une appartenance `WITH INHERIT FALSE` permet encore `SET ROLE`), il échoue, car révoquer les droits du propriétaire casserait le schéma. La liste `append_only` du callback contient `audit_events` et `physical_observations` (règle approuvée le 4 novembre 2026 pour les observations : le rôle applicatif les insère et les lit, sans `UPDATE`, `DELETE` ni `TRUNCATE`); une future table append-only s’y ajoute. La liste `no_delete` retire `DELETE` sur `reservations`, `locker_operations`, `loans`, `local_access_challenges`, `hub_display_outbox`, `command_outbox`, `inbound_device_messages` et `anomalies` : ces lignes changent d’état mais la chaîne de possession n’est jamais effacée (§1.1). Une future table d’historique de possession, de commande ou de preuve rejoint l’une de ces deux listes en même temps que la migration qui la crée; sinon le callback lui accorde `DELETE`.
 
 Le trigger de §4.9 n’est qu’une défense en profondeur. Ni lui ni ces droits ne protègent contre un superutilisateur ou le propriétaire de la table : la confiance envers ces comptes relève de l’exploitation (accès restreint, journalisation, sauvegardes).
 
@@ -1863,7 +1872,7 @@ Le trigger de §4.9 n’est qu’une défense en profondeur. Ni lui ni ces droit
 2. Fixer chaque mot de passe avec `\password aegis_app` (et `\password aegis_migrator`) dans `psql` : le client calcule le hachage SCRAM et le mot de passe en clair n’atteint ni le serveur ni ses journaux, contrairement à `ALTER ROLE ... PASSWORD '...'`.
 3. Redémarrer l’API une fois avec le compte propriétaire actuel pour Flyway : le callback accorde alors les droits à `aegis_app`.
 4. Basculer la source de données : `AEGIS_DB_USER=aegis_app` et son mot de passe, en conservant `AEGIS_DB_MIGRATION_USER` et `AEGIS_DB_MIGRATION_PASSWORD` sur le compte propriétaire. Sans ces deux variables, Flyway emprunte le compte de la source de données.
-5. Vérifier en tant que `aegis_app` que `UPDATE`, `DELETE` et `TRUNCATE` sur `aegis.audit_events`, ainsi que `DELETE` et `TRUNCATE` sur `aegis.reservations`, `aegis.locker_operations` et `aegis.loans`, sont refusés avec `42501`.
+5. Vérifier en tant que `aegis_app` que `UPDATE`, `DELETE` et `TRUNCATE` sur `aegis.audit_events` et `aegis.physical_observations`, ainsi que `DELETE` et `TRUNCATE` sur les huit tables de la liste `no_delete`, sont refusés avec `42501`.
 6. Facultatif, pour ne plus migrer en superutilisateur : transférer au rôle de migration la propriété du schéma `aegis`, de ses tables, séquences et fonctions et de `public.flyway_schema_history` (`ALTER ... OWNER TO aegis_migrator`), puis pointer `AEGIS_DB_MIGRATION_USER` vers lui. `pgcrypto` étant une extension de confiance, il suffit que ce rôle ait `CREATE` sur la base.
 
 Retour arrière : remettre `AEGIS_DB_USER` sur le compte propriétaire. Aucune donnée n’est modifiée par ces étapes.

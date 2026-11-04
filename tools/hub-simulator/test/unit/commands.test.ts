@@ -50,7 +50,7 @@ describe('UNLOCK_COMPARTMENT accepted (doc 10 §9, §10.1)', () => {
     ]);
     const [ack, unlocked] = h.events();
     expect(ack).toMatchObject({
-      schemaVersion: '2.0',
+      schemaVersion: '3.0',
       type: 'COMMAND_ACKNOWLEDGED',
       commandMessageId: c.messageId,
       operationId: c.operationId,
@@ -88,7 +88,7 @@ describe('UNLOCK_COMPARTMENT accepted (doc 10 §9, §10.1)', () => {
 
   it('accepts a newer minor schema and ignores unknown fields (doc 10 §3.2)', () => {
     const h = online();
-    h.transport().deliver(COMMANDS, command({ schemaVersion: '2.3', priority: 'high' }).body);
+    h.transport().deliver(COMMANDS, command({ schemaVersion: '3.3', priority: 'high' }).body);
     expect(h.events('COMMAND_ACKNOWLEDGED')).toHaveLength(1);
   });
 
@@ -123,7 +123,9 @@ describe('COMMAND_REJECTED (doc 10 §9.1, §10.2, §23.2)', () => {
     ['COMMAND_EXPIRED', () => command({ issuedAt: at(-120_000), expiresAt: at(0) })],
     ['COMMAND_EXPIRED', () => command({ issuedAt: at(-120_000), expiresAt: at(-1) })],
     ['UNSUPPORTED_SCHEMA', () => command({ schemaVersion: '1.0' })],
-    ['UNSUPPORTED_SCHEMA', () => command({ schemaVersion: '3.0' })],
+    ['UNSUPPORTED_SCHEMA', () => command({ schemaVersion: '2.0' })],
+    ['UNSUPPORTED_SCHEMA', () => command({ schemaVersion: '2.9' })],
+    ['UNSUPPORTED_SCHEMA', () => command({ schemaVersion: '4.0' })],
     ['INVALID_PAYLOAD', () => command({ schemaVersion: 'two' })],
     ['INVALID_PAYLOAD', () => command({ type: 'OPEN_ALL' })],
     ['INVALID_PAYLOAD', () => command({ expiresAt: '2026-09-16 14:33:00' })],
@@ -209,22 +211,24 @@ describe('COMMAND_REJECTED (doc 10 §9.1, §10.2, §23.2)', () => {
     expect(errors.length).toBeGreaterThan(0);
   });
 
-  it('ignores an uncorrelatable message: nothing is published nor actuated', () => {
+  it('ignores an uncorrelatable message: nothing is actuated, one INBOUND_MESSAGE_INVALID is published (§13.2)', () => {
     const h = online();
     const tooLarge = command({ padding: 'x'.repeat(16 * 1024) }).body;
     const noOperation = JSON.stringify({ ...JSON.parse(command().body), operationId: undefined });
     for (const body of ['{not json', '[]', tooLarge, noOperation]) h.transport().deliver(COMMANDS, body);
-    expect(h.events()).toEqual([]);
+    // No COMMAND_REJECTED without its identifiers; the reporting limit keeps one report.
+    expect(h.events()).toEqual([expect.objectContaining({ type: 'DEVICE_ERROR', errorCode: 'INBOUND_MESSAGE_INVALID', severity: 'WARNING' })]);
     expect(h.actuations).toEqual([]);
     expect(h.inbound.map((r) => r.outcome)).toEqual(['IGNORED', 'IGNORED', 'IGNORED', 'IGNORED']);
+    expect(h.inbound.map((r) => r.report)).toEqual(['PUBLISHED', 'SUPPRESSED', 'SUPPRESSED', 'SUPPRESSED']);
   });
 
-  it('never executes a retained command (§7.2)', () => {
+  it('never executes a retained command and reports it (§7.2)', () => {
     const h = online();
     h.transport().deliver(COMMANDS, command().body, { retain: true });
-    expect(h.events()).toEqual([]);
+    expect(h.events()).toEqual([expect.objectContaining({ type: 'DEVICE_ERROR', errorCode: 'INBOUND_MESSAGE_INVALID', compartmentId: A1 })]);
     expect(h.actuations).toEqual([]);
-    expect(h.inbound).toEqual([{ channel: 'commands', outcome: 'IGNORED', why: 'retained command' }]);
+    expect(h.inbound).toEqual([{ channel: 'commands', outcome: 'IGNORED', why: 'retained command', report: 'PUBLISHED' }]);
   });
 });
 

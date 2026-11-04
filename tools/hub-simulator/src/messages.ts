@@ -26,7 +26,7 @@ import {
 } from './contract.ts';
 import { isValidBootCount } from './boot-counter.ts';
 
-/** Doc 10 §8.1 common envelope of every hub message (schema 2.0). */
+/** Doc 10 §8.1 common envelope of every hub message (schema 3.0). */
 export interface HubEnvelope {
   schemaVersion: string;
   messageId: string;

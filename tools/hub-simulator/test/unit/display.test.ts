@@ -32,7 +32,7 @@ describe('DISPLAY_ACCESS_CHALLENGE (doc 10 §27.1, §27.2)', () => {
     expect(published.topic).toBe(EVENTS);
     expect(published.delivery).toEqual({ qos: 1, retain: false });
     expect(published.payload).toMatchObject({
-      schemaVersion: '2.0',
+      schemaVersion: '3.0',
       type: 'ACCESS_CHALLENGE_DISPLAYED',
       lockerId: LOCKER,
       operationId: d.operationId,
@@ -130,6 +130,7 @@ describe('DISPLAY_REJECTED (doc 10 §27.2, §27.4)', () => {
     ['INVALID_DISPLAY_PAYLOAD', { lockerId: OTHER_LOCKER }],
     ['INVALID_DISPLAY_PAYLOAD', { compartmentId: '7d4bd7a0-6a0e-4b8e-8e57-1f2c3d4e5f60' }],
     ['INVALID_DISPLAY_PAYLOAD', { schemaVersion: '1.0' }],
+    ['INVALID_DISPLAY_PAYLOAD', { schemaVersion: '2.0' }],
     ['INVALID_DISPLAY_PAYLOAD', { displayRevision: -1 }],
   ] as const)('rejects with %s (%o)', (reason, overrides) => {
     const h = online();
@@ -173,13 +174,22 @@ describe('DISPLAY_REJECTED (doc 10 §27.2, §27.4)', () => {
     expect(h.sim.screen).toEqual({ kind: 'IDLE' });
   });
 
-  it('ignores retained or uncorrelatable instructions without publishing anything', () => {
+  it('ignores retained or uncorrelatable instructions and reports them as INBOUND_MESSAGE_INVALID (§13.2)', () => {
     const h = online();
     h.transport().deliver(DISPLAY, challenge(h.sim).body, { retain: true });
     h.transport().deliver(DISPLAY, JSON.stringify({ type: 'DISPLAY_ACCESS_CHALLENGE', messageId: randomUUID() }));
     h.transport().deliver(DISPLAY, 'not json');
-    expect(h.events()).toEqual([]);
-    expect(h.inbound.map((r) => r.outcome)).toEqual(['IGNORED', 'IGNORED', 'IGNORED']);
+    expect(h.sim.screen).toEqual({ kind: 'IDLE' });
+    // One report per case: the second uncorrelatable one falls within the reporting limit.
+    expect(h.events().map((e) => [e.type, e.errorCode])).toEqual([
+      ['DEVICE_ERROR', 'INBOUND_MESSAGE_INVALID'],
+      ['DEVICE_ERROR', 'INBOUND_MESSAGE_INVALID'],
+    ]);
+    expect(h.inbound.map((r) => [r.outcome, r.report])).toEqual([
+      ['IGNORED', 'PUBLISHED'],
+      ['IGNORED', 'PUBLISHED'],
+      ['IGNORED', 'SUPPRESSED'],
+    ]);
   });
 });
 

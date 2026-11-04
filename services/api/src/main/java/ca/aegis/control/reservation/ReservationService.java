@@ -52,14 +52,19 @@ class ReservationService {
             "ux_reservations_one_active_per_user", ApiError.USER_ALREADY_HAS_ACTIVE_RESERVATION);
 
     private final ReservationRepository reservations;
+    private final CheckoutAttemptRepository attempts;
+    private final PendingCheckouts pendingCheckouts;
     private final ReservableAssets assets;
     private final LockerSchedules schedules;
     private final AuditTrail audit;
     private final Clock clock;
 
-    ReservationService(ReservationRepository reservations, ReservableAssets assets, LockerSchedules schedules,
-            AuditTrail audit, Clock clock) {
+    ReservationService(ReservationRepository reservations, CheckoutAttemptRepository attempts,
+            PendingCheckouts pendingCheckouts, ReservableAssets assets, LockerSchedules schedules, AuditTrail audit,
+            Clock clock) {
         this.reservations = reservations;
+        this.attempts = attempts;
+        this.pendingCheckouts = pendingCheckouts;
         this.assets = assets;
         this.schedules = schedules;
         this.audit = audit;
@@ -128,20 +133,71 @@ class ReservationService {
         details.put("reservedUntil", created.reservedUntil());
         audit.record(new AuditEvent(AuditEventType.RESERVATION_CREATED, user.id(), AuditSubjectType.RESERVATION, id,
                 AuditResult.ACCEPTED, details, now));
-        return view(created);
+        return view(created, now);
+    }
+
+    /**
+     * Document 06, section 5.5 and document 09, section 14.4, inside the transaction of the idempotency key. Locks
+     * follow document 06, section 3.3: the holder, the asset, the reservation, then the lockers and attempts that the
+     * cancellation ends. A refusal writes nothing.
+     * <p>
+     * The instant of the decision is read once the holder, asset and reservation are locked: a transaction that held
+     * them may have committed an attempt or a challenge later than the moment this request arrived, and every date
+     * this cancellation writes must not precede them.
+     */
+    @Transactional
+    ReservationView cancel(UUID actorId, UUID reservationId) {
+        LockedUser holder = reservations.lockUser(actorId)
+                .filter(found -> found.status() == AccountStatus.ACTIVE && found.role() == Role.TECHNICIAN)
+                .orElseThrow(() -> new ReservationRefusedException(ApiError.FORBIDDEN));
+        // Another technician's reservation is not visible, so it is not found (document 09, sections 14.3 and 26.2).
+        UUID assetId = reservations.find(reservationId).filter(row -> row.userId().equals(holder.id()))
+                .map(ReservationRow::assetId).orElseThrow(ResourceNotFoundException::new);
+        assets.lockForCustody(assetId);
+        ReservationRow reservation = reservations.lock(reservationId).orElseThrow();
+        Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
+
+        switch (reservation.status()) {
+            case CANCELLED -> {
+                audit.record(new AuditEvent(AuditEventType.RESERVATION_CANCELLED, holder.id(),
+                        AuditSubjectType.RESERVATION, reservationId, AuditResult.ALREADY_APPLIED,
+                        Map.of("assetId", assetId, "cancelledAt", reservation.cancelledAt()), now));
+                return view(reservation, now);
+            }
+            case FULFILLED, EXPIRED -> throw new ReservationRefusedException(ApiError.RESERVATION_NOT_CANCELLABLE);
+            case ACTIVE -> {
+                if (!cancellable(reservation, now)) {
+                    throw new ReservationRefusedException(ApiError.RESERVATION_NOT_CANCELLABLE);
+                }
+            }
+        }
+
+        List<UUID> endedAttempts = pendingCheckouts.endForCancellation(reservationId, holder.id(), now);
+        reservations.cancel(reservationId, now);
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("assetId", assetId);
+        details.put("reservedUntil", reservation.reservedUntil());
+        details.put("endedOperationIds", endedAttempts);
+        audit.record(AuditEvent.transition(AuditEventType.RESERVATION_CANCELLED, holder.id(),
+                AuditSubjectType.RESERVATION, reservationId, null, ReservationStatus.ACTIVE,
+                ReservationStatus.CANCELLED, null, details, now));
+        return view(reservations.find(reservationId).orElseThrow(), now);
     }
 
     /** Document 09, section 14.2. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     ReservationView activeOf(UUID technicianId) {
-        return reservations.activeOfUser(technicianId).map(this::view)
+        Instant now = clock.instant();
+        return reservations.activeOfUser(technicianId).map(row -> view(row, now))
                 .orElseThrow(() -> new ReservationRefusedException(ApiError.ACTIVE_RESERVATION_NOT_FOUND));
     }
 
     /** Document 09, sections 14.3 and 26.2: another technician's reservation is not visible, so it is not found. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     ReservationView ownedBy(UUID technicianId, UUID reservationId) {
-        return reservations.find(reservationId).filter(row -> row.userId().equals(technicianId)).map(this::view)
+        Instant now = clock.instant();
+        return reservations.find(reservationId).filter(row -> row.userId().equals(technicianId))
+                .map(row -> view(row, now))
                 .orElseThrow(ResourceNotFoundException::new);
     }
 
@@ -192,13 +248,31 @@ class ReservationService {
         return violation;
     }
 
-    private ReservationView view(ReservationRow row) {
+    private ReservationView view(ReservationRow row, Instant now) {
         AssetSummary asset = assets.summaries(List.of(row.assetId())).get(row.assetId());
-        UUID currentOperation = row.status() == ReservationStatus.ACTIVE
-                ? reservations.currentOperationOf(row.id()).orElse(null)
-                : null;
+        boolean active = row.status() == ReservationStatus.ACTIVE;
+        UUID currentOperation = active ? reservations.currentOperationOf(row.id()).orElse(null) : null;
         return new ReservationView(row.id(), asset, row.userId(), row.status(), row.reservedFrom(),
                 row.reservedUntil(), row.createdAt(), row.cancelledAt(), row.fulfilledAt(), row.expiredAt(),
-                currentOperation, List.of());
+                currentOperation, availableActions(row, now));
+    }
+
+    /**
+     * Document 09, section 8.10, for the holder, who is the only reader of these views. {@code CANCEL} is emitted
+     * exactly when {@link #cancel} would accept it at {@code now}; {@code CHECKOUT} is not emitted while its route
+     * does not exist (decision of 28 October 2026).
+     */
+    private List<String> availableActions(ReservationRow row, Instant now) {
+        return cancellable(row, now) ? List.of(ReservationAction.CANCEL.name()) : List.of();
+    }
+
+    /**
+     * The single rule of document 06, section 5.5 and document 09, section 8.10 that both {@link #cancel} and
+     * {@code availableActions} apply: an {@code ACTIVE} reservation before its {@code reservedUntil} (from then on it
+     * is due, and only its expiry may end it, document 06, section 14) with no attempt that blocks the cancellation.
+     */
+    private boolean cancellable(ReservationRow row, Instant now) {
+        return row.status() == ReservationStatus.ACTIVE && now.isBefore(row.reservedUntil())
+                && !attempts.blocksCancellation(row.id());
     }
 }

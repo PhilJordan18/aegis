@@ -70,6 +70,8 @@ public abstract class ApiIntegrationTest {
         // Nor may AEGIS_DB_APPLICATION_ROLE grant anything in the test databases: this role never exists.
         registry.add("spring.flyway.placeholders[application_role]", () -> "aegis_test_no_application_role");
         registry.add("aegis.security.jwt.secret", () -> JWT_SECRET);
+        // Tests move the clock and insert due reservations: a background expiry pass would race their assertions.
+        registry.add("aegis.reservations.expiry.scheduled", () -> "false");
     }
 
     @BeforeEach

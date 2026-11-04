@@ -148,6 +148,26 @@ class OperatingHoursTests {
         assertThrows(IllegalArgumentException.class, () -> new DailyWindow(DayOfWeek.MONDAY, false, NINE, null));
     }
 
+    /** Document 09, section 8.6: closesAt while open, otherwise the next opening within a week, or none. */
+    @Test
+    void theWindowStateGivesTheClosingOrTheNextOpening() {
+        assertEquals(new OperatingHours.WindowState(true, MONDAY_CLOSING, null),
+                OperatingHours.windowAt(weekdays, MONDAY_OPENING));
+        assertEquals(new OperatingHours.WindowState(false, null, MONDAY_OPENING),
+                OperatingHours.windowAt(weekdays, MONDAY_OPENING.minusSeconds(1)));
+        assertEquals(new OperatingHours.WindowState(false, null, Instant.parse("2026-09-29T13:00:00Z")),
+                OperatingHours.windowAt(weekdays, MONDAY_CLOSING));
+        assertEquals(new OperatingHours.WindowState(false, null, Instant.parse("2026-10-05T13:00:00Z")),
+                OperatingHours.windowAt(weekdays, Instant.parse("2026-10-03T16:00:00Z")));
+
+        WeeklySchedule mondaysOnly = new WeeklySchedule(TORONTO, week(day -> day == DayOfWeek.MONDAY
+                ? DailyWindow.open(day, NINE, FIVE_PM) : DailyWindow.closed(day)));
+        assertEquals(new OperatingHours.WindowState(false, null, Instant.parse("2026-10-05T13:00:00Z")),
+                OperatingHours.windowAt(mondaysOnly, MONDAY_CLOSING), "a full week later");
+        assertEquals(new OperatingHours.WindowState(false, null, null),
+                OperatingHours.windowAt(new WeeklySchedule(TORONTO, week(DailyWindow::closed)), MONDAY_OPENING));
+    }
+
     private static WeeklySchedule schedule(LocalTime opensAt, LocalTime closesAt, boolean weekdaysOnly) {
         return new WeeklySchedule(TORONTO, week(day -> weekdaysOnly && day.getValue() > 5
                 ? DailyWindow.closed(day)
