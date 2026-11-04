@@ -126,8 +126,8 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
     const restarted = sequence.find((m) => m.payload.type === 'DEVICE_RESTARTED')!;
     const beats = sequence.filter((m) => m.payload.type === 'HEARTBEAT');
 
-    expect(online).toMatchObject({ topic: STATUS, qos: 1, payload: { status: 'ONLINE', reason: 'CONNECTED', schemaVersion: '2.0' } });
-    expect(sequence.every((m) => m.payload.schemaVersion === '2.0' && m.payload.bootCount === 1)).toBe(true);
+    expect(online).toMatchObject({ topic: STATUS, qos: 1, payload: { status: 'ONLINE', reason: 'CONNECTED', schemaVersion: '3.0' } });
+    expect(sequence.every((m) => m.payload.schemaVersion === '3.0' && m.payload.bootCount === 1)).toBe(true);
     expect(will.bootCount).toBe(1);
     const connectionId = will.connectionId as string;
     expect(online.payload.connectionId).toBe(connectionId);

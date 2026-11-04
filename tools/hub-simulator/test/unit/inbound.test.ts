@@ -4,7 +4,7 @@ import { parseCommand, parseDisplay } from '../../src/inbound.ts';
 import { TOKEN } from './hub-harness.ts';
 
 const COMMAND = {
-  schemaVersion: '2.0',
+  schemaVersion: '3.0',
   messageId: '55c71961-21a3-4b2e-8b92-7f237e881a20',
   type: 'UNLOCK_COMPARTMENT',
   operationId: '2f38d3b6-c18f-4a74-aa9a-2d574286013f',
@@ -50,7 +50,8 @@ describe('parseCommand (doc 10 §8.2, §9)', () => {
   it.each([
     [{ schemaVersion: undefined }, 'INVALID_PAYLOAD'],
     [{ schemaVersion: '1.0' }, 'UNSUPPORTED_SCHEMA'],
-    [{ schemaVersion: '2' }, 'INVALID_PAYLOAD'],
+    [{ schemaVersion: '2.0' }, 'UNSUPPORTED_SCHEMA'],
+    [{ schemaVersion: '3' }, 'INVALID_PAYLOAD'],
     [{ type: 'COMMAND_ACKNOWLEDGED' }, 'INVALID_PAYLOAD'],
     [{ lockerId: undefined }, 'INVALID_PAYLOAD'],
     [{ issuedAt: undefined }, 'INVALID_PAYLOAD'],
@@ -66,7 +67,7 @@ describe('parseCommand (doc 10 §8.2, §9)', () => {
 
 describe('parseDisplay (doc 10 §27)', () => {
   const CHALLENGE = {
-    schemaVersion: '2.0',
+    schemaVersion: '3.0',
     messageId: 'fd6c4a94-4ac4-4a91-9249-59347c3b648b',
     type: 'DISPLAY_ACCESS_CHALLENGE',
     lockerId: 'd46a74ae-39dc-460b-8af0-38fc791b376a',
