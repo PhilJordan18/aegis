@@ -18,16 +18,23 @@ all() {
 [ -n "${BASE_SHA:-}" ] && [ -n "${HEAD_SHA:-}" ] || all true
 files=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA") || all true
 
-# A change to the CI itself re-runs everything.
-if printf '%s\n' "$files" | grep -Eq '^\.github/(workflows/ci\.yml|scripts/)'; then
+# A workflow change re-runs everything, and so does a CI script this filter does
+# not know. A known script reruns its unit tests and the jobs that execute it on
+# real reports; the filter and the aggregator are proven by their unit tests,
+# since a full run bypasses the filter and cannot exercise it.
+known='^\.github/scripts/(tests/|changed-components\.sh$|ci-result\.py$|test-report\.py$|xcresult-summary\.py$|check-accepted-adrs\.py$)'
+if printf '%s\n' "$files" | grep -Eq '^\.github/workflows/ci\.yml$'; then
   all true
 fi
+unknown=$(printf '%s\n' "$files" | grep -E '^\.github/scripts/' | grep -Ev "$known" || true)
+[ -z "$unknown" ] || all true
 
 changed() {
   if printf '%s\n' "$files" | grep -Eq "$1"; then echo true; else echo false; fi
 }
 
-api=$(changed '^(services/api/|infra/docker/)')
+# The API broker tests read the Mosquitto ACL and accounts of infra/mqtt/.
+api=$(changed '^(services/api/|infra/docker/|infra/mqtt/)')
 # No Web test reads docs/design/manager-entree/ any more (tokens moved to
 # src/styles/); the path stays, which only runs Web more often than needed.
 web=$(changed '^(apps/admin-web/|docs/design/manager-entree/)')
@@ -39,7 +46,21 @@ removed=$(git diff --name-only --diff-filter=DR "$BASE_SHA" "$HEAD_SHA") || all 
 [ -z "$removed" ] || agents=true
 adrs=$(changed '^(docs/adr/|docs/cahier-conception/13-registre-adrs-proposes\.md$|\.githooks/check-accepted-adrs$)')
 ios=$(changed '^apps/ios/')
-# A change under .github/scripts/ or to ci.yml already took the full run above.
-ci=false
+# A stacked pull request also carries its prerequisite's commits: they still
+# land on the base with it, so they still select iOS. The summary names the
+# commits that do, so a reviewer can tell them from the pull request's own.
+if [ "$ios" = true ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+  {
+    echo "iOS selected by these commits (not on the base):"
+    git log --no-merges --format='- %h %s' "$BASE_SHA..$HEAD_SHA" -- apps/ios || echo "- (history unreadable)"
+  } >>"$GITHUB_STEP_SUMMARY"
+fi
+if [ "$(changed '^\.github/scripts/test-report\.py$')" = true ]; then
+  api=true; web=true; simulator=true
+fi
+[ "$(changed '^\.github/scripts/xcresult-summary\.py$')" = false ] || ios=true
+[ "$(changed '^\.github/scripts/check-accepted-adrs\.py$')" = false ] || adrs=true
+# The measurement tools of docs/qualite/ci-02/mesures/ are tested with the scripts.
+ci=$(changed '^(\.github/scripts/|docs/qualite/ci-02/mesures/)')
 printf 'api=%s\nweb=%s\nsimulator=%s\nagents=%s\nadrs=%s\nios=%s\nci=%s\n' \
   "$api" "$web" "$simulator" "$agents" "$adrs" "$ios" "$ci" >>"$out"

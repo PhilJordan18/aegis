@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test'
 import { openCatalog, waitForCatalogState, type CatalogMode } from './catalogFakes.ts'
+import { openLockers, waitForLockerState, type LockerMode } from './lockerFakes.ts'
 import { afterSubmit, submitSignIn } from './support.ts'
 
 export interface Viewport {
@@ -68,6 +69,37 @@ const catalogScenarios: readonly Scenario[] = CATALOG_STATES.map(([mode, state])
   },
 }))
 
+/** Production Casiers page with routed fakes: signed in through the preview gateway, then /casiers. */
+const LOCKER_STATES: readonly (readonly [LockerMode, string])[] = [
+  ['nominal', 'nominal'],
+  ['offline', 'hors-ligne'],
+  ['unknown', 'inconnu'],
+  ['closed', 'ferme'],
+  ['noSchedule', 'sans-horaire'],
+  ['faulted', 'exceptions'],
+  ['long', 'contenu-long'],
+  ['code20', 'code-20-caracteres'],
+  ['code24', 'code-24-caracteres'],
+  ['codeUnbroken', 'code-sans-coupure'],
+  ['offlineLong', 'hors-ligne-contenu-long'],
+  ['empty', 'aucun-casier'],
+  ['loading', 'chargement'],
+  ['notFound', 'introuvable'],
+  ['serviceError', 'erreur-service'],
+  ['unreachable', 'service-injoignable'],
+  ['stale', 'non-actualise'],
+]
+
+const lockerScenarios: readonly Scenario[] = LOCKER_STATES.map(([mode, state]) => ({
+  route: 'casiers',
+  state,
+  path: '/connexion',
+  reach: async (page: Page) => {
+    await openLockers(page, mode)
+    await waitForLockerState(page, mode)
+  },
+}))
+
 export const SCENARIOS: readonly Scenario[] = [
   { route: 'landing', state: 'defaut', path: '/' },
   { route: 'connexion', state: 'inactif', path: '/connexion' },
@@ -115,5 +147,6 @@ export const SCENARIOS: readonly Scenario[] = [
     },
   },
   ...catalogScenarios,
+  ...lockerScenarios,
   { route: 'introuvable', state: 'defaut', path: '/nulle-part' },
 ]

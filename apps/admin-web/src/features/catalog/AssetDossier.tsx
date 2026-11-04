@@ -1,6 +1,6 @@
 import { useId, useLayoutEffect, useRef, type Ref } from 'react'
 import { useI18n } from '../../i18n/useI18n'
-import { Icon } from '../../ui/Icon'
+import { ReadOnlyMark } from '../../ui/ReadOnlyMark'
 import { StatusChip } from '../../ui/StatusChip'
 import {
   accessLevelLabel,
@@ -206,15 +206,5 @@ function DossierBody({ asset, titleId, stale, retrying, onRetry, returnFocus }: 
         </div>
       </div>
     </>
-  )
-}
-
-function ReadOnlyMark() {
-  const { m } = useI18n()
-  return (
-    <span className="ag-readonly">
-      <Icon name="lock" />
-      {m.equipment.readOnly}
-    </span>
   )
 }

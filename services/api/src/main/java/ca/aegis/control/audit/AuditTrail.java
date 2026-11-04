@@ -1,6 +1,8 @@
 package ca.aegis.control.audit;
 
 import java.time.ZoneOffset;
+import java.util.Objects;
+import java.util.UUID;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -27,12 +29,22 @@ public class AuditTrail {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void record(AuditEvent event) {
+        insert(event, null);
+    }
+
+    /** Same as {@link #record}, with the reference to the stored device message the event is about (V008). */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordAboutInboundMessage(AuditEvent event, UUID inboundMessageId) {
+        insert(event, Objects.requireNonNull(inboundMessageId, "inboundMessageId"));
+    }
+
+    private void insert(AuditEvent event, UUID inboundMessageId) {
         jdbc.sql("""
                 INSERT INTO aegis.audit_events
                     (event_type, actor_user_id, subject_type, subject_id, operation_id, from_state, to_state, result,
-                     reason, details, occurred_at)
+                     reason, details, occurred_at, inbound_message_id)
                 VALUES (:type, :actor, :subjectType, :subjectId, :operation, :fromState, :toState, :result, :reason,
-                        CAST(:details AS jsonb), :occurredAt)
+                        CAST(:details AS jsonb), :occurredAt, :inboundMessageId)
                 """)
                 .param("type", event.type().name())
                 .param("actor", event.actorUserId())
@@ -45,6 +57,7 @@ public class AuditTrail {
                 .param("reason", event.reason())
                 .param("details", jsonMapper.writeValueAsString(event.details()))
                 .param("occurredAt", event.occurredAt().atOffset(ZoneOffset.UTC))
+                .param("inboundMessageId", inboundMessageId)
                 .update();
     }
 }
