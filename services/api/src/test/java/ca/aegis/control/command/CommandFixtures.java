@@ -57,6 +57,19 @@ final class CommandFixtures {
     Operation awaitingLocalProof(UUID user, UUID locker, int address, Instant at) {
         UUID asset = reservations.assetAt(locker, address);
         UUID reservation = reservations.reservation(asset, user, "ACTIVE", at.minusSeconds(60), at.plusSeconds(3600));
+        return awaitingLocalProof(user, asset, locker, "CHECKOUT", reservation, null, at);
+    }
+
+    /** A return of an active loan waiting for its local proof, in a compartment of a new locker. */
+    Operation returnAwaitingLocalProof(UUID user, Instant at) {
+        UUID locker = reservations.locker();
+        UUID asset = reservations.assetAt(locker, 1);
+        UUID loan = reservations.loan(asset, user, at.minusSeconds(7200));
+        return awaitingLocalProof(user, asset, locker, "RETURN", null, loan, at);
+    }
+
+    private Operation awaitingLocalProof(UUID user, UUID asset, UUID locker, String type, UUID reservation, UUID loan,
+            Instant at) {
         Map<String, Object> placement = jdbc.sql("""
                 SELECT c.id AS compartment, i.id AS identifier
                 FROM aegis.asset_placements p
@@ -67,14 +80,15 @@ final class CommandFixtures {
         UUID compartment = (UUID) placement.get("compartment");
         UUID operation = jdbc.sql("""
                 INSERT INTO aegis.locker_operations
-                    (type, status, user_id, asset_id, locker_id, compartment_id, reservation_id,
+                    (type, status, user_id, asset_id, locker_id, compartment_id, reservation_id, loan_id,
                      expected_asset_identifier_id, created_at)
-                VALUES ('CHECKOUT', 'AWAITING_LOCAL_PROOF', :user, :asset, :locker, :compartment, :reservation,
+                VALUES (:type, 'AWAITING_LOCAL_PROOF', :user, :asset, :locker, :compartment, :reservation, :loan,
                         :identifier, :at)
                 RETURNING id
                 """)
                 .param("user", user).param("asset", asset).param("locker", locker).param("compartment", compartment)
-                .param("reservation", reservation).param("identifier", placement.get("identifier"))
+                .param("type", type).param("reservation", reservation).param("loan", loan)
+                .param("identifier", placement.get("identifier"))
                 .param("at", utc(at)).query(UUID.class).single();
         UUID device = hub(locker);
         // The ingestion tests reprovision the broker test hub without a session; the target session is then arbitrary.

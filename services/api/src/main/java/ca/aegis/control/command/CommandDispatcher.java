@@ -16,8 +16,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import tools.jackson.databind.json.JsonMapper;
-
 import ca.aegis.control.audit.AuditEvent;
 import ca.aegis.control.audit.AuditEventType;
 import ca.aegis.control.audit.AuditResult;
@@ -63,21 +61,24 @@ public class CommandDispatcher {
     private static final Logger log = LoggerFactory.getLogger(CommandDispatcher.class);
     private static final Duration MAX_RETRY_DELAY = Duration.ofSeconds(30);
     private static final String FAILURE_REASON_NOT_PUBLISHED = "COMMAND_NOT_PUBLISHED_BEFORE_EXPIRY";
+    /**
+     * Prefix of {@code last_error} once an attempt may have reached the broker: V007 has no column for it, and the
+     * prefix survives the later attempts until the command is marked or cancelled.
+     */
+    static final String UNCERTAIN = "PUBLICATION_UNCERTAIN ";
 
     private final JdbcClient jdbc;
     private final TransactionTemplate transactions;
     private final AuditTrail auditTrail;
-    private final JsonMapper jsonMapper;
     private final Clock clock;
     private final CommandPublisher publisher;
     private final Duration lease;
 
-    CommandDispatcher(JdbcClient jdbc, TransactionTemplate transactions, AuditTrail auditTrail, JsonMapper jsonMapper,
-            Clock clock, CommandPublisher publisher, Duration lease) {
+    CommandDispatcher(JdbcClient jdbc, TransactionTemplate transactions, AuditTrail auditTrail, Clock clock,
+            CommandPublisher publisher, Duration lease) {
         this.jdbc = jdbc;
         this.transactions = transactions;
         this.auditTrail = auditTrail;
-        this.jsonMapper = jsonMapper;
         this.clock = clock;
         this.publisher = publisher;
         this.lease = lease;
@@ -103,13 +104,15 @@ public class CommandDispatcher {
             transactions.executeWithoutResult(status -> cancel(claim));
             return Outcome.CANCELLED;
         }
-        byte[] payload = jsonMapper.writeValueAsString(claim.command().payload()).getBytes(StandardCharsets.UTF_8);
+        // Document 08, section 8.3: the stored payload is published, unchanged, at every attempt.
+        byte[] payload = claim.payload().getBytes(StandardCharsets.UTF_8);
         try {
             publisher.publish(claim.command().topic(), payload);
         } catch (CommandPublicationException failure) {
-            log.warn("Unlock command not accepted by the broker ({}); retrying later: messageId={}, attempt={}",
-                    failure.getMessage(), claim.command().messageId(), claim.attempt());
-            transactions.executeWithoutResult(status -> release(claim, failure.getMessage()));
+            log.warn("Unlock command not confirmed by the broker ({}, mayHaveBeenPublished={}); retrying later: "
+                    + "messageId={}, attempt={}", failure.getMessage(), failure.mayHaveBeenPublished(),
+                    claim.command().messageId(), claim.attempt());
+            transactions.executeWithoutResult(status -> release(claim, failure));
             return Outcome.RETRY_SCHEDULED;
         }
         return Boolean.TRUE.equals(transactions.execute(status -> markDispatched(claim)))
@@ -133,17 +136,22 @@ public class CommandDispatcher {
                 SET status = 'CLAIMED',
                     attempt_count = command.attempt_count + 1,
                     claimed_at = :now,
-                    claim_until = :claimUntil
+                    claim_until = :claimUntil,
+                    -- A lease that ended without a mark or a release: that claim may have published.
+                    last_error = CASE WHEN command.status = 'CLAIMED' THEN :leaseLost ELSE command.last_error END
                 FROM candidate
                 WHERE command.id = candidate.id
                 RETURNING command.id, command.message_id, command.operation_id, command.locker_id,
                           command.compartment_id, command.schema_version, command.issued_at, command.expires_at,
-                          command.attempt_count,
+                          command.attempt_count, command.payload::text AS payload,
+                          command.last_error LIKE :uncertain AS publication_uncertain,
                           (SELECT o.status IN ('CONFIRMED', 'FAILED', 'EXPIRED', 'ANOMALY')
                            FROM aegis.locker_operations o WHERE o.id = command.operation_id) AS operation_terminal
                 """)
                 .param("now", utc(now))
                 .param("claimUntil", utc(now.plus(lease)))
+                .param("leaseLost", UNCERTAIN + "LEASE_ENDED_WITHOUT_MARK")
+                .param("uncertain", UNCERTAIN + "%")
                 .query((row, number) -> new Claim(row.getObject("id", UUID.class),
                         new UnlockCommand(row.getObject("message_id", UUID.class),
                                 row.getObject("operation_id", UUID.class), row.getObject("locker_id", UUID.class),
@@ -151,7 +159,8 @@ public class CommandDispatcher {
                                 row.getObject("issued_at", OffsetDateTime.class).toInstant(),
                                 row.getObject("expires_at", OffsetDateTime.class).toInstant(),
                                 row.getString("schema_version")),
-                        row.getInt("attempt_count"), row.getBoolean("operation_terminal")))
+                        row.getString("payload"), row.getInt("attempt_count"),
+                        row.getBoolean("publication_uncertain"), row.getBoolean("operation_terminal")))
                 .optional();
         claim.ifPresent(c -> {
             if (c.attempt() > 1) {
@@ -164,9 +173,11 @@ public class CommandDispatcher {
     }
 
     /** Locks the operation, then the command: the same order as any other writer of both rows. */
-    private Optional<String> lockOperationStatus(Claim claim) {
-        return jdbc.sql("SELECT status FROM aegis.locker_operations WHERE id = :id FOR UPDATE")
-                .param("id", claim.command().operationId()).query(String.class).optional();
+    private Optional<OperationState> lockOperation(Claim claim) {
+        return jdbc.sql("SELECT status, type FROM aegis.locker_operations WHERE id = :id FOR UPDATE")
+                .param("id", claim.command().operationId())
+                .query((row, number) -> new OperationState(row.getString("status"), row.getString("type")))
+                .optional();
     }
 
     private boolean ownsRow(Claim claim) {
@@ -179,7 +190,7 @@ public class CommandDispatcher {
     }
 
     private boolean markDispatched(Claim claim) {
-        Optional<String> operationStatus = lockOperationStatus(claim);
+        Optional<String> operationStatus = lockOperation(claim).map(OperationState::status);
         if (!ownsRow(claim)) {
             log.info("Unlock command published without a mark: another claim or an acknowledgement owns it: "
                     + "messageId={}, attempt={}", claim.command().messageId(), claim.attempt());
@@ -210,39 +221,48 @@ public class CommandDispatcher {
         return true;
     }
 
-    private void release(Claim claim, String reason) {
-        lockOperationStatus(claim);
+    /**
+     * The uncertainty of an earlier attempt is kept: {@code last_error} then keeps its {@link #UNCERTAIN} prefix even
+     * when a later attempt is refused before sending, so the deadline never mistakes a possible publication for none.
+     */
+    private void release(Claim claim, CommandPublicationException failure) {
+        lockOperation(claim);
         if (!ownsRow(claim)) {
             return;
         }
         Instant now = clock.instant();
+        boolean uncertain = claim.publicationUncertain() || failure.mayHaveBeenPublished();
         jdbc.sql("""
                 UPDATE aegis.command_outbox
                 SET status = 'PENDING', claim_until = NULL, next_attempt_at = :next, last_error = :reason
                 WHERE id = :id
                 """).param("id", claim.id()).param("next", utc(now.plus(retryDelay(claim.attempt()))))
-                .param("reason", reason).update();
+                .param("reason", (uncertain ? UNCERTAIN : "") + failure.getMessage()).update();
     }
 
     /**
      * Document 05, section 5: an operation still {@code AUTHORIZED} at its deadline expires, and its command is
-     * forbidden. That is a safe failure only if no earlier claim can have published; after an uncertain earlier
-     * attempt the operation is left as it is, for the reconciliation of the acknowledgement and timeout handling.
+     * forbidden. That is a safe failure only if no earlier attempt can have published; after an uncertain attempt
+     * the operation is left as it is, for the reconciliation of the acknowledgement and timeout handling. Only a
+     * checkout expires here: a return also reverts its loan (document 05, section 4.3), which belongs to the
+     * operation expiry of document 06, section 14.2.
      */
     private void cancel(Claim claim) {
-        Optional<String> operationStatus = lockOperationStatus(claim);
+        Optional<OperationState> operation = lockOperation(claim);
         if (!ownsRow(claim)) {
             return;
         }
         Instant now = clock.instant();
-        boolean neverPublished = claim.attempt() == 1;
+        boolean neverPublished = !claim.publicationUncertain();
         String reason = claim.operationTerminal() ? "OPERATION_TERMINAL"
-                : neverPublished ? "COMMAND_EXPIRED" : "COMMAND_EXPIRED_AFTER_UNCERTAIN_ATTEMPT";
+                : neverPublished ? "COMMAND_EXPIRED" : UNCERTAIN + "COMMAND_EXPIRED";
         jdbc.sql("""
                 UPDATE aegis.command_outbox SET status = 'CANCELLED', claim_until = NULL, last_error = :reason
                 WHERE id = :id
                 """).param("id", claim.id()).param("reason", reason).update();
-        if (neverPublished && operationStatus.filter("AUTHORIZED"::equals).isPresent()) {
+        boolean authorizedCheckout = operation
+                .filter(o -> "AUTHORIZED".equals(o.status()) && "CHECKOUT".equals(o.type())).isPresent();
+        if (neverPublished && authorizedCheckout) {
             jdbc.sql("""
                     UPDATE aegis.locker_operations
                     SET status = 'EXPIRED', terminal_at = :now, failure_reason = :failure
@@ -253,9 +273,10 @@ public class CommandDispatcher {
                     AuditSubjectType.LOCKER_OPERATION, claim.command().operationId(), claim.command().operationId(),
                     "AUTHORIZED", "EXPIRED", AuditResult.ACCEPTED, FAILURE_REASON_NOT_PUBLISHED,
                     Map.of("messageId", claim.command().messageId()), now));
-        } else if (!neverPublished) {
-            log.warn("Unlock command expired after an attempt that may have been published; operation left for "
-                    + "reconciliation: messageId={}, attempt={}", claim.command().messageId(), claim.attempt());
+        } else if (!claim.operationTerminal()) {
+            log.warn("Unlock command expired; operation left for the operation expiry (mayHaveBeenPublished={}, "
+                    + "type={}): messageId={}, attempt={}", !neverPublished,
+                    operation.map(OperationState::type).orElse(null), claim.command().messageId(), claim.attempt());
         }
     }
 
@@ -265,6 +286,10 @@ public class CommandDispatcher {
         return delay.compareTo(MAX_RETRY_DELAY) > 0 ? MAX_RETRY_DELAY : delay;
     }
 
-    private record Claim(UUID id, UnlockCommand command, int attempt, boolean operationTerminal) {
+    private record Claim(UUID id, UnlockCommand command, String payload, int attempt, boolean publicationUncertain,
+            boolean operationTerminal) {
+    }
+
+    private record OperationState(String status, String type) {
     }
 }

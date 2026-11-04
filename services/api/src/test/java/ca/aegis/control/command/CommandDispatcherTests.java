@@ -152,7 +152,7 @@ class CommandDispatcherTests extends ApiIntegrationTest {
         CommandDispatcher dispatcher = dispatcher((topic, payload) -> {
             record(topic, payload);
             if (!brokerUp.getLast()) {
-                throw new CommandPublicationException("BROKER_NOT_CONNECTED", null);
+                throw new CommandPublicationException("BROKER_NOT_CONNECTED", false, null);
             }
         });
 
@@ -231,7 +231,7 @@ class CommandDispatcherTests extends ApiIntegrationTest {
 
         assertThat(published).hasSize(1);
         assertThat(fixtures.command(authorized.operation().id())).containsEntry("status", "CANCELLED")
-                .containsEntry("last_error", "COMMAND_EXPIRED_AFTER_UNCERTAIN_ATTEMPT");
+                .containsEntry("last_error", "PUBLICATION_UNCERTAIN COMMAND_EXPIRED");
         assertThat(fixtures.operation(authorized.operation().id())).containsEntry("status", "AUTHORIZED");
         assertThat(fixtures.audits(authorized.operation().id())).isEmpty();
     }
@@ -288,7 +288,7 @@ class CommandDispatcherTests extends ApiIntegrationTest {
         CommandDispatcher slow = dispatcher((topic, payload) -> {
             slowPublishing.countDown();
             await(slowResume);
-            throw new CommandPublicationException("MQTT_PUBLISH_FAILED reasonCode=32000", null);
+            throw new CommandPublicationException("MQTT_PUBACK_MISSING reasonCode=32000", true, null);
         });
         CommandDispatcher fast = dispatcher((topic, payload) -> {
             record(topic, payload);
@@ -307,7 +307,7 @@ class CommandDispatcherTests extends ApiIntegrationTest {
             assertThat(slowOutcome.get(10, TimeUnit.SECONDS)).isEqualTo(Outcome.RETRY_SCHEDULED);
             assertThat(fixtures.command(authorized.operation().id())).as("still owned by the second claim")
                     .containsEntry("status", "CLAIMED").containsEntry("attempt_count", 2)
-                    .containsEntry("last_error", null);
+                    .containsEntry("last_error", "PUBLICATION_UNCERTAIN LEASE_ENDED_WITHOUT_MARK");
 
             fastResume.countDown();
             assertThat(fastOutcome.get(10, TimeUnit.SECONDS)).isEqualTo(Outcome.PUBLISHED);
@@ -372,6 +372,79 @@ class CommandDispatcherTests extends ApiIntegrationTest {
         }
     }
 
+    /** A broker that stays unreachable until the deadline sent nothing: the checkout fails safely (review MEDIUM-1). */
+    @Test
+    void expiresTheOperationWhenEveryAttemptWasRefusedBeforeSending() {
+        Authorized authorized = authorizedCommand();
+        CommandDispatcher dispatcher = dispatcher((topic, payload) -> {
+            throw new CommandPublicationException("BROKER_NOT_CONNECTED", false, null);
+        });
+
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            assertThat(dispatcher.dispatchNext()).isEqualTo(Outcome.RETRY_SCHEDULED);
+            clock.advance(CommandDispatcher.retryDelay(attempt));
+        }
+        assertThat(fixtures.command(authorized.operation().id())).containsEntry("last_error", "BROKER_NOT_CONNECTED");
+        clock.set(START.plusSeconds(120));
+        assertThat(dispatcher.dispatchNext()).isEqualTo(Outcome.CANCELLED);
+
+        assertThat(fixtures.command(authorized.operation().id())).containsEntry("status", "CANCELLED")
+                .containsEntry("attempt_count", 4).containsEntry("last_error", "COMMAND_EXPIRED");
+        assertThat(fixtures.operation(authorized.operation().id())).containsEntry("status", "EXPIRED")
+                .containsEntry("failure_reason", "COMMAND_NOT_PUBLISHED_BEFORE_EXPIRY");
+    }
+
+    /** An unconfirmed publication stays uncertain even when later attempts are refused before sending. */
+    @Test
+    void keepsAnUnconfirmedPublicationUncertainUntilTheDeadline() {
+        Authorized authorized = authorizedCommand();
+        List<CommandPublicationException> failures = new CopyOnWriteArrayList<>(List.of(
+                new CommandPublicationException("MQTT_PUBACK_MISSING reasonCode=32000", true, null),
+                new CommandPublicationException("BROKER_NOT_CONNECTED", false, null)));
+        CommandDispatcher dispatcher = dispatcher((topic, payload) -> {
+            record(topic, payload);
+            throw failures.removeFirst();
+        });
+
+        assertThat(dispatcher.dispatchNext()).isEqualTo(Outcome.RETRY_SCHEDULED);
+        assertThat(fixtures.command(authorized.operation().id()))
+                .containsEntry("last_error", "PUBLICATION_UNCERTAIN MQTT_PUBACK_MISSING reasonCode=32000");
+        clock.advance(Duration.ofSeconds(1));
+        assertThat(dispatcher.dispatchNext()).isEqualTo(Outcome.RETRY_SCHEDULED);
+        assertThat(fixtures.command(authorized.operation().id()))
+                .containsEntry("last_error", "PUBLICATION_UNCERTAIN BROKER_NOT_CONNECTED");
+
+        clock.set(START.plusSeconds(120));
+        assertThat(dispatcher.dispatchNext()).isEqualTo(Outcome.CANCELLED);
+
+        assertThat(fixtures.command(authorized.operation().id())).containsEntry("status", "CANCELLED")
+                .containsEntry("last_error", "PUBLICATION_UNCERTAIN COMMAND_EXPIRED");
+        assertThat(fixtures.operation(authorized.operation().id())).containsEntry("status", "AUTHORIZED");
+        assertThat(fixtures.audits(authorized.operation().id())).isEmpty();
+    }
+
+    /**
+     * A return reverts its loan when it fails safely (document 05, section 4.3): that belongs to the operation
+     * expiry, so the dispatcher cancels the command without touching the operation (review MEDIUM-2).
+     */
+    @Test
+    void leavesAnExpiredReturnToTheOperationExpiry() {
+        Operation operation = fixtures.returnAwaitingLocalProof(technician(), START.minusSeconds(30));
+        transactions.executeWithoutResult(status -> {
+            fixtures.authorize(operation, START);
+            outbox.enqueueUnlock(operation.id());
+        });
+
+        clock.set(START.plusSeconds(120));
+        assertThat(dispatcher(this::record).dispatchNext()).isEqualTo(Outcome.CANCELLED);
+
+        assertThat(published).isEmpty();
+        assertThat(fixtures.command(operation.id())).containsEntry("status", "CANCELLED")
+                .containsEntry("last_error", "COMMAND_EXPIRED");
+        assertThat(fixtures.operation(operation.id())).containsEntry("status", "AUTHORIZED");
+        assertThat(fixtures.audits(operation.id())).isEmpty();
+    }
+
     @Test
     void retriesAfterADelayThatDoublesUpToThirtySeconds() {
         assertThat(CommandDispatcher.retryDelay(1)).isEqualTo(Duration.ofSeconds(1));
@@ -391,7 +464,7 @@ class CommandDispatcherTests extends ApiIntegrationTest {
     }
 
     private CommandDispatcher dispatcher(CommandPublisher publisher) {
-        return new CommandDispatcher(jdbc, transactions, auditTrail, jsonMapper, clock, publisher, LEASE);
+        return new CommandDispatcher(jdbc, transactions, auditTrail, clock, publisher, LEASE);
     }
 
     private void record(String topic, byte[] payload) {

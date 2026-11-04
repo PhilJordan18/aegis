@@ -11,9 +11,19 @@ public interface CommandPublisher {
 
     class CommandPublicationException extends Exception {
 
-        /** A bounded, machine-readable cause, safe to store in {@code command_outbox.last_error}. */
-        public CommandPublicationException(String reason, Throwable cause) {
+        private final boolean mayHaveBeenPublished;
+
+        /**
+         * @param reason a bounded, machine-readable cause, safe to store in {@code command_outbox.last_error}
+         * @param mayHaveBeenPublished false only when the message certainly never left this process
+         */
+        public CommandPublicationException(String reason, boolean mayHaveBeenPublished, Throwable cause) {
             super(reason, cause);
+            this.mayHaveBeenPublished = mayHaveBeenPublished;
+        }
+
+        public boolean mayHaveBeenPublished() {
+            return mayHaveBeenPublished;
         }
     }
 }

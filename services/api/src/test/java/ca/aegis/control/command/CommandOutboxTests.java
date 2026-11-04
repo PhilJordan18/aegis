@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,6 +46,12 @@ class CommandOutboxTests extends ApiIntegrationTest {
         fixtures = new CommandFixtures(jdbc);
     }
 
+    /** The scheduled job of {@link CommandDispatchJobTests} must find no due command of this class. */
+    @AfterEach
+    void retireCommands() {
+        fixtures.retireEarlierCommands();
+    }
+
     @Test
     void commitsTheAuthorizationAndItsCommandTogether() {
         Operation operation = fixtures.awaitingLocalProof(technician(), START.minusSeconds(30));
@@ -79,6 +86,20 @@ class CommandOutboxTests extends ApiIntegrationTest {
         assertThat(payload.get("operationId").asString()).isEqualTo(operation.id().toString());
         assertThat(payload.get("compartmentId").asString()).isEqualTo(operation.compartment().toString());
         assertThat(payload.get("expiresAt").asString()).isEqualTo("2026-09-28T13:02:00Z");
+    }
+
+    @Test
+    void issuesTheCommandAtTheInstantOfTheAuthorizingDecision() {
+        Operation operation = fixtures.awaitingLocalProof(technician(), START.minusSeconds(30));
+
+        clock.advance(Duration.ofSeconds(3));
+        UnlockCommand command = transactions.execute(status -> {
+            fixtures.authorize(operation, START);
+            return outbox.enqueueUnlock(operation.id(), START);
+        });
+
+        assertThat(command.issuedAt()).isEqualTo(START);
+        assertThat(instant(fixtures.command(operation.id()).get("issued_at"))).isEqualTo(START);
     }
 
     @Test

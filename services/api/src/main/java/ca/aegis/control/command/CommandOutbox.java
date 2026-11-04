@@ -45,6 +45,15 @@ public class CommandOutbox {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public UnlockCommand enqueueUnlock(UUID operationId) {
+        return enqueueUnlock(operationId, clock.instant());
+    }
+
+    /**
+     * The same, issued at {@code decidedAt}: the single instant the authorizing transaction read from its clock
+     * (document 06, section 3.2), so that the command and the authorization state the same time.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public UnlockCommand enqueueUnlock(UUID operationId, Instant decidedAt) {
         // The row lock orders this command after any concurrent transition of the same operation.
         OperationTarget operation = jdbc.sql("""
                 SELECT o.status, o.locker_id, o.compartment_id, o.expires_at,
@@ -71,7 +80,7 @@ public class CommandOutbox {
         if (!operation.challengeConsumed()) {
             throw new CommandRefusedException(Reason.LOCAL_CHALLENGE_NOT_CONSUMED);
         }
-        Instant issuedAt = clock.instant().truncatedTo(ChronoUnit.MILLIS);
+        Instant issuedAt = decidedAt.truncatedTo(ChronoUnit.MILLIS);
         // Truncating can only move the deadline earlier, never past the operation's own expiry.
         Instant expiresAt = operation.expiresAt().toInstant().truncatedTo(ChronoUnit.MILLIS);
         if (!issuedAt.isBefore(expiresAt)) {

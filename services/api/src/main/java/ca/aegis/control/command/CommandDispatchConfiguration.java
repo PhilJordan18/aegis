@@ -11,8 +11,6 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import tools.jackson.databind.json.JsonMapper;
-
 import ca.aegis.control.audit.AuditTrail;
 import ca.aegis.control.device.MqttProperties;
 
@@ -37,14 +35,14 @@ class CommandDispatchConfiguration {
     /** Section 9.2: the 15-second lease is an operating choice, distinct from the 120-second operation window. */
     @Bean
     CommandDispatcher commandDispatcher(JdbcClient jdbc, TransactionTemplate transactions, AuditTrail auditTrail,
-            JsonMapper jsonMapper, Clock clock, MqttCommandPublisher publisher,
+            Clock clock, MqttCommandPublisher publisher,
             @Value("${aegis.commands.dispatcher.lease:PT15S}") Duration lease,
             @Value("${aegis.commands.dispatcher.publish-timeout:PT5S}") Duration publishTimeout) {
         // A publication that may outlast its lease would let a second claim publish while the first still waits.
         if (publishTimeout.compareTo(lease) >= 0) {
             throw new IllegalStateException("aegis.commands.dispatcher.publish-timeout must be shorter than its lease");
         }
-        return new CommandDispatcher(jdbc, transactions, auditTrail, jsonMapper, clock, publisher, lease);
+        return new CommandDispatcher(jdbc, transactions, auditTrail, clock, publisher, lease);
     }
 
     @Bean

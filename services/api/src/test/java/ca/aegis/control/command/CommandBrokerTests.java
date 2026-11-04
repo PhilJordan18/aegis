@@ -101,7 +101,6 @@ class CommandBrokerTests extends ApiIntegrationTest {
         Received message = awaitMessages(received, 1).getFirst();
         assertThat(message.topic()).isEqualTo(COMMANDS);
         assertThat(message.qos()).isEqualTo(1);
-        assertThat(message.retained()).isFalse();
         JsonNode payload = jsonMapper.readTree(message.payload());
         assertThat(payload.get("schemaVersion").asString()).isEqualTo("3.0");
         assertThat(payload.get("type").asString()).isEqualTo("UNLOCK_COMPARTMENT");
@@ -114,7 +113,8 @@ class CommandBrokerTests extends ApiIntegrationTest {
         assertThat(fixtures.command(authorized.operation().id())).containsEntry("status", "DISPATCHED");
         assertThat(fixtures.operation(authorized.operation().id())).containsEntry("status", "COMMAND_SENT");
 
-        // Section 7.2: nothing stays on the broker for a hub that subscribes later.
+        // Section 7.2: nothing stays on the broker for a hub that subscribes later; a live subscriber always sees
+        // retain=false (MQTT 3.1.1, section 3.3.1.3), so only a late one proves it.
         List<Received> late = subscribeAsHub();
         Thread.sleep(1000);
         assertThat(late).isEmpty();
@@ -139,7 +139,6 @@ class CommandBrokerTests extends ApiIntegrationTest {
         assertThat(both).extracting(m -> jsonMapper.readTree(m.payload()).get("messageId").asString())
                 .containsOnly(authorized.command().messageId().toString());
         assertThat(both.get(1).payload()).isEqualTo(both.get(0).payload());
-        assertThat(both).allSatisfy(m -> assertThat(m.retained()).isFalse());
         assertThat(fixtures.operation(authorized.operation().id())).containsEntry("status", "COMMAND_SENT");
         assertThat(fixtures.audits(authorized.operation().id())).hasSize(1);
     }
@@ -169,7 +168,7 @@ class CommandBrokerTests extends ApiIntegrationTest {
     }
 
     private CommandDispatcher dispatcher(CommandPublisher publisher) {
-        return new CommandDispatcher(jdbc, transactions, auditTrail, jsonMapper, clock, publisher, LEASE);
+        return new CommandDispatcher(jdbc, transactions, auditTrail, clock, publisher, LEASE);
     }
 
     /** A hub connection with the test device account, which may read its own commands topic only. */
@@ -184,12 +183,13 @@ class CommandBrokerTests extends ApiIntegrationTest {
         hub.connect(options);
         hubs.add(hub);
         List<Received> received = new CopyOnWriteArrayList<>();
-        int[] granted = hub.subscribeWithResponse(new String[] {COMMANDS}, new int[] {1},
+        // Subscribed at QoS 2 so that the delivered QoS is the published one, not a downgrade to the subscription.
+        int[] granted = hub.subscribeWithResponse(new String[] {COMMANDS}, new int[] {2},
                 new org.eclipse.paho.client.mqttv3.IMqttMessageListener[] {(topic, message) -> received.add(
                         new Received(topic, new String(message.getPayload(), StandardCharsets.UTF_8),
                                 message.getQos(), message.isRetained()))})
                 .getGrantedQos();
-        assertThat(granted).containsExactly(1);
+        assertThat(granted).containsExactly(2);
         return received;
     }
 

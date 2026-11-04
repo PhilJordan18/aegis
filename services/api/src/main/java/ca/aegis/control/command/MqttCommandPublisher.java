@@ -53,15 +53,22 @@ public class MqttCommandPublisher implements CommandPublisher, SmartLifecycle {
     @Override
     public void publish(String topic, byte[] payload) throws CommandPublicationException {
         if (!client.isConnected()) {
-            throw new CommandPublicationException("BROKER_NOT_CONNECTED", null);
+            throw new CommandPublicationException("BROKER_NOT_CONNECTED", false, null);
         }
+        IMqttDeliveryToken token;
         try {
             // retained=false: a command must never reach a hub merely because it reconnects (section 7.2).
-            IMqttDeliveryToken token = client.publish(topic, payload, QOS_AT_LEAST_ONCE, false);
+            token = client.publish(topic, payload, QOS_AT_LEAST_ONCE, false);
+        } catch (MqttException refused) {
+            // Refused before it was queued for sending: the broker cannot have received it.
+            throw new CommandPublicationException("MQTT_PUBLISH_REFUSED reasonCode=" + refused.getReasonCode(),
+                    false, refused);
+        }
+        try {
             token.waitForCompletion(publishTimeout.toMillis());
-        } catch (MqttException failure) {
-            throw new CommandPublicationException("MQTT_PUBLISH_FAILED reasonCode=" + failure.getReasonCode(),
-                    failure);
+        } catch (MqttException unconfirmed) {
+            throw new CommandPublicationException("MQTT_PUBACK_MISSING reasonCode=" + unconfirmed.getReasonCode(),
+                    true, unconfirmed);
         }
     }
 
