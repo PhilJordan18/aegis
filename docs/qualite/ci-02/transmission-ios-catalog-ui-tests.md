@@ -145,3 +145,25 @@ La session cloud les branchera dans `ci.yml`.
 
 La session cloud ne modifie plus `CatalogUITests` ni `StillScreen`. La consolidation
 de #116 et #117 appartient à la session iOS.
+
+## Mise à jour du 4 novembre 2026 (session de relais)
+
+Run [41635406808](https://github.com/PhilJordan18/aegis/actions/runs/41635406808), tête
+`20e8959` de #120. Le code iOS est celui de `dev` (`639ada8`), et #120 ne modifie rien sous
+`apps/ios`.
+
+| Test | Durée | Constat |
+|---|---:|---|
+| `testCatalogueFilterSheetAndBackInBothLanguagesAndAppearances()` | 78,8 s | « Failed to get list of active applications: Timed out while fetching attributes `XC_kAXXCAttributeFocusedApplications` » : nouveau symptôme, délai d'une requête d'accessibilité |
+| `testOfflineRefreshKeepsTheLastListThenTryAgainRecovers()` | 50,7 s | `accessibilityAudit` -56, « Audit failed to complete in time » |
+
+Lecture :
+
+- **Le démarrage n'est pas en cause.** Le simulateur était démarré et prêt avant les tests :
+  démarré en 4 s, prêt 104 s plus tard.
+- **Le workflow n'est pas en cause.** La même famille d'échecs apparaît sur des têtes sans
+  l'étape de démarrage :
+  - #110 `0c1a46e` (run 41588612243) : -56 et `XCTAssertTrue failed` ;
+  - #111 `6aad1c7` (run 41588614163) : constat Dynamic Type sur « Last known: Blocked ».
+- Les constats sont transmis sur #117. Le remplacement de #117 par #116 n'est pas démontré :
+  #116 n'a qu'un run vert, et #117 un vert et un rouge.
