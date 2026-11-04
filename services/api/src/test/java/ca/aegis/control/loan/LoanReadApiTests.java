@@ -162,7 +162,8 @@ class LoanReadApiTests extends ApiIntegrationTest {
                 WHERE id = :id
                 """).param("id", loan).param("requested", utc(START.minusSeconds(110)))
                 .param("returned", utc(START.minusSeconds(60))).param("operation", confirmed).update();
-        clock.set(DUE.plusSeconds(3600));
+        // Past dueAt, but within the lifetime of the access token issued at START.
+        clock.set(DUE.plusSeconds(1));
 
         expectProblem(mine(token), 404, "ACTIVE_LOAN_NOT_FOUND");
         byId(token, loan).andExpect(status().isOk())
