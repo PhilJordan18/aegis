@@ -6,8 +6,9 @@ simulateur, Spring Boot, Flyway, `GET /api/v1/system/health`, la connexion par
 comptes préparés (`POST /api/v1/auth/login`, `GET /api/v1/auth/me`), les
 contrôles de rôle et de niveau d'accès côté serveur et l'administration des
 modèles et des actifs (document 09, sections 12.1 et 12.2), dont les mutations
-sont auditées (AUD-00). Il n'implémente pas
-encore les identifiants physiques, les placements ni l'ingestion MQTT. Les
+sont auditées (AUD-00). Les sections suivantes décrivent les tranches
+ajoutées depuis : identifiants physiques et placements, horaires, catalogue
+technicien et readiness, réservations, ingestion MQTT et état du casier. Les
 clients Web et iOS ont leur propre dossier sous `apps/`.
 
 ## Prérequis
@@ -237,7 +238,8 @@ type révoque l'ancienne dans la même transaction, index
 `ux_asset_identifiers_one_active_per_type` de `V003`), et l'archivage révoque
 les identifiants actifs de l'actif. La valeur, limitée à 255 caractères comme
 une observation du document 10, est comparée telle quelle, sans mise en
-majuscules; la normalisation des EPC RFID sera fixée avec PHY-02.
+majuscules. PHY-02 la compare aussi telle quelle à la valeur scannée : aucune
+normalisation des EPC n'est fixée par le document 10.
 
 `PUT /admin/assets/{assetId}/placement` termine le placement précédent au lieu
 de le supprimer et écrit `ASSET_PLACEMENT_CHANGED`. Il verrouille l'actif, puis
@@ -354,6 +356,175 @@ version MQTT qu'il encode. `IotEvidenceSchemaTests` vérifie les contraintes,
 le claim concurrent de la section 9.2, la déduplication concurrente d'un
 message, l'unicité concurrente d'une anomalie active et les droits.
 
+## Ingestion MQTT et état du casier (PHY-01)
+
+Avec `AEGIS_MQTT_ENABLED=true` et `AEGIS_MQTT_API_PASSWORD`, l'API s'abonne
+en QoS 1 à `aegis/v1/lockers/+/events` et `+/status` sous le compte
+`aegis_api`, et `GET /api/v1/lockers/{lockerId}/status` expose l'état dérivé
+des heartbeats. La session MQTT est toujours persistante (`cleanSession`
+faux) : l'ancienne propriété `aegis.mqtt.clean-session` n'existe plus. Un
+message n'est acquitté qu'après la validation de sa transaction. Si son
+ingestion échoue encore après ses nouvelles tentatives, les livraisons
+suivantes restent non acquittées, puis le client se déconnecte et se
+reconnecte avec un délai croissant de 1 à 30 s. Le broker renvoie alors les
+messages retenus dans leur ordre, et la déduplication absorbe ceux déjà
+enregistrés. Un message refusé par une contrainte de la base est seulement
+journalisé, avec son SQLState, le nom de la contrainte et son identifiant.
+
+### Compte MQTT du hub de test
+
+Les tests du broker (`MqttIngestionBrokerTests`) ne publient jamais sous
+l'identité du casier de démonstration. Ils utilisent un casier fictif
+réservé aux tests, `AEGIS-TEST-HUB`
+(`f08e3bc1-a0c6-4870-a6f6-55d9e9ddd502`), qu'ils provisionnent eux-mêmes
+dans leur base temporaire. Son compte Mosquitto porte cet identifiant, son
+mot de passe vient de `AEGIS_MQTT_TEST_DEVICE_PASSWORD` dans le fichier
+`--env-file`, et `infra/mqtt/acl` ne lui ouvre que ses quatre topics. Les
+tests lisent par défaut `infra/docker/.env.example`; les variables
+`AEGIS_TEST_MQTT_HOST`, `AEGIS_TEST_MQTT_PORT`,
+`AEGIS_TEST_MQTT_API_PASSWORD` et `AEGIS_TEST_MQTT_DEVICE_PASSWORD` les
+remplacent. Chaque exécution utilise un identifiant client unique et efface sa
+session à la fin.
+
+Un broker local créé avant ce compte doit être recréé une fois, depuis la
+racine du dépôt, sans supprimer de volume :
+
+```bash
+docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml up -d --wait
+```
+
+Le conteneur `mqtt-auth-init` ajoute alors le compte au fichier de mots de
+passe existant. Sans `AEGIS_MQTT_TEST_DEVICE_PASSWORD` dans le fichier
+d'environnement, la pile démarre sans ce compte et les tests du broker
+échouent : ajoutez la variable pour les exécuter. Le compte et le simulateur du
+casier de démonstration ne changent pas.
+
+## Présence RFID (PHY-02)
+
+Un `RFID_SCAN_COMPLETED` accepté (document 10, §12) est normalisé dans la
+transaction qui l'enregistre : une ligne `ASSET_IDENTIFIER_DETECTED` par
+identifiant observé dans `physical_observations`, puis, si l'actif attendu dans
+la cellule est connu, au plus un verdict `ASSET_PRESENT` ou `ASSET_ABSENT`. La
+table reste en insertion seule; le `raw_payload` du message est conservé. Hors
+opération, le message passe à `PROCESSED`; dans une opération, il reste
+`RECEIVED` pour le flux de retrait ou de retour (CHK/RET), qui n'est pas dans
+ce lot. Une observation ne modifie ni prêt, ni réservation, ni opération. Un
+scan qui nomme une cellule d'un autre casier est refusé
+(`REQUIRED_FIELD_MISSING`, faute de code au §21).
+
+Un verdict n'est écrit que pour un scan stable : lecteur `HEALTHY`, fenêtre
+d'au moins 3 s, horodatage au plus 5 s en avance et réception au plus 30 s
+après (§17.2), et identifiant de l'actif lié à la cellule avant le début de
+la fenêtre. `ASSET_PRESENT` exige au moins 3 lectures de l'étiquette;
+`ASSET_ABSENT`, son absence de toute la fenêtre; 1 ou 2 lectures ne donnent
+aucun verdict. Un lecteur `FAULTED` ou `UNKNOWN` ne confirme rien, mais son
+état est projeté sur la cellule, sauf si un scan plus récent de la cellule est
+déjà enregistré, même si le heartbeat arrivé en retard devient la référence.
+Un identifiant qui contient un caractère de contrôle est refusé
+(`REQUIRED_FIELD_MISSING`) et le message est conservé.
+
+`asset/ObservedPhysicalPresence` remplace `NoPhysicalProofPresence` derrière
+`PhysicalPresence`. La présence est recalculée à chaque lecture par
+`device/PresenceEvidence`, sans rien écrire. Elle vaut `PRESENT` ou `ABSENT`
+seulement si toutes ces conditions tiennent :
+
+- le casier est `ONLINE` maintenant (même règle des 30 s que PHY-01);
+- la cellule est active, `CONNECTED`, son lecteur `HEALTHY` et sa porte
+  `CLOSED` selon le heartbeat de référence;
+- le dernier scan de la cellule (plus grande `sequence` de la session) est
+  sain, fait dans la session et la connexion courantes, après le placement et
+  l'attribution de l'étiquette;
+- aucun événement de porte de la cellule ne le suit ni ne tombe dans sa
+  fenêtre;
+- chaque heartbeat de la session ultérieur au scan ou fait dans sa fenêtre
+  rapporte la cellule à son adresse, `CONNECTED` avec sa porte `CLOSED`. Une
+  cellule rapportée autrement ou à une autre adresse, absente du heartbeat ou
+  dans un heartbeat illisible annule le scan : tant que son lien avec le hub
+  est coupé, sa porte n'est pas observée, et la fenêtre suit la fermeture de
+  la porte (document 10, §12.2);
+- aucun heartbeat, message de porte ou scan du hub refusé ne peut l'avoir
+  suivi. Un message refusé ne garde pas sa cellule : il vaut pour toutes les
+  cellules du casier. Il annule le scan s'il a été reçu au même instant ou
+  après lui, si la `sequence` que son contenu brut annonce dans la session
+  courante est égale ou supérieure à la sienne, ou si son horodatage tombe au
+  début de la fenêtre ou après; un scan plus ancien rejoué après lui reste donc
+  sans valeur;
+- l'étiquette n'est vue dans aucune autre cellule par une détection que nul
+  scan sain ultérieur de cette cellule n'a remplacée;
+- pour `ABSENT` seulement, la porte a été ouverte puis fermée avant la
+  fenêtre (document 03, §4.16).
+
+Dans tous les autres cas, la présence vaut `UNKNOWN`. C'est le cas sans
+aucun scan, après un redémarrage ou une reconnexion tant qu'aucun nouveau scan
+n'est arrivé, et pour un message manquant, qui ne prouve jamais l'absence.
+
+Limite contractuelle : un message que le backend ne peut pas enregistrer du
+tout (JSON illisible, `messageId` invalide, `type` ou `timestamp` absent,
+charge trop grande) ne laisse aucune trace dans `inbound_device_messages`. Il
+ne peut donc annuler aucun scan, comme un message perdu : l'absence de
+message ne constitue jamais une preuve (document 10, §12.1). Seuls les
+messages enregistrés, acceptés ou refusés, comptent. Une
+présence observée pendant un prêt laisse l'actif `BORROWED`. L'anomalie
+`ASSET_PRESENT_WITH_ACTIVE_LOAN` du document 06, §12.4 relève d'ANO-01 (#52).
+
+La fraîcheur est événementielle (décision du 4 novembre 2026 sur #31, document
+06, §4.2) : le hub scanne après la fermeture d'une porte, au démarrage et à la
+reconnexion, jamais périodiquement, et un scan n'a pas d'âge maximal. Une
+cellule fermée observée sans interruption le garde. Un heartbeat maintient la
+continuité mais ne prouve pas la présence : un intervalle de plus de 30 s entre
+deux heartbeats valides de référence de la connexion courante (règle de PHY-01),
+ou entre son premier message et son premier heartbeat valide, annule tout scan
+antérieur, même si la même connexion reprend et même si personne n'a lu l'API
+pendant la coupure. Seul un scan postérieur à la reprise par sa réception, sa
+séquence et sa fenêtre la rétablit; aucune tolérance d'horloge n'est ajoutée.
+`RfidPresenceTests` (PostgreSQL) et
+`RfidPresenceBrokerTests` (Mosquitto, compte du hub de test) vérifient ces
+règles. Le scénario `tools/hub-simulator/scenarios/presence-demo-local.json`
+reste 30 s en ligne sans scanner, pose les étiquettes de démonstration dans A1
+et A2, les scanne, puis garde le hub en ligne dix minutes.
+
+## Outbox des commandes d'ouverture (IOT-01)
+
+`CommandOutbox.enqueueUnlock` écrit l'unique `UNLOCK_COMPARTMENT` d'une
+opération `AUTHORIZED` dont le défi local est `CONSUMED`, dans la transaction
+qui l'autorise (ADR-005) : appelé hors transaction, il échoue; refusé, il annule
+la décision avec lui. La cible est le casier et le compartiment de l'opération,
+la commande expire avec elle et porte le schéma 3.0 du document 10.
+
+Avec `AEGIS_COMMAND_DISPATCHER_ENABLED=true`, qui exige aussi
+`AEGIS_MQTT_ENABLED=true`, un job publie chaque seconde les commandes dues, en
+QoS 1 et jamais retenues, sur une connexion MQTT distincte de l'ingestion
+(`<client-id>-commands`). Chaque commande passe par trois transactions courtes :
+réclamation `FOR UPDATE SKIP LOCKED` avec un bail de 15 secondes, publication
+hors transaction, puis marquage `DISPATCHED` et passage de l'opération à
+`COMMAND_SENT`. `attempt_count` sert de jeton : un dispatcher dont le bail a
+expiré ne peut plus marquer, relâcher ni annuler la ligne. Le payload publié est
+celui de la ligne, inchangé à chaque tentative.
+
+Une tentative refusée avant tout envoi (broker non connecté) est certaine; une
+tentative sans accusé `PUBACK`, ou un bail terminé sans marquage, est incertaine
+et préfixe `last_error` de `PUBLICATION_UNCERTAIN`, préfixe conservé jusqu'à la
+fin de la commande. À l'échéance, la commande est annulée sans publication. Un
+retrait (`CHECKOUT`) qu'aucune tentative n'a pu publier passe à `EXPIRED`
+(document 05, §5); un retrait incertain et tout retour restent `AUTHORIZED`
+pour l'expiration des opérations (document 06, §14.2), qui reste à livrer : le
+retour doit aussi rétablir son prêt.
+
+La fenêtre entre la publication et le marquage n'est pas fermée : après un
+arrêt dans cette fenêtre, la même commande, avec le même `messageId`, est
+republiée à la fin du bail. La livraison est donc au moins une fois; la
+déduplication du hub (document 10, §16.1) empêche une seconde ouverture.
+`CommandBrokerTests` et `CommandDispatchJobTests` utilisent le broker de
+développement et le compte du hub de test ci-dessus; ils échouent sans broker.
+
+Limites connues : la réclamation et le bail utilisent l'horloge de l'API et non
+`now()` de PostgreSQL (document 08, §9.2), ce qui suppose des instances à
+l'heure; sans `AEGIS_COMMAND_DISPATCHER_ENABLED=true`, les commandes restent en
+attente et l'opération autorisée garde le casier; le job partage le planificateur
+de l'application, et un broker qui n'accuse plus réception peut retarder les
+autres jobs d'au plus `publish-timeout` par commande. La règle d'un accusé reçu
+avant le marquage (ligne encore `CLAIMED`) reste à fixer avec IOT-02.
+
 ## Catalogue technicien et readiness (RDY-01, RDY-02)
 
 `GET /api/v1/assets` et `GET /api/v1/assets/{assetId}` sont réservés au rôle
@@ -365,9 +536,8 @@ donne `BLOCKED` avec toutes ses raisons distinctes; une preuve physique
 insuffisante donne `UNKNOWN` / `UNKNOWN_PHYSICAL_STATE` seulement sans blocage;
 `READY` exige la présence `PRESENT`.
 
-Avant PHY-02, aucune observation n'est stockée : `asset/NoPhysicalProofPresence`
-répond `UNKNOWN` pour tout actif, donc un actif conforme est `UNKNOWN` et jamais
-`READY`. PHY-02 remplace ce composant derrière l'interface `PhysicalPresence`.
+La présence vient des scans RFID enregistrés (voir PHY-02) : sans preuve
+physique valable, un actif conforme est `UNKNOWN` et jamais `READY`.
 La disponibilité vient de `asset/AssetCustodyRepository` (document 03, §5.2) :
 un prêt `ACTIVE` ou `RETURN_PENDING` donne `BORROWED`, même en retard; sinon une
 réservation `ACTIVE` donne `RESERVED`, y compris pour son titulaire hors de son
@@ -415,19 +585,21 @@ python3 -I scripts/seed-demo-catalog.py
 ```
 
 Avec `AEGIS_DEMO_TECHNICIAN_PASSWORD` défini, il relit le catalogue technicien
-et échoue sur tout écart. Résultat attendu pour le technicien STANDARD, sans
-preuve physique avant PHY-02 :
+et échoue sur tout écart. Résultat attendu pour le technicien STANDARD :
 
 | Actif | Readiness | Placement |
 |---|---|---|
-| `AEG-DEMO-001` | `UNKNOWN` / `UNKNOWN_PHYSICAL_STATE` | A1 |
+| `AEG-DEMO-001` | `UNKNOWN` / `UNKNOWN_PHYSICAL_STATE`, `READY` après un scan | A1 |
 | `AEG-DEMO-002` | `BLOCKED` / `CALIBRATION_EXPIRED` | A2 |
 | `AEG-DEMO-003` | `BLOCKED` / `ACCESS_DENIED` (niveau `RESTRICTED`) | aucun |
 | `AEG-DEMO-004` | `UNKNOWN` / `UNKNOWN_PHYSICAL_STATE` (sans calibration) | aucun |
 | `AEG-DEMO-005` | `BLOCKED` / `MAINTENANCE` | aucun |
 
-Aucun actif n'est `READY` tant qu'aucune preuve de présence n'existe
-(décision du 28 octobre 2026).
+Seul `AEG-DEMO-001` peut devenir `READY`, après un scan stable de son
+étiquette `E20034120123456789000001` dans A1, par exemple avec le scénario
+`presence-demo-local.json` du simulateur. `AEG-DEMO-002` reste `BLOCKED` /
+`CALIBRATION_EXPIRED` même présent. Aucune route ni aucun champ ne force la
+présence.
 
 ## Réservations (RES-01)
 
@@ -459,13 +631,12 @@ transaction; un refus n'écrit rien et n'est pas enregistré pour la clé. Un
 `409` correspondant. Une réservation n'ouvre aucun compartiment, ne crée
 aucune opération et ne publie rien.
 
-Tant que la présence de production est `NoPhysicalProofPresence`, aucune
-readiness n'est `READY` : toute création reçoit `422 ASSET_NOT_READY` /
-`UNKNOWN_PHYSICAL_STATE` jusqu'à PHY-02 (décision du 28 octobre 2026). Seuls
-les tests importent `PresentAssetsConfiguration`, qui déclare chaque actif
-présent. `availableActions` contient `CANCEL` lorsque l'annulation serait
-acceptée (RES-02, section suivante) et jamais `CHECKOUT` tant que le retrait
-(CHK-01) n'existe pas. Un technicien ne lit que ses réservations :
+Sans scan valable, la présence de production vaut `UNKNOWN` : la création
+reçoit `422 ASSET_NOT_READY` / `UNKNOWN_PHYSICAL_STATE`. Seuls les tests
+importent `PresentAssetsConfiguration`, qui déclare chaque actif présent.
+`availableActions` contient `CANCEL` lorsque l'annulation serait acceptée
+(RES-02, section suivante) et jamais `CHECKOUT` tant que le retrait (CHK-01)
+n'existe pas. Un technicien ne lit que ses réservations :
 celle d'un autre donne `404 RESOURCE_NOT_FOUND`, l'absence de réservation
 active `404 ACTIVE_RESERVATION_NOT_FOUND`. `ReservationApiTests`,
 `ReservationConcurrencyTests` et `ReservationProductionPresenceTests` le
@@ -542,6 +713,35 @@ suivant décide de nouveau. Les tests d'intégration désactivent le job
 (`aegis.reservations.expiry.scheduled=false`) et pilotent l'horloge.
 `ReservationCancellationApiTests`, `ReservationExpiryTests` et
 `ReservationExpirySchedulingTests` le vérifient.
+
+## Recette présence et réservation
+
+Ce parcours valide le logiciel avec des observations simulées; il ne qualifie
+ni le RFID réel ni le casier. Avec l'API sur une base de recette dédiée, le
+jeu de démonstration et le simulateur qui joue
+`scenarios/presence-demo-local.json` :
+
+```bash
+set -a; . ~/.config/aegis/local-api.env; set +a
+AEGIS_RECIPE_DB_NAME=<base de recette> python3 -I scripts/check-presence-reservation.py
+```
+
+La phase `online` vérifie le hub `ONLINE`, `AEG-DEMO-001` présent et `READY`,
+`AEG-DEMO-002` bloqué par sa calibration, puis réserve, annule et rejoue
+l'annulation, laisse le serveur expirer une réservation de 20 s sans toucher
+l'horloge du Mac et lit l'audit. Sans horaire actif, chaque phase pose d'abord
+un horaire de test sur toute la journée par l'API d'administration. Dans les
+30 premières secondes du scénario, `--phase before` vérifie que
+`AEG-DEMO-001`, sans scan, reste `UNKNOWN` et n'est pas réservable. Avec
+`scenarios/presence-door-after-scan-local.json`, `--phase door` suit la porte
+de A1 par l'état du casier : ouverte puis refermée sans nouveau scan,
+`AEG-DEMO-001` est `UNKNOWN` et refusé; `AEG-DEMO-002` garde sa propre preuve;
+seul le scan suivant le rend `READY`. Après l'arrêt du simulateur et plus de
+30 s d'attente, `--phase offline` vérifie que `AEG-DEMO-001` redevient
+`UNKNOWN` et n'est plus réservable. L'audit n'a pas de
+route de lecture : le script le lit dans une transaction PostgreSQL en
+lecture seule. Une API, un broker ou une base absente fait échouer la
+recette. La fiche manuelle est `docs/qualite/recette-presence-reservation.md`.
 
 ## Rôles PostgreSQL
 
@@ -625,7 +825,8 @@ démarrage (voir « Rôles PostgreSQL »).
 PostgreSQL et Mosquitto sont publiés uniquement sur `127.0.0.1`. Le broker
 non chiffré est réservé au simulateur local isolé. Un hub réel, même au labo,
 exigera TLS avec certificat vérifié et ses propres identifiants. Les ACL de
-cette étape autorisent seulement l'identité fictive du contrat MQTT.
+cette étape autorisent seulement l'identité fictive du contrat MQTT et celle
+du hub de test.
 
 ## Limites connues de cette étape
 

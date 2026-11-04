@@ -54,6 +54,7 @@ export const fr = {
     signIn: 'Connexion — Aegis Manager',
     equipment: 'Équipements — Aegis Manager',
     equipmentPreview: 'Équipements — Aegis Manager',
+    lockers: 'Casiers — Aegis Manager',
     notFound: 'Page introuvable — Aegis Manager',
   } satisfies Record<RouteId, string>,
 
@@ -307,6 +308,82 @@ export const fr = {
     },
     calibrationValidUntil: ({ date }: { date: string }) => `Valide jusqu'au ${date}`,
     calibrationExpiredSince: ({ date }: { date: string }) => `Expirée depuis le ${date}`,
+  },
+
+  /**
+   * Locker status (PHY-01 #29, 09 §8.6, §16.1). « En ligne », « Hors ligne », « État inconnu » come from the
+   * approved Web direction (prototype `copy.connection`); every other text here is [P], proposed.
+   */
+  lockers: {
+    heading: 'Casiers',
+    loadingLockers: 'Recherche des casiers…',
+    loadingStatus: 'Chargement du statut du casier…',
+    /** Announced once, then only when the connection state changes. */
+    announce: ({ code, connection }: { code: string; connection: string }) => `Casier ${code}${NBSP}: ${connection}.`,
+    emptyTitle: 'Aucun casier trouvé parmi les équipements placés.',
+    emptyBody: 'Un casier apparaît ici dès qu\'un exemplaire y est placé. Les placements se consultent dans Équipements.',
+    emptyAction: 'Ouvrir Équipements',
+    notFoundTitle: 'Casier introuvable.',
+    notFoundBody: "Ce casier n'existe pas ou n'est plus accessible.",
+    forbiddenTitle: "Votre compte n'a pas accès au statut des casiers.",
+    statusLabel: 'Statut du casier',
+    connection: {
+      ONLINE: 'En ligne',
+      OFFLINE: 'Hors ligne',
+      UNKNOWN: 'État inconnu',
+    },
+    connectionNote: {
+      OFFLINE: "Le casier n'envoie plus de signal valide.",
+      UNKNOWN: `Aucun signal valide n'a encore été reçu${NBSP}: l'état du casier n'est pas connu.`,
+    },
+    lastSignal: ({ time }: { time: string }) => `Dernier signal${NBSP}: ${time}`,
+    neverSignal: 'Aucun signal reçu',
+    evaluatedNote: ({ time }: { time: string }) => `Évalué par le serveur à ${time}. Cette lecture n'autorise aucune ouverture.`,
+    readOnlyNote: `Lecture seule${NBSP}: aucune commande n'est envoyée au casier depuis cet écran.`,
+
+    windowTitle: "Horaire d'exploitation",
+    windowOpen: 'Ouvert',
+    windowClosed: 'Fermé',
+    windowClosesAt: 'Fermeture',
+    windowNextOpensAt: 'Prochaine ouverture',
+    noSchedule: "Aucun horaire d'ouverture",
+    noScheduleHelp: "Aucune plage d'ouverture n'est configurée pour ce casier.",
+    zoneNote: ({ zone }: { zone: string }) => `Fuseau du casier${NBSP}: ${zone}`,
+
+    compartmentsTitle: ({ count: value }: { count: number }) =>
+      plural(value, { one: `${count.format(value)} cellule`, other: `${count.format(value)} cellules` }),
+    compartmentsCaption: ({ code }: { code: string }) => `Cellules du casier ${code}`,
+    noCompartments: 'Aucune cellule déclarée pour ce casier.',
+    colCompartment: 'Cellule',
+    colEnabled: 'Activée',
+    colLink: 'Liaison',
+    colReader: 'Lecteur RFID',
+    colDoor: 'Porte',
+    colLock: 'Serrure',
+    colLastObservation: 'Dernière observation',
+    /** [P] The server keeps the last heartbeat's values on the cells while the locker is not online. */
+    lastKnownNote: `Dernier état connu, à la dernière observation${NBSP}: le casier n'est pas en ligne, ces valeurs ne sont pas l'état actuel.`,
+    noObservation: 'Aucune observation',
+    link: {
+      CONNECTED: 'Connectée',
+      DISCONNECTED: 'Déconnectée',
+      UNKNOWN: 'Inconnue',
+    },
+    reader: {
+      HEALTHY: 'En bon état',
+      FAULTED: 'En défaut',
+      UNKNOWN: 'Inconnu',
+    },
+    door: {
+      OPEN: 'Ouverte',
+      CLOSED: 'Fermée',
+      UNKNOWN: 'Inconnue',
+    },
+    lock: {
+      LOCKED: 'Verrouillée',
+      UNLOCKED: 'Déverrouillée',
+      UNKNOWN: 'Inconnue',
+    },
   },
 
   notFound: {
