@@ -103,6 +103,18 @@ scripts/ios-test.sh standalone
 - Les tests d'intégration sont **exclus**, pas ignorés; la recette échoue si
   un test est ignoré, échoue ou si aucun test ne s'exécute.
 
+`standalone` se découpe en deux recettes qui, ensemble, exécutent exactement
+les mêmes tests (195 + 22 = 217, vérifié par énumération avec Xcode 26.3) :
+
+```bash
+scripts/ios-test.sh pr        # rapide : tous les tests unitaires, un test UI par parcours critique, String Catalog
+scripts/ios-test.sh extended  # le reste des tests UI : deux langues, deux apparences, grandes tailles, audits
+```
+
+La liste des tests UI de `pr` est `PR_UI_TESTS` dans le script; tout test UI
+qui n'y figure pas s'exécute dans `extended`. Les deux recettes échouent comme
+`standalone` sur un échec, un test ignoré ou aucun test exécuté.
+
 La recette live demande l'API avec les comptes de démonstration activés
 (`services/api/README.md`). Les mots de passe viennent du fichier local non
 versionné utilisé pour démarrer l'API, sans être affichés :
@@ -377,7 +389,7 @@ AegisMobile/
 AegisMobileTests/    Swift Testing : configuration, client, états de l'écran,
                      traductions compilées, API réelle
 AegisMobileUITests/  XCUITest : erreur réseau et nouvelle tentative (FR, EN), service réel
-scripts/ios-test.sh      recettes standalone et live
+scripts/ios-test.sh      recettes standalone, pr, extended et live
 scripts/ios-destination.sh  choix du simulateur disponible (CI)
 scripts/summarize-results.py  contrôle et résumé des résultats (JSON, GitHub)
 scripts/check-strings.py contrôle du String Catalog
