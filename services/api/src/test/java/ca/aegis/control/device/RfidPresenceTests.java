@@ -564,6 +564,58 @@ class RfidPresenceTests extends ApiIntegrationTest {
         assertEquals("UNKNOWN", read(view, "$.readiness.result"));
     }
 
+    /**
+     * Review 4, LOW 1, kept fail-safe: a rejected heartbeat stamped two minutes ahead of the backend voids every scan of
+     * the connection whose window starts at or before its instant, so presence stays UNKNOWN for the length of the lead
+     * and never becomes READY. A window starting 1 ms after that instant counts again.
+     */
+    @Test
+    void aRejectedHeartbeatStampedAheadVoidsScansUntilItsInstant() throws Exception {
+        Instant ahead = clock.instant().plus(Duration.ofMinutes(2));
+        Map<String, Object> rejected = session.heartbeat(ahead, List.of(
+                cell(cellA, 1, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED"),
+                cell(cellB, 2, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED")));
+        rejected.put("clockSynchronized", "yes");
+        assertEquals(Outcome.REJECTED, ingestion.ingest("aegis/v1/lockers/" + locker + "/status", bytes(rejected)));
+
+        heartbeatsUntil(clock.instant().plus(Duration.ofMinutes(1)));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.readiness.result"), "one minute before the instant");
+        assertEquals("UNKNOWN", readinessAfterAScanFrom(ahead), "window starting at the instant");
+        assertEquals("READY", readinessAfterAScanFrom(ahead.plusMillis(1)), "window starting 1 ms after it");
+    }
+
+    /** The same bound holds for an accepted heartbeat stamped ahead that leaves the cell out. */
+    @Test
+    void anAcceptedHeartbeatStampedAheadVoidsScansUntilItsInstant() throws Exception {
+        Instant ahead = clock.instant().plus(Duration.ofMinutes(2));
+        ingest(session.heartbeat(ahead, List.of(cell(cellB, 2, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED"))));
+
+        assertEquals("UNKNOWN", readinessAfterAScanFrom(ahead), "window starting at the instant");
+        assertEquals("READY", readinessAfterAScanFrom(ahead.plusMillis(1)), "window starting 1 ms after it");
+    }
+
+    /** However far ahead a rejected message is stamped, its effect ends with its connection. */
+    @Test
+    void aReconnectionEndsTheVoidOfAMessageStampedAhead() throws Exception {
+        Map<String, Object> rejected = session.heartbeat(clock.instant().plus(Duration.ofDays(365)), List.of(
+                cell(cellA, 1, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED"),
+                cell(cellB, 2, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED")));
+        rejected.put("clockSynchronized", "yes");
+        assertEquals(Outcome.REJECTED, ingestion.ingest("aegis/v1/lockers/" + locker + "/status", bytes(rejected)));
+        clock.advance(Duration.ofSeconds(5));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.readiness.result"), "same connection");
+
+        clock.advance(Duration.ofSeconds(1));
+        session.connectionId = UUID.randomUUID();
+        ingest(session.availability(clock.instant(), "ONLINE", "CONNECTED"));
+        heartbeat("HEALTHY", "HEALTHY");
+        clock.advance(Duration.ofSeconds(5));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("READY", read(technicianView(assetA), "$.readiness.result"), "after the reconnection");
+    }
+
     /** No validity period is defined: on an unbroken connection reporting the cell connected and closed it holds. */
     @Test
     void aScanStaysValidWhileTheConnectionReportsTheCellConnectedAndClosed() throws Exception {
@@ -733,6 +785,23 @@ class RfidPresenceTests extends ApiIntegrationTest {
     private Map<String, Object> scan(UUID compartment, String reader, Map<String, Integer> reads) {
         Instant now = clock.instant();
         return session.scan(now, compartment, reader, now.minusSeconds(4), now.minusSeconds(1), reads);
+    }
+
+    /** A healthy 3 s scan of A1 whose window starts at {@code windowStart}, then A1's readiness. */
+    private String readinessAfterAScanFrom(Instant windowStart) throws Exception {
+        heartbeatsUntil(windowStart.plusSeconds(3));
+        ingest(session.scan(clock.instant(), cellA, "HEALTHY", windowStart, windowStart.plusSeconds(3),
+                reads(tagA, 3)));
+        return read(technicianView(assetA), "$.readiness.result");
+    }
+
+    /** Moves the clock to {@code instant} with a healthy heartbeat at least every 20 s, so the locker stays ONLINE. */
+    private void heartbeatsUntil(Instant instant) {
+        while (clock.instant().isBefore(instant)) {
+            Duration left = Duration.between(clock.instant(), instant);
+            clock.advance(left.compareTo(Duration.ofSeconds(20)) > 0 ? Duration.ofSeconds(20) : left);
+            heartbeat("HEALTHY", "HEALTHY");
+        }
     }
 
     private void heartbeat(String readerA, String readerB) {
