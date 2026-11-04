@@ -518,6 +518,47 @@ class CommandAcknowledgementsTests extends ApiIntegrationTest {
         assertThat(fixtures.command(sent.operation().id())).containsEntry("status", "DISPATCHED");
     }
 
+    /**
+     * Lead request on #123: an acknowledgement applied while valid, replayed after the operation ended, is the same
+     * report again and not a new incident: ALREADY_APPLIED, no anomaly, both states unchanged.
+     */
+    @Test
+    void anAcknowledgementAppliedWhileValidAndReplayedAfterTheEndIsNotAnIncident() {
+        Sent sent = sentCommand();
+        assertThat(report(sent, Kind.ACKNOWLEDGED, "ACCEPTED")).isEqualTo(Result.APPLIED);
+        fixtures.fail(sent.operation().id(), clock.instant());
+        clock.advance(Duration.ofSeconds(1));
+
+        assertThat(report(sent, Kind.ACKNOWLEDGED, "ACCEPTED")).isEqualTo(Result.ALREADY_APPLIED);
+        assertThat(report(sent, Kind.ACKNOWLEDGED, "ALREADY_APPLIED")).isEqualTo(Result.ALREADY_APPLIED);
+
+        assertThat(fixtures.anomalies(sent.operation().id())).isEmpty();
+        assertThat(fixtures.operation(sent.operation().id())).containsEntry("status", "FAILED");
+        assertThat(fixtures.command(sent.operation().id())).containsEntry("status", "ACKNOWLEDGED");
+        assertThat(eventTypes(sent)).containsExactly("COMMAND_SENT", "COMMAND_ACKNOWLEDGED");
+    }
+
+    /** Lead request on #123: a report naming another operation than its command's is not correlated. */
+    @Test
+    void aReportNamingAnotherOperationIsNotCorrelated() {
+        Sent sent = sentCommand();
+        Sent other = sentCommand();
+
+        // Stored against the other operation, as the ingestion would after resolving it, but naming this command.
+        Result result = transactions.execute(status -> acknowledgements.apply(new CommandReport(
+                fixtures.storeReport(other.operation(), sent.command().messageId(), "COMMAND_ACKNOWLEDGED",
+                        clock.instant()),
+                Kind.ACKNOWLEDGED, sent.command().messageId(), other.operation().id(), sent.operation().locker(),
+                sent.operation().compartment(), "ACCEPTED", clock.instant())));
+
+        assertThat(result).isEqualTo(Result.NOT_CORRELATED);
+        assertThat(fixtures.operation(sent.operation().id())).containsEntry("status", "COMMAND_SENT");
+        assertThat(fixtures.operation(other.operation().id())).containsEntry("status", "COMMAND_SENT");
+        assertThat(fixtures.command(sent.operation().id())).containsEntry("status", "DISPATCHED");
+        assertThat(eventTypes(sent)).containsExactly("COMMAND_SENT");
+        assertThat(eventTypes(other)).containsExactly("COMMAND_SENT");
+    }
+
     private boolean acknowledgementApplied(Sent sent) {
         return "ACKNOWLEDGED".equals(fixtures.command(sent.operation().id()).get("status"));
     }
