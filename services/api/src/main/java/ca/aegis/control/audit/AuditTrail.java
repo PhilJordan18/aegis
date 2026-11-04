@@ -29,14 +29,20 @@ public class AuditTrail {
     public void record(AuditEvent event) {
         jdbc.sql("""
                 INSERT INTO aegis.audit_events
-                    (event_type, actor_user_id, subject_type, subject_id, result, details, occurred_at)
-                VALUES (:type, :actor, :subjectType, :subjectId, :result, CAST(:details AS jsonb), :occurredAt)
+                    (event_type, actor_user_id, subject_type, subject_id, operation_id, from_state, to_state, result,
+                     reason, details, occurred_at)
+                VALUES (:type, :actor, :subjectType, :subjectId, :operation, :fromState, :toState, :result, :reason,
+                        CAST(:details AS jsonb), :occurredAt)
                 """)
                 .param("type", event.type().name())
                 .param("actor", event.actorUserId())
                 .param("subjectType", event.subjectType().name())
                 .param("subjectId", event.subjectId())
+                .param("operation", event.operationId())
+                .param("fromState", event.fromState())
+                .param("toState", event.toState())
                 .param("result", event.result() == null ? null : event.result().name())
+                .param("reason", event.reason())
                 .param("details", jsonMapper.writeValueAsString(event.details()))
                 .param("occurredAt", event.occurredAt().atOffset(ZoneOffset.UTC))
                 .update();

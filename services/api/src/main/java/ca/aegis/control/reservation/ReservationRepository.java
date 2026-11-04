@@ -5,6 +5,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -99,6 +100,65 @@ class ReservationRepository {
     Optional<ReservationRow> activeOfUser(UUID userId) {
         return jdbc.sql(SELECT_RESERVATION + "WHERE user_id = :id AND status = 'ACTIVE'").param("id", userId)
                 .query(ReservationRepository::map).optional();
+    }
+
+    /** The reservation row, locked after its asset (document 08, section 7.1) and read again under that lock. */
+    Optional<ReservationRow> lock(UUID id) {
+        return jdbc.sql(SELECT_RESERVATION + "WHERE id = :id FOR UPDATE").param("id", id)
+                .query(ReservationRepository::map).optional();
+    }
+
+    /** The asset of a reservation, read without lock to find the asset row to lock first. */
+    Optional<UUID> assetOf(UUID id) {
+        return jdbc.sql("SELECT asset_id FROM aegis.reservations WHERE id = :id").param("id", id)
+                .query(UUID.class).optional();
+    }
+
+    void cancel(UUID id, Instant at) {
+        end(id, "CANCELLED", "cancelled_at", at);
+    }
+
+    void expire(UUID id, Instant at) {
+        end(id, "EXPIRED", "expired_at", at);
+    }
+
+    /** A due reservation and its position in the order of a pass. */
+    record Due(UUID id, Instant reservedUntil) {
+    }
+
+    /**
+     * Up to {@code limit} {@code ACTIVE} reservations due at {@code now}, in the order {@code (reserved_until, id)},
+     * strictly after {@code after} when it is not null: a pass pages through them with this keyset, so the
+     * reservations it defers, skips or fails on never hide the later ones.
+     */
+    List<Due> dueAfter(Instant now, Due after, int limit) {
+        String keyset = after == null ? "" : " AND (reserved_until, id) > (:afterUntil, :afterId)";
+        var query = jdbc.sql("SELECT id, reserved_until FROM aegis.reservations WHERE status = 'ACTIVE' "
+                + "AND reserved_until <= :now" + keyset + " ORDER BY reserved_until, id LIMIT :limit")
+                .param("now", utc(now)).param("limit", limit);
+        if (after != null) {
+            query = query.param("afterUntil", utc(after.reservedUntil())).param("afterId", after.id());
+        }
+        return query.query((row, number) -> new Due(row.getObject("id", UUID.class),
+                instant(row, "reserved_until"))).list();
+    }
+
+    /** The active reservations of a technician or of an asset that are due at {@code now}. */
+    List<UUID> dueOf(UUID userId, UUID assetId, Instant now) {
+        return jdbc.sql("""
+                SELECT id FROM aegis.reservations
+                WHERE status = 'ACTIVE' AND reserved_until <= :now AND (user_id = :user OR asset_id = :asset)
+                ORDER BY id
+                """).param("now", utc(now)).param("user", userId).param("asset", assetId).query(UUID.class).list();
+    }
+
+    private void end(UUID id, String status, String dateColumn, Instant at) {
+        int ended = jdbc.sql("UPDATE aegis.reservations SET status = :status, " + dateColumn
+                + " = :at WHERE id = :id AND status = 'ACTIVE'")
+                .param("status", status).param("at", utc(at)).param("id", id).update();
+        if (ended != 1) {
+            throw new IllegalStateException("A locked reservation is no longer active: " + id);
+        }
     }
 
     /** The non-terminal checkout attempt of the reservation, if any; none exists before the checkout slice. */

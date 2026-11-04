@@ -63,7 +63,7 @@ class CustodySchemaTests {
     void migratedDatabase() {
         database = databases.create("custody");
         jdbc = JdbcClient.create(new DriverManagerDataSource(server.url(database), server.user(), server.password()));
-        assertEquals(8, flyway(absentRole).migrate().migrationsExecuted);
+        assertEquals(11, flyway(absentRole).migrate().migrationsExecuted);
         model = jdbc.sql("INSERT INTO aegis.asset_models (name) VALUES ('Multimeter') RETURNING id")
                 .query(UUID.class).single();
     }
@@ -89,8 +89,8 @@ class CustodySchemaTests {
                 "fk_locker_operations_asset:f", "fk_locker_operations_checkout_reservation:f",
                 "fk_locker_operations_compartment_locker:f", "fk_locker_operations_expected_identifier:f",
                 "fk_locker_operations_return_loan:f", "fk_locker_operations_user:f", "locker_operations_pkey:p",
-                "uq_locker_operations_id_asset_user:u", "uq_locker_operations_id_locker:u"),
-                constraints("locker_operations"));
+                "uq_locker_operations_id_asset_user:u", "uq_locker_operations_id_locker:u",
+                "uq_locker_operations_id_target:u"), constraints("locker_operations"));
         assertEquals(List.of(
                 "ck_loans_dates:c", "ck_loans_return_operation_distinct:c", "ck_loans_status:c",
                 "ck_loans_status_effects:c", "fk_loans_asset:f", "fk_loans_checkout_operation:f",
@@ -127,7 +127,8 @@ class CustodySchemaTests {
         assertEquals(List.of("reservations_pkey", "uq_reservations_id_asset_user",
                 "ux_reservations_one_active_per_asset", "ux_reservations_one_active_per_user"), indexes("reservations"));
         assertEquals(List.of("locker_operations_pkey", "uq_locker_operations_id_asset_user",
-                "uq_locker_operations_id_locker", "ux_locker_operations_one_open_per_locker"),
+                "uq_locker_operations_id_locker", "uq_locker_operations_id_target",
+                "ux_locker_operations_one_open_per_locker"),
                 indexes("locker_operations"));
         assertEquals(List.of("loans_pkey", "uq_loans_checkout_operation", "uq_loans_id_asset_holder",
                 "ux_loans_one_open_per_asset"), indexes("loans"));

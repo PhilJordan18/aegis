@@ -11,12 +11,11 @@ struct CatalogScreen: View {
     @Bindable var model: CatalogViewModel
     let makeSheet: (UUID) -> AssetSheetViewModel
     var reservations: ReservationContext?
-    private static let minimumRefresh = Duration.milliseconds(800)
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
+                CatalogStack {
                     FilterBar(selection: model.filter) { model.select($0) }
                     content
                 }
@@ -32,13 +31,9 @@ struct CatalogScreen: View {
             .onSubmit(of: .search) { model.submitSearch() }
             .onChange(of: model.searchText) { model.searchTextChanged() }
             .refreshable {
-                let started = ContinuousClock.now
                 // An unstructured task: the refresh must not be cancelled by
                 // the list updating under the indicator.
                 await Task { await model.reload() }.value
-                // An instant answer (offline) ending the refresh during the
-                // pull's own bounce left the list offset on iOS 26.
-                try? await Task.sleep(until: started + Self.minimumRefresh, clock: .continuous)
             }
             .task(id: model.criteria) { await model.loadIfNeeded() }
             .navigationDestination(for: AssetRoute.self) { route in
@@ -75,8 +70,13 @@ struct CatalogScreen: View {
                         AssetCardView(asset: asset, stale: snapshot.isStale)
                     }
                     .buttonStyle(.plain)
-                    .onAppear {
-                        if asset.id == snapshot.items.last?.id { Task { await model.loadMore() } }
+                    // The stack is not lazy on iOS 26, where every card is
+                    // created at once: the next page is read when the last
+                    // card enters the visible part of the scroll view.
+                    .onGeometryChange(for: Bool.self) { proxy in
+                        proxy.bounds(of: .scrollView).map { $0.intersects(proxy.frame(in: .local)) } ?? false
+                    } action: { visible in
+                        if visible, asset.id == snapshot.items.last?.id { Task { await model.loadMore() } }
                     }
                 }
                 footer(snapshot)
@@ -101,6 +101,23 @@ struct CatalogScreen: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 4)
                 .accessibilityIdentifier("catalog.footer")
+        }
+    }
+}
+
+/// The catalogue column. On iOS 26 a LazyVStack re-estimating its height
+/// while a pull to refresh ended left the list and the search drawer pulled
+/// down about 210 pt, and the next tap only released them; a stack that is
+/// not lazy settles. Before iOS 26 the lazy stack settles (checked on iOS
+/// 17.5), and there the accessibility audit passes with it but not without.
+private struct CatalogStack<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        if #available(iOS 26, *) {
+            VStack(alignment: .leading, spacing: 14) { content }
+        } else {
+            LazyVStack(alignment: .leading, spacing: 14) { content }
         }
     }
 }

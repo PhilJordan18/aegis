@@ -74,6 +74,12 @@ class AssetRepository {
                 .optional();
     }
 
+    /** {@link #lockForUpdate} without waiting: {@code false} when another transaction holds the row or it is absent. */
+    boolean tryLockForUpdate(UUID id) {
+        return !jdbc.sql("SELECT id FROM aegis.assets WHERE id = :id FOR UPDATE SKIP LOCKED")
+                .param("id", id).query(UUID.class).list().isEmpty();
+    }
+
     void update(UUID id, AssetRequest asset, Instant now) {
         jdbc.sql("""
                 UPDATE aegis.assets

@@ -9,8 +9,8 @@ import ca.aegis.control.asset.AssetSummary;
 /**
  * Document 09, section 8.3.
  *
- * @param availableActions always empty in this slice: no reservation mutation route exists yet, so none is admissible
- *        (section 8.10); the cancellation and checkout slices add {@code CANCEL} and {@code CHECKOUT}
+ * @param availableActions {@code CANCEL} when the cancellation would be accepted at the time of the response (section
+ *        8.10); {@code CHECKOUT} arrives with the checkout route
  */
 public record ReservationView(
         UUID id,

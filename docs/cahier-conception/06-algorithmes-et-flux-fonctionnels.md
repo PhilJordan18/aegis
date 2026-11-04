@@ -1100,7 +1100,7 @@ else:
 ```
 
 La session courante est celle du plus grand `bootCount`; un `DEVICE_AVAILABILITY` ONLINE
-ne rend jamais le locker ONLINE à lui seul (doc 10 §15.3, schéma MQTT 2.0).
+ne rend jamais le locker ONLINE à lui seul (doc 10 §15.3, depuis le schéma MQTT 2.0).
 
 Le hub publie un heartbeat toutes les 10 secondes. Un locker `OFFLINE` refuse toute nouvelle opération. Si la déconnexion survient après l’envoi d’une commande et que l’exécution est incertaine, l’opération passe à `ANOMALY`.
 
