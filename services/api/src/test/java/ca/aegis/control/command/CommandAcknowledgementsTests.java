@@ -431,6 +431,112 @@ class CommandAcknowledgementsTests extends ApiIntegrationTest {
         assertThat(fixtures.command(operation.id())).containsEntry("status", "REJECTED");
     }
 
+    /** Lead request on #123: a report naming another compartment of the same locker is refused by the ingestion. */
+    @Test
+    void anAcknowledgementForAnotherCompartmentIsRefusedByTheIngestion() {
+        Sent sent = sentCommand();
+        UUID neighbour = fixtures.compartment(sent.operation().locker(), 2);
+        UUID event = UUID.randomUUID();
+
+        assertThat(ingestion.ingest(eventsTopic(sent.operation().locker()), hubReport(sent, event,
+                sent.operation().locker(), neighbour, "\"result\":\"ACCEPTED\"", 31)))
+                .isEqualTo(DeviceMessageIngestion.Outcome.REJECTED);
+
+        assertThat(fixtures.inboundMessage(sent.operation().locker(), event))
+                .containsEntry("processing_status", "REJECTED")
+                .containsEntry("processing_error", "OPERATION_COMPARTMENT_MISMATCH");
+        assertThat(fixtures.operation(sent.operation().id())).containsEntry("status", "COMMAND_SENT");
+        assertThat(fixtures.command(sent.operation().id())).containsEntry("status", "DISPATCHED");
+        assertThat(eventTypes(sent)).containsExactly("COMMAND_SENT");
+    }
+
+    /** Lead request on #123: another locker's hub cannot acknowledge this locker's command. */
+    @Test
+    void anAcknowledgementFromAnotherLockersHubIsRefusedByTheIngestion() {
+        Sent sent = sentCommand();
+        Sent other = sentCommand();
+        UUID event = UUID.randomUUID();
+
+        // The other hub reports, on its own topic and under its own identity, about this locker's operation.
+        assertThat(ingestion.ingest(eventsTopic(other.operation().locker()), hubReport(sent, event,
+                other.operation().locker(), sent.operation().compartment(), "\"result\":\"ACCEPTED\"", 32)))
+                .isEqualTo(DeviceMessageIngestion.Outcome.REJECTED);
+
+        assertThat(fixtures.inboundMessage(other.operation().locker(), event))
+                .containsEntry("processing_status", "REJECTED")
+                .containsEntry("processing_error", "OPERATION_LOCKER_MISMATCH");
+
+        assertThat(fixtures.operation(sent.operation().id())).containsEntry("status", "COMMAND_SENT");
+        assertThat(fixtures.command(sent.operation().id())).containsEntry("status", "DISPATCHED");
+        assertThat(eventTypes(sent)).containsExactly("COMMAND_SENT");
+        assertThat(acknowledgementApplied(other)).isFalse();
+    }
+
+    /** At the correlation itself, a locker other than the command's is refused even with a matching compartment. */
+    @Test
+    void aReportNamingAnotherLockerIsNotCorrelated() {
+        Sent sent = sentCommand();
+        Result result = transactions.execute(status -> acknowledgements.apply(new CommandReport(
+                fixtures.storeReport(sent.operation(), sent.command().messageId(), "COMMAND_ACKNOWLEDGED",
+                        clock.instant()),
+                Kind.ACKNOWLEDGED, sent.command().messageId(), sent.operation().id(), UUID.randomUUID(),
+                sent.operation().compartment(), "ACCEPTED", clock.instant())));
+
+        assertThat(result).isEqualTo(Result.NOT_CORRELATED);
+        assertThat(fixtures.operation(sent.operation().id())).containsEntry("status", "COMMAND_SENT");
+    }
+
+    /**
+     * Lead request on #123: after the operation ended, the hub's acceptance and its redeliveries through the ingestion
+     * (the same event again, then the hub's ALREADY_APPLIED answer) open one anomaly in all.
+     */
+    @Test
+    void redeliveriesAfterTheEndThroughTheIngestionOpenOneAnomaly() {
+        Sent sent = sentCommand();
+        fixtures.fail(sent.operation().id(), clock.instant());
+        String topic = eventsTopic(sent.operation().locker());
+        UUID first = UUID.randomUUID();
+        byte[] accepted = hubReport(sent, first, sent.operation().locker(), sent.operation().compartment(),
+                "\"result\":\"ACCEPTED\"", 41);
+
+        assertThat(ingestion.ingest(topic, accepted)).isEqualTo(DeviceMessageIngestion.Outcome.ACCEPTED);
+        assertThat(ingestion.ingest(topic, accepted)).isEqualTo(DeviceMessageIngestion.Outcome.DUPLICATE);
+        clock.advance(Duration.ofSeconds(1));
+        UUID second = UUID.randomUUID();
+        assertThat(ingestion.ingest(topic, hubReport(sent, second, sent.operation().locker(),
+                sent.operation().compartment(), "\"result\":\"ALREADY_APPLIED\"", 42)))
+                .isEqualTo(DeviceMessageIngestion.Outcome.ACCEPTED);
+
+        assertThat(fixtures.inboundMessage(sent.operation().locker(), first))
+                .containsEntry("processing_status", "PROCESSED");
+        assertThat(fixtures.inboundMessage(sent.operation().locker(), second))
+                .containsEntry("processing_status", "PROCESSED");
+        assertThat(fixtures.anomalies(sent.operation().id())).singleElement()
+                .satisfies(anomaly -> assertThat(anomaly).containsEntry("type", "INCONSISTENT_PHYSICAL_STATE")
+                        .containsEntry("severity", "HIGH"));
+        assertThat(fixtures.operation(sent.operation().id())).containsEntry("status", "FAILED");
+        assertThat(fixtures.command(sent.operation().id())).containsEntry("status", "DISPATCHED");
+    }
+
+    private boolean acknowledgementApplied(Sent sent) {
+        return "ACKNOWLEDGED".equals(fixtures.command(sent.operation().id()).get("status"));
+    }
+
+    private static String eventsTopic(UUID locker) {
+        return "aegis/v1/lockers/" + locker + "/events";
+    }
+
+    /** A COMMAND_ACKNOWLEDGED of {@code sent}'s command as the hub of {@code locker} publishes it. */
+    private byte[] hubReport(Sent sent, UUID event, UUID locker, UUID compartment, String outcomeField,
+            long sequence) {
+        return ("""
+                {"schemaVersion":"3.0","messageId":"%s","type":"COMMAND_ACKNOWLEDGED",%s,"commandMessageId":"%s",\
+                "operationId":"%s","lockerId":"%s","compartmentId":"%s","timestamp":"%s","deviceSessionId":"%s",\
+                "bootCount":1,"sequence":%d}""").formatted(event, outcomeField, sent.command().messageId(),
+                sent.operation().id(), locker, compartment, UnlockCommand.format(clock.instant()),
+                fixtures.hubSession(locker), sequence).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
     private Result report(Sent sent, Kind kind, String outcome) {
         Instant at = clock.instant();
         String type = kind == Kind.ACKNOWLEDGED ? "COMMAND_ACKNOWLEDGED" : "COMMAND_REJECTED";
