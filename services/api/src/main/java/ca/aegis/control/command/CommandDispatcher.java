@@ -28,9 +28,9 @@ import ca.aegis.control.command.CommandPublisher.CommandPublicationException;
  * transactions with the publication between them, so no transaction is ever open while the broker is awaited:
  *
  * <ol>
- * <li>claim: {@code FOR UPDATE SKIP LOCKED} takes one due row and leases it; another dispatcher skips it, and sees
- * it again only once the lease has ended;</li>
- * <li>publish the payload rebuilt from the row, with its unchanged {@code messageId};</li>
+ * <li>claim: {@code FOR NO KEY UPDATE SKIP LOCKED} takes one due row and leases it; another dispatcher skips it,
+ * and sees it again only once the lease has ended;</li>
+ * <li>publish the stored payload, with its unchanged {@code messageId};</li>
  * <li>mark: under the locks of the operation then the command, only if this claim still owns the row.</li>
  * </ol>
  *
@@ -129,7 +129,7 @@ public class CommandDispatcher {
                     WHERE (status = 'PENDING' OR (status = 'CLAIMED' AND claim_until < :now))
                       AND next_attempt_at <= :now
                     ORDER BY created_at, id
-                    FOR UPDATE SKIP LOCKED
+                    FOR NO KEY UPDATE SKIP LOCKED
                     LIMIT 1
                 )
                 UPDATE aegis.command_outbox AS command
@@ -174,7 +174,9 @@ public class CommandDispatcher {
 
     /** Locks the operation, then the command: the same order as any other writer of both rows. */
     private Optional<OperationState> lockOperation(Claim claim) {
-        return jdbc.sql("SELECT status, type FROM aegis.locker_operations WHERE id = :id FOR UPDATE")
+        return jdbc.sql("""
+                SELECT status, type FROM aegis.locker_operations WHERE id = :id FOR NO KEY UPDATE
+                """)
                 .param("id", claim.command().operationId())
                 .query((row, number) -> new OperationState(row.getString("status"), row.getString("type")))
                 .optional();
@@ -184,7 +186,7 @@ public class CommandDispatcher {
         return jdbc.sql("""
                 SELECT id FROM aegis.command_outbox
                 WHERE id = :id AND status = 'CLAIMED' AND attempt_count = :attempt
-                FOR UPDATE
+                FOR NO KEY UPDATE
                 """).param("id", claim.id()).param("attempt", claim.attempt()).query(UUID.class).optional()
                 .isPresent();
     }

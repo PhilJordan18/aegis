@@ -196,10 +196,11 @@ public class DeviceMessageIngestion {
     /** IOT-02 #41: the stored report decides its command and operation in this same transaction. */
     private Outcome applyCommandReport(ActiveDevice device, Storable message, Fact fact, UUID inboundId,
             Instant receivedAt) {
-        CommandAcknowledgements.Result result = acknowledgements.apply(CommandReport.stored(inboundId,
-                message.type().name(), fact.commandMessageId(), fact.operationId(), device.lockerId(),
-                fact.compartmentId(), fact.parsedJson(), receivedAt));
-        ProcessingError rejection = switch (result) {
+        Optional<CommandReport> report = CommandReport.stored(inboundId, message.type().name(),
+                fact.commandMessageId(), fact.operationId(), device.lockerId(), fact.compartmentId(), fact.parsedJson(),
+                receivedAt);
+        ProcessingError rejection = report.isEmpty() ? ProcessingError.REQUIRED_FIELD_MISSING : switch (
+                acknowledgements.apply(report.get())) {
             case APPLIED, ALREADY_APPLIED, ANOMALY_RAISED -> null;
             case NOT_CORRELATED -> ProcessingError.COMMAND_CORRELATION_INVALID;
             case OUTSIDE_VALIDITY_WINDOW -> ProcessingError.TIMESTAMP_OUT_OF_RANGE;

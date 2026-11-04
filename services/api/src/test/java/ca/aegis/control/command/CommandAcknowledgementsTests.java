@@ -110,15 +110,15 @@ class CommandAcknowledgementsTests extends ApiIntegrationTest {
 
         Map<String, Object> operation = fixtures.operation(authorized.operation().id());
         assertThat(operation).containsEntry("status", "COMMAND_ACKNOWLEDGED");
-        assertThat(instant(operation.get("command_sent_at"))).isEqualTo(START.plusSeconds(1));
+        // An upper bound of the sending, one microsecond before the acknowledgement so that the audit keeps order.
+        assertThat(instant(operation.get("command_sent_at"))).isEqualTo(START.plusSeconds(1).minusNanos(1000));
         Map<String, Object> command = fixtures.command(authorized.operation().id());
         assertThat(command).containsEntry("status", "ACKNOWLEDGED");
         assertThat(command.get("claim_until")).isNull();
         assertThat(instant(command.get("published_at"))).isEqualTo(START.plusSeconds(1));
-        // Both transitions share one instant; their states, not their order, chain them.
         assertThat(fixtures.audits(sent.operation().id()))
                 .extracting(audit -> audit.get("from_state") + "->" + audit.get("to_state"))
-                .containsExactlyInAnyOrder("AUTHORIZED->COMMAND_SENT", "COMMAND_SENT->COMMAND_ACKNOWLEDGED");
+                .containsExactly("AUTHORIZED->COMMAND_SENT", "COMMAND_SENT->COMMAND_ACKNOWLEDGED");
 
         // The lease ends: the acknowledged row is never claimed or published again.
         clock.advance(LEASE.multipliedBy(2));
@@ -155,10 +155,16 @@ class CommandAcknowledgementsTests extends ApiIntegrationTest {
 
             assertThat(fixtures.operation(sent.operation().id())).as(reason).containsEntry("status", "COMMAND_SENT");
             assertThat(fixtures.command(sent.operation().id())).as(reason).containsEntry("status", "REJECTED");
-            assertThat(fixtures.audits(sent.operation().id())).as(reason).last()
-                    .satisfies(audit -> assertThat(audit).containsEntry("event_type", "COMMAND_REJECTED")
-                            .containsEntry("subject_type", "COMMAND_OUTBOX")
-                            .containsEntry("reason", "PHYSICAL_STATE_UNCERTAIN"));
+            // Document 10, section 9.1: the backend creates or keeps an anomaly for a locker inspection.
+            assertThat(fixtures.anomalies(sent.operation().id())).as(reason).singleElement()
+                    .satisfies(anomaly -> assertThat(anomaly).containsEntry("type", "INCONSISTENT_PHYSICAL_STATE")
+                            .containsEntry("severity", "HIGH"));
+            assertThat(fixtures.audits(sent.operation().id())).as(reason)
+                    .extracting(audit -> audit.get("event_type") + ":" + audit.get("reason"))
+                    .contains("COMMAND_REJECTED:PHYSICAL_STATE_UNCERTAIN",
+                            "ANOMALY_CREATED:COMMAND_REJECTED_" + reason);
+            assertThat(report(sent, Kind.REJECTED, reason)).as(reason).isEqualTo(Result.ALREADY_APPLIED);
+            assertThat(fixtures.anomalies(sent.operation().id())).as(reason).hasSize(1);
         }
     }
 
@@ -317,6 +323,107 @@ class CommandAcknowledgementsTests extends ApiIntegrationTest {
                 .containsEntry("processing_status", "REJECTED")
                 .containsEntry("processing_error", "TIMESTAMP_OUT_OF_RANGE");
         assertThat(fixtures.operation(late.operation().id())).containsEntry("status", "COMMAND_SENT");
+    }
+
+    /** Review HIGH 1 and MEDIUM 2: a malformed report is stored rejected, never applied, and never throws. */
+    @Test
+    void aMalformedReportIsStoredRejectedWithoutAdvancingOrBlockingTheIngestion() {
+        Sent sent = sentCommand();
+        UUID session = fixtures.hubSession(sent.operation().locker());
+        String topic = "aegis/v1/lockers/" + sent.operation().locker() + "/events";
+        Map<String, String> bodies = Map.of(
+                "NUL in detail", "\"type\":\"COMMAND_REJECTED\",\"reason\":\"CELL_UNREACHABLE\",\"detail\":\"bus\\u0000x\"",
+                "result not a string", "\"type\":\"COMMAND_ACKNOWLEDGED\",\"result\":{}",
+                "unknown result", "\"type\":\"COMMAND_ACKNOWLEDGED\",\"result\":\"BOGUS\"",
+                "missing result", "\"type\":\"COMMAND_ACKNOWLEDGED\"",
+                "unknown reason", "\"type\":\"COMMAND_REJECTED\",\"reason\":\"BOGUS\"");
+        long sequence = 20;
+        for (Map.Entry<String, String> body : bodies.entrySet()) {
+            UUID event = UUID.randomUUID();
+            byte[] payload = ("""
+                    {"schemaVersion":"3.0","messageId":"%s",%s,"commandMessageId":"%s","operationId":"%s",\
+                    "lockerId":"%s","compartmentId":"%s","timestamp":"%s","deviceSessionId":"%s","bootCount":1,\
+                    "sequence":%d}""").formatted(event, body.getValue(), sent.command().messageId(),
+                    sent.operation().id(), sent.operation().locker(), sent.operation().compartment(),
+                    UnlockCommand.format(clock.instant()), session, sequence++)
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+            DeviceMessageIngestion.Outcome outcome = ingestion.ingest(topic, payload);
+
+            assertThat(outcome).as(body.getKey()).isIn(DeviceMessageIngestion.Outcome.REJECTED,
+                    DeviceMessageIngestion.Outcome.LOGGED);
+            if (outcome == DeviceMessageIngestion.Outcome.REJECTED) {
+                assertThat(fixtures.inboundMessage(sent.operation().locker(), event)).as(body.getKey())
+                        .containsEntry("processing_status", "REJECTED");
+            }
+            assertThat(fixtures.operation(sent.operation().id())).as(body.getKey())
+                    .containsEntry("status", "COMMAND_SENT");
+            assertThat(fixtures.command(sent.operation().id())).as(body.getKey())
+                    .containsEntry("status", "DISPATCHED");
+        }
+        // The ingestion goes on: a valid acknowledgement behind them is still applied.
+        assertThat(report(sent, Kind.ACKNOWLEDGED, "ACCEPTED")).isEqualTo(Result.APPLIED);
+    }
+
+    @Test
+    void theStoredReportReadsOnlyTheValuesOfTheContract() {
+        UUID id = UUID.randomUUID();
+        Instant at = Instant.parse("2026-11-04T18:00:00Z");
+        assertThat(CommandReport.stored(id, "COMMAND_ACKNOWLEDGED", id, id, id, id, "{\"result\":\"ACCEPTED\"}", at))
+                .hasValueSatisfying(report -> assertThat(report.outcome()).isEqualTo("ACCEPTED"));
+        assertThat(CommandReport.stored(id, "COMMAND_REJECTED", id, id, id, id,
+                "{\"reason\":\"PREVIOUS_EXECUTION_UNCERTAIN\"}", at)).isPresent();
+        for (String payload : List.of("{\"result\":\"BOGUS\"}", "{\"result\":{}}", "{}", "not json")) {
+            assertThat(CommandReport.stored(id, "COMMAND_ACKNOWLEDGED", id, id, id, id, payload, at)).as(payload)
+                    .isEmpty();
+        }
+        assertThat(CommandReport.stored(id, "COMMAND_ACKNOWLEDGED", id, id, id, id, null, at)).isEmpty();
+        assertThat(CommandReport.stored(id, "COMMAND_REJECTED", id, id, id, id, "{\"reason\":\"BOGUS\"}", at))
+                .isEmpty();
+    }
+
+    /**
+     * Review LOW 5: only an acknowledgement may record the sending on the dispatcher's behalf (decision of #41). A
+     * rejection before the mark decides the command; the operation stays AUTHORIZED for its expiry, and the
+     * rejected command is never published again.
+     */
+    @Test
+    void aRejectionBeforeTheMarkDecidesTheCommandWithoutASecondTransition() {
+        Authorized authorized = authorizedCommand();
+        assertThatThrownBy(dispatcher((topic, payload) -> {
+            throw new WorkerStopped();
+        })::dispatchNext).isInstanceOf(WorkerStopped.class);
+        clock.advance(Duration.ofSeconds(1));
+        Sent early = new Sent(authorized.operation(), authorized.command());
+
+        assertThat(report(early, Kind.REJECTED, "CELL_UNREACHABLE")).isEqualTo(Result.APPLIED);
+
+        assertThat(fixtures.operation(authorized.operation().id())).containsEntry("status", "AUTHORIZED");
+        assertThat(fixtures.command(authorized.operation().id())).containsEntry("status", "REJECTED");
+        clock.advance(LEASE.multipliedBy(2));
+        assertThat(dispatcher((topic, payload) -> {
+            throw new AssertionError("a rejected command was published again");
+        }).dispatchNext()).isEqualTo(Outcome.IDLE);
+    }
+
+    /** Review MEDIUM 3: a return failing safely also reverts its loan, which the operation expiry owns. */
+    @Test
+    void aSafeRejectionLeavesAReturnToTheOperationExpiry() {
+        Operation operation = fixtures.returnAwaitingLocalProof(accounts.technician().id(),
+                clock.instant().minusSeconds(30));
+        UnlockCommand command = transactions.execute(status -> {
+            fixtures.authorize(operation, clock.instant());
+            return outbox.enqueueUnlock(operation.id());
+        });
+        clock.advance(Duration.ofSeconds(1));
+        assertThat(dispatcher((topic, payload) -> { }).dispatchNext()).isEqualTo(Outcome.PUBLISHED);
+        clock.advance(Duration.ofSeconds(1));
+        Sent sent = new Sent(operation, command);
+
+        assertThat(report(sent, Kind.REJECTED, "CELL_UNREACHABLE")).isEqualTo(Result.APPLIED);
+
+        assertThat(fixtures.operation(operation.id())).containsEntry("status", "COMMAND_SENT");
+        assertThat(fixtures.command(operation.id())).containsEntry("status", "REJECTED");
     }
 
     private Result report(Sent sent, Kind kind, String outcome) {

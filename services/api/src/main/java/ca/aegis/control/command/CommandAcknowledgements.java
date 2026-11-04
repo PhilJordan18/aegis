@@ -3,6 +3,8 @@ package ca.aegis.control.command;
 import static ca.aegis.control.command.CommandOutbox.utc;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -16,6 +18,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+
 import ca.aegis.control.audit.AuditEvent;
 import ca.aegis.control.audit.AuditEventType;
 import ca.aegis.control.audit.AuditResult;
@@ -26,7 +32,9 @@ import ca.aegis.control.audit.AuditTrail;
  * Applies a hub's {@code COMMAND_ACKNOWLEDGED} or {@code COMMAND_REJECTED} (document 10, section 10) to the command
  * and its operation, in the ingestion transaction that stores the inbound message (document 08, section 9.3). It
  * locks the operation then the command, as the dispatcher does, so the two never deadlock and an acknowledgement
- * that overtakes the dispatcher's mark is applied once: the late mark then finds a row it no longer owns.
+ * that overtakes the dispatcher's mark is applied once: the late mark then finds a row it no longer owns. Rows are
+ * locked {@code FOR NO KEY UPDATE}: storing the report already holds a foreign-key {@code KEY SHARE} lock on both rows,
+ * which {@code FOR UPDATE} would wait for and deadlock against a second report or the dispatcher.
  *
  * <p>The first report of a command decides it. A redelivered report, or the hub's answer to a redelivered command
  * (a new event {@code messageId}, the same {@code commandMessageId}), changes nothing: the hub's own journal prevents
@@ -50,13 +58,17 @@ public class CommandAcknowledgements {
         /** An acknowledgement received outside its command's validity window; nothing changed (decision of #41). */
         OUTSIDE_VALIDITY_WINDOW,
         /**
-         * An acknowledgement of a cancelled command or of a terminal operation: both are kept as they are, and one
-         * {@code INCONSISTENT_PHYSICAL_STATE} anomaly asks for a manual inspection of the locker (decision of #41).
+         * An acknowledgement of a cancelled command or of a terminal operation, or a rejection reporting an uncertain
+         * physical state after the end: both states are kept, and one {@code INCONSISTENT_PHYSICAL_STATE} anomaly
+         * asks for a manual inspection of the locker (decision of #41; document 10, section 9.1).
          */
         ANOMALY_RAISED,
-        /** A rejection of a cancelled command or of a terminal operation: recorded, nothing to change. */
+        /** A rejection before actuation of a cancelled command or of a terminal operation: recorded only. */
         TERMINAL_IGNORED
     }
+
+    /** Document 10, section 10.1. */
+    static final Set<String> ACKNOWLEDGEMENT_RESULTS = Set.of("ACCEPTED", "ALREADY_APPLIED");
 
     /**
      * Document 10, section 10.2: rejections the hub issues before any actuation, which leave the compartment locked.
@@ -67,6 +79,8 @@ public class CommandAcknowledgements {
             "UNKNOWN_COMPARTMENT", "CLOCK_NOT_SYNCHRONIZED", "COMMAND_EXPIRED", "LOCAL_OPERATION_IN_PROGRESS",
             "CELL_UNREACHABLE", "COMPARTMENT_DISABLED", "DOOR_STATE_UNSAFE", "POWER_STATE_UNSAFE",
             "INTERNAL_DEVICE_ERROR");
+
+    static final Set<String> UNCERTAIN_REJECTIONS = Set.of("LOCK_ACTUATION_FAILED", "PREVIOUS_EXECUTION_UNCERTAIN");
 
     private static final Logger log = LoggerFactory.getLogger(CommandAcknowledgements.class);
     private static final Set<String> TERMINAL = Set.of("CONFIRMED", "FAILED", "EXPIRED", "ANOMALY");
@@ -80,26 +94,28 @@ public class CommandAcknowledgements {
     }
 
     /**
-     * @param report a report already stored as {@code inboundMessageId} in this transaction, whose
+     * @param report a valid report already stored as {@code inboundMessageId} in this transaction, whose
      *        {@code commandMessageId} references an outbox row ({@code fk_inbound_messages_command})
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public Result apply(CommandReport report) {
-        Optional<String> operationStatus = jdbc.sql(
-                "SELECT status FROM aegis.locker_operations WHERE id = :id FOR UPDATE")
-                .param("id", report.operationId()).query(String.class).optional();
+        Optional<OperationRow> operation = jdbc.sql(
+                "SELECT status, type FROM aegis.locker_operations WHERE id = :id FOR NO KEY UPDATE")
+                .param("id", report.operationId())
+                .query((row, number) -> new OperationRow(row.getString("status"), row.getString("type")))
+                .optional();
         Optional<CommandRow> command = jdbc.sql("""
                 SELECT id, operation_id, locker_id, compartment_id, status, issued_at, expires_at
                 FROM aegis.command_outbox WHERE message_id = :messageId
-                FOR UPDATE
+                FOR NO KEY UPDATE
                 """).param("messageId", report.commandMessageId())
                 .query((row, number) -> new CommandRow(row.getObject("id", UUID.class),
                         row.getObject("operation_id", UUID.class), row.getObject("locker_id", UUID.class),
                         row.getObject("compartment_id", UUID.class), row.getString("status"),
-                        row.getObject("issued_at", java.time.OffsetDateTime.class).toInstant(),
-                        row.getObject("expires_at", java.time.OffsetDateTime.class).toInstant()))
+                        row.getObject("issued_at", OffsetDateTime.class).toInstant(),
+                        row.getObject("expires_at", OffsetDateTime.class).toInstant()))
                 .optional();
-        if (command.isEmpty() || operationStatus.isEmpty() || !command.get().matches(report)) {
+        if (command.isEmpty() || operation.isEmpty() || !command.get().matches(report)) {
             log.warn("Command report not correlated with its command: inboundMessageId={}, commandMessageId={}",
                     report.inboundMessageId(), report.commandMessageId());
             return Result.NOT_CORRELATED;
@@ -109,8 +125,8 @@ public class CommandAcknowledgements {
             return Result.ALREADY_APPLIED;
         }
         Instant at = report.receivedAt();
-        if (row.status().equals("CANCELLED") || TERMINAL.contains(operationStatus.get())) {
-            return reportAfterTheEnd(report, row, operationStatus.get(), at);
+        if (row.status().equals("CANCELLED") || TERMINAL.contains(operation.get().status())) {
+            return reportAfterTheEnd(report, row, operation.get().status(), at);
         }
         // The backend's reception instant, never the hub's clock, is compared with the command's own window.
         if (report.kind() == Kind.ACKNOWLEDGED && (at.isBefore(row.issuedAt()) || !at.isBefore(row.expiresAt()))) {
@@ -125,27 +141,36 @@ public class CommandAcknowledgements {
                     claim_until = NULL
                 WHERE id = :id
                 """).param("id", row.id()).param("status", report.kind().name()).param("at", utc(at)).update();
-        transitionOperation(report, row, operationStatus.get(), at);
+        transitionOperation(report, row, operation.get(), at);
         return Result.APPLIED;
     }
 
-    private void transitionOperation(CommandReport report, CommandRow command, String status, Instant at) {
+    private void transitionOperation(CommandReport report, CommandRow command, OperationRow operation, Instant at) {
         Map<String, Object> details = Map.of("commandMessageId", report.commandMessageId(), "outcome",
                 report.outcome());
-        if (status.equals("AUTHORIZED")) {
-            // The report overtook the dispatcher's mark: the command was sent, so the operation first records it.
+        String status = operation.status();
+        if (report.kind() == Kind.REJECTED && UNCERTAIN_REJECTIONS.contains(report.outcome())) {
+            // Document 10, section 9.1: the cell may have moved; the backend creates or keeps an anomaly.
+            auditCommandOnly(report, command, "PHYSICAL_STATE_UNCERTAIN", details, at);
+            openInspectionAnomaly(report, command, "COMMAND_REJECTED_" + report.outcome(), details, at);
+            return;
+        }
+        if (status.equals("AUTHORIZED") && report.kind() == Kind.ACKNOWLEDGED) {
+            // Decision of #41: the acknowledgement overtook the dispatcher's mark, so the operation first records
+            // the sending. command_sent_at is an upper bound, set just before the acknowledgement to keep the order.
+            Instant sentAt = at.minus(1, ChronoUnit.MICROS);
             jdbc.sql("""
-                    UPDATE aegis.locker_operations SET status = 'COMMAND_SENT', command_sent_at = :at
+                    UPDATE aegis.locker_operations SET status = 'COMMAND_SENT', command_sent_at = :sentAt
                     WHERE id = :id
-                    """).param("id", report.operationId()).param("at", utc(at)).update();
-            record(report, AuditEventType.COMMAND_SENT, "AUTHORIZED", "COMMAND_SENT", "SENT_BEFORE_MARK", details, at);
+                    """).param("id", report.operationId()).param("sentAt", utc(sentAt)).update();
+            record(report, AuditEventType.COMMAND_SENT, "AUTHORIZED", "COMMAND_SENT", "SENT_BEFORE_MARK", details,
+                    sentAt);
             status = "COMMAND_SENT";
         }
         if (!status.equals("COMMAND_SENT")) {
-            // Further along than COMMAND_SENT: the single command of the operation was already reported on.
-            auditTrail.recordAboutInboundMessage(new AuditEvent(eventType(report), null,
-                    AuditSubjectType.COMMAND_OUTBOX, command.id(), report.operationId(), null, null,
-                    AuditResult.ACCEPTED, "OPERATION_" + status, details, at), report.inboundMessageId());
+            // A rejection before the mark leaves the operation AUTHORIZED: no actuation happened, and the operation
+            // expiry (document 06, section 14.2) ends it safely; the dispatcher never claims a rejected row again.
+            auditCommandOnly(report, command, "OPERATION_" + status, details, at);
             return;
         }
         if (report.kind() == Kind.ACKNOWLEDGED) {
@@ -155,7 +180,7 @@ public class CommandAcknowledgements {
                     """).param("id", report.operationId()).param("at", utc(at)).update();
             record(report, AuditEventType.COMMAND_ACKNOWLEDGED, "COMMAND_SENT", "COMMAND_ACKNOWLEDGED", null,
                     details, at);
-        } else if (SAFE_REJECTIONS.contains(report.outcome())) {
+        } else if (operation.type().equals("CHECKOUT")) {
             String failure = "COMMAND_REJECTED_" + report.outcome();
             jdbc.sql("""
                     UPDATE aegis.locker_operations SET status = 'FAILED', terminal_at = :at, failure_reason = :failure
@@ -163,28 +188,36 @@ public class CommandAcknowledgements {
                     """).param("id", report.operationId()).param("at", utc(at)).param("failure", failure).update();
             record(report, AuditEventType.COMMAND_REJECTED, "COMMAND_SENT", "FAILED", failure, details, at);
         } else {
-            // LOCK_ACTUATION_FAILED, PREVIOUS_EXECUTION_UNCERTAIN or an unknown reason: the cell may have moved.
-            auditTrail.recordAboutInboundMessage(new AuditEvent(AuditEventType.COMMAND_REJECTED, null,
-                    AuditSubjectType.COMMAND_OUTBOX, command.id(), report.operationId(), null, null,
-                    AuditResult.ACCEPTED, "PHYSICAL_STATE_UNCERTAIN", details, at), report.inboundMessageId());
-            log.warn("Command rejected with an uncertain physical state; operation left for the anomaly handling: "
-                    + "operationId={}, reason={}", report.operationId(), report.outcome());
+            // A return failing safely also reverts its loan (document 05, sections 4 and 7): that belongs to the
+            // operation expiry, which keeps both in one transaction. The rejection is recorded on the command only.
+            auditCommandOnly(report, command, "RETURN_LEFT_FOR_EXPIRY", details, at);
         }
     }
 
     /**
      * Decision of #41, 4 November 2026: the operation and the command keep their final states. An acknowledgement
      * means the hub may have unlocked a cell that no live operation covers, so it opens one HIGH
-     * {@code INCONSISTENT_PHYSICAL_STATE} anomaly; a repeated report finds it open and opens none
-     * ({@code ux_anomalies_one_open_per_operation} is the final guard). The report alone never establishes a
-     * checkout or a return.
+     * {@code INCONSISTENT_PHYSICAL_STATE} anomaly; so does a rejection reporting an uncertain physical state
+     * (document 10, section 9.1). The report alone never establishes a checkout or a return.
      */
     private Result reportAfterTheEnd(CommandReport report, CommandRow command, String operationStatus, Instant at) {
         Map<String, Object> details = Map.of("commandMessageId", report.commandMessageId(), "outcome",
                 report.outcome(), "operationStatus", operationStatus, "commandStatus", command.status());
-        if (report.kind() == Kind.REJECTED) {
+        if (report.kind() == Kind.REJECTED && !UNCERTAIN_REJECTIONS.contains(report.outcome())) {
             return Result.TERMINAL_IGNORED;
         }
+        openInspectionAnomaly(report, command, report.kind() == Kind.ACKNOWLEDGED
+                ? "COMMAND_ACKNOWLEDGED_AFTER_END" : "COMMAND_REJECTED_" + report.outcome(), details, at);
+        return Result.ANOMALY_RAISED;
+    }
+
+    /**
+     * One HIGH anomaly per operation: a repeated report finds it open and opens none
+     * ({@code ux_anomalies_one_open_per_operation} is the final guard). Once an administrator has resolved it, a
+     * later report is a new observation and opens a new one.
+     */
+    private void openInspectionAnomaly(CommandReport report, CommandRow command, String reason,
+            Map<String, Object> details, Instant at) {
         Optional<UUID> anomaly = jdbc.sql("""
                 INSERT INTO aegis.anomalies (type, severity, locker_operation_id, compartment_id, detected_at, details)
                 VALUES ('INCONSISTENT_PHYSICAL_STATE', 'HIGH', :operation, :compartment, :at, CAST(:details AS jsonb))
@@ -193,18 +226,23 @@ public class CommandAcknowledgements {
                 RETURNING id
                 """).param("operation", report.operationId()).param("compartment", command.compartmentId())
                 .param("at", utc(at)).param("details", """
-                        {"reason": "COMMAND_ACKNOWLEDGED_AFTER_END", "commandMessageId": "%s"}"""
-                        .formatted(report.commandMessageId()))
+                        {"reason": "%s", "commandMessageId": "%s"}""".formatted(reason, report.commandMessageId()))
                 .query(UUID.class).optional();
         if (anomaly.isPresent()) {
             auditTrail.recordAboutInboundMessage(new AuditEvent(AuditEventType.ANOMALY_CREATED, null,
                     AuditSubjectType.ANOMALY, anomaly.get(), report.operationId(), null, null, AuditResult.ACCEPTED,
-                    "COMMAND_ACKNOWLEDGED_AFTER_END", details, at), report.inboundMessageId());
-            log.warn("Hub acknowledged a command after its operation ended or the command was cancelled; anomaly "
-                    + "opened for a locker inspection: operationId={}, anomalyId={}", report.operationId(),
-                    anomaly.get());
+                    reason, details, at), report.inboundMessageId());
+            log.warn("Command report leaves the physical state uncertain; anomaly opened for a locker inspection: "
+                    + "operationId={}, anomalyId={}, reason={}", report.operationId(), anomaly.get(), reason);
         }
-        return Result.ANOMALY_RAISED;
+    }
+
+    private void auditCommandOnly(CommandReport report, CommandRow command, String reason,
+            Map<String, Object> details, Instant at) {
+        auditTrail.recordAboutInboundMessage(new AuditEvent(report.kind() == Kind.ACKNOWLEDGED
+                ? AuditEventType.COMMAND_ACKNOWLEDGED : AuditEventType.COMMAND_REJECTED, null,
+                AuditSubjectType.COMMAND_OUTBOX, command.id(), report.operationId(), null, null, AuditResult.ACCEPTED,
+                reason, details, at), report.inboundMessageId());
     }
 
     private void record(CommandReport report, AuditEventType type, String from, String to, String reason,
@@ -214,36 +252,44 @@ public class CommandAcknowledgements {
                 report.inboundMessageId());
     }
 
-    private static AuditEventType eventType(CommandReport report) {
-        return report.kind() == Kind.ACKNOWLEDGED ? AuditEventType.COMMAND_ACKNOWLEDGED
-                : AuditEventType.COMMAND_REJECTED;
-    }
-
     /**
      * One stored report.
      *
-     * @param outcome {@code result} of an acknowledgement ({@code ACCEPTED}, {@code ALREADY_APPLIED}) or
-     *        {@code reason} of a rejection
+     * @param outcome {@code result} of an acknowledgement or {@code reason} of a rejection, one of the values of
+     *        document 10, section 10
      * @param receivedAt the backend's reception instant, never the hub's clock
      */
     public record CommandReport(UUID inboundMessageId, Kind kind, UUID commandMessageId, UUID operationId,
             UUID lockerId, UUID compartmentId, String outcome, Instant receivedAt) {
 
-        private static final tools.jackson.databind.json.JsonMapper JSON =
-                tools.jackson.databind.json.JsonMapper.builder().build();
+        private static final JsonMapper JSON = JsonMapper.builder().build();
 
         /**
-         * A report as the ingestion stored it: its type and its parsed payload, whose {@code result} or
-         * {@code reason} the ingestion has already validated against document 10, section 10.
+         * The report the ingestion stored, or empty when its {@code result} or {@code reason} is missing, not a
+         * string or not a value of document 10, section 10: such a report must be stored rejected, never applied.
+         * It never throws, so a malformed report cannot block the ingestion of the messages behind it.
          */
-        public static CommandReport stored(UUID inboundMessageId, String messageType, UUID commandMessageId,
-                UUID operationId, UUID lockerId, UUID compartmentId, String parsedPayload, Instant receivedAt) {
+        public static Optional<CommandReport> stored(UUID inboundMessageId, String messageType,
+                UUID commandMessageId, UUID operationId, UUID lockerId, UUID compartmentId, String parsedPayload,
+                Instant receivedAt) {
+            if (parsedPayload == null || operationId == null || compartmentId == null || commandMessageId == null) {
+                return Optional.empty();
+            }
             Kind kind = messageType.equals("COMMAND_ACKNOWLEDGED") ? Kind.ACKNOWLEDGED : Kind.REJECTED;
-            tools.jackson.databind.JsonNode payload = JSON.readTree(parsedPayload);
-            String field = kind == Kind.ACKNOWLEDGED ? "result" : "reason";
-            String outcome = payload.hasNonNull(field) ? payload.get(field).asString() : "UNKNOWN";
-            return new CommandReport(inboundMessageId, kind, commandMessageId, operationId, lockerId, compartmentId,
-                    outcome, receivedAt);
+            JsonNode value;
+            try {
+                value = JSON.readTree(parsedPayload).get(kind == Kind.ACKNOWLEDGED ? "result" : "reason");
+            } catch (JacksonException unreadable) {
+                return Optional.empty();
+            }
+            if (value == null || !value.isString()) {
+                return Optional.empty();
+            }
+            String outcome = value.asString();
+            boolean allowed = kind == Kind.ACKNOWLEDGED ? ACKNOWLEDGEMENT_RESULTS.contains(outcome)
+                    : SAFE_REJECTIONS.contains(outcome) || UNCERTAIN_REJECTIONS.contains(outcome);
+            return allowed ? Optional.of(new CommandReport(inboundMessageId, kind, commandMessageId, operationId,
+                    lockerId, compartmentId, outcome, receivedAt)) : Optional.empty();
         }
 
         public CommandReport {
@@ -256,6 +302,9 @@ public class CommandAcknowledgements {
             Objects.requireNonNull(outcome, "outcome");
             Objects.requireNonNull(receivedAt, "receivedAt");
         }
+    }
+
+    private record OperationRow(String status, String type) {
     }
 
     private record CommandRow(UUID id, UUID operationId, UUID lockerId, UUID compartmentId, String status,
