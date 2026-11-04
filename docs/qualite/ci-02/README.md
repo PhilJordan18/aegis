@@ -20,6 +20,11 @@ il durcit leurs scripts, mesure leurs preuves et propose une promotion.
   est hors des `needs`, `CI result` se termine sans l'attendre (par exemple run
   `41577913719` : `CI result` vert à 04:26, iOS encore en cours). Les comptes
   ci-dessous portent sur la conclusion **du job**, jamais sur celle du workflow.
+  Depuis #111, le résumé de `CI result` nomme les jobs qu'il n'agrège pas
+  (iOS standalone tests, CI script tests). Un test vérifie que chaque job hors
+  des `needs` y figure. Exemple constaté le 4 novembre sur le run 41865264625
+  (#116, `07da342`) : `CI result` est vert à 16:17Z, alors qu'iOS échoue à
+  16:38Z.
 
 ## Matrice des jobs (état de `dev`)
 

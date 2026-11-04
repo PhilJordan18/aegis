@@ -411,6 +411,17 @@ class WorkflowWiringTests(unittest.TestCase):
                 command = result[result.index("run:"):]
                 self.assertRegex(command, rf'"[^"=]+=\${variable.group(1)}"', f"{job} is not passed to ci-result.py")
 
+    def test_every_job_outside_the_aggregator_is_named_in_its_summary(self):
+        result = self.text[self.text.index("  result:\n"):]
+        needs = {name.strip() for name in re.search(r"needs: \[([^\]]*)\]", result).group(1).split(",")}
+        note = result[result.index("- name: Jobs outside CI result"):]
+        jobs = re.findall(r"^  (\w+):\n    name: (.+)$", self.text, re.M)
+        outside = [(job, name) for job, name in jobs if job not in needs and job != "result"]
+        self.assertTrue(outside)
+        for job, name in outside:
+            with self.subTest(job=job):
+                self.assertIn(name, note, f"{name} is outside CI result but not named in its summary")
+
 
 if __name__ == "__main__":
     unittest.main()

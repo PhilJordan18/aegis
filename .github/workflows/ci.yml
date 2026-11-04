@@ -325,3 +325,10 @@ jobs:
           python3 .github/scripts/ci-result.py "$CHANGES"
           "API tests=$API" "Web checks=$WEB" "Simulator tests=$SIMULATOR"
           "Agent setup validator=$AGENTS" "Accepted ADR guard=$ADRS"
+      - name: Jobs outside CI result
+        if: always()
+        # These jobs are not in `needs` (#67 criteria not met), so CI result
+        # neither waits for nor reflects them: read their own checks.
+        run: >-
+          echo "**Not aggregated:** iOS standalone tests, CI script tests. A green CI result
+          says nothing about them; read their own checks." >> "$GITHUB_STEP_SUMMARY"
