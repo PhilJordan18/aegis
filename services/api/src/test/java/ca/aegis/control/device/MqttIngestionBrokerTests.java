@@ -329,19 +329,21 @@ class MqttIngestionBrokerTests extends ApiIntegrationTest {
                 START.minusSeconds(60), START.plusSeconds(1800));
         Map<String, Object> before = custody(loan, reservation, borrowed, reserved, token);
 
-        publish(STATUS, session.heartbeat(clock.instant(), "OPEN"));
-        publish(EVENTS, session.deviceError(clock.instant(), "LOCK_ACTUATOR_FAULT", "CRITICAL"));
-        publish(EVENTS, session.deviceError(clock.instant(), "INBOUND_MESSAGE_INVALID", "WARNING"));
-        publish(STATUS, session.availability(clock.instant(), "OFFLINE", "SHUTDOWN"));
-        publish(EVENTS, new Session(BOOTS.incrementAndGet()).restarted(clock.instant()));
+        List<Object> published = List.of(
+                publish(STATUS, session.heartbeat(clock.instant(), "OPEN")),
+                publish(EVENTS, session.deviceError(clock.instant(), "LOCK_ACTUATOR_FAULT", "CRITICAL")),
+                publish(EVENTS, session.deviceError(clock.instant(), "INBOUND_MESSAGE_INVALID", "WARNING")),
+                publish(STATUS, session.availability(clock.instant(), "OFFLINE", "SHUTDOWN")),
+                publish(EVENTS, new Session(BOOTS.incrementAndGet()).restarted(clock.instant())))
+                .stream().map(message -> message.get("messageId")).toList();
 
         assertEquals(before, custody(loan, reservation, borrowed, reserved, token));
+        // Scoped to these messages: other tests of the shared test hub store scans and their observations.
         assertEquals(0L, jdbc.sql("""
                 SELECT count(*) FROM aegis.physical_observations o
                 JOIN aegis.inbound_device_messages m ON m.id = o.inbound_message_id
-                JOIN aegis.locker_devices d ON d.id = m.locker_device_id
-                WHERE d.locker_id = :locker
-                """).param("locker", LOCKER).query(Long.class).single());
+                WHERE m.message_id::text IN (:ids)
+                """).param("ids", published.stream().map(Object::toString).toList()).query(Long.class).single());
     }
 
     private Map<String, Object> custody(UUID loan, UUID reservation, UUID borrowed, UUID reserved, String token)
