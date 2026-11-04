@@ -167,9 +167,15 @@ public class CommandAcknowledgements {
                     sentAt);
             status = "COMMAND_SENT";
         }
+        if (status.equals("AUTHORIZED") && operation.type().equals("CHECKOUT")) {
+            // A refusal before any actuation that overtook the mark: document 05, section 5, AUTHORIZED -> FAILED,
+            // "publication impossible avant toute possibilité d'exécution", one transition and no physical effect.
+            fail(report, "AUTHORIZED", details, at);
+            return;
+        }
         if (!status.equals("COMMAND_SENT")) {
-            // A rejection before the mark leaves the operation AUTHORIZED: no actuation happened, and the operation
-            // expiry (document 06, section 14.2) ends it safely; the dispatcher never claims a rejected row again.
+            // A return refused before the mark: its safe failure also reverts the loan, in the operation expiry
+            // (document 06, section 14.2). The dispatcher never claims a rejected row again.
             auditCommandOnly(report, command, "OPERATION_" + status, details, at);
             return;
         }
@@ -181,17 +187,21 @@ public class CommandAcknowledgements {
             record(report, AuditEventType.COMMAND_ACKNOWLEDGED, "COMMAND_SENT", "COMMAND_ACKNOWLEDGED", null,
                     details, at);
         } else if (operation.type().equals("CHECKOUT")) {
-            String failure = "COMMAND_REJECTED_" + report.outcome();
-            jdbc.sql("""
-                    UPDATE aegis.locker_operations SET status = 'FAILED', terminal_at = :at, failure_reason = :failure
-                    WHERE id = :id
-                    """).param("id", report.operationId()).param("at", utc(at)).param("failure", failure).update();
-            record(report, AuditEventType.COMMAND_REJECTED, "COMMAND_SENT", "FAILED", failure, details, at);
+            fail(report, "COMMAND_SENT", details, at);
         } else {
             // A return failing safely also reverts its loan (document 05, sections 4 and 7): that belongs to the
             // operation expiry, which keeps both in one transaction. The rejection is recorded on the command only.
             auditCommandOnly(report, command, "RETURN_LEFT_FOR_EXPIRY", details, at);
         }
+    }
+
+    private void fail(CommandReport report, String from, Map<String, Object> details, Instant at) {
+        String failure = "COMMAND_REJECTED_" + report.outcome();
+        jdbc.sql("""
+                UPDATE aegis.locker_operations SET status = 'FAILED', terminal_at = :at, failure_reason = :failure
+                WHERE id = :id
+                """).param("id", report.operationId()).param("at", utc(at)).param("failure", failure).update();
+        record(report, AuditEventType.COMMAND_REJECTED, from, "FAILED", failure, details, at);
     }
 
     /**

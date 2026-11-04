@@ -383,12 +383,12 @@ class CommandAcknowledgementsTests extends ApiIntegrationTest {
     }
 
     /**
-     * Review LOW 5: only an acknowledgement may record the sending on the dispatcher's behalf (decision of #41). A
-     * rejection before the mark decides the command; the operation stays AUTHORIZED for its expiry, and the
-     * rejected command is never published again.
+     * Review LOW 5 and its re-verification: only an acknowledgement records the sending on the dispatcher's behalf
+     * (decision of #41). A refusal before the mark is a publication without any possible execution (document 05,
+     * section 5): the checkout fails in one transition, and the rejected command is never published again.
      */
     @Test
-    void aRejectionBeforeTheMarkDecidesTheCommandWithoutASecondTransition() {
+    void aRejectionBeforeTheMarkFailsTheCheckoutInOneTransition() {
         Authorized authorized = authorizedCommand();
         assertThatThrownBy(dispatcher((topic, payload) -> {
             throw new WorkerStopped();
@@ -398,8 +398,13 @@ class CommandAcknowledgementsTests extends ApiIntegrationTest {
 
         assertThat(report(early, Kind.REJECTED, "CELL_UNREACHABLE")).isEqualTo(Result.APPLIED);
 
-        assertThat(fixtures.operation(authorized.operation().id())).containsEntry("status", "AUTHORIZED");
+        assertThat(fixtures.operation(authorized.operation().id())).containsEntry("status", "FAILED")
+                .containsEntry("failure_reason", "COMMAND_REJECTED_CELL_UNREACHABLE")
+                .containsEntry("command_sent_at", null);
         assertThat(fixtures.command(authorized.operation().id())).containsEntry("status", "REJECTED");
+        assertThat(fixtures.audits(authorized.operation().id()))
+                .extracting(audit -> audit.get("from_state") + "->" + audit.get("to_state"))
+                .containsExactly("AUTHORIZED->FAILED");
         clock.advance(LEASE.multipliedBy(2));
         assertThat(dispatcher((topic, payload) -> {
             throw new AssertionError("a rejected command was published again");
