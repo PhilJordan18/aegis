@@ -45,7 +45,7 @@ def main():
     path = os.environ.get("GITHUB_STEP_SUMMARY")
     if path:
         with open(path, "a", encoding="utf-8") as out:
-            out.write("### iOS standalone tests\n\n" + text)
+            out.write("### iOS tests\n\n" + text)
     return status
 
 

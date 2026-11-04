@@ -34,6 +34,7 @@ jobs:
       agents: ${{ steps.filter.outputs.agents }}
       adrs: ${{ steps.filter.outputs.adrs }}
       ios: ${{ steps.filter.outputs.ios }}
+      ios_fast: ${{ steps.filter.outputs.ios_fast }}
       ci: ${{ steps.filter.outputs.ci }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -44,6 +45,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
           HEAD_SHA: ${{ github.sha }}
         run: sh .github/scripts/changed-components.sh
 
@@ -134,7 +136,7 @@ jobs:
       - run: npm run build
 
   # Simulator tests, the agent setup validator and the accepted ADR guard are in
-  # the `needs` of `CI result` (#67, docs/qualite/ci-02/). iOS standalone and CI
+  # the `needs` of `CI result` (#67, docs/qualite/ci-02/). iOS tests and CI
   # script tests stay outside it until they meet the criteria of #67.
   simulator:
     name: Simulator tests
@@ -218,7 +220,7 @@ jobs:
         run: python3 .github/scripts/check-accepted-adrs.py
 
   ios:
-    name: iOS standalone tests
+    name: iOS tests
     needs: changes
     if: needs.changes.outputs.ios == 'true'
     # Xcode 26.3 (17C529) is pinned explicitly; this hosted configuration is
@@ -274,15 +276,33 @@ jobs:
           xcrun simctl bootstatus "$udid"
           ready=$(date +%s)
           echo "Simulator booted in $((booted - start)) s, ready $((ready - booted)) s later" | tee -a "$GITHUB_STEP_SUMMARY"
-      - name: Standalone recipe
-        run: scripts/ios-test.sh standalone
+      - name: Choose the recipe
+        # changed-components.sh selects the fast `pr` recipe only for a pull
+        # request into dev that changes non-visual iOS paths; everything else
+        # runs `standalone`, which is `pr` plus `extended`. Until the `pr`
+        # recipe exists on the checked-out branch, standalone runs instead.
+        env:
+          FAST: ${{ needs.changes.outputs.ios_fast }}
+        run: |
+          recipe=standalone
+          if [ "$FAST" = true ]; then
+            if grep -Eq '^ *pr\) pr ;;' scripts/ios-test.sh; then
+              recipe=pr
+            else
+              echo "::notice::scripts/ios-test.sh has no pr recipe on this branch; running standalone"
+            fi
+          fi
+          echo "IOS_RECIPE=$recipe" >> "$GITHUB_ENV"
+          echo "iOS recipe: **$recipe**" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: iOS recipe
+        run: scripts/ios-test.sh "$IOS_RECIPE"
       - name: Result summary
         if: always()
         run: python3 ../../.github/scripts/xcresult-summary.py
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ios-standalone-results
+          name: ios-test-results
           path: apps/ios/build/results/
           retention-days: 7
 
@@ -330,5 +350,5 @@ jobs:
         # These jobs are not in `needs` (#67 criteria not met), so CI result
         # neither waits for nor reflects them: read their own checks.
         run: >-
-          echo "**Not aggregated:** iOS standalone tests, CI script tests. A green CI result
+          echo "**Not aggregated:** iOS tests, CI script tests. A green CI result
           says nothing about them; read their own checks." >> "$GITHUB_STEP_SUMMARY"

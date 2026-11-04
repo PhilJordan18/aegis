@@ -159,3 +159,67 @@ Les 14 tests UI critiques couvrent :
 **Risque relevé par la session iOS.** L'audit de la feuille de filtres, qui a échoué
 sur #116 `07da342`, est dans `extended`. Une PR non visuelle ne le rencontrerait qu'au
 push sur `dev`, puis avant `main`.
+
+## Câblage livré (branche `67-ci-ios-suite-selection`, 4 novembre)
+
+**Filtre.** `changed-components.sh` ajoute la sortie `ios_fast`. Elle vaut `true` seulement
+quand trois conditions sont réunies :
+
+- la PR vise `dev` ;
+- elle modifie `apps/ios/` ;
+- chaque fichier iOS modifié est sous un chemin non visuel :
+  - `AegisMobile/Networking/` ;
+  - `AegisMobileTests/` ;
+  - `docs/` ;
+  - `README.md`.
+
+Tout le reste exécute `standalone` (= `pr` + `extended`, sans perte de couverture) :
+
+- vues, `Session/`, ressources, `Localizable.xcstrings`, tests UI, recettes, projet,
+  `Config/`, chemin inconnu ;
+- push, lancement manuel, PR vers `main` ;
+- `ci.yml` ou `xcresult-summary.py` modifié.
+
+La liste non visuelle est volontairement étroite. La session iOS peut l'élargir.
+
+**Job.**
+
+- Le job s'appelle désormais « iOS tests » et son artefact `ios-test-results`.
+- Après le démarrage du simulateur, l'étape « Choose the recipe » écrit la recette dans
+  le résumé, puis « iOS recipe » exécute `scripts/ios-test.sh "$IOS_RECIPE"`.
+- Le résumé `xcresult-summary.py` liste le bundle par son nom (`pr.xcresult` ou
+  `standalone.xcresult`). Un run `pr` n'est donc jamais présenté comme `standalone`.
+
+**Activation.**
+
+- Tant que `scripts/ios-test.sh` de la branche testée n'a pas de recette `pr`, l'étape
+  garde `standalone` et l'annonce par un `::notice::`.
+- La voie rapide s'active donc d'elle-même quand #121 apporte les recettes sur `dev`,
+  quel que soit l'ordre de fusion.
+
+**Rejeu local de l'étape.**
+
+| Script | `FAST=true` | `FAST=false` ou vide |
+|---|---|---|
+| `ios-test.sh` de `dev` | `standalone` | `standalone` |
+| `ios-test.sh` de `c575c27` (#121) | `pr` | `standalone` |
+
+**Tests.**
+
+- 6 nouveaux tests du filtre et du câblage.
+- Deux mutations vérifiées :
+  - `ios_fast` toujours vrai : 11 échecs ;
+  - condition « vers `dev` » retirée : 1 échec.
+
+**Nombres.** Aucun nombre n'est fixé dans la CI. La recette échoue déjà sur un test ignoré,
+sur un échec ou sur zéro test. Les nombres observés sont :
+
+- `standalone` : 217 sur #121 (run 41876632897) ;
+- `pr` : 195 et `extended` : 22, d'après la session iOS.
+
+Un nombre exact par recette demanderait une modification de la CI à chaque test ajouté.
+Ce n'est pas proposé.
+
+**Reste à prouver.** Le premier run hébergé de la voie `pr` aura lieu sur la première PR
+iOS non visuelle après la fusion de #121. Sa durée et son nombre de tests sont à consigner
+sur #67.
