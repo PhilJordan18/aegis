@@ -23,7 +23,16 @@ import {
 } from './contract.ts';
 import type { SimulatorConfig } from './config.ts';
 import { EmissionLog, type ReplaySelector } from './emission-log.ts';
-import { parseCommand, parseDisplay, qrUriFor, type ChallengeContent, type DisplayInstruction } from './inbound.ts';
+import { InboundReportLimiter, inboundReportDetail, type InboundChannel, type InboundIssue } from './inbound-report.ts';
+import {
+  parseCommand,
+  parseDisplay,
+  peekCompartmentId,
+  qrUriFor,
+  type ChallengeContent,
+  type DisplayInstruction,
+  type UncorrelatableCause,
+} from './inbound.ts';
 import {
   DeviceSession,
   buildChallengeDisplayed,
@@ -61,6 +70,8 @@ export interface InboundReport {
   readonly reason?: CommandRejectReason | DisplayRejectReason;
   /** Local diagnostic only, never published. */
   readonly why?: string;
+  /** For a retained or uncorrelatable message: its INBOUND_MESSAGE_INVALID was published, or suppressed by the limit (§13.2). */
+  readonly report?: 'PUBLISHED' | 'SUPPRESSED';
 }
 
 /** What the simulated screen shows. Only the `screen` accessor exposes the QR content. */
@@ -214,12 +225,13 @@ type DisplayOutcome =
   | { readonly accepted: false; readonly correlation: DisplayCorrelation; readonly reason: DisplayRejectReason };
 
 /**
- * Simulated Aegis Locker Node (schema 2.0). Status: availability with a Last Will per
+ * Simulated Aegis Locker Node (schema 3.0). Status: availability with a Last Will per
  * connection, DEVICE_RESTARTED once per boot, a heartbeat every 10 seconds. Commands:
  * technical validation, a durable deduplication journal, actuation of the targeted
  * cell, deterministic acknowledgement. Display: the access challenge and its
- * acknowledgement. Physical observations: door, lock and RFID events produced by
- * scripted physical actions.
+ * acknowledgement. A retained or uncorrelatable inbound message is ignored and
+ * reported as INBOUND_MESSAGE_INVALID, within the reporting limit. Physical
+ * observations: door, lock and RFID events produced by scripted physical actions.
  *
  * It never authorises anything: it executes what the backend already decided and
  * reports what it observes.
@@ -257,6 +269,8 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
   /** Highest display revision accepted in this boot (§27.4). */
   #displayRevision: number | undefined;
   readonly #displayOutcomes = new Map<string, DisplayOutcome>();
+  /** INBOUND_MESSAGE_INVALID reporting limit of the current boot (§13.2). */
+  #inboundReports = new InboundReportLimiter();
   /** PREVIOUS_EXECUTION_UNCERTAIN rejections to publish after the first ONLINE of the boot. */
   #uncertainReports: JournalEntry[] = [];
   #queued: OutboundMessage[] = [];
@@ -721,13 +735,15 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
   #handleCommand(body: Buffer, meta: InboundMeta): void {
     // Doc 10 §7.2: a retained command is never executed, however it was produced.
     if (meta.retain) {
-      this.emit('inbound', { channel: 'commands', outcome: 'IGNORED', why: 'retained command' });
+      const report = this.#reportInvalidInbound('commands', 'RETAINED', undefined, peekCompartmentId(body));
+      this.emit('inbound', { channel: 'commands', outcome: 'IGNORED', why: 'retained command', report });
       return;
     }
     const parsed = parseCommand(body);
     if (parsed.kind === 'uncorrelatable') {
       // COMMAND_REJECTED requires messageId, operationId and compartmentId (§20).
-      this.emit('inbound', { channel: 'commands', outcome: 'IGNORED', why: parsed.why });
+      const report = this.#reportInvalidInbound('commands', 'UNCORRELATABLE', parsed.cause, parsed.compartmentId);
+      this.emit('inbound', { channel: 'commands', outcome: 'IGNORED', why: parsed.why, report });
       return;
     }
     const expiresAt = parsed.kind === 'command' ? parsed.command.expiresAtMs : parsed.expiresAtMs;
@@ -929,12 +945,14 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
 
   #handleDisplay(body: Buffer, meta: InboundMeta): void {
     if (meta.retain) {
-      this.emit('inbound', { channel: 'display', outcome: 'IGNORED', why: 'retained display instruction' });
+      const report = this.#reportInvalidInbound('display', 'RETAINED', undefined, peekCompartmentId(body));
+      this.emit('inbound', { channel: 'display', outcome: 'IGNORED', why: 'retained display instruction', report });
       return;
     }
     const parsed = parseDisplay(body);
     if (parsed.kind === 'uncorrelatable') {
-      this.emit('inbound', { channel: 'display', outcome: 'IGNORED', why: parsed.why });
+      const report = this.#reportInvalidInbound('display', 'UNCORRELATABLE', parsed.cause, parsed.compartmentId);
+      this.emit('inbound', { channel: 'display', outcome: 'IGNORED', why: parsed.why, report });
       return;
     }
     const correlation = parsed.correlation;
@@ -1163,6 +1181,30 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
     }
   }
 
+  /**
+   * Doc 10 §13.2: DEVICE_ERROR INBOUND_MESSAGE_INVALID, WARNING, without operationId
+   * nor any value of the ignored payload. compartmentId only when the field names a
+   * cell of this hub. At most one per (channel, issue) per window.
+   */
+  #reportInvalidInbound(
+    channel: InboundChannel,
+    issue: InboundIssue,
+    cause: UncorrelatableCause | undefined,
+    compartmentId: string | undefined,
+  ): 'PUBLISHED' | 'SUPPRESSED' {
+    const admitted = this.#inboundReports.admit(channel, issue, this.#now());
+    if (!admitted) return 'SUPPRESSED';
+    this.#publishEvent(
+      buildDeviceError(this.#context(), {
+        errorCode: 'INBOUND_MESSAGE_INVALID',
+        severity: 'WARNING',
+        ...(compartmentId !== undefined && this.#cellById(compartmentId) ? { compartmentId } : {}),
+        detail: inboundReportDetail(channel, issue, cause, admitted.suppressed),
+      }),
+    );
+    return 'PUBLISHED';
+  }
+
   // ---- Common ---------------------------------------------------------------------
 
   /** A new connectionId and its Last Will, numbered now, before each CONNECT (decision D6). */
@@ -1229,6 +1271,7 @@ export class HubSimulator extends EventEmitter<SimulatorEvents> {
     this.#clearLocalTimers();
     this.#displayRevision = undefined;
     this.#displayOutcomes.clear();
+    this.#inboundReports = new InboundReportLimiter();
     this.#queued = [];
     this.#queueLosses.clear();
     this.#armedFault = undefined;

@@ -148,7 +148,7 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('commands and display through
       qos: 1,
       retain: false,
       payload: {
-        schemaVersion: '2.0',
+        schemaVersion: '3.0',
         type: 'COMMAND_ACKNOWLEDGED',
         result: 'ACCEPTED',
         operationId: valid.operationId,
@@ -299,6 +299,69 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('commands and display through
       'the kept door event',
     );
     expect(ofSession().indexOf(errors[1]!)).toBeLessThan(ofSession().indexOf(opened));
+  });
+
+  it('reports a retained command and uncorrelatable messages as INBOUND_MESSAGE_INVALID, and leaves no retained message (§13.2)', { timeout: 30_000 }, async () => {
+    const api = await backend();
+    clients.push(api.client);
+    // QoS 0, so that no offline persistent session of the locker queues these messages;
+    // the retained one is replayed to the hub when it subscribes.
+    const publish0 = (topic: string, body: string, retain = false) => api.client.publishAsync(topic, body, { qos: 0, retain });
+    const retained = shortCommand();
+    await publish0(COMMANDS, retained.body, true);
+    try {
+      const { sim, actuated } = await hub('sim-it-invalid');
+      const reportsOf = () =>
+        api.events.filter(
+          (e) => e.payload.deviceSessionId === sim.deviceSessionId && e.payload.errorCode === 'INBOUND_MESSAGE_INVALID',
+        );
+      const first = await until(() => reportsOf()[0], 5_000, 'report of the retained command');
+      expect(first).toMatchObject({
+        qos: 1,
+        retain: false,
+        payload: { schemaVersion: '3.0', type: 'DEVICE_ERROR', severity: 'WARNING', compartmentId: A1, lockerId: DEFAULT_LOCKER_ID },
+      });
+      expect(first.payload.detail).toContain('retained commands message');
+      expect(first.payload).not.toHaveProperty('operationId');
+      for (const value of [retained.operationId, retained.messageId]) expect(first.body).not.toContain(value);
+
+      await publish0(DISPLAY, JSON.stringify({ type: 'DISPLAY_ACCESS_CHALLENGE', operationId: retained.operationId, payload: { token: TOKEN } }));
+      await publish0(COMMANDS, '{not json');
+      await publish0(COMMANDS, '{not json');
+      const all = await until(() => (reportsOf().length >= 3 ? reportsOf() : undefined), 5_000, 'three reports');
+      // The second unreadable command falls within the reporting limit.
+      await new Promise((r) => setTimeout(r, 500));
+      expect(reportsOf()).toHaveLength(3);
+      expect(all.map((e) => e.payload.detail)).toEqual([
+        expect.stringContaining('retained commands'),
+        expect.stringContaining('A display message cannot be correlated'),
+        expect.stringContaining('A commands message cannot be correlated (payload is not valid JSON)'),
+      ]);
+      for (const e of all) {
+        expect(e.body).not.toContain(TOKEN);
+        expect(e.body).not.toContain(retained.operationId);
+      }
+      expect(actuated).toEqual([]);
+    } finally {
+      // Stop the hub first, so that it does not receive the clearing message itself.
+      await Promise.all(sims.splice(0).map((s) => s.stop()));
+      await publish0(COMMANDS, '', true);
+    }
+
+    const device = await mqtt.connectAsync(BROKER, {
+      protocolVersion: 4,
+      clientId: `aegis-sim-it-retained-${process.pid}`,
+      username: DEFAULT_LOCKER_ID,
+      password: DEVICE_PASSWORD!,
+      clean: true,
+      reconnectPeriod: 0,
+    });
+    clients.push(device);
+    const replayed: boolean[] = [];
+    device.on('message', (_topic, _body, packet) => replayed.push(packet.retain));
+    await device.subscribeAsync([COMMANDS, DISPLAY], { qos: 1 });
+    await new Promise((r) => setTimeout(r, 500));
+    expect(replayed.filter(Boolean)).toEqual([]);
   });
 
   it('the device account never receives the commands of another locker (§6.1)', { timeout: 15_000 }, async () => {

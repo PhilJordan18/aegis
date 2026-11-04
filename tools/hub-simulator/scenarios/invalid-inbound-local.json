@@ -1,0 +1,15 @@
+{
+  "steps": [
+    { "do": "waitOnline", "timeoutMs": 10000 },
+    { "do": "receiveCommand", "ref": "retained", "compartment": "A1", "operation": "op1", "retained": true },
+    { "do": "receiveRaw", "channel": "commands", "body": "{not json" },
+    { "do": "receiveRaw", "channel": "commands", "body": "{\"type\":\"UNLOCK_COMPARTMENT\",\"compartmentId\":\"1ae77ae3-8490-4f09-9412-a7816b77bff9\"}" },
+    { "do": "receiveRaw", "channel": "display", "body": "{\"type\":\"DISPLAY_ACCESS_CHALLENGE\",\"payload\":{\"compartmentCode\":\"A1\"}}" },
+    { "do": "receiveCommand", "ref": "old-schema", "compartment": "A1", "operation": "op2", "schemaVersion": "2.0" },
+    { "wait": 60000 },
+    { "do": "receiveRaw", "channel": "commands", "body": "[]" },
+    { "do": "receiveCommand", "ref": "valid", "compartment": "A1", "operation": "op1" },
+    { "wait": 16000 },
+    { "do": "stop" }
+  ]
+}

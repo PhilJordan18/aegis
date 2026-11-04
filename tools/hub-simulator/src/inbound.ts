@@ -24,12 +24,29 @@ export interface UnlockCommand {
 }
 
 /**
- * `uncorrelatable`: no COMMAND_REJECTED can be built, because messageId, operationId
- * or compartmentId is missing (§20 makes them required in the rejection).
+ * Why a message cannot be correlated (doc 10 §13.2). A closed set, so that the
+ * INBOUND_MESSAGE_INVALID detail is built from fixed texts and never from the payload.
+ */
+export type UncorrelatableCause = 'PAYLOAD_TOO_LARGE' | 'INVALID_JSON' | 'NOT_AN_OBJECT' | 'CORRELATION_MISSING';
+
+/**
+ * No rejection can be built, because messageId, operationId or compartmentId is
+ * missing (§20 makes them required in the rejection). `compartmentId` is kept only
+ * when that field holds a canonical UUID; `why` is a local diagnostic.
+ */
+export interface Uncorrelatable {
+  readonly kind: 'uncorrelatable';
+  readonly cause: UncorrelatableCause;
+  readonly why: string;
+  readonly compartmentId?: string;
+}
+
+/**
+ * `uncorrelatable`: see above.
  * `invalid`: a correlatable command whose content is refused before any other check.
  */
 export type CommandParse =
-  | { readonly kind: 'uncorrelatable'; readonly why: string }
+  | Uncorrelatable
   | {
       readonly kind: 'invalid';
       readonly correlation: CommandCorrelation;
@@ -71,7 +88,7 @@ export interface DisplayInstruction {
 }
 
 export type DisplayParse =
-  | { readonly kind: 'uncorrelatable'; readonly why: string }
+  | Uncorrelatable
   | { readonly kind: 'invalid'; readonly correlation: DisplayCorrelation; readonly why: string }
   | { readonly kind: 'instruction'; readonly correlation: DisplayCorrelation; readonly instruction: DisplayInstruction };
 
@@ -84,18 +101,50 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function decode(body: Buffer | string): { ok: true; value: Record<string, unknown> } | { ok: false; why: string } {
+type Decoded = { ok: true; value: Record<string, unknown> } | { ok: false; cause: UncorrelatableCause; why: string };
+
+function decode(body: Buffer | string): Decoded {
   const size = typeof body === 'string' ? Buffer.byteLength(body, 'utf8') : body.length;
   // Refused before deserialisation (§3.3, §19.2).
-  if (size > MAX_PAYLOAD_BYTES) return { ok: false, why: `payload of ${size} bytes exceeds ${MAX_PAYLOAD_BYTES}` };
+  if (size > MAX_PAYLOAD_BYTES) {
+    return { ok: false, cause: 'PAYLOAD_TOO_LARGE', why: `payload of ${size} bytes exceeds ${MAX_PAYLOAD_BYTES}` };
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(typeof body === 'string' ? body : body.toString('utf8'));
   } catch {
-    return { ok: false, why: 'payload is not valid JSON' };
+    return { ok: false, cause: 'INVALID_JSON', why: 'payload is not valid JSON' };
   }
-  if (!isRecord(parsed)) return { ok: false, why: 'payload is not a JSON object' };
+  if (!isRecord(parsed)) return { ok: false, cause: 'NOT_AN_OBJECT', why: 'payload is not a JSON object' };
   return { ok: true, value: parsed };
+}
+
+/** The correlation fields a rejection needs (§20), or why they cannot be read. */
+function correlate(
+  body: Buffer | string,
+): { ok: true; raw: Record<string, unknown>; messageId: string; operationId: string; compartmentId: string } | Uncorrelatable {
+  const decoded = decode(body);
+  if (!decoded.ok) return { kind: 'uncorrelatable', cause: decoded.cause, why: decoded.why };
+  const raw = decoded.value;
+  const { messageId, operationId, compartmentId } = raw;
+  if (!isCanonicalUuid(messageId) || !isCanonicalUuid(operationId) || !isCanonicalUuid(compartmentId)) {
+    return {
+      kind: 'uncorrelatable',
+      cause: 'CORRELATION_MISSING',
+      why: 'messageId, operationId or compartmentId is not a canonical UUID',
+      ...(isCanonicalUuid(compartmentId) ? { compartmentId } : {}),
+    };
+  }
+  return { ok: true, raw, messageId, operationId, compartmentId };
+}
+
+/**
+ * The compartmentId of any inbound message, retained ones included, when that field
+ * holds a canonical UUID (doc 10 §13.2). Nothing else is read.
+ */
+export function peekCompartmentId(body: Buffer | string): string | undefined {
+  const decoded = decode(body);
+  return decoded.ok && isCanonicalUuid(decoded.value.compartmentId) ? decoded.value.compartmentId : undefined;
 }
 
 /** undefined when supported, otherwise why: a malformed version, or an unknown major. */
@@ -108,13 +157,9 @@ function schemaProblem(value: unknown): { unsupported: boolean; why: string } | 
 }
 
 export function parseCommand(body: Buffer | string): CommandParse {
-  const decoded = decode(body);
-  if (!decoded.ok) return { kind: 'uncorrelatable', why: decoded.why };
-  const raw = decoded.value;
-  const { messageId, operationId, compartmentId } = raw;
-  if (!isCanonicalUuid(messageId) || !isCanonicalUuid(operationId) || !isCanonicalUuid(compartmentId)) {
-    return { kind: 'uncorrelatable', why: 'messageId, operationId or compartmentId is not a canonical UUID' };
-  }
+  const correlated = correlate(body);
+  if (!('ok' in correlated)) return correlated;
+  const { raw, messageId, operationId, compartmentId } = correlated;
   const correlation: CommandCorrelation = { commandMessageId: messageId, operationId, compartmentId };
   const readableExpiry = parseInstant(raw.expiresAt);
   const invalid = (detail: string, reason: 'INVALID_PAYLOAD' | 'UNSUPPORTED_SCHEMA' = 'INVALID_PAYLOAD') =>
@@ -136,13 +181,9 @@ export function parseCommand(body: Buffer | string): CommandParse {
 }
 
 export function parseDisplay(body: Buffer | string): DisplayParse {
-  const decoded = decode(body);
-  if (!decoded.ok) return { kind: 'uncorrelatable', why: decoded.why };
-  const raw = decoded.value;
-  const { messageId, operationId, compartmentId } = raw;
-  if (!isCanonicalUuid(messageId) || !isCanonicalUuid(operationId) || !isCanonicalUuid(compartmentId)) {
-    return { kind: 'uncorrelatable', why: 'messageId, operationId or compartmentId is not a canonical UUID' };
-  }
+  const correlated = correlate(body);
+  if (!('ok' in correlated)) return correlated;
+  const { raw, messageId, operationId, compartmentId } = correlated;
   const payload = isRecord(raw.payload) ? raw.payload : undefined;
   const revision = raw.displayRevision;
   const displayRevision = Number.isSafeInteger(revision) && (revision as number) >= 0 ? (revision as number) : undefined;
