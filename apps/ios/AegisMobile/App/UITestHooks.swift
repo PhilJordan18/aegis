@@ -89,13 +89,16 @@ enum UITestScenario: String {
     case activityNotCancellable = "activity-not-cancellable"
     /// No reservation; an overdue loan.
     case activityLoan = "activity-loan"
+    /// An active reservation; the first loan read fails 503, later ones
+    /// answer 404 ACTIVE_LOAN_NOT_FOUND.
+    case activityLoanUnavailable = "activity-loan-unavailable"
 
     var storedSession: StoredSession? {
         switch self {
         case .resumeSlow, .resumeOffline, .resumeRecovers, .resumeInvalid, .signedIn,
              .catalog, .catalogEmpty, .catalogPages, .catalogOffline, .catalogDetailOffline, .catalogDetailGone,
              .reservation, .reservationRefused, .reservationOffline, .reservationClosed,
-             .activityReserved, .activityNotCancellable, .activityLoan:
+             .activityReserved, .activityNotCancellable, .activityLoan, .activityLoanUnavailable:
             StoredSession(accessToken: "scenario-token", expiresAt: .now + 3600, email: Self.technicianEmail)
         case .resumeExpired:
             StoredSession(accessToken: "scenario-token", expiresAt: .now - 60, email: Self.technicianEmail)
@@ -114,11 +117,13 @@ struct ScenarioTransport: HTTPTransport {
     let scenario: UITestScenario
     private let profileChecks = Counter()
     private let listReads = Counter()
+    private let loanReads = Counter()
     private let activity: ActivityState
 
     init(scenario: UITestScenario) {
         self.scenario = scenario
-        let seeded = [UITestScenario.activityReserved, .activityNotCancellable].contains(scenario)
+        let seeded = [UITestScenario.activityReserved, .activityNotCancellable, .activityLoanUnavailable]
+            .contains(scenario)
         activity = ActivityState(seeded ? UITestActivityFixtures.reservation(
             until: UITestActivityFixtures.instant(.now + 2 * 3600)) : nil)
     }
@@ -161,8 +166,8 @@ struct ScenarioTransport: HTTPTransport {
         if path.hasSuffix("/assets") { return try assets(request) }
         if path.contains("/assets/") { return try asset(request) }
         guard [.reservation, .reservationRefused, .reservationOffline, .reservationClosed, .activityReserved,
-               .activityNotCancellable, .activityLoan, .catalog, .catalogEmpty, .catalogPages, .catalogOffline,
-               .catalogDetailOffline, .catalogDetailGone].contains(scenario) else {
+               .activityNotCancellable, .activityLoan, .activityLoanUnavailable, .catalog, .catalogEmpty,
+               .catalogPages, .catalogOffline, .catalogDetailOffline, .catalogDetailGone].contains(scenario) else {
             throw URLError(.cannotConnectToHost)
         }
         guard request.value(forHTTPHeaderField: "Authorization") == "Bearer scenario-token" else {
@@ -209,7 +214,7 @@ struct ScenarioTransport: HTTPTransport {
             throw URLError(.timedOut)
         case .signedIn, .loginSuccess, .catalog, .catalogEmpty, .catalogPages, .catalogOffline, .catalogDetailOffline,
              .catalogDetailGone, .reservation, .reservationRefused, .reservationOffline, .reservationClosed,
-             .activityReserved, .activityNotCancellable, .activityLoan:
+             .activityReserved, .activityNotCancellable, .activityLoan, .activityLoanUnavailable:
             return response(request, 200, UITestScenario.technician)
         case .resumeRecovers where profileChecks.next() > 1:
             return response(request, 200, UITestScenario.technician)
@@ -260,6 +265,8 @@ struct ScenarioTransport: HTTPTransport {
     private func currentLoan(_ request: URLRequest) -> (Data, URLResponse) {
         switch scenario {
         case .activityLoan: response(request, 200, UITestActivityFixtures.overdueLoan())
+        case .activityLoanUnavailable where loanReads.next() == 1: problem(request, 503, "INTERNAL_ERROR")
+        case .activityLoanUnavailable: problem(request, 404, "ACTIVE_LOAN_NOT_FOUND")
         case .activityReserved, .activityNotCancellable: problem(request, 404, "ACTIVE_LOAN_NOT_FOUND")
         default: problem(request, 404, "RESOURCE_NOT_FOUND")
         }

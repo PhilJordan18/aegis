@@ -64,6 +64,7 @@ PR_UI_TESTS=(
     "AegisMobileUITests/ReservationUITests/testAClosedLockerCannotBeConfirmed"
     "AegisMobileUITests/ReservationUITests/testMyOwnReservationReplacesReserveOnTheSheet"
     "AegisMobileUITests/ReservationUITests/testARefusedCancelFollowsTheNewRead"
+    "AegisMobileUITests/ReservationUITests/testALoanReadFailureStaysInTheLoanSection"
 )
 
 usage() {

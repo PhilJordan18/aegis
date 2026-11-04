@@ -42,8 +42,9 @@ final class ReservationUITests: XCTestCase {
     // MARK: Reserve, follow, cancel
 
     /// The whole path on fixtures: the hours route is missing as on `dev`,
-    /// `GET /me/loan` answers 404 RESOURCE_NOT_FOUND, which stays a notice
-    /// and never hides the reservation.
+    /// `GET /me/loan` answers 404 RESOURCE_NOT_FOUND, a read failure and not
+    /// « no loan ». Its notice stays below the confirmation and the
+    /// reservation, or below the empty state once cancelled (#38).
     @MainActor
     func testReserveThenCancelInBothLanguagesAndAppearances() throws {
         for (language, appearance) in [(Language.french, XCUIDevice.Appearance.light), (.english, .dark)] {
@@ -64,8 +65,8 @@ final class ReservationUITests: XCTestCase {
             XCTAssertTrue(app.tabBars.buttons[language["activity"]].isSelected)
             XCTAssertTrue(element(app, "activity.feedback").label.contains(language["confirmed"]))
             XCTAssertTrue(app.staticTexts[language["reservedForYou"]].exists)
-            XCTAssertTrue(element(app, "activity.notice").label.contains(language["loanUnknown"]))
             XCTAssertTrue(element(app, "activity.reservation.until").exists)
+            assertTopToBottom(app, [element(app, "activity.feedback"), reservation, loanNotice(app, language)])
             try audit(app)
             attach(app, "\(language.code)-activity-reserved-\(theme)")
 
@@ -77,10 +78,38 @@ final class ReservationUITests: XCTestCase {
             XCTAssertTrue(element(app, "activity.feedback").label.contains(language["cancelled"]))
             // The loan stays unknown: only the reservation is known to be absent.
             XCTAssertEqual(element(app, "activity.empty").label, language["noReservation"])
+            assertTopToBottom(app, [element(app, "activity.feedback"), element(app, "activity.empty"),
+                                    loanNotice(app, language)])
             try audit(app)
             attach(app, "\(language.code)-activity-cancelled-\(theme)")
             app.terminate()
         }
+    }
+
+    /// A loan read that fails while the reservation is read: the reservation
+    /// comes first, the loan section carries the notice, its trace id and
+    /// the retry, and the retry recovers without a false « no loan » before.
+    @MainActor
+    func testALoanReadFailureStaysInTheLoanSection() throws {
+        let app = launch(.english, scenario: "activity-loan-unavailable", tab: "activity")
+        let reservation = element(app, "activity.reservation")
+        XCTAssertTrue(reservation.waitForExistence(timeout: 15))
+        let notice = loanNotice(app, .english)
+        XCTAssertTrue(notice.waitForExistence(timeout: 15))
+        XCTAssertEqual(notice.identifier, "activity.loan.notice")
+        XCTAssertTrue(notice.label.contains("5f4bc22e-66a4-48ef-8bf3-6e7184d71c30"))
+        XCTAssertFalse(element(app, "activity.empty").exists)
+        assertTopToBottom(app, [reservation, notice])
+        let retry = app.buttons["activity.loan.retry"]
+        assertTopToBottom(app, [notice, retry])
+        try audit(app)
+        attach(app, "en-activity-loan-unavailable")
+
+        retry.tap()
+        XCTAssertTrue(notice.waitForNonExistence(timeout: 15))
+        XCTAssertTrue(reservation.exists)
+        XCTAssertTrue(app.buttons["activity.cancel"].exists)
+        XCTAssertFalse(element(app, "activity.empty").exists)
     }
 
     /// Production until PHY-02: 422 ASSET_NOT_READY with
@@ -209,6 +238,28 @@ final class ReservationUITests: XCTestCase {
     }
 
     // MARK: Helpers
+
+    /// The loan read failure, found by its words so the order is checked
+    /// wherever the notice sits.
+    @MainActor
+    private func loanNotice(_ app: XCUIApplication, _ language: Language) -> XCUIElement {
+        app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label BEGINSWITH %@", language["loanUnknown"])).firstMatch
+    }
+
+    /// Reading order, which VoiceOver follows in this single column.
+    @MainActor
+    private func assertTopToBottom(_ app: XCUIApplication, _ elements: [XCUIElement],
+                                   file: StaticString = #filePath, line: UInt = #line) {
+        let frames = elements.map(\.frame)
+        for (element, frame) in zip(elements, frames) {
+            XCTAssertTrue(element.exists, "missing \(element)", file: file, line: line)
+            XCTAssertFalse(frame.isEmpty, "no frame for \(element)", file: file, line: line)
+        }
+        for (upper, lower) in zip(frames, frames.dropFirst()) {
+            XCTAssertLessThanOrEqual(upper.maxY, lower.minY, "\(upper) is not above \(lower)", file: file, line: line)
+        }
+    }
 
     @MainActor
     private func openReservation(_ app: XCUIApplication) {

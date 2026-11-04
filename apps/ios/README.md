@@ -104,7 +104,7 @@ scripts/ios-test.sh standalone
   un test est ignoré, échoue ou si aucun test ne s'exécute.
 
 `standalone` se découpe en deux recettes qui, ensemble, exécutent exactement
-les mêmes tests (195 + 22 = 217, vérifié par énumération avec Xcode 26.3) :
+les mêmes tests (196 + 22 = 218, vérifié par énumération avec Xcode 26.3) :
 
 ```bash
 scripts/ios-test.sh pr        # rapide : tous les tests unitaires, un test UI par parcours critique, String Catalog
@@ -299,7 +299,7 @@ L'onglet **Mon activité** est placé entre Équipements et Compte.
 | Carte de réservation | « Réservé pour vous », équipement, cellule, « À retirer avant … »; « Annuler la réservation » seulement si `availableActions` contient `CANCEL` et que la lecture est à jour |
 | Annulation | Confirmation, puis `POST /reservations/{id}/cancel` avec clé et corps `{}`; issue inconnue → même clé au nouvel essai; `409 RESERVATION_NOT_CANCELLABLE` → message, puis la carte suit la relecture |
 | Prêt | `GET /me/loan` lu en parallèle; en retard, « Retour prévu à » ou retour en attente, tels que le serveur les donne |
-| Prêt illisible | `GET /me/loan` n'a pas encore de contrôleur (`404 RESOURCE_NOT_FOUND`) : avis « Le prêt en cours n'a pas pu être vérifié. »; la réservation reste affichée, aucun prêt n'est inventé, « Aucune réservation en cours. » remplace l'état vide complet |
+| Prêt illisible | Seul `404 ACTIVE_LOAN_NOT_FOUND` signifie « aucun prêt ». Tout autre échec, dont `404 RESOURCE_NOT_FOUND` tant que `GET /me/loan` n'a pas de contrôleur (#48), donne l'avis « Le prêt en cours n'a pas pu être vérifié. », avec son identifiant de suivi et Réessayer, **sous** la confirmation et la carte de réservation, ou sous « Aucune réservation en cours. » qui remplace alors l'état vide complet; aucun prêt n'est inventé (#38) |
 | Hors ligne | Dernier état reçu, marqué non actualisé; aucune action proposée sur une lecture périmée |
 
 - L'app ne décide jamais l'expiration : seul le serveur expire une
@@ -323,8 +323,9 @@ aucune réservation, `GET /me/loan` et la route d'état du casier absents
 (`UNKNOWN_PHYSICAL_STATE`). Scénarios nommés : `reservation` (création puis
 annulation), `reservation-refused`, `reservation-offline` (première réponse
 perdue, la même clé réussit, une autre clé serait refusée `409`),
-`reservation-closed`, `activity-reserved`, `activity-not-cancellable` et
-`activity-loan`. `AEGIS_START_TAB=activity` ouvre l'onglet.
+`reservation-closed`, `activity-reserved`, `activity-not-cancellable`,
+`activity-loan` et `activity-loan-unavailable` (réservation active, première
+lecture du prêt en `503`, les suivantes en `404 ACTIVE_LOAN_NOT_FOUND`). `AEGIS_START_TAB=activity` ouvre l'onglet.
 
 ## Français et anglais
 
