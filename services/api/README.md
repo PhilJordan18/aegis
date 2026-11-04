@@ -467,17 +467,63 @@ messages enregistrés, acceptés ou refusés, comptent. Une
 présence observée pendant un prêt laisse l'actif `BORROWED`. L'anomalie
 `ASSET_PRESENT_WITH_ACTIVE_LOAN` du document 06, §12.4 relève d'ANO-01 (#52).
 
-Les documents ne fixent ni le moment où le hub scanne hors opération, ni une
-durée de validité d'un scan (le document 06, §4.2 cite la fraîcheur des
-observations sans valeur; les bornes de 5 s et 30 s du document 10, §17.2
-portent sur l'horodatage des événements). Aucune n'est inventée : un scan reste
-valable sur une connexion ininterrompue et saine tant que rien ci-dessus ne
-l'invalide. **Décision ouverte pour Philippe** : faut-il une durée maximale de
-validité d'un scan, ou un scan périodique du hub, et laquelle? `RfidPresenceTests` (PostgreSQL) et
+La fraîcheur est événementielle (décision du 4 novembre 2026 sur #31, document
+06, §4.2) : le hub scanne après la fermeture d'une porte, au démarrage et à la
+reconnexion, jamais périodiquement, et un scan n'a pas d'âge maximal. Une
+cellule fermée observée sans interruption le garde. Un heartbeat maintient la
+continuité mais ne prouve pas la présence : un intervalle de plus de 30 s entre
+deux heartbeats valides de référence de la connexion courante (règle de PHY-01),
+ou entre son premier message et son premier heartbeat valide, annule tout scan
+antérieur, même si la même connexion reprend et même si personne n'a lu l'API
+pendant la coupure. Seul un scan postérieur à la reprise par sa réception, sa
+séquence et sa fenêtre la rétablit; aucune tolérance d'horloge n'est ajoutée.
+`RfidPresenceTests` (PostgreSQL) et
 `RfidPresenceBrokerTests` (Mosquitto, compte du hub de test) vérifient ces
 règles. Le scénario `tools/hub-simulator/scenarios/presence-demo-local.json`
 reste 30 s en ligne sans scanner, pose les étiquettes de démonstration dans A1
 et A2, les scanne, puis garde le hub en ligne dix minutes.
+
+## Outbox des commandes d'ouverture (IOT-01)
+
+`CommandOutbox.enqueueUnlock` écrit l'unique `UNLOCK_COMPARTMENT` d'une
+opération `AUTHORIZED` dont le défi local est `CONSUMED`, dans la transaction
+qui l'autorise (ADR-005) : appelé hors transaction, il échoue; refusé, il annule
+la décision avec lui. La cible est le casier et le compartiment de l'opération,
+la commande expire avec elle et porte le schéma 3.0 du document 10.
+
+Avec `AEGIS_COMMAND_DISPATCHER_ENABLED=true`, qui exige aussi
+`AEGIS_MQTT_ENABLED=true`, un job publie chaque seconde les commandes dues, en
+QoS 1 et jamais retenues, sur une connexion MQTT distincte de l'ingestion
+(`<client-id>-commands`). Chaque commande passe par trois transactions courtes :
+réclamation `FOR UPDATE SKIP LOCKED` avec un bail de 15 secondes, publication
+hors transaction, puis marquage `DISPATCHED` et passage de l'opération à
+`COMMAND_SENT`. `attempt_count` sert de jeton : un dispatcher dont le bail a
+expiré ne peut plus marquer, relâcher ni annuler la ligne. Le payload publié est
+celui de la ligne, inchangé à chaque tentative.
+
+Une tentative refusée avant tout envoi (broker non connecté) est certaine; une
+tentative sans accusé `PUBACK`, ou un bail terminé sans marquage, est incertaine
+et préfixe `last_error` de `PUBLICATION_UNCERTAIN`, préfixe conservé jusqu'à la
+fin de la commande. À l'échéance, la commande est annulée sans publication. Un
+retrait (`CHECKOUT`) qu'aucune tentative n'a pu publier passe à `EXPIRED`
+(document 05, §5); un retrait incertain et tout retour restent `AUTHORIZED`
+pour l'expiration des opérations (document 06, §14.2), qui reste à livrer : le
+retour doit aussi rétablir son prêt.
+
+La fenêtre entre la publication et le marquage n'est pas fermée : après un
+arrêt dans cette fenêtre, la même commande, avec le même `messageId`, est
+republiée à la fin du bail. La livraison est donc au moins une fois; la
+déduplication du hub (document 10, §16.1) empêche une seconde ouverture.
+`CommandBrokerTests` et `CommandDispatchJobTests` utilisent le broker de
+développement et le compte du hub de test ci-dessus; ils échouent sans broker.
+
+Limites connues : la réclamation et le bail utilisent l'horloge de l'API et non
+`now()` de PostgreSQL (document 08, §9.2), ce qui suppose des instances à
+l'heure; sans `AEGIS_COMMAND_DISPATCHER_ENABLED=true`, les commandes restent en
+attente et l'opération autorisée garde le casier; le job partage le planificateur
+de l'application, et un broker qui n'accuse plus réception peut retarder les
+autres jobs d'au plus `publish-timeout` par commande. La règle d'un accusé reçu
+avant le marquage (ligne encore `CLAIMED`) reste à fixer avec IOT-02.
 
 ## Catalogue technicien et readiness (RDY-01, RDY-02)
 
