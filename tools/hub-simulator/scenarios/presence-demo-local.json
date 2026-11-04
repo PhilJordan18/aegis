@@ -1,6 +1,7 @@
 {
   "steps": [
     { "do": "waitOnline", "timeoutMs": 10000 },
+    { "wait": 30000 },
     { "do": "putTag", "code": "A1", "identifier": "E20034120123456789000001" },
     { "do": "scanRfid", "code": "A1" },
     { "do": "putTag", "code": "A2", "identifier": "E20034120123456789000002" },

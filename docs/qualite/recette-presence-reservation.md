@@ -45,11 +45,16 @@ dans la section « Écarts » avec l'heure et la commande.
 - [ ] Le simulateur publie le scénario de présence depuis
   `tools/hub-simulator` :
   `npm start -- --scenario scenarios/presence-demo-local.json`.
-  Il pose et scanne le tag de A1 puis celui de A2, publie ses heartbeats
-  pendant 10 minutes, puis s'arrête. La présence ne vaut que pendant cette
-  connexion : relance le scénario pour une nouvelle série.
-- [ ] Phase en ligne, depuis `services/api`, avec `AEGIS_RECIPE_DB_NAME` et
-  `AEGIS_API_URL` exportés :
+  Il reste 30 secondes en ligne sans scanner, pose et scanne le tag de A1
+  puis celui de A2, publie ses heartbeats pendant 10 minutes, puis s'arrête.
+  La présence ne vaut que pendant cette connexion : relance le scénario pour
+  une nouvelle série.
+- [ ] Dans les 30 premières secondes, avant tout scan :
+  `python3 -I scripts/check-presence-reservation.py --phase before`
+  affiche le hub `ONLINE`, A1 `UNKNOWN` et la réservation de A1 refusée
+  (`422 ASSET_NOT_READY [UNKNOWN_PHYSICAL_STATE]`).
+- [ ] Phase en ligne, après les scans, depuis `services/api`, avec
+  `AEGIS_RECIPE_DB_NAME` et `AEGIS_API_URL` exportés :
   `python3 -I scripts/check-presence-reservation.py`
   Résultat attendu : chaque étape affiche `ok` et le script se termine par
   « Parcours conforme ». Il échoue si l'API, le broker ou PostgreSQL manque :
@@ -67,6 +72,21 @@ Le script vérifie, dans l'ordre :
 | Audit de la réservation | `RESERVATION_CREATED`, `RESERVATION_CANCELLED` |
 | Réservation de 20 s | expirée par le serveur en moins d'une minute, sans changer l'heure du Mac |
 | Réservation de A2 | `422 ASSET_NOT_READY [CALIBRATION_EXPIRED]` |
+
+## Porte ouverte après le scan
+
+- [ ] Le scénario de présence est arrêté. Je lance
+  `npm start -- --scenario scenarios/presence-door-after-scan-local.json`,
+  puis aussitôt, depuis `services/api` :
+  `python3 -I scripts/check-presence-reservation.py --phase door`.
+  Le scénario scanne A1 et A2, ouvre la porte de A1 de force, la referme,
+  puis scanne A1 de nouveau. Le script suit la porte par l'état du casier.
+- [ ] Porte ouverte : A1 `UNKNOWN` et sa réservation refusée
+  (`422 ASSET_NOT_READY [UNKNOWN_PHYSICAL_STATE]`); A2 garde sa propre
+  preuve (`PRESENT`, `BLOCKED [CALIBRATION_EXPIRED]`).
+- [ ] Porte refermée, sans nouveau scan : A1 reste `UNKNOWN` et sa réservation
+  reste refusée.
+- [ ] Après le nouveau scan : A1 `PRESENT`, `READY`.
 
 ## Preuves MQTT (facultatif)
 

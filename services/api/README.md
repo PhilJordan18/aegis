@@ -476,8 +476,8 @@ l'invalide. **Décision ouverte pour Philippe** : faut-il une durée maximale de
 validité d'un scan, ou un scan périodique du hub, et laquelle? `RfidPresenceTests` (PostgreSQL) et
 `RfidPresenceBrokerTests` (Mosquitto, compte du hub de test) vérifient ces
 règles. Le scénario `tools/hub-simulator/scenarios/presence-demo-local.json`
-pose les étiquettes de démonstration dans A1 et A2, les scanne, puis garde le
-hub en ligne dix minutes.
+reste 30 s en ligne sans scanner, pose les étiquettes de démonstration dans A1
+et A2, les scanne, puis garde le hub en ligne dix minutes.
 
 ## Catalogue technicien et readiness (RDY-01, RDY-02)
 
@@ -683,10 +683,16 @@ AEGIS_RECIPE_DB_NAME=<base de recette> python3 -I scripts/check-presence-reserva
 La phase `online` vérifie le hub `ONLINE`, `AEG-DEMO-001` présent et `READY`,
 `AEG-DEMO-002` bloqué par sa calibration, puis réserve, annule et rejoue
 l'annulation, laisse le serveur expirer une réservation de 20 s sans toucher
-l'horloge du Mac et lit l'audit. Sans horaire actif, elle pose un horaire de
-test sur toute la journée par l'API d'administration. Après l'arrêt du
-simulateur et plus de 30 s d'attente, `--phase offline` vérifie que
-`AEG-DEMO-001` redevient `UNKNOWN` et n'est plus réservable. L'audit n'a pas de
+l'horloge du Mac et lit l'audit. Sans horaire actif, chaque phase pose d'abord
+un horaire de test sur toute la journée par l'API d'administration. Dans les
+30 premières secondes du scénario, `--phase before` vérifie que
+`AEG-DEMO-001`, sans scan, reste `UNKNOWN` et n'est pas réservable. Avec
+`scenarios/presence-door-after-scan-local.json`, `--phase door` suit la porte
+de A1 par l'état du casier : ouverte puis refermée sans nouveau scan,
+`AEG-DEMO-001` est `UNKNOWN` et refusé; `AEG-DEMO-002` garde sa propre preuve;
+seul le scan suivant le rend `READY`. Après l'arrêt du simulateur et plus de
+30 s d'attente, `--phase offline` vérifie que `AEG-DEMO-001` redevient
+`UNKNOWN` et n'est plus réservable. L'audit n'a pas de
 route de lecture : le script le lit dans une transaction PostgreSQL en
 lecture seule. Une API, un broker ou une base absente fait échouer la
 recette. La fiche manuelle est `docs/qualite/recette-presence-reservation.md`.

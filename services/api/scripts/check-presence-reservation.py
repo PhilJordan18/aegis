@@ -4,7 +4,10 @@
 It validates the software with simulated observations only: it is not a
 qualification of the real RFID reader or of the locker.
 
-Two phases:
+Four phases:
+  before   the hub simulator is ONLINE but has not scanned yet (the first 30 s
+           of scenarios/presence-demo-local.json). Checks that A1 has no proof
+           and cannot be reserved.
   online   (default) the hub simulator publishes and A1 is observed. Checks the
            status, the catalog (A1 READY, A2 BLOCKED by calibration), the
            reservation of A1, its cancellation with an idempotent replay, a
@@ -13,6 +16,10 @@ Two phases:
   offline  the simulator has been stopped for more than 30 seconds. Checks
            that the hub is no longer ONLINE and that A1 can no longer be
            reserved.
+  door     start it with scenarios/presence-door-after-scan-local.json. Follows
+           the A1 door through the locker status: once it opens, A1 has no
+           proof and cannot be reserved while A2 keeps its own; once it closes,
+           A1 still has none; only the next scan makes it READY again.
 
 Each phase exits non-zero on the first unreachable service and on any
 difference; nothing is skipped. The audit and MQTT evidence have no read
@@ -29,7 +36,7 @@ Environment:
 
 Run it after scripts/seed-demo-catalog.py, while the hub simulator plays
 scenarios/presence-demo-local.json (10 minutes of presence for one
-connection). When the locker has no active schedule, the online phase sets a
+connection). When the locker has no active schedule, every phase first sets a
 whole-day test schedule through the administrative API; it never replaces an
 existing one.
 """
@@ -115,6 +122,36 @@ def readiness(item):
     return f"{item['readiness']['result']} {item['readiness']['reasons']}"
 
 
+def hub_online(technician):
+    status, locker = call("GET", f"/lockers/{LOCKER_ID}/status", technician)
+    check("Connexion du hub", "200 ONLINE", f"{status} {locker.get('connectionStatus')}")
+
+
+def door_of(technician, code):
+    status, locker = call("GET", f"/lockers/{LOCKER_ID}/status", technician)
+    cells = [cell for cell in locker.get("compartments", []) if cell.get("code") == code] if status == 200 else []
+    return cells[0].get("doorState") if cells else None
+
+
+def wait_until(label, observe, expected, seconds):
+    """Polls once a second until observe() returns expected; a timeout is a failure, never a skip."""
+    deadline = time.monotonic() + seconds
+    observed = observe()
+    while observed != expected and time.monotonic() < deadline:
+        time.sleep(1)
+        observed = observe()
+    return check(label, expected, observed)
+
+
+def unproven(technician, step):
+    """A1 has no usable physical proof: it is UNKNOWN and its reservation is refused."""
+    ready = asset(technician, READY_CODE)
+    check(f"{READY_CODE} {step}", "UNKNOWN UNKNOWN ['UNKNOWN_PHYSICAL_STATE']",
+          f"{ready['presence']} {readiness(ready)}")
+    status, refused = reserve(technician, ready["id"], instant(datetime.timedelta(minutes=10)))
+    check(f"Réservation de {READY_CODE}", "422 ASSET_NOT_READY ['UNKNOWN_PHYSICAL_STATE']", error_of(status, refused))
+
+
 def reserve(token, asset_id, until):
     return call("POST", "/reservations", token, {"assetId": asset_id, "reservedUntil": until}, str(uuid.uuid4()))
 
@@ -141,10 +178,7 @@ def audit_of(reservation_id):
     return [row[0] for row in rows]
 
 
-def online(admin, technician):
-    print("Horaire")
-    ensure_schedule(admin)
-
+def online(technician):
     print("État du casier")
     status, locker = call("GET", f"/lockers/{LOCKER_ID}/status", technician)
     check("Connexion du hub", "200 ONLINE", f"{status} {locker.get('connectionStatus')}")
@@ -212,6 +246,34 @@ def online(admin, technician):
           "(tests sur fixtures seulement).")
 
 
+def before(technician):
+    print("Hub en ligne, avant tout scan")
+    hub_online(technician)
+    unproven(technician, "sans scan")
+
+
+def door(technician):
+    print("Porte de A1 ouverte après le scan")
+    hub_online(technician)
+
+    def ready_state():
+        item = asset(technician, READY_CODE)
+        return f"{item['presence']} {readiness(item)}"
+
+    if not wait_until(f"{READY_CODE} prêt après le premier scan", ready_state, "PRESENT READY []", 60):
+        return
+    if not wait_until("Porte de A1 ouverte", lambda: door_of(technician, "A1"), "OPEN", 60):
+        return
+    unproven(technician, "après l'ouverture de sa porte")
+    blocked = asset(technician, CALIBRATION_CODE)
+    check(f"{CALIBRATION_CODE} garde sa propre preuve", "PRESENT BLOCKED ['CALIBRATION_EXPIRED']",
+          f"{blocked['presence']} {readiness(blocked)}")
+    if not wait_until("Porte de A1 refermée", lambda: door_of(technician, "A1"), "CLOSED", 40):
+        return
+    unproven(technician, "après la fermeture, sans nouveau scan")
+    wait_until(f"{READY_CODE} prêt après un nouveau scan", ready_state, "PRESENT READY []", 60)
+
+
 def offline(technician):
     print("Hub arrêté")
     status, locker = call("GET", f"/lockers/{LOCKER_ID}/status", technician)
@@ -225,14 +287,15 @@ def offline(technician):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--phase", choices=["online", "offline"], default="online")
+    parser.add_argument("--phase", choices=["before", "online", "door", "offline"], default="online")
     phase = parser.parse_args().phase
     technician = login("AEGIS_DEMO_TECHNICIAN_PASSWORD", "technician@aegis.demo")
     print(f"API : {API} ; phase : {phase}")
-    if phase == "online":
-        online(login("AEGIS_DEMO_ADMIN_PASSWORD", "admin@aegis.demo"), technician)
-    else:
-        offline(technician)
+    # Without an open window every reservation is refused as OUTSIDE_OPERATING_HOURS, which would hide the
+    # physical reason each phase checks.
+    print("Horaire")
+    ensure_schedule(login("AEGIS_DEMO_ADMIN_PASSWORD", "admin@aegis.demo"))
+    {"before": before, "online": online, "door": door, "offline": offline}[phase](technician)
     if failures:
         sys.exit(f"{len(failures)} écart(s) : " + " ; ".join(failures))
     print("Parcours conforme, avec des observations simulées : aucune qualification du RFID réel ni du casier.")
