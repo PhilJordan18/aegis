@@ -193,6 +193,28 @@ final class CommandFixtures {
                 .query(UUID.class).single();
     }
 
+    /** The current session of the active hub of {@code locker}, which the hub's envelopes carry. */
+    UUID hubSession(UUID locker) {
+        hub(locker);
+        return jdbc.sql("""
+                SELECT device_session_id FROM aegis.locker_devices WHERE locker_id = :locker AND disabled_at IS NULL
+                """).param("locker", locker).query(UUID.class).single();
+    }
+
+    List<Map<String, Object>> anomalies(UUID operation) {
+        return jdbc.sql("""
+                SELECT type, severity, status, compartment_id FROM aegis.anomalies WHERE locker_operation_id = :id
+                """).param("id", operation).query().listOfRows();
+    }
+
+    Map<String, Object> inboundMessage(UUID locker, UUID messageId) {
+        return jdbc.sql("""
+                SELECT m.processing_status, m.processing_error FROM aegis.inbound_device_messages m
+                JOIN aegis.locker_devices d ON d.id = m.locker_device_id
+                WHERE d.locker_id = :locker AND m.message_id = :messageId
+                """).param("locker", locker).param("messageId", messageId).query().singleRow();
+    }
+
     Map<String, Object> command(UUID operation) {
         return jdbc.sql("""
                 SELECT id, message_id, locker_id, compartment_id, command_type, topic, schema_version, issued_at,

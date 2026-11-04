@@ -22,6 +22,8 @@ import ca.aegis.control.audit.AuditEventType;
 import ca.aegis.control.audit.AuditResult;
 import ca.aegis.control.audit.AuditSubjectType;
 import ca.aegis.control.audit.AuditTrail;
+import ca.aegis.control.command.CommandAcknowledgements;
+import ca.aegis.control.command.CommandAcknowledgements.CommandReport;
 import ca.aegis.control.device.Inspection.Fact;
 import ca.aegis.control.device.Inspection.Storable;
 import ca.aegis.control.device.Inspection.Unstorable;
@@ -33,7 +35,8 @@ import ca.aegis.control.device.LockerDeviceRepository.ActiveDevice;
  * The backend ingestion of hub messages (document 10, section 19.1; document 06, section 9; document 08, section
  * 8.2). The payload is inspected outside any transaction; one short transaction then locks the device, reserves the
  * pair (device, messageId) and applies the availability projection. Nothing here waits for MQTT, and no fact
- * advances a reservation, a loan, an operation or a readiness verdict.
+ * advances a reservation, a loan or a readiness verdict. The one exception for an operation is a command report:
+ * {@link CommandAcknowledgements} applies it in the same transaction (document 08, section 9.3).
  */
 @Service
 public class DeviceMessageIngestion {
@@ -54,14 +57,16 @@ public class DeviceMessageIngestion {
     private final AuditTrail audit;
     private final TransactionTemplate transactions;
     private final Clock clock;
+    private final CommandAcknowledgements acknowledgements;
 
     DeviceMessageIngestion(LockerDeviceRepository devices, InboundMessageRepository messages, AuditTrail audit,
-            TransactionTemplate transactions, Clock clock) {
+            TransactionTemplate transactions, Clock clock, CommandAcknowledgements acknowledgements) {
         this.devices = devices;
         this.messages = messages;
         this.audit = audit;
         this.transactions = transactions;
         this.clock = clock;
+        this.acknowledgements = acknowledgements;
     }
 
     public Outcome ingest(String topic, byte[] payload) {
@@ -182,7 +187,32 @@ public class DeviceMessageIngestion {
             return Outcome.REJECTED;
         }
         project(device, message, fact, receivedAt);
+        if (message.type().commandCorrelated()) {
+            return applyCommandReport(device, message, fact, inserted.get(), receivedAt);
+        }
         return Outcome.ACCEPTED;
+    }
+
+    /** IOT-02 #41: the stored report decides its command and operation in this same transaction. */
+    private Outcome applyCommandReport(ActiveDevice device, Storable message, Fact fact, UUID inboundId,
+            Instant receivedAt) {
+        CommandAcknowledgements.Result result = acknowledgements.apply(CommandReport.stored(inboundId,
+                message.type().name(), fact.commandMessageId(), fact.operationId(), device.lockerId(),
+                fact.compartmentId(), fact.parsedJson(), receivedAt));
+        ProcessingError rejection = switch (result) {
+            case APPLIED, ALREADY_APPLIED, ANOMALY_RAISED -> null;
+            case NOT_CORRELATED -> ProcessingError.COMMAND_CORRELATION_INVALID;
+            case OUTSIDE_VALIDITY_WINDOW -> ProcessingError.TIMESTAMP_OUT_OF_RANGE;
+            case TERMINAL_IGNORED -> ProcessingError.TERMINAL_OPERATION_EVENT_IGNORED;
+        };
+        if (rejection == null) {
+            messages.markProcessed(inboundId);
+            return Outcome.ACCEPTED;
+        }
+        messages.markRejected(inboundId, rejection);
+        log.warn("Command report not applied: lockerId={}, messageId={}, type={}, processingError={}",
+                device.lockerId(), message.messageId(), message.type(), rejection);
+        return Outcome.REJECTED;
     }
 
     private void project(ActiveDevice device, Storable message, Fact fact, Instant receivedAt) {

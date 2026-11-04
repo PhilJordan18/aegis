@@ -30,6 +30,7 @@ import ca.aegis.control.command.CommandAcknowledgements.Kind;
 import ca.aegis.control.command.CommandAcknowledgements.Result;
 import ca.aegis.control.command.CommandDispatcher.Outcome;
 import ca.aegis.control.command.CommandFixtures.Operation;
+import ca.aegis.control.device.DeviceMessageIngestion;
 import ca.aegis.control.support.ApiIntegrationTest;
 
 /**
@@ -48,6 +49,9 @@ class CommandAcknowledgementsTests extends ApiIntegrationTest {
 
     @Autowired
     private TransactionTemplate transactions;
+
+    @Autowired
+    private DeviceMessageIngestion ingestion;
 
     @Autowired
     private AuditTrail auditTrail;
@@ -215,6 +219,106 @@ class CommandAcknowledgementsTests extends ApiIntegrationTest {
         assertThat(eventTypes(sent)).containsExactly("COMMAND_SENT", "COMMAND_ACKNOWLEDGED");
     }
 
+    /** Decision of #41: an acknowledgement received at or after the command's deadline advances nothing. */
+    @Test
+    void anAcknowledgementReceivedAfterTheCommandExpiredAdvancesNothing() {
+        Sent sent = sentCommand();
+        clock.set(START.plusSeconds(120));
+
+        assertThat(report(sent, Kind.ACKNOWLEDGED, "ACCEPTED")).isEqualTo(Result.OUTSIDE_VALIDITY_WINDOW);
+
+        assertThat(fixtures.operation(sent.operation().id())).containsEntry("status", "COMMAND_SENT");
+        assertThat(fixtures.command(sent.operation().id())).containsEntry("status", "DISPATCHED");
+        assertThat(eventTypes(sent)).containsExactly("COMMAND_SENT");
+    }
+
+    /**
+     * Decision of #41: an acceptance of a command whose operation already ended keeps both final states and opens
+     * exactly one HIGH {@code INCONSISTENT_PHYSICAL_STATE} anomaly, even when the hub repeats it.
+     */
+    @Test
+    void anAcceptanceAfterTheOperationEndedOpensOneAnomalyAndChangesNoState() {
+        Sent sent = sentCommand();
+        fixtures.fail(sent.operation().id(), clock.instant());
+
+        assertThat(report(sent, Kind.ACKNOWLEDGED, "ACCEPTED")).isEqualTo(Result.ANOMALY_RAISED);
+        clock.advance(Duration.ofSeconds(1));
+        assertThat(report(sent, Kind.ACKNOWLEDGED, "ALREADY_APPLIED")).isEqualTo(Result.ANOMALY_RAISED);
+
+        assertThat(fixtures.operation(sent.operation().id())).containsEntry("status", "FAILED");
+        assertThat(fixtures.command(sent.operation().id())).containsEntry("status", "DISPATCHED");
+        assertThat(fixtures.anomalies(sent.operation().id())).singleElement()
+                .satisfies(anomaly -> assertThat(anomaly).containsEntry("type", "INCONSISTENT_PHYSICAL_STATE")
+                        .containsEntry("severity", "HIGH").containsEntry("status", "OPEN")
+                        .containsEntry("compartment_id", sent.operation().compartment()));
+        assertThat(eventTypes(sent)).containsExactly("COMMAND_SENT", "ANOMALY_CREATED");
+    }
+
+    /** The same for a command the dispatcher cancelled after an uncertain attempt; a rejection opens nothing. */
+    @Test
+    void anAcceptanceOfACancelledCommandOpensOneAnomalyAndARejectionIsOnlyRecorded() {
+        Authorized authorized = authorizedCommand();
+        assertThatThrownBy(dispatcher((topic, payload) -> {
+            throw new WorkerStopped();
+        })::dispatchNext).isInstanceOf(WorkerStopped.class);
+        clock.set(START.plusSeconds(120));
+        assertThat(dispatcher((topic, payload) -> { }).dispatchNext()).isEqualTo(Outcome.CANCELLED);
+        Sent cancelled = new Sent(authorized.operation(), authorized.command());
+
+        assertThat(report(cancelled, Kind.REJECTED, "COMMAND_EXPIRED")).isEqualTo(Result.TERMINAL_IGNORED);
+        assertThat(fixtures.anomalies(authorized.operation().id())).isEmpty();
+        assertThat(report(cancelled, Kind.ACKNOWLEDGED, "ACCEPTED")).isEqualTo(Result.ANOMALY_RAISED);
+        assertThat(report(cancelled, Kind.ACKNOWLEDGED, "ALREADY_APPLIED")).isEqualTo(Result.ANOMALY_RAISED);
+
+        assertThat(fixtures.command(authorized.operation().id())).containsEntry("status", "CANCELLED");
+        assertThat(fixtures.operation(authorized.operation().id())).containsEntry("status", "AUTHORIZED");
+        assertThat(fixtures.anomalies(authorized.operation().id())).hasSize(1);
+    }
+
+    /** The handed-over call site: a hub JSON through the real ingestion decides the operation once. */
+    @Test
+    void theIngestionAppliesAHubAcknowledgementInTheTransactionThatStoresIt() {
+        Sent sent = sentCommand();
+        UUID session = fixtures.hubSession(sent.operation().locker());
+        String topic = "aegis/v1/lockers/" + sent.operation().locker() + "/events";
+        UUID event = UUID.randomUUID();
+        byte[] ack = ("""
+                {"schemaVersion":"3.0","messageId":"%s","type":"COMMAND_ACKNOWLEDGED","commandMessageId":"%s",                "operationId":"%s","lockerId":"%s","compartmentId":"%s","timestamp":"%s","deviceSessionId":"%s",                "bootCount":1,"sequence":%d,"result":"ACCEPTED"}""").formatted(event, sent.command().messageId(),
+                sent.operation().id(), sent.operation().locker(), sent.operation().compartment(),
+                UnlockCommand.format(clock.instant()), session, 7).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+        assertThat(ingestion.ingest(topic, ack)).isEqualTo(DeviceMessageIngestion.Outcome.ACCEPTED);
+        assertThat(ingestion.ingest(topic, ack)).isEqualTo(DeviceMessageIngestion.Outcome.DUPLICATE);
+
+        assertThat(fixtures.inboundMessage(sent.operation().locker(), event))
+                .containsEntry("processing_status", "PROCESSED");
+        assertThat(fixtures.operation(sent.operation().id())).containsEntry("status", "COMMAND_ACKNOWLEDGED");
+        assertThat(fixtures.command(sent.operation().id())).containsEntry("status", "ACKNOWLEDGED");
+        assertThat(eventTypes(sent)).containsExactly("COMMAND_SENT", "COMMAND_ACKNOWLEDGED");
+
+        // A late acknowledgement of the same command, after its deadline, is stored rejected and changes nothing.
+        clock.set(START.plusSeconds(200));
+        Sent late = sentCommand();
+        clock.set(START.plusSeconds(200 + 125));
+        UUID lateEvent = UUID.randomUUID();
+        byte[] lateAck = new String(ack, java.nio.charset.StandardCharsets.UTF_8)
+                .replace(event.toString(), lateEvent.toString())
+                .replace(sent.command().messageId().toString(), late.command().messageId().toString())
+                .replace(sent.operation().id().toString(), late.operation().id().toString())
+                .replace(sent.operation().locker().toString(), late.operation().locker().toString())
+                .replace(sent.operation().compartment().toString(), late.operation().compartment().toString())
+                .replace(session.toString(), fixtures.hubSession(late.operation().locker()).toString())
+                .replaceAll("\"timestamp\":\"[^\"]+\"",
+                        "\"timestamp\":\"" + UnlockCommand.format(clock.instant()) + "\"")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(ingestion.ingest("aegis/v1/lockers/" + late.operation().locker() + "/events", lateAck))
+                .isEqualTo(DeviceMessageIngestion.Outcome.REJECTED);
+        assertThat(fixtures.inboundMessage(late.operation().locker(), lateEvent))
+                .containsEntry("processing_status", "REJECTED")
+                .containsEntry("processing_error", "TIMESTAMP_OUT_OF_RANGE");
+        assertThat(fixtures.operation(late.operation().id())).containsEntry("status", "COMMAND_SENT");
+    }
+
     private Result report(Sent sent, Kind kind, String outcome) {
         Instant at = clock.instant();
         String type = kind == Kind.ACKNOWLEDGED ? "COMMAND_ACKNOWLEDGED" : "COMMAND_REJECTED";
@@ -234,11 +338,12 @@ class CommandAcknowledgementsTests extends ApiIntegrationTest {
         return new Sent(authorized.operation(), authorized.command());
     }
 
+    /** Authorized at the current test instant. */
     private Authorized authorizedCommand() {
-        clock.set(START);
-        Operation operation = fixtures.awaitingLocalProof(accounts.technician().id(), START.minusSeconds(30));
+        Instant now = clock.instant();
+        Operation operation = fixtures.awaitingLocalProof(accounts.technician().id(), now.minusSeconds(30));
         UnlockCommand command = transactions.execute(status -> {
-            fixtures.authorize(operation, START);
+            fixtures.authorize(operation, now);
             return outbox.enqueueUnlock(operation.id());
         });
         return new Authorized(operation, command);
