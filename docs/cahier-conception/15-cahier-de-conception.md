@@ -857,7 +857,7 @@ Exemple abrégé d’une commande après consommation valide du défi QR :
 
 ```json
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "3.0",
   "messageId": "55c71961-21a3-4b2e-8b92-7f237e881a20",
   "type": "UNLOCK_COMPARTMENT",
   "operationId": "2f38d3b6-c18f-4a74-aa9a-2d574286013f",

@@ -147,10 +147,11 @@ describe('display deadline (review finding 5)', () => {
     expect(all).not.toContain(TOKEN);
   });
 
-  it('an uncorrelatable display instruction publishes nothing (no DEVICE_ERROR errorCode fits)', () => {
+  it('an uncorrelatable display instruction is reported as INBOUND_MESSAGE_INVALID, never with its token (schema 3.0)', () => {
     const h = online();
     h.transport().deliver(DISPLAY, JSON.stringify({ type: 'DISPLAY_ACCESS_CHALLENGE', payload: { token: TOKEN } }));
-    expect(h.events()).toEqual([]);
+    expect(h.events()).toEqual([expect.objectContaining({ type: 'DEVICE_ERROR', errorCode: 'INBOUND_MESSAGE_INVALID' })]);
     expect(h.inbound.map((r) => r.outcome)).toEqual(['IGNORED']);
+    expect(h.instances.flatMap((t) => t.published).map((p) => p.body).join('\n')).not.toContain(TOKEN);
   });
 });

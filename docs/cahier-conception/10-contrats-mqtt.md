@@ -2,9 +2,9 @@
 
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Date de révision :** 22 octobre 2026  
-**Version documentaire :** 1.5 — comportement du hub décidé par Philippe le 22 octobre 2026 : messages retenus, doublons tardifs, opération déjà exécutée, rétention et saturation du journal, rejets d’affichage, révision périmée, abonnements, `STORAGE_FAULT` (§7.2, §9, §10, §13.2, §16.1, §18, §20, §23, §27) (#39); schéma 2.0, topics et ACL inchangés  
-**Version documentaire précédente :** 1.4 — schéma des messages 2.0 : connexions, ordre des démarrages et projection de disponibilité (#63)
+**Date de révision :** 3 novembre 2026  
+**Version documentaire :** 1.6 — schéma des messages 3.0 : code `DEVICE_ERROR` `INBOUND_MESSAGE_INVALID` pour un message `commands` ou `display` non corrélable ou retenu, décidé le 22 octobre 2026 (§3.2, §7.2, §13.2, §20, §23) (#98); topics et ACL inchangés  
+**Version documentaire précédente :** 1.5 — comportement du hub décidé par Philippe le 22 octobre 2026 : messages retenus, doublons tardifs, opération déjà exécutée, rétention et saturation du journal, rejets d’affichage, révision périmée, abonnements, `STORAGE_FAULT` (§7.2, §9, §10, §13.2, §16.1, §18, §20, §23, §27) (#39); schéma 2.0
 
 ---
 
@@ -50,7 +50,7 @@ Une commande MQTT est la conséquence d’une LockerOperation déjà autorisée.
 
 ### 3.1 Version MQTT
 
-Le P0 utilise MQTT 3.1.1 afin de maximiser la compatibilité des bibliothèques ESP32. Le contrat applicatif ne dépend pas des propriétés propres à MQTT 5. Le schéma 2.0 des messages (§3.2) ne change pas cette version du protocole.
+Le P0 utilise MQTT 3.1.1 afin de maximiser la compatibilité des bibliothèques ESP32. Le contrat applicatif ne dépend pas des propriétés propres à MQTT 5. Le schéma 3.0 des messages (§3.2) ne change pas cette version du protocole.
 
 ### 3.2 Version du schéma
 
@@ -58,7 +58,7 @@ Tous les messages contiennent :
 
 ```json
 {
-  "schemaVersion": "2.0"
+  "schemaVersion": "3.0"
 }
 ```
 
@@ -70,8 +70,14 @@ Règles :
 - un champ requis ne devient jamais facultatif dans la même major;
 - un changement de type, de sens ou de valeur contrôlée exige une nouvelle major.
 
-La version courante est **2.0** (#63, 21 octobre 2026). Elle remplace 1.0, qu’aucun
-producteur ni consommateur n’avait déployée, pour trois changements :
+La version courante est **3.0** (#98, décision du 22 octobre 2026). Elle remplace 2.0
+pour un seul changement : la valeur contrôlée `INBOUND_MESSAGE_INVALID` s’ajoute aux
+codes de `DEVICE_ERROR` (§13.2), afin que le hub signale un message `commands` ou
+`display` qu’il ne peut pas corréler ou qu’il reçoit retenu (§7.2, §20). L’enveloppe,
+les champs, les topics et le sens des autres valeurs sont ceux de 2.0.
+
+La version 2.0 (#63, 21 octobre 2026) avait remplacé 1.0, qu’aucun producteur ni
+consommateur n’avait déployée, pour trois changements :
 
 - la valeur contrôlée `SHUTDOWN` s’ajoute aux raisons de disponibilité (§15);
 - `bootCount` devient requis dans l’enveloppe du hub (§8.1);
@@ -79,9 +85,12 @@ producteur ni consommateur n’avait déployée, pour trois changements :
 
 Une nouvelle valeur contrôlée exige une nouvelle major (règle ci-dessus); un nouveau
 champ requis aussi, car un producteur de l’ancienne version ne le fournirait pas. Le
-simulateur passe à 2.0 dans le même changement que ce document, et le firmware et
-l’ingestion backend s’écrivent directement en 2.0. Un message 1.0 est rejeté avec
-`UNSUPPORTED_SCHEMA`.
+simulateur passe à 3.0 dans le même changement que ce document; l’ingestion backend
+(PHY-01), les producteurs backend de `commands` et `display` et le firmware (FW-00)
+s’écrivent directement en 3.0. Aucune flotte mixte n’existe en P0 : après le passage,
+un message 2.0 ou 1.0 est rejeté avec `UNSUPPORTED_SCHEMA`, côté backend
+(`processingError`, §21) comme côté hub (`COMMAND_REJECTED` `UNSUPPORTED_SCHEMA`; pour
+un message d’écran, `DISPLAY_REJECTED` `INVALID_DISPLAY_PAYLOAD`, §27.2).
 
 ### 3.3 Encodage
 
@@ -175,8 +184,8 @@ Règles :
 ### 5.1 Version des topics
 
 Le segment `v1` versionne l’arborescence des topics et les ACL qui en dépendent, pas le
-schéma des payloads. Il ne se déduit jamais de `schemaVersion` : le schéma 2.0 garde les
-topics `aegis/v1/...` et ne modifie aucune ACL (§6). Seul un changement de
+schéma des payloads. Il ne se déduit jamais de `schemaVersion` : les schémas 2.0 puis 3.0
+gardent les topics `aegis/v1/...` et ne modifient aucune ACL (§6). Seul un changement de
 l’arborescence (niveau ajouté, topic renommé ou déplacé) créerait `aegis/v2/...`; il
 exigerait de nouvelles ACL pour le hub et le backend, testées avant la démonstration,
 et un basculement coordonné des deux côtés. Un consommateur choisit son décodeur
@@ -247,7 +256,7 @@ Le backend ne compte jamais sur une livraison exactement une fois. Toute livrais
 
 Une commande ou une instruction d’écran `retain=true` est strictement interdite. Une ancienne commande ne doit jamais être livrée à un hub simplement parce qu’il vient de se reconnecter.
 
-Si le hub en reçoit une malgré tout, il ne l’exécute pas, ne l’affiche pas et ne la consigne pas dans son journal des commandes (§16.1) : elle ne consomme ni son `messageId` ni son `operationId`, et ne change pas la réponse faite à la même commande livrée sans retain. Le schéma 2.0 ne prévoit aucun signalement de ce cas; il est suivi par #98 (schéma 3.0, `INBOUND_MESSAGE_INVALID`).
+Si le hub en reçoit une malgré tout, il ne l’exécute pas, ne l’affiche pas et ne la consigne pas dans son journal des commandes (§16.1) : elle ne consomme ni son `messageId` ni son `operationId`, et ne change pas la réponse faite à la même commande livrée sans retain. Il la signale par un `DEVICE_ERROR` `INBOUND_MESSAGE_INVALID` (§13.2), dans la limite de signalement du §13.2 : ce signalement ne porte ni `operationId` ni le contenu du message, et ne vaut ni accusé ni rejet de la commande.
 
 Seuls les messages DEVICE_AVAILABILITY sont retenus : ONLINE, OFFLINE `SHUTDOWN` et le Last Will OFFLINE `CONNECTION_LOST`. Un statut retenu ne remplace jamais la vérification de fraîcheur (§15.3).
 
@@ -259,7 +268,7 @@ Seuls les messages DEVICE_AVAILABILITY sont retenus : ONLINE, OFFLINE `SHUTDOWN`
 
 | Champ | Type | Requis | Règle |
 |---|---|---:|---|
-| schemaVersion | string | oui | 2.0 |
+| schemaVersion | string | oui | 3.0 |
 | messageId | UUID | oui | Nouveau pour chaque fait logique |
 | type | string | oui | Autorisé sur le topic |
 | lockerId | UUID | oui | Concorde avec identité et topic |
@@ -336,7 +345,7 @@ Payload :
 
 ```json
 {
-  "schemaVersion": "2.0",
+  "schemaVersion": "3.0",
   "messageId": "55c71961-21a3-4b2e-8b92-7f237e881a20",
   "type": "UNLOCK_COMPARTMENT",
   "operationId": "2f38d3b6-c18f-4a74-aa9a-2d574286013f",
@@ -390,7 +399,7 @@ Un accusé positif signifie que le hub a validé la commande, que la cellule cib
 
 ```json
 {
-  "schemaVersion": "2.0",
+  "schemaVersion": "3.0",
   "messageId": "b7ce3d98-f78f-4c1a-a96f-36663bdcfe3c",
   "type": "COMMAND_ACKNOWLEDGED",
   "commandMessageId": "55c71961-21a3-4b2e-8b92-7f237e881a20",
@@ -417,7 +426,7 @@ Un rejet connu reste un rejet : un doublon d’une commande rejetée republie le
 
 ```json
 {
-  "schemaVersion": "2.0",
+  "schemaVersion": "3.0",
   "messageId": "ac370f20-52a2-4e07-9791-f9f64dabdd93",
   "type": "COMMAND_REJECTED",
   "commandMessageId": "55c71961-21a3-4b2e-8b92-7f237e881a20",
@@ -466,7 +475,7 @@ aegis/v1/lockers/{lockerId}/events
 
 ```json
 {
-  "schemaVersion": "2.0",
+  "schemaVersion": "3.0",
   "messageId": "19dc9b16-b1db-4f26-a48a-073034ea35b8",
   "type": "DOOR_OPENED",
   "operationId": "2f38d3b6-c18f-4a74-aa9a-2d574286013f",
@@ -498,7 +507,7 @@ Chaque cellule lit localement les tags. Pendant une opération, le hub lance le 
 
 ```json
 {
-  "schemaVersion": "2.0",
+  "schemaVersion": "3.0",
   "messageId": "55bb8489-fe94-4d21-94df-84cb6fca134a",
   "type": "RFID_SCAN_COMPLETED",
   "operationId": "2f38d3b6-c18f-4a74-aa9a-2d574286013f",
@@ -560,7 +569,7 @@ Publié après restauration de la connectivité :
 
 ```json
 {
-  "schemaVersion": "2.0",
+  "schemaVersion": "3.0",
   "messageId": "ec491081-28bd-46d4-87b2-57da75f670bb",
   "type": "DEVICE_RESTARTED",
   "lockerId": "d46a74ae-39dc-460b-8af0-38fc791b376a",
@@ -604,7 +613,8 @@ Codes initiaux :
 - LOCK_ACTUATOR_FAULT;
 - POWER_FAULT;
 - CLOCK_SYNC_LOST;
-- STORAGE_FAULT.
+- STORAGE_FAULT;
+- INBOUND_MESSAGE_INVALID (schéma 3.0, ci-dessous).
 
 `detail` suit la règle du §10.2 : borné à 240 caractères, sans secret, pour le diagnostic seulement.
 
@@ -617,7 +627,75 @@ Codes initiaux :
 - un redémarrage efface la file et ses pertes : `DEVICE_RESTARTED` porte déjà l’incertitude (§13.1), sans `STORAGE_FAULT`;
 - aucune preuve perdue n’est reconstituée (§23.6 point 4).
 
-Un message entrant impossible à corréler ou retenu n’a pas encore de code : `INBOUND_MESSAGE_INVALID` (`WARNING`, sans payload ni identifiant inventé) exige une nouvelle major et arrive avec le schéma 3.0 (#98).
+#### `INBOUND_MESSAGE_INVALID`
+
+Le hub publie ce code pour un message reçu sur son topic `commands` ou `display` dans
+l’un des deux cas suivants (#98) :
+
+- **message retenu** : reçu avec `retain=true` (§7.2), même s’il est valide par
+  ailleurs. Ce cas prime sur le suivant;
+- **message non corrélable** : plus de 16 KiB (§3.3), JSON illisible ou autre chose
+  qu’un objet, ou `messageId`, `operationId` ou `compartmentId` absent ou qui n’est pas
+  un UUID canonique (§9.1 étapes 1 et 3, §20).
+
+Un message corrélable mais invalide, y compris d’une major non supportée, reçoit son
+`COMMAND_REJECTED` ou son `DISPLAY_REJECTED` (§10.2, §27.2), jamais ce code. Un doublon
+reçoit sa réponse connue.
+
+Le signalement :
+
+- est un `DEVICE_ERROR` sur `events`, QoS 1, sans retain, avec l’enveloppe hub du §8.1
+  et un nouveau `messageId` d’événement;
+- porte `errorCode` = `INBOUND_MESSAGE_INVALID` et `severity` = `WARNING`;
+- ne porte jamais d’`operationId`, même lisible, ni aucun identifiant fabriqué; le
+  `messageId` du message reçu n’y figure pas;
+- porte `compartmentId` seulement si le champ `compartmentId` du message reçu est un
+  UUID canonique désignant une cellule de ce hub; sinon le champ est absent;
+- a un `detail` borné (§10.2) composé de textes fixes du hub : le topic, le cas et le
+  nombre de messages non signalés (limite ci-dessous). Il ne recopie jamais le payload
+  ni aucune de ses valeurs, en particulier le token ou l’URI du QR (§4.3, §22.1).
+
+Il n’exécute, n’affiche ni ne journalise rien (§16.1) : il ne consomme aucun
+`messageId` ni `operationId`. Le backend l’accepte et le conserve comme un fait technique
+du hub, sans PhysicalObservation ni transition (§19.1, §23.3 point 8); sa présentation dans
+l’administration relève de l’ingestion (PHY-01, #29).
+
+Exemple (commande retenue visant une cellule connue) :
+
+```json
+{
+  "schemaVersion": "3.0",
+  "messageId": "4c0f5a2e-7b1d-4e8a-9c3f-2a6b8d0e1f47",
+  "type": "DEVICE_ERROR",
+  "lockerId": "d46a74ae-39dc-460b-8af0-38fc791b376a",
+  "compartmentId": "1ae77ae3-8490-4f09-9412-a7816b77bff9",
+  "timestamp": "2026-09-16T14:36:00Z",
+  "deviceSessionId": "bd6a6594-09f7-4ff5-b0df-dae65da7c249",
+  "bootCount": 4,
+  "sequence": 7,
+  "errorCode": "INBOUND_MESSAGE_INVALID",
+  "severity": "WARNING",
+  "detail": "A retained commands message was ignored: neither executed, displayed nor journaled."
+}
+```
+
+**Limite de signalement (proposition #98, à confirmer).** Une rafale de messages
+invalides ne doit pas inonder `events`. Le hub publie au plus un signalement par couple
+(topic `commands` ou `display`, cas retenu ou non corrélable) par fenêtre de
+60 secondes, soit au plus quatre par minute :
+
+- le premier message d’un couple est signalé aussitôt si aucun signalement de ce couple
+  n’a été publié depuis 60 secondes; les suivants sont seulement comptés;
+- le signalement suivant du même couple indique dans `detail` le nombre de messages non
+  signalés depuis le précédent; ce nombre sert au diagnostic seulement (§10.2);
+- la fenêtre se mesure sur l’horloge monotone du hub, jamais sur l’horloge NTP, qui peut
+  ne pas être synchronisée;
+- le compteur vit en mémoire vive et repart à zéro au démarrage, sans écriture en NVS;
+- la limite ne change ni les champs ni le sens du signalement, et ne retient jamais un
+  message ignoré. Le backend ne déduit rien de l’absence d’un signalement.
+
+Ce comportement est local au hub. Les paramètres (couple, 60 secondes, compteur dans
+`detail`) attendent la confirmation de l’équipe avant la qualification de FW-00 (#23).
 
 ---
 
@@ -633,7 +711,7 @@ Fréquence nominale : toutes les 10 secondes.
 
 ```json
 {
-  "schemaVersion": "2.0",
+  "schemaVersion": "3.0",
   "messageId": "9445c92f-95da-4806-a911-ff60db45f713",
   "type": "HEARTBEAT",
   "lockerId": "d46a74ae-39dc-460b-8af0-38fc791b376a",
@@ -688,7 +766,7 @@ Après connexion et synchronisation de l’horloge, le hub publie avec QoS 1 et 
 
 ```json
 {
-  "schemaVersion": "2.0",
+  "schemaVersion": "3.0",
   "messageId": "79adb482-4a28-4bef-8e7a-016574901eee",
   "type": "DEVICE_AVAILABILITY",
   "lockerId": "d46a74ae-39dc-460b-8af0-38fc791b376a",
@@ -725,7 +803,7 @@ son `timestamp`; il le déduplique sur `messageId` (§16.2) et date le signaleme
 
 ```json
 {
-  "schemaVersion": "2.0",
+  "schemaVersion": "3.0",
   "messageId": "e92228c7-91db-4831-ab79-21dd44f84550",
   "type": "DEVICE_AVAILABILITY",
   "lockerId": "d46a74ae-39dc-460b-8af0-38fc791b376a",
@@ -996,7 +1074,7 @@ Un payload trop volumineux ou impossible à parser est rejeté avant désériali
 | LOCK_LOCKED | non | oui | non | requis en opération | requis |
 | RFID_SCAN_COMPLETED | non | oui | non | requis en opération | requis |
 | DEVICE_RESTARTED | non | oui | non | non | non |
-| DEVICE_ERROR | non | oui | non | facultatif | facultatif |
+| DEVICE_ERROR | non | oui | non | facultatif (jamais pour `INBOUND_MESSAGE_INVALID`) | facultatif |
 | HEARTBEAT | non | non | oui | non | non |
 | DEVICE_AVAILABILITY | non | non | oui | non | non |
 
@@ -1014,7 +1092,7 @@ Les types ajoutés pour l’écran sont exclus des trois topics de commande/éta
 | ACCESS_CHALLENGE_DISPLAYED | events | requis | requis |
 | DISPLAY_REJECTED | events | requis si le message est corrélable | requis si corrélable |
 
-Un message impossible à corréler ne produit jamais un faux `DISPLAY_REJECTED` ou `COMMAND_REJECTED` sans identifiants obligatoires. Son signalement par un `DEVICE_ERROR` expurgé attend le code `INBOUND_MESSAGE_INVALID` du schéma 3.0 (#98); en schéma 2.0, le hub ne publie rien et n’actionne rien.
+Un message impossible à corréler ne produit jamais un faux `DISPLAY_REJECTED` ou `COMMAND_REJECTED` sans identifiants obligatoires. Le hub ne l’actionne pas, ne l’affiche pas et le signale par un `DEVICE_ERROR` `INBOUND_MESSAGE_INVALID` expurgé, sans `operationId`, avec `compartmentId` seulement s’il est lu dans un champ valide, dans la limite de signalement du §13.2. Un message `commands` ou `display` retenu reçoit le même signalement (§7.2).
 
 ## 21. Codes de rejet backend
 
@@ -1109,8 +1187,12 @@ Les logs n’incluent aucun secret, mot de passe ou payload complet par défaut.
 8. Un doublon livré après `expiresAt` reçoit son résultat connu, pas `COMMAND_EXPIRED`.
 9. Une nouvelle commande d’une opération déjà exécutée n’actionne rien : même cellule, résultat connu; autre cellule, `INVALID_PAYLOAD`.
 10. Un `messageId` réutilisé avec un autre contenu reçoit le résultat journalisé, avec l’`operationId` et le `compartmentId` journalisés; aucune autre cellule n’est actionnée ni citée comme actionnée.
-11. Une commande ou une instruction d’écran retenue n’est ni exécutée, ni affichée, ni journalisée.
+11. Une commande ou une instruction d’écran retenue n’est ni exécutée, ni affichée, ni journalisée; elle produit un `DEVICE_ERROR` `INBOUND_MESSAGE_INVALID`.
 12. Un journal saturé d’entrées protégées refuse la nouvelle commande par `INTERNAL_DEVICE_ERROR` sans actionnement.
+13. Une commande ou une instruction d’écran non corrélable (JSON illisible, trop volumineuse, sans `messageId`, `operationId` ou `compartmentId` valide) n’actionne et n’affiche rien et produit un `DEVICE_ERROR` `INBOUND_MESSAGE_INVALID` `WARNING`, QoS 1, sans retain.
+14. Ce signalement ne contient ni `operationId`, ni le payload reçu, ni aucune de ses valeurs, ni le token ou l’URI du QR; il porte `compartmentId` seulement si ce champ désigne une cellule du hub.
+15. Une rafale de messages invalides donne au plus un signalement par topic et par cas en 60 secondes; le suivant compte les messages non signalés (§13.2, proposition #98 à confirmer).
+16. Une commande 2.0 est rejetée `UNSUPPORTED_SCHEMA`, une instruction d’écran 2.0 `INVALID_DISPLAY_PAYLOAD`, sans actionnement ni affichage.
 
 ### 23.3 Événements
 
@@ -1121,6 +1203,8 @@ Les logs n’incluent aucun secret, mot de passe ou payload complet par défaut.
 5. Seul un RFID_SCAN_COMPLETED sain et vide du tag attendu peut contribuer à confirmer un checkout après fermeture.
 6. L’absence d’un message RFID ne confirme jamais l’absence de l’actif.
 7. Une ambiguïté entre cellules produit une anomalie ou UNKNOWN.
+8. Un `DEVICE_ERROR` `INBOUND_MESSAGE_INVALID` est enregistré sans PhysicalObservation ni transition, et n’est rattaché à aucune opération.
+9. Un message device 2.0 ou 1.0 est rejeté `UNSUPPORTED_SCHEMA`.
 
 ### 23.4 Déduplication backend
 
@@ -1235,7 +1319,7 @@ Topic : `aegis/v1/lockers/{lockerId}/display`. QoS 1, `retain=false`, TLS et ACL
 
 ```json
 {
-  "schemaVersion": "2.0",
+  "schemaVersion": "3.0",
   "messageId": "fd6c4a94-4ac4-4a91-9249-59347c3b648b",
   "type": "DISPLAY_ACCESS_CHALLENGE",
   "lockerId": "d46a74ae-39dc-460b-8af0-38fc791b376a",

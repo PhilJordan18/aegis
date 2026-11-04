@@ -10,8 +10,16 @@ on:
 permissions:
   contents: read
 
+# One group per branch for pull requests and manual runs: a manual run waits
+# for the pull request run of the same branch instead of running beside it, and
+# a newer pull request run cancels the older one. Only pull request runs cancel;
+# a pending run is replaced by a newer one. Pushes to dev and main have their
+# own group and are never cancelled: each one qualifies the merged branch.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: >-
+    ci-${{ github.event_name == 'push' && 'push' || 'branch' }}-${{
+    github.event.pull_request.head.repo.full_name || github.repository }}-${{
+    github.head_ref || github.ref_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -76,10 +84,20 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - name: Start an isolated broker
+        working-directory: .
+        # The backend broker tests use the development Mosquitto with its ACL and
+        # the example credentials of infra/docker/.env.example; a missing broker
+        # fails them. Plaintext MQTT stays on this runner's loopback.
+        run: docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml up -d --wait mosquitto
       - run: ./mvnw -B -ntp test
       - name: Test counts
         if: always()
         run: python3 ../../.github/scripts/test-report.py "API tests" target/surefire-reports/TEST-*.xml
+      - name: Broker logs
+        if: failure()
+        working-directory: .
+        run: docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml logs mosquitto
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -238,6 +256,24 @@ jobs:
           esac
           echo "IOS_DESTINATION=$destination" >> "$GITHUB_ENV"
           echo "Simulator $(cat build/results/destination.txt)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Boot the simulator
+        # Measured in #67: xcodebuild sees the simulator booted within seconds,
+        # then spends 2 to 4 minutes installing and launching the first test
+        # host while the new device finishes its first boot. This step waits
+        # for that first boot explicitly, bounded by the step timeout, so its
+        # cost is recorded apart from the tests. A simulator that does not
+        # finish booting fails here, never as a test failure.
+        timeout-minutes: 8
+        run: |
+          udid=${IOS_DESTINATION#*id=}
+          start=$(date +%s)
+          if ! xcrun simctl list devices booted | grep -q "$udid"; then
+            xcrun simctl boot "$udid"
+          fi
+          booted=$(date +%s)
+          xcrun simctl bootstatus "$udid"
+          ready=$(date +%s)
+          echo "Simulator booted in $((booted - start)) s, ready $((ready - booted)) s later" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Standalone recipe
         run: scripts/ios-test.sh standalone
       - name: Result summary

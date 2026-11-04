@@ -332,9 +332,27 @@ deuxième prêt pour une même opération de retrait
 (`uq_loans_checkout_operation`); le service convertira ces refus en
 `CONFLICT` (section 7.2). Le rôle applicatif ne peut ni supprimer ni vider
 ces trois tables. Le catalogue les lit pour dériver la disponibilité (section
-suivante); seule la création de réservation (RES-01) écrit dans
-`reservations`. `CustodySchemaTests` vérifie les
+suivante); seules la création (RES-01), l'annulation et l'expiration (RES-02)
+d'une réservation écrivent dans `reservations`. `CustodySchemaTests` vérifie les
 contraintes, cinq courses concurrentes et les droits.
+
+## Défis locaux, commandes, preuves IoT et anomalies (schéma de PHY-01)
+
+`V007` crée `local_access_challenges`, `hub_display_outbox` et
+`command_outbox`; `V008` crée `inbound_device_messages` et
+`physical_observations`, puis ajoute `audit_events.inbound_message_id` et
+`audit_events.physical_observation_id` avec leurs clés étrangères; `V009` crée
+`anomalies` (document 08, sections 4.6 à 4.9). Ces migrations ne créent que
+les tables, leurs contraintes et les index d'invariant, d'expiration et de
+claim que la section 11.1 leur attribue : un défi par opération, une
+instruction de défi par opération, une commande par opération, une ligne par
+paire `(locker_device_id, message_id)` et une anomalie active par opération.
+Les index de lecture de la section 5.2 restent à `V011`. Aucun code Java ne
+les utilise encore : l'ingestion MQTT (PHY-01) les remplira. `schema_version`
+n'a aucune valeur par défaut dans les deux outbox : le producteur indique la
+version MQTT qu'il encode. `IotEvidenceSchemaTests` vérifie les contraintes,
+le claim concurrent de la section 9.2, la déduplication concurrente d'un
+message, l'unicité concurrente d'une anomalie active et les droits.
 
 ## Catalogue technicien et readiness (RDY-01, RDY-02)
 
@@ -445,8 +463,9 @@ Tant que la présence de production est `NoPhysicalProofPresence`, aucune
 readiness n'est `READY` : toute création reçoit `422 ASSET_NOT_READY` /
 `UNKNOWN_PHYSICAL_STATE` jusqu'à PHY-02 (décision du 28 octobre 2026). Seuls
 les tests importent `PresentAssetsConfiguration`, qui déclare chaque actif
-présent. `availableActions` reste vide tant que l'annulation (RES-02) et le
-retrait (CHK-01) n'existent pas. Un technicien ne lit que ses réservations :
+présent. `availableActions` contient `CANCEL` lorsque l'annulation serait
+acceptée (RES-02, section suivante) et jamais `CHECKOUT` tant que le retrait
+(CHK-01) n'existe pas. Un technicien ne lit que ses réservations :
 celle d'un autre donne `404 RESOURCE_NOT_FOUND`, l'absence de réservation
 active `404 ACTIVE_RESERVATION_NOT_FOUND`. `ReservationApiTests`,
 `ReservationConcurrencyTests` et `ReservationProductionPresenceTests` le
@@ -474,7 +493,55 @@ l'heure du test. Résultat attendu, à chaque étape :
 | Réservation courante après la demande | `404 ACTIVE_RESERVATION_NOT_FOUND` |
 
 Le script échoue sur tout écart. Un `201` serait un échec : la réservation
-resterait active, car aucune annulation n'existe avant RES-02.
+resterait active jusqu'à son annulation ou son expiration.
+
+## Annulation et expiration (RES-02)
+
+`POST /api/v1/reservations/{reservationId}/cancel` (document 09, section 14.4;
+document 06, section 5.5) exige `Idempotency-Key`; le corps est absent ou `{}`,
+et toute propriété donne `400 VALIDATION_ERROR`. Elle verrouille le titulaire
+(`FOR NO KEY UPDATE`), l'actif, la réservation, puis les lockers et tentatives
+qu'elle termine.
+
+| Situation | Réponse |
+|---|---|
+| Réservation `ACTIVE` du demandeur, avant `reservedUntil`, aucune tentative de retrait autorisée, ni en `ANOMALY` dont l'anomalie n'est pas `RESOLVED` (document 09, section 8.10) | `200`, `CANCELLED`, audit `RESERVATION_CANCELLED` (`ACTIVE` → `CANCELLED`) |
+| Même clé et même requête | Réponse originale rejouée, `Idempotency-Replayed: true`, aucun effet |
+| Réservation déjà `CANCELLED`, nouvelle clé | `200`, audit `ALREADY_APPLIED` |
+| Réservation d'un autre technicien ou inconnue | `404 RESOURCE_NOT_FOUND` |
+| `FULFILLED`, `EXPIRED`, `reservedUntil` atteint, tentative autorisée une fois, quelle qu'en soit l'issue, ou tentative en `ANOMALY` dont l'anomalie n'est pas `RESOLVED` | `409 RESERVATION_NOT_CANCELLABLE` |
+
+Un refus n'écrit rien. Une tentative encore `REQUESTED` ou
+`AWAITING_LOCAL_PROOF` se termine `FAILED` (`RESERVATION_CANCELLED`) dans la
+même transaction, avec un audit `OPERATION_FAILED`. Son défi QR encore
+`PENDING` devient `INVALIDATED`, avec un audit `LOCAL_CHALLENGE_INVALIDATED`;
+son instruction d'affichage est arrêtée et son chiffré purgé (document 08,
+section 4.6). L'effacement de l'écran du hub n'est pas encore émis (LOC-01
+#43, IOT-01 #40). La lecture littérale de la question ouverte Q1 (document 09,
+section 8.10) est appliquée : une tentative autorisée puis terminée bloque
+l'annulation.
+
+`ReservationExpiry` (document 06, section 14.1) traite chaque réservation
+`ACTIVE` échue (`reservedUntil <= now`) dans sa propre transaction courte :
+verrou de l'actif, puis de la réservation, nouvelle vérification, puis
+`EXPIRED` et audit `RESERVATION_EXPIRED` sans acteur. Elle est différée tant
+qu'une tentative autorisée n'est pas classée ou qu'une tentative en `ANOMALY`
+a une anomalie non `RESOLVED`; une attente QR ne la diffère pas et se termine
+`EXPIRED` avec elle, son défi QR `PENDING` devient `EXPIRED` (audit
+`LOCAL_CHALLENGE_EXPIRED`) et son instruction d'affichage est purgée.
+Une réservation `FULFILLED` n'expire jamais, donc un prêt ouvert garde l'actif
+`BORROWED`. La disponibilité est dérivée à nouveau à la lecture suivante.
+
+`ReservationExpiryJob` l'exécute toutes les
+`aegis.reservations.expiry.interval` (`PT15S`), par lots de
+`aegis.reservations.expiry.batch-size` (`100`), et saute un actif verrouillé
+ailleurs (`SKIP LOCKED`). La création et l'annulation l'exécutent d'abord, dans
+une transaction distincte, pour les réservations échues qu'elles pourraient
+rencontrer. Un arrêt avant le commit ne laisse rien à moitié fait : le passage
+suivant décide de nouveau. Les tests d'intégration désactivent le job
+(`aegis.reservations.expiry.scheduled=false`) et pilotent l'horloge.
+`ReservationCancellationApiTests`, `ReservationExpiryTests` et
+`ReservationExpirySchedulingTests` le vérifient.
 
 ## Rôles PostgreSQL
 
@@ -491,8 +558,10 @@ même compte `aegis`, et le rôle applicatif n'existe pas.
 Après chaque migration, le callback Flyway accorde au rôle applicatif, s'il
 existe : `USAGE` sur `aegis`, `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les
 tables métier, `SELECT`, `INSERT` et `UPDATE` sans `DELETE` sur
-`reservations`, `locker_operations` et `loans`, et seulement `SELECT` et
-`INSERT` sur `audit_events`; jamais `TRUNCATE`, `REFERENCES` ni `TRIGGER`. Il échoue si ce rôle est
+`reservations`, `locker_operations`, `loans`, `local_access_challenges`,
+`hub_display_outbox`, `command_outbox`, `inbound_device_messages` et
+`anomalies`, et seulement `SELECT` et `INSERT` sur `audit_events` et
+`physical_observations`; jamais `TRUNCATE`, `REFERENCES` ni `TRIGGER`. Il échoue si ce rôle est
 superutilisateur ou membre d'un propriétaire du schéma, même sans héritage. Le trigger
 append-only de `audit_events` n'est qu'une défense en profondeur : le
 propriétaire de la table peut le désactiver et un superutilisateur le
@@ -517,9 +586,9 @@ aux environnements partagés dans cette carte :
    plaçant le compte propriétaire dans `AEGIS_DB_MIGRATION_USER` et
    `AEGIS_DB_MIGRATION_PASSWORD`;
 5. vérifier en tant que `aegis_app` que `UPDATE`, `DELETE` et `TRUNCATE` sur
-   `aegis.audit_events`, ainsi que `DELETE` et `TRUNCATE` sur
-   `aegis.reservations`, `aegis.locker_operations` et `aegis.loans`, échouent
-   avec `42501`;
+   `aegis.audit_events` et `aegis.physical_observations`, ainsi que `DELETE`
+   et `TRUNCATE` sur les huit tables sans `DELETE` ci-dessus, échouent avec
+   `42501`;
 6. facultatif : transférer la propriété du schéma `aegis`, de ses objets et de
    `public.flyway_schema_history` à `aegis_migrator`, puis migrer avec lui
    plutôt qu'avec un superutilisateur.
@@ -543,7 +612,9 @@ doivent être conservées. Chaque démarrage de l'API applique les migrations
 en attente, dans l'ordre : `V001`, `V002` pour l'identité et le catalogue,
 `V002_1` pour les clés d'idempotence REST, `V002_2` pour `audit_events`,
 `V003` pour les lockers et les placements, `V004` pour les horaires, puis
-`V005` et `V006` pour les réservations, opérations et prêts. Il valide
+`V005` et `V006` pour les réservations, opérations et prêts, `V007` pour les
+défis locaux et les outbox, `V008` pour les messages des devices et les
+observations, puis `V009` pour les anomalies. Il valide
 l'historique dans `public.flyway_schema_history` sans rejouer une migration
 déjà appliquée. Une table `aegis.flyway_schema_history` résiduelle peut
 exister dans une base locale ancienne : elle n'est pas lue, et une requête

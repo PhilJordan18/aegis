@@ -73,3 +73,97 @@ Repères dans le code (lecture seule de CI-02) :
    automatique qui masquerait un échec.
 3. Livrer par une PR vers `dev`; CI-02 comptera de nouveau les succès iOS à
    partir du premier run vert sur `dev` qui suivra.
+
+## Mise à jour du 3 novembre 2026
+
+Cette section remplace les points 1 et 2 ci-dessus. Les mesures sont dans
+`diagnostic-duree-ios.md`.
+
+Les décisions humaines du 3 novembre s'appliquent :
+
+- **La tolérance Dynamic Type est refusée.** La bande de 60 pt du commit 27ee03f doit
+  être retirée.
+- **Le découpage de l'audit en trois passes est aussi à retirer.** Il double environ la
+  durée de chaque audit (catalogue : 11,6 à 20,5 s, contre 6,1 à 8,7 s) et n'a pas
+  empêché le -56.
+- **La disposition réelle de la carte « Last known: Blocked » doit être vérifiée**
+  avant toute conclusion sur l'audit, en grande taille et en AX5 : défilement, safe
+  areas, libellé lisible. Un défaut produit n'est pas exclu.
+
+Références exactes. Les lignes renvoient à `apps/ios/AegisMobileUITests/` ; les durées
+et les comptes viennent de `diagnostic-duree-ios.md`.
+
+1. **Premier appui sur « Réessayer » perdu.**
+   - Test : `CatalogUITests.testOfflineRefreshKeepsTheLastListThenTryAgainRecovers`.
+   - Code : `CatalogUITests.swift:141-151` sur `dev` 639ada8, et `:151` dans 27ee03f
+     (#117). Le second `retry.tap()` est conditionné par
+     `notice.waitForNonExistence(timeout: 5)`.
+   - Observé dans 20 itérations sur 22, sur les runs 41620521054, 41620501772,
+     41588098193, 41586558351, 41622125076 et 41629351716 : chaque fois, le bouton
+     `catalog.retry` a reçu deux taps.
+   - Le commentaire du test dit « seen once ». **Pas de second appui automatique** :
+     reproduire, puis corriger la cause, dans l'app ou dans l'attente du test.
+2. **Retour vers la liste.**
+   - Code : `CatalogUITests.swift:71-72` sur `dev`.
+   - Run 41586558351, FR sombre : le tap sur `navigationBars.buttons.firstMatch`
+     n'a pas ramené la carte MM-002 en 10 s, alors que `BackButton` était présent et
+     touchable en (16, 62).
+   - #117 ajoute `waitForStillScreen()` à `:73`. Ce n'est à garder que si un test
+     prouve que le tap pendant la transition est bien la cause.
+3. **Dynamic Type.**
+   - Constat : « partially unsupported » sur « Last known: Blocked », cadre
+     (51, 646, 172, 18), pour une zone visible de (0, 0, 402, 671).
+   - Runs 41577913719, 41584155476 et 41588098193.
+   - Code de l'audit : `CatalogUITests.swift:313-334` sur `dev`. La bande `growthBand`
+     de 27ee03f (`:287-308`) est refusée.
+   - Vérifier la mise en page réelle en grande taille et en AX5. **Pas de tolérance
+     générale de 60 pt.**
+4. **Timeouts d'audit (-56).**
+   - Runs 41515528716 et 41586555809 : test hors ligne, fenêtre de 17 s.
+   - Run 41620501772 : catalogue EN clair, fenêtre de 41 s, suivi du timeout de
+     lancement de `testEmptyCatalogueOffersNoFilterToClear`.
+   - Les trois passes de 27ee03f (`:338-342`) sont à retirer.
+5. **Nouvelle tentative de #116.**
+   - Code : `StillScreen.swift`, `performCompletedAccessibilityAudit`, dans 4084695 ;
+     appelée à `CatalogUITests.swift:323`.
+   - **Ce n'est pas une suppression de constat** : elle ne relance que sur -56, un audit
+     interrompu n'a rendu aucun constat, et un second -56 échoue.
+   - **Mais elle double le coût de l'audit et peut masquer l'instabilité.** Elle doit
+     être visible dans le résumé du job, et pas seulement comme activité du bundle.
+     Elle doit aussi être justifiée et traitée.
+   - Le run vert 41622125076 ne l'a pas déclenchée : il ne la valide pas.
+
+Les recettes de suites rapide et étendue sont attendues de la session iOS
+(`suites-ios.md`) :
+
+- les deux recettes dans `ios-test.sh` ;
+- la sélection par nom ;
+- le nombre attendu et l'unité comptée ;
+- la liste des chemins visuels.
+
+La session cloud les branchera dans `ci.yml`.
+
+La session cloud ne modifie plus `CatalogUITests` ni `StillScreen`. La consolidation
+de #116 et #117 appartient à la session iOS.
+
+## Mise à jour du 4 novembre 2026 (session de relais)
+
+Run [41635406808](https://github.com/PhilJordan18/aegis/actions/runs/41635406808), tête
+`20e8959` de #120. Le code iOS est celui de `dev` (`639ada8`), et #120 ne modifie rien sous
+`apps/ios`.
+
+| Test | Durée | Constat |
+|---|---:|---|
+| `testCatalogueFilterSheetAndBackInBothLanguagesAndAppearances()` | 78,8 s | « Failed to get list of active applications: Timed out while fetching attributes `XC_kAXXCAttributeFocusedApplications` » : nouveau symptôme, délai d'une requête d'accessibilité |
+| `testOfflineRefreshKeepsTheLastListThenTryAgainRecovers()` | 50,7 s | `accessibilityAudit` -56, « Audit failed to complete in time » |
+
+Lecture :
+
+- **Le démarrage n'est pas en cause.** Le simulateur était démarré et prêt avant les tests :
+  démarré en 4 s, prêt 104 s plus tard.
+- **Le workflow n'est pas en cause.** La même famille d'échecs apparaît sur des têtes sans
+  l'étape de démarrage :
+  - #110 `0c1a46e` (run 41588612243) : -56 et `XCTAssertTrue failed` ;
+  - #111 `6aad1c7` (run 41588614163) : constat Dynamic Type sur « Last known: Blocked ».
+- Les constats sont transmis sur #117. Le remplacement de #117 par #116 n'est pas démontré :
+  #116 n'a qu'un run vert, et #117 un vert et un rouge.
