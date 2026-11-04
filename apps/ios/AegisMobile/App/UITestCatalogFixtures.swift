@@ -67,11 +67,20 @@ enum UITestCatalogFixtures {
              compartment: nil),
     ]
 
+    /// PG-001 to PG-025, all ready: more than one page of 20.
+    static let paged: [Item] = (1...25).map { number in
+        let code = String(format: "PG-%03d", number)
+        return Item(id: String(format: "300e72fd-118c-4d1f-af9c-7fb61e89f%03d", 100 + number), code: code,
+                    name: "Pince \(code)", manufacturer: nil, modelNumber: nil, access: "STANDARD",
+                    operational: "SERVICEABLE", calibration: #"{"required":false,"dueAt":null,"status":"NOT_REQUIRED"}"#,
+                    availability: "AVAILABLE", presence: "PRESENT", result: "READY", reasons: [], compartment: "B1")
+    }
+
     /// A fake server: filters by `readiness` and `q`, pages by `page` and `size`.
-    static func page(for url: URL, empty: Bool = false) -> String {
+    static func page(for url: URL, items: [Item]) -> String {
         let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         func value(_ name: String) -> String? { query.first { $0.name == name }?.value }
-        var matches = empty ? [] : items
+        var matches = items
         if let readiness = value("readiness") { matches = matches.filter { $0.result == readiness } }
         if let search = value("q")?.lowercased() {
             matches = matches.filter { $0.code.lowercased().contains(search) || $0.name.lowercased().contains(search) }

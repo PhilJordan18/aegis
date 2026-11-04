@@ -57,7 +57,9 @@ final class CatalogUITests: XCTestCase {
                 // Bloqué sends readiness=BLOCKED; the fixture server filters.
                 app.buttons["catalog.filter.blocked"].tap()
                 XCTAssertTrue(card(app, "MM-002").waitForExistence(timeout: 10))
-                XCTAssertFalse(card(app, "MM-001").exists)
+                // MM-002 was already listed: the filtered answer is the one
+                // without MM-001.
+                XCTAssertTrue(card(app, "MM-001").waitForNonExistence(timeout: 10))
                 XCTAssertTrue(app.buttons["catalog.filter.blocked"].isSelected)
 
                 card(app, "MM-002").tap()
@@ -86,6 +88,26 @@ final class CatalogUITests: XCTestCase {
         XCTAssertTrue(card(app, "TI-002").label.hasPrefix("À vérifier, "))
         XCTAssertTrue(card(app, "OS-001").label.hasPrefix("Indisponible, "))
         assertNoIdentifierShown(app)
+    }
+
+    // MARK: Pages
+
+    /// Twenty cards per page: the second page is read only once the last
+    /// card of the first one is scrolled into view, not as soon as it exists.
+    @MainActor
+    func testNextPageIsReadWhenTheLastCardIsReached() {
+        let app = launch(.french, scenario: "catalog-pages")
+        XCTAssertTrue(card(app, "PG-001").waitForExistence(timeout: 30))
+        XCTAssertTrue(app.waitForStillScreen())
+        XCTAssertFalse(card(app, "PG-021").exists)
+
+        let last = card(app, "PG-025")
+        var swipes = 0
+        while !last.waitForExistence(timeout: 2), swipes < 12 {
+            app.swipeUp()
+            swipes += 1
+        }
+        XCTAssertTrue(last.exists)
     }
 
     // MARK: Empty
@@ -139,15 +161,8 @@ final class CatalogUITests: XCTestCase {
                 try audit(app)
                 attach(app, "\(language.code)-catalog-offline-\(theme)")
 
-                XCTAssertTrue(waitUntilSettled(retry))
+                // One tap: the list must be at rest after the refresh.
                 retry.tap()
-                // A tap that lands while the scroll view is still ending the
-                // pull's bounce only stops it (seen once on iOS 26): one more
-                // tap on the settled button, never more.
-                if !notice.waitForNonExistence(timeout: 5) {
-                    XCTAssertTrue(waitUntilSettled(retry))
-                    retry.tap()
-                }
                 XCTAssertTrue(notice.waitForNonExistence(timeout: 15))
                 XCTAssertFalse(card(app, "MM-001").label.contains(language["lastKnown"]))
                 app.terminate()
@@ -304,12 +319,12 @@ final class CatalogUITests: XCTestCase {
         let menuFrame = menu.exists ? menu.frame : .null
         // The system large title does not wrap: on a 375 pt screen
         // "Équipements" is truncated from AX3 (a known limit, reported).
-        // Before iOS 26 the pixel sampling of the status chips reports "nearly
-        // passed" for pairs above 5:1; their ratios are computed from the
-        // asset catalogue by `StatusContrastTests`.
+        // The pixel sampling of the status chips reports "nearly passed" for
+        // pairs above 5:1 (Prêt, light: 5.75:1), before iOS 26 and, since the
+        // cards are no longer lazy, on iOS 26 too. Their ratios are computed
+        // from the asset catalogue by `StatusContrastTests`.
         let chipFrames = app.descendants(matching: .any).matching(identifier: "asset.status")
             .allElementsBoundByIndex.map(\.frame)
-        let sampledChips = ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26
         let bar = app.navigationBars.firstMatch
         let largeTitle = bar.exists ? bar.frame : .null
         var types = XCUIAccessibilityAuditType.all
@@ -325,7 +340,7 @@ final class CatalogUITests: XCTestCase {
             if let target = issue.element {
                 let center = CGPoint(x: target.frame.midX, y: target.frame.midY)
                 let summary = issue.compactDescription
-                let nearlyInChip = sampledChips && summary.contains("nearly")
+                let nearlyInChip = summary.contains("nearly")
                     && chipFrames.contains { $0.contains(center) }
                 switch issue.auditType {
                 case .textClipped:
