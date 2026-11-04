@@ -10,7 +10,7 @@ set -eu
 
 out="${GITHUB_OUTPUT:-/dev/stdout}"
 all() {
-  printf 'api=true\nweb=true\nsimulator=true\nagents=true\nadrs=%s\nios=true\nci=true\n' "$1" >>"$out"
+  printf 'api=true\nweb=true\nsimulator=true\nagents=true\nadrs=%s\nios=true\nios_fast=false\nci=true\n' "$1" >>"$out"
   exit 0
 }
 
@@ -58,9 +58,21 @@ fi
 if [ "$(changed '^\.github/scripts/test-report\.py$')" = true ]; then
   api=true; web=true; simulator=true
 fi
-[ "$(changed '^\.github/scripts/xcresult-summary\.py$')" = false ] || ios=true
+# The fast iOS recipe (`pr`) runs only on a pull request into dev whose iOS
+# changes all fall under these non-visual paths. Views, assets, strings, UI
+# tests, recipes, project settings and any unknown path keep the full
+# standalone recipe, as do pushes, manual runs and pull requests into main.
+ios_non_visual='^apps/ios/(AegisMobile/Networking/|AegisMobileTests/|docs/|README\.md$)'
+ios_fast=false
+if [ "$ios" = true ] && [ "${BASE_REF:-}" = dev ]; then
+  visual=$(printf '%s\n' "$files" | grep -E '^apps/ios/' | grep -Ev "$ios_non_visual" || true)
+  [ -n "$visual" ] || ios_fast=true
+fi
+if [ "$(changed '^\.github/scripts/xcresult-summary\.py$')" = true ]; then
+  ios=true; ios_fast=false
+fi
 [ "$(changed '^\.github/scripts/check-accepted-adrs\.py$')" = false ] || adrs=true
 # The measurement tools of docs/qualite/ci-02/mesures/ are tested with the scripts.
 ci=$(changed '^(\.github/scripts/|docs/qualite/ci-02/mesures/)')
-printf 'api=%s\nweb=%s\nsimulator=%s\nagents=%s\nadrs=%s\nios=%s\nci=%s\n' \
-  "$api" "$web" "$simulator" "$agents" "$adrs" "$ios" "$ci" >>"$out"
+printf 'api=%s\nweb=%s\nsimulator=%s\nagents=%s\nadrs=%s\nios=%s\nios_fast=%s\nci=%s\n' \
+  "$api" "$web" "$simulator" "$agents" "$adrs" "$ios" "$ios_fast" "$ci" >>"$out"
