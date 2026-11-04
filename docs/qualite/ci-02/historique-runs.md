@@ -150,4 +150,17 @@ Retour au [bilan](README.md).
 | [41584158843](https://github.com/PhilJordan18/aegis/actions/runs/41584158843/job/125745782915) | pull_request | `67-ci-promote-qualified-jobs` | `a3f917c` | success | 14.0 | 160 total, 160 passed, 0 failed, 0 skipped |
 | [41586555809](https://github.com/PhilJordan18/aegis/actions/runs/41586555809/job/125753337711) | pull_request | `67-ci-qualify-controls` | `ec9c36a` | failure | 18.6 | 160 total, 159 passed, 1 failed, 0 skipped |
 | [41586558351](https://github.com/PhilJordan18/aegis/actions/runs/41586558351/job/125753344732) | pull_request | `67-ci-promote-qualified-jobs` | `6fedac9` | failure | 15.3 | 160 total, 159 passed, 1 failed, 0 skipped |
+| [41588612243](https://github.com/PhilJordan18/aegis/actions/runs/41588612243/job/125759882043) | pull_request | `67-ci-qualify-controls` | `0c1a46e` | failure | 19.5 | 160 total, 158 passed, 2 failed, 0 skipped |
+| [41588614163](https://github.com/PhilJordan18/aegis/actions/runs/41588614163/job/125759882453) | pull_request | `67-ci-promote-qualified-jobs` | `6aad1c7` | failure | 20.7 | 160 total, 159 passed, 1 failed, 0 skipped |
+| [41620501772](https://github.com/PhilJordan18/aegis/actions/runs/41620501772/job/125864757472) | pull_request | `34-fix-ios-catalog-audit-flakes` | `27ee03f` | failure | 21.5 | 160 total, 158 passed, 2 failed, 0 skipped |
+| [41620521054](https://github.com/PhilJordan18/aegis/actions/runs/41620521054/job/125864843257) | workflow_dispatch | `34-fix-ios-catalog-audit-flakes` | `27ee03f` | success | 22.8 | 160 total, 160 passed, 0 failed, 0 skipped |
+| [41622125076](https://github.com/PhilJordan18/aegis/actions/runs/41622125076/job/125870249270) | pull_request | `34-fix-ios-audit-settle` | `4084695` | success | 20.0 | 160 total, 160 passed, 0 failed, 0 skipped |
+| [41629351716](https://github.com/PhilJordan18/aegis/actions/runs/41629351716/job/125894707822) | pull_request | `67-ci-ios-run-cost` | `8a0aa6e` | success | 21.8 | 160 total, 160 passed, 0 failed, 0 skipped |
+| [41635406808](https://github.com/PhilJordan18/aegis/actions/runs/41635406808/job/125915288122) | pull_request | `67-ci-ios-run-cost` | `20e8959` | failure | 20.3 | 160 total, 158 passed, 2 failed, 0 skipped |
+
+Les sept dernières lignes ont été ajoutées par la session de relais du 4 novembre 2026. Les
+comptes viennent du résumé du job et de la base de chaque bundle, lue en lecture seule. Sur
+les douze derniers runs non volontaires, sept sont rouges, et tous les échecs sont dans
+`CatalogUITests`. La médiane des durées des sept derniers runs est de 20,7 min, au-dessus de
+la cible de 20 min de #67.
 
