@@ -39,6 +39,19 @@ export interface ReceiveCommandStep {
   readonly issuedInMs?: number;
   readonly expiresInMs?: number;
   readonly schemaVersion?: string;
+  /** Delivered with the retain flag, as replayed from the broker's retained store (§7.2). */
+  readonly retained?: boolean;
+}
+
+/**
+ * Raw bytes handed to the hub on commands or display, for messages it cannot
+ * correlate (§13.2): unreadable JSON, missing identifiers, oversized payloads.
+ */
+export interface ReceiveRawStep {
+  readonly do: 'receiveRaw';
+  readonly channel: 'commands' | 'display';
+  readonly body: string;
+  readonly retained?: boolean;
 }
 
 /**
@@ -66,6 +79,7 @@ export type ScenarioStep =
   | { readonly do: 'armFault'; readonly fault: ActuationFault }
   | { readonly do: 'waitUnlocked'; readonly code: string; readonly timeoutMs?: number }
   | ReceiveCommandStep
+  | ReceiveRawStep
   | { readonly do: 'redeliverCommand'; readonly ref: string };
 
 export interface Scenario {
@@ -171,6 +185,14 @@ function parseStep(raw: unknown, index: number): ScenarioStep {
     }
     case 'receiveCommand':
       return parseReceiveCommand(raw, fail);
+    case 'receiveRaw': {
+      for (const key of Object.keys(raw)) if (!['do', 'channel', 'body', 'retained'].includes(key)) fail(`unknown receiveRaw field ${key}`);
+      const { channel, body, retained } = raw;
+      if (channel !== 'commands' && channel !== 'display') return fail('channel must be commands or display');
+      if (typeof body !== 'string') return fail('body must be a string');
+      if (retained !== undefined && typeof retained !== 'boolean') return fail('retained must be a boolean');
+      return { do: 'receiveRaw', channel, body, ...(retained !== undefined ? { retained } : {}) };
+    }
     case 'redeliverCommand':
       if (typeof raw.ref !== 'string' || !LABEL.test(raw.ref)) return fail('ref must be 1-32 letters, digits, "_" or "-"');
       return { do: 'redeliverCommand', ref: raw.ref };
@@ -217,9 +239,9 @@ function optionalInteger(
 }
 
 function parseReceiveCommand(raw: Record<string, unknown>, fail: (reason: string) => never): ReceiveCommandStep {
-  const allowed = ['do', 'ref', 'compartment', 'compartmentId', 'operation', 'lockerId', 'issuedInMs', 'expiresInMs', 'schemaVersion'];
+  const allowed = ['do', 'ref', 'compartment', 'compartmentId', 'operation', 'lockerId', 'issuedInMs', 'expiresInMs', 'schemaVersion', 'retained'];
   for (const key of Object.keys(raw)) if (!allowed.includes(key)) fail(`unknown receiveCommand field ${key}`);
-  const { ref, compartment, compartmentId, operation, lockerId, schemaVersion } = raw;
+  const { ref, compartment, compartmentId, operation, lockerId, schemaVersion, retained } = raw;
   if (typeof ref !== 'string' || !LABEL.test(ref)) return fail('ref must be 1-32 letters, digits, "_" or "-"');
   if ((compartment === undefined) === (compartmentId === undefined)) return fail('give either compartment or compartmentId');
   if (compartment !== undefined && typeof compartment !== 'string') return fail('compartment must be a compartment code');
@@ -229,6 +251,7 @@ function parseReceiveCommand(raw: Record<string, unknown>, fail: (reason: string
   }
   if (lockerId !== undefined && !isCanonicalUuid(lockerId)) return fail('lockerId must be a canonical UUID');
   if (schemaVersion !== undefined && typeof schemaVersion !== 'string') return fail('schemaVersion must be a string');
+  if (retained !== undefined && typeof retained !== 'boolean') return fail('retained must be a boolean');
   const issuedInMs = optionalInteger(raw, 'issuedInMs', -RELATIVE_MAX_MS, RELATIVE_MAX_MS, fail);
   const expiresInMs = optionalInteger(raw, 'expiresInMs', -RELATIVE_MAX_MS, RELATIVE_MAX_MS, fail);
   return {
@@ -241,6 +264,7 @@ function parseReceiveCommand(raw: Record<string, unknown>, fail: (reason: string
     ...(issuedInMs !== undefined ? { issuedInMs } : {}),
     ...(expiresInMs !== undefined ? { expiresInMs } : {}),
     ...(schemaVersion !== undefined ? { schemaVersion } : {}),
+    ...(retained !== undefined ? { retained } : {}),
   };
 }
 
@@ -392,9 +416,12 @@ export async function runScenario(
         if (commands.has(step.ref)) throw new ScenarioError(`command ref ${step.ref} is already used`);
         const body = buildScenarioCommand(simulator, step, operationIdOf, now());
         commands.set(step.ref, body);
-        simulator.deliver('commands', body);
+        simulator.deliver('commands', body, { retain: step.retained ?? false });
         break;
       }
+      case 'receiveRaw':
+        simulator.deliver(step.channel, step.body, { retain: step.retained ?? false });
+        break;
       case 'redeliverCommand': {
         const body = commands.get(step.ref);
         if (!body) throw new ScenarioError(`no command was received under ref ${step.ref}`);

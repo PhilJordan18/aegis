@@ -1,12 +1,12 @@
 // MQTT contract constants, re-implemented from docs/cahier-conception/10-contrats-mqtt.md
-// (payload schema 2.0, decisions D1-D7 of issue #63). Deliberately not shared with the Java API so that a divergence between the
+// (payload schema 3.0: decisions D1-D7 of issue #63, INBOUND_MESSAGE_INVALID of #98). Deliberately not shared with the Java API so that a divergence between the
 // two readings of the contract surfaces in integration instead of being hidden.
 
 /**
  * Doc 10 §3.2. The payload schema is versioned independently of the `v1` topic
  * segment, which versions the topic tree and the ACLs only.
  */
-export const SCHEMA_VERSION = '2.0';
+export const SCHEMA_VERSION = '3.0';
 
 /** Doc 10 §8.1: bootCount is an unsigned 32-bit integer from 1, as the firmware stores it in NVS. */
 export const BOOT_COUNT_MIN = 1;
@@ -153,8 +153,8 @@ export const COMMAND_TYPE = 'UNLOCK_COMPARTMENT';
 export const DISPLAY_TYPES = ['DISPLAY_ACCESS_CHALLENGE', 'DISPLAY_OPERATION_STATUS'] as const;
 export type DisplayType = (typeof DISPLAY_TYPES)[number];
 
-/** Doc 10 §3.2: a hub accepts any minor of the major it implements. */
-export const SUPPORTED_SCHEMA_MAJOR = 2;
+/** Doc 10 §3.2: a hub accepts any minor of the major it implements; 2.0 and 1.0 are refused. */
+export const SUPPORTED_SCHEMA_MAJOR = 3;
 
 /** Doc 10 §10.2: the controlled COMMAND_REJECTED reasons. */
 export const COMMAND_REJECT_REASONS = [
@@ -175,7 +175,7 @@ export const COMMAND_REJECT_REASONS = [
 ] as const;
 export type CommandRejectReason = (typeof COMMAND_REJECT_REASONS)[number];
 
-/** Doc 10 §13.2: the initial controlled DEVICE_ERROR codes, and its severities. */
+/** Doc 10 §13.2: the controlled DEVICE_ERROR codes (INBOUND_MESSAGE_INVALID since 3.0), and its severities. */
 export const DEVICE_ERROR_CODES = [
   'CELL_COMMUNICATION_LOST',
   'RFID_READER_FAULT',
@@ -184,9 +184,16 @@ export const DEVICE_ERROR_CODES = [
   'POWER_FAULT',
   'CLOCK_SYNC_LOST',
   'STORAGE_FAULT',
+  'INBOUND_MESSAGE_INVALID',
 ] as const;
 export type DeviceErrorCode = (typeof DEVICE_ERROR_CODES)[number];
 export type DeviceErrorSeverity = 'WARNING' | 'CRITICAL';
+
+/**
+ * Doc 10 §13.2 reporting limit of INBOUND_MESSAGE_INVALID (proposal of #98, awaiting
+ * confirmation): at most one report per (topic, case) in this window.
+ */
+export const INBOUND_REPORT_WINDOW_MS = 60_000;
 
 /** Doc 10 §10.1. */
 export type AckResult = 'ACCEPTED' | 'ALREADY_APPLIED';
