@@ -29,6 +29,7 @@ final class CommandFixtures {
     private static final SecureRandom RANDOM = new SecureRandom();
     /** Addresses 1 and 2 of the broker test locker belong to the ingestion tests. */
     private static final AtomicInteger BROKER_LOCKER_ADDRESS = new AtomicInteger(100);
+    private static final java.util.concurrent.atomic.AtomicLong REPORT_SEQUENCE = new java.util.concurrent.atomic.AtomicLong();
 
     private final JdbcClient jdbc;
     private final ReservationFixtures reservations;
@@ -169,6 +170,49 @@ final class CommandFixtures {
                 SET status = 'FAILED', terminal_at = created_at + interval '10 minutes', failure_reason = 'TEST_RETIRED'
                 WHERE locker_id = :locker AND terminal_at IS NULL
                 """).param("locker", BROKER_TEST_LOCKER).update();
+    }
+
+    /**
+     * A command report as the ingestion stores it before applying it: a new event {@code messageId} from the hub of
+     * the operation's locker, received at {@code at}. Returns the stored row's id.
+     */
+    UUID storeReport(Operation operation, UUID commandMessageId, String type, Instant at) {
+        UUID device = hub(operation.locker());
+        return jdbc.sql("""
+                INSERT INTO aegis.inbound_device_messages
+                    (locker_device_id, message_id, topic, message_type, operation_id, command_message_id,
+                     schema_version, device_session_id, boot_count, sequence, occurred_at, received_at, raw_payload)
+                VALUES (:device, :messageId, :topic, :type, :operation, :command, '3.0', :session, 1,
+                        :sequence, :at, :at, :raw)
+                RETURNING id
+                """).param("device", device).param("messageId", UUID.randomUUID())
+                .param("topic", "aegis/v1/lockers/" + operation.locker() + "/events").param("type", type)
+                .param("operation", operation.id()).param("command", commandMessageId)
+                .param("session", UUID.randomUUID()).param("sequence", REPORT_SEQUENCE.incrementAndGet())
+                .param("at", utc(at)).param("raw", new byte[] {'{', '}'})
+                .query(UUID.class).single();
+    }
+
+    /** The current session of the active hub of {@code locker}, which the hub's envelopes carry. */
+    UUID hubSession(UUID locker) {
+        hub(locker);
+        return jdbc.sql("""
+                SELECT device_session_id FROM aegis.locker_devices WHERE locker_id = :locker AND disabled_at IS NULL
+                """).param("locker", locker).query(UUID.class).single();
+    }
+
+    List<Map<String, Object>> anomalies(UUID operation) {
+        return jdbc.sql("""
+                SELECT type, severity, status, compartment_id FROM aegis.anomalies WHERE locker_operation_id = :id
+                """).param("id", operation).query().listOfRows();
+    }
+
+    Map<String, Object> inboundMessage(UUID locker, UUID messageId) {
+        return jdbc.sql("""
+                SELECT m.processing_status, m.processing_error FROM aegis.inbound_device_messages m
+                JOIN aegis.locker_devices d ON d.id = m.locker_device_id
+                WHERE d.locker_id = :locker AND m.message_id = :messageId
+                """).param("locker", locker).param("messageId", messageId).query().singleRow();
     }
 
     Map<String, Object> command(UUID operation) {

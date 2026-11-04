@@ -62,7 +62,7 @@ public class CommandOutbox {
                        EXISTS (SELECT 1 FROM aegis.command_outbox x WHERE x.operation_id = o.id) AS command_exists
                 FROM aegis.locker_operations o
                 WHERE o.id = :id
-                FOR UPDATE OF o
+                FOR NO KEY UPDATE OF o
                 """)
                 .param("id", operationId)
                 .query((row, number) -> new OperationTarget(row.getString("status"),
