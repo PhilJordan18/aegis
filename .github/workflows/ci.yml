@@ -133,8 +133,9 @@ jobs:
         run: python3 ../../.github/scripts/test-report.py "Web tests" "$RUNNER_TEMP/web-reports/unit.xml"
       - run: npm run build
 
-  # The jobs below are not required yet (#67): they stay outside the `needs` of
-  # `CI result` until they meet the promotion criteria recorded in that issue.
+  # Simulator tests, the agent setup validator and the accepted ADR guard are in
+  # the `needs` of `CI result` (#67, docs/qualite/ci-02/). iOS standalone and CI
+  # script tests stay outside it until they meet the criteria of #67.
   simulator:
     name: Simulator tests
     needs: changes
@@ -304,7 +305,7 @@ jobs:
   # the change filter, and a skipped job must neither block nor hide a failure.
   result:
     name: CI result
-    needs: [changes, api, web]
+    needs: [changes, api, web, simulator, agents, adrs]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -317,4 +318,17 @@ jobs:
           CHANGES: ${{ needs.changes.result }}
           API: ${{ needs.changes.outputs.api }}:${{ needs.api.result }}
           WEB: ${{ needs.changes.outputs.web }}:${{ needs.web.result }}
-        run: python3 .github/scripts/ci-result.py "$CHANGES" "API tests=$API" "Web checks=$WEB"
+          SIMULATOR: ${{ needs.changes.outputs.simulator }}:${{ needs.simulator.result }}
+          AGENTS: ${{ needs.changes.outputs.agents }}:${{ needs.agents.result }}
+          ADRS: ${{ needs.changes.outputs.adrs }}:${{ needs.adrs.result }}
+        run: >-
+          python3 .github/scripts/ci-result.py "$CHANGES"
+          "API tests=$API" "Web checks=$WEB" "Simulator tests=$SIMULATOR"
+          "Agent setup validator=$AGENTS" "Accepted ADR guard=$ADRS"
+      - name: Jobs outside CI result
+        if: always()
+        # These jobs are not in `needs` (#67 criteria not met), so CI result
+        # neither waits for nor reflects them: read their own checks.
+        run: >-
+          echo "**Not aggregated:** iOS standalone tests, CI script tests. A green CI result
+          says nothing about them; read their own checks." >> "$GITHUB_STEP_SUMMARY"
