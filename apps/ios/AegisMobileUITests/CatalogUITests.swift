@@ -68,7 +68,11 @@ final class CatalogUITests: XCTestCase {
                 try audit(app)
                 attach(app, "\(language.code)-sheet-blocked-\(theme)")
 
+                // The audit enlarges then restores the text: a tap sent while
+                // the sheet lays out again is lost (hosted run 41586558351).
+                XCTAssertTrue(app.waitForStillScreen())
                 app.navigationBars.buttons.firstMatch.tap()
+                XCTAssertTrue(element(app, "asset.name").waitForNonExistence(timeout: 10))
                 XCTAssertTrue(card(app, "MM-002").waitForExistence(timeout: 10))
                 app.terminate()
             }
@@ -279,18 +283,29 @@ final class CatalogUITests: XCTestCase {
     ///   floating tab bar, whose scroll-edge fade the audit samples. The same
     ///   element passes once scrolled into full view.
     /// - Dynamic Type of the filter chips, replaced by a menu at accessibility
-    ///   sizes (checked by `testLargestTextUsesTheFilterMenu`).
+    ///   sizes (checked by `testLargestTextUsesTheFilterMenu`);
+    /// - Dynamic Type of an element in the `growthBand` just above the fade:
+    ///   the audit enlarges every text above it too, which pushes it under
+    ///   the fade. On iPhone 17 iOS 26.5 the stale chip "Last known: Blocked"
+    ///   at y 646-664 (visible bottom 671) failed in hosted runs 41577913719,
+    ///   41584155476 and 41588098193, while the same `StatusChip` higher up
+    ///   passed in each of them.
     /// `atLargestSize` skips the Dynamic Type check when the text already uses
     /// the largest accessibility size and cannot grow further.
     /// Height above the floating tab bar covered by its scroll-edge fade.
     private let fadeHeight: CGFloat = 120
+    /// Height above the fade where enlarged text is judged under the fade.
+    private let growthBand: CGFloat = 60
 
     @MainActor
     private func audit(_ app: XCUIApplication, atLargestSize: Bool = false) throws {
+        XCTAssertTrue(app.waitForStillScreen(), "The screen kept changing; the audit needs a still screen.")
         let tabBar = app.tabBars.firstMatch
         let window = app.windows.firstMatch.frame
         var visible = window
         if tabBar.exists { visible.size.height = max(0, tabBar.frame.minY - fadeHeight - window.minY) }
+        var growable = visible
+        if tabBar.exists { growable.size.height = max(0, visible.height - growthBand) }
         let search = app.searchFields.firstMatch
         let searchFrame = search.exists ? search.frame : .null
         // The chips give way to a menu at accessibility sizes (handoff §2):
@@ -317,42 +332,50 @@ final class CatalogUITests: XCTestCase {
         // the list at the largest size.
         if ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26 { types.remove(.dynamicType) }
         var unhandled: [String] = []
-        try app.performAccessibilityAudit(for: types) { issue in
-            let tolerated: Bool
-            if let target = issue.element {
-                let center = CGPoint(x: target.frame.midX, y: target.frame.midY)
-                let summary = issue.compactDescription
-                let nearlyInChip = sampledChips && summary.contains("nearly")
-                    && chipFrames.contains { $0.contains(center) }
-                switch issue.auditType {
-                case .textClipped:
-                    tolerated = [.textField, .searchField].contains(target.elementType)
-                        || (atLargestSize && menuFrame.contains(center))
-                        || largeTitle.contains(center)
-                case .hitRegion:
-                    tolerated = searchFrame.contains(center)
-                case .dynamicType:
-                    tolerated = !visible.contains(target.frame) || chips.contains(center)
-                case .contrast:
-                    // By type as well: after a pull the search field may have
-                    // moved since its frame was read.
-                    tolerated = !visible.contains(target.frame) || searchFrame.contains(center)
-                        || target.elementType == .searchField || nearlyInChip
-                default:
+        // One audit of every type at once can exceed the audit's own time
+        // limit on a hosted runner ("Audit failed to complete in time", code
+        // -56, runs 41515528716 and 41586555809). The same types are audited
+        // in three shorter passes; a timeout in any of them still fails.
+        let slow: XCUIAccessibilityAuditType = [.contrast, .dynamicType]
+        let passes = [types.intersection(.contrast), types.intersection(.dynamicType), types.subtracting(slow)]
+        for pass in passes where !pass.isEmpty {
+            try app.performAccessibilityAudit(for: pass) { issue in
+                let tolerated: Bool
+                if let target = issue.element {
+                    let center = CGPoint(x: target.frame.midX, y: target.frame.midY)
+                    let summary = issue.compactDescription
+                    let nearlyInChip = sampledChips && summary.contains("nearly")
+                        && chipFrames.contains { $0.contains(center) }
+                    switch issue.auditType {
+                    case .textClipped:
+                        tolerated = [.textField, .searchField].contains(target.elementType)
+                            || (atLargestSize && menuFrame.contains(center))
+                            || largeTitle.contains(center)
+                    case .hitRegion:
+                        tolerated = searchFrame.contains(center)
+                    case .dynamicType:
+                        tolerated = !growable.contains(target.frame) || chips.contains(center)
+                    case .contrast:
+                        // By type as well: after a pull the search field may have
+                        // moved since its frame was read.
+                        tolerated = !visible.contains(target.frame) || searchFrame.contains(center)
+                            || target.elementType == .searchField || nearlyInChip
+                    default:
+                        tolerated = false
+                    }
+                } else {
                     tolerated = false
                 }
-            } else {
-                tolerated = false
+                if !tolerated {
+                    let element = issue.element.map { "\($0.elementType) '\($0.label)' id=\($0.identifier) frame=\($0.frame)" } ?? "none"
+                    unhandled.append("\(issue.compactDescription) — \(element) — \(issue.detailedDescription)")
+                }
+                // Every issue is collected, then reported together below.
+                return true
             }
-            if !tolerated {
-                let element = issue.element.map { "\($0.elementType) '\($0.label)' id=\($0.identifier) frame=\($0.frame)" } ?? "none"
-                unhandled.append("\(issue.compactDescription) — \(element) — \(issue.detailedDescription)")
-            }
-            // Every issue is collected, then reported together below.
-            return true
         }
         if !unhandled.isEmpty {
-            let report = XCTAttachment(string: (["visible=\(visible)"] + unhandled).joined(separator: "\n"))
+            let report = XCTAttachment(string: (["visible=\(visible) growable=\(growable)"] + unhandled).joined(separator: "\n"))
             report.name = "audit-issues"
             report.lifetime = .keepAlways
             add(report)
