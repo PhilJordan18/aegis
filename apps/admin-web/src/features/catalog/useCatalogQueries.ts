@@ -5,14 +5,18 @@ import { useSessionStore } from '../auth/session'
 import { useCatalogGateway } from './CatalogGatewayContext'
 import type { AdminAssetView, AssetListQuery } from './contract'
 
-/** One page of units. The previous page stays on screen while the next one loads. */
-export function useAssetList(query: AssetListQuery) {
+/**
+ * One page of units. The previous page stays on screen while the next one loads. `enabled: false` reads
+ * nothing (the locker screen needs the list only to find lockers when the address names none).
+ */
+export function useAssetList(query: AssetListQuery, { enabled = true }: { readonly enabled?: boolean } = {}) {
   const gateway = useCatalogGateway()
   const session = useSessionStore()
   return useQuery({
     queryKey: queryKeys.catalog.assetList(query),
     queryFn: ({ signal }) => authorizedRequest(session, (accessToken) => gateway.listAssets(accessToken, query, signal)),
     placeholderData: keepPreviousData,
+    enabled,
   })
 }
 

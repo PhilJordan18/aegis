@@ -89,3 +89,9 @@ export interface AssetListQuery {
 }
 
 export const DEFAULT_PAGE_SIZE = 20
+
+/**
+ * The first-page query of the units list. Équipements and Casiers both send it, so they share one cached request: keep one
+ * definition, or the two screens would silently stop sharing (and Casiers would read another page).
+ */
+export const LIST_QUERY_BASE = { size: DEFAULT_PAGE_SIZE, sort: 'assetCode,asc' } as const

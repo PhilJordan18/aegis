@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, type ComponentType } from 'react'
 import { SignInPage } from '../features/auth/SignInPage'
 import { EquipmentPage } from '../pages/EquipmentPage'
 import { LandingPage } from '../pages/LandingPage'
+import { LockersPage } from '../pages/LockersPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 import { useI18n } from '../i18n/useI18n'
 import { useSignInPreviewScenario } from '../preview/PreviewContext'
@@ -49,6 +50,8 @@ function Page({ routeId }: { readonly routeId: RouteId }) {
       return <SignInPage key={scenario ?? 'default'} afterSignInPath={AFTER_SIGN_IN_PATH} />
     case 'equipment':
       return <RequireAdminSession>{(profile) => <EquipmentPage sessionProfile={profile} />}</RequireAdminSession>
+    case 'lockers':
+      return <RequireAdminSession>{(profile) => <LockersPage sessionProfile={profile} />}</RequireAdminSession>
     case 'equipmentPreview':
       return EquipmentPreviewPage ? (
         <Suspense fallback={null}>

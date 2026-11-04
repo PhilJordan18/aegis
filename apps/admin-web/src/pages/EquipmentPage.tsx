@@ -12,13 +12,12 @@ import { AssetDossier } from '../features/catalog/AssetDossier'
 import { AssetList } from '../features/catalog/AssetList'
 import { equipmentHref } from '../features/catalog/equipmentHref'
 import { classifyCatalogFailure } from '../features/catalog/catalogFailure'
-import { DEFAULT_PAGE_SIZE, type AdminAssetView, type AssetListQuery } from '../features/catalog/contract'
+import { LIST_QUERY_BASE, type AdminAssetView, type AssetListQuery } from '../features/catalog/contract'
 import { useAsset, useAssetList } from '../features/catalog/useCatalogQueries'
 import { useI18n } from '../i18n/useI18n'
 import '../app/page.css'
 import '../features/catalog/equipment.css'
 
-const LIST_QUERY_BASE = { size: DEFAULT_PAGE_SIZE, sort: 'assetCode,asc' } as const
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 /** The API reads `page` as a Java int (PageQuery): a larger index is a 400, not a page past the end. */
 const MAX_PAGE_INDEX = 2_147_483_647
