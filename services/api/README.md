@@ -336,6 +336,24 @@ suivante); seule la création de réservation (RES-01) écrit dans
 `reservations`. `CustodySchemaTests` vérifie les
 contraintes, cinq courses concurrentes et les droits.
 
+## Défis locaux, commandes, preuves IoT et anomalies (schéma de PHY-01)
+
+`V007` crée `local_access_challenges`, `hub_display_outbox` et
+`command_outbox`; `V008` crée `inbound_device_messages` et
+`physical_observations`, puis ajoute `audit_events.inbound_message_id` et
+`audit_events.physical_observation_id` avec leurs clés étrangères; `V009` crée
+`anomalies` (document 08, sections 4.6 à 4.9). Ces migrations ne créent que
+les tables, leurs contraintes et les index d'invariant, d'expiration et de
+claim que la section 11.1 leur attribue : un défi par opération, une
+instruction de défi par opération, une commande par opération, une ligne par
+paire `(locker_device_id, message_id)` et une anomalie active par opération.
+Les index de lecture de la section 5.2 restent à `V011`. Aucun code Java ne
+les utilise encore : l'ingestion MQTT (PHY-01) les remplira. `schema_version`
+n'a aucune valeur par défaut dans les deux outbox : le producteur indique la
+version MQTT qu'il encode. `IotEvidenceSchemaTests` vérifie les contraintes,
+le claim concurrent de la section 9.2, la déduplication concurrente d'un
+message, l'unicité concurrente d'une anomalie active et les droits.
+
 ## Catalogue technicien et readiness (RDY-01, RDY-02)
 
 `GET /api/v1/assets` et `GET /api/v1/assets/{assetId}` sont réservés au rôle
@@ -491,8 +509,10 @@ même compte `aegis`, et le rôle applicatif n'existe pas.
 Après chaque migration, le callback Flyway accorde au rôle applicatif, s'il
 existe : `USAGE` sur `aegis`, `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les
 tables métier, `SELECT`, `INSERT` et `UPDATE` sans `DELETE` sur
-`reservations`, `locker_operations` et `loans`, et seulement `SELECT` et
-`INSERT` sur `audit_events`; jamais `TRUNCATE`, `REFERENCES` ni `TRIGGER`. Il échoue si ce rôle est
+`reservations`, `locker_operations`, `loans`, `local_access_challenges`,
+`hub_display_outbox`, `command_outbox`, `inbound_device_messages` et
+`anomalies`, et seulement `SELECT` et `INSERT` sur `audit_events` et
+`physical_observations`; jamais `TRUNCATE`, `REFERENCES` ni `TRIGGER`. Il échoue si ce rôle est
 superutilisateur ou membre d'un propriétaire du schéma, même sans héritage. Le trigger
 append-only de `audit_events` n'est qu'une défense en profondeur : le
 propriétaire de la table peut le désactiver et un superutilisateur le
@@ -517,9 +537,9 @@ aux environnements partagés dans cette carte :
    plaçant le compte propriétaire dans `AEGIS_DB_MIGRATION_USER` et
    `AEGIS_DB_MIGRATION_PASSWORD`;
 5. vérifier en tant que `aegis_app` que `UPDATE`, `DELETE` et `TRUNCATE` sur
-   `aegis.audit_events`, ainsi que `DELETE` et `TRUNCATE` sur
-   `aegis.reservations`, `aegis.locker_operations` et `aegis.loans`, échouent
-   avec `42501`;
+   `aegis.audit_events` et `aegis.physical_observations`, ainsi que `DELETE`
+   et `TRUNCATE` sur les huit tables sans `DELETE` ci-dessus, échouent avec
+   `42501`;
 6. facultatif : transférer la propriété du schéma `aegis`, de ses objets et de
    `public.flyway_schema_history` à `aegis_migrator`, puis migrer avec lui
    plutôt qu'avec un superutilisateur.
@@ -543,7 +563,9 @@ doivent être conservées. Chaque démarrage de l'API applique les migrations
 en attente, dans l'ordre : `V001`, `V002` pour l'identité et le catalogue,
 `V002_1` pour les clés d'idempotence REST, `V002_2` pour `audit_events`,
 `V003` pour les lockers et les placements, `V004` pour les horaires, puis
-`V005` et `V006` pour les réservations, opérations et prêts. Il valide
+`V005` et `V006` pour les réservations, opérations et prêts, `V007` pour les
+défis locaux et les outbox, `V008` pour les messages des devices et les
+observations, puis `V009` pour les anomalies. Il valide
 l'historique dans `public.flyway_schema_history` sans rejouer une migration
 déjà appliquée. Une table `aegis.flyway_schema_history` résiduelle peut
 exister dans une base locale ancienne : elle n'est pas lue, et une requête
