@@ -103,6 +103,18 @@ scripts/ios-test.sh standalone
 - Les tests d'intégration sont **exclus**, pas ignorés; la recette échoue si
   un test est ignoré, échoue ou si aucun test ne s'exécute.
 
+`standalone` se découpe en deux recettes qui, ensemble, exécutent exactement
+les mêmes tests (195 + 22 = 217, vérifié par énumération avec Xcode 26.3) :
+
+```bash
+scripts/ios-test.sh pr        # rapide : tous les tests unitaires, un test UI par parcours critique, String Catalog
+scripts/ios-test.sh extended  # le reste des tests UI : deux langues, deux apparences, grandes tailles, audits
+```
+
+La liste des tests UI de `pr` est `PR_UI_TESTS` dans le script; tout test UI
+qui n'y figure pas s'exécute dans `extended`. Les deux recettes échouent comme
+`standalone` sur un échec, un test ignoré ou aucun test exécuté.
+
 La recette live demande l'API avec les comptes de démonstration activés
 (`services/api/README.md`). Les mots de passe viennent du fichier local non
 versionné utilisé pour démarrer l'API, sans être affichés :
@@ -211,8 +223,8 @@ l'intégration.
 ## Catalogue et fiche d'équipement (#34)
 
 Après la connexion, le technicien arrive sur l'onglet **Équipements**; l'onglet
-**Compte** garde la déconnexion et l'écran « Service Aegis ». « Mon activité »
-et « Réserver » appartiennent à #37 et #38 : ils ne sont pas affichés.
+**Compte** garde la déconnexion et l'écran « Service Aegis ». « Réserver » et
+l'onglet « Mon activité » sont décrits plus bas (#37, #38).
 
 | Situation | Comportement |
 |---|---|
@@ -267,6 +279,52 @@ liste à la plus grande taille sur les deux versions.
 sert cinq équipements FICTIFS aux scénarios `catalog`, `catalog-empty`,
 `catalog-offline`, `catalog-detail-offline` et `catalog-detail-gone`. Ce n'est
 jamais un repli de l'application : sans scénario, l'app appelle l'API.
+
+## Réservation et « Mon activité » (#37, #38)
+
+Maquette approuvée : `docs/design/mobile-parcours/proposition.md` §5 et §6.
+L'onglet **Mon activité** est placé entre Équipements et Compte.
+
+| Situation | Comportement |
+|---|---|
+| Fiche d'un équipement prêt | « Réserver » ouvre la feuille de réservation; désactivé avec sa raison si l'état n'est pas « Prêt » ou n'est pas actualisé |
+| Fiche de mon équipement | « Réservé pour vous » ou « Emprunté par vous » (lus dans Mon activité) et « Voir mon activité » à la place de Réserver |
+| Feuille | Équipement et cellule, « Réserver jusqu'à » par pas de 15 min, heure de fermeture, conséquences de l'heure, fuseau du casier, « La réservation n'ouvre aucune porte. », Confirmer épinglé en bas |
+| Heures du casier | `GET /lockers/{id}/status` (§8.6) : ouvert → choix jusqu'à la fermeture (incluse); fermé → Confirmer désactivé et « Le casier est fermé. Réouverture à … » ou « … Aucun horaire d'ouverture. »; route absente ou erreur → « Heures d'ouverture indisponibles. Le service vérifiera l'heure choisie. », Confirmer actif |
+| Envoi | `POST /reservations` avec une `Idempotency-Key` par intention; double appui ignoré; feuille non fermable pendant l'envoi |
+| Issue inconnue | Réseau, 5xx, réponse illisible ou `IDEMPOTENCY_REQUEST_IN_PROGRESS` : message et Réessayer, qui renvoie **la même clé**; une autre heure est une nouvelle intention, avec une nouvelle clé |
+| Refus | Message contrôlé par code (§14.1), jamais le texte du serveur; la fiche est relue; `USER_ALREADY_HAS_ACTIVE_RESERVATION` propose « Voir mon activité » |
+| Refus de production | Jusqu'à PHY-02, `422 ASSET_NOT_READY` avec `UNKNOWN_PHYSICAL_STATE` : « Réservation impossible : présence non confirmée par le casier. », un refus, sans Réessayer |
+| Créée | La feuille se ferme, Mon activité s'ouvre avec « Réservation confirmée jusqu'à … », annoncé à VoiceOver |
+| Carte de réservation | « Réservé pour vous », équipement, cellule, « À retirer avant … »; « Annuler la réservation » seulement si `availableActions` contient `CANCEL` et que la lecture est à jour |
+| Annulation | Confirmation, puis `POST /reservations/{id}/cancel` avec clé et corps `{}`; issue inconnue → même clé au nouvel essai; `409 RESERVATION_NOT_CANCELLABLE` → message, puis la carte suit la relecture |
+| Prêt | `GET /me/loan` lu en parallèle; en retard, « Retour prévu à » ou retour en attente, tels que le serveur les donne |
+| Prêt illisible | `GET /me/loan` n'a pas encore de contrôleur (`404 RESOURCE_NOT_FOUND`) : avis « Le prêt en cours n'a pas pu être vérifié. »; la réservation reste affichée, aucun prêt n'est inventé, « Aucune réservation en cours. » remplace l'état vide complet |
+| Hors ligne | Dernier état reçu, marqué non actualisé; aucune action proposée sur une lecture périmée |
+
+- L'app ne décide jamais l'expiration : seul le serveur expire une
+  réservation, et `GET /me/reservation` répond alors `404`.
+- Préparer le retrait et Rapporter l'équipement appartiennent à CHK-01 (#46)
+  et RET-01 (#50) : non proposés, même si `CHECKOUT` ou `RETURN` sont listés.
+- Textes proposés, non encore approuvés : « Cet équipement est emprunté. »,
+  « Choisissez une heure plus tardive. », « Cette réservation ne peut plus être
+  annulée. », « Cette réservation n'est plus disponible. », « Le service a
+  refusé la demande. », « Le service n'a pas pu traiter la demande. »,
+  « Connexion au service impossible. », et toutes les traductions anglaises
+  de cette section.
+- Fuseau : la maquette écrit « heure avancée de l'Est »; l'heure avancée a pris
+  fin le 1er novembre 2026. L'app affiche le nom système du fuseau à la date
+  affichée (« heure normale de l'Est » en hiver).
+
+**Données fictives.** `App/UITestActivityFixtures.swift` (Debug seulement).
+Sans autre indication, chaque scénario connecté répond comme `dev` aujourd'hui :
+aucune réservation, `GET /me/loan` et la route d'état du casier absents
+(`404 RESOURCE_NOT_FOUND`), toute réservation refusée `422 ASSET_NOT_READY`
+(`UNKNOWN_PHYSICAL_STATE`). Scénarios nommés : `reservation` (création puis
+annulation), `reservation-refused`, `reservation-offline` (première réponse
+perdue, la même clé réussit, une autre clé serait refusée `409`),
+`reservation-closed`, `activity-reserved`, `activity-not-cancellable` et
+`activity-loan`. `AEGIS_START_TAB=activity` ouvre l'onglet.
 
 ## Français et anglais
 
@@ -323,12 +381,15 @@ AegisMobile/
   App/          point d'entrée SwiftUI
   Networking/   APIConfiguration, APIClient (URLSession), SystemHealth
   Health/       HealthViewModel (@MainActor, @Observable) et HealthView
+  Catalog/      catalogue et fiche d'équipement
+  Reservation/  feuille de réservation et erreurs des mutations
+  Activity/     Mon activité : réservation, prêt, annulation
   Assets.xcassets  couleurs du traitement A (valeurs du prototype, non définitives)
   Localizable.xcstrings  textes français et anglais
 AegisMobileTests/    Swift Testing : configuration, client, états de l'écran,
                      traductions compilées, API réelle
 AegisMobileUITests/  XCUITest : erreur réseau et nouvelle tentative (FR, EN), service réel
-scripts/ios-test.sh      recettes standalone et live
+scripts/ios-test.sh      recettes standalone, pr, extended et live
 scripts/ios-destination.sh  choix du simulateur disponible (CI)
 scripts/summarize-results.py  contrôle et résumé des résultats (JSON, GitHub)
 scripts/check-strings.py contrôle du String Catalog

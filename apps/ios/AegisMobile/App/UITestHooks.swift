@@ -9,7 +9,7 @@ import Foundation
 ///   before launch.
 /// - `AEGIS_START_SCREEN=health`: opens the diagnostic screen directly.
 /// - `AEGIS_UI_FOCUS=email|password`: focuses a field (keyboard captures).
-/// - `AEGIS_START_TAB=account`: opens the Account tab once signed in.
+/// - `AEGIS_START_TAB=account|activity`: opens that tab once signed in.
 ///
 /// Catalogue answers come from `UITestCatalogFixtures`: fictional data for UI
 /// tests and captures only, never a fallback of the real app.
@@ -29,8 +29,10 @@ struct UITestHooks {
         if environment["AEGIS_START_SCREEN"] == "health" {
             startScreen = .health
         }
-        if environment["AEGIS_START_TAB"] == "account" {
-            tab = .account
+        switch environment["AEGIS_START_TAB"] {
+        case "account": tab = .account
+        case "activity": tab = .activity
+        default: break
         }
         switch environment["AEGIS_UI_FOCUS"] {
         case "email": focus = .email
@@ -67,11 +69,33 @@ enum UITestScenario: String {
     case catalogDetailOffline = "catalog-detail-offline"
     /// List reads succeed; every asset read answers 404 ASSET_NOT_FOUND.
     case catalogDetailGone = "catalog-detail-gone"
+    /// Every signed-in scenario answers like `dev` today unless it says
+    /// otherwise: no reservation, `GET /me/loan` and the locker status route
+    /// missing (404 RESOURCE_NOT_FOUND), and every reservation refused 422
+    /// ASSET_NOT_READY with UNKNOWN_PHYSICAL_STATE until PHY-02.
+    /// Reservations are created, then cancelled.
+    case reservation = "reservation"
+    /// The production refusal, named for the tests.
+    case reservationRefused = "reservation-refused"
+    /// The first creation is lost on the network; a retry with the same key
+    /// creates it, a new key is refused 409 ASSET_ALREADY_RESERVED.
+    case reservationOffline = "reservation-offline"
+    /// The locker status says closed until tomorrow.
+    case reservationClosed = "reservation-closed"
+    /// An active reservation listing CHECKOUT and CANCEL; no loan.
+    case activityReserved = "activity-reserved"
+    /// As above, but cancelling is refused 409 RESERVATION_NOT_CANCELLABLE
+    /// and the reservation is then read without actions.
+    case activityNotCancellable = "activity-not-cancellable"
+    /// No reservation; an overdue loan.
+    case activityLoan = "activity-loan"
 
     var storedSession: StoredSession? {
         switch self {
         case .resumeSlow, .resumeOffline, .resumeRecovers, .resumeInvalid, .signedIn,
-             .catalog, .catalogEmpty, .catalogPages, .catalogOffline, .catalogDetailOffline, .catalogDetailGone:
+             .catalog, .catalogEmpty, .catalogPages, .catalogOffline, .catalogDetailOffline, .catalogDetailGone,
+             .reservation, .reservationRefused, .reservationOffline, .reservationClosed,
+             .activityReserved, .activityNotCancellable, .activityLoan:
             StoredSession(accessToken: "scenario-token", expiresAt: .now + 3600, email: Self.technicianEmail)
         case .resumeExpired:
             StoredSession(accessToken: "scenario-token", expiresAt: .now - 60, email: Self.technicianEmail)
@@ -90,9 +114,38 @@ struct ScenarioTransport: HTTPTransport {
     let scenario: UITestScenario
     private let profileChecks = Counter()
     private let listReads = Counter()
+    private let activity: ActivityState
 
     init(scenario: UITestScenario) {
         self.scenario = scenario
+        let seeded = [UITestScenario.activityReserved, .activityNotCancellable].contains(scenario)
+        activity = ActivityState(seeded ? UITestActivityFixtures.reservation(
+            until: UITestActivityFixtures.instant(.now + 2 * 3600)) : nil)
+    }
+
+    /// The reservation the fake server holds, and the keys it received.
+    private final class ActivityState: @unchecked Sendable {
+        private let lock = NSLock()
+        private var reservation: String?
+        private var keys: [String?] = []
+
+        init(_ reservation: String?) {
+            self.reservation = reservation
+        }
+
+        var current: String? {
+            get { lock.withLock { reservation } }
+            set { lock.withLock { reservation = newValue } }
+        }
+
+        /// Records a creation key; returns the attempt number and whether
+        /// the key repeats the first one.
+        func attempt(_ key: String?) -> (number: Int, repeatsFirst: Bool) {
+            lock.withLock {
+                keys.append(key)
+                return (keys.count, keys.count > 1 && key != nil && key == keys[0])
+            }
+        }
     }
 
     private final class Counter: @unchecked Sendable {
@@ -107,6 +160,19 @@ struct ScenarioTransport: HTTPTransport {
         if path.hasSuffix("/auth/me") { return try await me(request) }
         if path.hasSuffix("/assets") { return try assets(request) }
         if path.contains("/assets/") { return try asset(request) }
+        guard [.reservation, .reservationRefused, .reservationOffline, .reservationClosed, .activityReserved,
+               .activityNotCancellable, .activityLoan, .catalog, .catalogEmpty, .catalogPages, .catalogOffline,
+               .catalogDetailOffline, .catalogDetailGone].contains(scenario) else {
+            throw URLError(.cannotConnectToHost)
+        }
+        guard request.value(forHTTPHeaderField: "Authorization") == "Bearer scenario-token" else {
+            return problem(request, 401, "AUTH_TOKEN_INVALID")
+        }
+        if path.hasSuffix("/me/reservation") { return currentReservation(request) }
+        if path.hasSuffix("/me/loan") { return currentLoan(request) }
+        if path.hasSuffix("/cancel") { return cancel(request) }
+        if path.hasSuffix("/reservations") { return try reserve(request) }
+        if path.hasSuffix("/status"), path.contains("/lockers/") { return lockerStatus(request) }
         throw URLError(.cannotConnectToHost)
     }
 
@@ -142,7 +208,8 @@ struct ScenarioTransport: HTTPTransport {
             try await Task.sleep(for: .seconds(3600))
             throw URLError(.timedOut)
         case .signedIn, .loginSuccess, .catalog, .catalogEmpty, .catalogPages, .catalogOffline, .catalogDetailOffline,
-             .catalogDetailGone:
+             .catalogDetailGone, .reservation, .reservationRefused, .reservationOffline, .reservationClosed,
+             .activityReserved, .activityNotCancellable, .activityLoan:
             return response(request, 200, UITestScenario.technician)
         case .resumeRecovers where profileChecks.next() > 1:
             return response(request, 200, UITestScenario.technician)
@@ -185,10 +252,61 @@ struct ScenarioTransport: HTTPTransport {
         }
     }
 
+    private func currentReservation(_ request: URLRequest) -> (Data, URLResponse) {
+        guard let reservation = activity.current else { return problem(request, 404, "ACTIVE_RESERVATION_NOT_FOUND") }
+        return response(request, 200, reservation)
+    }
+
+    private func currentLoan(_ request: URLRequest) -> (Data, URLResponse) {
+        switch scenario {
+        case .activityLoan: response(request, 200, UITestActivityFixtures.overdueLoan())
+        case .activityReserved, .activityNotCancellable: problem(request, 404, "ACTIVE_LOAN_NOT_FOUND")
+        default: problem(request, 404, "RESOURCE_NOT_FOUND")
+        }
+    }
+
+    private func reserve(_ request: URLRequest) throws -> (Data, URLResponse) {
+        let body = request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: String] }
+        let until = body?["reservedUntil"] ?? UITestActivityFixtures.instant(.now + 3600)
+        switch scenario {
+        case .reservation:
+            break
+        case .reservationOffline:
+            let attempt = activity.attempt(request.value(forHTTPHeaderField: "Idempotency-Key"))
+            if attempt.number == 1 { throw URLError(.networkConnectionLost) }
+            guard attempt.repeatsFirst else { return problem(request, 409, "ASSET_ALREADY_RESERVED") }
+        default:
+            return problem(request, 422, "ASSET_NOT_READY", extra: #","reasons":["UNKNOWN_PHYSICAL_STATE"]"#)
+        }
+        let reservation = UITestActivityFixtures.reservation(until: until)
+        activity.current = reservation
+        return response(request, 201, reservation,
+                        headers: ["Location": "/api/v1/reservations/\(UITestActivityFixtures.reservationId)"])
+    }
+
+    private func cancel(_ request: URLRequest) -> (Data, URLResponse) {
+        guard let reservation = activity.current else { return problem(request, 404, "RESOURCE_NOT_FOUND") }
+        if scenario == .activityNotCancellable {
+            activity.current = reservation.replacingOccurrences(
+                of: #""availableActions":["CHECKOUT","CANCEL"]"#, with: #""availableActions":[]"#)
+            return problem(request, 409, "RESERVATION_NOT_CANCELLABLE")
+        }
+        activity.current = nil
+        let cancelled = reservation
+            .replacingOccurrences(of: #""status":"ACTIVE""#, with: #""status":"CANCELLED""#)
+            .replacingOccurrences(of: #""availableActions":["CHECKOUT","CANCEL"]"#, with: #""availableActions":[]"#)
+        return response(request, 200, cancelled)
+    }
+
+    private func lockerStatus(_ request: URLRequest) -> (Data, URLResponse) {
+        guard scenario == .reservationClosed else { return problem(request, 404, "RESOURCE_NOT_FOUND") }
+        return response(request, 200, UITestActivityFixtures.closedLocker(nextOpensAt: .now + 15 * 3600))
+    }
+
     private func problem(_ request: URLRequest, _ status: Int, _ code: String,
-                         headers: [String: String] = [:]) -> (Data, URLResponse) {
+                         headers: [String: String] = [:], extra: String = "") -> (Data, URLResponse) {
         // Distinctive server text, which the app must never display.
-        let body = #"{"type":"https://aegis.local/problems/scenario","title":"SERVER TITLE NOT SHOWN","status":\#(status),"code":"\#(code)","detail":"SERVER DETAIL NOT SHOWN","instance":"/","traceId":"5f4bc22e-66a4-48ef-8bf3-6e7184d71c30","timestamp":"2026-10-21T12:00:00Z"}"#
+        let body = #"{"type":"https://aegis.local/problems/scenario","title":"SERVER TITLE NOT SHOWN","status":\#(status),"code":"\#(code)","detail":"SERVER DETAIL NOT SHOWN","instance":"/","traceId":"5f4bc22e-66a4-48ef-8bf3-6e7184d71c30","timestamp":"2026-10-21T12:00:00Z"\#(extra)}"#
         return response(request, status, body, contentType: "application/problem+json", headers: headers)
     }
 
