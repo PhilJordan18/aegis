@@ -112,3 +112,50 @@ Aucun ADR ni document normatif 02 à 10 n'est modifié.
 - la base du bundle compte 249 exécutions de cas, soit 222 unitaires et 27 UI.
 
 La session iOS doit fixer, pour chaque suite, le nombre attendu et l'unité comptée.
+
+## Câblage prévu (4 novembre)
+
+**Recettes annoncées par la session iOS**, transmises par la session d'intégration et QA :
+
+| Recette | Contenu | Nombre annoncé |
+|---|---|---:|
+| `ios-test.sh pr` | 181 tests unitaires non live, puis 14 tests UI critiques, puis `check-strings.py` | 195 |
+| `ios-test.sh extended` | les autres tests UI : langues et apparences, très grandes tailles, audits d'accessibilité (feuille de filtres, réserver et annuler, connexion en sombre, AX5) | 22 |
+| `ios-test.sh standalone` (inchangée) | union des deux | 217 |
+
+Les 14 tests UI critiques couvrent :
+
+- santé du service et nouvel essai ;
+- connexion : acceptée, refusée, administrateur refusé, jeton stocké refusé ;
+- catalogue : statut, pagination, rafraîchissement hors ligne avec un seul appui sur
+  « Réessayer », bien retiré ;
+- réservation : refus en production, réponse perdue rejouée comme la même intention,
+  casier fermé, réservation personnelle, annulation refusée.
+
+**Ce qui bloque le câblage.**
+
+- Le commit annoncé (`dc4b8a8`) n'est pas encore sur `origin`.
+- La liste des chemins visuels n'est pas fournie.
+- L'unité des nombres n'est pas confirmée : tests du résumé `xcresulttool` ou exécutions
+  de cas du bundle. Sur `fbf866a`, `standalone` donne 160 tests de résumé et 249
+  exécutions.
+
+**Câblage prévu**, dans `ci.yml` et `changed-components.sh` (propriété CI-02) :
+
+- **PR iOS sans chemin visuel :** `pr`, nombre exact 195.
+- **Cas qui exécutent `standalone` (nombre exact 217) :**
+  - une PR qui touche un chemin visuel, une recette, `ci.yml` ou `xcresult-summary.py` ;
+  - une PR vers `main` ;
+  - un push sur `dev` ou `main` ;
+  - un lancement manuel.
+
+  La suite étendue n'est jamais exécutée sans la rapide.
+- **Fail-safe :** un chemin iOS inconnu du filtre est traité comme visuel.
+- **Résumé de job :** il porte le nom de la recette et son nombre. Un run `pr` n'est
+  jamais présenté comme `standalone`.
+- **Condition :** les recettes doivent être sur `dev` avant le câblage. Sinon, la voie
+  rapide appellerait une recette absente.
+
+**Risque relevé par la session iOS.** L'audit de la feuille de filtres, qui a échoué
+sur #116 `07da342`, est dans `extended`. Une PR non visuelle ne le rencontrerait qu'au
+push sur `dev`, puis avant `main`.

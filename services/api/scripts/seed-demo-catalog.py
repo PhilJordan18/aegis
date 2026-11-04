@@ -45,12 +45,13 @@ MODELS = [
 ]
 
 # expected: readiness of the demo technician (maximum level STANDARD) while no physical proof exists.
+# afterScan: also accepted once a stable RFID scan proves presence (PHY-02, scenario presence-demo-local.json).
 ASSETS = [
     {"assetCode": "AEG-DEMO-001", "model": "Multimètre Fluke 117", "serialNumber": "FL117-0001",
      "requiredAccessLevel": "STANDARD", "operationalStatus": "SERVICEABLE",
      "calibrationRequired": True, "calibrationDueAt": "2027-04-30T04:00:00Z",
      "compartment": COMPARTMENT_A1, "rfid": "E20034120123456789000001",
-     "expected": "UNKNOWN [UNKNOWN_PHYSICAL_STATE]"},
+     "expected": "UNKNOWN [UNKNOWN_PHYSICAL_STATE]", "afterScan": "READY []"},
     {"assetCode": "AEG-DEMO-002", "model": "Caméra thermique FLIR E8", "serialNumber": "FLIR-E8-0002",
      "requiredAccessLevel": "STANDARD", "operationalStatus": "SERVICEABLE",
      "calibrationRequired": True, "calibrationDueAt": "2026-10-01T04:00:00Z",
@@ -158,8 +159,9 @@ def summarise(email, password):
             continue
         readiness = f"{asset['readiness']['result']} [{', '.join(asset['readiness']['reasons'])}]"
         placement = asset["placement"]["compartmentCode"] if asset["placement"] else "-"
-        status = "ok" if readiness == spec["expected"] else f"attendu {spec['expected']}"
-        mismatches += readiness != spec["expected"]
+        accepted = {spec["expected"], spec.get("afterScan", spec["expected"])}
+        status = "ok" if readiness in accepted else f"attendu {' ou '.join(sorted(accepted))}"
+        mismatches += readiness not in accepted
         print(f"  {spec['assetCode']}  {readiness:<34} {asset['availability']:<11} {placement:<3} {status}")
     return mismatches
 

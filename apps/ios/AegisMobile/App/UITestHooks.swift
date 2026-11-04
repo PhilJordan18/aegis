@@ -59,6 +59,8 @@ enum UITestScenario: String {
     case catalog = "catalog"
     /// Signed in on an empty catalogue.
     case catalogEmpty = "catalog-empty"
+    /// Signed in on 25 ready assets: two pages of 20.
+    case catalogPages = "catalog-pages"
     /// The first list read succeeds, the second is offline, later ones succeed.
     case catalogOffline = "catalog-offline"
     /// List reads succeed; every asset read is offline.
@@ -69,7 +71,7 @@ enum UITestScenario: String {
     var storedSession: StoredSession? {
         switch self {
         case .resumeSlow, .resumeOffline, .resumeRecovers, .resumeInvalid, .signedIn,
-             .catalog, .catalogEmpty, .catalogOffline, .catalogDetailOffline, .catalogDetailGone:
+             .catalog, .catalogEmpty, .catalogPages, .catalogOffline, .catalogDetailOffline, .catalogDetailGone:
             StoredSession(accessToken: "scenario-token", expiresAt: .now + 3600, email: Self.technicianEmail)
         case .resumeExpired:
             StoredSession(accessToken: "scenario-token", expiresAt: .now - 60, email: Self.technicianEmail)
@@ -139,7 +141,7 @@ struct ScenarioTransport: HTTPTransport {
         case .resumeSlow:
             try await Task.sleep(for: .seconds(3600))
             throw URLError(.timedOut)
-        case .signedIn, .loginSuccess, .catalog, .catalogEmpty, .catalogOffline, .catalogDetailOffline,
+        case .signedIn, .loginSuccess, .catalog, .catalogEmpty, .catalogPages, .catalogOffline, .catalogDetailOffline,
              .catalogDetailGone:
             return response(request, 200, UITestScenario.technician)
         case .resumeRecovers where profileChecks.next() > 1:
@@ -158,7 +160,12 @@ struct ScenarioTransport: HTTPTransport {
         if scenario == .catalogOffline, listReads.next() == 2 {
             throw URLError(.notConnectedToInternet)
         }
-        return response(request, 200, UITestCatalogFixtures.page(for: request.url!, empty: scenario == .catalogEmpty))
+        let items = switch scenario {
+        case .catalogEmpty: [UITestCatalogFixtures.Item]()
+        case .catalogPages: UITestCatalogFixtures.paged
+        default: UITestCatalogFixtures.items
+        }
+        return response(request, 200, UITestCatalogFixtures.page(for: request.url!, items: items))
     }
 
     private func asset(_ request: URLRequest) throws -> (Data, URLResponse) {

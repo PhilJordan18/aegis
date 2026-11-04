@@ -12,6 +12,8 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+import ca.aegis.control.device.Inspection.Fact;
+
 /** The availability projection of {@code locker_devices} and its mirror on {@code lockers} (document 08, §4.4). */
 @Repository
 class LockerDeviceRepository {
@@ -97,21 +99,38 @@ class LockerDeviceRepository {
                 .update();
     }
 
-    /** Applies one reported cell when it belongs to the locker at the reported address; false otherwise. */
-    boolean applyCompartment(UUID lockerId, CompartmentReport report, Instant receivedAt) {
+    /**
+     * Applies one reported cell when it belongs to the locker at the reported address; false otherwise. The reader
+     * status stays that of a later RFID scan of the cell already stored for the session: a projection never goes
+     * back to an older fact (document 10, section 14).
+     */
+    boolean applyCompartment(ActiveDevice device, Fact heartbeat, CompartmentReport report, Instant receivedAt) {
         return jdbc.sql("""
                 UPDATE aegis.compartments
-                SET connection_status = :connection, rfid_reader_status = :reader, door_state = :door,
-                    lock_state = :lock, last_observed_at = :at, updated_at = :at
+                SET connection_status = :connection, door_state = :door, lock_state = :lock,
+                    last_observed_at = :at, updated_at = :at,
+                    rfid_reader_status = CASE WHEN EXISTS (
+                        SELECT 1 FROM aegis.inbound_device_messages later
+                        WHERE later.locker_device_id = :device AND later.device_session_id = :session
+                          AND later.boot_count = :boot AND later.sequence > :sequence
+                          AND later.message_type = 'RFID_SCAN_COMPLETED' AND later.processing_status <> 'REJECTED'
+                          AND later.received_at >= :provisionedAt
+                          AND later.parsed_payload ->> 'compartmentId' = CAST(:id AS text))
+                        THEN rfid_reader_status ELSE :reader END
                 WHERE id = :id AND locker_id = :locker AND local_address = :address
                 """)
+                .param("device", device.id())
+                .param("session", heartbeat.deviceSessionId())
+                .param("boot", heartbeat.bootCount())
+                .param("sequence", heartbeat.sequence())
+                .param("provisionedAt", utc(device.provisionedAt()))
                 .param("connection", report.connectionStatus())
                 .param("reader", report.readerStatus())
                 .param("door", report.doorState())
                 .param("lock", report.lockState())
                 .param("at", utc(receivedAt))
                 .param("id", report.compartmentId())
-                .param("locker", lockerId)
+                .param("locker", device.lockerId())
                 .param("address", report.cellAddress())
                 .update() == 1;
     }

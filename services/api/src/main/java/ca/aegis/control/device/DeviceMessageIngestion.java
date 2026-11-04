@@ -34,9 +34,10 @@ import ca.aegis.control.device.LockerDeviceRepository.ActiveDevice;
 /**
  * The backend ingestion of hub messages (document 10, section 19.1; document 06, section 9; document 08, section
  * 8.2). The payload is inspected outside any transaction; one short transaction then locks the device, reserves the
- * pair (device, messageId) and applies the availability projection. Nothing here waits for MQTT, and no fact
- * advances a reservation, a loan or a readiness verdict. The one exception for an operation is a command report:
- * {@link CommandAcknowledgements} applies it in the same transaction (document 08, section 9.3).
+ * pair (device, messageId), applies the availability projection and normalizes an RFID scan into observations.
+ * Nothing here waits for MQTT, and no fact advances a reservation, a loan or a readiness verdict. The one exception
+ * for an operation is a command report: {@link CommandAcknowledgements} applies it in the same transaction (document
+ * 08, section 9.3).
  */
 @Service
 public class DeviceMessageIngestion {
@@ -54,15 +55,20 @@ public class DeviceMessageIngestion {
 
     private final LockerDeviceRepository devices;
     private final InboundMessageRepository messages;
+    private final PhysicalObservationRepository observations;
+    private final RfidScanNormalization scans;
     private final AuditTrail audit;
     private final TransactionTemplate transactions;
     private final Clock clock;
     private final CommandAcknowledgements acknowledgements;
 
-    DeviceMessageIngestion(LockerDeviceRepository devices, InboundMessageRepository messages, AuditTrail audit,
+    DeviceMessageIngestion(LockerDeviceRepository devices, InboundMessageRepository messages,
+            PhysicalObservationRepository observations, RfidScanNormalization scans, AuditTrail audit,
             TransactionTemplate transactions, Clock clock, CommandAcknowledgements acknowledgements) {
         this.devices = devices;
         this.messages = messages;
+        this.observations = observations;
+        this.scans = scans;
         this.audit = audit;
         this.transactions = transactions;
         this.clock = clock;
@@ -158,6 +164,12 @@ public class DeviceMessageIngestion {
                 return Outcome.LOGGED;
             }
         }
+        boolean rfidScan = rejection == null && message.type() == InboundMessageType.RFID_SCAN_COMPLETED;
+        if (rfidScan && !observations.compartmentOf(device.lockerId(), fact.compartmentId())) {
+            // Section 21 has no code for a cell outside the locker; the observation could not reference it.
+            rejection = ProcessingError.REQUIRED_FIELD_MISSING;
+            rfidScan = false;
+        }
 
         Row row = rejection != null
                 ? new Row(device.id(), message.messageId(), topic.value(), message.type(), operationId,
@@ -168,7 +180,7 @@ public class DeviceMessageIngestion {
                         fact.commandMessageId(), fact.displayMessageId(), message.schemaVersion(),
                         fact.deviceSessionId(), fact.bootCount(), fact.sequence(), fact.connectionId(),
                         fact.availabilityStatus(), message.occurredAt(), receivedAt, payload, fact.parsedJson(),
-                        message.type().technical() ? "PROCESSED" : "RECEIVED", null);
+                        processed(message.type(), operationId) ? "PROCESSED" : "RECEIVED", null);
         Optional<UUID> inserted = messages.insert(row);
         if (inserted.isEmpty()) {
             UUID existing = messages.idOf(device.id(), message.messageId());
@@ -186,9 +198,13 @@ public class DeviceMessageIngestion {
                     message.type(), printable(message.schemaVersion()), rejection);
             return Outcome.REJECTED;
         }
-        project(device, message, fact, receivedAt);
+        DeviceProjection projection = project(device, message, fact, receivedAt);
         if (message.type().commandCorrelated()) {
             return applyCommandReport(device, message, fact, inserted.get(), receivedAt);
+        }
+        if (rfidScan) {
+            scans.normalize(device.lockerId(), device.id(), inserted.get(), operationId, fact, message.occurredAt(),
+                    receivedAt, projection);
         }
         return Outcome.ACCEPTED;
     }
@@ -216,7 +232,15 @@ public class DeviceMessageIngestion {
         return Outcome.REJECTED;
     }
 
-    private void project(ActiveDevice device, Storable message, Fact fact, Instant receivedAt) {
+    /**
+     * A technical fact is fully processed here. So is an RFID scan outside any operation, once normalized; inside one,
+     * its observations are stored but the operation workflow that interprets them keeps it RECEIVED.
+     */
+    private static boolean processed(InboundMessageType type, UUID operationId) {
+        return type.technical() || (type == InboundMessageType.RFID_SCAN_COMPLETED && operationId == null);
+    }
+
+    private DeviceProjection project(ActiveDevice device, Storable message, Fact fact, Instant receivedAt) {
         AvailabilityProjection.Outcome outcome = AvailabilityProjection.apply(device.projection(), message.type(),
                 fact, receivedAt, connection -> devices.connectionClosed(device.id(), fact.bootCount(), connection,
                         device.provisionedAt()));
@@ -236,7 +260,7 @@ public class DeviceMessageIngestion {
         if (outcome.newReference()) {
             List<UUID> applied = new ArrayList<>();
             for (CompartmentReport report : fact.compartments()) {
-                if (devices.applyCompartment(device.lockerId(), report, receivedAt)) {
+                if (devices.applyCompartment(device, fact, report, receivedAt)) {
                     applied.add(report.compartmentId());
                 } else {
                     log.warn("Heartbeat cell ignored: lockerId={}, messageId={}, compartmentId={} is not a cell "
@@ -246,6 +270,7 @@ public class DeviceMessageIngestion {
             }
             devices.forgetCompartmentsOtherThan(device.lockerId(), applied, receivedAt);
         }
+        return outcome.projection();
     }
 
     private static void logOnly(InboundTopic topic, ProcessingError error, UUID messageId, int size) {

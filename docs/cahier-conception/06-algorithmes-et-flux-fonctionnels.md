@@ -144,6 +144,12 @@ Elle est recalculée à la lecture, à la réservation et immédiatement avant u
 
 Le contexte sert uniquement à reconnaître qu’une réservation détenue par le même technicien est compatible avec son propre retrait. Elle demeure incompatible pour les autres utilisateurs.
 
+**Fraîcheur des observations** (décision du 4 novembre 2026, #31). La fraîcheur est événementielle et n’a pas d’âge maximal. La présence repose sur le dernier scan stable et sain de la cellule, fait après la fermeture de sa porte, le démarrage ou la reconnexion du hub. Une cellule fermée observée sans interruption garde ce scan aussi longtemps que dure l’observation. Le hub ne fait aucun scan périodique. Un heartbeat maintient la continuité de l’observation, mais n’établit jamais la présence.
+
+La continuité est rompue par une ouverture de porte, un redémarrage ou une reconnexion. Elle l’est aussi par un intervalle entre deux heartbeats valides de la même connexion qui ferait passer le casier `OFFLINE` selon la règle de doc 10 §15.3 (plus de 30 secondes). L’intervalle compte même si les heartbeats reprennent ensuite sur la même connexion, et même si personne n’a consulté l’API pendant l’interruption. Le premier heartbeat d’une connexion compte aussi : il ne doit pas suivre son premier message de plus de 30 secondes.
+
+Une rupture invalide le scan antérieur. La présence reste alors `UNKNOWN` jusqu’à un nouveau scan qualifiant, postérieur à la reprise à la fois par sa réception, sa séquence et sa fenêtre. Un doublon, un scan retardé ou un scan fait avant la reprise ne la rétablit pas. Aucune tolérance d’horloge n’est ajoutée : un horodatage ambigu laisse la présence `UNKNOWN`.
+
 ### 4.3 Priorité des résultats
 
 1. Une condition qui prouve que l’actif ne peut pas être utilisé produit `BLOCKED`.

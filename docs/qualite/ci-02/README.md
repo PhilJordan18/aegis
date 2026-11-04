@@ -20,8 +20,80 @@ il durcit leurs scripts, mesure leurs preuves et propose une promotion.
   est hors des `needs`, `CI result` se termine sans l'attendre (par exemple run
   `41577913719` : `CI result` vert à 04:26, iOS encore en cours). Les comptes
   ci-dessous portent sur la conclusion **du job**, jamais sur celle du workflow.
+  Depuis #111, le résumé de `CI result` nomme les jobs qu'il n'agrège pas
+  (iOS standalone tests, CI script tests). Un test vérifie que chaque job hors
+  des `needs` y figure. Exemple constaté le 4 novembre sur le run 41865264625
+  (#116, `07da342`) : `CI result` est vert à 16:17Z, alors qu'iOS échoue à
+  16:38Z.
 
-## Matrice des jobs (état de `dev`)
+## État au 4 novembre 2026 (session de relais)
+
+Cette section prévaut sur les matrices plus bas, qui datent du 3 novembre.
+
+**Fusions.** #110 est sur `dev` (`923999d`), puis #120 (`f6169d8`) et #115
+(`5ce22b9`). #111 est la dernière PR du lot : elle ajoute simulateur, validateur
+et garde ADR aux `needs` de `CI result`.
+
+**Agrégateur après #111.**
+
+- `CI result` attend `changes`, `api`, `web`, `simulator`, `agents` et `adrs`.
+- **iOS standalone tests et CI script tests restent hors des `needs`.**
+  - `CI result` ne les attend pas et ne les reflète pas.
+  - Son résumé les nomme, et un test le vérifie.
+  - Il faut lire leur propre check.
+
+**Filtres.** Les règles sont dans `changed-components.sh` :
+
+- un push lance tout ;
+- `ci.yml` modifié, ou un script CI inconnu, lance tout ;
+- un script connu ne relance que ses tests et les jobs qui l'exécutent ;
+- `infra/mqtt/` sélectionne API et simulateur ;
+- la garde ADR ne tourne que sur PR.
+
+**Broker.** Le job API démarre `mqtt-auth-init` puis `mosquitto` avec
+`infra/docker/.env.example`.
+
+| Preuve | SHA | Run | Résultat |
+|---|---|---|---|
+| Démarrage du broker (suite API de `dev`) | `20e8959` | [41635406808](https://github.com/PhilJordan18/aegis/actions/runs/41635406808) | API 301/301 |
+| Synchronisation de #120 | `fbf866a` | [41863970758](https://github.com/PhilJordan18/aegis/actions/runs/41863970758) | API 351/351 |
+| Tests broker de #115 | `ff7d706` | [41868105338](https://github.com/PhilJordan18/aegis/actions/runs/41868105338) | `MqttIngestionBrokerTests` 9/9, API 385/385, aucun test ignoré |
+
+#40 utilisera la même étape.
+
+**Suites iOS.**
+
+- La session iOS annonce les recettes `ios-test.sh pr` (195 tests : 181 unitaires
+  et 14 tests UI critiques) et `ios-test.sh extended` (22 tests UI). Leur union
+  vaut `standalone` (217), avec le même `check-strings.py`.
+- Le commit annoncé, `dc4b8a8` sur `38-feat-ios-reservation-activity`, n'est pas
+  encore sur `origin`. Le déclenchement n'est donc pas câblé : toute PR iOS
+  exécute encore `standalone` complet, sans perte de couverture.
+- Le câblage prévu est décrit dans [suites-ios.md](suites-ios.md#câblage-prévu-4-novembre).
+
+**Durées mesurées du job iOS** (`standalone`, macos-26) :
+
+| Run | SHA | Contexte | Durée | Résultat |
+|---|---|---|---:|---|
+| 41862351116 | `923999d` | push `dev` | 17,5 min | vert |
+| 41868034177 | `f6169d8` | push `dev` | 21,6 min | vert |
+| 41863970758 | `fbf866a` | PR #120 | 23,6 min | vert, 160/160 |
+
+- La médiane des sept runs de [l'historique](historique-runs.md#ios-standalone-tests)
+  arrêté au 4 novembre est de 20,7 min.
+- Sur les douze derniers runs non volontaires, sept sont rouges, tous dans
+  `CatalogUITests`.
+
+**Reste à qualifier selon #67.**
+
+| Job | Critères remplis | Ce qui manque |
+|---|---|---|
+| iOS standalone tests | 1, 4, 5, 7 | **2** : stabilité, car les rouges `CatalogUITests` relèvent de #116. **6** : durée au-dessus de 20 min. Puis **3**, déjà observé sur `1ab1203`, à refaire sur la tête finale. #67 reste ouverte. |
+| CI script tests | 1 (pushs `923999d`, `f6169d8`), 2 (branches de #110, #111, #120 et `dev`), 4 (`Ran N tests`), 5 à 7 (moins de 0,2 min) | **3** : échec volontaire, selon le plan ci-dessous. Ensuite, ajout aux `needs` par une nouvelle PR. |
+| Recette iOS live | — | Décision de Philippe entre les options (a), (b) et (c) de #67 |
+| Firmware | — | Hors mission (Jimmy) |
+
+## Matrice des jobs (état de `dev` au 3 novembre)
 
 | Job | Déclenchement | Commande | Preuve disponible | Lacune |
 |---|---|---|---|---|
@@ -98,6 +170,9 @@ Branche `67-ci-promote-qualified-jobs`, empilée sur l'incrément 1.
 2. Commit suivant : retire tout le dispositif, garde **Simulator tests** et
    **Agent setup validator** dans les `needs`, ajoute un test vérifiant que
    chaque job des `needs` est bien transmis à `ci-result.py`.
+3. Après la décision (a) sur la garde ADR : **Accepted ADR guard** rejoint les
+   `needs`. Sur push et sur une PR qui ne touche aucun ADR, `adrs=false` et la
+   garde `skipped` ne bloque pas.
 
 ### État rouge de `1ab1203` : à ne jamais fusionner
 

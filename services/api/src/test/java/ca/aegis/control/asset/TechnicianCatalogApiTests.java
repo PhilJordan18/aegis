@@ -91,6 +91,7 @@ class TechnicianCatalogApiTests extends CatalogApiTest {
                 .andExpect(jsonPath("$.readiness.reasons").value(contains("UNKNOWN_PHYSICAL_STATE")))
                 .andExpect(jsonPath("$.readiness.evaluatedAt").value(START.toString()));
 
+        // Deliberately global: it also guards that no other class leaves an asset ready in the production context.
         mvc.perform(asTechnician(get(CATALOG).param("readiness", "READY")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items").isEmpty())

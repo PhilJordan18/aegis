@@ -130,6 +130,84 @@ class InboundMessagesTests {
         assertEquals(ProcessingError.TIMESTAMP_OUT_OF_RANGE, storable(EVENTS_TOPIC, error).rejection());
     }
 
+    @Test
+    void aValidRfidScanOutsideAnOperationCarriesItsWindowReaderAndIdentifiers() {
+        Map<String, Object> scan = session.scan(NOW, DevicePayloads.CELL_A1, "HEALTHY", NOW.minusSeconds(4),
+                NOW.minusSeconds(1), reads("E2-A", 5, "E2-B", 1));
+        Storable stored = storable(EVENTS_TOPIC, scan);
+
+        assertNull(stored.rejection());
+        assertNull(stored.fact().operationId());
+        RfidScan fact = stored.fact().rfidScan();
+        assertEquals(NOW.minusSeconds(4), fact.windowStartedAt());
+        assertEquals(NOW.minusSeconds(1), fact.windowEndedAt());
+        assertTrue(fact.healthy());
+        assertTrue(fact.coversStableWindow());
+        assertEquals(java.util.List.of(new RfidScan.ObservedIdentifier("E2-A", 5),
+                new RfidScan.ObservedIdentifier("E2-B", 1)), fact.identifiers());
+
+        Storable empty = storable(EVENTS_TOPIC, session.scan(NOW, DevicePayloads.CELL_A1, "FAULTED",
+                NOW.minusSeconds(1), NOW, Map.of()));
+        assertNull(empty.rejection());
+        assertFalse(empty.fact().rfidScan().healthy());
+        assertFalse(empty.fact().rfidScan().coversStableWindow());
+    }
+
+    /** Section 12.1 bounds; a scan the contract does not allow is rejected, not kept as weaker evidence. */
+    @Test
+    void anRfidScanOutsideTheContractIsRejected() {
+        assertScanRejected(ProcessingError.REQUIRED_FIELD_MISSING, scan -> scan.remove("compartmentId"));
+        assertScanRejected(ProcessingError.REQUIRED_FIELD_MISSING, scan -> scan.remove("windowStartedAt"));
+        assertScanRejected(ProcessingError.TIMESTAMP_INVALID, scan -> scan.put("windowEndedAt", "yesterday"));
+        assertScanRejected(ProcessingError.TIMESTAMP_OUT_OF_RANGE,
+                scan -> scan.put("windowEndedAt", NOW.minusSeconds(5).toString()));
+        assertScanRejected(ProcessingError.TIMESTAMP_OUT_OF_RANGE,
+                scan -> scan.put("windowEndedAt", NOW.plusSeconds(1).toString()));
+        assertScanRejected(ProcessingError.TIMESTAMP_OUT_OF_RANGE,
+                scan -> scan.put("windowStartedAt", NOW.minusSeconds(12).toString()));
+        assertScanRejected(ProcessingError.REQUIRED_FIELD_MISSING, scan -> scan.put("readerStatus", "BROKEN"));
+        assertScanRejected(ProcessingError.REQUIRED_FIELD_MISSING, scan -> scan.remove("observedIdentifiers"));
+        assertScanRejected(ProcessingError.REQUIRED_FIELD_MISSING, scan -> scan.put("observedIdentifiers", "E2"));
+        assertScanRejected(ProcessingError.REQUIRED_FIELD_MISSING,
+                scan -> identifier(scan).put("identifierType", "NFC"));
+        assertScanRejected(ProcessingError.REQUIRED_FIELD_MISSING, scan -> identifier(scan).put("identifierValue", ""));
+        assertScanRejected(ProcessingError.REQUIRED_FIELD_MISSING,
+                scan -> identifier(scan).put("identifierValue", "x".repeat(256)));
+        assertScanRejected(ProcessingError.REQUIRED_FIELD_MISSING, scan -> identifier(scan).put("readCount", 0));
+        assertScanRejected(ProcessingError.REQUIRED_FIELD_MISSING, scan -> identifier(scan).put("readCount", 65_536));
+        assertScanRejected(ProcessingError.REQUIRED_FIELD_MISSING, scan -> scan.put("observedIdentifiers",
+                java.util.List.of(identifier(scan), identifier(scan))));
+        Map<String, Integer> many = new java.util.LinkedHashMap<>();
+        for (int i = 0; i < 33; i++) {
+            many.put("E2-" + i, 3);
+        }
+        assertEquals(ProcessingError.REQUIRED_FIELD_MISSING, storable(EVENTS_TOPIC, session.scan(NOW,
+                DevicePayloads.CELL_A1, "HEALTHY", NOW.minusSeconds(3), NOW, many)).rejection());
+        many.remove("E2-0");
+        assertNull(storable(EVENTS_TOPIC, session.scan(NOW, DevicePayloads.CELL_A1, "HEALTHY", NOW.minusSeconds(10),
+                NOW, many)).rejection(), "32 identifiers over ten seconds is the contract's limit");
+    }
+
+    private void assertScanRejected(ProcessingError expected, java.util.function.Consumer<Map<String, Object>> edit) {
+        Map<String, Object> scan = session.scan(NOW, DevicePayloads.CELL_A1, "HEALTHY", NOW.minusSeconds(3), NOW,
+                reads("E2-A", 3));
+        edit.accept(scan);
+        assertEquals(expected, storable(EVENTS_TOPIC, scan).rejection(), scan.toString());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> identifier(Map<String, Object> scan) {
+        return ((java.util.List<Map<String, Object>>) scan.get("observedIdentifiers")).get(0);
+    }
+
+    private static Map<String, Integer> reads(Object... valuesAndCounts) {
+        Map<String, Integer> reads = new java.util.LinkedHashMap<>();
+        for (int i = 0; i < valuesAndCounts.length; i += 2) {
+            reads.put((String) valuesAndCounts[i], (Integer) valuesAndCounts[i + 1]);
+        }
+        return reads;
+    }
+
     /** Kept as a log, not as a REJECTED row, pending the decision on documents 08 and 10 (section 19.2). */
     @Test
     void messagesWithoutTheColumnsOfARowAreUnstorable() {
