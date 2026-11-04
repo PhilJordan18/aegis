@@ -413,10 +413,17 @@ QoS 1 et jamais retenues, sur une connexion MQTT distincte de l'ingestion
 réclamation `FOR UPDATE SKIP LOCKED` avec un bail de 15 secondes, publication
 hors transaction, puis marquage `DISPATCHED` et passage de l'opération à
 `COMMAND_SENT`. `attempt_count` sert de jeton : un dispatcher dont le bail a
-expiré ne peut plus marquer, relâcher ni annuler la ligne. Une commande expirée
-avant toute tentative est annulée et son opération passe à `EXPIRED`; après une
-tentative incertaine, la commande est annulée et l'opération reste à
-réconcilier.
+expiré ne peut plus marquer, relâcher ni annuler la ligne. Le payload publié est
+celui de la ligne, inchangé à chaque tentative.
+
+Une tentative refusée avant tout envoi (broker non connecté) est certaine; une
+tentative sans accusé `PUBACK`, ou un bail terminé sans marquage, est incertaine
+et préfixe `last_error` de `PUBLICATION_UNCERTAIN`, préfixe conservé jusqu'à la
+fin de la commande. À l'échéance, la commande est annulée sans publication. Un
+retrait (`CHECKOUT`) qu'aucune tentative n'a pu publier passe à `EXPIRED`
+(document 05, §5); un retrait incertain et tout retour restent `AUTHORIZED`
+pour l'expiration des opérations (document 06, §14.2), qui reste à livrer : le
+retour doit aussi rétablir son prêt.
 
 La fenêtre entre la publication et le marquage n'est pas fermée : après un
 arrêt dans cette fenêtre, la même commande, avec le même `messageId`, est
@@ -424,6 +431,14 @@ republiée à la fin du bail. La livraison est donc au moins une fois; la
 déduplication du hub (document 10, §16.1) empêche une seconde ouverture.
 `CommandBrokerTests` et `CommandDispatchJobTests` utilisent le broker de
 développement et le compte du hub de test ci-dessus; ils échouent sans broker.
+
+Limites connues : la réclamation et le bail utilisent l'horloge de l'API et non
+`now()` de PostgreSQL (document 08, §9.2), ce qui suppose des instances à
+l'heure; sans `AEGIS_COMMAND_DISPATCHER_ENABLED=true`, les commandes restent en
+attente et l'opération autorisée garde le casier; le job partage le planificateur
+de l'application, et un broker qui n'accuse plus réception peut retarder les
+autres jobs d'au plus `publish-timeout` par commande. La règle d'un accusé reçu
+avant le marquage (ligne encore `CLAIMED`) reste à fixer avec IOT-02.
 
 ## Catalogue technicien et readiness (RDY-01, RDY-02)
 
