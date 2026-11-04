@@ -11,6 +11,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.IllegalTransactionStateException;
@@ -175,6 +176,20 @@ class CommandOutboxTests extends ApiIntegrationTest {
         assertThat(command.compartmentId()).isEqualTo(first.compartment()).isNotEqualTo(neighbour);
         assertThat(command.lockerId()).isEqualTo(first.locker());
         assertThat(fixtures.command(first.id())).containsEntry("compartment_id", first.compartment());
+
+        // fk_command_outbox_operation is the final guard: no row may name another compartment of the operation.
+        jdbc.sql("DELETE FROM aegis.command_outbox WHERE operation_id = :operation").param("operation", first.id())
+                .update();
+        assertThatThrownBy(() -> jdbc.sql("""
+                INSERT INTO aegis.command_outbox (message_id, operation_id, locker_id, compartment_id, command_type,
+                    topic, schema_version, issued_at, expires_at, payload)
+                VALUES (:message, :operation, :locker, :neighbour, 'UNLOCK_COMPARTMENT', :topic, '3.0', :issued,
+                        :expires, '{}'::jsonb)
+                """).param("message", UUID.randomUUID()).param("operation", first.id())
+                .param("locker", first.locker()).param("neighbour", neighbour).param("topic", command.topic())
+                .param("issued", CommandFixtures.utc(START)).param("expires", CommandFixtures.utc(START.plusSeconds(120)))
+                .update()).isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("fk_command_outbox_operation");
     }
 
     private void assertRefused(UUID operation, Reason reason) {
