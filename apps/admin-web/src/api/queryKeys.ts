@@ -14,4 +14,8 @@ export const queryKeys = {
     assetList: (query: { readonly page: number; readonly size: number; readonly sort: string }) => ['catalog', 'assets', 'list', query] as const,
     asset: (assetId: string) => ['catalog', 'assets', 'detail', assetId] as const,
   },
+  lockers: {
+    all: ['lockers'] as const,
+    status: (lockerId: string) => ['lockers', 'status', lockerId] as const,
+  },
 } as const
