@@ -779,3 +779,7 @@ infra/docker/.env
 
 # JetBrains project files (local IDE state)
 .idea/
+
+### Aegis firmware ###
+# Device credentials and Wi-Fi settings, copied from secrets.h.example
+firmware/locker-controller/secrets.h
