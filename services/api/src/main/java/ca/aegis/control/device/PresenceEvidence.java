@@ -22,6 +22,7 @@ import ca.aegis.control.device.PhysicalObservationRepository.ConnectionStart;
 import ca.aegis.control.device.PhysicalObservationRepository.Detection;
 import ca.aegis.control.device.PhysicalObservationRepository.Observation;
 import ca.aegis.control.device.PhysicalObservationRepository.PhysicalEvent;
+import ca.aegis.control.device.PhysicalObservationRepository.Resumption;
 import ca.aegis.control.device.PhysicalObservationRepository.Type;
 import ca.aegis.control.device.PhysicalObservationRepository.UnobservedCell;
 
@@ -48,8 +49,8 @@ public class PresenceEvidence {
     }
 
     /** The facts of one locker that every expectation in it shares. */
-    private record LockerFacts(ConnectionStart start, List<PhysicalEvent> events, List<UnobservedCell> unobserved,
-            List<Rejected> rejected) {
+    private record LockerFacts(ConnectionStart start, Optional<Resumption> resumed, List<PhysicalEvent> events,
+            List<UnobservedCell> unobserved, List<Rejected> rejected) {
     }
 
     /**
@@ -126,6 +127,8 @@ public class PresenceEvidence {
         ActiveDevice device = active.get();
         return observations.connectionStart(device.id(), device.projection(), device.provisionedAt())
                 .map(start -> new LockerFacts(start,
+                        observations.lastResumption(device.id(), device.projection(), device.provisionedAt(), start,
+                                AvailabilityProjection.FRESHNESS),
                         observations.events(device.id(), device.projection(), device.provisionedAt(),
                                 start.sequence()),
                         observations.unobservedCells(lockerId, device.id(), device.projection(),
@@ -152,7 +155,8 @@ public class PresenceEvidence {
      * document 06, sections 4.4 and 9.3: stored evidence that the door may have moved since also voids it, namely a
      * heartbeat of the session, later or made inside the scan window, that does not report the cell connected with its
      * door closed (while the cell's link is down its door is not observed), or a rejected heartbeat, door or scan
-     * message of the device, whose cell is unknown, that may have followed the scan or fallen inside its window.
+     * message of the device, whose cell is unknown, that may have followed the scan or fallen inside its window. A
+     * lapse of heartbeat continuity in the connection voids every scan that does not follow its end.
      */
     private static Optional<PhysicalEvent> usableScan(Expectation expectation, CompartmentState cell,
             LockerFacts facts) {
@@ -190,7 +194,14 @@ public class PresenceEvidence {
                         && (report.sequence() > scan.sequence() || report.occurredAt() == null
                                 || !report.occurredAt().isBefore(scan.windowStartedAt())));
         boolean rejectedSince = facts.rejected().stream().anyMatch(rejected -> rejected.voids(scan));
-        return doorMovedSince || unobservedSince || rejectedSince ? Optional.empty() : Optional.of(scan);
+        // Decision of 4 November 2026 on #31: once continuity lapsed, the door may have moved unseen, even if the same
+        // connection resumed. Only a scan later than the resumption by reception, sequence and window counts: a scan
+        // made before it restores nothing, even when delivered after it.
+        boolean lapsedSince = facts.resumed().filter(resumed -> !scan.receivedAt().isAfter(resumed.receivedAt())
+                || scan.sequence() <= resumed.sequence() || !scan.windowStartedAt().isAfter(resumed.occurredAt()))
+                .isPresent();
+        return doorMovedSince || unobservedSince || rejectedSince || lapsedSince ? Optional.empty()
+                : Optional.of(scan);
     }
 
     private static Verdict verdict(Expectation expectation, PhysicalEvent scan, LockerFacts facts,

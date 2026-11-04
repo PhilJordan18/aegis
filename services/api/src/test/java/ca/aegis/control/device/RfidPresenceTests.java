@@ -616,18 +616,80 @@ class RfidPresenceTests extends ApiIntegrationTest {
         assertEquals("READY", read(technicianView(assetA), "$.readiness.result"), "after the reconnection");
     }
 
-    /** No validity period is defined: on an unbroken connection reporting the cell connected and closed it holds. */
+    /**
+     * No validity period is defined (decision of 4 November on #31): on an unbroken connection reporting the cell
+     * connected and closed it holds, here for ten minutes of heartbeats exactly at the continuity limit.
+     */
     @Test
     void aScanStaysValidWhileTheConnectionReportsTheCellConnectedAndClosed() throws Exception {
         ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
-        for (int i = 0; i < 5; i++) {
-            clock.advance(Duration.ofSeconds(10));
+        heartbeat("HEALTHY", "HEALTHY");
+        for (int i = 0; i < 20; i++) {
+            clock.advance(AvailabilityProjection.FRESHNESS);
             heartbeat("HEALTHY", "HEALTHY");
         }
 
         String view = technicianView(assetA);
         assertEquals("PRESENT", read(view, "$.presence"));
         assertEquals("READY", read(view, "$.readiness.result"));
+    }
+
+    /**
+     * Decision of 4 November on #31: a heartbeat gap longer than the continuity rule voids the scan even though the
+     * same connection resumes and nothing read presence during the gap. Heartbeats and a replay of the old scan do not
+     * restore it; a new scan does.
+     */
+    @Test
+    void aHeartbeatGapOnTheSameConnectionVoidsTheScanUntilANewScan() throws Exception {
+        Map<String, Object> before = ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"));
+
+        clock.advance(Duration.ofSeconds(31));
+        heartbeat("HEALTHY", "HEALTHY");
+        for (int i = 0; i < 3; i++) {
+            clock.advance(Duration.ofSeconds(10));
+            heartbeat("HEALTHY", "HEALTHY");
+        }
+        String view = technicianView(assetA);
+        assertEquals("UNKNOWN", read(view, "$.presence"), "heartbeats alone");
+        assertEquals("UNKNOWN", read(view, "$.readiness.result"));
+        assertEquals(Outcome.DUPLICATE, ingestion.ingest(events(), bytes(before)));
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"), "replay of the old scan");
+
+        clock.advance(Duration.ofSeconds(5));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        view = technicianView(assetA);
+        assertEquals("PRESENT", read(view, "$.presence"), "new scan");
+        assertEquals("READY", read(view, "$.readiness.result"));
+    }
+
+    /** A scan made before the gap ended proves nothing, even delivered after it and within the delivery delay. */
+    @Test
+    void aScanMadeBeforeAHeartbeatGapEndedAndDeliveredAfterItLeavesPresenceUnknown() throws Exception {
+        Map<String, Object> delayed = scan(cellA, "HEALTHY", reads(tagA, 3));
+        clock.advance(Duration.ofSeconds(26));
+        heartbeat("HEALTHY", "HEALTHY");
+        clock.advance(Duration.ofSeconds(2));
+        ingest(delayed);
+
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"));
+    }
+
+    /** The first heartbeat of a connection is continuity too: one that comes too late voids the scans before it. */
+    @Test
+    void aScanBeforeALateFirstHeartbeatOfAConnectionLeavesPresenceUnknown() throws Exception {
+        clock.advance(Duration.ofSeconds(1));
+        session.connectionId = UUID.randomUUID();
+        ingest(session.availability(clock.instant(), "ONLINE", "CONNECTED"));
+        clock.advance(Duration.ofSeconds(5));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        clock.advance(Duration.ofSeconds(26));
+        heartbeat("HEALTHY", "HEALTHY");
+
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"));
+        clock.advance(Duration.ofSeconds(5));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"));
     }
 
     /** Review LOW 3: a control character in an identifier is rejected and stored, never lost with its payload. */
@@ -696,7 +758,10 @@ class RfidPresenceTests extends ApiIntegrationTest {
         clock.advance(Duration.ofSeconds(26));
         assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"), "no heartbeat for over 30 seconds");
         heartbeat("HEALTHY", "HEALTHY");
-        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"), "the same connection resumed");
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"), "the same connection resumed");
+        clock.advance(Duration.ofSeconds(5));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"), "new scan");
 
         ingest(session.availability(clock.instant(), "OFFLINE", "SHUTDOWN"));
         assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"), "announced offline");

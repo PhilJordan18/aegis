@@ -4,6 +4,7 @@ import static ca.aegis.control.device.LockerDeviceRepository.utc;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Collection;
@@ -41,6 +42,10 @@ class PhysicalObservationRepository {
 
     /** The first message of a connection: the lowest sequence and its device instant. */
     record ConnectionStart(long sequence, Instant occurredAt, Instant receivedAt) {
+    }
+
+    /** The reference heartbeat that ended a lapse of heartbeat continuity in a connection. */
+    record Resumption(long sequence, Instant occurredAt, Instant receivedAt) {
     }
 
     /**
@@ -166,6 +171,52 @@ class PhysicalObservationRepository {
                 .param("connection", projection.heartbeatConnectionId())
                 .param("provisionedAt", utc(provisionedAt))
                 .query((row, number) -> new ConnectionStart(row.getLong("sequence"), instant(row, "occurred_at"),
+                        instant(row, "received_at")))
+                .optional();
+    }
+
+    /**
+     * The latest lapse of heartbeat continuity in the device's current connection, rebuilt from the stored heartbeats
+     * as {@link AvailabilityProjection} saw them, so a lapse that no read observed still counts: the valid reference
+     * heartbeat received more than {@code freshness} after the previous one, or after the connection's first message.
+     * A heartbeat whose payload could not be stored parsed does not count, which can only add a lapse.
+     */
+    Optional<Resumption> lastResumption(UUID deviceId, DeviceProjection projection, Instant provisionedAt,
+            ConnectionStart start, Duration freshness) {
+        return jdbc.sql("""
+                WITH valid AS (
+                    SELECT sequence, occurred_at, received_at,
+                           max(sequence) OVER (ORDER BY received_at, sequence
+                                               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS earlier
+                    FROM aegis.inbound_device_messages
+                    WHERE locker_device_id = :device AND device_session_id = :session AND boot_count = :boot
+                      AND connection_id = :connection AND message_type = 'HEARTBEAT'
+                      AND processing_status <> 'REJECTED' AND received_at >= :provisionedAt
+                      AND parsed_payload ->> 'clockSynchronized' = 'true'
+                      AND occurred_at >= received_at - CAST(:maxAge AS interval)
+                      AND occurred_at <= received_at + CAST(:maxLead AS interval)
+                ), reference AS (
+                    SELECT sequence, occurred_at, received_at,
+                           lag(received_at, 1, CAST(:startedAt AS timestamptz))
+                               OVER (ORDER BY received_at, sequence) AS previous
+                    FROM valid
+                    WHERE earlier IS NULL OR sequence > earlier
+                )
+                SELECT sequence, occurred_at, received_at FROM reference
+                WHERE received_at > previous + CAST(:freshness AS interval)
+                ORDER BY received_at DESC, sequence DESC
+                LIMIT 1
+                """)
+                .param("device", deviceId)
+                .param("session", projection.deviceSessionId())
+                .param("boot", projection.bootCount())
+                .param("connection", projection.heartbeatConnectionId())
+                .param("provisionedAt", utc(provisionedAt))
+                .param("maxAge", InboundMessages.HEARTBEAT_MAX_AGE.toString())
+                .param("maxLead", InboundMessages.MAX_CLOCK_LEAD.toString())
+                .param("startedAt", utc(start.receivedAt()))
+                .param("freshness", freshness.toString())
+                .query((row, number) -> new Resumption(row.getLong("sequence"), instant(row, "occurred_at"),
                         instant(row, "received_at")))
                 .optional();
     }
