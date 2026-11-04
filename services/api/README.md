@@ -332,8 +332,8 @@ deuxième prêt pour une même opération de retrait
 (`uq_loans_checkout_operation`); le service convertira ces refus en
 `CONFLICT` (section 7.2). Le rôle applicatif ne peut ni supprimer ni vider
 ces trois tables. Le catalogue les lit pour dériver la disponibilité (section
-suivante); seule la création de réservation (RES-01) écrit dans
-`reservations`. `CustodySchemaTests` vérifie les
+suivante); seules la création (RES-01), l'annulation et l'expiration (RES-02)
+d'une réservation écrivent dans `reservations`. `CustodySchemaTests` vérifie les
 contraintes, cinq courses concurrentes et les droits.
 
 ## Défis locaux, commandes, preuves IoT et anomalies (schéma de PHY-01)
@@ -463,8 +463,9 @@ Tant que la présence de production est `NoPhysicalProofPresence`, aucune
 readiness n'est `READY` : toute création reçoit `422 ASSET_NOT_READY` /
 `UNKNOWN_PHYSICAL_STATE` jusqu'à PHY-02 (décision du 28 octobre 2026). Seuls
 les tests importent `PresentAssetsConfiguration`, qui déclare chaque actif
-présent. `availableActions` reste vide tant que l'annulation (RES-02) et le
-retrait (CHK-01) n'existent pas. Un technicien ne lit que ses réservations :
+présent. `availableActions` contient `CANCEL` lorsque l'annulation serait
+acceptée (RES-02, section suivante) et jamais `CHECKOUT` tant que le retrait
+(CHK-01) n'existe pas. Un technicien ne lit que ses réservations :
 celle d'un autre donne `404 RESOURCE_NOT_FOUND`, l'absence de réservation
 active `404 ACTIVE_RESERVATION_NOT_FOUND`. `ReservationApiTests`,
 `ReservationConcurrencyTests` et `ReservationProductionPresenceTests` le
@@ -492,7 +493,55 @@ l'heure du test. Résultat attendu, à chaque étape :
 | Réservation courante après la demande | `404 ACTIVE_RESERVATION_NOT_FOUND` |
 
 Le script échoue sur tout écart. Un `201` serait un échec : la réservation
-resterait active, car aucune annulation n'existe avant RES-02.
+resterait active jusqu'à son annulation ou son expiration.
+
+## Annulation et expiration (RES-02)
+
+`POST /api/v1/reservations/{reservationId}/cancel` (document 09, section 14.4;
+document 06, section 5.5) exige `Idempotency-Key`; le corps est absent ou `{}`,
+et toute propriété donne `400 VALIDATION_ERROR`. Elle verrouille le titulaire
+(`FOR NO KEY UPDATE`), l'actif, la réservation, puis les lockers et tentatives
+qu'elle termine.
+
+| Situation | Réponse |
+|---|---|
+| Réservation `ACTIVE` du demandeur, avant `reservedUntil`, aucune tentative de retrait autorisée, ni en `ANOMALY` dont l'anomalie n'est pas `RESOLVED` (document 09, section 8.10) | `200`, `CANCELLED`, audit `RESERVATION_CANCELLED` (`ACTIVE` → `CANCELLED`) |
+| Même clé et même requête | Réponse originale rejouée, `Idempotency-Replayed: true`, aucun effet |
+| Réservation déjà `CANCELLED`, nouvelle clé | `200`, audit `ALREADY_APPLIED` |
+| Réservation d'un autre technicien ou inconnue | `404 RESOURCE_NOT_FOUND` |
+| `FULFILLED`, `EXPIRED`, `reservedUntil` atteint, tentative autorisée une fois, quelle qu'en soit l'issue, ou tentative en `ANOMALY` dont l'anomalie n'est pas `RESOLVED` | `409 RESERVATION_NOT_CANCELLABLE` |
+
+Un refus n'écrit rien. Une tentative encore `REQUESTED` ou
+`AWAITING_LOCAL_PROOF` se termine `FAILED` (`RESERVATION_CANCELLED`) dans la
+même transaction, avec un audit `OPERATION_FAILED`. Son défi QR encore
+`PENDING` devient `INVALIDATED`, avec un audit `LOCAL_CHALLENGE_INVALIDATED`;
+son instruction d'affichage est arrêtée et son chiffré purgé (document 08,
+section 4.6). L'effacement de l'écran du hub n'est pas encore émis (LOC-01
+#43, IOT-01 #40). La lecture littérale de la question ouverte Q1 (document 09,
+section 8.10) est appliquée : une tentative autorisée puis terminée bloque
+l'annulation.
+
+`ReservationExpiry` (document 06, section 14.1) traite chaque réservation
+`ACTIVE` échue (`reservedUntil <= now`) dans sa propre transaction courte :
+verrou de l'actif, puis de la réservation, nouvelle vérification, puis
+`EXPIRED` et audit `RESERVATION_EXPIRED` sans acteur. Elle est différée tant
+qu'une tentative autorisée n'est pas classée ou qu'une tentative en `ANOMALY`
+a une anomalie non `RESOLVED`; une attente QR ne la diffère pas et se termine
+`EXPIRED` avec elle, son défi QR `PENDING` devient `EXPIRED` (audit
+`LOCAL_CHALLENGE_EXPIRED`) et son instruction d'affichage est purgée.
+Une réservation `FULFILLED` n'expire jamais, donc un prêt ouvert garde l'actif
+`BORROWED`. La disponibilité est dérivée à nouveau à la lecture suivante.
+
+`ReservationExpiryJob` l'exécute toutes les
+`aegis.reservations.expiry.interval` (`PT15S`), par lots de
+`aegis.reservations.expiry.batch-size` (`100`), et saute un actif verrouillé
+ailleurs (`SKIP LOCKED`). La création et l'annulation l'exécutent d'abord, dans
+une transaction distincte, pour les réservations échues qu'elles pourraient
+rencontrer. Un arrêt avant le commit ne laisse rien à moitié fait : le passage
+suivant décide de nouveau. Les tests d'intégration désactivent le job
+(`aegis.reservations.expiry.scheduled=false`) et pilotent l'horloge.
+`ReservationCancellationApiTests`, `ReservationExpiryTests` et
+`ReservationExpirySchedulingTests` le vérifient.
 
 ## Rôles PostgreSQL
 
