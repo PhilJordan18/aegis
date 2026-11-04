@@ -44,6 +44,9 @@ public enum ApiError {
     /** A non-terminal locker operation concerns the asset (document 09, sections 12.2 and 12.3). */
     ASSET_OPERATION_IN_PROGRESS(HttpStatus.CONFLICT, "Opération en cours",
             "Une opération physique non terminée concerne l'actif."),
+    /** The reservation is not in a state that admits a cancellation (document 09, section 14.4). */
+    RESERVATION_NOT_CANCELLABLE(HttpStatus.CONFLICT, "Réservation non annulable",
+            "La réservation ne peut plus être annulée dans son état actuel."),
     ASSET_NOT_READY(HttpStatus.UNPROCESSABLE_CONTENT, "Actif non prêt",
             "L'actif ne peut pas être réservé dans son état actuel."),
     OUTSIDE_OPERATING_HOURS(HttpStatus.UNPROCESSABLE_CONTENT, "Hors des heures d'exploitation",

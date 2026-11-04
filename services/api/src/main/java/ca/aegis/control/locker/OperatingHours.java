@@ -39,6 +39,30 @@ public final class OperatingHours {
         }
     }
 
+    /** The window state at {@code now}: its closing when open, else the next opening within a week. */
+    public record WindowState(boolean open, Instant closesAt, Instant nextOpensAt) {
+    }
+
+    /**
+     * Searches the current local day and the seven following ones, which covers every enabled weekday of a weekly
+     * schedule even when the current day's window has already closed.
+     */
+    public static WindowState windowAt(WeeklySchedule schedule, Instant now) {
+        LocalDate today = now.atZone(schedule.timeZone()).toLocalDate();
+        Optional<OpenWindow> current = windowOn(schedule, today).filter(window -> window.contains(now));
+        if (current.isPresent()) {
+            return new WindowState(true, current.get().closesAt(), null);
+        }
+        for (int offset = 0; offset <= 7; offset++) {
+            Optional<OpenWindow> next = windowOn(schedule, today.plusDays(offset))
+                    .filter(window -> window.opensAt().isAfter(now));
+            if (next.isPresent()) {
+                return new WindowState(false, null, next.get().opensAt());
+            }
+        }
+        return new WindowState(false, null, null);
+    }
+
     /**
      * The window of {@code date} as instants, or empty for a closed day. A local time that falls in a daylight-saving
      * gap or overlap has two candidate instants, one per offset around the transition; opening takes the later and

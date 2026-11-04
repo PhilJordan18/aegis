@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { BOOT_COUNT_MAX, BOOT_COUNT_MIN } from './contract.ts';
 
 /**
- * Source of the `bootCount` of each boot (doc 10 §8.1, schema 2.0). The firmware
+ * Source of the `bootCount` of each boot (doc 10 §8.1, since schema 2.0). The firmware
  * keeps it in NVS; the simulator keeps it in a state file outside the repository,
  * so that a restarted process never reuses a count a backend has already seen.
  */

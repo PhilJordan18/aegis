@@ -10,8 +10,16 @@ on:
 permissions:
   contents: read
 
+# One group per branch for pull requests and manual runs: a manual run waits
+# for the pull request run of the same branch instead of running beside it, and
+# a newer pull request run cancels the older one. Only pull request runs cancel;
+# a pending run is replaced by a newer one. Pushes to dev and main have their
+# own group and are never cancelled: each one qualifies the merged branch.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: >-
+    ci-${{ github.event_name == 'push' && 'push' || 'branch' }}-${{
+    github.event.pull_request.head.repo.full_name || github.repository }}-${{
+    github.head_ref || github.ref_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -26,6 +34,7 @@ jobs:
       agents: ${{ steps.filter.outputs.agents }}
       adrs: ${{ steps.filter.outputs.adrs }}
       ios: ${{ steps.filter.outputs.ios }}
+      ci: ${{ steps.filter.outputs.ci }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -75,7 +84,20 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - name: Start an isolated broker
+        working-directory: .
+        # The backend broker tests use the development Mosquitto with its ACL and
+        # the example credentials of infra/docker/.env.example; a missing broker
+        # fails them. Plaintext MQTT stays on this runner's loopback.
+        run: docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml up -d --wait mosquitto
       - run: ./mvnw -B -ntp test
+      - name: Test counts
+        if: always()
+        run: python3 ../../.github/scripts/test-report.py "API tests" target/surefire-reports/TEST-*.xml
+      - name: Broker logs
+        if: failure()
+        working-directory: .
+        run: docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml logs mosquitto
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -105,7 +127,10 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run typecheck
       - run: npm run lint
-      - run: npm test
+      - run: npm test -- --reporter=default --reporter=junit --outputFile.junit="$RUNNER_TEMP/web-reports/unit.xml"
+      - name: Test counts
+        if: always()
+        run: python3 ../../.github/scripts/test-report.py "Web tests" "$RUNNER_TEMP/web-reports/unit.xml"
       - run: npm run build
 
   # The jobs below are not required yet (#67): they stay outside the `needs` of
@@ -177,7 +202,8 @@ jobs:
   adrs:
     name: Accepted ADR guard
     needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.adrs == 'true'
+    # adrs is true only on pull requests (changed-components.sh): the guard needs a base.
+    if: needs.changes.outputs.adrs == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -213,32 +239,40 @@ jobs:
           xcodebuild -version
           xcrun simctl list runtimes
       - name: Choose a simulator
-        # Newest available iPhone 17, 16 or 15 on an iOS 17+ runtime; fails
-        # explicitly when none exists. To be replaced by scripts/ios-destination.sh
-        # once it is on dev (#90).
+        # apps/ios/scripts/ios-destination.sh is the single source of the
+        # simulator choice (first available of iPhone 17, 16, 15, newest iOS);
+        # it fails when none exists. The choice is kept with the results.
         run: |
-          destination=$(xcrun simctl list devices available -j | python3 -c '
-          import json, os, re, sys
-          devices = json.load(sys.stdin)["devices"]
-          found = []
-          for runtime, items in devices.items():
-              match = re.search(r"iOS-(\d+)-(\d+)", runtime)
-              if not match or int(match.group(1)) < 17:
-                  continue
-              version = (int(match.group(1)), int(match.group(2)))
-              for item in items:
-                  model = re.fullmatch(r"iPhone (17|16|15)", item["name"])
-                  if model:
-                      found.append((version, int(model.group(1)), item["udid"], item["name"]))
-          if not found:
-              sys.exit("no iPhone 15, 16 or 17 simulator on an iOS 17+ runtime")
-          version, _, udid, name = max(found)
-          print(f"platform=iOS Simulator,id={udid}")
-          print(f"{name}, iOS {version[0]}.{version[1]}", file=sys.stderr)
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as out:
-              out.write(f"Simulator chosen: {name}, iOS {version[0]}.{version[1]}\n")
-          ')
+          mkdir -p build/results
+          if ! destination=$(scripts/ios-destination.sh 2>build/results/destination.txt); then
+            cat build/results/destination.txt
+            exit 1
+          fi
+          cat build/results/destination.txt
+          case "$destination" in
+            "platform=iOS Simulator,id="?*) ;;
+            *) echo "::error::unexpected destination '$destination'"; exit 1 ;;
+          esac
           echo "IOS_DESTINATION=$destination" >> "$GITHUB_ENV"
+          echo "Simulator $(cat build/results/destination.txt)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Boot the simulator
+        # Measured in #67: xcodebuild sees the simulator booted within seconds,
+        # then spends 2 to 4 minutes installing and launching the first test
+        # host while the new device finishes its first boot. This step waits
+        # for that first boot explicitly, bounded by the step timeout, so its
+        # cost is recorded apart from the tests. A simulator that does not
+        # finish booting fails here, never as a test failure.
+        timeout-minutes: 8
+        run: |
+          udid=${IOS_DESTINATION#*id=}
+          start=$(date +%s)
+          if ! xcrun simctl list devices booted | grep -q "$udid"; then
+            xcrun simctl boot "$udid"
+          fi
+          booted=$(date +%s)
+          xcrun simctl bootstatus "$udid"
+          ready=$(date +%s)
+          echo "Simulator booted in $((booted - start)) s, ready $((ready - booted)) s later" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Standalone recipe
         run: scripts/ios-test.sh standalone
       - name: Result summary
@@ -251,6 +285,21 @@ jobs:
           path: apps/ios/build/results/
           retention-days: 7
 
+  scripts:
+    name: CI script tests
+    needs: changes
+    if: needs.changes.outputs.ci == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - run: python3 -m unittest discover -v -s .github/scripts/tests
+
   # The only check to require on dev and main: component jobs may be skipped by
   # the change filter, and a skipped job must neither block nor hide a failure.
   result:
@@ -260,28 +309,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
       - env:
-          CHANGES_RESULT: ${{ needs.changes.result }}
-          API_NEEDED: ${{ needs.changes.outputs.api }}
-          API_RESULT: ${{ needs.api.result }}
-          WEB_NEEDED: ${{ needs.changes.outputs.web }}
-          WEB_RESULT: ${{ needs.web.result }}
-        run: |
-          status=0
-          echo "changes=$CHANGES_RESULT api=$API_NEEDED/$API_RESULT web=$WEB_NEEDED/$WEB_RESULT"
-          if [ "$CHANGES_RESULT" != success ]; then
-            echo "::error::Change detection did not succeed ($CHANGES_RESULT)."
-            status=1
-          fi
-          check() {
-            if [ "$2" = true ] && [ "$3" != success ]; then
-              echo "::error::$1 was required and ended as '$3'."
-              status=1
-            elif [ "$2" != true ] && [ "$3" != skipped ] && [ "$3" != success ]; then
-              echo "::error::$1 ended as '$3'."
-              status=1
-            fi
-          }
-          check "API tests" "$API_NEEDED" "$API_RESULT"
-          check "Web checks" "$WEB_NEEDED" "$WEB_RESULT"
-          exit $status
+          CHANGES: ${{ needs.changes.result }}
+          API: ${{ needs.changes.outputs.api }}:${{ needs.api.result }}
+          WEB: ${{ needs.changes.outputs.web }}:${{ needs.web.result }}
+        run: python3 .github/scripts/ci-result.py "$CHANGES" "API tests=$API" "Web checks=$WEB"

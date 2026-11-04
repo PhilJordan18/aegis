@@ -81,7 +81,7 @@ class ReservationApiTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.fulfilledAt").value(nullValue()))
                 .andExpect(jsonPath("$.expiredAt").value(nullValue()))
                 .andExpect(jsonPath("$.currentOperationId").value(nullValue()))
-                .andExpect(jsonPath("$.availableActions").value(empty()))
+                .andExpect(jsonPath("$.availableActions").value(contains("CANCEL")))
                 .andReturn();
         String body = result.getResponse().getContentAsString(StandardCharsets.UTF_8);
         String id = JsonPath.read(body, "$.id");

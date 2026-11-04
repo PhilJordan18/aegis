@@ -45,7 +45,7 @@ function sorted(o: object): string[] {
 }
 
 function expectEnvelope(payload: Record<string, unknown>, type: string): void {
-  expect(payload.schemaVersion).toBe('2.0');
+  expect(payload.schemaVersion).toBe('3.0');
   expect(payload.messageId).toMatch(UUID_V4);
   expect(payload.type).toBe(type);
   expect(payload.lockerId).toBe(LOCKER);
@@ -174,8 +174,8 @@ describe('envelope rules (doc 10 §8.1, §16.3, §20)', () => {
     expect(new Set(messages.map((m) => m.payload.bootCount))).toEqual(new Set([BOOT_COUNT]));
   });
 
-  it('declares schema 2.0', () => {
-    expect(SCHEMA_VERSION).toBe('2.0');
+  it('declares schema 3.0', () => {
+    expect(SCHEMA_VERSION).toBe('3.0');
   });
 
   it.each([0, -1, 1.5, Number.NaN, 4_294_967_296])('refuses bootCount %s', (bootCount) => {
