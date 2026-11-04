@@ -816,6 +816,13 @@ Une seule instruction de défi par opération; les retries conservent le même `
 
 Cette table est la matérialisation de `D8`. Une ligne correspond à une commande d’ouverture durable, avec un `message_id` qui ne change jamais lors des reprises.
 
+Seul le compartiment attendu s’ouvre : la clé composite `fk_command_outbox_operation` refuse une commande dont le casier ou le compartiment n’est pas celui de son opération, y compris un autre compartiment du même casier. Elle s’appuie sur `UNIQUE (id, locker_id, compartment_id)` de `locker_operations`, ajoutée par `V007` parce que `V006` est déjà appliquée (décision du 4 novembre 2026). La garantie ne repose donc pas seulement sur le producteur de commandes.
+
+```sql
+ALTER TABLE locker_operations
+    ADD CONSTRAINT uq_locker_operations_id_target UNIQUE (id, locker_id, compartment_id);
+```
+
 ```sql
 CREATE TABLE command_outbox (
     id              uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
@@ -840,7 +847,8 @@ CREATE TABLE command_outbox (
     created_at      timestamptz NOT NULL DEFAULT now(),
 
     CONSTRAINT fk_command_outbox_operation
-        FOREIGN KEY (operation_id) REFERENCES locker_operations (id),
+        FOREIGN KEY (operation_id, locker_id, compartment_id)
+        REFERENCES locker_operations (id, locker_id, compartment_id),
     CONSTRAINT fk_command_outbox_compartment_locker
         FOREIGN KEY (compartment_id, locker_id)
         REFERENCES compartments (id, locker_id),
@@ -1797,7 +1805,7 @@ Découpage recommandé :
 | `V004__create_operating_schedules.sql` | `operating_schedules`, `operating_windows` et leurs index. |
 | `V005__create_reservations.sql` | `reservations` et index d’unicité active `ux_reservations_one_active_per_asset` et `ux_reservations_one_active_per_user`. |
 | `V006__create_operations_and_loans.sql` | `locker_operations`, `loans`, FK circulaire ajoutée après les deux tables; `fk_loans_checkout_operation` composite et `uq_loans_checkout_operation`; index partiels `ux_loans_one_open_per_asset` et `ux_locker_operations_one_open_per_locker`; `audit_events.operation_id`, `fk_audit_events_operation` et `ix_audit_events_operation_time`. Les index de lecture de §5.2 restent dans `V011`. |
-| `V007__create_command_outbox.sql` | `local_access_challenges`, `hub_display_outbox`, `command_outbox`; index d’invariant `ux_display_one_challenge_per_operation`, index d’expiration `ix_local_challenges_pending_expiry` et index de claim `ix_display_claimable` et `ix_command_outbox_claimable`. Les trois tables rejoignent la liste `no_delete` du callback (§12.1). Les index de lecture de §5.2 restent dans `V011`. |
+| `V007__create_command_outbox.sql` | `local_access_challenges`, `hub_display_outbox`, `command_outbox`; contrainte `uq_locker_operations_id_target` sur `locker_operations`, cible de la clé composite `fk_command_outbox_operation` (§4.7); index d’invariant `ux_display_one_challenge_per_operation`, index d’expiration `ix_local_challenges_pending_expiry` et index de claim `ix_display_claimable` et `ix_command_outbox_claimable`. Les trois tables rejoignent la liste `no_delete` du callback (§12.1). Les index de lecture de §5.2 restent dans `V011`. |
 | `V008__create_device_messages_and_observations.sql` | `inbound_device_messages`, `physical_observations`; `audit_events.inbound_message_id`, `audit_events.physical_observation_id` et leurs FK `fk_audit_events_message` et `fk_audit_events_observation`, sans reconstitution des événements antérieurs. `inbound_device_messages` rejoint la liste `no_delete` du callback et `physical_observations` la liste `append_only` (§12.1). Les index de lecture de §5.2 restent dans `V011`. |
 | `V009__create_anomalies.sql` | `anomalies` et son index d’invariant `ux_anomalies_one_open_per_operation` (§5.1). `anomalies` rejoint la liste `no_delete` du callback (§12.1). `audit_events` a été déplacée vers `V002_2`; aucune migration n’est renumérotée. Les index de lecture de §5.2 restent dans `V011`. |
 | `V010__create_rest_idempotency.sql` | Déplacée vers `V002_1`; numéro laissé inutilisé, aucune migration n’est renumérotée. |
@@ -1854,7 +1862,7 @@ L’application ne reçoit pas le droit de supprimer ou de modifier `audit_event
 | Propriétaire des migrations (`aegis_migrator` par défaut, ou le compte propriétaire actuel) | `LOGIN`, jamais superutilisateur dans un environnement cible | Possède le schéma `aegis`, ses objets et `public.flyway_schema_history`; exécute Flyway. |
 | Rôle applicatif (`aegis_app` par défaut) | `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS` | `CONNECT` sur la base; `USAGE` sur `aegis`; `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les tables métier; `SELECT`, `INSERT` et `UPDATE`, sans `DELETE`, sur `reservations`, `locker_operations`, `loans`, `local_access_challenges`, `hub_display_outbox`, `command_outbox`, `inbound_device_messages` et `anomalies`; `SELECT` et `INSERT` seulement sur `audit_events` et `physical_observations`; `USAGE`, `SELECT` sur les séquences. Jamais `TRUNCATE`, `REFERENCES`, `TRIGGER`, ni `CREATE` sur le schéma. |
 
-Les droits suivent le schéma : le callback `afterMigrate` de §11.1 les réapplique de façon idempotente après chaque migration, avec le nom du placeholder Flyway `application_role` (`AEGIS_DB_APPLICATION_ROLE`, `aegis_app` par défaut). Si le rôle n’existe pas, le callback ne fait rien; s’il est superutilisateur ou membre d’un propriétaire du schéma ou de ses objets, même sans héritage (une appartenance `WITH INHERIT FALSE` permet encore `SET ROLE`), il échoue, car révoquer les droits du propriétaire casserait le schéma. La liste `append_only` du callback contient `audit_events` et `physical_observations`; une future table append-only s’y ajoute. La liste `no_delete` retire `DELETE` sur `reservations`, `locker_operations`, `loans`, `local_access_challenges`, `hub_display_outbox`, `command_outbox`, `inbound_device_messages` et `anomalies` : ces lignes changent d’état mais la chaîne de possession n’est jamais effacée (§1.1). Une future table d’historique de possession, de commande ou de preuve rejoint l’une de ces deux listes en même temps que la migration qui la crée; sinon le callback lui accorde `DELETE`.
+Les droits suivent le schéma : le callback `afterMigrate` de §11.1 les réapplique de façon idempotente après chaque migration, avec le nom du placeholder Flyway `application_role` (`AEGIS_DB_APPLICATION_ROLE`, `aegis_app` par défaut). Si le rôle n’existe pas, le callback ne fait rien; s’il est superutilisateur ou membre d’un propriétaire du schéma ou de ses objets, même sans héritage (une appartenance `WITH INHERIT FALSE` permet encore `SET ROLE`), il échoue, car révoquer les droits du propriétaire casserait le schéma. La liste `append_only` du callback contient `audit_events` et `physical_observations` (règle approuvée le 4 novembre 2026 pour les observations : le rôle applicatif les insère et les lit, sans `UPDATE`, `DELETE` ni `TRUNCATE`); une future table append-only s’y ajoute. La liste `no_delete` retire `DELETE` sur `reservations`, `locker_operations`, `loans`, `local_access_challenges`, `hub_display_outbox`, `command_outbox`, `inbound_device_messages` et `anomalies` : ces lignes changent d’état mais la chaîne de possession n’est jamais effacée (§1.1). Une future table d’historique de possession, de commande ou de preuve rejoint l’une de ces deux listes en même temps que la migration qui la crée; sinon le callback lui accorde `DELETE`.
 
 Le trigger de §4.9 n’est qu’une défense en profondeur. Ni lui ni ces droits ne protègent contre un superutilisateur ou le propriétaire de la table : la confiance envers ces comptes relève de l’exploitation (accès restreint, journalisation, sauvegardes).
 

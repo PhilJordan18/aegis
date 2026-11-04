@@ -157,7 +157,8 @@ class IotEvidenceSchemaTests {
         assertEquals(List.of(
                 "fk_command_outbox_compartment_locker FOREIGN KEY (compartment_id, locker_id) "
                         + "REFERENCES compartments(id, locker_id)",
-                "fk_command_outbox_operation FOREIGN KEY (operation_id) REFERENCES locker_operations(id)",
+                "fk_command_outbox_operation FOREIGN KEY (operation_id, locker_id, compartment_id) "
+                        + "REFERENCES locker_operations(id, locker_id, compartment_id)",
                 "fk_display_challenge FOREIGN KEY (challenge_id, operation_id) "
                         + "REFERENCES local_access_challenges(id, operation_id)",
                 "fk_display_device FOREIGN KEY (locker_device_id, locker_id) REFERENCES locker_devices(id, locker_id)",
@@ -430,7 +431,8 @@ class IotEvidenceSchemaTests {
                 with(command(site, abandoned), "message_id", unlock.get("message_id"))));
         assertViolation("23503", "fk_command_outbox_operation",
                 () -> insert("command_outbox", command(site, UUID.randomUUID())));
-        assertViolation("23503", "fk_command_outbox_compartment_locker", () -> insert("command_outbox",
+        // A compartment of another locker breaks both keys; which one PostgreSQL reports first is not specified.
+        assertRefused("23503", () -> insert("command_outbox",
                 with(command(site, abandoned), "compartment_id", elsewhere.compartment())));
 
         Map<String, Object> other = command(site, abandoned);
@@ -466,6 +468,37 @@ class IotEvidenceSchemaTests {
         assertEquals(1, jdbc.sql("""
                 SELECT attempt_count FROM aegis.command_outbox WHERE id = :id AND claimed_at IS NOT NULL
                 """).param("id", command).query(Integer.class).single());
+    }
+
+    /**
+     * Section 4.7: the database, not only the command writer, keeps an unlock on the operation's own compartment. A
+     * command for A1 is accepted; the same operation cannot command A2 of the same locker, nor a coherent compartment
+     * of another locker.
+     */
+    @Test
+    void aCommandOpensOnlyTheCompartmentOfItsOperation() {
+        Site site = site("A");
+        Site elsewhere = site("B");
+        UUID neighbour = jdbc.sql("""
+                INSERT INTO aegis.compartments (locker_id, code, local_address, hub_port)
+                VALUES (:locker, 'A2', 2, 2)
+                RETURNING id
+                """).param("locker", site.locker()).query(UUID.class).single();
+        UUID operation = operation(site, "AUTHORIZED");
+
+        assertViolation("23503", "fk_command_outbox_operation", () -> insert("command_outbox",
+                with(command(site, operation), "compartment_id", neighbour)));
+        assertViolation("23503", "fk_command_outbox_operation", () -> insert("command_outbox",
+                with(command(site, operation), "locker_id", elsewhere.locker(),
+                        "compartment_id", elsewhere.compartment())));
+        assertEquals(0, jdbc.sql("SELECT count(*) FROM aegis.command_outbox WHERE operation_id = :id")
+                .param("id", operation).query(Long.class).single());
+
+        UUID command = insert("command_outbox", command(site, operation));
+        assertEquals(List.of(site.locker(), site.compartment()), jdbc.sql("""
+                SELECT locker_id, compartment_id FROM aegis.command_outbox WHERE id = :id
+                """).param("id", command).query((row, n) -> List.of(row.getObject(1, UUID.class),
+                row.getObject(2, UUID.class))).single());
     }
 
     /**

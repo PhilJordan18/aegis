@@ -100,8 +100,13 @@ CREATE TABLE aegis.hub_display_outbox (
         CHECK (status NOT IN ('PENDING', 'CLAIMED', 'DISPATCHED') OR encrypted_payload IS NOT NULL)
 );
 
+-- Target of the composite key below: V006 is already applied and stays unchanged, so the key is added here.
+ALTER TABLE aegis.locker_operations
+    ADD CONSTRAINT uq_locker_operations_id_target UNIQUE (id, locker_id, compartment_id);
+
 -- One row per durable unlock command; its message_id never changes across retries (section 8.3). payload holds the
--- minimal command contract only, never a password, user token or MQTT secret.
+-- minimal command contract only, never a password, user token or MQTT secret. The composite operation key refuses a
+-- command whose locker or compartment is not the operation's own: only the expected compartment may open.
 CREATE TABLE aegis.command_outbox (
     id              uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
     message_id      uuid NOT NULL,
@@ -125,7 +130,8 @@ CREATE TABLE aegis.command_outbox (
     created_at      timestamptz NOT NULL DEFAULT now(),
 
     CONSTRAINT fk_command_outbox_operation
-        FOREIGN KEY (operation_id) REFERENCES aegis.locker_operations (id),
+        FOREIGN KEY (operation_id, locker_id, compartment_id)
+        REFERENCES aegis.locker_operations (id, locker_id, compartment_id),
     CONSTRAINT fk_command_outbox_compartment_locker
         FOREIGN KEY (compartment_id, locker_id)
         REFERENCES aegis.compartments (id, locker_id),
