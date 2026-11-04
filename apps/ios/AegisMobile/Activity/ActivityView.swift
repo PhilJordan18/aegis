@@ -15,8 +15,9 @@ struct ActivityScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     if let feedback = model.feedback { FeedbackNote(feedback: feedback) }
-                    notices
+                    reservationNotice
                     content
+                    loanNotice
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
@@ -42,16 +43,24 @@ struct ActivityScreen: View {
     }
 
     @ViewBuilder
-    private var notices: some View {
+    private var reservationNotice: some View {
         if let failure = model.reservation.failure {
             FailureNotice(failure: failure, receivedAt: model.reservation.isStale ? model.reservation.receivedAt : nil,
                           isRetrying: model.isLoading, retry: { Task { await model.refresh() } },
                           title: Self.title(failure), identifier: "activity")
-        } else if let failure = model.loan.failure {
-            // A loan that could not be read never hides the reservation.
+        }
+    }
+
+    /// The loan section's failure, below the confirmation and the reservation
+    /// or its known absence, which a loan read never outranks (#38). When
+    /// both reads failed, the notice above already covers the loan.
+    @ViewBuilder
+    private var loanNotice: some View {
+        if model.reservation.failure == nil, let failure = model.loan.failure {
             FailureNotice(failure: failure, receivedAt: model.loan.isStale ? model.loan.receivedAt : nil,
                           isRetrying: model.isLoading, retry: { Task { await model.refresh() } },
-                          title: String(localized: "Le prêt en cours n’a pas pu être vérifié."), identifier: "activity")
+                          title: String(localized: "Le prêt en cours n’a pas pu être vérifié."),
+                          identifier: "activity.loan")
         }
     }
 
