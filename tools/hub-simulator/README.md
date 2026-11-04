@@ -14,7 +14,7 @@ La tranche SIM-02 (#39) ajoute les commandes, l'écran et les observations
 physiques; voir [Commandes](#commandes-unlock_compartment),
 [Journal de déduplication](#journal-de-déduplication), [Écran](#écran-du-hub) et
 [Observations physiques](#observations-physiques). La tranche SIM-01 (P0.0,
-issue #15, mise au schéma 2.0 par #63) couvre :
+issue #15, mise au schéma 2.0 par #63, puis 3.0 par #98) couvre :
 
 - `DEVICE_AVAILABILITY` `ONLINE` (`reason` `CONNECTED`) publié à chaque connexion,
   QoS 1, `retain=true` (§15.1);
@@ -30,7 +30,7 @@ issue #15, mise au schéma 2.0 par #63) couvre :
 - `DEVICE_RESTARTED` une seule fois par démarrage, sur `events`, QoS 1, sans
   retain, avec un `resetReason` de la liste contrôlée (§13.1);
 - un `HEARTBEAT` immédiat après connexion puis toutes les 10 s, QoS 0, sans retain (§14);
-- l'enveloppe commune du §8.1, schéma `2.0` (voir ci-dessous);
+- l'enveloppe commune du §8.1, schéma `3.0` (voir ci-dessous);
 - MQTT 3.1.1, `cleanSession=false`, `keepAlive=30`, `clientId`
   `aegis-locker-<deviceKey>` (§4.1, §7.1);
 - la reconnexion avec backoff 1, 2, 4, 8, 16 puis 30 s et gigue (§18), qui
@@ -42,11 +42,11 @@ Le simulateur prouve seulement ce qu'il émet. La projection de disponibilité
 (ONLINE, OFFLINE, Will périmé sans effet, reprise du backend) relève de
 l'ingestion backend (PHY-01, §15.3 et §23.5 points 5 à 12).
 
-## Champs du schéma 2.0
+## Champs du schéma 3.0
 
 | Champ | Messages | Règle appliquée par le simulateur |
 |---|---|---|
-| `schemaVersion` | tous | `"2.0"`; le segment `v1` des topics versionne l'arborescence et les ACL, pas le payload |
+| `schemaVersion` | tous | `"3.0"`; le segment `v1` des topics versionne l'arborescence et les ACL, pas le payload |
 | `messageId` | tous | UUID neuf pour chaque fait; un rejeu le conserve |
 | `deviceSessionId` | tous | UUID neuf à chaque démarrage |
 | `bootCount` | tous | Entier de 1 à 4 294 967 295 (32 bits non signé), +1 à chaque démarrage, identique pour tous les messages d'un démarrage (voir ci-dessous) |
@@ -54,6 +54,7 @@ l'ingestion backend (PHY-01, §15.3 et §23.5 points 5 à 12).
 | `connectionId` | `DEVICE_AVAILABILITY`, `HEARTBEAT` | UUID neuf par connexion MQTT, partagé par son Will, son `ONLINE`, ses heartbeats et son `SHUTDOWN` |
 | `timestamp` | tous | RFC 3339 UTC en secondes entières, terminé par `Z`; celui du Will est l'instant de sa préparation |
 | `reason` | `DEVICE_AVAILABILITY` | `CONNECTED`, `CONNECTION_LOST` ou `SHUTDOWN` |
+| `errorCode` | `DEVICE_ERROR` | `STORAGE_FAULT` ou, depuis 3.0, `INBOUND_MESSAGE_INVALID` (voir [Messages entrants invalides](#messages-entrants-invalides)) |
 | `resetReason` | `DEVICE_RESTARTED` | `POWER_ON`, `EXTERNAL_RESET`, `SOFTWARE_RESET`, `WATCHDOG`, `PANIC`, `BROWNOUT` ou `UNKNOWN` |
 
 Un nouveau `connectionId` et un nouveau Last Will (nouveau `messageId`, nouvelle
@@ -111,7 +112,8 @@ relatif viserait le dépôt; les tests écrivent dans un répertoire temporaire.
 fier à `sessionPresent` : une session persistante peut exister sans ces
 abonnements (créée par SIM-01, par exemple). Une commande livrée avec le
 drapeau `retain`, c'est-à-dire rejouée depuis le stock retenu du broker à
-l'abonnement, n'est jamais exécutée (§7.2). Une publication `retain=true` faite
+l'abonnement, n'est jamais exécutée et est signalée (§7.2, voir
+[Messages entrants invalides](#messages-entrants-invalides)). Une publication `retain=true` faite
 pendant que le hub est abonné lui parvient avec `retain=false`
 [MQTT-3.3.1-9] : elle est traitée comme toute commande, et seul le backend
 peut l'éviter en ne publiant jamais de commande retenue. Pendant un arrêt
@@ -122,9 +124,9 @@ Validation, dans cet ordre (§9.1) :
 
 | Étape | Résultat si elle échoue |
 |---|---|
-| Taille ≤ 16 Kio, JSON objet, `messageId`, `operationId` et `compartmentId` en UUID canonique | Ignorée et journalisée localement : un `COMMAND_REJECTED` exige ces trois champs (§20) |
+| Taille ≤ 16 Kio, JSON objet, `messageId`, `operationId` et `compartmentId` en UUID canonique | Ignorée, signalée par `DEVICE_ERROR` `INBOUND_MESSAGE_INVALID` : un `COMMAND_REJECTED` exige ces trois champs (§20) |
 | `messageId` déjà dans le journal | Résultat connu republié : `COMMAND_ACKNOWLEDGED` `ALREADY_APPLIED` ou le même `COMMAND_REJECTED`, sans actionnement |
-| `schemaVersion` majeure 2 | `UNSUPPORTED_SCHEMA` (version absente ou mal formée : `INVALID_PAYLOAD`) |
+| `schemaVersion` majeure 3 | `UNSUPPORTED_SCHEMA`, notamment pour 2.0 et 1.0 (version absente ou mal formée : `INVALID_PAYLOAD`) |
 | `type`, `lockerId`, `issuedAt`, `expiresAt` valides, `expiresAt` > `issuedAt` | `INVALID_PAYLOAD` |
 | `lockerId` du hub | `WRONG_LOCKER` |
 | `compartmentId` d'une cellule configurée | `UNKNOWN_COMPARTMENT` |
@@ -219,9 +221,32 @@ remplace l'écran pour 30 s au plus, sans accusé positif.
 | Schéma, type, `lockerId`, cellule ou payload invalide | `INVALID_DISPLAY_PAYLOAD` |
 
 Un message non corrélable (sans `messageId`, `operationId` ou `compartmentId`
-valides) ou retenu est ignoré et journalisé localement. Le token et l'URI du QR
-ne sont jamais journalisés ni publiés. Seul l'accesseur `screen` de l'API les
-expose, pour qu'un test de bout en bout puisse « scanner » le QR.
+valides) ou retenu n'est pas affiché et est signalé comme une commande (voir
+ci-dessous). Une instruction 2.0 reçoit `INVALID_DISPLAY_PAYLOAD`. Le token et
+l'URI du QR ne sont jamais journalisés ni publiés. Seul l'accesseur `screen` de
+l'API les expose, pour qu'un test de bout en bout puisse « scanner » le QR.
+
+## Messages entrants invalides
+
+Depuis le schéma 3.0 (#98, doc 10 §13.2), un message `commands` ou `display`
+retenu, ou impossible à corréler (plus de 16 Kio, JSON illisible ou non objet,
+`messageId`, `operationId` ou `compartmentId` absent ou non canonique), n'est ni
+exécuté, ni affiché, ni journalisé. Le hub publie à la place un `DEVICE_ERROR`
+sur `events`, QoS 1, sans retain :
+
+- `errorCode` `INBOUND_MESSAGE_INVALID`, `severity` `WARNING`;
+- jamais d'`operationId`, ni le `messageId` du message reçu;
+- `compartmentId` seulement si ce champ est l'UUID canonique d'une cellule du hub;
+- un `detail` fait de textes fixes (topic, cas, cause parmi une liste fermée,
+  nombre de messages non signalés) : aucune valeur du payload, donc jamais le token.
+
+Limite de signalement (proposition #98 à confirmer) : au plus un signalement par
+topic et par cas (retenu, non corrélable) par fenêtre de 60 s, soit quatre par
+minute au plus. Les messages suivants sont comptés; le signalement suivant du même
+couple indique leur nombre dans `detail`. Le compteur repart à zéro à chaque
+démarrage. Une commande ou une instruction corrélable mais invalide, 2.0 comprise,
+garde son rejet habituel. Le simulateur mesure la fenêtre sur l'horloge de l'hôte
+(le firmware, sur son horloge monotone) : un recul de l'horloge clôt la fenêtre.
 
 ## Observations physiques
 
@@ -350,6 +375,7 @@ Les scénarios `*-local.json` fabriquent eux-mêmes leurs commandes
 | `negative-commands-local.json` | Mauvaise cellule, mauvais locker, commande expirée, redélivrance et seconde commande de la même opération (`ALREADY_APPLIED`), rejeu d'un accusé |
 | `missing-tag-reader-fault-local.json` | Retour sans l'actif (scan vide), lecteur en panne, rejeu d'un scan |
 | `restart-mid-operation-local.json` | Crash pendant l'actionnement puis `PREVIOUS_EXECUTION_UNCERTAIN`, redémarrage porte ouverte |
+| `invalid-inbound-local.json` | Commande retenue, messages non corrélables signalés dans la limite, commande 2.0 refusée, puis l'opération de la commande retenue exécutée normalement |
 | `checkout-with-backend.json` | Attend le déverrouillage décidé par un vrai backend, puis retire l'actif et referme |
 
 | Étape | Effet |
@@ -371,7 +397,8 @@ Les scénarios `*-local.json` fabriquent eux-mêmes leurs commandes
 | `{ "do": "setClock", "synchronized": false }` / `{ "do": "setScreen", "available": false }` | Horloge non synchronisée, écran coupé |
 | `{ "do": "armFault", "fault": "CRASH_DURING_ACTUATION" }` | La prochaine commande valide fait planter le hub après l'actionnement (ou `LOCK_ACTUATION_FAILED`) |
 | `{ "do": "waitUnlocked", "code": "A1", "timeoutMs": 600000 }` | Attendre qu'une commande déverrouille la cellule |
-| `{ "do": "receiveCommand", "ref": "c1", "compartment": "A1", "operation": "op1", "expiresInMs": 120000 }` | Commande fabriquée localement, livrée comme par le broker; options `compartmentId` (UUID brut), `lockerId`, `issuedInMs`, `schemaVersion` |
+| `{ "do": "receiveCommand", "ref": "c1", "compartment": "A1", "operation": "op1", "expiresInMs": 120000 }` | Commande fabriquée localement, livrée comme par le broker; options `compartmentId` (UUID brut), `lockerId`, `issuedInMs`, `schemaVersion`, `retained` (livrée avec le drapeau `retain`) |
+| `{ "do": "receiveRaw", "channel": "commands", "body": "{not json" }` | Octets bruts livrés sur `commands` ou `display`; option `retained` |
 | `{ "do": "redeliverCommand", "ref": "c1" }` | Redélivrance des mêmes octets |
 
 `restart` passe par un arrêt brutal : le broker publie le Will de la connexion
@@ -439,7 +466,7 @@ AEGIS_MQTT_API_PASSWORD="$(grep '^AEGIS_MQTT_API_PASSWORD=' ../../infra/docker/.
   npm run test:integration
 ```
 
-`npm test` vérifie la construction des messages contre le schéma 2.0 (champs,
+`npm test` vérifie la construction des messages contre le schéma 3.0 (champs,
 types, topics, QoS, retain, `sequence`, `bootCount`, `connectionId`, `reason`,
 `resetReason`, cadence de 10 s, backoff), la persistance de `bootCount` dans un
 répertoire temporaire et le rejeu, avec un transport simulé et une horloge
@@ -467,6 +494,11 @@ session persistante de son propre `clientId` :
   et opération concurrente sont rejetées sans actionnement;
 - un défi d'écran est affiché et acquitté sans son token; une instruction pour
   un autre démarrage est refusée;
+- une commande retenue sur le broker, une instruction d'écran non corrélable
+  portant un token et deux commandes illisibles donnent trois
+  `INBOUND_MESSAGE_INVALID`, sans token ni `operationId`, et rien n'est actionné.
+  Ces messages sont publiés en QoS 0, pour qu'aucune session hors ligne ne les
+  garde, et le message retenu est effacé à la fin du test;
 - un crash pendant l'actionnement laisse la commande sans PUBACK : le broker la
   redélivre après le redémarrage et le hub répond
   `PREVIOUS_EXECUTION_UNCERTAIN`, sans second actionnement;
@@ -484,22 +516,21 @@ Les points relevés par SIM-01 (liste de `resetReason`, raison `SHUTDOWN`,
 `sequence` du Will, QoS de `DEVICE_RESTARTED`) sont tranchés par #63 (D1 à D7)
 et appliqués ici. Restent hors du simulateur :
 
-- les cas de rejet de l'ingestion (message 1.0, `resetReason` hors liste, champ
-  manquant), que le simulateur n'émet pas;
+- les cas de rejet de l'ingestion (message 1.0 ou 2.0, `resetReason` hors liste,
+  champ manquant), que le simulateur n'émet pas;
 - un silence de heartbeats sans Will sur une connexion ouverte (§23.5 point 10) :
   le simulateur ne sait pas suspendre ses heartbeats en gardant la connexion;
-- les codes `DEVICE_ERROR` autres que `STORAGE_FAULT` (§13.2) : le document 10
-  ne dit pas quand les émettre, et `INBOUND_MESSAGE_INVALID` attend le schéma
-  3.0 (#98).
+- les codes `DEVICE_ERROR` autres que `STORAGE_FAULT` et
+  `INBOUND_MESSAGE_INVALID` (§13.2) : le document 10 ne dit pas quand les émettre.
 
 Les choix de SIM-02 là où le document 10 ne tranchait pas sont maintenant des
 décisions du document 10 (version 1.5, #39) :
 
 - une commande ou une instruction d'écran livrée avec le drapeau `retain` est
-  ignorée sans réponse et sans entrée de journal (§7.2);
-- un message non corrélable n'est pas publié (§20). Son signalement par un
-  `DEVICE_ERROR` `INBOUND_MESSAGE_INVALID`, comme celui d'un message retenu,
-  arrive avec le schéma 3.0 (#98);
+  ignorée sans réponse ni entrée de journal (§7.2); depuis le schéma 3.0 (#98),
+  elle est signalée par `INBOUND_MESSAGE_INVALID`, comme un message non
+  corrélable (§13.2, §20). La limite de signalement de 60 s par topic et par cas
+  est une proposition à confirmer;
 - la déduplication passe avant l'expiration : une redélivrance tardive reçoit le
   résultat connu, pas `COMMAND_EXPIRED` (§9.1, §10.1);
 - un rejet est rejoué à l'identique, même si sa cause a disparu : le backend
