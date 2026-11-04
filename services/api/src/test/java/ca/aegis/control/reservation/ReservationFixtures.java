@@ -13,7 +13,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * Catalog, locker, schedule and custody rows inserted directly: lockers and loans have no creation route in P0, and
  * the reservation tests must not depend on the catalog routes they do not exercise.
  */
-final class ReservationFixtures {
+public final class ReservationFixtures {
 
     /** Every day open from 08:00 to 17:00 in Toronto: 12:00Z to 21:00Z on 28 September 2026 (EDT). */
     static final String OPENS_AT = "08:00";
@@ -27,7 +27,7 @@ final class ReservationFixtures {
     private final String suffix = UUID.randomUUID().toString().substring(0, 8);
     private int sequence;
 
-    ReservationFixtures(JdbcClient jdbc) {
+    public ReservationFixtures(JdbcClient jdbc) {
         this.jdbc = jdbc;
     }
 
@@ -36,7 +36,7 @@ final class ReservationFixtures {
                 .param("name", "Modèle réservation " + suffix + "-" + next()).query(UUID.class).single();
     }
 
-    UUID locker() {
+    public UUID locker() {
         return jdbc.sql("""
                 INSERT INTO aegis.lockers (code, name, topology) VALUES (:code, 'Casier réservation', 'HUB_CELL')
                 RETURNING id
@@ -44,13 +44,13 @@ final class ReservationFixtures {
     }
 
     /** A locker with every day open from {@link #OPENS_AT} to {@link #CLOSES_AT} in America/Toronto. */
-    UUID scheduledLocker(UUID creator) {
+    public UUID scheduledLocker(UUID creator) {
         UUID locker = locker();
         schedule(locker, creator, true);
         return locker;
     }
 
-    void schedule(UUID locker, UUID creator, boolean open) {
+    public void schedule(UUID locker, UUID creator, boolean open) {
         UUID schedule = jdbc.sql("""
                 INSERT INTO aegis.operating_schedules (locker_id, time_zone, created_by_user_id)
                 VALUES (:locker, 'America/Toronto', :creator)
@@ -93,15 +93,7 @@ final class ReservationFixtures {
                 .query(UUID.class)
                 .single();
         if (locker != null) {
-            UUID compartment = jdbc.sql("""
-                    INSERT INTO aegis.compartments (locker_id, code, local_address, hub_port)
-                    VALUES (:locker, :code, :port, :port)
-                    RETURNING id
-                    """).param("locker", locker).param("code", "C" + n).param("port", n).query(UUID.class).single();
-            jdbc.sql("""
-                    INSERT INTO aegis.asset_placements (asset_id, compartment_id, reason, assigned_at)
-                    VALUES (:asset, :compartment, 'Test', :past)
-                    """).param("asset", asset).param("compartment", compartment).param("past", utc(PAST)).update();
+            place(asset, locker, "C" + n, n);
         }
         jdbc.sql("""
                 INSERT INTO aegis.asset_identifiers (asset_id, identifier_type, identifier_value, assigned_at)
@@ -110,7 +102,26 @@ final class ReservationFixtures {
         return asset;
     }
 
-    UUID reservation(UUID asset, UUID user, String status, Instant from, Instant until) {
+    /** A serviceable asset placed in a new compartment of {@code locker} at {@code address}, also its hub port. */
+    public UUID assetAt(UUID locker, int address) {
+        UUID asset = asset(null);
+        place(asset, locker, "T" + suffix + "-" + address, address);
+        return asset;
+    }
+
+    private void place(UUID asset, UUID locker, String code, int address) {
+        UUID compartment = jdbc.sql("""
+                INSERT INTO aegis.compartments (locker_id, code, local_address, hub_port)
+                VALUES (:locker, :code, :port, :port)
+                RETURNING id
+                """).param("locker", locker).param("code", code).param("port", address).query(UUID.class).single();
+        jdbc.sql("""
+                INSERT INTO aegis.asset_placements (asset_id, compartment_id, reason, assigned_at)
+                VALUES (:asset, :compartment, 'Test', :past)
+                """).param("asset", asset).param("compartment", compartment).param("past", utc(PAST)).update();
+    }
+
+    public UUID reservation(UUID asset, UUID user, String status, Instant from, Instant until) {
         String terminal = switch (status) {
             case "ACTIVE" -> "";
             case "FULFILLED" -> ", fulfilled_at";
@@ -131,7 +142,7 @@ final class ReservationFixtures {
     }
 
     /** An open loan of {@code holder}, born from a confirmed checkout of a fulfilled reservation. */
-    UUID loan(UUID asset, UUID holder, Instant at) {
+    public UUID loan(UUID asset, UUID holder, Instant at) {
         UUID reservation = reservation(asset, holder, "FULFILLED", at, at.plusSeconds(3600));
         UUID checkout = checkout(asset, holder, reservation, "CONFIRMED", at);
         return jdbc.sql("""

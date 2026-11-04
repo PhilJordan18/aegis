@@ -6,8 +6,9 @@ simulateur, Spring Boot, Flyway, `GET /api/v1/system/health`, la connexion par
 comptes préparés (`POST /api/v1/auth/login`, `GET /api/v1/auth/me`), les
 contrôles de rôle et de niveau d'accès côté serveur et l'administration des
 modèles et des actifs (document 09, sections 12.1 et 12.2), dont les mutations
-sont auditées (AUD-00). Il n'implémente pas
-encore les identifiants physiques, les placements ni l'ingestion MQTT. Les
+sont auditées (AUD-00). Les sections suivantes décrivent les tranches
+ajoutées depuis : identifiants physiques et placements, horaires, catalogue
+technicien et readiness, réservations, ingestion MQTT et état du casier. Les
 clients Web et iOS ont leur propre dossier sous `apps/`.
 
 ## Prérequis
@@ -354,6 +355,49 @@ version MQTT qu'il encode. `IotEvidenceSchemaTests` vérifie les contraintes,
 le claim concurrent de la section 9.2, la déduplication concurrente d'un
 message, l'unicité concurrente d'une anomalie active et les droits.
 
+## Ingestion MQTT et état du casier (PHY-01)
+
+Avec `AEGIS_MQTT_ENABLED=true` et `AEGIS_MQTT_API_PASSWORD`, l'API s'abonne
+en QoS 1 à `aegis/v1/lockers/+/events` et `+/status` sous le compte
+`aegis_api`, et `GET /api/v1/lockers/{lockerId}/status` expose l'état dérivé
+des heartbeats. La session MQTT est toujours persistante (`cleanSession`
+faux) : l'ancienne propriété `aegis.mqtt.clean-session` n'existe plus. Un
+message n'est acquitté qu'après la validation de sa transaction. Si son
+ingestion échoue encore après ses nouvelles tentatives, les livraisons
+suivantes restent non acquittées, puis le client se déconnecte et se
+reconnecte avec un délai croissant de 1 à 30 s. Le broker renvoie alors les
+messages retenus dans leur ordre, et la déduplication absorbe ceux déjà
+enregistrés. Un message refusé par une contrainte de la base est seulement
+journalisé, avec son SQLState, le nom de la contrainte et son identifiant.
+
+### Compte MQTT du hub de test
+
+Les tests du broker (`MqttIngestionBrokerTests`) ne publient jamais sous
+l'identité du casier de démonstration. Ils utilisent un casier fictif
+réservé aux tests, `AEGIS-TEST-HUB`
+(`f08e3bc1-a0c6-4870-a6f6-55d9e9ddd502`), qu'ils provisionnent eux-mêmes
+dans leur base temporaire. Son compte Mosquitto porte cet identifiant, son
+mot de passe vient de `AEGIS_MQTT_TEST_DEVICE_PASSWORD` dans le fichier
+`--env-file`, et `infra/mqtt/acl` ne lui ouvre que ses quatre topics. Les
+tests lisent par défaut `infra/docker/.env.example`; les variables
+`AEGIS_TEST_MQTT_HOST`, `AEGIS_TEST_MQTT_PORT`,
+`AEGIS_TEST_MQTT_API_PASSWORD` et `AEGIS_TEST_MQTT_DEVICE_PASSWORD` les
+remplacent. Chaque exécution utilise un identifiant client unique et efface sa
+session à la fin.
+
+Un broker local créé avant ce compte doit être recréé une fois, depuis la
+racine du dépôt, sans supprimer de volume :
+
+```bash
+docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml up -d --wait
+```
+
+Le conteneur `mqtt-auth-init` ajoute alors le compte au fichier de mots de
+passe existant. Sans `AEGIS_MQTT_TEST_DEVICE_PASSWORD` dans le fichier
+d'environnement, la pile démarre sans ce compte et les tests du broker
+échouent : ajoutez la variable pour les exécuter. Le compte et le simulateur du
+casier de démonstration ne changent pas.
+
 ## Catalogue technicien et readiness (RDY-01, RDY-02)
 
 `GET /api/v1/assets` et `GET /api/v1/assets/{assetId}` sont réservés au rôle
@@ -625,7 +669,8 @@ démarrage (voir « Rôles PostgreSQL »).
 PostgreSQL et Mosquitto sont publiés uniquement sur `127.0.0.1`. Le broker
 non chiffré est réservé au simulateur local isolé. Un hub réel, même au labo,
 exigera TLS avec certificat vérifié et ses propres identifiants. Les ACL de
-cette étape autorisent seulement l'identité fictive du contrat MQTT.
+cette étape autorisent seulement l'identité fictive du contrat MQTT et celle
+du hub de test.
 
 ## Limites connues de cette étape
 

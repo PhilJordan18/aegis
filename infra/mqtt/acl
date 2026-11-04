@@ -10,3 +10,10 @@ topic read aegis/v1/lockers/d46a74ae-39dc-460b-8af0-38fc791b376a/commands
 topic read aegis/v1/lockers/d46a74ae-39dc-460b-8af0-38fc791b376a/display
 topic write aegis/v1/lockers/d46a74ae-39dc-460b-8af0-38fc791b376a/events
 topic write aegis/v1/lockers/d46a74ae-39dc-460b-8af0-38fc791b376a/status
+
+# Fixed fictitious locker identity of the backend broker tests only, so that they never publish as the demo hub.
+user f08e3bc1-a0c6-4870-a6f6-55d9e9ddd502
+topic read aegis/v1/lockers/f08e3bc1-a0c6-4870-a6f6-55d9e9ddd502/commands
+topic read aegis/v1/lockers/f08e3bc1-a0c6-4870-a6f6-55d9e9ddd502/display
+topic write aegis/v1/lockers/f08e3bc1-a0c6-4870-a6f6-55d9e9ddd502/events
+topic write aegis/v1/lockers/f08e3bc1-a0c6-4870-a6f6-55d9e9ddd502/status

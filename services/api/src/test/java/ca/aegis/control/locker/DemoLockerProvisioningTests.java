@@ -44,6 +44,16 @@ class DemoLockerProvisioningTests extends ApiIntegrationTest {
     }
 
     @Test
+    void theDemoHubDeviceIsCreatedOnceForTheSimulator() {
+        provisioner.provision();
+
+        assertEquals(List.of(Map.of("device_key", "sim-d46a74ae-39dc-460b-8af0-38fc791b376a",
+                "firmware_version", "0.1.0-sim")), jdbc.sql("""
+                SELECT device_key, firmware_version FROM aegis.locker_devices WHERE locker_id = :locker
+                """).param("locker", DemoLockerProvisioner.LOCKER_ID).query().listOfRows());
+    }
+
+    @Test
     void provisioningAgainKeepsTheRowsAndAnAdministratorsChange() {
         jdbc.sql("UPDATE aegis.compartments SET enabled = false WHERE code = 'A2' AND locker_id = :locker")
                 .param("locker", DemoLockerProvisioner.LOCKER_ID).update();
@@ -87,7 +97,7 @@ class DemoLockerProvisioningTests extends ApiIntegrationTest {
     private List<String> cells() {
         return jdbc.sql("""
                 SELECT id || ' ' || code || ' ' || local_address || ' ' || hub_port || ' ' || enabled
-                FROM aegis.compartments WHERE locker_id = :locker ORDER BY code
+                FROM aegis.compartments WHERE locker_id = :locker AND code IN ('A1', 'A2') ORDER BY code
                 """).param("locker", DemoLockerProvisioner.LOCKER_ID).query(String.class).list();
     }
 }
