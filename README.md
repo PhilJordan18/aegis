@@ -126,7 +126,7 @@ La cible finale est **10 retraits et 10 retours consécutifs**, sans interventio
 | `services/api/` | API Spring Boot et migrations Flyway |
 | `firmware/locker-controller/` | Firmware du hub et des cellules |
 | `tools/hub-simulator/` | Simulateur MQTT du hub (Node/TypeScript) pour développer et tester sans le locker |
-| `infra/docker/`, `infra/mqtt/` | Environnement reproductible et broker |
+| `infra/docker/`, `infra/mqtt/` | Environnement reproductible et broker ([TLS, identités des hubs et ACL](infra/mqtt/README.md)) |
 | `docs/cahier-conception/` | Documents 02–15 ci-dessous |
 | `docs/architecture/`, `docs/diagrams/`, `docs/research/` | Dessins, sources des diagrammes et résultats de POC |
 | `docs/journal/`, `docs/meetings/` | Travail réellement effectué et décisions de réunion |

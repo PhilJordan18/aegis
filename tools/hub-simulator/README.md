@@ -330,7 +330,7 @@ docker compose --env-file infra/docker/.env.example -f infra/docker/compose.yaml
 | `AEGIS_MQTT_URL` | `mqtt://127.0.0.1:1883` | Broker; `mqtt:` est refusé hors boucle locale |
 | `AEGIS_MQTT_DEVICE_USERNAME` | le `lockerId` | Utilisateur MQTT du device |
 | `AEGIS_MQTT_CA_FILE` | aucun | CA à valider pour `mqtts:` |
-| `AEGIS_SIM_LOCKER_ID` | `d46a74ae-39dc-460b-8af0-38fc791b376a` | Locker fictif de `infra/mqtt/acl` |
+| `AEGIS_SIM_LOCKER_ID` | `d46a74ae-39dc-460b-8af0-38fc791b376a` | Locker fictif dont le compte est créé par `mqtt-auth-init` |
 | `AEGIS_SIM_DEVICE_KEY` | `sim-<lockerId>` | `clientId` = `aegis-locker-<deviceKey>` |
 | `AEGIS_SIM_COMPARTMENTS` | `A1:1ae77ae3-…:1,A2:5c1d0b7e-…:2` | `code:compartmentId:cellAddress`, séparés par des virgules |
 | `AEGIS_SIM_FIRMWARE_VERSION` | `0.1.0-sim` | `firmwareVersion` déclaré |
@@ -475,6 +475,10 @@ d'écran, la déduplication (redélivrance, seconde commande d'une opération,
 redémarrage, nouveau processus), le crash pendant l'actionnement, les
 événements de porte, serrure et RFID, le journal et les scénarios `*-local.json`.
 Désactiver l'une ou l'autre des deux déduplications fait échouer ces tests.
+
+Avec `AEGIS_MQTT_URL=mqtts://localhost:8883` et `AEGIS_MQTT_CA_FILE`, les tests de
+`test/integration/broker.test.ts` passent par l'écouteur TLS (voir
+[le guide du broker](../../infra/mqtt/README.md)).
 
 `npm run test:integration` utilise le broker local, observé comme `aegis_api`,
 fichier par fichier. Chaque test de commande efface au début et à la fin la
