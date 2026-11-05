@@ -1,6 +1,7 @@
 // Runs against the local Mosquitto of infra/docker/compose.yaml. Credentials come from
 // the environment, e.g. `set -a; . ../../infra/docker/.env.example; set +a`.
 import { spawn, type ChildProcess } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { once } from 'node:events';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -16,6 +17,8 @@ import { HubSimulator } from '../../src/simulator.ts';
 const BROKER = process.env.AEGIS_MQTT_URL ?? 'mqtt://127.0.0.1:1883';
 const DEVICE_PASSWORD = process.env.AEGIS_MQTT_DEVICE_PASSWORD;
 const API_PASSWORD = process.env.AEGIS_MQTT_API_PASSWORD;
+// Set with an mqtts: AEGIS_MQTT_URL to run the same checks over the TLS listener.
+const CA_FILE = process.env.AEGIS_MQTT_CA_FILE;
 const STATUS = `aegis/v1/lockers/${DEFAULT_LOCKER_ID}/status`;
 const EVENTS = `aegis/v1/lockers/${DEFAULT_LOCKER_ID}/events`;
 const STATUS_FACTS = new Set(['DEVICE_AVAILABILITY', 'DEVICE_RESTARTED', 'HEARTBEAT']);
@@ -39,6 +42,7 @@ async function observe(): Promise<{ client: MqttClient; live: Received[]; retain
     password: API_PASSWORD!,
     clean: true,
     reconnectPeriod: 0,
+    ...(CA_FILE ? { ca: readFileSync(CA_FILE), rejectUnauthorized: true } : {}),
   });
   const live: Received[] = [];
   const retained: Received[] = [];
@@ -83,6 +87,7 @@ beforeAll(async () => {
     password: DEVICE_PASSWORD,
     clean: true,
     reconnectPeriod: 0,
+    ...(CA_FILE ? { ca: readFileSync(CA_FILE), rejectUnauthorized: true } : {}),
   });
   await client.endAsync();
 });
@@ -108,6 +113,7 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
         AEGIS_MQTT_DEVICE_PASSWORD: DEVICE_PASSWORD,
         AEGIS_SIM_BOOT_COUNT_FILE: join(stateDir, 'cli-boot-counts.json'),
         AEGIS_SIM_COMMAND_JOURNAL_FILE: join(stateDir, 'cli-journal.json'),
+        ...(CA_FILE ? { AEGIS_MQTT_CA_FILE: CA_FILE } : {}),
       },
       stdio: ['ignore', 'pipe', 'inherit'],
     });
@@ -184,6 +190,7 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
         password: DEVICE_PASSWORD!,
         bootCountFile: join(stateDir, 'api-loss.json'),
         commandJournalFile: join(stateDir, 'api-loss-journal.json'),
+        ...(CA_FILE ? { caFile: CA_FILE } : {}),
       }),
     );
     const wills: string[] = [];
@@ -279,6 +286,7 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
         bootCountFile: join(stateDir, 'api-restart.json'),
         commandJournalFile: join(stateDir, 'api-restart-journal.json'),
         firstBootCount: 9,
+        ...(CA_FILE ? { caFile: CA_FILE } : {}),
       }),
     );
     try {
@@ -331,6 +339,7 @@ describe.skipIf(!DEVICE_PASSWORD || !API_PASSWORD)('against the local broker', (
         password: 'definitely-wrong',
         bootCountFile: join(stateDir, 'wrong-secret.json'),
         commandJournalFile: join(stateDir, 'wrong-secret-journal.json'),
+        ...(CA_FILE ? { caFile: CA_FILE } : {}),
       }),
     );
     const errors: string[] = [];

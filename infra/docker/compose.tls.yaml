@@ -1,0 +1,63 @@
+# TLS listener 8883 for the real hub. Requires lab certificates, see
+# infra/mqtt/README.md. Use on top of compose.yaml:
+#   docker compose --env-file <env> -f infra/docker/compose.yaml -f infra/docker/compose.tls.yaml up -d --wait
+services:
+  mqtt-tls-init:
+    image: eclipse-mosquitto:2@sha256:38c0da4f2ef84284d47b3b3eeea1cb3bdeabe81ee10caf0cd5c5ff61ee3ea408
+    entrypoint: ["sh", "-ec"]
+    # The bind-mounted key keeps its host owner and mode 0600; mosquitto runs as
+    # uid 1883 and could not read it. Copy it into a volume owned by that uid.
+    command:
+      - |
+        # Off loopback, the example passwords published in Git would let anyone
+        # on the LAN log in as aegis_api. Refuse; never print the values.
+        case "$$AEGIS_MQTT_TLS_BIND" in
+          127.*|::1|'[::1]'|localhost) ;;
+          *)
+            for v in "$$AEGIS_MQTT_API_PASSWORD" "$$AEGIS_MQTT_DEVICE_PASSWORD"; do
+              case "$$v" in
+                *change-me)
+                  echo "8883 is published on a non-loopback address with an example MQTT password; use infra/docker/.env with generated passwords (infra/mqtt/README.md)" >&2
+                  exit 1 ;;
+              esac
+            done ;;
+        esac
+        for f in ca.crt server.crt server.key; do
+          if [ ! -s "/certs-src/$$f" ]; then
+            echo "missing $$f in the certificate directory; run infra/mqtt/certs/generate-lab-certs.sh" >&2
+            exit 1
+          fi
+        done
+        cp /certs-src/ca.crt /certs-src/server.crt /certs-src/server.key /mosquitto/certs/
+        chown 1883:1883 /mosquitto/certs/ca.crt /mosquitto/certs/server.crt /mosquitto/certs/server.key
+        chmod 0444 /mosquitto/certs/ca.crt /mosquitto/certs/server.crt
+        chmod 0400 /mosquitto/certs/server.key
+    environment:
+      AEGIS_MQTT_TLS_BIND: ${AEGIS_MQTT_TLS_BIND:-127.0.0.1}
+      AEGIS_MQTT_API_PASSWORD: ${AEGIS_MQTT_API_PASSWORD:?Set AEGIS_MQTT_API_PASSWORD in the env file}
+      AEGIS_MQTT_DEVICE_PASSWORD: ${AEGIS_MQTT_DEVICE_PASSWORD:?Set AEGIS_MQTT_DEVICE_PASSWORD in the env file}
+    volumes:
+      - type: bind
+        source: ${AEGIS_MQTT_CERT_DIR:-../mqtt/certs/lab/broker}
+        target: /certs-src
+        read_only: true
+        bind:
+          create_host_path: false
+      - mqtt_tls:/mosquitto/certs
+    restart: "no"
+
+  mosquitto:
+    depends_on:
+      mqtt-tls-init:
+        condition: service_completed_successfully
+    ports:
+      # Loopback by default. Exposing the hub listener on the LAN is an explicit
+      # choice: set AEGIS_MQTT_TLS_BIND to the laptop's LAN address.
+      - "${AEGIS_MQTT_TLS_BIND:-127.0.0.1}:${AEGIS_MQTT_TLS_PORT:-8883}:8883"
+    volumes:
+      # Same target as compose.yaml: replaces the empty no-tls/ with the TLS listener.
+      - ../mqtt/tls:/mosquitto/config/conf.d:ro
+      - mqtt_tls:/mosquitto/certs:ro
+
+volumes:
+  mqtt_tls:

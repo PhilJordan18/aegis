@@ -1,19 +1,27 @@
+# ACL of doc 10 §6. Anything not granted here is denied (§6.3).
+
+# Backend account, distinct from every device account (§6.2).
 user aegis_api
 topic write aegis/v1/lockers/+/commands
 topic write aegis/v1/lockers/+/display
 topic read aegis/v1/lockers/+/events
 topic read aegis/v1/lockers/+/status
+# The %u patterns below also apply to this account. Deny their aegis_api
+# expansion, so the backend cannot publish an "event" or "status" that its own
+# +/events and +/status subscriptions would ingest. Exact topics only: on
+# Mosquitto 2.1.2 a wildcard deny (aegis/v1/lockers/aegis_api/#) also blocked
+# delivery on the backend's +/events subscription.
+topic deny aegis/v1/lockers/aegis_api/commands
+topic deny aegis/v1/lockers/aegis_api/display
+topic deny aegis/v1/lockers/aegis_api/events
+topic deny aegis/v1/lockers/aegis_api/status
 
-# Fixed fictitious locker identity from the MQTT contract, simulator only.
-user d46a74ae-39dc-460b-8af0-38fc791b376a
-topic read aegis/v1/lockers/d46a74ae-39dc-460b-8af0-38fc791b376a/commands
-topic read aegis/v1/lockers/d46a74ae-39dc-460b-8af0-38fc791b376a/display
-topic write aegis/v1/lockers/d46a74ae-39dc-460b-8af0-38fc791b376a/events
-topic write aegis/v1/lockers/d46a74ae-39dc-460b-8af0-38fc791b376a/status
-
-# Fixed fictitious locker identity of the backend broker tests only, so that they never publish as the demo hub.
-user f08e3bc1-a0c6-4870-a6f6-55d9e9ddd502
-topic read aegis/v1/lockers/f08e3bc1-a0c6-4870-a6f6-55d9e9ddd502/commands
-topic read aegis/v1/lockers/f08e3bc1-a0c6-4870-a6f6-55d9e9ddd502/display
-topic write aegis/v1/lockers/f08e3bc1-a0c6-4870-a6f6-55d9e9ddd502/events
-topic write aegis/v1/lockers/f08e3bc1-a0c6-4870-a6f6-55d9e9ddd502/status
+# Device accounts (§6.1). A hub's MQTT username is its lockerId, so %u confines
+# each hub to its own locker without one ACL block per device. Mosquitto applies
+# patterns to every user; their aegis_api expansion is denied above.
+# infra/mqtt/provision-device.sh only creates usernames that are canonical
+# lowercase UUIDs.
+pattern read aegis/v1/lockers/%u/commands
+pattern read aegis/v1/lockers/%u/display
+pattern write aegis/v1/lockers/%u/events
+pattern write aegis/v1/lockers/%u/status
