@@ -57,7 +57,8 @@ cp firmware/locker-controller/secrets.h.example firmware/locker-controller/secre
 Fill in `secrets.h` (it is git-ignored, never commit it): Wi-Fi, broker host (it must
 match a `subjectAltName` of the broker certificate), `LOCKER_ID`, the device password
 and the lab CA certificate. The broker's TLS listener, the lab CA and the device
-account come from issue #24 (INF-01); they are not on `dev` yet.
+account come from issue #24 (INF-01): see the [broker guide](../../infra/mqtt/README.md)
+to generate the lab CA, start the 8883 listener and provision the hub account.
 
 ## Build and flash
 
