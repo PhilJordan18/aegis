@@ -2,11 +2,13 @@ import { lazy, Suspense, useEffect, type ComponentType } from 'react'
 import { SignInPage } from '../features/auth/SignInPage'
 import { EquipmentPage } from '../pages/EquipmentPage'
 import { LandingPage } from '../pages/LandingPage'
+import { LockersPage } from '../pages/LockersPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
+import { useI18n } from '../i18n/useI18n'
 import { useSignInPreviewScenario } from '../preview/PreviewContext'
 import { RequireAdminSession } from './RequireAdminSession'
 import { useLocation } from './router'
-import { matchRoute, pathOf, ROUTES, type RouteId } from './routes'
+import { matchRoute, pathOf, type RouteId } from './routes'
 
 // `__AEGIS_PREVIEW__` is a build-time literal: production builds drop these chunks.
 const EquipmentPreviewPage: ComponentType | null = __AEGIS_PREVIEW__ ? lazy(() => import('../preview/EquipmentPreviewPage')) : null
@@ -18,10 +20,13 @@ const AFTER_SIGN_IN_PATH = pathOf(__AEGIS_PREVIEW__ ? 'equipmentPreview' : 'equi
 export function App() {
   const { pathname } = useLocation()
   const routeId = matchRoute(pathname, __AEGIS_PREVIEW__)
+  const { m } = useI18n()
+  const title = m.pageTitle[routeId]
 
+  // The title follows both the route and the language.
   useEffect(() => {
-    document.title = ROUTES[routeId].title
-  }, [routeId])
+    document.title = title
+  }, [title])
 
   return (
     <>
@@ -45,6 +50,8 @@ function Page({ routeId }: { readonly routeId: RouteId }) {
       return <SignInPage key={scenario ?? 'default'} afterSignInPath={AFTER_SIGN_IN_PATH} />
     case 'equipment':
       return <RequireAdminSession>{(profile) => <EquipmentPage sessionProfile={profile} />}</RequireAdminSession>
+    case 'lockers':
+      return <RequireAdminSession>{(profile) => <LockersPage sessionProfile={profile} />}</RequireAdminSession>
     case 'equipmentPreview':
       return EquipmentPreviewPage ? (
         <Suspense fallback={null}>

@@ -1,0 +1,1848 @@
+{
+  "sourceLanguage" : "fr",
+  "strings" : {
+    "+ %lld autre raison" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "+ %lld more reason"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "+ %lld more reasons"
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "+ %lld autre raison"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "+ %lld autres raisons"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Absent de sa cellule" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not in its compartment"
+          }
+        }
+      }
+    },
+    "Accès réservé aux techniciens" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Technicians only"
+          }
+        }
+      }
+    },
+    "Actualiser" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh"
+          }
+        }
+      }
+    },
+    "Administrateur" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Administrator"
+          }
+        }
+      }
+    },
+    "Adresse : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Address: %@"
+          }
+        }
+      }
+    },
+    "Adresse courriel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Email address"
+          }
+        }
+      }
+    },
+    "Adresse courriel ou mot de passe incorrect." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Incorrect email address or password."
+          }
+        }
+      }
+    },
+    "Adresse du service absente" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service address missing"
+          }
+        }
+      }
+    },
+    "Afficher le mot de passe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show password"
+          }
+        }
+      }
+    },
+    "Annulation…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelling…"
+          }
+        }
+      }
+    },
+    "Annuler la réservation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel reservation"
+          }
+        }
+      }
+    },
+    "Annuler la réservation de %@ ?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel the reservation of %@?"
+          }
+        }
+      }
+    },
+    "Aucun placement connu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No known placement"
+          }
+        }
+      }
+    },
+    "Aucun équipement ne correspond." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No equipment matches."
+          }
+        }
+      }
+    },
+    "Aucun équipement n’est encore disponible." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No equipment is available yet."
+          }
+        }
+      }
+    },
+    "Aucune heure disponible aujourd’hui." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No time available today."
+          }
+        }
+      }
+    },
+    "Aucune réservation en cours." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No reservation in progress."
+          }
+        }
+      }
+    },
+    "Aucune réservation ni prêt en cours." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No reservation or loan in progress."
+          }
+        }
+      }
+    },
+    "Bloqué" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blocked"
+          }
+        }
+      }
+    },
+    "Calibration" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calibration"
+          }
+        }
+      }
+    },
+    "Calibration expirée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calibration expired"
+          }
+        }
+      }
+    },
+    "Calibration expirée depuis le %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calibration expired on %@"
+          }
+        }
+      }
+    },
+    "Ce compte administrateur s’utilise dans Aegis Manager sur le Web. Aucune donnée n’a été chargée." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This administrator account is used in Aegis Manager on the web. No data was loaded."
+          }
+        }
+      }
+    },
+    "Ce compte n’a pas accès à l’application Aegis. Aucune donnée n’a été chargée." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This account can't use the Aegis app. No data was loaded."
+          }
+        }
+      }
+    },
+    "Cellule" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartment"
+          }
+        }
+      }
+    },
+    "Cellule %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartment %@"
+          }
+        }
+      }
+    },
+    "Cet équipement est emprunté." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This equipment is borrowed."
+          }
+        }
+      }
+    },
+    "Cet équipement n’est plus disponible." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This equipment is no longer available."
+          }
+        }
+      }
+    },
+    "Cette réservation ne peut plus être annulée." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This reservation can no longer be cancelled."
+          }
+        }
+      }
+    },
+    "Cette réservation n’est plus disponible." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This reservation is no longer available."
+          }
+        }
+      }
+    },
+    "Cette version de l’application ne reconnaît pas cette information." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This version of the app doesn't recognize this information."
+          }
+        }
+      }
+    },
+    "Cette version de l’application n’a pas d’adresse de service valide." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This version of the app has no valid service address."
+          }
+        }
+      }
+    },
+    "Chargement de l’équipement" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading equipment details"
+          }
+        }
+      }
+    },
+    "Chargement de votre activité" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading your activity"
+          }
+        }
+      }
+    },
+    "Chargement des équipements" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading equipment"
+          }
+        }
+      }
+    },
+    "Choisissez un autre équipement." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose another piece of equipment."
+          }
+        }
+      }
+    },
+    "Choisissez une heure avant la fermeture." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a time before closing."
+          }
+        }
+      }
+    },
+    "Choisissez une heure plus tardive." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a later time."
+          }
+        }
+      }
+    },
+    "Code ou modèle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code or model"
+          }
+        }
+      }
+    },
+    "Compte" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account"
+          }
+        }
+      }
+    },
+    "Compte fourni par votre administrateur." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account provided by your administrator."
+          }
+        }
+      }
+    },
+    "Compte utilisé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account used"
+          }
+        }
+      }
+    },
+    "Confirmer la réservation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm reservation"
+          }
+        }
+      }
+    },
+    "Connexion" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in"
+          }
+        }
+      }
+    },
+    "Connexion au service impossible" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't reach the service"
+          }
+        }
+      }
+    },
+    "Connexion au service impossible." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can’t connect to the service."
+          }
+        }
+      }
+    },
+    "Connexion au service impossible. Vérifiez le réseau." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't reach the service. Check your network."
+          }
+        }
+      }
+    },
+    "Connexion en cours" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signing in"
+          }
+        }
+      }
+    },
+    "Connexion…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signing in…"
+          }
+        }
+      }
+    },
+    "Demandez l’accès à un administrateur." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ask an administrator for access."
+          }
+        }
+      }
+    },
+    "Dernier état : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last known: %@"
+          }
+        }
+      }
+    },
+    "Dernier état connu, non actualisé : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last known status, not up to date: %@"
+          }
+        }
+      }
+    },
+    "Disponible dans la cellule %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Available in compartment %@"
+          }
+        }
+      }
+    },
+    "Déjà réservé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Already reserved"
+          }
+        }
+      }
+    },
+    "Effacer les filtres" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear filters"
+          }
+        }
+      }
+    },
+    "Emprunté" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borrowed"
+          }
+        }
+      }
+    },
+    "Emprunté par vous" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borrowed by you"
+          }
+        }
+      }
+    },
+    "En maintenance" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In maintenance"
+          }
+        }
+      }
+    },
+    "En retard depuis %@ — rapportez l’équipement." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overdue since %@. Please bring the equipment back."
+          }
+        }
+      }
+    },
+    "Endommagé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Damaged"
+          }
+        }
+      }
+    },
+    "Espace technicien" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Technician access"
+          }
+        }
+      }
+    },
+    "Expirée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expired"
+          }
+        }
+      }
+    },
+    "Expirée le %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expired on %@"
+          }
+        }
+      }
+    },
+    "Fermer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        }
+      }
+    },
+    "Fermeture du casier : %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Locker closes at %@."
+          }
+        }
+      }
+    },
+    "Filtre : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter: %@"
+          }
+        }
+      }
+    },
+    "Garder la réservation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep reservation"
+          }
+        }
+      }
+    },
+    "Heure du service" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service time"
+          }
+        }
+      }
+    },
+    "Heures du casier : %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Locker time: %@."
+          }
+        }
+      }
+    },
+    "Heures d’ouverture indisponibles. Le service vérifiera l’heure choisie." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opening hours unavailable. The service will check the time you choose."
+          }
+        }
+      }
+    },
+    "Identifiant de suivi : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trace ID: %@"
+          }
+        }
+      }
+    },
+    "Inconnue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unknown"
+          }
+        }
+      }
+    },
+    "Indisponible" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unavailable"
+          }
+        }
+      }
+    },
+    "Indisponible jusqu’au retour" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unavailable until returned"
+          }
+        }
+      }
+    },
+    "Indisponible pour le moment" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unavailable for now"
+          }
+        }
+      }
+    },
+    "Informations non actualisées depuis %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not up to date since %@."
+          }
+        }
+      }
+    },
+    "La réservation n’ouvre aucune porte." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reserving does not unlock the compartment."
+          }
+        }
+      }
+    },
+    "La session n’a pas pu être enregistrée sur cet appareil. Réessayez." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The session couldn't be saved on this device. Try again."
+          }
+        }
+      }
+    },
+    "Le casier est fermé." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The locker is closed."
+          }
+        }
+      }
+    },
+    "Le casier est fermé. Aucun horaire d’ouverture." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The locker is closed. No opening hours."
+          }
+        }
+      }
+    },
+    "Le casier est fermé. Réouverture à %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The locker is closed. Reopens at %@."
+          }
+        }
+      }
+    },
+    "Le prêt en cours n’a pas pu être vérifié." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your current loan couldn’t be checked."
+          }
+        }
+      }
+    },
+    "Le service a refusé la demande." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service refused the request."
+          }
+        }
+      }
+    },
+    "Le service a répondu avec l’erreur %lld. Réessayez dans un instant." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service returned error %lld. Try again in a moment."
+          }
+        }
+      }
+    },
+    "Le service a répondu dans un format inattendu. Vérifiez l’adresse configurée." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service replied in an unexpected format. Check the configured address."
+          }
+        }
+      }
+    },
+    "Le service n’a pas pu charger les équipements." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service couldn't load the equipment."
+          }
+        }
+      }
+    },
+    "Le service n’a pas pu charger votre activité." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service couldn’t load your activity."
+          }
+        }
+      }
+    },
+    "Le service n’a pas pu traiter la connexion. Identifiant de suivi : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service couldn't process the sign-in. Trace ID: %@"
+          }
+        }
+      }
+    },
+    "Le service n’a pas pu traiter la connexion. Réessayez dans un instant." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service couldn't process the sign-in. Try again in a moment."
+          }
+        }
+      }
+    },
+    "Le service n’a pas pu traiter la demande." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service couldn’t process the request."
+          }
+        }
+      }
+    },
+    "Le service répond mais ne se déclare pas opérationnel." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service responds but doesn't report itself as operational."
+          }
+        }
+      }
+    },
+    "Lecture des heures du casier…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading the locker hours…"
+          }
+        }
+      }
+    },
+    "L’adresse courriel est trop longue." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The email address is too long."
+          }
+        }
+      }
+    },
+    "Masquer le mot de passe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide password"
+          }
+        }
+      }
+    },
+    "Mon activité" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "My activity"
+          }
+        }
+      }
+    },
+    "Mot de passe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password"
+          }
+        }
+      }
+    },
+    "Niveau d’accès" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Access level"
+          }
+        }
+      }
+    },
+    "Niveau d’accès insuffisant" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Access level too low"
+          }
+        }
+      }
+    },
+    "Niveau d’accès requis" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Required access level"
+          }
+        }
+      }
+    },
+    "Niveau inconnu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unknown level"
+          }
+        }
+      }
+    },
+    "Non disponible" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not available"
+          }
+        }
+      }
+    },
+    "Non requise" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not required"
+          }
+        }
+      }
+    },
+    "Pourquoi il est bloqué" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Why it's blocked"
+          }
+        }
+      }
+    },
+    "Présence non confirmée par le casier" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Presence not confirmed by the locker"
+          }
+        }
+      }
+    },
+    "Prévenez un administrateur." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tell an administrator."
+          }
+        }
+      }
+    },
+    "Prêt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready"
+          }
+        }
+      }
+    },
+    "Prêt.\nAutorisé.\nProuvé." : {
+      "comment" : "Common Aegis signature, three lines",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready.\nAuthorized.\nProven."
+          }
+        }
+      }
+    },
+    "Quelqu’un vient de le réserver." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Someone just reserved it."
+          }
+        }
+      }
+    },
+    "Reprise de la session…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resuming your session…"
+          }
+        }
+      }
+    },
+    "Restreint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restricted"
+          }
+        }
+      }
+    },
+    "Retirez l’équipement avant cette heure. Elle sera aussi l’heure de retour prévue." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick up the equipment before this time. It will also be the expected return time."
+          }
+        }
+      }
+    },
+    "Retiré de la circulation par l’administration" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Withdrawn from use by the administration"
+          }
+        }
+      }
+    },
+    "Retour en attente de vérification." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Return awaiting verification."
+          }
+        }
+      }
+    },
+    "Retour prévu à %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Due back at %@"
+          }
+        }
+      }
+    },
+    "Retour à la liste" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back to the list"
+          }
+        }
+      }
+    },
+    "Réessayer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try again"
+          }
+        }
+      }
+    },
+    "Réessayez plus tard." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try again later."
+          }
+        }
+      }
+    },
+    "Réponse inattendue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unexpected response"
+          }
+        }
+      }
+    },
+    "Réservation annulée." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reservation cancelled."
+          }
+        }
+      }
+    },
+    "Réservation confirmée jusqu’à %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reservation confirmed until %@"
+          }
+        }
+      }
+    },
+    "Réservation impossible : calibration expirée." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can’t reserve: calibration expired."
+          }
+        }
+      }
+    },
+    "Réservation impossible : niveau d’accès insuffisant." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can’t reserve: access level too low."
+          }
+        }
+      }
+    },
+    "Réservation impossible : présence non confirmée par le casier." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can’t reserve: presence not confirmed by the locker."
+          }
+        }
+      }
+    },
+    "Réservation impossible : équipement absent de sa cellule." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can’t reserve: equipment missing from its compartment."
+          }
+        }
+      }
+    },
+    "Réservation impossible : équipement en maintenance." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can’t reserve: equipment under maintenance."
+          }
+        }
+      }
+    },
+    "Réservation impossible : équipement endommagé." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can’t reserve: equipment damaged."
+          }
+        }
+      }
+    },
+    "Réservation impossible : équipement non disponible." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can’t reserve: equipment not available."
+          }
+        }
+      }
+    },
+    "Réservation impossible : équipement non prêt." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can’t reserve: equipment not ready."
+          }
+        }
+      }
+    },
+    "Réservation possible après actualisation de la fiche." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can reserve once this page is up to date."
+          }
+        }
+      }
+    },
+    "Réservation…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reserving…"
+          }
+        }
+      }
+    },
+    "Réserver" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reserve"
+          }
+        }
+      }
+    },
+    "Réserver jusqu’à" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reserve until"
+          }
+        }
+      }
+    },
+    "Réservé pour vous" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reserved for you"
+          }
+        }
+      }
+    },
+    "Rôle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Role"
+          }
+        }
+      }
+    },
+    "Rôle inconnu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unknown role"
+          }
+        }
+      }
+    },
+    "Saisissez une adresse courriel valide." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a valid email address."
+          }
+        }
+      }
+    },
+    "Saisissez votre adresse courriel." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter your email address."
+          }
+        }
+      }
+    },
+    "Saisissez votre mot de passe." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter your password."
+          }
+        }
+      }
+    },
+    "Se connecter" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in"
+          }
+        }
+      }
+    },
+    "Se connecter avec un autre compte" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in with another account"
+          }
+        }
+      }
+    },
+    "Se déconnecter" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign out"
+          }
+        }
+      }
+    },
+    "Service" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service"
+          }
+        }
+      }
+    },
+    "Service Aegis" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aegis service"
+          }
+        }
+      }
+    },
+    "Service indisponible" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service unavailable"
+          }
+        }
+      }
+    },
+    "Service injoignable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service unreachable"
+          }
+        }
+      }
+    },
+    "Service opérationnel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service operational"
+          }
+        }
+      }
+    },
+    "Standard" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Standard"
+          }
+        }
+      }
+    },
+    "Technicien" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Technician"
+          }
+        }
+      }
+    },
+    "Tous" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All"
+          }
+        }
+      }
+    },
+    "Trop de tentatives. Réessayez dans %@." : {
+      "comment" : "The argument is a localized duration, for example 55 seconds",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Too many attempts. Try again in %@."
+          }
+        }
+      }
+    },
+    "Trop de tentatives. Réessayez plus tard." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Too many attempts. Try again later."
+          }
+        }
+      }
+    },
+    "Valide" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valid"
+          }
+        }
+      }
+    },
+    "Valide jusqu’au %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valid until %@"
+          }
+        }
+      }
+    },
+    "Version" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version"
+          }
+        }
+      }
+    },
+    "Voir les équipements" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Browse equipment"
+          }
+        }
+      }
+    },
+    "Voir mon activité" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View my activity"
+          }
+        }
+      }
+    },
+    "Vos équipements. Votre activité." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your equipment. Your activity."
+          }
+        }
+      }
+    },
+    "Votre compte n’a pas accès aux équipements." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your account doesn't have access to equipment."
+          }
+        }
+      }
+    },
+    "Votre compte n’a pas accès à cette activité." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your account can’t access this activity."
+          }
+        }
+      }
+    },
+    "Votre niveau d’accès ne permet pas cet équipement." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your access level doesn’t allow this equipment."
+          }
+        }
+      }
+    },
+    "Votre réservation et votre prêt restent actifs." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your reservation and loan stay active."
+          }
+        }
+      }
+    },
+    "Votre session a expiré. Vos réservations et prêts sont conservés." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your session has expired. Your reservations and loans are kept."
+          }
+        }
+      }
+    },
+    "Votre session est conservée, mais elle n’a pas pu être vérifiée. Aucune action n’est possible hors ligne." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your session is kept but couldn't be verified. No action is available offline."
+          }
+        }
+      }
+    },
+    "Votre session n’est plus valide. Reconnectez-vous." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your session is no longer valid. Sign in again."
+          }
+        }
+      }
+    },
+    "Vous avez déjà une réservation active." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You already have an active reservation."
+          }
+        }
+      }
+    },
+    "Vous déconnecter ?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign out?"
+          }
+        }
+      }
+    },
+    "Vous pouvez réessayer." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can try again."
+          }
+        }
+      }
+    },
+    "Vous êtes déconnecté." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You're signed out."
+          }
+        }
+      }
+    },
+    "Vérification du service…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking the service…"
+          }
+        }
+      }
+    },
+    "Vérifie que l’application joint le service Aegis Control." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checks that the app can reach the Aegis Control service."
+          }
+        }
+      }
+    },
+    "Vérifiez les champs indiqués." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the highlighted fields."
+          }
+        }
+      }
+    },
+    "Vérifiez votre mot de passe." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check your password."
+          }
+        }
+      }
+    },
+    "nom@entreprise.ca" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "name@company.ca"
+          }
+        }
+      }
+    },
+    "À retirer avant %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick up before %@"
+          }
+        }
+      }
+    },
+    "À vérifier" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs checking"
+          }
+        }
+      }
+    },
+    "Équipements" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Equipment"
+          }
+        }
+      }
+    },
+    "État du service" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service status"
+          }
+        }
+      }
+    },
+    "État indisponible" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Status unavailable"
+          }
+        }
+      }
+    },
+    "État signalé : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reported status: %@"
+          }
+        }
+      }
+    },
+    "État évalué à %@, heure du casier." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Status checked at %@, locker time."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

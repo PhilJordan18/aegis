@@ -1,0 +1,179 @@
+package ca.aegis.control.asset;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
+
+import ca.aegis.control.shared.web.ApiError;
+import ca.aegis.control.shared.web.InvalidRequestException;
+import ca.aegis.control.shared.web.PageQuery;
+import ca.aegis.control.shared.web.PageResponse;
+import ca.aegis.control.shared.web.ResourceNotFoundException;
+
+/**
+ * Administration of assets (document 09, section 12.2). Lock order: the asset row first, then its model row in
+ * shared mode; model archival only locks the model, so the two never wait on each other in a cycle.
+ */
+@Service
+class AdminAssetService {
+
+    private final AssetRepository assets;
+    private final AssetModelRepository models;
+    private final AssetPlacementRepository placements;
+    private final AssetIdentifierRepository identifiers;
+    private final AssetCustodyRepository custody;
+    private final PhysicalPresence presence;
+    private final CatalogAudit audit;
+    private final Clock clock;
+
+    AdminAssetService(AssetRepository assets, AssetModelRepository models, AssetPlacementRepository placements,
+            AssetIdentifierRepository identifiers, AssetCustodyRepository custody, PhysicalPresence presence,
+            CatalogAudit audit, Clock clock) {
+        this.assets = assets;
+        this.models = models;
+        this.placements = placements;
+        this.identifiers = identifiers;
+        this.custody = custody;
+        this.presence = presence;
+        this.audit = audit;
+        this.clock = clock;
+    }
+
+    @Transactional
+    AdminAssetView create(AssetRequest request, UUID actor) {
+        requireCoherentCalibration(request);
+        requireActiveModel(request.assetModelId());
+        Instant now = now();
+        UUID id;
+        try {
+            id = assets.insert(request, now);
+        } catch (DataIntegrityViolationException violation) {
+            throw CatalogConflictException.translate(violation);
+        }
+        AssetRecord created = assets.find(id).orElseThrow();
+        audit.assetCreated(created, actor, now);
+        return view(created);
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    AdminAssetView get(UUID id) {
+        return assets.find(id).map(this::view).orElseThrow(ResourceNotFoundException::new);
+    }
+
+    /**
+     * Every item of a page is evaluated at the same instant, and its custody read in the same snapshot as the asset
+     * rows (document 09, section 24).
+     */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    PageResponse<AdminAssetView> list(PageQuery page, Optional<String> pattern, AssetSort sort) {
+        Instant evaluatedAt = evaluationInstant();
+        List<AssetRecord> rows = assets.page(page, pattern, sort);
+        Map<UUID, Custody> custodies = custody.of(rows);
+        Map<UUID, Presence> presences = presence.of(rows.stream().map(AssetRecord::id).toList(), evaluatedAt);
+        return PageResponse.of(rows.stream()
+                .map(asset -> AdminAssetView.of(asset, custodies.get(asset.id()), presences.get(asset.id()),
+                        evaluatedAt))
+                .toList(), page, assets.count(pattern));
+    }
+
+    /** An identical replacement changes nothing, not even {@code updated_at}. */
+    @Transactional
+    AdminAssetView replace(UUID id, AssetRequest request, UUID actor) {
+        requireCoherentCalibration(request);
+        AssetRecord current = assets.lockForUpdate(id).orElseThrow(ResourceNotFoundException::new);
+        if (current.archived()) {
+            throw new CatalogConflictException(ApiError.ASSET_ARCHIVED);
+        }
+        requireActiveModel(request.assetModelId());
+        if (current.sameAs(request)) {
+            return view(current);
+        }
+        Instant now = now();
+        try {
+            assets.update(id, request, now);
+        } catch (DataIntegrityViolationException violation) {
+            throw CatalogConflictException.translate(violation);
+        }
+        AssetRecord updated = assets.find(id).orElseThrow();
+        audit.assetUpdated(current, updated, actor, now);
+        return view(updated);
+    }
+
+    /**
+     * Archival keeps the asset row, its identifier rows and every future reference to it. In the same transaction it
+     * revokes the active identifiers (decided on 28 October 2026), so that a tag can be reused, and ends the active placement,
+     * keeping its row, so the compartment is freed (document 03, section 4.8). Placement changes lock the asset row
+     * first too, so no placement can start on an asset being archived. Archiving an archived asset
+     * returns it unchanged and is audited as already applied. An active reservation, an unfinished loan or a
+     * non-terminal locker operation refuses the archival (document 09, section 12.2); reservation creation locks the
+     * asset row too, so none can start while the archival decides.
+     */
+    @Transactional
+    AdminAssetView archive(UUID id, UUID actor) {
+        AssetRecord current = assets.lockForUpdate(id).orElseThrow(ResourceNotFoundException::new);
+        Instant now = now();
+        if (current.archived()) {
+            audit.assetArchived(current, actor, now, true);
+            return view(current);
+        }
+        custody.archivalBlocker(id).ifPresent(blocker -> {
+            throw new CatalogConflictException(blocker);
+        });
+        assets.archive(id, now);
+        AssetRecord archived = assets.find(id).orElseThrow();
+        audit.assetArchived(archived, actor, now, false);
+        identifiers.lockActiveOfAsset(id).forEach(identifier -> {
+            identifiers.revoke(identifier.id(), now);
+            audit.identifierRevoked(identifiers.find(identifier.id()).orElseThrow(), actor, now, false);
+        });
+        placements.currentOf(id).ifPresent(placement -> {
+            placements.end(placement.id(), now);
+            audit.placementChanged(id, placement, null, actor, now);
+        });
+        return view(assets.find(id).orElseThrow());
+    }
+
+    /** Document 08, constraint {@code ck_assets_calibration_pair}, reported as a field error. */
+    private static void requireCoherentCalibration(AssetRequest request) {
+        if (request.calibrationRequired() && request.calibrationDueAt() == null) {
+            throw InvalidRequestException.of("calibrationDueAt", "REQUIRED_WHEN_CALIBRATION_REQUIRED",
+                    "L'échéance de calibration est requise lorsque la calibration est exigée.");
+        }
+        if (!request.calibrationRequired() && request.calibrationDueAt() != null) {
+            throw InvalidRequestException.of("calibrationDueAt", "NOT_ALLOWED_WITHOUT_CALIBRATION",
+                    "Aucune échéance de calibration n'est acceptée lorsque la calibration n'est pas exigée.");
+        }
+    }
+
+    /** Holds the model in shared mode until commit, so that it cannot be archived under the new reference. */
+    private void requireActiveModel(UUID modelId) {
+        boolean active = models.lockForReference(modelId).filter(model -> !model.archived()).isPresent();
+        if (!active) {
+            throw InvalidRequestException.of("assetModelId", "ASSET_MODEL_NOT_ACTIVE",
+                    "Le modèle est introuvable ou archivé.");
+        }
+    }
+
+    private AdminAssetView view(AssetRecord asset) {
+        Instant evaluatedAt = evaluationInstant();
+        Presence current = presence.of(List.of(asset.id()), evaluatedAt).get(asset.id());
+        return AdminAssetView.of(asset, custody.of(asset), current, evaluatedAt);
+    }
+
+    private Instant evaluationInstant() {
+        return clock.instant().truncatedTo(ChronoUnit.SECONDS);
+    }
+
+    private Instant now() {
+        return clock.instant().truncatedTo(ChronoUnit.MICROS);
+    }
+}

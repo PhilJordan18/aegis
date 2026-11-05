@@ -60,7 +60,8 @@ affiche la disponibilité (« Emprunté », « Déjà réservé »). Voir
 | `EXPIRED` | Redevient disponible après recalcul | Message explicite « réservation expirée », pas une erreur générique | Historique + audit | Terminal ; ne doit jamais être confondu visuellement avec `CANCELLED` (raisons différentes pour l'administrateur) |
 
 `availableActions[]` du DTO doit piloter les boutons visibles (ne pas
-recalculer côté client quelles actions sont permises).
+recalculer côté client quelles actions sont permises). Valeurs, conditions et
+cas : `09-contrats-rest.md` §8.10.
 
 ## 5. Prêt (`LoanView.status`) et retard
 

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Équipements — Aegis Manager</title>
+  <script src="js/boot.js"></script>
+  <link rel="stylesheet" href="css/aegis-v3.css">
+  <link rel="stylesheet" href="css/shell.css">
+</head>
+<body>
+  <a class="ag-skip" href="#contenu" id="skip">Aller au contenu principal</a>
+  <div class="sh">
+    <header class="sh__bar">
+      <div id="bar-brand"></div>
+      <button type="button" class="ag-btn ag-btn--secondary sh__menu" id="menu-btn" aria-haspopup="dialog" aria-controls="drawer">
+        <span id="menu-icon"></span><span id="menu-label"></span>
+      </button>
+    </header>
+
+    <aside class="sh__side" id="side"></aside>
+
+    <main id="contenu" class="sh__main" tabindex="-1">
+      <h1 class="sh__title" id="page-title">Équipements</h1>
+      <div class="sh__lockerline">
+        <span class="ag-chip ag-chip--ready" id="locker-chip"></span>
+        <span class="sh__lockerinfo ag-tnum" id="locker-info"></span>
+      </div>
+      <p class="sh__mockband"><strong id="band-title"></strong> <span id="band-body"></span></p>
+
+      <section class="sh__list" aria-labelledby="list-title">
+        <div class="sh__listhead"><h2 id="list-title">2 exemplaires</h2><span id="list-meta"></span></div>
+        <ul class="sh__rows" id="rows"></ul>
+      </section>
+
+      <aside class="sh__specimen" aria-labelledby="spec-title" id="specimen">
+        <div class="sh__spechead">
+          <span id="spec-mark"></span>
+          <h2 id="spec-title">Couleurs métier et noyau du logo</h2>
+        </div>
+        <ul class="sh__specchips" id="spec-chips"></ul>
+        <p id="spec-note"></p>
+      </aside>
+    </main>
+  </div>
+
+  <dialog class="sh__drawer" id="drawer" aria-label="Menu"></dialog>
+
+  <script src="js/copy.js"></script>
+  <script src="js/icons.js"></script>
+  <script src="js/brand.js"></script>
+  <script src="js/shell.js"></script>
+</body>
+</html>

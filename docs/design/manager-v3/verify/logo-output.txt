@@ -1,0 +1,15 @@
+Signatures SVG (texte vivant), coordonnées dans le viewBox 400 × 100 :
+  aegis-core-logo.svg | tel que fourni (Inter, Arial, sans-serif) {"aegisRight":223.1,"separatorX":255,"gapToSeparator":31.9,"coreRight":344,"viewBoxWidth":400,"fonts":["Arial (système)","Arial (système)"]}
+  aegis-core-logo.svg | repli Verdana (plus large) {"aegisRight":245.4,"separatorX":255,"gapToSeparator":9.6,"coreRight":342.6,"viewBoxWidth":400,"fonts":["Verdana (système)","Verdana (système)"]}
+  aegis-core-logo-dark.svg | tel que fourni (Inter, Arial, sans-serif) {"aegisRight":223.1,"separatorX":255,"gapToSeparator":31.9,"coreRight":344,"viewBoxWidth":400,"fonts":["Arial (système)","Arial (système)"]}
+  aegis-core-logo-dark.svg | repli Verdana (plus large) {"aegisRight":245.4,"separatorX":255,"gapToSeparator":9.6,"coreRight":342.6,"viewBoxWidth":400,"fonts":["Verdana (système)","Verdana (système)"]}
+
+Symbole (noyau : pixels reconnaissables comme noyau, meilleur contraste noyau / fond)
+ 1x sombre (page #070C13): 12px→6px/11.06  14px→5px/11.06  16px→8px/11.73  18px→8px/11.73  20px→14px/11.73  24px→18px/11.73  28px→24px/11.73  32px→32px/11.73  40px→50px/11.73  48px→72px/11.73
+ 1x sombre (carte #0E1621): 12px→6px/10.26  14px→5px/10.26  16px→8px/10.87  18px→8px/10.87  20px→14px/10.87  24px→18px/10.87  28px→24px/10.87  32px→32px/10.87  40px→50px/10.87  48px→72px/10.87
+ 1x clair (page #F4F6FA): 12px→4px/4.37  14px→4px/4.37  16px→8px/4.55  18px→8px/4.55  20px→12px/4.55  24px→18px/4.55  28px→24px/4.55  32px→32px/4.55  40px→50px/4.55  48px→72px/4.55
+ 1x clair (carte #FFFFFF): 12px→4px/4.73  14px→4px/4.73  16px→8px/4.92  18px→8px/4.92  20px→12px/4.92  24px→18px/4.92  28px→24px/4.92  32px→32px/4.92  40px→50px/4.92  48px→72px/4.92
+ 2x sombre (page #070C13): 12px→18px/11.73  14px→24px/11.73  16px→32px/11.73  18px→40px/11.73  20px→50px/11.73  24px→72px/11.73  28px→84px/11.73  32px→112px/11.73  40px→200px/11.73  48px→288px/11.73
+ 2x sombre (carte #0E1621): 12px→18px/10.87  14px→24px/10.87  16px→32px/10.87  18px→40px/10.87  20px→50px/10.87  24px→72px/10.87  28px→84px/10.87  32px→112px/10.87  40px→200px/10.87  48px→288px/10.87
+ 2x clair (page #F4F6FA): 12px→18px/4.55  14px→24px/4.55  16px→32px/4.55  18px→40px/4.55  20px→50px/4.55  24px→72px/4.55  28px→84px/4.55  32px→112px/4.55  40px→200px/4.55  48px→288px/4.55
+ 2x clair (carte #FFFFFF): 12px→18px/4.92  14px→24px/4.92  16px→32px/4.92  18px→40px/4.92  20px→50px/4.92  24px→72px/4.92  28px→112px/4.92  32px→144px/4.92  40px→200px/4.92  48px→288px/4.92

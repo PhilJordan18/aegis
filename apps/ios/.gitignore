@@ -1,0 +1,4 @@
+# Machine-specific signing and API address (see Config/Local.xcconfig.example).
+Config/Local.xcconfig
+build/
+*.xcresult

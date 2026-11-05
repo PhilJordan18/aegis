@@ -1,0 +1,17 @@
+{
+  "steps": [
+    { "do": "waitOnline", "timeoutMs": 10000 },
+    { "wait": 1000 },
+    { "do": "dropConnection" },
+    { "do": "waitOnline", "timeoutMs": 10000 },
+    { "do": "replay", "type": "DEVICE_AVAILABILITY", "reason": "CONNECTION_LOST", "connectionsAgo": 1 },
+    { "do": "replay", "type": "HEARTBEAT", "connectionsAgo": 1 },
+    { "do": "restart", "resetReason": "WATCHDOG" },
+    { "do": "waitOnline", "timeoutMs": 10000 },
+    { "do": "replay", "type": "DEVICE_RESTARTED", "bootsAgo": 1 },
+    { "do": "replay", "type": "HEARTBEAT", "bootsAgo": 1 },
+    { "do": "replay", "type": "HEARTBEAT" },
+    { "wait": 1000 },
+    { "do": "stop" }
+  ]
+}

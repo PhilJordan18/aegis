@@ -1,0 +1,12 @@
+// Copy to Local.xcconfig (ignored by Git) and adapt to your machine.
+// Never commit a signing team, a certificate or a credential.
+
+// Apple Developer team used to sign the app for a physical iPhone.
+// DEVELOPMENT_TEAM = ABCDE12345
+
+// Must be unique for your team when signing for a device.
+// AEGIS_BUNDLE_ID_PREFIX = ca.example.yourname.aegis
+
+// HTTPS address of Aegis Control reachable from the device. The "/$()/" is
+// required because "//" starts a comment in an xcconfig file.
+// AEGIS_API_BASE_URL = https:/$()/aegis-control.example.lan:8443/api/v1

@@ -1,0 +1,395 @@
+import type { RouteId } from '../../app/routes'
+import type { AccessLevel } from '../../features/auth/contract'
+import type { FieldErrorCode } from '../../features/auth/signInValidation'
+import type { Availability, DiagnosticReason, OperationalStatus, Presence } from '../../features/catalog/contract'
+import { createPluralSelector } from '../plural'
+
+/**
+ * French catalog: the reference for the shape of every other catalog (en.ts is
+ * typed against it, so a missing key fails `tsc`) and the fallback language.
+ * Texts are those of docs/design/manager-entree/ (states.md §3, handoff §7):
+ * [A] = approved, everything else [P] = proposed, awaiting Philippe's approval.
+ *
+ * Rules (docs/localisation/convention.md): one complete sentence per message,
+ * values inserted already formatted, named parameters, plurals through
+ * `createPluralSelector`, never a server `title`/`detail`. U+00A0 precedes
+ * « : ? » and the narrow gaps the handoff requires.
+ */
+const NBSP = '\u00A0'
+const plural = createPluralSelector('fr')
+const count = new Intl.NumberFormat('fr-CA')
+
+export const fr = {
+  brand: {
+    /** Accessible name of the brand link; « aegis » and « Manager » are names and are never translated. */
+    homeLabel: 'Aegis Manager, accueil',
+    /** [A] Common signature, decided on 2026-10-21 (glossary « Signatures de marque »); « Prêt » is READY. */
+    signature: {
+      /** [A] */
+      ready: 'Prêt.',
+      /** [A] */
+      authorized: 'Autorisé.',
+      /** [A] */
+      proven: 'Prouvé.',
+    },
+    /** [A] Decided on 2026-10-21. */
+    tagline: 'L’essentiel, sous contrôle.',
+    /** [A] Decided on 2026-10-21. */
+    description: 'Disponibilité, conformité et traçabilité de vos équipements.',
+  },
+
+  language: {
+    legend: 'Langue',
+  },
+
+  appearance: {
+    legend: 'Apparence',
+    system: 'Système',
+    light: 'Clair',
+    dark: 'Sombre',
+  },
+
+  pageTitle: {
+    landing: 'Aegis Manager',
+    signIn: 'Connexion — Aegis Manager',
+    equipment: 'Équipements — Aegis Manager',
+    equipmentPreview: 'Équipements — Aegis Manager',
+    lockers: 'Casiers — Aegis Manager',
+    notFound: 'Page introuvable — Aegis Manager',
+  } satisfies Record<RouteId, string>,
+
+  shell: {
+    skipLink: 'Aller au contenu principal',
+    sectionsLabel: 'Sections',
+    accountLabel: 'Compte',
+    administratorRole: 'Administrateur',
+    openMenu: 'Ouvrir le menu',
+    closeMenu: 'Fermer le menu',
+    menuTitle: 'Menu',
+    signOut: 'Se déconnecter',
+    soonLegend: 'Section à venir',
+    soonSuffix: ', à venir',
+    /** Order imposed by sections.md §5 and handoff §6 SidebarNav. */
+    sections: {
+      overview: "Vue d'ensemble",
+      equipment: 'Équipements',
+      reservationsLoans: 'Réservations et prêts',
+      lockers: 'Casiers',
+      anomalies: 'Anomalies',
+      audit: 'Audit',
+    },
+  },
+
+  landing: {
+    signIn: 'Se connecter',
+    seeGuarantees: 'Voir les cinq garanties',
+    /** [A] */
+    accountNote: 'Compte fourni par votre administrateur.',
+    mockCaption: "Diagnostic d'un exemplaire",
+    mockBadge: 'Exemple illustratif',
+    blockers: ({ count: value }: { count: number }) =>
+      plural(value, { one: `${count.format(value)} empêchement`, other: `${count.format(value)} empêchements` }),
+    noBlockers: 'Aucun empêchement détecté',
+    calibrationExpired: ({ date }: { date: string }) => `Calibration expirée depuis le ${date}`,
+    guaranteesLabel: 'Cinq garanties du P0',
+    guarantees: {
+      readiness: {
+        title: 'Disponibilité réelle',
+        text: `Chaque équipement indique s'il peut servir; sinon, la raison précise${NBSP}: calibration expirée, maintenance, absence de sa cellule.`,
+      },
+      checkout: {
+        title: 'Retrait conforme',
+        text: "Le serveur refuse un retrait non autorisé ou non conforme; l'interface l'explique, elle ne le décide pas.",
+      },
+      compartment: {
+        title: 'Bonne cellule',
+        text: "Seule la cellule attendue s'ouvre, après une autorisation valide. Une réservation ou un code affiché n'ouvre rien.",
+      },
+      proof: {
+        title: 'Preuve physique',
+        text: 'Retrait et retour sont confirmés par des observations cohérentes du casier, jamais par un simple clic.',
+      },
+      custody: {
+        title: 'Chaîne de possession',
+        text: "Chaque action et chaque observation restent consultables dans l'audit, sans effacement.",
+      },
+    },
+    footerPrototype: "Prototype académique en cours de validation en laboratoire, conçu pour les équipes de maintenance et d'inspection.",
+    footerTechnician: `Technicien${NBSP}? Utilisez Aegis Mobile sur iPhone.`,
+  },
+
+  signIn: {
+    /** [A] */
+    heading: 'Connexion',
+    /** [A] */
+    accountNote: 'Compte fourni par votre administrateur.',
+    /** [A] */
+    emailLabel: 'Adresse courriel',
+    /** [A] */
+    passwordLabel: 'Mot de passe',
+    /** [A] */
+    submit: 'Se connecter',
+    /** [A] Eyebrow above the title, from the v3 mock. */
+    role: 'Espace administrateur',
+    /** [A] */
+    subtitle: 'Accédez à Aegis Manager.',
+    home: 'Accueil',
+    /** [A] */
+    footerProduct: 'Aegis Manager · Administration',
+    footerTechnician: `Technicien${NBSP}? Utilisez Aegis Mobile sur iPhone.`,
+    fieldError: {
+      emailRequired: 'Saisissez votre adresse courriel.',
+      emailInvalid: 'Saisissez une adresse courriel valide, par exemple nom@example.com.',
+      emailTooLong: "L'adresse courriel ne peut pas dépasser 320 caractères.",
+      passwordRequired: 'Saisissez votre mot de passe.',
+      /** Server violation on a password the client accepted (review R5). */
+      passwordRejected: "Ce mot de passe n'est pas accepté. Vérifiez-le, puis réessayez.",
+    } satisfies Record<FieldErrorCode, string>,
+    validationUnknown: 'Vérifiez les champs indiqués, puis réessayez.',
+    submitting: 'Connexion…',
+    submittingStatus: 'Connexion en cours.',
+    reveal: 'Afficher',
+    conceal: 'Masquer',
+    revealLabel: 'Afficher le mot de passe',
+    concealLabel: 'Masquer le mot de passe',
+    revealedStatus: 'Votre mot de passe est visible.',
+    concealedStatus: 'Votre mot de passe est masqué.',
+    /** [A] */
+    invalidCredentialsTitle: 'Adresse courriel ou mot de passe incorrect.',
+    invalidCredentialsBody: 'Vérifiez les deux champs, puis réessayez.',
+    /** [A] */
+    rateLimitedTitle: 'Trop de tentatives.',
+    /** [A→P] T1: the one place the delay is shown, fixed when the 429 arrives; `duration` is already formatted (« 42 secondes »). */
+    rateLimitedBody: ({ duration }: { duration: string }) => `Réessayez dans ${duration}.`,
+    /** [A] Shown when the 429 carries no usable Retry-After. */
+    rateLimitedFallback: 'Réessayez dans une minute.',
+    rateLimitedReady: 'Vous pouvez réessayer.',
+    /** [A] */
+    unreachableTitle: 'Connexion au service impossible.',
+    /** [A] wording split into title and body; « puis réessayez » added [P] (T3). */
+    unreachableBody: 'Vérifiez le réseau, puis réessayez.',
+    serviceErrorTitle: "Le service n'a pas pu traiter la connexion.",
+    serviceErrorBody: "Réessayez dans un instant. Si le problème persiste, transmettez l'identifiant de suivi au support.",
+    /** [A] Visible label of the traceId, shared with iOS (glossary, decided on 2026-10-21); the traceId itself is never translated. */
+    traceIdLabel: `Identifiant de suivi${NBSP}:`,
+    /** Not in states.md: same message when no traceId is available. */
+    serviceErrorBodyWithoutCode: 'Réessayez dans un instant.',
+    /** [A] */
+    sessionExpiredTitle: 'Votre session a expiré. Reconnectez-vous.',
+    /** [A→P] T2. */
+    sessionExpiredBody: "L'expiration ne modifie ni les réservations, ni les prêts, ni les opérations en cours.",
+    sessionInvalidTitle: "Votre session n'est plus valide. Reconnectez-vous.",
+    sessionInvalidBody: "Aucune réservation, aucun prêt ni aucune opération n'a été modifié.",
+    signedOutTitle: 'Vous êtes déconnecté.',
+    roleHeading: 'Accès réservé aux administrateurs',
+    roleBody: "Aegis Manager est réservé aux comptes administrateur. Aucune donnée n'a été chargée et la session a été fermée.",
+    /** [A] Names the mobile app as the footers do (Aegis Mobile). */
+    technicianAccount: "Ce compte technicien s'utilise dans Aegis Mobile.",
+    roleUnknownTitle: 'Ce compte ne peut pas utiliser Aegis Manager.',
+    roleAccountUsed: `Compte utilisé${NBSP}:`,
+    roleRetry: 'Se connecter avec un autre compte',
+  },
+
+  /**
+   * Équipements (CAT-01, read-only list and dossier). Every text below is [P]: proposed, awaiting
+   * Philippe's approval. Reasons, statuses and calibration follow docs/localisation/glossaire.md;
+   * codes (REST enums, assetCode, traceId) are never translated, only their presentation.
+   */
+  equipment: {
+    heading: 'Équipements',
+    viewsLabel: 'Vues des équipements',
+    unitsTab: 'Exemplaires',
+    modelsTab: 'Modèles',
+    selectedOverline: 'Exemplaire sélectionné',
+    listTitle: ({ count: value }: { count: number }) =>
+      plural(value, { one: `${count.format(value)} exemplaire`, other: `${count.format(value)} exemplaires` }),
+    listMeta: 'Diagnostic opérationnel',
+    listFoot: ({ time }: { time: string }) => `Triés par code · diagnostic évalué à ${time}`,
+    blockers: ({ count: value }: { count: number }) =>
+      plural(value, { one: `${count.format(value)} empêchement`, other: `${count.format(value)} empêchements` }),
+    noBlockers: 'Aucun empêchement détecté',
+    archived: 'Archivé',
+    archivedOn: ({ date }: { date: string }) => `Archivé le ${date}`,
+    /** « Disponible · Présence inconnue · En service »: availability, presence, service state. */
+    facts: ({ availability, presence, status }: { availability: string; presence: string; status: string }) => `${availability} · ${presence} · ${status}`,
+
+    loading: 'Chargement des exemplaires…',
+    loaded: ({ count: value, page, pages }: { count: number; page: number; pages: number }) =>
+      `Liste chargée${NBSP}: ${plural(value, { one: `${count.format(value)} exemplaire`, other: `${count.format(value)} exemplaires` })}, page ${count.format(page)} sur ${count.format(pages)}.`,
+    selectedStatus: ({ name }: { name: string }) => `Exemplaire sélectionné${NBSP}: ${name}.`,
+    detailLoading: "Chargement de l'exemplaire…",
+
+    paginationLabel: 'Pagination des exemplaires',
+    previousPage: 'Précédent',
+    nextPage: 'Suivant',
+    pageOf: ({ page, pages }: { page: number; pages: number }) => `Page ${count.format(page)} sur ${count.format(pages)}`,
+
+    emptyTitle: 'Aucun exemplaire.',
+    emptyBody: "Dès qu'un exemplaire est enregistré, il apparaît ici avec son diagnostic opérationnel.",
+
+    retry: 'Réessayer',
+    backToList: 'Retour à la liste',
+    unreachableTitle: 'Connexion au service impossible.',
+    unreachableBody: 'Vérifiez le réseau, puis réessayez.',
+    serviceErrorTitle: "Le service n'a pas pu fournir ces données.",
+    serviceErrorBody: "Réessayez dans un instant. Si le problème persiste, transmettez l'identifiant de suivi au support.",
+    serviceErrorBodyWithoutCode: 'Réessayez dans un instant.',
+    traceIdLabel: `Identifiant de suivi${NBSP}:`,
+    forbiddenTitle: "Votre compte n'a pas accès aux équipements.",
+    forbiddenBody: "Le serveur a refusé la demande. Aucune donnée n'a été chargée.",
+    notFoundTitle: 'Exemplaire introuvable.',
+    notFoundBody: "Cet exemplaire n'existe plus ou n'est plus accessible.",
+    staleTitle: 'Données non actualisées.',
+    staleBody: ({ time }: { time: string }) => `Les données affichées ont été évaluées à ${time}. La dernière actualisation a échoué.`,
+
+    diagnosticTitle: 'Diagnostic opérationnel',
+    diagnosticNote: ({ time }: { time: string }) =>
+      `Empêchements non personnels connus (disponibilité, état de service, calibration, présence), évalués à ${time}. Une liste vide ne donne ni droit d'emprunt ni possibilité d'ouvrir le casier.`,
+    unknownNote: `L'état physique n'est pas encore observé${NBSP}: aucune présence ni absence n'est supposée.`,
+    derivedFacts: 'Faits dérivés',
+    settings: 'Réglages',
+    readOnly: 'lecture seule',
+    factAvailability: 'Disponibilité',
+    factPresence: 'Présence',
+    factCalibration: 'Calibration',
+    factPlacement: 'Placement',
+    factSerialNumber: 'Numéro de série',
+    settingAccessLevel: "Niveau d'accès requis",
+    settingServiceState: 'État de service',
+    settingCalibrationRequired: 'Calibration requise',
+    settingCalibrationDue: 'Échéance de calibration',
+    yes: 'Oui',
+    no: 'Non',
+    notProvided: 'Non renseigné',
+    noPlacement: 'Aucun placement connu',
+    presenceUnknownHelp: "Aucune observation de présence n'est disponible.",
+    zoneNote: ({ zone }: { zone: string }) => `Fuseau du laboratoire${NBSP}: ${zone}`,
+
+    /** 09 §3: a value this version does not know is shown as an unavailable state, never as a known one. */
+    unrecognized: 'État indisponible',
+    unrecognizedNote: "Une valeur envoyée par le serveur n'est pas reconnue par cette version de l'application. Elle est affichée comme état indisponible.",
+    reason: {
+      NOT_PRESENT: 'Absent du casier',
+      NOT_AVAILABLE: 'Non disponible',
+      MAINTENANCE: 'En maintenance',
+      DAMAGED: 'Endommagé',
+      CALIBRATION_EXPIRED: 'Calibration expirée',
+      UNKNOWN_PHYSICAL_STATE: 'État physique inconnu',
+    } satisfies Record<DiagnosticReason, string>,
+    calibrationExpiredOn: ({ date }: { date: string }) => `Calibration expirée depuis le ${date}`,
+    availability: {
+      AVAILABLE: 'Disponible',
+      RESERVED: 'Réservé',
+      BORROWED: 'Emprunté',
+      UNAVAILABLE: 'Indisponible',
+    } satisfies Record<Availability, string>,
+    presence: {
+      PRESENT: 'Présent',
+      ABSENT: 'Absent du casier',
+      UNKNOWN: 'Inconnue',
+    } satisfies Record<Presence, string>,
+    presenceInline: {
+      PRESENT: 'Présent',
+      ABSENT: 'Absent du casier',
+      UNKNOWN: 'Présence inconnue',
+    } satisfies Record<Presence, string>,
+    serviceState: {
+      SERVICEABLE: 'En service',
+      MAINTENANCE: 'En maintenance',
+      DAMAGED: 'Endommagé',
+    } satisfies Record<OperationalStatus, string>,
+    accessLevel: {
+      STANDARD: 'Standard',
+      RESTRICTED: 'Restreint',
+    } satisfies Record<AccessLevel, string>,
+    calibrationStatus: {
+      NOT_REQUIRED: 'Non requise',
+      UNKNOWN: 'Échéance non renseignée',
+    },
+    calibrationValidUntil: ({ date }: { date: string }) => `Valide jusqu'au ${date}`,
+    calibrationExpiredSince: ({ date }: { date: string }) => `Expirée depuis le ${date}`,
+  },
+
+  /**
+   * Locker status (PHY-01 #29, 09 §8.6, §16.1). « En ligne », « Hors ligne », « État inconnu » come from the
+   * approved Web direction (prototype `copy.connection`); every other text here is [P], proposed.
+   */
+  lockers: {
+    heading: 'Casiers',
+    loadingLockers: 'Recherche des casiers…',
+    loadingStatus: 'Chargement du statut du casier…',
+    /** Announced once, then only when the connection state changes. */
+    announce: ({ code, connection }: { code: string; connection: string }) => `Casier ${code}${NBSP}: ${connection}.`,
+    emptyTitle: 'Aucun casier trouvé parmi les équipements placés.',
+    emptyBody: 'Un casier apparaît ici dès qu\'un exemplaire y est placé. Les placements se consultent dans Équipements.',
+    emptyAction: 'Ouvrir Équipements',
+    notFoundTitle: 'Casier introuvable.',
+    notFoundBody: "Ce casier n'existe pas ou n'est plus accessible.",
+    forbiddenTitle: "Votre compte n'a pas accès au statut des casiers.",
+    statusLabel: 'Statut du casier',
+    connection: {
+      ONLINE: 'En ligne',
+      OFFLINE: 'Hors ligne',
+      UNKNOWN: 'État inconnu',
+    },
+    connectionNote: {
+      OFFLINE: "Le casier n'envoie plus de signal valide.",
+      UNKNOWN: `Aucun signal valide n'a encore été reçu${NBSP}: l'état du casier n'est pas connu.`,
+    },
+    lastSignal: ({ time }: { time: string }) => `Dernier signal${NBSP}: ${time}`,
+    neverSignal: 'Aucun signal reçu',
+    evaluatedNote: ({ time }: { time: string }) => `Évalué par le serveur à ${time}. Cette lecture n'autorise aucune ouverture.`,
+    readOnlyNote: `Lecture seule${NBSP}: aucune commande n'est envoyée au casier depuis cet écran.`,
+
+    windowTitle: "Horaire d'exploitation",
+    windowOpen: 'Ouvert',
+    windowClosed: 'Fermé',
+    windowClosesAt: 'Fermeture',
+    windowNextOpensAt: 'Prochaine ouverture',
+    noSchedule: "Aucun horaire d'ouverture",
+    noScheduleHelp: "Aucune plage d'ouverture n'est configurée pour ce casier.",
+    zoneNote: ({ zone }: { zone: string }) => `Fuseau du casier${NBSP}: ${zone}`,
+
+    compartmentsTitle: ({ count: value }: { count: number }) =>
+      plural(value, { one: `${count.format(value)} cellule`, other: `${count.format(value)} cellules` }),
+    compartmentsCaption: ({ code }: { code: string }) => `Cellules du casier ${code}`,
+    noCompartments: 'Aucune cellule déclarée pour ce casier.',
+    colCompartment: 'Cellule',
+    colEnabled: 'Activée',
+    colLink: 'Liaison',
+    colReader: 'Lecteur RFID',
+    colDoor: 'Porte',
+    colLock: 'Serrure',
+    colLastObservation: 'Dernière observation',
+    /** [P] The server keeps the last heartbeat's values on the cells while the locker is not online. */
+    lastKnownNote: `Dernier état connu, à la dernière observation${NBSP}: le casier n'est pas en ligne, ces valeurs ne sont pas l'état actuel.`,
+    noObservation: 'Aucune observation',
+    link: {
+      CONNECTED: 'Connectée',
+      DISCONNECTED: 'Déconnectée',
+      UNKNOWN: 'Inconnue',
+    },
+    reader: {
+      HEALTHY: 'En bon état',
+      FAULTED: 'En défaut',
+      UNKNOWN: 'Inconnu',
+    },
+    door: {
+      OPEN: 'Ouverte',
+      CLOSED: 'Fermée',
+      UNKNOWN: 'Inconnue',
+    },
+    lock: {
+      LOCKED: 'Verrouillée',
+      UNLOCKED: 'Déverrouillée',
+      UNKNOWN: 'Inconnue',
+    },
+  },
+
+  notFound: {
+    /** Not covered by the handoff: the sign-in panel layout, conservatively reused. Copy provisional. */
+    heading: 'Page introuvable',
+    body: "Cette adresse ne correspond à aucune page d'Aegis Manager.",
+    home: "Retour à l'accueil",
+  },
+}

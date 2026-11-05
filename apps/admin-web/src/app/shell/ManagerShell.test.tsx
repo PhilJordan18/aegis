@@ -38,22 +38,23 @@ describe('ManagerShell', () => {
     expect(skip.getAttribute('href')).toBe('#contenu')
   })
 
-  it('lists the six sections in order, with only the built one focusable', () => {
+  it('lists the six sections in order, with only the built ones focusable', () => {
     const { sidebar } = renderShell()
     const items = within(sidebar).getAllByRole('listitem')
     expect(items.map((item) => item.textContent)).toEqual([
       "Vue d'ensemble, à venir",
       'Équipements',
       'Réservations et prêts, à venir',
-      'Casiers, à venir',
+      'Casiers',
       'Anomalies, à venir',
       'Audit, à venir',
     ])
     const links = within(sidebar).getAllByRole('link')
+    expect(links.map((link) => link.getAttribute('href')).filter((href) => href !== '/')).toEqual(['/apercu/equipements', '/casiers'])
     const current = links.find((link) => link.getAttribute('aria-current') === 'page')
     expect(current?.textContent).toBe('Équipements')
     const soon = sidebar.querySelectorAll('[aria-disabled="true"]')
-    expect(soon).toHaveLength(5)
+    expect(soon).toHaveLength(4)
     soon.forEach((element) => expect(element.matches('a, button, [tabindex]')).toBe(false))
     expect(sidebar.textContent).toContain('Section à venir')
   })

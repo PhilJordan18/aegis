@@ -1,0 +1,14 @@
+{
+  "steps": [
+    { "do": "waitOnline", "timeoutMs": 10000 },
+    { "do": "receiveCommand", "ref": "wrong-compartment", "compartmentId": "7d4bd7a0-6a0e-4b8e-8e57-1f2c3d4e5f60" },
+    { "do": "receiveCommand", "ref": "wrong-locker", "compartment": "A1", "lockerId": "0b6f1c84-5f43-4c2a-9a7e-3d1e2c4b5a69" },
+    { "do": "receiveCommand", "ref": "expired", "compartment": "A1", "issuedInMs": -180000, "expiresInMs": -60000 },
+    { "do": "receiveCommand", "ref": "valid", "compartment": "A1", "operation": "op1" },
+    { "do": "redeliverCommand", "ref": "valid" },
+    { "do": "receiveCommand", "ref": "same-operation", "compartment": "A1", "operation": "op1" },
+    { "do": "replay", "type": "COMMAND_ACKNOWLEDGED" },
+    { "wait": 16000 },
+    { "do": "stop" }
+  ]
+}

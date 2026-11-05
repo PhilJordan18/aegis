@@ -113,7 +113,7 @@ def slugify(text):
 
 def md_inline(text):
     out = markdown.markdown(text, extensions=["attr_list"])
-    return re.sub(r"^<p>|</p>$", "", out.strip())
+    return re.sub(r"(?:^<p>)|(?:</p>$)", "", out.strip())
 
 
 def md_block(text):

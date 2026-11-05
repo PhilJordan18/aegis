@@ -422,8 +422,8 @@ Une seule transaction :
 | LocalAccessChallenge.expiresAt | Au plus 60 secondes après création, bornées par horaire et réservation | Défi et opération EXPIRED avant toute commande |
 | LockerOperation.expiresAt | 120 secondes après authorizedAt | EXPIRED si la situation est sûre; ANOMALY si elle est incertaine |
 | Loan.dueAt | Copié depuis Reservation.reservedUntil | overdue devient vrai; aucun changement de statut |
-| DeviceHeartbeat | Toutes les 10 secondes | Met à jour lastSeenAt |
-| Locker OFFLINE | Après 30 secondes sans heartbeat valide | Bloque une nouvelle ouverture et peut créer une anomalie pendant une opération |
+| DeviceHeartbeat | Toutes les 10 secondes | Met à jour lastSeenAt et, s’il est valide, le heartbeat de référence (doc 10 §15.3) |
+| Locker OFFLINE | Après 30 secondes sans heartbeat valide, ou dès l’OFFLINE de la connexion du heartbeat de référence (doc 10 §15.3) | Bloque une nouvelle ouverture et peut créer une anomalie pendant une opération |
 
 Les transitions liées au temps peuvent être évaluées par une tâche planifiée et de nouveau lors de chaque commande sensible. Cette double vérification évite de dépendre exclusivement du scheduler.
 

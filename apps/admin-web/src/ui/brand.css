@@ -1,9 +1,23 @@
-.ag-brand { display: inline-flex; align-items: center; gap: 10px; min-height: 32px; text-decoration: none; border-radius: var(--ag-r-small); }
-.ag-brand__mark { width: 26px; height: 26px; }
-.ag-brand__frame { color: var(--ag-text); }
-.ag-brand__cross { color: var(--ag-text-3); }
-.ag-brand__name { font-weight: 650; font-size: 1.25rem; line-height: 1; letter-spacing: -0.035em; color: var(--ag-text); }
-.ag-brand__sub { font-weight: 500; font-size: 0.9375rem; line-height: 1; letter-spacing: -0.01em; color: var(--ag-text-2); }
-@media (forced-colors: active) {
-  .ag-brand__frame, .ag-brand__cross { color: currentColor; }
+.ag-brand {
+  display: inline-flex; align-items: center; gap: 10px; min-height: 32px; min-width: 0;
+  color: var(--ag-text); text-decoration: none; border-radius: var(--ag-r-small);
+}
+/* Symbol: 28 px in headers, 24 px compact (reference.md). One asset per appearance. */
+.ag-brand__mark { flex: none; width: 28px; height: 28px; display: inline-block; }
+.ag-brand__img { width: 100%; height: 100%; display: block; }
+:root[data-theme='dark'] .ag-brand__img--light,
+:root:not([data-theme='dark']) .ag-brand__img--dark { display: none; }
+.ag-brand__text { display: inline-flex; align-items: center; min-width: 0; }
+.ag-brand__word { font-size: 1.5rem; font-weight: 600; line-height: 1; letter-spacing: -0.045em; }
+.ag-brand__app {
+  margin-left: 12px; padding-left: 12px; border-left: 1px solid var(--ag-border);
+  font-size: 0.875rem; font-weight: 500; line-height: 1; letter-spacing: 0.04em; color: var(--ag-text-2);
+}
+/* Compact: the symbol shrinks and « Manager » moves under « aegis » instead of disappearing. */
+@media (max-width: 479px) {
+  .ag-brand { gap: 8px; }
+  .ag-brand__mark { width: 24px; height: 24px; }
+  .ag-brand__text { flex-direction: column; align-items: flex-start; gap: 3px; }
+  .ag-brand__word { font-size: 1.25rem; }
+  .ag-brand__app { margin: 0; padding: 0; border: 0; font-size: 0.75rem; }
 }

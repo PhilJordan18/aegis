@@ -527,7 +527,7 @@ Les contraintes dépendant d’un statut devront être garanties par une combina
 | Readiness | Dérivé | Actif + utilisateur + état physique + moment |
 | CalibrationStatus | Dérivé | calibrationRequired + calibrationDueAt + moment |
 | Loan.overdue | Dérivé | statut du prêt + dueAt + moment |
-| Locker ONLINE ou OFFLINE | Dérivé | âge du dernier heartbeat |
+| Locker ONLINE ou OFFLINE | Dérivé | âge du heartbeat de référence et fermeture de sa connexion (doc 10 §15.3) |
 | Présence d’un actif | Dérivé | dernière séquence physique stable et cohérente |
 | Disponibilité d’un actif | Dérivé | réservation, prêt, archivage et blocages applicables |
 

@@ -1,0 +1,121 @@
+
+OK  sign-in nominal fr dark 1440
+  a                      Aegis Manager, accueil             visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  a                      Accueil                            visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  button                 Français                           visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +1px obscurci:false
+  button                 English                            visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +1px obscurci:false
+  input#email            email                              visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  input#password         password                           visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  button#reveal          Afficher le mot de passe           visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  button#submit          Se connecter                       visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+
+OK  sign-in validation en dark 1440
+  a                      Aegis Manager, home                visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  a                      Home                               visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  button                 Français                           visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +1px obscurci:false
+  button                 English                            visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +1px obscurci:false
+  input#email            email                              visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  input#password         password                           visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  button#reveal          Show password                      visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  button#submit          Sign in                            visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+
+OK  sign-in rate-limited fr dark 1440 (verrou, aria-disabled)
+  a                      Aegis Manager, accueil             visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  a                      Accueil                            visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  button                 Français                           visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +1px obscurci:false
+  button                 English                            visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +1px obscurci:false
+  input#email            email                              visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  input#password         password                           visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  button#reveal          Afficher le mot de passe           visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  button#submit          Se connecter                       visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false aria-disabled
+
+OK  sign-in role-unauthorized en dark 1440
+  a                      Aegis Manager, home                visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  a                      Home                               visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  button                 Français                           visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +1px obscurci:false
+  button                 English                            visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +1px obscurci:false
+  button#role-retry      Sign in with another account       visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+
+OK  sign-in nominal fr dark 390
+  a                      Aegis Manager, accueil             visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  button                 Français                           visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +1px obscurci:false
+  button                 English                            visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +1px obscurci:false
+  input#email            email                              visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  input#password         password                           visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  button#reveal          Afficher le mot de passe           visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  button#submit          Se connecter                       visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+
+OK  shell fr dark 1440
+  a                      Aegis Manager, accueil             visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  a                      Équipements                        visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  button                 ADAdministrateur DémoAdministrateur visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+
+OK  shell en dark 390
+  a                      Aegis Manager, home                visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  button#menu-btn        Open menu                          visible:true anneau:8.98:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+
+OK  shell drawer fr dark 390
+  a                      Équipements                        visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+  button                 ADAdministrateur DémoAdministrateur visible:true anneau:8.32:1 solid 2px rgb(140, 174, 255) +2px obscurci:false
+
+OK  sign-in nominal fr light 1440
+  a                      Aegis Manager, accueil             visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  a                      Accueil                            visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  button                 Français                           visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +1px obscurci:false
+  button                 English                            visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +1px obscurci:false
+  input#email            email                              visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  input#password         password                           visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  button#reveal          Afficher le mot de passe           visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  button#submit          Se connecter                       visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+
+OK  sign-in validation en light 1440
+  a                      Aegis Manager, home                visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  a                      Home                               visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  button                 Français                           visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +1px obscurci:false
+  button                 English                            visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +1px obscurci:false
+  input#email            email                              visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  input#password         password                           visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  button#reveal          Show password                      visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  button#submit          Sign in                            visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+
+OK  sign-in rate-limited fr light 1440 (verrou, aria-disabled)
+  a                      Aegis Manager, accueil             visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  a                      Accueil                            visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  button                 Français                           visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +1px obscurci:false
+  button                 English                            visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +1px obscurci:false
+  input#email            email                              visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  input#password         password                           visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  button#reveal          Afficher le mot de passe           visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  button#submit          Se connecter                       visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false aria-disabled
+
+OK  sign-in role-unauthorized en light 1440
+  a                      Aegis Manager, home                visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  a                      Home                               visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  button                 Français                           visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +1px obscurci:false
+  button                 English                            visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +1px obscurci:false
+  button#role-retry      Sign in with another account       visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+
+OK  sign-in nominal fr light 390
+  a                      Aegis Manager, accueil             visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  button                 Français                           visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +1px obscurci:false
+  button                 English                            visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +1px obscurci:false
+  input#email            email                              visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  input#password         password                           visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  button#reveal          Afficher le mot de passe           visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  button#submit          Se connecter                       visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+
+OK  shell fr light 1440
+  a                      Aegis Manager, accueil             visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  a                      Équipements                        visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  button                 ADAdministrateur DémoAdministrateur visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+
+OK  shell en light 390
+  a                      Aegis Manager, home                visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  button#menu-btn        Open menu                          visible:true anneau:6.54:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+
+OK  shell drawer fr light 390
+  a                      Équipements                        visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+  button                 ADAdministrateur DémoAdministrateur visible:true anneau:7.07:1 solid 2px rgb(35, 75, 206) +2px obscurci:false
+
+Tiroir : focus initial drawer-close | après Échap {"open":false,"focus":"menu-btn"} 
+Langue au clavier : {"lang":"en","h1":"Sign in","focus":"en","pressed":"true","alert":"Incorrect email address or password."}

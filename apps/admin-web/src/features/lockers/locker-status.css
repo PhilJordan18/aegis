@@ -1,0 +1,80 @@
+/*
+ * Casiers: read-only locker status (PHY-01 #29). Same opaque surfaces and hairlines as Équipements;
+ * panels, diagnostic block, facts and skeleton bars come from equipment.css. Opaque, no glass, no gradient.
+ */
+.ag-lockers { flex: 1; min-height: 0; display: grid; grid-auto-rows: max-content; align-content: start; gap: 20px; overflow: auto; padding: 4px; }
+/* A locker panel is as tall as its content and the list scrolls: `.ag-panel` clips (overflow: hidden, min-height: 0), which
+   would cut the cells off in a short window instead of letting the list scroll. */
+.ag-lk { overflow: visible; min-height: auto; }
+.ag-lockers:focus-visible { outline-offset: -2px; }
+.ag-lockers--empty { overflow: visible; }
+.ag-lk__empty-action { margin-top: 6px; }
+
+.ag-lk__body { padding: 24px 32px 20px; }
+.ag-lk__alert, .ag-lk__skel { padding: 24px 32px; display: grid; gap: 14px; align-content: start; }
+.ag-lk__skel .ag-skel__bar--title { width: 45%; height: 26px; }
+.ag-lk__skel .ag-skel__bar--block { width: 100%; height: 88px; border-radius: var(--ag-r-card); }
+.ag-lk__stale { margin-bottom: 16px; }
+.ag-lk__title {
+  margin-top: 8px; font-size: var(--ag-type-title-lg-size); line-height: var(--ag-type-title-lg-lh);
+  font-weight: var(--ag-type-title-lg-weight); letter-spacing: var(--ag-type-title-lg-track); overflow-wrap: anywhere;
+}
+.ag-lk__title:focus-visible { outline-offset: 4px; }
+/* The code moves whole to its own line when it fits there, and breaks only when it is longer than a line: a fixed no-wrap
+   overflowed a narrow panel for codes of 20 characters (WCAG 1.4.10). */
+.ag-lk__code { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+.ag-lk__top { margin-top: 16px; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 20px 32px; align-items: start; }
+.ag-lk__top .ag-diag { margin-top: 0; }
+.ag-lk__signal { font-size: 0.875rem; font-weight: 500; color: var(--ag-text); }
+.ag-lk__window { padding: 16px 0 0; }
+.ag-lk__window-state { margin-top: 12px; font-size: var(--ag-eq-fact-value-size); font-weight: 600; }
+.ag-lk__window .ag-facts { margin-top: 12px; }
+.ag-lk__window .ag-help { margin-top: 12px; }
+.ag-lk__noschedule .ag-help { margin-top: 4px; }
+.ag-lk__sec { margin-top: 24px; }
+.ag-lk__foot { margin-top: 16px; }
+
+/* Compartments: a real table while the container is wide enough, stacked « label: value » lines below. */
+.ag-lk-table-wrap { margin-top: 12px; container-type: inline-size; }
+.ag-lk-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.ag-lk-table th, .ag-lk-table td { padding: 10px 12px 10px 0; text-align: left; vertical-align: middle; border-bottom: 1px solid var(--ag-separator); overflow-wrap: anywhere; }
+.ag-lk-table thead th { font-size: var(--ag-type-caption-size); font-weight: 500; color: var(--ag-text-2); white-space: nowrap; }
+.ag-lk-table tbody th { font-weight: 600; }
+.ag-lk-table__code { font-size: 0.9375rem; }
+.ag-lk-table tbody tr:last-child th, .ag-lk-table tbody tr:last-child td { border-bottom: 0; }
+.ag-lk-table__off th, .ag-lk-table__off td { color: var(--ag-text-2); }
+.ag-lk-table__none { color: var(--ag-text-2); }
+.ag-lk-table__label { display: none; }
+
+@container (max-width: 759px) {
+  .ag-lk-table, .ag-lk-table tbody, .ag-lk-table tr, .ag-lk-table td, .ag-lk-table th { display: block; }
+  .ag-lk-table thead {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  .ag-lk-table tbody tr { padding: 12px 0; border-bottom: 1px solid var(--ag-separator); }
+  .ag-lk-table tbody tr:last-child { border-bottom: 0; }
+  .ag-lk-table th, .ag-lk-table td { border-bottom: 0; padding: 0; }
+  .ag-lk-table tbody th { margin-bottom: 6px; }
+  .ag-lk-table td { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 12px; min-height: 30px; padding: 3px 0; }
+  .ag-lk-table__label { display: inline; font-size: var(--ag-type-caption-size); color: var(--ag-text-2); }
+}
+
+@media (max-width: 1279px) {
+  .ag-lk__top { grid-template-columns: minmax(0, 1fr); }
+  .ag-lk__window { padding-top: 0; }
+}
+@media (max-width: 1023px) {
+  .ag-lockers { overflow: visible; padding: 0; }
+  .ag-lk__body { padding: 20px; }
+  .ag-lk__alert, .ag-lk__skel { padding: 20px; }
+}
+@media (max-width: 479px) {
+  .ag-lk__body, .ag-lk__alert, .ag-lk__skel { padding: 16px; }
+}
+
+@media (forced-colors: active) {
+  .ag-lk-table th, .ag-lk-table td, .ag-lk-table tbody tr { border-color: CanvasText; }
+}
+
+/* The note over a table of last-known values: a plain sentence, no alert colour, since it describes data and is not a fault. */
+.ag-lk__lastknown { margin-bottom: 8px; font-size: var(--ag-type-small-size); line-height: 1.45; color: var(--ag-text-2); }

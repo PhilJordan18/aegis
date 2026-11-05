@@ -1,0 +1,16 @@
+{
+  "steps": [
+    { "do": "waitOnline", "timeoutMs": 10000 },
+    { "do": "receiveCommand", "ref": "return-without-asset", "compartment": "A1", "operation": "return" },
+    { "wait": 1000 },
+    { "do": "openDoor", "code": "A1" },
+    { "wait": 1000 },
+    { "do": "closeDoor", "code": "A1" },
+    { "wait": 3500 },
+    { "do": "putTag", "code": "A2", "identifier": "E20034120123456789000002" },
+    { "do": "updateCompartment", "code": "A2", "patch": { "readerStatus": "FAULTED" } },
+    { "do": "scanRfid", "code": "A2" },
+    { "do": "replay", "type": "RFID_SCAN_COMPLETED" },
+    { "do": "stop" }
+  ]
+}

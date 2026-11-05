@@ -1,12 +1,20 @@
+import { isAbsolute, resolve } from 'node:path';
+import { defaultBootCountFile, isValidBootCount } from './boot-counter.ts';
+import { defaultCommandJournalFile } from './command-journal.ts';
 import {
   CANONICAL_UUID,
   CELL_ADDRESS_MAX,
   CELL_ADDRESS_MIN,
   HEARTBEAT_INTERVAL_MS,
+  RFID_DEFAULT_WINDOW_MS,
+  RFID_WINDOW_MAX_MS,
+  RESET_REASONS,
+  isResetReason,
   type CellConnectionStatus,
   type DoorState,
   type LockState,
   type ReaderStatus,
+  type ResetReason,
 } from './contract.ts';
 
 /**
@@ -22,9 +30,17 @@ export const DEFAULT_COMPARTMENTS: readonly CompartmentConfig[] = [
 ];
 export const DEFAULT_BROKER_URL = 'mqtt://127.0.0.1:1883';
 export const DEFAULT_FIRMWARE_VERSION = '0.1.0-sim';
-/** Not a contract-controlled value: doc 10 §13.1 only shows WATCHDOG. */
-export const DEFAULT_RESET_REASON = 'POWER_ON';
+/** A simulated process start is a cold boot. */
+export const DEFAULT_RESET_REASON: ResetReason = 'POWER_ON';
 export const DEFAULT_RSSI_DBM = -55;
+/**
+ * Doc 10 §9.2: the real value belongs to the hardware ADR (lock mechanism). This
+ * simulator default leaves a technician time to open the door in a demonstration.
+ */
+export const DEFAULT_UNLOCK_WINDOW_MS = 15_000;
+export const UNLOCK_WINDOW_MIN_MS = 1_000;
+export const UNLOCK_WINDOW_MAX_MS = 120_000;
+export const RFID_WINDOW_MIN_MS = 100;
 
 export interface CompartmentConfig {
   /** Readable code used by scenarios only; it never appears in a payload. */
@@ -45,12 +61,22 @@ export interface SimulatorConfig {
   readonly deviceKey: string;
   readonly compartments: readonly CompartmentConfig[];
   readonly firmwareVersion: string;
-  readonly resetReason: string;
+  readonly resetReason: ResetReason;
   readonly rssiDbm: number;
   readonly heartbeatIntervalMs: number;
   /** Allows plaintext MQTT to a non-loopback host, e.g. a private Docker network. */
   readonly allowInsecureRemote: boolean;
   readonly caFile?: string;
+  /** State file holding the last bootCount of this deviceKey, the simulator's NVS. */
+  readonly bootCountFile: string;
+  /** Overrides the bootCount of the first boot only (tests, deliberate reset). */
+  readonly firstBootCount?: number;
+  /** State file of the §16.1 command journal of this deviceKey, outside the repository. */
+  readonly commandJournalFile: string;
+  /** How long an accepted unlock lasts before the hub relocks on its own (§9.2). */
+  readonly unlockWindowMs: number;
+  /** Stabilisation window of the RFID scan that follows a door closing (§12). */
+  readonly rfidWindowMs: number;
 }
 
 export class ConfigError extends Error {
@@ -115,8 +141,29 @@ export function validateConfig(config: SimulatorConfig): SimulatorConfig {
     ids.add(c.compartmentId);
     addresses.add(c.cellAddress);
   }
-  if (!/^[A-Z][A-Z0-9_]{0,63}$/.test(config.resetReason)) {
-    throw new ConfigError('resetReason must be an UPPER_SNAKE_CASE value');
+  // A producer emits only controlled values (decision D1); normalising an unknown
+  // cause to UNKNOWN is the consumer's tolerance rule, not the simulator's.
+  if (!isResetReason(config.resetReason)) {
+    throw new ConfigError(`resetReason must be one of ${RESET_REASONS.join(', ')}`);
+  }
+  if (config.bootCountFile.length === 0 || !isAbsolute(config.bootCountFile)) {
+    throw new ConfigError('bootCountFile must be an absolute path');
+  }
+  if (config.commandJournalFile.length === 0 || !isAbsolute(config.commandJournalFile)) {
+    throw new ConfigError('commandJournalFile must be an absolute path');
+  }
+  if (
+    !Number.isInteger(config.unlockWindowMs) ||
+    config.unlockWindowMs < UNLOCK_WINDOW_MIN_MS ||
+    config.unlockWindowMs > UNLOCK_WINDOW_MAX_MS
+  ) {
+    throw new ConfigError(`unlockWindowMs must be an integer in ${UNLOCK_WINDOW_MIN_MS}..${UNLOCK_WINDOW_MAX_MS}`);
+  }
+  if (!Number.isInteger(config.rfidWindowMs) || config.rfidWindowMs < RFID_WINDOW_MIN_MS || config.rfidWindowMs > RFID_WINDOW_MAX_MS) {
+    throw new ConfigError(`rfidWindowMs must be an integer in ${RFID_WINDOW_MIN_MS}..${RFID_WINDOW_MAX_MS}`);
+  }
+  if (config.firstBootCount !== undefined && !isValidBootCount(config.firstBootCount)) {
+    throw new ConfigError('the first bootCount must be an integer >= 1');
   }
   if (config.firmwareVersion.length === 0 || config.firmwareVersion.length > 32) {
     throw new ConfigError('firmwareVersion must be 1-32 characters');
@@ -162,37 +209,57 @@ function parseInteger(name: string, raw: string): number {
 export function configFromEnv(env: NodeJS.ProcessEnv): SimulatorConfig {
   const lockerId = env.AEGIS_SIM_LOCKER_ID ?? DEFAULT_LOCKER_ID;
   const caFile = env.AEGIS_MQTT_CA_FILE;
+  const bootCount = env.AEGIS_SIM_BOOT_COUNT;
+  const deviceKey = env.AEGIS_SIM_DEVICE_KEY ?? `sim-${lockerId}`;
   return validateConfig({
     brokerUrl: env.AEGIS_MQTT_URL ?? DEFAULT_BROKER_URL,
     // The local broker authenticates the hub with its lockerId as username.
     username: env.AEGIS_MQTT_DEVICE_USERNAME ?? lockerId,
     password: env.AEGIS_MQTT_DEVICE_PASSWORD ?? '',
     lockerId,
-    deviceKey: env.AEGIS_SIM_DEVICE_KEY ?? `sim-${lockerId}`,
+    deviceKey,
     compartments: env.AEGIS_SIM_COMPARTMENTS ? parseCompartments(env.AEGIS_SIM_COMPARTMENTS) : DEFAULT_COMPARTMENTS,
     firmwareVersion: env.AEGIS_SIM_FIRMWARE_VERSION ?? DEFAULT_FIRMWARE_VERSION,
-    resetReason: env.AEGIS_SIM_RESET_REASON ?? DEFAULT_RESET_REASON,
+    resetReason: (env.AEGIS_SIM_RESET_REASON ?? DEFAULT_RESET_REASON) as ResetReason,
     rssiDbm: env.AEGIS_SIM_RSSI_DBM ? parseInteger('AEGIS_SIM_RSSI_DBM', env.AEGIS_SIM_RSSI_DBM) : DEFAULT_RSSI_DBM,
     heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
     allowInsecureRemote: env.AEGIS_SIM_ALLOW_INSECURE_REMOTE === 'true',
     ...(caFile ? { caFile } : {}),
+    bootCountFile: env.AEGIS_SIM_BOOT_COUNT_FILE
+      ? resolve(env.AEGIS_SIM_BOOT_COUNT_FILE)
+      : defaultBootCountFile(deviceKey, env),
+    ...(bootCount ? { firstBootCount: parseInteger('AEGIS_SIM_BOOT_COUNT', bootCount) } : {}),
+    commandJournalFile: env.AEGIS_SIM_COMMAND_JOURNAL_FILE
+      ? resolve(env.AEGIS_SIM_COMMAND_JOURNAL_FILE)
+      : defaultCommandJournalFile(deviceKey, env),
+    unlockWindowMs: env.AEGIS_SIM_UNLOCK_WINDOW_MS
+      ? parseInteger('AEGIS_SIM_UNLOCK_WINDOW_MS', env.AEGIS_SIM_UNLOCK_WINDOW_MS)
+      : DEFAULT_UNLOCK_WINDOW_MS,
+    rfidWindowMs: env.AEGIS_SIM_RFID_WINDOW_MS
+      ? parseInteger('AEGIS_SIM_RFID_WINDOW_MS', env.AEGIS_SIM_RFID_WINDOW_MS)
+      : RFID_DEFAULT_WINDOW_MS,
   });
 }
 
 /** Defaults for programmatic use; the password must still be supplied by the caller. */
 export function defineConfig(overrides: Partial<SimulatorConfig> & Pick<SimulatorConfig, 'password'>): SimulatorConfig {
   const lockerId = overrides.lockerId ?? DEFAULT_LOCKER_ID;
+  const deviceKey = overrides.deviceKey ?? `sim-${lockerId}`;
   return validateConfig({
     brokerUrl: DEFAULT_BROKER_URL,
     username: lockerId,
     lockerId,
-    deviceKey: `sim-${lockerId}`,
+    deviceKey,
     compartments: DEFAULT_COMPARTMENTS,
     firmwareVersion: DEFAULT_FIRMWARE_VERSION,
     resetReason: DEFAULT_RESET_REASON,
     rssiDbm: DEFAULT_RSSI_DBM,
     heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
     allowInsecureRemote: false,
+    bootCountFile: defaultBootCountFile(deviceKey),
+    commandJournalFile: defaultCommandJournalFile(deviceKey),
+    unlockWindowMs: DEFAULT_UNLOCK_WINDOW_MS,
+    rfidWindowMs: RFID_DEFAULT_WINDOW_MS,
     ...overrides,
   });
 }

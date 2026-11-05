@@ -1,4 +1,6 @@
 import type { Page } from '@playwright/test'
+import { openCatalog, waitForCatalogState, type CatalogMode } from './catalogFakes.ts'
+import { openLockers, waitForLockerState, type LockerMode } from './lockerFakes.ts'
 import { afterSubmit, submitSignIn } from './support.ts'
 
 export interface Viewport {
@@ -43,6 +45,60 @@ export interface Scenario {
   /** Brings the page into the state to inspect, after navigation. */
   readonly reach?: (page: Page) => Promise<void>
 }
+
+/** Production Équipements page with routed fakes: signed in through the preview gateway, then /equipements. */
+const CATALOG_STATES: readonly (readonly [CatalogMode, string])[] = [
+  ['nominal', 'nominal'],
+  ['long', 'contenu-long'],
+  ['loading', 'chargement'],
+  ['empty', 'vide'],
+  ['serviceError', 'erreur-service'],
+  ['forbidden', 'acces-refuse'],
+  ['unreachable', 'service-injoignable'],
+  ['paged', 'pagination'],
+  ['staleDossier', 'dossier-non-actualise'],
+]
+
+const catalogScenarios: readonly Scenario[] = CATALOG_STATES.map(([mode, state]) => ({
+  route: 'equipements',
+  state,
+  path: '/connexion',
+  reach: async (page: Page) => {
+    await openCatalog(page, mode)
+    await waitForCatalogState(page, mode)
+  },
+}))
+
+/** Production Casiers page with routed fakes: signed in through the preview gateway, then /casiers. */
+const LOCKER_STATES: readonly (readonly [LockerMode, string])[] = [
+  ['nominal', 'nominal'],
+  ['offline', 'hors-ligne'],
+  ['unknown', 'inconnu'],
+  ['closed', 'ferme'],
+  ['noSchedule', 'sans-horaire'],
+  ['faulted', 'exceptions'],
+  ['long', 'contenu-long'],
+  ['code20', 'code-20-caracteres'],
+  ['code24', 'code-24-caracteres'],
+  ['codeUnbroken', 'code-sans-coupure'],
+  ['offlineLong', 'hors-ligne-contenu-long'],
+  ['empty', 'aucun-casier'],
+  ['loading', 'chargement'],
+  ['notFound', 'introuvable'],
+  ['serviceError', 'erreur-service'],
+  ['unreachable', 'service-injoignable'],
+  ['stale', 'non-actualise'],
+]
+
+const lockerScenarios: readonly Scenario[] = LOCKER_STATES.map(([mode, state]) => ({
+  route: 'casiers',
+  state,
+  path: '/connexion',
+  reach: async (page: Page) => {
+    await openLockers(page, mode)
+    await waitForLockerState(page, mode)
+  },
+}))
 
 export const SCENARIOS: readonly Scenario[] = [
   { route: 'landing', state: 'defaut', path: '/' },
@@ -90,5 +146,7 @@ export const SCENARIOS: readonly Scenario[] = [
       await page.getByRole('radio', { name: 'Système' }).first().waitFor({ state: 'visible' })
     },
   },
+  ...catalogScenarios,
+  ...lockerScenarios,
   { route: 'introuvable', state: 'defaut', path: '/nulle-part' },
 ]

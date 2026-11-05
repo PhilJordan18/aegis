@@ -1,4 +1,6 @@
-import { expect, test, type Page, type Request } from '@playwright/test'
+import { randomUUID } from 'node:crypto'
+import { fileURLToPath } from 'node:url'
+import { expect, test, type APIRequestContext, type Page, type Request } from '@playwright/test'
 
 /**
  * WEB-01 acceptance against the real Aegis Control API (playwright.api.config.ts).
@@ -88,7 +90,7 @@ test('a technician account is refused, its token is dropped and no request follo
   expect((await login).status()).toBe(200)
 
   await expect(page.getByRole('heading', { level: 1, name: 'Accès réservé aux administrateurs' })).toBeFocused()
-  await expect(page.getByRole('alert')).toContainText("Ce compte technicien s'utilise dans l'application Aegis.")
+  await expect(page.getByRole('alert')).toContainText("Ce compte technicien s'utilise dans Aegis Mobile.")
   await expect(page.locator('form')).toHaveCount(0)
   await page.waitForLoadState('networkidle')
   expect(requests.map((request) => new URL(request.url()).pathname)).toEqual(['/api/v1/auth/login'])
@@ -128,6 +130,251 @@ test('repeated attempts reach the rate limit and use its Retry-After delay', asy
   const alert = page.getByRole('alert')
   await expect(alert).toContainText('Trop de tentatives.')
   await expect(alert).toContainText(/Réessayez dans \d+\s+secondes?\./)
-  await expect(page.getByText(/^Disponible dans \d+:\d{2}$/)).toBeVisible()
+  // The delay is shown once, in the alert: no countdown caption under the button.
+  await expect(page.getByText(/\d+:\d{2}/)).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Se connecter' })).toHaveAttribute('aria-disabled', 'true')
 })
+
+test('an administrator opens Équipements, sees the units from the API and opens one', async ({ page, request }) => {
+  // The API holds no seed: this run registers its own unit (document 09 §12.1-12.2), through the same proxy.
+  const login = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
+  expect(login.status()).toBe(200)
+  const { accessToken } = (await login.json()) as { accessToken: string }
+  const headers = () => ({ Authorization: `Bearer ${accessToken}`, 'Idempotency-Key': randomUUID() })
+  // Unique per run: model names are unique among active models, and the database outlives the run.
+  const stamp = Date.now()
+  const code = `E2E-${stamp}`
+  const modelName = `Multimètre E2E ${stamp}`
+  const model = await request.post('/api/v1/admin/asset-models', {
+    headers: headers(),
+    data: { name: modelName, manufacturer: 'Fluke', modelNumber: '117', description: null, defaultCalibrationRequired: true },
+  })
+  expect(model.status()).toBe(201)
+  const { id: assetModelId } = (await model.json()) as { id: string }
+  const created = await request.post('/api/v1/admin/assets', {
+    headers: headers(),
+    data: { assetModelId, assetCode: code, serialNumber: null, requiredAccessLevel: 'STANDARD', operationalStatus: 'SERVICEABLE', calibrationRequired: true, calibrationDueAt: '2027-01-15T05:00:00Z' },
+  })
+  expect(created.status()).toBe(201)
+  const unit = (await created.json()) as { id: string }
+
+  const requests = apiRequests(page)
+  await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
+  await expect(page).toHaveURL(/\/equipements$/)
+  await expect(page.getByRole('heading', { level: 1, name: 'Équipements' })).toBeFocused()
+
+  // The list comes from GET /admin/assets with the bearer token; the first unit is selected and read by id.
+  await expect(page.getByRole('heading', { level: 2, name: /^\d+ exemplaires?$/ })).toBeVisible()
+  const rows = page.locator('.ag-list__items a')
+  await expect(rows.first()).toBeVisible()
+  await expect(rows.first()).toHaveAttribute('aria-current', 'true')
+  const listRequest = requests.find((candidate) => new URL(candidate.url()).pathname === '/api/v1/admin/assets')
+  expect(listRequest, 'GET /admin/assets').toBeTruthy()
+  expect(await listRequest?.headerValue('authorization')).toMatch(/^Bearer \S+$/)
+
+  // Opens the unit this run created: the address carries its id, and its dossier is read from /admin/assets/{id}.
+  // On an empty database that unit is also the first one, already selected and read; a cached read is not repeated.
+  await page.evaluate((assetId) => {
+    window.history.pushState(null, '', `/equipements?exemplaire=${assetId}`)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }, unit.id)
+  await expect(page).toHaveURL(new RegExp(`exemplaire=${unit.id}$`))
+  const detailPath = `/api/v1/admin/assets/${unit.id}`
+  await expect.poll(() => requests.some((candidate) => new URL(candidate.url()).pathname === detailPath)).toBe(true)
+  const detail = requests.find((candidate) => new URL(candidate.url()).pathname === detailPath)
+  expect((await detail?.response())?.status()).toBe(200)
+  await expect(page.getByRole('heading', { level: 2, name: new RegExp(`${modelName} · ${code}`) })).toBeVisible()
+
+  // What the API says today: no presence observation, so no presence, no placement and no « Prêt ».
+  const dossier = page.getByRole('group', { name: new RegExp(code) })
+  await expect(dossier).toContainText('État physique inconnu')
+  await expect(dossier).toContainText("Aucune observation de présence n'est disponible.")
+  await expect(dossier).toContainText('Aucun placement connu')
+  await expect(dossier).toContainText('Fluke 117')
+  // 2027-01-15T05:00:00Z is local midnight in the laboratory zone: date, time and zone are all shown.
+  await expect(dossier).toContainText(/15\sjanv\.\s2027,\s00\sh\s00\sHNE/)
+  await expect(dossier).toContainText('America/Toronto')
+  await expect(page.locator('main')).not.toContainText(/\bPrêt\b/)
+  // Read-only: no create, edit or archive control. The kept database may hold more than one page, whose pager has buttons.
+  const pagerButtons = await page.getByRole('navigation', { name: 'Pagination des exemplaires' }).getByRole('button').count()
+  await expect(page.locator('main').getByRole('button')).toHaveCount(pagerButtons)
+
+  // Clicking a listed unit selects it through the address and reads it by id.
+  const first = rows.first()
+  await first.click()
+  await expect(page).toHaveURL(/\/equipements\?exemplaire=[0-9a-f-]{36}/)
+  await expect(first).toHaveAttribute('aria-current', 'true')
+})
+
+/**
+ * PHY-01 #29 acceptance: the Casiers page against the real locker status. The expectations come from a direct
+ * GET of the same status in the same test, translated to the French words of the catalog: no state is
+ * hard-coded, so the run is right whatever the simulator is doing. Only enumerations and « seen or never » are
+ * compared, since timestamps move with every heartbeat.
+ */
+const DEMO_LOCKER_ID = process.env.AEGIS_DEMO_LOCKER_ID ?? 'd46a74ae-39dc-460b-8af0-38fc791b376a'
+const LIVE_SHOTS = fileURLToPath(new URL('../test-results/live/', import.meta.url))
+
+interface LiveStatus {
+  lockerId: string
+  code: string
+  name: string
+  connectionStatus: string
+  lastSeenAt: string | null
+  currentWindow: { timeZone: string | null; open: boolean; closesAt: string | null; nextOpensAt: string | null }
+  compartments: {
+    code: string
+    enabled: boolean
+    connectionStatus: string
+    rfidReaderStatus: string
+    doorState: string
+    lockState: string
+    lastObservedAt: string | null
+  }[]
+}
+
+// Test-side translation of the contract enumerations into the words the page must show (fr.ts `lockers`).
+const WORDS = {
+  connection: { ONLINE: 'En ligne', OFFLINE: 'Hors ligne', UNKNOWN: 'État inconnu' },
+  link: { CONNECTED: 'Connectée', DISCONNECTED: 'Déconnectée', UNKNOWN: 'Inconnue' },
+  reader: { HEALTHY: 'En bon état', FAULTED: 'En défaut', UNKNOWN: 'Inconnu' },
+  door: { OPEN: 'Ouverte', CLOSED: 'Fermée', UNKNOWN: 'Inconnue' },
+  lock: { LOCKED: 'Verrouillée', UNLOCKED: 'Déverrouillée', UNKNOWN: 'Inconnue' },
+} as const
+
+const word = (table: Record<string, string>, value: string): string => {
+  const text = table[value]
+  expect(text, `the contract value ${value} has a word in this test`).toBeTruthy()
+  return text as string
+}
+
+/**
+ * A direct GET of the same status. It reuses the bearer token the page itself sent, so the run signs in once
+ * per test: the API's in-memory rate limiter counts every login of the run.
+ */
+async function directStatus(request: APIRequestContext, lockerId: string, authorization: string): Promise<LiveStatus> {
+  const response = await request.get(`/api/v1/lockers/${lockerId}/status`, { headers: { Authorization: authorization } })
+  expect(response.status(), 'direct GET /lockers/{id}/status').toBe(200)
+  return (await response.json()) as LiveStatus
+}
+
+async function expectPageShows(page: Page, status: LiveStatus) {
+  const panel = page.getByRole('region', { name: new RegExp(status.code) })
+  await expect(panel.getByRole('heading', { level: 2 })).toContainText(status.code)
+  const chip = panel.locator('.ag-diag .ag-chip')
+  await expect(chip).toHaveText(word(WORDS.connection, status.connectionStatus))
+  await expect(chip.locator('svg')).toHaveCount(1)
+  const signal = panel.locator('.ag-lk__signal')
+  if (status.lastSeenAt === null) await expect(signal).toHaveText('Aucun signal reçu')
+  else await expect(signal).toContainText('Dernier signal')
+
+  // The window is the server's verdict, shown as sent: no schedule says so, and no zone is invented.
+  const { currentWindow } = status
+  if (currentWindow.open) await expect(panel).toContainText('Ouvert')
+  else if (currentWindow.nextOpensAt !== null) await expect(panel).toContainText('Fermé')
+  else {
+    await expect(panel).toContainText("Aucun horaire d'ouverture")
+    await expect(panel).not.toContainText(/Fermeture|Prochaine ouverture|Fuseau du casier/)
+  }
+  if (currentWindow.timeZone !== null) await expect(panel).toContainText(currentWindow.timeZone)
+
+  // While the locker is not ONLINE, an observed cell is its last known state: the note says so and the table points to it.
+  const lastKnown = status.connectionStatus !== 'ONLINE' && status.compartments.some((compartment) => compartment.lastObservedAt !== null)
+  const note = panel.locator('.ag-lk__lastknown')
+  if (lastKnown) {
+    await expect(note).toContainText('Dernier état connu')
+    await expect(panel.locator('table.ag-lk-table')).toHaveAttribute('aria-describedby', (await note.getAttribute('id')) ?? 'missing')
+  } else await expect(note).toHaveCount(0)
+
+  const rows = panel.getByRole('row')
+  await expect(rows).toHaveCount(status.compartments.length + 1)
+  for (const compartment of status.compartments) {
+    const row = rows.filter({ has: page.getByRole('rowheader', { name: compartment.code, exact: true }) })
+    await expect(row).toHaveCount(1)
+    const cells = row.getByRole('cell')
+    await expect(cells.nth(0)).toHaveText(new RegExp(compartment.enabled ? 'Oui$' : 'Non$'))
+    await expect(cells.nth(1)).toContainText(word(WORDS.link, compartment.connectionStatus))
+    await expect(cells.nth(2)).toContainText(word(WORDS.reader, compartment.rfidReaderStatus))
+    await expect(cells.nth(3)).toContainText(word(WORDS.door, compartment.doorState))
+    await expect(cells.nth(4)).toContainText(word(WORDS.lock, compartment.lockState))
+    if (compartment.lastObservedAt === null) await expect(cells.nth(5)).toContainText('Aucune observation')
+    else await expect(cells.nth(5)).not.toContainText('Aucune observation')
+    if (lastKnown && compartment.lastObservedAt !== null) {
+      for (const column of [1, 2, 3, 4]) await expect(cells.nth(column).locator('.ag-chip')).toHaveCount(0)
+    }
+  }
+}
+
+/** Every request of the page that reaches the API, as « METHOD path ». The sign-in POST is the only write allowed. */
+function expectOnlyReads(requests: Request[]) {
+  const writes = requests.filter((candidate) => candidate.method() !== 'GET' && !(candidate.method() === 'POST' && new URL(candidate.url()).pathname === '/api/v1/auth/login'))
+  expect(writes.map((candidate) => `${candidate.method()} ${new URL(candidate.url()).pathname}`), 'write requests made by the page').toEqual([])
+}
+
+test('Casiers (catalog discovery): the chip and every compartment row match a direct GET of the same status', async ({ page, request }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const requests = apiRequests(page)
+  await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
+  await expect(page).toHaveURL(/\/equipements$/)
+  // Through the shell link, in the same session: no reload, so the in-memory token survives.
+  const statusPromise = page.waitForRequest((candidate) => /\/api\/v1\/lockers\/[^/]+\/status$/.test(new URL(candidate.url()).pathname))
+  await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Casiers' }).click()
+  await expect(page).toHaveURL(/\/casiers$/)
+  await expect(page).toHaveTitle('Casiers — Aegis Manager')
+  await expect(page.getByRole('heading', { level: 1, name: 'Casiers' })).toBeFocused()
+
+  // Which locker the page found is read from its own request: the catalog placements name it.
+  const statusRequest = await statusPromise
+  const lockerId = new URL(statusRequest.url()).pathname.split('/').at(-2) ?? ''
+  expect(lockerId).toBe(DEMO_LOCKER_ID)
+  const authorization = (await statusRequest.headerValue('authorization')) ?? ''
+  expect(authorization).toMatch(/^Bearer \S+$/)
+  expect(requests.some((candidate) => new URL(candidate.url()).pathname === '/api/v1/admin/assets'), 'the catalog placements were read').toBe(true)
+
+  await expect(page.locator('.ag-lk__title')).toBeVisible()
+  const status = await directStatus(request, lockerId, authorization)
+  await expectPageShows(page, status)
+
+  await page.evaluate(() => document.fonts.ready)
+  await page.screenshot({ path: `${LIVE_SHOTS}casiers-live-desktop-1440-light.png`, fullPage: true, animations: 'disabled' })
+
+  // Read only: no control on the page, and the page wrote nothing.
+  await expect(page.locator('main').getByRole('button')).toHaveCount(0)
+  expectOnlyReads(requests)
+})
+
+test('Casiers (?casier=): the named locker is read directly and matches a direct GET of the same status', async ({ page, request }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.emulateMedia({ colorScheme: 'dark' })
+  const requests = apiRequests(page)
+  await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
+  await expect(page).toHaveURL(/\/equipements$/)
+  const statusPromise = page.waitForRequest((candidate) => /\/api\/v1\/lockers\/[^/]+\/status$/.test(new URL(candidate.url()).pathname))
+  await page.evaluate((lockerId) => {
+    window.history.pushState(null, '', `/casiers?casier=${lockerId}`)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }, DEMO_LOCKER_ID)
+  await expect(page.getByRole('heading', { level: 1, name: 'Casiers' })).toBeVisible()
+  const statusRequest = await statusPromise
+  const authorization = (await statusRequest.headerValue('authorization')) ?? ''
+  expect(authorization).toMatch(/^Bearer \S+$/)
+  await expect(page.locator('.ag-lk__title')).toBeVisible()
+
+  const status = await directStatus(request, DEMO_LOCKER_ID, authorization)
+  await expectPageShows(page, status)
+  // Named in the address: the catalog placements are not needed for this page.
+  const afterOpening = requests.filter((candidate) => /\/api\/v1\/lockers\//.test(candidate.url()))
+  expect(afterOpening.length).toBeGreaterThan(0)
+  expect(afterOpening.every((candidate) => candidate.url().includes(`/lockers/${DEMO_LOCKER_ID}/status`))).toBe(true)
+
+  await page.evaluate(() => document.fonts.ready)
+  await page.screenshot({ path: `${LIVE_SHOTS}casiers-live-mobile-390-dark.png`, fullPage: true, animations: 'disabled' })
+  await expectNoHorizontalScrollLive(page)
+  await expect(page.locator('main').getByRole('button')).toHaveCount(0)
+  expectOnlyReads(requests)
+})
+
+async function expectNoHorizontalScrollLive(page: Page) {
+  const { scrollWidth, clientWidth } = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }))
+  expect(scrollWidth, 'horizontal scroll').toBeLessThanOrEqual(clientWidth)
+}

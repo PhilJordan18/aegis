@@ -1,0 +1,17 @@
+{
+  "steps": [
+    { "do": "waitOnline", "timeoutMs": 10000 },
+    { "do": "armFault", "fault": "CRASH_DURING_ACTUATION" },
+    { "do": "receiveCommand", "ref": "interrupted", "compartment": "A1", "operation": "op1" },
+    { "do": "restart", "resetReason": "BROWNOUT" },
+    { "do": "waitOnline", "timeoutMs": 10000 },
+    { "do": "redeliverCommand", "ref": "interrupted" },
+    { "do": "receiveCommand", "ref": "door-left-open", "compartment": "A2", "operation": "op2" },
+    { "do": "openDoor", "code": "A2" },
+    { "do": "restart", "resetReason": "WATCHDOG" },
+    { "do": "waitOnline", "timeoutMs": 10000 },
+    { "do": "closeDoor", "code": "A2" },
+    { "wait": 1000 },
+    { "do": "stop" }
+  ]
+}

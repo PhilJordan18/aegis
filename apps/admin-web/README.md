@@ -2,21 +2,24 @@
 
 Application React/TypeScript des administrateurs (ADR-010). Elle couvre
 l'accueil, la connexion avec tous ses états, le shell d'Aegis Manager et un
-aperçu statique de l'écran Équipements (WEB-00). Depuis WEB-01, la connexion
+aperçu statique de l'écran Équipements (WEB-00), puis la lecture seule du
+catalogue et du statut des casiers. Depuis WEB-01, la connexion
 et la session passent par l'API (`POST /api/v1/auth/login`,
 `GET /api/v1/auth/me`) hors du mode aperçu.
 
-Le rendu applique le handoff de conception (`docs/design/manager-entree/` :
-`handoff.md`, `tokens.css`, `states.md`, `reference/`). Il n'invente aucune
-direction visuelle. Les textes [P] et les jetons restent **proposés** tant
-que Philippe n'a pas approuvé le rendu.
+Le rendu applique l'identité « Lumière du hub » v3 approuvée par Philippe
+(issue #79 : `docs/design/manager-v3/`, référence commune dans
+`docs/design/identite/reference.md`) sur les parcours, les états et les textes
+du handoff d'entrée (`docs/design/manager-entree/` : `handoff.md`, `states.md`).
+Il n'invente aucune direction visuelle. Les textes [P] restent **proposés** tant
+que Philippe ne les a pas approuvés.
 
 ## Commandes
 
 Node 22.12 ou plus récent (vérifié avec Node 24.13 et npm 11.8).
 
 ```bash
-npm install
+npm ci --ignore-scripts   # installation reproductible; aucune dépendance n’a de script d’installation
 npm run dev            # serveur Vite, aperçu de conception actif
 npm run dev:api        # serveur Vite sans aperçu : /api est relayé vers l'API locale
 npm run typecheck      # TypeScript strict (tsc -b)
@@ -29,6 +32,8 @@ npm run preview        # sert dist/
 npm run test:a11y      # Playwright : axe (WCAG 2.x A/AA), absence de défilement horizontal et parcours, sur toute la matrice
 npm run capture        # mêmes contrôles, et écrit la matrice complète dans test-results/captures/ (ignoré par Git)
 npm run capture:evidence  # 16 captures choisies, à 1×, dans docs/design/manager-entree/captures/
+npm run capture:integration  # 14 captures FR/EN de l'identité v3, à 1×, dans docs/design/manager-v3/captures-integration/
+npm run test:identity  # mesures sur le rendu : saut de mise en page, contrastes peints, focus, texte coupé
 npm run test:e2e:api   # recette Playwright contre l'API réelle (build de production); échoue sans API ou sans identifiants
 ```
 
@@ -88,14 +93,25 @@ nommés `<route>-<état>-<taille>-<thème>.png`.
 Une capture est prise avant les contrôles, pour qu'un état en échec laisse
 une trace. Les parcours (`flow:`) vérifient en outre :
 
-- l'ordre de tabulation et le focus après connexion;
+- l'ordre de tabulation (marque, « Accueil », langue, courriel) et le focus après connexion;
 - l'écran de mauvais rôle, sans aucune requête;
 - le sélecteur d'aperçu;
 - l'apparence appliquée avant le premier affichage;
-- le stockage, qui ne contient que la préférence;
+- le stockage, qui ne contient que les préférences d'interface (apparence,
+  langue) et seulement après un choix explicite;
 - les polices servies par le bundle, sans CDN;
-- la transparence réduite (émulée par CDP) et le mouvement réduit;
+- l'absence de verre (aucun `backdrop-filter`) et le mouvement réduit;
 - le tiroir modal et le lien d'évitement.
+
+`e2e/entry.spec.ts` tourne en français (la langue du navigateur est `fr-CA`
+dans la configuration). `e2e/language.spec.ts` refait la matrice en anglais
+(`en-CA`; 5 tailles, thèmes clair et sombre, tous les états de connexion, le
+shell et la page introuvable : axe, défilement horizontal, `lang`, titre, aucun
+chemin de clé visible, aucun texte français hors aperçu) et vérifie les parcours
+de langue : préférence du navigateur, repli, choix mémorisé qui l'emporte,
+changement au clavier, rechargement, menu du compte, tiroir et lien
+d'évitement en anglais. `npm run test:a11y` et `npm run capture` incluent les
+deux fichiers.
 
 ## Dépendances
 
@@ -116,27 +132,50 @@ une trace. Les parcours (`flow:`) vérifient en outre :
 Aucun kit d'interface, aucun framework CSS, aucune bibliothèque d'icônes,
 aucun client HTTP : `fetch` suffit.
 
+Aucune dépendance n'a été ajoutée pour la localisation (#78) : `Intl`
+(`PluralRules`, `NumberFormat`, `DateTimeFormat`), présent dans tous les
+navigateurs ciblés, couvre les pluriels, les unités et les dates en `fr-CA` et
+`en-CA`. Une bibliothèque (`react-intl`, `i18next`) n'aurait ajouté que du
+poids et un format de message à apprendre pour deux langues et une quarantaine
+de messages; le typage TypeScript des catalogues apporte déjà la vérification
+des clés et des paramètres.
+
 ## Couche visuelle
 
-- `src/styles/tokens.css` reprend mot pour mot
-  `docs/design/manager-entree/tokens.css`. `src/styles/tokens.test.ts`
-  échoue si les deux fichiers divergent : modifier d'abord le fichier de
-  conception.
-- `src/styles/base.css` contient la réinitialisation, l'anneau de focus et
-  le verre avec ses trois replis opaques : absence de `backdrop-filter`,
-  `prefers-reduced-transparency` et `forced-colors`. Le décor y est masqué
-  dans ces cas, et toute transition est coupée en mouvement réduit.
+- `src/styles/tokens.css` porte les palettes sémantiques de la référence
+  d'identité (clair minéral, sombre profond) et les jetons adoptés par Philippe :
+  bordure des contrôles, anneau de focus plein de 2 px décalé de 2 px, élément
+  sélectionné, contrôle désactivé; l'information est un bleu azur distinct du
+  succès, de l'avertissement, de l'erreur et de l'accent. Il remplace pour
+  l'entrée les jetons « Verre lumineux » de `docs/design/manager-entree/tokens.css`
+  (conservé comme historique). `src/styles/tokens.test.ts` mesure le contraste de
+  chaque paire qui porte du texte, un contrôle ou le focus, dans les deux
+  apparences; `src/styles/identity.test.ts` échoue si du verre, des cellules, de
+  l'indigo ou un dégradé de surface reviennent dans les sources de production.
+- `src/styles/base.css` contient la réinitialisation, l'anneau de focus (le halo
+  translucide ne l'accompagne que sur un champ) et la coupure des transitions en
+  mouvement réduit. Aucune surface n'utilise `backdrop-filter`.
+- Marque : un composant unique, `src/ui/Brand.tsx`. Le symbole vient des deux
+  fichiers de `src/assets/brand/` (clair et sombre, copiés de
+  `docs/design/identite/assets/`, voir leur `README.md`), choisis par `data-theme`;
+  le mot « aegis » est composé en Geist et « Manager » est du texte, qui passe sur
+  une seconde ligne sous 480 px au lieu de disparaître. Remplacer les deux
+  fichiers suffit pour les assets définitifs. `src/ui/BrandPromise.tsx` porte la
+  signature commune, l'accroche et la description (catalogues, `brand.*`).
 - Chaque composant a sa feuille CSS simple, avec des classes `ag-*` et ses
   règles de couleurs forcées (handoff §9.5) :
-  - `src/ui/` : marque, bouton, alerte, pastille de statut, icônes SVG en
-    ligne, cellules;
+  - `src/ui/` : marque, promesse de marque, bouton, alerte, pastille de statut,
+    icônes SVG en ligne;
   - `src/app/shell/` : barre latérale, menu du compte, tiroir;
   - `src/app/page.css` : cadre et titre de page dans le shell, communs à
     l'Équipements protégé et à l'aperçu;
   - `src/pages/`;
   - `src/features/auth/sign-in.css`.
-- Le verre est réservé à la navigation : barre latérale, onglets, barre
-  compacte. Formulaires, alertes et données reposent sur `--ag-surface`.
+- Surfaces opaques et filets; la seule lumière est un halo radial localisé
+  derrière la promesse (accueil, connexion), jamais derrière la carte ou un
+  message. Les erreurs globales de connexion sont annoncées sous le bouton, dans
+  une zone réservée au bas du formulaire : elles ne déplacent ni un champ ni le
+  bouton.
 
 ## Ce qui relève de l'aperçu uniquement
 
@@ -179,6 +218,104 @@ la passerelle HTTP (`features/auth/httpAuthGateway.ts`) remplace la
 passerelle d'aperçu, et l'Équipements protégé (`/equipements`) remplace
 l'aperçu statique.
 
+## Casiers : statut en lecture seule (PHY-01 #29)
+
+Page protégée `/casiers`, la quatrième section de l'ordre approuvé de la barre
+latérale (`docs/design/asset-lifecycle/sections.md` §5.4; l'entrée « Casiers »
+existait déjà, marquée « à venir »). C'est le **minimum lisible** de la section :
+le statut d'un casier tel que le serveur l'a évalué. Elle ne reprend ni la
+modification de l'horaire, ni l'équipement placé, ni les opérations du casier
+(`sections.md` §5.4), qui restent à faire. Aucune nouvelle identité : shell,
+panneau, bloc de diagnostic, pastille de statut (`StatusChip`), alerte et
+avis de données périmées (`StaleNotice`) sont ceux d'Équipements.
+
+- **Source** : `GET /api/v1/lockers/{lockerId}/status` (09 §8.6, §16.1;
+  `src/features/lockers/`). Le type reprend le contrat; `contractParsers.ts` est
+  strict comme celui du catalogue : un champ manquant ou mal typé rejette toute la
+  réponse (erreur de service avec identifiant de suivi), de même qu'un identifiant
+  qui n'est pas un UUID ou un instant qui n'est pas un RFC 3339 UTC réel (les
+  microsecondes de l'API sont acceptées, un 30 février ne l'est pas), de sorte
+  qu'aucun formateur ne peut lever d'exception au rendu. Une valeur d'énumération
+  inconnue devient `UNRECOGNIZED` et s'affiche « État indisponible », jamais comme
+  un état sain (09 §3).
+- **Quel casier ?** Il n'existe pas encore de liste de casiers utilisable : le
+  document 09 §12 prévoit `GET /admin/lockers` et `ApiRoutes` l'autorise pour les
+  administrateurs, mais aucun contrôleur ne le sert et le contrat ne lui donne pas
+  de schéma de réponse. La page ne l'appelle donc pas. Elle prend `?casier=<uuid>`
+  (UUID validé, sinon ignoré) ou, à défaut, les casiers où le catalogue place des
+  exemplaires (`placement.lockerId`, première page, la même requête que
+  Équipements). C'est un moyen au mieux : un casier sans exemplaire placé, ou placé
+  après la première page, n'est pas trouvé ainsi. Aucun identifiant n'est écrit en
+  dur. Sans exemplaire placé, la page dit « Aucun casier trouvé parmi les
+  équipements placés », une consigne (les placements se consultent dans
+  Équipements) et un lien vers la page Équipements existante : l'adresse
+  `?casier=` reste un moyen direct, mais n'est jamais la seule voie affichée.
+- **Contenu** : code et nom; pastille « En ligne », « Hors ligne » ou « État
+  inconnu » (libellés approuvés du prototype, avec un symbole distinct par état);
+  « Dernier signal : … » (`lastSeenAt`; « Last seen: … » en anglais (décision de Philippe, #118); ou « Aucun signal reçu »); heure d'évaluation;
+  horaire d'exploitation (ouvert avec la fermeture, fermé avec la prochaine
+  ouverture, ou « Aucun horaire d'ouverture ») dans le fuseau du casier avec son
+  abréviation; tableau des cellules (activée, liaison, lecteur RFID, porte,
+  serrure, dernière observation). Les instants techniques (signal, observation,
+  évaluation) sont dans le fuseau de l'appareil, comme le diagnostic des
+  équipements; les instants métier (fermeture, ouverture) dans celui du casier.
+- **Casier hors ligne** : le serveur garde sur les cellules les valeurs du dernier
+  signal tant que le casier n'est pas en ligne (elles ne sont mises à jour que par
+  les signaux; PHY-01). « Hors ligne » peut donc surmonter des cellules qui disent
+  « Connectée », « En bon état », « Fermée », « Verrouillée ». Chaque cellule qui a
+  une observation est alors dessinée en texte neutre, sous la note « Dernier état
+  connu, à la dernière observation » [P] : la valeur du serveur reste visible,
+  inchangée, mais n'est jamais présentée comme une santé ou un défaut actuels. Rien
+  n'est dérivé côté navigateur. Une cellule jamais observée garde son état inconnu.
+  Que le serveur renvoie plutôt des cellules « inconnues » hors ligne est une
+  décision à prendre côté API.
+- **Le serveur seul décide** : `ONLINE`, `OFFLINE`, `UNKNOWN` et `open` viennent de
+  la réponse. Le navigateur ne dérive rien d'un horodatage (test avec un
+  `lastSeenAt` vieux de six ans pour un casier `ONLINE`).
+- **Lecture seule** : aucun bouton, champ ni formulaire de la page ne change un
+  état, ne force un état prêt, n'ouvre une cellule ni n'envoie une commande; la
+  passerelle (`LockerGateway`) n'a qu'une méthode, `getStatus` (09 §17, §25). Un
+  test le vérifie sur le rendu et sur la passerelle.
+- **Rafraîchissement** : TanStack Query, toutes les 15 s (`LOCKER_STATUS_REFRESH_MS`;
+  le hub émet toutes les 10 s, le seuil du serveur est de 30 s) et au retour sur la
+  fenêtre; en pause quand l'onglet est caché. Un échec garde les dernières données
+  avec l'avis « Données non actualisées. » et un bouton « Réessayer »; un 403 ou un
+  404 au rafraîchissement retire les données au lieu de les garder. Un 401 termine
+  la session et ramène à `/connexion`.
+- **Annonces** : une zone `role="status"` dit une fois « Casier AEGIS-DEMO-01 : En
+  ligne. », puis seulement quand l'état de connexion change; un rafraîchissement
+  identique ne relit rien.
+- **Tableau** : un vrai `<table>` avec ses rôles écrits; sous 760 px de largeur de
+  conteneur, les lignes s'empilent en « libellé : valeur » (libellés répétés,
+  masqués aux lecteurs d'écran). La liste de panneaux n'est un arrêt de tabulation
+  (groupe nommé) que lorsqu'elle défile. Le focus ne tombe jamais sur le corps :
+  après « Réessayer » d'une alerte de premier chargement, ou d'un avis de données
+  périmées dont la réponse est 403 ou 404, le panneau le prend; pour l'alerte du
+  catalogue, la page. Un état normal est du texte; chaque exception
+  (déconnectée, en défaut, ouverte, déverrouillée, inconnue) est une pastille avec
+  symbole et texte, jamais la couleur seule.
+- **Tests** : `src/features/lockers/*.test.ts`, `src/pages/LockersPage.test.tsx`
+  (états : chargement, nominal, hors ligne, jamais vu, sans horaire, fermé, 404,
+  403, 401, erreur réseau, réponse hors contrat, données périmées, intervalle,
+  absence d'action d'écriture, FR et EN); Playwright : scénarios `casiers` de la
+  matrice (français) et `lockers` de `language.spec.ts` (anglais), et les parcours
+  `flow: casiers`, avec les mêmes faux routés que le catalogue
+  (`e2e/lockerFakes.ts`). `npm run capture -- --grep casiers` (français) et
+  `npm run capture -- --grep "en-lockers"` (anglais) écrivent les captures dans
+  `test-results/captures/`.
+- **Recette contre l'API réelle** : `npm run test:e2e:api` ouvre `/casiers` deux
+  fois, par la découverte du catalogue puis avec `?casier=<id du casier de
+  démonstration>` (`AEGIS_DEMO_LOCKER_ID` le remplace). Dans le même test, il lit
+  directement `GET /lockers/{id}/status` avec le même jeton et vérifie que la
+  pastille de connexion, l'horaire et chaque ligne de cellule montrent exactement
+  ce que l'API renvoie; aucun état n'est écrit en dur dans le test, seuls les
+  énumérations et « vu ou jamais vu » sont comparés (les horodatages bougent à
+  chaque signal). Il vérifie aussi que la page n'émet aucune requête d'écriture
+  (hors la connexion) et écrit deux captures du rendu réel dans
+  `test-results/live/` (1440 clair, 390 sombre). Comme le reste du fichier, il
+  échoue sans API. Le limiteur de débit de l'API compte chaque connexion : ne pas
+  enchaîner deux exécutions en moins d'une minute.
+
 ## Routage
 
 `src/app/routes.ts` et `src/app/router.ts` forment une interface
@@ -190,14 +327,73 @@ sera remplacée par le routeur choisi à l'intégration.
 | `/` | Accueil (textes [P] du handoff §7) |
 | `/connexion` | Connexion |
 | `/equipements` | Équipements, protégé : session administrateur exigée, sinon `/connexion`. Arrivée après la connexion hors aperçu |
+| `/casiers` | Casiers (statut en lecture seule), protégé comme `/equipements`. `?casier=<uuid>` désigne un casier |
 | `/apercu/equipements` | Aperçu seulement; « Page introuvable » ailleurs |
 | autre | Page introuvable |
 
-- `<html lang="fr-CA">` (handoff §7) et un titre par route.
+- `<html lang>` (`fr-CA` ou `en-CA`, handoff §7) et un titre par route, tous
+  deux dans la langue choisie (voir « Langue »). Les chemins (`/connexion`,
+  `/equipements`) restent français dans les deux langues : ce sont des adresses
+  stables, pas des textes.
 - Lien d'évitement vers `#contenu` en tête du shell.
 - Après une navigation, le focus passe au `h1` de la page; au premier
   chargement, il n'est pas déplacé.
 - La connexion suit ses propres règles de focus (`states.md` §3).
+
+## Langue
+
+Français et anglais (#78), selon `docs/localisation/convention.md` et
+`docs/localisation/glossaire.md`. Le français est la langue de référence et de
+repli; les textes anglais sont des propositions à valider.
+
+- **Résolution** (`src/i18n/locale.ts`), dans l'ordre : le choix explicite
+  gardé dans `localStorage` sous `aegis.manager.language` (`fr` ou `en`, rien
+  d'autre); sinon la première langue de `navigator.languages` dont la langue
+  principale est `fr` ou `en` (`fr-FR` donne le français, `fil` rien); sinon le
+  français. Le stockage est lu et écrit prudemment, comme l'apparence : une
+  erreur est tolérée et le choix s'applique alors pour la page. Rien n'est
+  écrit tant que l'utilisateur ne choisit pas, et rien n'est envoyé au serveur.
+- **Format** : `fr-CA` ou `en-CA` (`FORMAT_LOCALE`), quel que soit la variante
+  du navigateur. `<html lang>` prend la même valeur, à la création du
+  contrôleur (avant le premier rendu) puis à chaque changement; le titre du
+  document suit la route et la langue (`pageTitle`).
+- **Sélecteur** « Français / English » (`features/language/LanguageSwitch.tsx`) :
+  groupe de boutons radio natifs, même contrôle segmenté que l'apparence,
+  appliqué aussitôt. Chaque option est écrite dans sa langue avec son attribut
+  `lang`, sans drapeau. Version compacte (légende masquée visuellement, qui
+  reste le nom accessible du groupe) dans l'en-tête de l'accueil, de la
+  connexion et de la page introuvable; version complète dans le menu du compte
+  et le tiroir du shell.
+- **Catalogues** (`src/i18n/messages/`) : `fr.ts` fixe la forme; `en.ts` est
+  typé `Messages = typeof fr`, donc une clé manquante, en trop ou un paramètre
+  différent échoue à `tsc`. Un message est une chaîne ou une fonction à
+  paramètres nommés (`rateLimitedBody({ duration })`), une phrase complète à la
+  fois, jamais assemblée; les valeurs (durée, date) sont formatées avant
+  d'être insérées. Les pluriels passent par `createPluralSelector`
+  (`Intl.PluralRules`, `i18n/plural.ts`) et les durées, horloges et dates par
+  `i18n/format.ts` (`Intl.NumberFormat` avec l'unité `second`,
+  `Intl.DateTimeFormat` avec un fuseau explicite). Les composants lisent
+  `const { m, format } = useI18n()`.
+- **Erreurs** : l'affichage vient du code (outcome de connexion, code de
+  violation), jamais du `title` ni du `detail` du serveur. Les erreurs de champ
+  et les annonces de la zone `status` sont gardées comme des codes et traduites
+  au rendu : changer de langue les met à jour sur place. Un code inconnu donne le
+  message générique et le `traceId`, affiché tel quel après sa phrase
+  d'introduction (qui lui sert de libellé).
+- **Ce qui n'est pas traduit** : les noms de produits (Aegis, Aegis Manager),
+  les codes, les identifiants (`traceId`), le contenu de démonstration de
+  l'accueil (« Multimètre 2 », `MM-002`, donnée saisie) et les chemins d'URL.
+- **Couverture** : accueil, connexion et tous ses états, shell (navigation,
+  menu du compte, tiroir, lien d'évitement), sélecteur d'apparence, page
+  `/equipements` protégée et page introuvable. L'**aperçu de conception**
+  (`src/preview/**`, hors build de production) reste en français : sa bande
+  « Mode aperçu » et le contenu de l'écran Équipements d'aperçu ne sont pas
+  traduits, seul le shell qui les entoure suit la langue. Il n'est donc pas
+  bilingue.
+- **Nouvel écran** : ajouter les textes dans `fr.ts` et `en.ts` dans le même
+  changement; un nouveau terme métier passe d'abord par le glossaire. Le test
+  `src/i18n/messages/catalog.test.ts` vérifie les mêmes clés, les mêmes
+  paramètres, l'absence de texte vide ou qui ressemble à un chemin de clé.
 
 ## Apparence
 
@@ -290,9 +486,10 @@ Content-Security-Policy devra l'autoriser par empreinte.
   - validation client sans requête;
   - le `title` et le `detail` du serveur ne sont jamais affichés : seuls le
     `code`, `violations[].field` et le `traceId` servent.
-- Textes : `features/auth/signInCopy.ts` sépare les libellés approuvés [A]
-  des libellés proposés [P] (`states.md`). La validation est dans
-  `signInValidation.ts`.
+- Textes : le groupe `signIn` des catalogues (`src/i18n/messages/`, voir
+  « Langue ») marque en commentaire les libellés approuvés [A]; les autres sont
+  proposés [P] (`states.md`). La validation (`signInValidation.ts`) renvoie des
+  codes d'erreur de champ, que la page traduit au rendu.
 - `features/auth/session.ts` garde aussi en mémoire le courriel d'une
   session terminée par un 401, pour préremplir le formulaire.
 

@@ -5,6 +5,7 @@
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de révision :** 16 septembre 2026
 **Mise à jour ciblée :** 23 septembre 2026 — outbox et protections QR approuvées.
+**Mise à jour ciblée :** 28 octobre 2026 — création d’une réservation (RES-01, #37) : horaire du placement courant, locker sans horaire et ordre des contrôles implémenté (§5.1, §5.2), décisions de Philippe du 28 octobre 2026.
 **Version :** 1.2 — contrôle local QR et étoile
 
 ---
@@ -143,6 +144,12 @@ Elle est recalculée à la lecture, à la réservation et immédiatement avant u
 
 Le contexte sert uniquement à reconnaître qu’une réservation détenue par le même technicien est compatible avec son propre retrait. Elle demeure incompatible pour les autres utilisateurs.
 
+**Fraîcheur des observations** (décision du 4 novembre 2026, #31). La fraîcheur est événementielle et n’a pas d’âge maximal. La présence repose sur le dernier scan stable et sain de la cellule, fait après la fermeture de sa porte, le démarrage ou la reconnexion du hub. Une cellule fermée observée sans interruption garde ce scan aussi longtemps que dure l’observation. Le hub ne fait aucun scan périodique. Un heartbeat maintient la continuité de l’observation, mais n’établit jamais la présence.
+
+La continuité est rompue par une ouverture de porte, un redémarrage ou une reconnexion. Elle l’est aussi par un intervalle entre deux heartbeats valides de la même connexion qui ferait passer le casier `OFFLINE` selon la règle de doc 10 §15.3 (plus de 30 secondes). L’intervalle compte même si les heartbeats reprennent ensuite sur la même connexion, et même si personne n’a consulté l’API pendant l’interruption. Le premier heartbeat d’une connexion compte aussi : il ne doit pas suivre son premier message de plus de 30 secondes.
+
+Une rupture invalide le scan antérieur. La présence reste alors `UNKNOWN` jusqu’à un nouveau scan qualifiant, postérieur à la reprise à la fois par sa réception, sa séquence et sa fenêtre. Un doublon, un scan retardé ou un scan fait avant la reprise ne la rétablit pas. Aucune tolérance d’horloge n’est ajoutée : un horodatage ambigu laisse la présence `UNKNOWN`.
+
 ### 4.3 Priorité des résultats
 
 1. Une condition qui prouve que l’actif ne peut pas être utilisé produit `BLOCKED`.
@@ -248,7 +255,8 @@ Une réservation P0 est immédiate. `reservedFrom` correspond à l’instant d�
 La demande est admissible seulement si :
 
 - l’utilisateur est actif et possède le rôle `TECHNICIAN`;
-- le locker possède un horaire actif;
+- l’actif possède un placement courant : son locker est celui de ce placement, relu une fois le verrou de l’actif acquis;
+- ce locker possède un horaire actif;
 - l’instant courant appartient à une plage ouverte;
 - `reservedUntil` est postérieur à l’instant courant;
 - `reservedUntil` ne dépasse pas la fermeture de cette même plage;
@@ -256,6 +264,8 @@ La demande est admissible seulement si :
 - l’actif ne possède aucune réservation `ACTIVE`;
 - l’actif ne possède aucun prêt non terminé;
 - la readiness vaut `READY` dans le contexte d’une nouvelle réservation.
+
+Un locker sans horaire actif n’a aucune plage ouverte : la demande est refusée comme hors plage (`OUTSIDE_OPERATING_HOURS`). Un actif sans placement courant n’a ni locker, ni horaire, ni compartiment où prouver sa présence : la demande est refusée comme non prête (`ASSET_NOT_READY` / `UNKNOWN_PHYSICAL_STATE`). Ces règles et l’ordre de §5.2 sont ceux qu’implémente et teste RES-01 (décisions du 28 octobre 2026); le document 09, §14.1, en donne les codes HTTP.
 
 ### 5.2 Pseudocode transactionnel
 
@@ -267,18 +277,25 @@ function createReservation(userId, assetId, requestedUntil, requestKey):
         return existing result
 
     begin transaction
+        require now < requestedUntil                 // before any lock
         lock user then asset
+        reread asset and its current placement      // the placement may have changed while waiting for the lock
 
         require active TECHNICIAN
-        window = requireOpenOperatingWindow(asset.lockerId, now)
-        require now < requestedUntil <= window.closesAt
+        require asset exists
 
         require no ACTIVE reservation for user
         require no ACTIVE reservation for asset
         require no non-completed loan for asset
 
+        if asset has a current placement:
+            window = requireOpenOperatingWindow(placement.lockerId, now)   // no active schedule: no open window
+            require requestedUntil <= window.closesAt
+
+        require user access level permits asset.requiredAccessLevel
         readiness = evaluateReadiness(asset, user, RESERVATION, now)
         require readiness.result == READY
+        require asset has a current placement        // otherwise NOT READY, UNKNOWN_PHYSICAL_STATE
 
         create Reservation(
             status = ACTIVE,
@@ -286,7 +303,7 @@ function createReservation(userId, assetId, requestedUntil, requestKey):
             reservedUntil = requestedUntil
         )
 
-        append AuditEvent(RESERVATION_CREATED)
+        append AuditEvent(RESERVATION_CREATED)    // fromState and toState null, initial state in details
         save requestKey result
     commit
 
@@ -636,8 +653,8 @@ function ingestDeviceMessage(deviceIdentity, topic, rawPayload):
         observations = normalize(envelope)
         persist observations
 
-        if envelope carries heartbeat:
-            update lastSeenAt
+        if envelope carries heartbeat or availability:
+            update lastSeenAt and the availability projection (doc 10 §15.3)
 
         if envelope references operation:
             lock operation and affected aggregates
@@ -647,6 +664,8 @@ function ingestDeviceMessage(deviceIdentity, topic, rawPayload):
         mark message PROCESSED
     commit
 ```
+
+Exception unique (décision du 4 novembre 2026, #41) : un accusé de commande corrélé et valide qui précède le marquage du dispatcher enregistre `AUTHORIZED → COMMAND_SENT → COMMAND_ACKNOWLEDGED` dans la même transaction, deux transitions auditées dans cet ordre (document 08, §9.3).
 
 ### 9.3 Événements retardés ou désordonnés
 
@@ -1073,13 +1092,23 @@ Le retard ne déclenche aucune transition. Le prêt reste `ACTIVE` ou `RETURN_PE
 ### 14.4 État en ligne du locker
 
 ```text
-if no valid heartbeat has ever been received:
+reference = valid heartbeat with the highest sequence in the current session
+            (facts accepted since provisionedAt, doc 10 §15.3)
+
+if no valid heartbeat since provisionedAt:
     deviceStatus = UNKNOWN
-else if now - lastSeenAt > 30 seconds:
+else if reference is none:              # new session, no valid heartbeat yet
+    deviceStatus = OFFLINE
+else if reference.connection was closed by an OFFLINE availability:
+    deviceStatus = OFFLINE
+else if now - reference.receivedAt > 30 seconds:
     deviceStatus = OFFLINE
 else:
     deviceStatus = ONLINE
 ```
+
+La session courante est celle du plus grand `bootCount`; un `DEVICE_AVAILABILITY` ONLINE
+ne rend jamais le locker ONLINE à lui seul (doc 10 §15.3, depuis le schéma MQTT 2.0).
 
 Le hub publie un heartbeat toutes les 10 secondes. Un locker `OFFLINE` refuse toute nouvelle opération. Si la déconnexion survient après l’envoi d’une commande et que l’exécution est incertaine, l’opération passe à `ANOMALY`.
 

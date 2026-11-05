@@ -1,21 +1,24 @@
 import { useId } from 'react'
+import { useI18n } from '../../i18n/useI18n'
+import type { Messages } from '../../i18n/messages'
 import type { AppearancePreference } from './appearance'
 import { useAppearance } from './useAppearance'
 import './appearance-switch.css'
 
-const OPTIONS: readonly { value: AppearancePreference; label: string }[] = [
-  { value: 'system', label: 'Système' },
-  { value: 'light', label: 'Clair' },
-  { value: 'dark', label: 'Sombre' },
+const OPTIONS: readonly { value: AppearancePreference; label: keyof Pick<Messages['appearance'], 'system' | 'light' | 'dark'> }[] = [
+  { value: 'system', label: 'system' },
+  { value: 'light', label: 'light' },
+  { value: 'dark', label: 'dark' },
 ]
 
 /** Native radio group as a segmented control (handoff §6 AppearanceSwitch, U7). Applied immediately. */
 export function AppearanceSwitch() {
   const { preference, setPreference } = useAppearance()
   const name = useId()
+  const { m } = useI18n()
   return (
     <fieldset className="ag-appearance">
-      <legend className="ag-appearance__legend">Apparence</legend>
+      <legend className="ag-appearance__legend">{m.appearance.legend}</legend>
       <div className="ag-segmented">
         {OPTIONS.map((option) => (
           <label key={option.value} className="ag-segmented__option">
@@ -26,7 +29,7 @@ export function AppearanceSwitch() {
               checked={preference === option.value}
               onChange={() => setPreference(option.value)}
             />
-            {option.label}
+            {m.appearance[option.label]}
           </label>
         ))}
       </div>

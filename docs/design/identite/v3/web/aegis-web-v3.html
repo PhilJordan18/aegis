@@ -1,0 +1,91 @@
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap');
+#ag-web-study { font-family:'Geist',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+#ag-web-study * { box-sizing:border-box; }
+#ag-web-study .webapp { --bg:#070c13; --surface:#0e1621; --field:#111d2b; --ink:#f0f4fc; --muted:#a9b8cd; --border:#2b3b50; --accent:#8caeff; --core:#64d8eb; --button:#315ee8; --button-ink:#fff; --glow:#17386655; --error-bg:#391f25; --error-ink:#ffc8cf; background:var(--bg); color:var(--ink); min-height:690px; color-scheme:dark; position:relative; overflow:hidden; border:1px solid var(--border); border-radius:14px; }
+#ag-web-study .webapp.light { --bg:#f4f6fa; --surface:#fff; --field:#f6f8fb; --ink:#14253b; --muted:#53647a; --border:#d3dce7; --accent:#234bce; --core:#087a9b; --button:#234bce; --glow:#7ca7ef20; --error-bg:#fff0f1; --error-ink:#9e2837; color-scheme:light; }
+#ag-web-study header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:25px 36px; border-bottom:1px solid var(--border); position:relative; z-index:2; }
+#ag-web-study .brand { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+#ag-web-study .mark { position:relative; width:29px; height:29px; color:var(--accent); flex:none; }
+#ag-web-study .mark:before { content:''; position:absolute; inset:0; background:currentColor; clip-path:polygon(6.25% 93.75%,42.19% 12.5%,59.38% 12.5%,23.44% 93.75%); }
+#ag-web-study .mark:after { content:''; position:absolute; inset:0; background:currentColor; clip-path:polygon(59.38% 12.5%,95.31% 93.75%,76.56% 93.75%,50% 32.81%); }
+#ag-web-study .mark b { position:absolute; left:37.5%; top:51.56%; width:25%; height:25%; background:var(--core); clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%); }
+#ag-web-study .brandname { font-size:25px; line-height:1; font-weight:600; letter-spacing:-1.2px; }
+#ag-web-study .product { border-left:1px solid var(--border); padding-left:14px; margin-left:5px; font-size:12px; font-weight:500; letter-spacing:.8px; color:var(--muted); }
+#ag-web-study .languages { display:flex; border:1px solid var(--border); border-radius:8px; padding:3px; gap:2px; flex:none; }
+#ag-web-study .languages button { border:0; color:var(--muted); background:transparent; font:500 12px 'Geist',sans-serif; min-height:34px; min-width:38px; border-radius:5px; }
+#ag-web-study .languages button[aria-pressed=true] { background:var(--ink); color:var(--bg); }
+#ag-web-study .content { display:grid; grid-template-columns:minmax(0,1fr) minmax(310px,390px); gap:48px; padding:66px 54px 64px; align-items:center; position:relative; }
+#ag-web-study .content:before { content:''; position:absolute; pointer-events:none; width:500px; height:500px; left:-100px; top:-50px; background:radial-gradient(ellipse,var(--glow),transparent 70%); }
+#ag-web-study .intro { position:relative; }
+#ag-web-study .eyebrow { color:var(--muted); font-size:11px; line-height:1.5; font-weight:500; letter-spacing:2px; text-transform:uppercase; margin:0 0 22px; }
+#ag-web-study .promise { margin:0; color:var(--ink); font-size:64px; line-height:1.04; font-weight:500; letter-spacing:-3.8px; }
+#ag-web-study .promise span { color:var(--accent); }
+#ag-web-study .description { font-size:16px; line-height:1.65; max-width:300px; color:var(--muted); margin:25px 0 0; }
+#ag-web-study .detail-rule { width:38px; height:2px; background:var(--accent); margin-top:31px; opacity:.8; }
+#ag-web-study .login { background:var(--surface); border:1px solid var(--border); border-radius:19px; padding:31px; position:relative; box-shadow:0 16px 50px #00000012; }
+#ag-web-study .login .eyebrow { font-size:10px; letter-spacing:1.4px; margin-bottom:10px; }
+#ag-web-study h2 { color:var(--ink); font-size:30px; line-height:1.2; letter-spacing:-1.1px; font-weight:600; margin:0 0 8px; }
+#ag-web-study .sub { color:var(--muted); font-size:14px; line-height:1.55; margin:0 0 25px; }
+#ag-web-study label { display:block; color:var(--ink); font-size:13px; font-weight:500; margin:18px 0 8px; }
+#ag-web-study input { min-width:0; width:100%; color:var(--ink); font:400 16px/1.4 'Geist',sans-serif; padding:13px 14px; background:var(--field); border:1px solid var(--border); border-radius:9px; }
+#ag-web-study input::placeholder { color:var(--muted); opacity:1; }
+#ag-web-study .password { position:relative; }
+#ag-web-study .password input { padding-right:49px; }
+#ag-web-study .eye { width:44px; height:44px; color:var(--muted); border:0; background:transparent; border-radius:7px; display:grid; place-items:center; position:absolute; right:3px; top:3px; }
+#ag-web-study .eye svg { width:18px; height:18px; }
+#ag-web-study .submit { width:100%; margin-top:24px; padding:14px 15px; border:0; min-height:49px; border-radius:9px; background:var(--button); color:var(--button-ink); font:500 15px 'Geist',sans-serif; display:flex; justify-content:space-between; align-items:center; }
+#ag-web-study .submit svg { width:18px; height:18px; }
+#ag-web-study .account-note { color:var(--muted); font-size:12px; line-height:1.5; margin:17px 0 0; }
+#ag-web-study .error { margin:18px 0 12px; border-radius:8px; padding:11px 12px; color:var(--error-ink); background:var(--error-bg); font-size:13px; line-height:1.5; }
+#ag-web-study footer { display:flex; justify-content:space-between; align-items:center; gap:18px; padding:22px 36px; border-top:1px solid var(--border); font-size:12px; line-height:1.5; color:var(--muted); }
+#ag-web-study footer span:last-child { text-align:right; }
+#ag-web-study [hidden] { display:none !important; }
+@media(max-width:800px) { #ag-web-study .content { padding:42px 28px; gap:28px; grid-template-columns:minmax(0,1fr) minmax(290px,350px); } #ag-web-study .promise { font-size:49px; letter-spacing:-2.4px; } #ag-web-study .login { padding:25px; } #ag-web-study header,#ag-web-study footer { padding-left:28px; padding-right:28px; } }
+@media(max-width:640px) { #ag-web-study .webapp { min-height:690px; } #ag-web-study .content { display:block; padding:29px 20px; } #ag-web-study .intro { display:none; } #ag-web-study .login { max-width:410px; margin:auto; padding:25px; } #ag-web-study header { padding:20px; } #ag-web-study .brand { gap:7px; } #ag-web-study .product { padding-left:9px; margin-left:2px; font-size:11px; } #ag-web-study footer { padding:20px; flex-direction:column; align-items:flex-start; gap:7px; } #ag-web-study footer span:last-child { text-align:left; } #ag-web-study .languages button { min-width:35px; min-height:38px; } }
+@media(max-width:360px) { #ag-web-study .product { display:none; } #ag-web-study .content { padding-left:12px; padding-right:12px; } #ag-web-study .login { padding:20px; } }
+@media(pointer:coarse) { #ag-web-study .languages button { min-width:44px; min-height:44px; } }
+</style>
+<div id="ag-web-study">
+<div class="viz-carousel" aria-label="Aegis Manager — connexion Web v3" data-previous-label="Précédente" data-next-label="Suivante">
+<section data-variant="Sombre profond" aria-label="Connexion Web sombre"><div class="webapp" lang="fr-CA" aria-label="Aegis Manager, prototype sombre">
+<header><div class="brand"><span class="mark" aria-hidden="true"><b></b></span><span class="brandname">aegis</span><span class="product">Manager</span></div><div class="languages" role="group" aria-label="Langue de la maquette"><button type="button" data-lang="fr" aria-pressed="true" aria-label="Français">FR</button><button type="button" data-lang="en" aria-pressed="false" aria-label="English">EN</button></div></header>
+<div class="content"><div class="intro"><p class="eyebrow" data-copy="brandEyebrow">L’essentiel, sous contrôle.</p><h1 class="promise" data-copy="promise">Prêt.<br>Autorisé.<br><span>Prouvé.</span></h1><p class="description" data-copy="description">Disponibilité, conformité et traçabilité de vos équipements.</p><div class="detail-rule" aria-hidden="true"></div></div>
+<section class="login" aria-label="Formulaire de connexion de démonstration"><p class="eyebrow" data-copy="role">Espace administrateur</p><h2 data-copy="heading">Connexion</h2><p class="sub" data-copy="sub">Accédez à Aegis Manager.</p><div class="error" role="status" data-copy="error" hidden>Adresse courriel ou mot de passe incorrect.</div>
+<label for="ag-dark-email" data-copy="email">Adresse courriel</label><input id="ag-dark-email" type="email" placeholder="nom@entreprise.ca" autocomplete="off">
+<label for="ag-dark-password" data-copy="password">Mot de passe</label><div class="password"><input id="ag-dark-password" type="password" placeholder="Saisir votre mot de passe" autocomplete="off"><button class="eye" type="button" aria-label="Afficher le mot de passe"><i data-lucide="eye" aria-hidden="true"></i></button></div>
+<button class="submit" type="button"><span data-copy="submit">Se connecter</span><i data-lucide="arrow-right" aria-hidden="true"></i></button><p class="account-note" data-copy="accountNote">Compte fourni par votre administrateur.</p></section></div>
+<footer><span data-copy="footerProduct">Aegis Manager · Administration</span><span data-copy="technician">Technicien ? Utilisez Aegis Mobile sur iPhone.</span></footer>
+</div></section>
+<section data-variant="Clair minéral" aria-label="Connexion Web claire" hidden><div class="webapp light" lang="fr-CA" aria-label="Aegis Manager, prototype clair">
+<header><div class="brand"><span class="mark" aria-hidden="true"><b></b></span><span class="brandname">aegis</span><span class="product">Manager</span></div><div class="languages" role="group" aria-label="Langue de la maquette"><button type="button" data-lang="fr" aria-pressed="true" aria-label="Français">FR</button><button type="button" data-lang="en" aria-pressed="false" aria-label="English">EN</button></div></header>
+<div class="content"><div class="intro"><p class="eyebrow" data-copy="brandEyebrow">L’essentiel, sous contrôle.</p><h1 class="promise" data-copy="promise">Prêt.<br>Autorisé.<br><span>Prouvé.</span></h1><p class="description" data-copy="description">Disponibilité, conformité et traçabilité de vos équipements.</p><div class="detail-rule" aria-hidden="true"></div></div>
+<section class="login" aria-label="Formulaire de connexion de démonstration"><p class="eyebrow" data-copy="role">Espace administrateur</p><h2 data-copy="heading">Connexion</h2><p class="sub" data-copy="sub">Accédez à Aegis Manager.</p><div class="error" role="status" data-copy="error" hidden>Adresse courriel ou mot de passe incorrect.</div>
+<label for="ag-light-email" data-copy="email">Adresse courriel</label><input id="ag-light-email" type="email" placeholder="nom@entreprise.ca" autocomplete="off">
+<label for="ag-light-password" data-copy="password">Mot de passe</label><div class="password"><input id="ag-light-password" type="password" placeholder="Saisir votre mot de passe" autocomplete="off"><button class="eye" type="button" aria-label="Afficher le mot de passe"><i data-lucide="eye" aria-hidden="true"></i></button></div>
+<button class="submit" type="button"><span data-copy="submit">Se connecter</span><i data-lucide="arrow-right" aria-hidden="true"></i></button><p class="account-note" data-copy="accountNote">Compte fourni par votre administrateur.</p></section></div>
+<footer><span data-copy="footerProduct">Aegis Manager · Administration</span><span data-copy="technician">Technicien ? Utilisez Aegis Mobile sur iPhone.</span></footer>
+</div></section>
+</div></div>
+<script>
+(() => {
+ const init=()=>{
+  const root=document.getElementById('ag-web-study'); if(!root || root.dataset.ready) return; root.dataset.ready='true';
+  const copy={
+   fr:{brandEyebrow:'L’essentiel, sous contrôle.',promise:'Prêt.<br>Autorisé.<br><span>Prouvé.</span>',description:'Disponibilité, conformité et traçabilité de vos équipements.',role:'Espace administrateur',heading:'Connexion',sub:'Accédez à Aegis Manager.',email:'Adresse courriel',password:'Mot de passe',submit:'Se connecter',accountNote:'Compte fourni par votre administrateur.',footerProduct:'Aegis Manager · Administration',technician:'Technicien ? Utilisez Aegis Mobile sur iPhone.',error:'Adresse courriel ou mot de passe incorrect.',emailPlaceholder:'nom@entreprise.ca',passwordPlaceholder:'Saisir votre mot de passe',show:'Afficher le mot de passe',hide:'Masquer le mot de passe'},
+   en:{brandEyebrow:'Clarity. Control. Confidence.',promise:'Ready.<br>Authorized.<br><span>Verified.</span>',description:'Equipment availability, compliance and traceability.',role:'Administrator workspace',heading:'Sign in',sub:'Access Aegis Manager.',email:'Email address',password:'Password',submit:'Sign in',accountNote:'Account provided by your administrator.',footerProduct:'Aegis Manager · Administration',technician:'Technician? Use Aegis Mobile on iPhone.',error:'Incorrect email address or password.',emailPlaceholder:'name@company.ca',passwordPlaceholder:'Enter your password',show:'Show password',hide:'Hide password'}
+  };
+  root.querySelectorAll('.webapp').forEach(app=>{
+   const state={lang:'fr',error:false};
+   const pass=app.querySelector('.password input'); const eye=app.querySelector('.eye');
+   function render(){ const c=copy[state.lang]; app.lang=state.lang==='fr'?'fr-CA':'en-CA'; app.querySelectorAll('[data-copy]').forEach(el=>{if(el.dataset.copy==='promise')el.innerHTML=c.promise;else el.textContent=c[el.dataset.copy];}); app.querySelector('input[type=email]').placeholder=c.emailPlaceholder; pass.placeholder=c.passwordPlaceholder; eye.setAttribute('aria-label',pass.type==='password'?c.show:c.hide); app.querySelector('.error').hidden=!state.error; app.querySelectorAll('[data-lang]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.lang===state.lang))); }
+   app.querySelectorAll('[data-lang]').forEach(button=>button.addEventListener('click',()=>{state.lang=button.dataset.lang;render();}));
+   eye.addEventListener('click',()=>{pass.type=pass.type==='password'?'text':'password';render();});
+   app.querySelector('.submit').addEventListener('click',()=>{state.error=true;render();});
+   render();
+   if(globalThis.Tweak){const tweak=new Tweak({container:app,onChange:render});tweak.addToggle(state,'error',{label:'Erreur de connexion'});}
+  });
+ };
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+})();
+</script>

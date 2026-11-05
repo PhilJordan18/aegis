@@ -1,0 +1,13 @@
+{
+  "steps": [
+    { "do": "waitOnline", "timeoutMs": 10000 },
+    { "do": "putTag", "code": "A1", "identifier": "E20034120123456789000001" },
+    { "do": "waitUnlocked", "code": "A1", "timeoutMs": 600000 },
+    { "wait": 2000 },
+    { "do": "openDoor", "code": "A1" },
+    { "do": "takeTag", "code": "A1", "identifier": "E20034120123456789000001" },
+    { "wait": 2000 },
+    { "do": "closeDoor", "code": "A1" },
+    { "wait": 4000 }
+  ]
+}

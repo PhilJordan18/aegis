@@ -336,12 +336,38 @@ CREATE TABLE compartments (
 
 Un seul device actif commande un locker en P0. Les anciens devices sont désactivés, jamais réaffectés silencieusement.
 
+Les colonnes `provisioned_at`, `device_session_id`, `boot_count` et `heartbeat_*`
+persistent la projection de disponibilité du doc 10 §15.3 (#63, schéma MQTT 2.0) :
+l’instant du dernier provisionnement, la session courante choisie par le plus grand
+`boot_count`, et le heartbeat de référence (valide, de plus grande `sequence` dans la
+session) avec sa connexion, sa `sequence`, son `receivedAt` et la fermeture éventuelle
+de sa connexion. `first_valid_heartbeat_at` garde le premier heartbeat valide reçu
+depuis le provisionnement. Ces colonnes sont mises à jour dans la transaction qui
+enregistre le message. Une nouvelle session (`boot_count` supérieur) vide le heartbeat de
+référence sans toucher à `first_valid_heartbeat_at`. Un nouveau provisionnement (doc 10
+§8.1) met `provisioned_at` à l’instant courant et vide la session, le heartbeat de
+référence et `first_valid_heartbeat_at`; seuls les faits reçus ensuite comptent.
+
+`connection_status` n’est qu’un cache. À la lecture : UNKNOWN si
+`first_valid_heartbeat_at` est vide; sinon OFFLINE s’il n’y a pas de heartbeat de
+référence dans la session courante, si `heartbeat_connection_closed_at` est renseigné ou
+si `last_valid_heartbeat_at` date de plus de 30 secondes; ONLINE sinon. Après un redémarrage
+du backend, ces colonnes sont relues telles quelles, et un rejeu des faits acceptés de
+`inbound_device_messages` reçus depuis `provisioned_at` doit redonner les mêmes valeurs.
+
 ```sql
 CREATE TABLE locker_devices (
     id                 uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
     locker_id          uuid NOT NULL,
     device_key         text NOT NULL,
     device_session_id  uuid NULL,
+    boot_count         bigint NULL,
+    provisioned_at     timestamptz NOT NULL DEFAULT now(),
+    heartbeat_connection_id uuid NULL,
+    heartbeat_sequence bigint NULL,
+    last_valid_heartbeat_at timestamptz NULL,
+    heartbeat_connection_closed_at timestamptz NULL,
+    first_valid_heartbeat_at timestamptz NULL,
     firmware_version   text NOT NULL,
     connection_status  text NOT NULL DEFAULT 'UNKNOWN',
     last_seen_at       timestamptz NULL,
@@ -357,7 +383,25 @@ CREATE TABLE locker_devices (
     CONSTRAINT ck_locker_devices_firmware_non_blank
         CHECK (btrim(firmware_version) <> ''),
     CONSTRAINT ck_locker_devices_connection_status
-        CHECK (connection_status IN ('ONLINE', 'OFFLINE', 'UNKNOWN'))
+        CHECK (connection_status IN ('ONLINE', 'OFFLINE', 'UNKNOWN')),
+    CONSTRAINT ck_locker_devices_boot_count
+        CHECK (boot_count IS NULL OR boot_count BETWEEN 1 AND 4294967295),
+    CONSTRAINT ck_locker_devices_session_pair
+        CHECK ((device_session_id IS NULL) = (boot_count IS NULL)),
+    CONSTRAINT ck_locker_devices_heartbeat_reference
+        CHECK (
+            (heartbeat_connection_id IS NULL
+                AND heartbeat_sequence IS NULL
+                AND last_valid_heartbeat_at IS NULL
+                AND heartbeat_connection_closed_at IS NULL)
+            OR
+            (heartbeat_connection_id IS NOT NULL
+                AND heartbeat_sequence IS NOT NULL
+                AND heartbeat_sequence >= 0
+                AND last_valid_heartbeat_at IS NOT NULL
+                AND boot_count IS NOT NULL
+                AND first_valid_heartbeat_at IS NOT NULL)
+        )
 );
 ```
 
@@ -600,6 +644,10 @@ CREATE TABLE locker_operations (
 
 `return_requested_at` est conservé même après un échec sûr ramenant le prêt à `ACTIVE`; `return_operation_id` n’est renseigné qu’après confirmation.
 
+`uq_loans_checkout_operation` porte l’index unique sur lequel s’appuie le §7.4 : une opération de checkout crée au plus un prêt, même si deux confirmations se concurrencent ou si une confirmation est rejouée après la fin du prêt.
+
+`fk_loans_checkout_operation` est composite (décision du 28 octobre 2026) : l’opération de checkout d’un prêt porte le même actif et le même titulaire que lui, grâce à `uq_locker_operations_id_asset_user`. PostgreSQL ne vérifie pas que cette opération est de type `CHECKOUT`, ni que `return_operation_id` désigne un retour de ce prêt : ces deux contrôles restent explicites dans les services de confirmation (§7.4 et §7.5) et dans leurs tests.
+
 ```sql
 CREATE TABLE loans (
     id                    uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
@@ -619,9 +667,12 @@ CREATE TABLE loans (
     CONSTRAINT fk_loans_holder
         FOREIGN KEY (holder_user_id) REFERENCES users (id),
     CONSTRAINT fk_loans_checkout_operation
-        FOREIGN KEY (checkout_operation_id) REFERENCES locker_operations (id),
+        FOREIGN KEY (checkout_operation_id, asset_id, holder_user_id)
+        REFERENCES locker_operations (id, asset_id, user_id),
     CONSTRAINT fk_loans_return_operation
         FOREIGN KEY (return_operation_id) REFERENCES locker_operations (id),
+    CONSTRAINT uq_loans_checkout_operation
+        UNIQUE (checkout_operation_id),
     CONSTRAINT ck_loans_status
         CHECK (status IN ('ACTIVE', 'RETURN_PENDING', 'COMPLETED')),
     CONSTRAINT ck_loans_dates
@@ -721,7 +772,7 @@ CREATE TABLE hub_display_outbox (
     message_type text NOT NULL,
     display_revision bigint NOT NULL CHECK (display_revision > 0),
     topic text NOT NULL CHECK (btrim(topic) <> ''),
-    schema_version text NOT NULL DEFAULT '1.0',
+    schema_version text NOT NULL,
     encrypted_payload bytea NULL,
     encryption_key_id text NOT NULL CHECK (btrim(encryption_key_id) <> ''),
     issued_at timestamptz NOT NULL,
@@ -746,6 +797,7 @@ CREATE TABLE hub_display_outbox (
     CONSTRAINT ck_display_challenge
         CHECK ((message_type = 'DISPLAY_ACCESS_CHALLENGE') = (challenge_id IS NOT NULL)),
     CONSTRAINT ck_display_dates CHECK (expires_at > issued_at),
+    CONSTRAINT ck_display_schema_non_blank CHECK (btrim(schema_version) <> ''),
     CONSTRAINT ck_display_status
         CHECK (status IN ('PENDING', 'CLAIMED', 'DISPATCHED', 'ACKNOWLEDGED', 'REJECTED', 'CANCELLED')),
     CONSTRAINT ck_display_claim
@@ -763,6 +815,13 @@ Une seule instruction de défi par opération; les retries conservent le même `
 #### `command_outbox`
 
 Cette table est la matérialisation de `D8`. Une ligne correspond à une commande d’ouverture durable, avec un `message_id` qui ne change jamais lors des reprises.
+
+Seul le compartiment attendu s’ouvre : la clé composite `fk_command_outbox_operation` refuse une commande dont le casier ou le compartiment n’est pas celui de son opération, y compris un autre compartiment du même casier. Elle s’appuie sur `UNIQUE (id, locker_id, compartment_id)` de `locker_operations`, ajoutée par `V007` parce que `V006` est déjà appliquée (décision du 4 novembre 2026). La garantie ne repose donc pas seulement sur le producteur de commandes.
+
+```sql
+ALTER TABLE locker_operations
+    ADD CONSTRAINT uq_locker_operations_id_target UNIQUE (id, locker_id, compartment_id);
+```
 
 ```sql
 CREATE TABLE command_outbox (
@@ -788,7 +847,8 @@ CREATE TABLE command_outbox (
     created_at      timestamptz NOT NULL DEFAULT now(),
 
     CONSTRAINT fk_command_outbox_operation
-        FOREIGN KEY (operation_id) REFERENCES locker_operations (id),
+        FOREIGN KEY (operation_id, locker_id, compartment_id)
+        REFERENCES locker_operations (id, locker_id, compartment_id),
     CONSTRAINT fk_command_outbox_compartment_locker
         FOREIGN KEY (compartment_id, locker_id)
         REFERENCES compartments (id, locker_id),
@@ -830,6 +890,12 @@ CREATE TABLE command_outbox (
 
 Une seule ligne canonique est conservée par paire `(locker_device_id, message_id)`. Un doublon n’est donc pas réinséré; il produit au besoin un `AuditEvent` `MQTT_MESSAGE_DUPLICATE_IGNORED`.
 
+`device_session_id`, `boot_count`, `sequence`, `connection_id` et `availability_status`
+sont extraits du payload accepté (schéma MQTT 2.0, #63). Ils portent les règles du doc 10 §15.3 : un
+fait d’un `boot_count` inférieur à celui du device est conservé sans effet, et une
+connexion est fermée dès qu’un `DEVICE_AVAILABILITY` OFFLINE accepté porte son
+`connection_id`. Ils restent nuls pour un message rejeté avant leur extraction.
+
 ```sql
 CREATE TABLE inbound_device_messages (
     id                uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
@@ -841,6 +907,11 @@ CREATE TABLE inbound_device_messages (
     command_message_id uuid NULL,
     display_message_id uuid NULL,
     schema_version    text NOT NULL,
+    device_session_id uuid NULL,
+    boot_count        bigint NULL,
+    sequence          bigint NULL,
+    connection_id     uuid NULL,
+    availability_status text NULL,
     occurred_at       timestamptz NOT NULL,
     received_at       timestamptz NOT NULL DEFAULT now(),
     raw_payload       bytea NOT NULL,
@@ -892,7 +963,29 @@ CREATE TABLE inbound_device_messages (
                 AND command_message_id IS NULL)
         ),
     CONSTRAINT ck_inbound_messages_error
-        CHECK (processing_status <> 'REJECTED' OR processing_error IS NOT NULL)
+        CHECK (processing_status <> 'REJECTED' OR processing_error IS NOT NULL),
+    CONSTRAINT ck_inbound_messages_boot_count
+        CHECK (boot_count IS NULL OR boot_count BETWEEN 1 AND 4294967295),
+    CONSTRAINT ck_inbound_messages_sequence
+        CHECK (sequence IS NULL OR sequence >= 0),
+    CONSTRAINT ck_inbound_messages_accepted_envelope
+        CHECK (
+            processing_status = 'REJECTED'
+            OR (device_session_id IS NOT NULL AND boot_count IS NOT NULL AND sequence IS NOT NULL)
+        ),
+    CONSTRAINT ck_inbound_messages_connection
+        CHECK (
+            (message_type IN ('HEARTBEAT', 'DEVICE_AVAILABILITY')
+                AND (connection_id IS NOT NULL OR processing_status = 'REJECTED'))
+            OR (message_type NOT IN ('HEARTBEAT', 'DEVICE_AVAILABILITY') AND connection_id IS NULL)
+        ),
+    CONSTRAINT ck_inbound_messages_availability_status
+        CHECK (
+            (message_type = 'DEVICE_AVAILABILITY'
+                AND ((availability_status IS NOT NULL AND availability_status IN ('ONLINE', 'OFFLINE'))
+                    OR (availability_status IS NULL AND processing_status = 'REJECTED')))
+            OR (message_type <> 'DEVICE_AVAILABILITY' AND availability_status IS NULL)
+        )
 );
 ```
 
@@ -1032,6 +1125,12 @@ CREATE TABLE anomalies (
 
 L’audit est append-only du point de vue de l’application. `from_state` et `to_state` sont renseignés pour les transitions; les événements de consultation ou d’authentification peuvent les laisser nuls.
 
+Une création n’a pas d’état de départ, et `ck_audit_events_state_pair` refuse un `to_state` sans `from_state` : `RESERVATION_CREATED` laisse donc les deux nuls et porte l’état initial dans `details` (`assetId`, `status`, `reservedFrom`, `reservedUntil`). C’est la règle de la tranche RES-01 (décision du 28 octobre 2026); l’enregistrer dans `to_state` exigerait une nouvelle migration.
+
+La table est créée par `V002_2` (§11.1), avant les tables que référencent `operation_id`, `inbound_message_id` et `physical_observation_id`. Ces trois colonnes n’y figurent donc pas encore : chacune arrive avec sa FK, et `ix_audit_events_operation_time` avec `operation_id`, dans la migration qui crée la table référencée (`V006` pour `locker_operations`, `V008` pour `inbound_device_messages` et `physical_observations`). Aucune colonne de référence n’existe sans sa FK. Le DDL ci-dessous reste le schéma cible complet. Aucun événement n’est reconstitué pour les lignes antérieures à la table.
+
+`V002_2` ajoute deux triggers qui refusent `UPDATE` et `DELETE` ligne par ligne et `TRUNCATE` par instruction (`aegis.refuse_audit_event_change`, SQLSTATE `23001`). C’est une défense en profondeur seulement : le propriétaire de la table peut désactiver ou supprimer ces triggers, et un superutilisateur les contourne, par exemple avec `session_replication_role = replica`. La protection réelle est l’absence de ces droits pour le rôle applicatif (§12.1).
+
 ```sql
 CREATE TABLE audit_events (
     id                       uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
@@ -1110,7 +1209,9 @@ CREATE TABLE audit_events (
 
 #### `rest_idempotency_keys`
 
-Une clé est liée à l’acteur, à la route logique et au hash de la requête. La réponse est enregistrée dans la même transaction que la mutation métier.
+Une clé est liée à l’acteur, à la route logique et au hash de la requête. La réponse est enregistrée dans la même transaction que la mutation métier. La table est créée par `V002_1` (§11.1).
+
+`response_body` est un `jsonb` : il conserve le document JSON de la réponse, mais ni l’ordre des clés ni les espaces du texte émis. Un rejeu restitue donc le même contenu JSON, pas les mêmes octets; c’est le sens de « réponse originale exacte » au document 09, §20.2. Aucun en-tête n’est stocké : `Location` est reconstruit à partir de `resource_type` et `resource_id`.
 
 ```sql
 CREATE TABLE rest_idempotency_keys (
@@ -1215,6 +1316,11 @@ CREATE UNIQUE INDEX ux_asset_placements_one_current_per_asset
 CREATE UNIQUE INDEX ux_asset_placements_one_current_per_compartment
     ON asset_placements (compartment_id)
     WHERE removed_at IS NULL;
+
+-- Au plus un identifiant actif par type et par actif (CAT-02, décision du 28 octobre 2026).
+CREATE UNIQUE INDEX ux_asset_identifiers_one_active_per_type
+    ON asset_identifiers (asset_id, identifier_type)
+    WHERE active = true;
 
 -- Un seul horaire actif et une seule fenêtre configurée par jour
 CREATE UNIQUE INDEX ux_operating_schedules_one_active_per_locker
@@ -1335,6 +1441,12 @@ CREATE INDEX ix_inbound_messages_command_message
     ON inbound_device_messages (command_message_id, received_at)
     WHERE command_message_id IS NOT NULL;
 
+CREATE INDEX ix_inbound_messages_closed_connections
+    ON inbound_device_messages (locker_device_id, boot_count, connection_id)
+    WHERE message_type = 'DEVICE_AVAILABILITY'
+      AND availability_status = 'OFFLINE'
+      AND processing_status <> 'REJECTED';
+
 CREATE INDEX ix_physical_observations_operation_time
     ON physical_observations (operation_id, observed_at)
     WHERE operation_id IS NOT NULL;
@@ -1414,7 +1526,7 @@ Quand plusieurs agrégats sont requis, le backend les verrouille dans cet ordre 
 7. `local_access_challenges`, si concerné;
 8. `anomalies`.
 
-Les lectures de garde utilisent `SELECT ... FOR UPDATE` sur les lignes existantes. Le verrou de la ligne `lockers` sérialise le parcours physique; l’index partiel reste la barrière finale lorsqu’aucune opération ouverte n’existait encore.
+Les lectures de garde utilisent `SELECT ... FOR UPDATE` sur les lignes existantes, sauf pour `users`, verrouillée par `SELECT ... FOR NO KEY UPDATE`, et pour `compartments` lors d’un changement de placement, verrouillés de même dans l’ordre de leur identifiant : ce mode sérialise les placements visant un même compartiment sans bloquer le verrou `KEY SHARE` que prennent les clés étrangères vers lui. Ces parcours ne modifient jamais la clé d’un utilisateur, et ce mode n’entre pas en conflit avec le verrou `KEY SHARE` que la clé étrangère `fk_rest_idempotency_actor` prend sur la ligne de l’acteur à l’insertion de sa clé d’idempotence (§8.1). Avec `FOR UPDATE`, deux requêtes concurrentes du même utilisateur portant des clés différentes s’attendraient mutuellement jusqu’au deadlock, et une ligne `users` tenue ailleurs retarderait l’insertion d’une nouvelle clé. Le verrou de la ligne `lockers` sérialise le parcours physique; l’index partiel reste la barrière finale lorsqu’aucune opération ouverte n’existait encore.
 
 ### 7.2 Création d’une réservation
 
@@ -1422,12 +1534,13 @@ Dans une seule transaction :
 
 1. calculer `now` une seule fois côté backend;
 2. prendre la clé REST et son `request_hash`;
-3. verrouiller l’utilisateur puis l’actif;
-4. charger et verrouiller la réservation active éventuelle et le prêt ouvert éventuel;
-5. vérifier rôle, horaire, accès, calibration, présence, statut opérationnel et readiness;
-6. insérer `reservations` et `audit_events`;
-7. enregistrer la réponse dans `rest_idempotency_keys`;
-8. valider la transaction.
+3. verrouiller l’utilisateur (`FOR NO KEY UPDATE`, §7.1) puis l’actif;
+4. relire l’actif et son placement courant après ce verrou, car une requête qui a attendu le verrou garde sinon les lignes jointes lues avant l’attente;
+5. charger et verrouiller la réservation active éventuelle et le prêt ouvert éventuel;
+6. vérifier, dans l’ordre du document 09, §14.1 : rôle, réservations actives, prêt ouvert, horaire du locker du placement courant, niveau d’accès, puis readiness;
+7. insérer `reservations` et `audit_events`;
+8. enregistrer la réponse dans `rest_idempotency_keys`;
+9. valider la transaction.
 
 Une violation `23505` sur un index d’invariant est convertie en `CONFLICT`; la transaction est annulée et aucune réservation partielle ne reste visible.
 
@@ -1435,7 +1548,7 @@ Une violation `23505` sur un index d’invariant est convertie en `CONFLICT`; la
 
 **Transaction de préparation :** vérifier et verrouiller le contexte, créer l’opération `AWAITING_LOCAL_PROOF`, le défi `PENDING` et son affichage chiffré dans `hub_display_outbox`. Incrémenter `lockers.display_revision` sous verrou. Ne créer aucune commande de serrure et ne pas modifier le prêt.
 
-**Transaction de validation QR :** verrouiller utilisateur, actif, réservation/prêt, locker, compartiment, opération puis défi; vérifier l’initiateur, le hash constant-time, l’affichage, la session, l’expiration et toutes les gardes métier courantes. Consommer le défi; passer l’opération à `AUTHORIZED`; renseigner `local_proof_validated_at = authorized_at`, `expires_at = authorized_at + 120 secondes`; passer le prêt à `RETURN_PENDING` pour un retour; insérer l’unique `command_outbox`; purger le ciphertext du QR et enregistrer audit/réponse idempotente. Tout est validé ou annulé ensemble.
+**Transaction de validation QR :** verrouiller utilisateur (`FOR NO KEY UPDATE`, §7.1), actif, réservation/prêt, locker, compartiment, opération puis défi; vérifier l’initiateur, le hash constant-time, l’affichage, la session, l’expiration et toutes les gardes métier courantes. Consommer le défi; passer l’opération à `AUTHORIZED`; renseigner `local_proof_validated_at = authorized_at`, `expires_at = authorized_at + 120 secondes`; passer le prêt à `RETURN_PENDING` pour un retour; insérer l’unique `command_outbox`; purger le ciphertext du QR et enregistrer audit/réponse idempotente. Tout est validé ou annulé ensemble.
 
 Les refus avec incrément d’essais doivent être commités. Une erreur applicative ne doit pas annuler ce compteur. Le même `Idempotency-Key` et la même requête rejouent la réponse initiale; une autre clé après consommation ne produit aucune commande supplémentaire.
 
@@ -1485,18 +1598,22 @@ Les transactions qui échouent sur `40P01` (deadlock) ou `40001` (serialization 
 
 ### 8.1 Idempotence REST
 
-Les mutations suivantes exigent une clé `Idempotency-Key` : création de réservation, annulation, autorisation de checkout, autorisation de retour, reconnaissance d’anomalie et toute commande équivalente ajoutée au P0. La clé est limitée à 128 caractères.
+Les mutations de la liste du document 09, §20.1, exigent une clé `Idempotency-Key` : création de réservation, annulation, préparation d’un retrait (`checkout`) et d’un retour, autorisation locale QR, création et archivage d’un modèle d’actif, création et archivage d’un actif, ajout et révocation d’un identifiant physique, reconnaissance d’anomalie, et toute commande équivalente ajoutée au P0. La clé est limitée à 128 caractères.
 
-Flux :
+Flux, dans une seule transaction `READ COMMITTED` :
 
-1. normaliser la route logique et calculer un SHA-256 du corps canonique;
-2. tenter d’insérer `(actor_user_id, endpoint, idempotency_key, request_hash)` avec `status = 'IN_PROGRESS'`;
-3. si l’insertion gagne, exécuter la mutation, enregistrer la réponse et passer la clé à `COMPLETED` dans la même transaction;
-4. si la clé existe, attendre la fin de la transaction gagnante, verrouiller sa ligne et comparer le hash;
-5. avec le même hash, retourner exactement `response_status` et `response_body` déjà enregistrés;
-6. avec un hash différent, retourner `409 IDEMPOTENCY_KEY_REUSED` sans modifier le métier.
+1. normaliser la route logique et calculer un SHA-256 de la méthode, de la route, des paramètres de chemin et du corps canonique;
+2. borner l’attente de la clé par `SET LOCAL lock_timeout = '5s'`;
+3. tenter d’insérer `(actor_user_id, endpoint, idempotency_key, request_hash)` avec `status = 'IN_PROGRESS'` (`ON CONFLICT DO NOTHING`); une insertion concurrente de la même clé attend la fin de la transaction gagnante;
+4. si l’insertion gagne, rétablir le `lock_timeout` par défaut, exécuter la mutation, enregistrer la réponse et passer la clé à `COMPLETED` dans la même transaction;
+5. si la clé existe, verrouiller sa ligne (`FOR UPDATE`); si elle a expiré, la supprimer et reprendre à l’étape 3; si elle a disparu pendant l’attente, reprendre aussi à l’étape 3;
+6. avec le même hash, retourner le `response_status` et le contenu JSON de `response_body` déjà enregistrés, sans appeler la mutation;
+7. avec un hash différent, retourner `409 IDEMPOTENCY_KEY_REUSED` sans modifier le métier;
+8. si l’attente dépasse le délai, retourner `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` avec `Retry-After`; la transaction est annulée sans effet.
 
-Une erreur métier déterministe peut elle aussi être enregistrée comme réponse, afin qu’une répétition ne produise pas un résultat différent pendant la durée de rétention. Les clés sont conservées au moins 24 heures; leur purge est une opération de maintenance distincte et ne doit pas toucher aux tables métier.
+La ligne de clé est la première ligne que le flux verrouille explicitement, avant les agrégats de l’ordre du §7.1. Son insertion prend toutefois un verrou `KEY SHARE` sur la ligne `users` de l’acteur, par la contrainte `fk_rest_idempotency_actor`; c’est pourquoi les gardes verrouillent `users` en `FOR NO KEY UPDATE`, mode compatible avec ce verrou (§7.1).
+
+Pour les routes du catalogue (création et archivage d’un modèle d’actif ou d’un actif), une erreur métier n’est pas enregistrée : la transaction est annulée, ligne de clé comprise. Une nouvelle tentative avec la même clé réexécute la requête contre l’état métier du moment; son résultat peut donc différer du premier si cet état a changé entre-temps. Ce choix vaut pour cette tranche seulement, pas comme règle générale : d’autres flux, par exemple l’autorisation locale QR (§7.3), devront rejouer certains refus sans recompter la tentative et fixeront leur propre règle. Les clés sont conservées au moins 24 heures; leur purge est une opération de maintenance distincte et ne doit pas toucher aux tables métier.
 
 Les requêtes GET sont naturellement sans effet; elles n’utilisent pas cette table.
 
@@ -1507,10 +1624,10 @@ L’identité d’un message entrant est `(locker_device_id, message_id)`. Le `l
 Dans une transaction :
 
 1. authentifier le device et vérifier le topic autorisé;
-2. parser le minimum nécessaire pour obtenir `message_id`, `message_type`, la version et `command_message_id` pour un accusé de commande;
+2. parser le minimum nécessaire pour obtenir `message_id`, `message_type`, la version, `command_message_id` pour un accusé de commande et, depuis le schéma MQTT 2.0, `device_session_id`, `boot_count`, `sequence`, `connection_id` et `availability_status` (doc 10 §15.3);
 3. insérer `inbound_device_messages`;
 4. si la contrainte `uq_inbound_messages_device_message` est en conflit, ne produire aucune observation ni transition et, si utile, ajouter `MQTT_MESSAGE_DUPLICATE_IGNORED`;
-5. pour un nouveau message, conserver `raw_payload`, normaliser les observations, mettre à jour la projection de santé et appliquer au plus une progression de machine à états;
+5. pour un nouveau message, conserver `raw_payload`, normaliser les observations, mettre à jour la projection de santé (règles du doc 10 §15.3) et appliquer au plus une progression de machine à états;
 6. marquer le message `PROCESSED` ou `REJECTED`;
 7. valider.
 
@@ -1579,6 +1696,14 @@ Le délai de lease de 15 secondes est un choix d’exploitation P0; il ne doit p
 ### 9.3 Accusé et erreur
 
 L’ingestion d’un `COMMAND_ACKNOWLEDGED` ou `COMMAND_REJECTED` vérifie `operation_id`, le `command_message_id` référant au `message_id` de l’outbox, le locker, le type et la fenêtre de validité. Elle met à jour `command_outbox` et `locker_operations` dans la même transaction que l’insertion du message entrant. Un accusé dupliqué ne change rien.
+
+Décisions du 4 novembre 2026 (IOT-02, #41) :
+
+- La fenêtre de validité se juge sur l’instant de réception du backend, jamais sur l’horloge du hub. Un `COMMAND_ACKNOWLEDGED` reçu hors de `[issued_at, expires_at[` ne fait avancer ni la commande ni l’opération; le message est conservé `REJECTED` (`TIMESTAMP_OUT_OF_RANGE`).
+- Un accusé corrélé peut précéder le marquage du dispatcher (ligne encore `CLAIMED` ou `PENDING`, opération encore `AUTHORIZED`). Il prouve que la commande a quitté le backend : la même transaction enregistre alors `AUTHORIZED → COMMAND_SENT` (`command_sent_at` = réception, borne supérieure) puis `COMMAND_SENT → COMMAND_ACKNOWLEDGED`, deux transitions auditées dans cet ordre. C’est la seule exception à « au plus une transition » (document 06, §9.2 et §9.4) : un `COMMAND_REJECTED` sûr reçu avant le marquage fait échouer un retrait en une seule transition `AUTHORIZED → FAILED` (document 05, §5 : publication sans possibilité d’exécution); un retour garde son état pour l’expiration de l’opération. Le marquage tardif, protégé par `attempt_count`, ne change plus rien.
+- Un rapport dont `result` ou `reason` n’est pas une valeur du document 10, §10, est conservé `REJECTED` (`REQUIRED_FIELD_MISSING`) sans effet.
+- Un rejet sûr fait échouer un retrait; un retour garde son état, car son échec sûr rétablit aussi le prêt (document 05, §4 et §7) dans l’expiration de l’opération. Un rejet `LOCK_ACTUATION_FAILED` ou `PREVIOUS_EXECUTION_UNCERTAIN` laisse l’opération en l’état et crée ou maintient l’anomalie `INCONSISTENT_PHYSICAL_STATE` `HIGH` (document 10, §9.1).
+- Un `ACCEPTED` corrélé d’une commande `CANCELLED` ou d’une opération terminale ne modifie ni la commande ni l’opération. Il est conservé `PROCESSED` et ouvre une seule anomalie `INCONSISTENT_PHYSICAL_STATE` `HIGH` pour inspection du casier; une redélivrance n’en ouvre pas d’autre (`ux_anomalies_one_open_per_operation`). Un rejet dans ce cas est conservé `REJECTED` (`TERMINAL_OPERATION_EVENT_IGNORED`). L’accusé seul n’établit jamais un retrait ni un retour.
 
 Une perte du dispatcher après publication n’est pas interprétée comme un échec sûr. Le système assume une livraison au moins une fois et s’appuie sur l’identité stable de commande et la déduplication du hub.
 
@@ -1682,20 +1807,24 @@ Découpage recommandé :
 |---|---|
 | `V001__create_schema_and_extensions.sql` | `pgcrypto`, schéma `aegis`, conventions initiales. |
 | `V002__create_identity_and_catalog.sql` | `users`, `asset_models`, `assets`, `asset_identifiers`. |
-| `V003__create_lockers_and_placements.sql` | `lockers`, `compartments`, `locker_devices`, `asset_placements`. |
+| `V002_1__create_rest_idempotency_keys.sql` | `rest_idempotency_keys` (§4.10), avancée depuis `V010` pour les routes du catalogue (document 09, §20.1). Ajoutée quand toutes les bases s’arrêtaient à `V002`. |
+| `V002_2__create_audit_events.sql` | `audit_events` (§4.9), avancée depuis `V009` pour auditer le catalogue avant `V003`, sans `operation_id`, `inbound_message_id` ni `physical_observation_id`; index `ix_audit_events_subject_time` et `ix_audit_events_time`; triggers append-only. Ajoutée quand les bases s’arrêtaient à `V002` ou `V002_1`. |
+| `V003__create_lockers_and_placements.sql` | `lockers`, `compartments`, `locker_devices`, `asset_placements`; `ux_asset_identifiers_one_active_per_type` sur `asset_identifiers` (CAT-02, décision du 28 octobre 2026). |
 | `V004__create_operating_schedules.sql` | `operating_schedules`, `operating_windows` et leurs index. |
-| `V005__create_reservations.sql` | `reservations` et index d’unicité active. |
-| `V006__create_operations_and_loans.sql` | `locker_operations`, `loans`, FK circulaire ajoutée après les deux tables. |
-| `V007__create_command_outbox.sql` | `command_outbox`, `local_access_challenges`, `hub_display_outbox` et index de claim, si aucune migration n’a encore été appliquée. |
-| `V008__create_device_messages_and_observations.sql` | `inbound_device_messages`, `physical_observations`. |
-| `V009__create_anomalies_and_audit.sql` | `anomalies`, `audit_events`. |
-| `V010__create_rest_idempotency.sql` | `rest_idempotency_keys`. |
+| `V005__create_reservations.sql` | `reservations` et index d’unicité active `ux_reservations_one_active_per_asset` et `ux_reservations_one_active_per_user`. |
+| `V006__create_operations_and_loans.sql` | `locker_operations`, `loans`, FK circulaire ajoutée après les deux tables; `fk_loans_checkout_operation` composite et `uq_loans_checkout_operation`; index partiels `ux_loans_one_open_per_asset` et `ux_locker_operations_one_open_per_locker`; `audit_events.operation_id`, `fk_audit_events_operation` et `ix_audit_events_operation_time`. Les index de lecture de §5.2 restent dans `V011`. |
+| `V007__create_command_outbox.sql` | `local_access_challenges`, `hub_display_outbox`, `command_outbox`; contrainte `uq_locker_operations_id_target` sur `locker_operations`, cible de la clé composite `fk_command_outbox_operation` (§4.7); index d’invariant `ux_display_one_challenge_per_operation`, index d’expiration `ix_local_challenges_pending_expiry` et index de claim `ix_display_claimable` et `ix_command_outbox_claimable`. Les trois tables rejoignent la liste `no_delete` du callback (§12.1). Les index de lecture de §5.2 restent dans `V011`. |
+| `V008__create_device_messages_and_observations.sql` | `inbound_device_messages`, `physical_observations`; `audit_events.inbound_message_id`, `audit_events.physical_observation_id` et leurs FK `fk_audit_events_message` et `fk_audit_events_observation`, sans reconstitution des événements antérieurs. `inbound_device_messages` rejoint la liste `no_delete` du callback et `physical_observations` la liste `append_only` (§12.1). Les index de lecture de §5.2 restent dans `V011`. |
+| `V009__create_anomalies.sql` | `anomalies` et son index d’invariant `ux_anomalies_one_open_per_operation` (§5.1). `anomalies` rejoint la liste `no_delete` du callback (§12.1). `audit_events` a été déplacée vers `V002_2`; aucune migration n’est renumérotée. Les index de lecture de §5.2 restent dans `V011`. |
+| `V010__create_rest_idempotency.sql` | Déplacée vers `V002_1`; numéro laissé inutilisé, aucune migration n’est renumérotée. |
 | `V011__create_read_indexes.sql` | Index de lecture et index partiels restant. |
 | `V012__seed_demo_reference_data.sql` | Facultatif et réservé à l’environnement de démonstration; comptes et UUIDs fixes documentés. |
 
 Si V001–V012 existent déjà dans une base, ajouter une migration V013 dédiée : nouvelles tables/colonnes, enums textuels CHECK, FK et index partiel des opérations ouvertes. Déployer pendant une pause sans opération physique active; traiter explicitement les lignes historiques sans preuve QR. Ne pas inventer des preuves pour satisfaire le nouveau CHECK. Ce document décrit le schéma cible neuf, pas un ALTER rétroactif prêt à exécuter sur des données existantes.
 
 Les numéros ne sont pas réécrits après application. Une correction ajoute `V013`, `V014`, etc.; elle ne modifie pas le fichier déjà enregistré dans `flyway_schema_history`.
+
+Le callback Flyway `afterMigrate__grant_application_role.sql`, placé avec les migrations, réapplique les droits du rôle applicatif après chaque `migrate` (§12.1). Un callback n’est pas versionné : il n’entre ni dans `flyway_schema_history` ni dans la validation des checksums, et peut donc évoluer sans nouvelle migration.
 
 ### 11.2 DDL transactionnel et index concurrents
 
@@ -1733,6 +1862,28 @@ Les comptes de démo, un locker et deux compartiments peuvent être insérés pa
 Le compte applicatif possède uniquement les droits nécessaires sur `aegis`. Les clients, le broker MQTT, le hub et les cellules n’ont aucun accès PostgreSQL.
 
 L’application ne reçoit pas le droit de supprimer ou de modifier `audit_events`. Si une correction d’audit est nécessaire, elle crée un nouvel événement de rectification. Une politique de rétention peut archiver les payloads bruts dans une procédure séparée, sans supprimer l’audit métier ou la chaîne de possession exigée par le P0.
+
+**Séparation des rôles.** Deux comptes distincts :
+
+| Rôle | Attributs | Droits |
+|---|---|---|
+| Propriétaire des migrations (`aegis_migrator` par défaut, ou le compte propriétaire actuel) | `LOGIN`, jamais superutilisateur dans un environnement cible | Possède le schéma `aegis`, ses objets et `public.flyway_schema_history`; exécute Flyway. |
+| Rôle applicatif (`aegis_app` par défaut) | `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS` | `CONNECT` sur la base; `USAGE` sur `aegis`; `SELECT`, `INSERT`, `UPDATE`, `DELETE` sur les tables métier; `SELECT`, `INSERT` et `UPDATE`, sans `DELETE`, sur `reservations`, `locker_operations`, `loans`, `local_access_challenges`, `hub_display_outbox`, `command_outbox`, `inbound_device_messages` et `anomalies`; `SELECT` et `INSERT` seulement sur `audit_events` et `physical_observations`; `USAGE`, `SELECT` sur les séquences. Jamais `TRUNCATE`, `REFERENCES`, `TRIGGER`, ni `CREATE` sur le schéma. |
+
+Les droits suivent le schéma : le callback `afterMigrate` de §11.1 les réapplique de façon idempotente après chaque migration, avec le nom du placeholder Flyway `application_role` (`AEGIS_DB_APPLICATION_ROLE`, `aegis_app` par défaut). Si le rôle n’existe pas, le callback ne fait rien; s’il est superutilisateur ou membre d’un propriétaire du schéma ou de ses objets, même sans héritage (une appartenance `WITH INHERIT FALSE` permet encore `SET ROLE`), il échoue, car révoquer les droits du propriétaire casserait le schéma. La liste `append_only` du callback contient `audit_events` et `physical_observations` (règle approuvée le 4 novembre 2026 pour les observations : le rôle applicatif les insère et les lit, sans `UPDATE`, `DELETE` ni `TRUNCATE`); une future table append-only s’y ajoute. La liste `no_delete` retire `DELETE` sur `reservations`, `locker_operations`, `loans`, `local_access_challenges`, `hub_display_outbox`, `command_outbox`, `inbound_device_messages` et `anomalies` : ces lignes changent d’état mais la chaîne de possession n’est jamais effacée (§1.1). Une future table d’historique de possession, de commande ou de preuve rejoint l’une de ces deux listes en même temps que la migration qui la crée; sinon le callback lui accorde `DELETE`.
+
+Le trigger de §4.9 n’est qu’une défense en profondeur. Ni lui ni ces droits ne protègent contre un superutilisateur ou le propriétaire de la table : la confiance envers ces comptes relève de l’exploitation (accès restreint, journalisation, sauvegardes).
+
+**Mise en place par un opérateur** (aucun environnement n’est basculé par la carte AUD-00) :
+
+1. Créer les rôles avec `infra/postgres/provision-roles.sql`, en tant que superutilisateur et sans mot de passe dans la commande : `psql -v ON_ERROR_STOP=1 -v app_role=aegis_app -v migration_role=aegis_migrator -d aegis -f infra/postgres/provision-roles.sql`. Le script est idempotent et ne contient aucun secret.
+2. Fixer chaque mot de passe avec `\password aegis_app` (et `\password aegis_migrator`) dans `psql` : le client calcule le hachage SCRAM et le mot de passe en clair n’atteint ni le serveur ni ses journaux, contrairement à `ALTER ROLE ... PASSWORD '...'`.
+3. Redémarrer l’API une fois avec le compte propriétaire actuel pour Flyway : le callback accorde alors les droits à `aegis_app`.
+4. Basculer la source de données : `AEGIS_DB_USER=aegis_app` et son mot de passe, en conservant `AEGIS_DB_MIGRATION_USER` et `AEGIS_DB_MIGRATION_PASSWORD` sur le compte propriétaire. Sans ces deux variables, Flyway emprunte le compte de la source de données.
+5. Vérifier en tant que `aegis_app` que `UPDATE`, `DELETE` et `TRUNCATE` sur `aegis.audit_events` et `aegis.physical_observations`, ainsi que `DELETE` et `TRUNCATE` sur les huit tables de la liste `no_delete`, sont refusés avec `42501`.
+6. Facultatif, pour ne plus migrer en superutilisateur : transférer au rôle de migration la propriété du schéma `aegis`, de ses tables, séquences et fonctions et de `public.flyway_schema_history` (`ALTER ... OWNER TO aegis_migrator`), puis pointer `AEGIS_DB_MIGRATION_USER` vers lui. `pgcrypto` étant une extension de confiance, il suffit que ce rôle ait `CREATE` sur la base.
+
+Retour arrière : remettre `AEGIS_DB_USER` sur le compte propriétaire. Aucune donnée n’est modifiée par ces étapes.
 
 ### 12.2 Observabilité minimale
 

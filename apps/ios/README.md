@@ -1,0 +1,463 @@
+# Aegis Mobile — client iOS du technicien
+
+Application SwiftUI du technicien. Elle communique uniquement avec l'API
+Spring Aegis Control (`/api/v1`) : jamais avec PostgreSQL, le courtier MQTT ou
+le casier.
+
+**État :**
+
+- FND-02B (#16) : squelette exécutable et écran technique « Service Aegis »
+  (`GET /system/health`), atteignable depuis le compte.
+- IOS-01 (#36) : connexion du technicien selon le handoff approuvé
+  (`docs/design/mobile-entree/`, #35), session au Keychain, expiration,
+  401, 429, déconnexion, reprise hors ligne et refus du compte
+  administrateur, en français et en anglais.
+- RDY-02 (#34) : catalogue du technicien (onglet « Équipements ») et fiche
+  d'équipement selon le handoff `docs/design/mobile-parcours/` (#35), sur
+  `GET /assets` et `GET /assets/{assetId}` (doc 09 §8.1, §8.2, §11). L'API
+  technicien n'existe pas encore sur `dev` : la recette live a été passée
+  contre la branche API `33-feat-readiness` (RDY-01, #33), pas contre `dev`.
+
+## Environnement vérifié
+
+Observations du **21 octobre 2026** sur le Mac de Philippe, contrôlées par
+commande (`sw_vers`, `xcodebuild -version`, `swift --version`,
+`xcodebuild -showsdks`, `xcrun simctl list`) :
+
+| Élément | Valeur observée |
+|---|---|
+| Mac | macOS 15.7.9 (24G830), Intel x86_64 |
+| Xcode sélectionné | 26.3 (17C529), `/Applications/Xcode.app` |
+| Swift | compilateur 6.2.4; mode de langage du projet : Swift 6 |
+| SDK | iOS 26.2, iOS Simulator 26.2 |
+| Runtimes de simulateur installés | iOS 17.5, 18.0, 18.1, 18.3.1, 18.4, 18.5, 26.0, 26.3.1 |
+
+Le projet utilise des groupes synchronisés avec le système de fichiers
+(format `objectVersion 77`) : **Xcode 16 ou plus récent** est requis pour
+l'ouvrir.
+
+## Cible minimale et versions testées
+
+**Cible minimale : iOS 17.0** (`Config/Shared.xcconfig`), à ne pas confondre
+avec les versions réellement testées :
+
+| Configuration | Recette | Résultat (28 octobre 2026, branche #34) |
+|---|---|---|
+| iPhone 17, iOS 26.3.1 (simulateur) | `standalone` | 159 réussis, 0 ignoré; audits d'accessibilité réussis; catalogue cohérent (125 clés, fr + en) |
+| iPhone 17, iOS 26.3.1 (simulateur) | `live`, API de la branche `33-feat-readiness` (5788607), comptes et catalogue de démonstration | 10 réussis, 0 ignoré |
+| Release, simulateur générique | compilation | aucun symbole de couverture, aucun hook ni donnée fictive de test dans le binaire |
+| iPhone SE (3e génération), iOS 17.5 (simulateur) | `standalone` | 159 réussis, 0 ignoré; audits réussis (taille de texte : voir la limite du catalogue); catalogue cohérent |
+| iPhone SE (3e génération), iOS 17.5 (simulateur) | `live`, même API | 10 réussis, 0 ignoré |
+| iOS 17.0 exact, iOS 18.x, iOS 26.0 | — | non testés (pas de runtime 17.0; autres runtimes non exécutés) |
+| iPhone 12 (Philippe), iPhone 15 Plus (Jimmy) | — | non testés; versions déclarées non confirmées (voir plus bas) |
+
+Justification de la cible :
+
+- la couche de présentation utilise le framework Observation (`@Observable`),
+  disponible à partir d'iOS 17;
+- iOS 17 et iOS 18 couvrent les mêmes iPhone (XS/XR et suivants); iOS 26
+  exclut les XS/XR. Viser plus haut n'apporte rien au P0 et réduirait les
+  iPhone de démonstration possibles;
+- la cible n'est pas déduite de la version de Xcode. Elle reste iOS 17.0 tant
+  qu'aucune fonctionnalité nécessaire au P0 n'exige plus. Une API plus récente
+  ne sera proposée qu'avec son besoin, son comportement de repli et son coût.
+
+Appareils disponibles (déclarés le 21 octobre 2026, **non vérifiés**) :
+
+| Appareil | Version annoncée | À confirmer |
+|---|---|---|
+| iPhone 12 (Philippe) | iOS 26.5 | Réglages › Général › Informations : version et numéro de build |
+| iPhone 15 Plus (Jimmy) | iOS 27.0.1 | Idem |
+
+Ces versions ne justifient pas de relever la cible. Elles dépassent en
+revanche le SDK iOS 26.2 de Xcode 26.3 : installer sur un appareil plus récent
+que le SDK peut demander les fichiers de prise en charge de l'appareil ou un
+Xcode plus récent, en particulier pour iOS 27. À vérifier au premier essai,
+sans changer la cible.
+
+## Ouvrir et lancer dans Xcode
+
+1. Démarrer l'API (voir `services/api/README.md`) et vérifier :
+   `curl http://localhost:8080/api/v1/system/health`.
+2. Ouvrir `apps/ios/AegisMobile.xcodeproj` (pas d'espace de travail ni de
+   dépendance externe).
+3. Choisir le schéma partagé **AegisMobile** et une destination
+   **iPhone 17** (iOS 26.x) ou **iPhone SE (3rd generation)** (iOS 17.5).
+4. Product › Run (⌘R). Product › Test (⌘U) exécute toute la suite; sans
+   adresse d'API réelle, les deux tests d'intégration y sont ignorés. Ce
+   résultat ne prouve donc pas l'intégration : utiliser la recette `live`.
+
+## Recettes de test (local et CI)
+
+`scripts/ios-test.sh` est la seule commande à utiliser en CI. Depuis
+`apps/ios/` :
+
+```bash
+scripts/ios-test.sh standalone
+```
+
+- Tests unitaires (client, Keychain réel du simulateur, modèle de session),
+  tests UI de la connexion et de l'écran de santé en français et en anglais
+  avec audits d'accessibilité de Xcode, sans backend, puis contrôle du
+  String Catalog (`scripts/check-strings.py`).
+- Les tests d'intégration sont **exclus**, pas ignorés; la recette échoue si
+  un test est ignoré, échoue ou si aucun test ne s'exécute.
+
+`standalone` se découpe en deux recettes qui, ensemble, exécutent exactement
+les mêmes tests (196 + 22 = 218, vérifié par énumération avec Xcode 26.3) :
+
+```bash
+scripts/ios-test.sh pr        # rapide : tous les tests unitaires, un test UI par parcours critique, String Catalog
+scripts/ios-test.sh extended  # le reste des tests UI : deux langues, deux apparences, grandes tailles, audits
+```
+
+La liste des tests UI de `pr` est `PR_UI_TESTS` dans le script; tout test UI
+qui n'y figure pas s'exécute dans `extended`. Les deux recettes échouent comme
+`standalone` sur un échec, un test ignoré ou aucun test exécuté.
+
+La recette live demande l'API avec les comptes de démonstration activés
+(`services/api/README.md`). Les mots de passe viennent du fichier local non
+versionné utilisé pour démarrer l'API, sans être affichés :
+
+```bash
+(set -a; . ~/.config/aegis/local-api.env; set +a; AEGIS_LIVE_API_BASE_URL=http://localhost:8080/api/v1 AEGIS_LIVE_TECHNICIAN_PASSWORD="$AEGIS_DEMO_TECHNICIAN_PASSWORD" AEGIS_LIVE_ADMIN_PASSWORD="$AEGIS_DEMO_ADMIN_PASSWORD" scripts/ios-test.sh live)
+```
+
+- Santé, authentification et catalogue par le client
+  (`LiveAPIIntegrationTests`, `LiveAuthIntegrationTests`,
+  `LiveCatalogIntegrationTests`), puis par l'application lancée : santé,
+  connexion du technicien, reprise depuis le Keychain après relance,
+  déconnexion, refus du compte administrateur, catalogue réel filtré sur
+  « Bloqué » et fiche avec ses raisons (`SignInLiveUITests`).
+- Échoue (code 1) si l'adresse ou un des deux mots de passe manque, si
+  `/system/health` est injoignable, ou si les 10 tests ne réussissent pas
+  tous; un test ignoré est un échec. Sans `GET /assets` (cas de `dev`
+  aujourd'hui), les deux tests du catalogue échouent : la recette échoue
+  explicitement. Le test UI du catalogue demande au moins un équipement
+  `BLOCKED` dans les données de démonstration.
+- `AEGIS_LIVE_TECHNICIAN_EMAIL` et `AEGIS_LIVE_ADMIN_EMAIL` remplacent les
+  adresses par défaut (`technician@aegis.demo`, `admin@aegis.demo`).
+
+**En CI (CI-02, #67)** : le simulateur et le résumé ne dépendent pas de la
+machine.
+
+```bash
+IOS_DESTINATION="$(scripts/ios-destination.sh)" scripts/ios-test.sh standalone
+```
+
+- `scripts/ios-destination.sh` choisit le premier simulateur disponible parmi
+  `IOS_SIMULATOR_NAMES` (défaut : iPhone 17, iPhone 16, iPhone 15), sur son
+  runtime iOS le plus récent, et l'annonce sur la sortie d'erreur; il échoue
+  si aucun n'existe.
+- Chaque recette écrit `build/results/<recette>-summary.json` (nombres de
+  tests exécutés, réussis, échoués et ignorés, version de Xcode, SDK du
+  simulateur, simulateur et durée) et, sous GitHub Actions, ajoute un tableau
+  au résumé de l'étape (`GITHUB_STEP_SUMMARY`). Le dossier `build/results/`
+  (bundles `.xcresult` et résumés) est l'artefact à conserver.
+- Le Xcode d'un runner hébergé est une configuration testée distincte de
+  celle du Mac de développement.
+
+Variables facultatives : `IOS_DESTINATION` (défaut
+`platform=iOS Simulator,name=iPhone 17,OS=latest`, à adapter aux simulateurs
+de la machine), `IOS_DERIVED_DATA` (défaut `build/DerivedData`) et
+`IOS_RESULTS_DIR` (défaut `build/results`, où sont écrits les `.xcresult` et
+les résumés).
+Exemple sur la cible minimale :
+
+```bash
+IOS_DESTINATION='platform=iOS Simulator,name=iPhone SE (3rd generation),OS=17.5' scripts/ios-test.sh standalone
+```
+
+Le premier build prend 5 à 6 minutes sur ce Mac Intel. `build/` est ignoré
+par Git.
+
+Compiler sans tester, puis installer et lancer sur le simulateur démarré :
+
+```bash
+xcodebuild build -project AegisMobile.xcodeproj -scheme AegisMobile -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' -derivedDataPath build/DerivedData
+```
+
+```bash
+xcrun simctl install booted build/DerivedData/Build/Products/Debug-iphonesimulator/AegisMobile.app
+```
+
+```bash
+xcrun simctl launch booted com.example.aegis.mobile
+```
+
+## Connexion et session (#36)
+
+| Situation | Comportement |
+|---|---|
+| Lancement sans session | Formulaire de connexion |
+| Session au Keychain, non expirée | « Reprise de la session… », puis `GET /auth/me`; le compte n'est affiché qu'après acceptation par le serveur |
+| `GET /auth/me` injoignable ou en erreur 5xx | Jeton conservé, écran « Connexion au service impossible » avec Réessayer et Se déconnecter; session non présentée comme vérifiée, aucune action métier |
+| Expiration (`expiresIn`, 60 min, sans refresh token) | Échéance calculée sur l'horloge de l'appareil à la réception; retour à la connexion, courriel prérempli, message d'expiration; vérifiée à l'échéance, après chaque réveil et au retour au premier plan |
+| 401 sur une route protégée | Jeton supprimé; « session expirée » pour `AUTH_TOKEN_EXPIRED`, sinon « session n'est plus valide » |
+| 403 | Refus de l'action, session conservée (doc 09 §4.3); sauf sur `GET /auth/me` à la reprise, où il signifie que le compte ne peut pas utiliser l'app |
+| Réponse tardive | Une réponse arrivée après une déconnexion ou une nouvelle session est ignorée |
+| 401 à la connexion | « Adresse courriel ou mot de passe incorrect. »; mot de passe effacé, courriel conservé |
+| 429 | Délai `Retry-After` affiché une seule fois s'il est valide (1 à 3600 s), bouton désactivé jusque-là; sinon « Réessayez plus tard. » sans verrou |
+| Compte administrateur ou rôle inconnu | Jeton non conservé, aucune donnée chargée, écran « Accès réservé aux techniciens » (message neutre pour un rôle inconnu) |
+| Déconnexion | Confirmation, puis suppression locale du jeton (aucune route serveur) |
+
+- Le jeton, son échéance et l'adresse sont un seul élément Keychain
+  `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`; jamais `UserDefaults`,
+  jamais journalisés (descriptions de débogage et réflexion masquées).
+- Une erreur Keychain passagère au lancement conserve l'élément; un élément
+  illisible est supprimé; si la déconnexion ne peut pas le supprimer, il est
+  écrasé par une session vide et expirée.
+- Seuls les `traceId` alphanumériques (avec tirets, 64 caractères au plus)
+  sont affichés.
+- Le client ne lit jamais le contenu du jeton; le serveur reste l'autorité.
+- Un double envoi est ignoré pendant la requête; l'état d'envoi est annoncé
+  à VoiceOver.
+
+**Hooks de test (Debug uniquement, absents de Release)** : variables de
+lancement `AEGIS_UI_SCENARIO` (réponses d'API scriptées et session en
+mémoire, voir `App/UITestHooks.swift`), `AEGIS_RESET_SESSION=1`,
+`AEGIS_START_SCREEN=health`, `AEGIS_START_TAB=account` et `AEGIS_UI_FOCUS`.
+Ils servent aux tests UI et aux captures; seule la recette live prouve
+l'intégration.
+
+## Catalogue et fiche d'équipement (#34)
+
+Après la connexion, le technicien arrive sur l'onglet **Équipements**; l'onglet
+**Compte** garde la déconnexion et l'écran « Service Aegis ». « Réserver » et
+l'onglet « Mon activité » sont décrits plus bas (#37, #38).
+
+| Situation | Comportement |
+|---|---|
+| Chargement | Cartes neutres, sans couleur d'état |
+| Liste | Pile de navigation native; une carte ouvre la fiche, retour natif; pages de 20, la suivante en fin de liste; tirer pour actualiser |
+| Recherche | `q` sans espaces de bord, 1 à 100 caractères (UTF-16), jamais envoyé vide; appliquée à la validation, retirée quand le champ est vidé |
+| Filtres | Tous / Prêt / Bloqué / À vérifier envoient rien / `READY` / `BLOCKED` / `UNKNOWN`; cibles de 44 pt; menu « Filtre : Tous » aux tailles d'accessibilité |
+| Vide | « Aucun équipement ne correspond. » avec « Effacer les filtres », ou « Aucun équipement n'est encore disponible. » sans filtre |
+| Erreur sans liste | Message contrôlé (réseau, service avec identifiant de suivi, 403) et Réessayer |
+| Actualisation impossible | La dernière liste reste, sous un avis « Informations non actualisées depuis <heure de réception> » avec Réessayer; les puces deviennent « Dernier état : X », en couleurs neutres; pas de page suivante sur une liste périmée |
+| 401 | Fin de session par le parcours existant (#36) |
+| 400 (`q`, `size`) ou code inconnu | Traitement générique (doc 09 §7.1) : message contrôlé et identifiant de suivi, jamais le texte du serveur |
+| Fiche | Puce d'état, « Pourquoi il est bloqué » avec chaque raison et sa suite, calibration, niveau d'accès requis, cellule |
+| Fiche 404 | « Cet équipement n'est plus disponible. » et « Retour à la liste » (`ASSET_NOT_FOUND` ou `RESOURCE_NOT_FOUND`) |
+| Fiche hors ligne | Dernière fiche reçue, « Dernier état » et note de non-actualisation |
+
+- La readiness n'est jamais calculée par l'app : elle est affichée telle que
+  le serveur l'a évaluée. Un équipement `BORROWED` n'est jamais « Prêt ».
+- Une valeur d'énumération inconnue est décodée, journalisée (catégorie
+  `contract`) et affichée « État indisponible », jamais comme une valeur
+  connue ni comme prête.
+- `identifierValue` et tout identifiant RFID ne sont ni décodés, ni gardés, ni
+  affichés : seuls les champs du contrat sont lus.
+- Chaque état porte un symbole et un texte; la couleur n'est jamais seule.
+
+**Heures.** L'échéance de calibration s'affiche avec la date, l'heure et le
+fuseau `America/Toronto` (convention du laboratoire P0, décision du
+22 octobre 2026, `docs/localisation/convention.md`), indépendamment du
+placement et sans règle « minuit »; son état vient du serveur. Le pied
+« État évalué à X, heure du casier. » utilise la plus ancienne évaluation de
+la liste, dans le même fuseau, l'API n'exposant pas encore le fuseau du
+casier. L'heure de réception des données hors ligne est un instant technique,
+dans le fuseau de l'appareil. Les formats viennent de `FormatStyle` : iOS
+produit « 21 oct. 2026 à 15:20 HAE » et « Oct 21, 2026 at 3:20 PM EDT » là où
+la convention, calculée avec `Intl`, montre « 21 oct. 2026, 15 h 20 HAE » et
+« Oct 21, 2026, 3:20 p.m. EDT ». L'écart est signalé, pas corrigé à la main.
+
+**Preuves.** `docs/evidence/catalog/live-*.png` sont des captures de la
+recette live du 28 octobre 2026 contre la branche API `33-feat-readiness`
+(5788607) : catalogue réel et fiche AEG-DEMO-002 bloquée par sa calibration,
+sur iPhone 17 (iOS 26.3.1) et iPhone SE (iOS 17.5). Les captures des tests UI
+sur données fictives restent dans les résultats `xcresult`.
+
+**Limite connue.** Sur un écran de 375 pt, le grand titre système
+« Équipements » est tronqué aux plus grandes tailles d'accessibilité; l'onglet
+et VoiceOver le donnent en entier. Avant iOS 26, l'audit de taille de texte de
+Xcode lit le remplacement des filtres par le menu comme une taille non prise
+en charge : il n'est appliqué que sur iOS 26, et le test AX5 rend et audite la
+liste à la plus grande taille sur les deux versions.
+
+**Données fictives.** `App/UITestCatalogFixtures.swift` (Debug seulement)
+sert cinq équipements FICTIFS aux scénarios `catalog`, `catalog-empty`,
+`catalog-offline`, `catalog-detail-offline` et `catalog-detail-gone`. Ce n'est
+jamais un repli de l'application : sans scénario, l'app appelle l'API.
+
+## Réservation et « Mon activité » (#37, #38)
+
+Maquette approuvée : `docs/design/mobile-parcours/proposition.md` §5 et §6.
+L'onglet **Mon activité** est placé entre Équipements et Compte.
+
+| Situation | Comportement |
+|---|---|
+| Fiche d'un équipement prêt | « Réserver » ouvre la feuille de réservation; désactivé avec sa raison si l'état n'est pas « Prêt » ou n'est pas actualisé |
+| Fiche de mon équipement | « Réservé pour vous » ou « Emprunté par vous » (lus dans Mon activité) et « Voir mon activité » à la place de Réserver |
+| Feuille | Équipement et cellule, « Réserver jusqu'à » par pas de 15 min, heure de fermeture, conséquences de l'heure, fuseau du casier, « La réservation n'ouvre aucune porte. », Confirmer épinglé en bas |
+| Heures du casier | `GET /lockers/{id}/status` (§8.6) : ouvert → choix jusqu'à la fermeture (incluse); fermé → Confirmer désactivé et « Le casier est fermé. Réouverture à … » ou « … Aucun horaire d'ouverture. »; route absente ou erreur → « Heures d'ouverture indisponibles. Le service vérifiera l'heure choisie. », Confirmer actif |
+| Envoi | `POST /reservations` avec une `Idempotency-Key` par intention; double appui ignoré; feuille non fermable pendant l'envoi |
+| Issue inconnue | Réseau, 5xx, réponse illisible ou `IDEMPOTENCY_REQUEST_IN_PROGRESS` : message et Réessayer, qui renvoie **la même clé**; une autre heure est une nouvelle intention, avec une nouvelle clé |
+| Refus | Message contrôlé par code (§14.1), jamais le texte du serveur; la fiche est relue; `USER_ALREADY_HAS_ACTIVE_RESERVATION` propose « Voir mon activité » |
+| Refus de production | Jusqu'à PHY-02, `422 ASSET_NOT_READY` avec `UNKNOWN_PHYSICAL_STATE` : « Réservation impossible : présence non confirmée par le casier. », un refus, sans Réessayer |
+| Créée | La feuille se ferme, Mon activité s'ouvre avec « Réservation confirmée jusqu'à … », annoncé à VoiceOver |
+| Carte de réservation | « Réservé pour vous », équipement, cellule, « À retirer avant … »; « Annuler la réservation » seulement si `availableActions` contient `CANCEL` et que la lecture est à jour |
+| Annulation | Confirmation, puis `POST /reservations/{id}/cancel` avec clé et corps `{}`; issue inconnue → même clé au nouvel essai; `409 RESERVATION_NOT_CANCELLABLE` → message, puis la carte suit la relecture |
+| Prêt | `GET /me/loan` lu en parallèle; en retard, « Retour prévu à » ou retour en attente, tels que le serveur les donne |
+| Prêt illisible | Seul `404 ACTIVE_LOAN_NOT_FOUND` signifie « aucun prêt ». Tout autre échec, dont `404 RESOURCE_NOT_FOUND` tant que `GET /me/loan` n'a pas de contrôleur (#48), donne l'avis « Le prêt en cours n'a pas pu être vérifié. », avec son identifiant de suivi et Réessayer, **sous** la confirmation et la carte de réservation, ou sous « Aucune réservation en cours. » qui remplace alors l'état vide complet; aucun prêt n'est inventé (#38) |
+| Hors ligne | Dernier état reçu, marqué non actualisé; aucune action proposée sur une lecture périmée |
+
+- L'app ne décide jamais l'expiration : seul le serveur expire une
+  réservation, et `GET /me/reservation` répond alors `404`.
+- Préparer le retrait et Rapporter l'équipement appartiennent à CHK-01 (#46)
+  et RET-01 (#50) : non proposés, même si `CHECKOUT` ou `RETURN` sont listés.
+- Textes proposés, non encore approuvés : « Cet équipement est emprunté. »,
+  « Choisissez une heure plus tardive. », « Cette réservation ne peut plus être
+  annulée. », « Cette réservation n'est plus disponible. », « Le service a
+  refusé la demande. », « Le service n'a pas pu traiter la demande. »,
+  « Connexion au service impossible. », et toutes les traductions anglaises
+  de cette section.
+- Fuseau : la maquette écrit « heure avancée de l'Est »; l'heure avancée a pris
+  fin le 1er novembre 2026. L'app affiche le nom système du fuseau à la date
+  affichée (« heure normale de l'Est » en hiver).
+
+**Données fictives.** `App/UITestActivityFixtures.swift` (Debug seulement).
+Sans autre indication, chaque scénario connecté répond comme `dev` aujourd'hui :
+aucune réservation, `GET /me/loan` et la route d'état du casier absents
+(`404 RESOURCE_NOT_FOUND`), toute réservation refusée `422 ASSET_NOT_READY`
+(`UNKNOWN_PHYSICAL_STATE`). Scénarios nommés : `reservation` (création puis
+annulation), `reservation-refused`, `reservation-offline` (première réponse
+perdue, la même clé réussit, une autre clé serait refusée `409`),
+`reservation-closed`, `activity-reserved`, `activity-not-cancellable`,
+`activity-loan` et `activity-loan-unavailable` (réservation active, première
+lecture du prêt en `503`, les suivantes en `404 ACTIVE_LOAN_NOT_FOUND`). `AEGIS_START_TAB=activity` ouvre l'onglet.
+
+## Français et anglais
+
+Convention commune Web et iOS : `docs/localisation/` (#78, tenue par la
+session API/Web, avec le glossaire). Pour iOS :
+
+- String Catalog `AegisMobile/Localizable.xcstrings`; le français est la
+  langue de développement et de repli (`developmentRegion = fr`), l'anglais
+  est traduit;
+- la langue suit le système ou le choix fait pour l'application dans
+  Réglages, qui apparaît dès que deux langues existent; aucune préférence
+  n'est envoyée au serveur;
+- formats natifs (`FormatStyle`) avec `Locale.current` : langue de l'app,
+  région et réglage 12/24 h du système;
+- seule la présentation est traduite : jamais les codes, les identifiants,
+  le `traceId` ni les données du serveur.
+
+Le contrôle `scripts/check-strings.py` compare les clés extraites par le
+compilateur au catalogue. Il échoue si une clé manque au catalogue, si une
+clé n'est plus utilisée, si une traduction anglaise manque ou est vide, ou si
+les marqueurs (`%@`, `%lld`) diffèrent. Les tests UI vérifient l'écran dans
+les deux langues avec `-AppleLanguages` et `-AppleLocale`.
+
+Ajouter un texte : l'écrire en français dans le code (`Text("…")`), compiler,
+puis ajouter sa traduction anglaise au catalogue, dans Xcode ou dans le JSON.
+
+## Configuration et règles réseau
+
+| Fichier | Rôle | Versionné |
+|---|---|---|
+| `Config/Shared.xcconfig` | Cible iOS, Swift, version, préfixe d'identifiant | oui |
+| `Config/Debug.xcconfig` | `AEGIS_API_BASE_URL = http://localhost:8080/api/v1` | oui |
+| `Config/Release.xcconfig` | Adresse vide : à fournir en HTTPS | oui |
+| `Config/Local.xcconfig` | Équipe de signature, préfixe d'identifiant, adresse locale | **non** (`Local.xcconfig.example`) |
+| `Config/AegisMobile-Info.plist` | Expose `AegisAPIBaseURL` au code | oui |
+
+- L'adresse est validée au lancement (`APIConfiguration`) : HTTPS obligatoire,
+  sauf HTTP vers `localhost`, `127.0.0.1` ou `::1`. Une adresse absente ou en
+  HTTP vers un autre hôte affiche un état de configuration au lieu d'appeler.
+- **Aucune exception App Transport Security** n'est déclarée : l'appel HTTP au
+  loopback du simulateur fonctionne sans elle (vérifié). Aucun certificat
+  arbitraire n'est accepté et la vérification TLS reste celle de la plateforme.
+- En Debug seulement, la variable de lancement `AEGIS_API_BASE_URL` remplace
+  l'adresse (utilisée par les tests UI pour simuler un service injoignable);
+  elle subit la même validation.
+- Aucun secret, compte ou équipe de signature n'est versionné. L'identifiant
+  `com.example.aegis.mobile` est un substitut à remplacer dans `Local.xcconfig`
+  pour signer sur un appareil.
+
+## Structure
+
+```text
+AegisMobile/
+  App/          point d'entrée SwiftUI
+  Networking/   APIConfiguration, APIClient (URLSession), SystemHealth
+  Health/       HealthViewModel (@MainActor, @Observable) et HealthView
+  Catalog/      catalogue et fiche d'équipement
+  Reservation/  feuille de réservation et erreurs des mutations
+  Activity/     Mon activité : réservation, prêt, annulation
+  Assets.xcassets  couleurs du traitement A (valeurs du prototype, non définitives)
+  Localizable.xcstrings  textes français et anglais
+AegisMobileTests/    Swift Testing : configuration, client, états de l'écran,
+                     traductions compilées, API réelle
+AegisMobileUITests/  XCUITest : erreur réseau et nouvelle tentative (FR, EN), service réel
+scripts/ios-test.sh      recettes standalone, pr, extended et live
+scripts/ios-destination.sh  choix du simulateur disponible (CI)
+scripts/summarize-results.py  contrôle et résumé des résultats (JSON, GitHub)
+scripts/check-strings.py contrôle du String Catalog
+```
+
+Grâce aux groupes synchronisés, un fichier ajouté dans un de ces dossiers est
+compilé sans modifier `project.pbxproj`.
+
+Couleurs : bleu–indigo du traitement A « Verre lumineux »
+(`docs/design/asset-lifecycle/prototype/tokens/brand.css`). Ces valeurs restent
+des propositions de prototype, non des jetons approuvés.
+
+## Essai sur l'iPhone réel — conditions à réunir
+
+Le simulateur ne valide ni la caméra, ni le scan du QR, ni le réseau du
+laboratoire. Avant le premier essai :
+
+1. Version et build iOS confirmés sur l'iPhone 12 et l'iPhone 15 Plus, et
+   capacité de Xcode 26.3 à installer sur ces versions.
+2. Compte Apple Developer et équipe de signature sur le Mac qui compile
+   (`DEVELOPMENT_TEAM` dans `Local.xcconfig`), mode développeur activé sur
+   l'iPhone, échéance du profil connue.
+3. Adresse d'Aegis Control joignable depuis l'iPhone : jamais `localhost`.
+   Le contrat impose HTTPS hors environnement local; il faut donc un
+   certificat dont la chaîne est approuvée sur l'iPhone. Ce choix (autorité
+   locale, nom d'hôte) est à coordonner avec le responsable de l'API et de
+   l'infrastructure; aucun contournement TLS n'est prévu.
+4. Réseau : iPhone et hôte sur le même réseau autorisé, sans isolation des
+   clients. Joindre un hôte du réseau local demandera la description
+   `NSLocalNetworkUsageDescription` (non ajoutée tant qu'elle n'est pas
+   utilisée).
+5. Caméra : `NSCameraUsageDescription` et le scan seront ajoutés avec CHK-01
+   et validés seulement sur l'appareil.
+
+Essais de la connexion (#36) qui restent à faire sur un iPhone réel, aucun
+n'ayant été exécuté :
+
+- connexion, relance et reprise depuis le Keychain de l'appareil, y compris
+  après un verrouillage (élément lisible seulement appareil déverrouillé);
+- remplissage automatique des mots de passe avec un trousseau réel;
+- VoiceOver manuel : ordre de lecture, annonce « Connexion en cours »,
+  messages d'erreur et de limite, confirmation de déconnexion;
+- Taille du texte, Gras, Réduire les animations et Augmenter le contraste
+  réglés dans Réglages;
+- mode Avion au lancement avec une session valide (reprise hors ligne),
+  puis retour du réseau et Réessayer;
+- expiration réelle après 60 minutes, application en arrière-plan puis au
+  premier plan;
+- connexion en HTTPS vers l'hôte de démonstration (point 3).
+
+## Preuves
+
+Captures dans `docs/evidence/`, prises le 14 octobre 2026 avec le même Xcode
+et les mêmes runtimes que ci-dessus :
+
+- `health-live-iphone17-ios26.3.png` : appel réel, service opérationnel;
+- `health-unreachable-iphone17-ios26.3.png` : port fermé, erreur réseau et
+  bouton « Réessayer » (capture du test UI);
+- `health-live-iphonese-ios17.5-dark-ax.png` : cible minimale, thème sombre,
+  texte d'accessibilité très grand;
+- `health-unreachable-en-iphone17-ios26.3.png` (21 octobre 2026) : même état
+  en anglais (capture du test UI).
+
+`docs/evidence/sign-in/` (21 octobre 2026, iPhone 17, iOS 26.3.1, scénarios
+Debug) :
+
+- `scripts/capture-sign-in.sh` : connexion clair/sombre FR/EN, clavier,
+  très grand texte, reprise, reprise hors ligne, session expirée, compte;
+- tests UI : refus FR/EN, limite de tentatives, envoi, mauvais rôle,
+  erreurs de champ, très grand texte défilé, audit en sombre.

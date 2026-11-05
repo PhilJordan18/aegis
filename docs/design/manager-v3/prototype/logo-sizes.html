@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lisibilité du logo — prototype Aegis Manager v3</title>
+  <script src="js/boot.js"></script>
+  <link rel="stylesheet" href="css/aegis-v3.css">
+  <style>
+    body { background: #888; padding: 16px; }
+    .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .sheet { padding: 20px; border-radius: 12px; display: grid; gap: 22px; }
+    .sheet--dark { --ag-muted: #a9b8cd; background: #070c13; color: #f0f4fc; }
+    .sheet--dark-panel { --ag-muted: #a9b8cd; --ag-border: #2b3b50; background: #0e1621; color: #f0f4fc; }
+    .sheet--dark, .sheet--dark-panel { --ag-border: #2b3b50; }
+    .sheet .ag-brand { color: inherit; }
+    .sheet--light-panel, .sheet--light { --ag-border: #d3dce7; }
+    .sheet--light { background: #f4f6fa; color: #14253b; --ag-muted: #53647a; }
+    .sheet--light-panel { background: #ffffff; color: #14253b; --ag-muted: #53647a; }
+    h2 { font-size: .8125rem; font-weight: 600; margin-bottom: 8px; opacity: .85; }
+    .line { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 20px; }
+    .item { display: grid; gap: 4px; justify-items: start; font-size: 11px; font-variant-numeric: tabular-nums; }
+    .item img { display: block; }
+  </style>
+</head>
+<body>
+  <h1 class="ag-sr-only">Lisibilité du logo</h1>
+  <div class="row" id="rows"></div>
+  <script>
+    (function () {
+      var mk = [12, 16, 20, 24, 28, 32, 40, 48];
+      var M = '../../identite/assets/aegis-core-mark.svg', MD = '../../identite/assets/aegis-core-mark-dark.svg';
+      function marks(dark) {
+        return mk.map(function (s) {
+          return '<div class="item"><img src="' + (dark ? MD : M) + '" alt="" width="' + s + '" height="' + s + '">' + s + '</div>';
+        }).join('');
+      }
+      function brands(dark) { // composant de marque de l'application : symbole + « aegis » en Geist (0,8 × le symbole) + Manager
+        return [16, 20, 24, 28, 32, 40].map(function (m) {
+          return '<div class="item"><span class="ag-brand" style="gap:' + Math.round(m / 3) + 'px"><img src="' + (dark ? MD : M) + '" alt="" width="' + m + '" height="' + m + '">' +
+            '<span class="ag-brand__word" style="font-size:' + (m * 0.8) + 'px">aegis</span><span class="ag-brand__app" style="font-size:' + Math.max(11, m * 0.4) + 'px">Manager</span></span>' + m + '</div>';
+        }).join('');
+      }
+      var sheets = [['sheet--dark', true, 'Sombre : fond de la page #070C13'], ['sheet--dark-panel', true, 'Sombre : fond de la carte #0E1621'], ['sheet--light', false, 'Clair : fond de la page #F4F6FA'], ['sheet--light-panel', false, 'Clair : fond de la carte #FFFFFF']];
+      document.getElementById('rows').innerHTML = sheets.map(function (s) {
+        return '<section class="sheet ' + s[0] + '"><div><h2>' + s[2] + ' — symbole (px)</h2><div class="line">' + marks(s[1]) + '</div></div>' +
+          '<div><h2>Composant de marque Web (symbole px)</h2><div class="line">' + brands(s[1]) + '</div></div></section>';
+      }).join('');
+    })();
+  </script>
+</body>
+</html>

@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { fileURLToPath } from 'node:url'
+import { openCatalog, waitForCatalogState } from './catalogFakes.ts'
+import { openLockers, waitForLockerState, type LockerMode } from './lockerFakes.ts'
 import { SCENARIOS, THEMES, VIEWPORTS } from './matrix.ts'
 import {
   APPEARANCE_STORAGE_KEY,
@@ -78,12 +80,15 @@ test.describe('flow:', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Équipements' })).toBeFocused()
   })
 
-  test('flow: sign-in tab order starts at « Accueil », then the brand, then the email field', async ({ page }) => {
+  test('flow: sign-in tab order is the brand, « Accueil », the language switch, then the email field', async ({ page }) => {
     await page.goto('/connexion')
     await settle(page)
-    await page.getByRole('link', { name: 'Accueil', exact: true }).focus()
+    await page.getByRole('link', { name: 'Aegis Manager, accueil' }).focus()
     await page.keyboard.press('Tab')
-    await expect(page.getByRole('link', { name: 'Aegis Manager, accueil' })).toBeFocused()
+    await expect(page.getByRole('link', { name: 'Accueil', exact: true })).toBeFocused()
+    await page.keyboard.press('Tab')
+    // One tab stop for the whole radio group: the checked option (French here, from the browser language).
+    await expect(page.getByRole('radio', { name: 'Français' })).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(page.getByLabel('Adresse courriel')).toBeFocused()
   })
@@ -97,7 +102,7 @@ test.describe('flow:', () => {
     await submitSignIn(page)
     const heading = page.getByRole('heading', { level: 1, name: 'Accès réservé aux administrateurs' })
     await expect(heading).toBeFocused()
-    await expect(page.getByRole('alert')).toContainText("Ce compte technicien s'utilise dans l'application Aegis.")
+    await expect(page.getByRole('alert')).toContainText("Ce compte technicien s'utilise dans Aegis Mobile.")
     await expect(page.locator('form')).toHaveCount(0)
     expect(requests.slice(before)).toEqual([])
     await page.getByRole('button', { name: 'Se connecter avec un autre compte' }).click()
@@ -158,19 +163,13 @@ test.describe('flow:', () => {
     expect(await page.evaluate(() => document.fonts.check('600 16px "Geist Variable"'))).toBe(true)
   })
 
-  test('flow: reduced transparency makes the glass opaque and removes the decor', async ({ page }) => {
-    const cdp = await page.context().newCDPSession(page)
-    await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }] })
-    await page.goto('/apercu/equipements')
-    await settle(page)
-    const sidebar = page.getByRole('navigation', { name: 'Sections' })
-    const style = await sidebar.evaluate((element) => {
-      const computed = getComputedStyle(element)
-      return { backdrop: computed.backdropFilter, background: computed.backgroundColor }
-    })
-    expect(style.backdrop).toBe('none')
-    expect(style.background).toBe('rgb(247, 249, 254)')
-    await expect(page.locator('.ag-shell__bg')).toBeHidden()
+  test('flow: no surface uses a blurred backdrop (no glass)', async ({ page }) => {
+    for (const path of ['/', '/connexion', '/apercu/equipements']) {
+      await page.goto(path)
+      await settle(page)
+      const blurred = await page.evaluate(() => [...document.querySelectorAll('*')].filter((element) => getComputedStyle(element).backdropFilter !== 'none').length)
+      expect(blurred, `${path}: elements with a backdrop filter`).toBe(0)
+    }
   })
 
   test('flow: reduced motion stops the busy indicator', async ({ page }) => {
@@ -214,52 +213,293 @@ test.describe('flow:', () => {
   })
 })
 
-// Review R1: the signature lit cell is either absent or fully visible, inside its
-// container and the viewport, and at least 16 px from the card or panel.
-const LIT_CELL_WIDTHS = [1440, 1280, 1024, 768, 640, 480, 390, 320]
-const LIT_CELL_PAGES = [
-  { name: 'landing', path: '/', container: '.ag-atmos', card: '.ag-atmos__figure', expectLitBelow768: true },
-  { name: 'connexion', path: '/connexion', container: '.ag-signin', card: '.ag-signin__panel', expectLitBelow768: false },
-]
+test.describe('flow: équipements (production page, routed fakes)', () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
 
-test.describe('flow: lit cell geometry', () => {
-  for (const pageCase of LIT_CELL_PAGES) {
-    for (const width of LIT_CELL_WIDTHS) {
-      test(`flow: lit cell ${pageCase.name} at ${width} px`, async ({ page }) => {
-        await page.setViewportSize({ width, height: width <= 390 ? 720 : 900 })
-        await page.goto(pageCase.path)
-        await settle(page)
-        const geometry = await page.evaluate(
-          ({ container, card }) => {
-            const rect = (element: Element) => element.getBoundingClientRect().toJSON() as DOMRect
-            const lit = [...document.querySelectorAll('[data-lit-layer] i')].filter(
-              (element) => getComputedStyle(element).visibility === 'visible' && element.getBoundingClientRect().width > 0,
-            )
-            const containerElement = document.querySelector(container)
-            const cardElement = document.querySelector(card)
-            return {
-              count: lit.length,
-              cell: lit[0] ? rect(lit[0]) : null,
-              container: containerElement ? rect(containerElement) : null,
-              card: cardElement ? rect(cardElement) : null,
-              viewport: { width: document.documentElement.clientWidth },
-            }
-          },
-          { container: pageCase.container, card: pageCase.card },
-        )
-        const expected = width >= 768 || pageCase.expectLitBelow768 ? 1 : 0
-        expect(geometry.count).toBe(expected)
-        if (expected === 0) return
+  async function openEquipment(page: import('@playwright/test').Page, mode: 'nominal' | 'paged' | 'long') {
+    await page.goto('/connexion')
+    await settle(page)
+    const requests = await openCatalog(page, mode)
+    await waitForCatalogState(page, mode)
+    return requests
+  }
 
-        const { cell, container, card, viewport } = geometry
-        if (!cell || !container || !card) throw new Error('missing geometry')
-        expect(cell.left).toBeGreaterThanOrEqual(Math.max(container.left, 0))
-        expect(cell.right).toBeLessThanOrEqual(Math.min(container.right, viewport.width))
-        expect(cell.top).toBeGreaterThanOrEqual(container.top)
-        expect(cell.bottom).toBeLessThanOrEqual(container.bottom)
-        const gap = Math.max(card.left - cell.right, cell.left - card.right, card.top - cell.bottom, cell.top - card.bottom)
-        expect(gap, 'distance between the lit cell and the card').toBeGreaterThanOrEqual(16)
+  test('flow: the list is read from the API, the first unit is selected and the page asks nothing else', async ({ page }) => {
+    const requests = await openEquipment(page, 'nominal')
+    await expect(page).toHaveTitle('Équipements — Aegis Manager')
+    await expect(page.getByRole('heading', { level: 2, name: '2 exemplaires' })).toBeVisible()
+    const rows = page.locator('.ag-list__items a')
+    await expect(rows).toHaveCount(2)
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true')
+    await expect(page.getByRole('heading', { level: 2, name: /Multimètre 1 · MM-001/ })).toBeVisible()
+    // No invented readiness or presence.
+    await expect(page.locator('main')).not.toContainText(/\bPrêt\b/)
+    await expect(page.locator('main')).toContainText('Présence inconnue')
+    await expect(page.locator('main')).toContainText('Aucun placement connu')
+    // Only the two catalog routes, through the routed fakes.
+    expect(requests.every((request) => /^GET \/api\/v1\/admin\/assets(\/[0-9a-f-]{36})?(\?|$)/.test(request))).toBe(true)
+  })
+
+  test('flow: keyboard selection with Tab and Enter changes the dossier, keeps the focus on the row and announces it', async ({ page }) => {
+    await openEquipment(page, 'nominal')
+    const second = page.locator('.ag-list__items a').nth(1)
+    await page.locator('.ag-list__items a').first().focus()
+    await page.keyboard.press('Tab')
+    await expect(second).toBeFocused()
+    // The focus ring is drawn, not removed.
+    expect(await second.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe('none')
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(/\/equipements\?exemplaire=00000000-0000-4000-8000-000000000002$/)
+    await expect(second).toHaveAttribute('aria-current', 'true')
+    await expect(second).toBeFocused()
+    await expect(page.getByRole('heading', { level: 2, name: /Multimètre 2 · MM-002/ })).toBeVisible()
+    await expect(page.locator('main')).toContainText('Calibration expirée depuis le 8 sept. 2026, 00 h 00 HAE')
+    await expect(page.getByRole('status').filter({ hasText: 'Exemplaire sélectionné : Multimètre 2, MM-002.' })).toHaveCount(1)
+    await page.goBack()
+    await expect(page.locator('.ag-list__items a').first()).toHaveAttribute('aria-current', 'true')
+  })
+
+  test('flow: on a stacked layout a selection moves the focus to the dossier', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openEquipment(page, 'nominal')
+    await page.locator('.ag-list__items a').nth(1).click()
+    await expect(page.getByRole('group', { name: /Multimètre 2 · MM-002/ })).toBeFocused()
+  })
+
+  test('flow: a stale dossier keeps the unit, says it is not up to date and retries from the keyboard', async ({ page }) => {
+    await page.goto('/connexion')
+    await settle(page)
+    const requests = await openCatalog(page, 'staleDossier')
+    await waitForCatalogState(page, 'staleDossier')
+    const dossier = page.locator('.ag-dossier')
+    await expect(dossier.getByRole('alert')).toContainText('Données non actualisées.')
+    await expect(dossier.getByRole('heading', { level: 2, name: /Multimètre 1 · MM-001/ })).toBeVisible()
+    // The list is not stale: only the dossier's refresh failed.
+    await expect(page.locator('.ag-list').getByRole('alert')).toHaveCount(0)
+    const retry = dossier.getByRole('button', { name: 'Réessayer' })
+    // Reached by keyboard, so the focus ring is the one a keyboard user sees.
+    await page.locator('.ag-dossier__scroll').focus()
+    await page.keyboard.press('Tab')
+    await expect(retry).toBeFocused()
+    expect(await retry.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe('none')
+    const before = requests.filter((request) => /assets\/[0-9a-f-]{36}$/.test(request)).length
+    await page.keyboard.press('Enter')
+    await expect.poll(() => requests.filter((request) => /assets\/[0-9a-f-]{36}$/.test(request)).length).toBeGreaterThan(before)
+    // This retry fails too: focus stays on the button, and the status region says so because the alert does not speak twice.
+    await expect(dossier.getByRole('status')).toHaveText('Données non actualisées.')
+    await expect(retry).toBeFocused()
+    await expect(retry).not.toHaveAttribute('aria-disabled')
+  })
+
+  test('flow: pagination keeps the address, resets the selection and keeps focus on the pager', async ({ page }) => {
+    const requests = await openEquipment(page, 'paged')
+    await expect(page.getByRole('heading', { level: 2, name: '25 exemplaires' })).toBeVisible()
+    await expect(page.locator('.ag-list__items a')).toHaveCount(20)
+    const pager = page.getByRole('navigation', { name: 'Pagination des exemplaires' })
+    await expect(pager.getByText('Page 1 sur 2')).toBeVisible()
+    await expect(pager.getByRole('button', { name: 'Précédent' })).toHaveAttribute('aria-disabled', 'true')
+    await pager.getByRole('button', { name: 'Suivant' }).click()
+    await expect(page).toHaveURL(/\/equipements\?page=2$/)
+    await expect(pager.getByText('Page 2 sur 2')).toBeVisible()
+    await expect(page.locator('.ag-list__items a')).toHaveCount(5)
+    await expect(pager.getByRole('button', { name: 'Suivant' })).toBeFocused()
+    await expect(pager.getByRole('button', { name: 'Suivant' })).toHaveAttribute('aria-disabled', 'true')
+    expect(requests.some((request) => request.includes('page=1&size=20&sort=assetCode%2Casc'))).toBe(true)
+  })
+
+  test('flow: the page offers no control that creates, edits, archives or saves', async ({ page }) => {
+    await openEquipment(page, 'nominal')
+    await expect(page.locator('main').getByRole('button')).toHaveCount(0)
+    await expect(page.locator('main').locator('input, select, textarea')).toHaveCount(0)
+  })
+
+  test('flow: the « Modèles » tab is a dormant, non-focusable tab announced as coming', async ({ page }) => {
+    await openEquipment(page, 'nominal')
+    const tabs = page.getByRole('navigation', { name: 'Vues des équipements' })
+    await expect(tabs.getByRole('link', { name: 'Exemplaires' })).toHaveAttribute('aria-current', 'page')
+    await expect(tabs.getByRole('link', { name: 'Modèles' })).toHaveCount(0)
+    await expect(tabs).toContainText('Modèles, à venir')
+  })
+
+  test('flow: long French content wraps without clipping or horizontal scroll at 200 % zoom', async ({ page }) => {
+    await page.setViewportSize({ width: 640, height: 400 })
+    await openEquipment(page, 'long')
+    await expectNoHorizontalScroll(page)
+    const clipped = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>('main a.ag-item, main .ag-dossier__scroll *')].filter((element) => element.scrollWidth > element.clientWidth + 1 && getComputedStyle(element).overflowX !== 'visible').length,
+    )
+    expect(clipped).toBe(0)
+  })
+})
+
+test.describe('flow: casiers (production page, routed fakes)', () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
+
+  async function openLockerPage(page: import('@playwright/test').Page, mode: LockerMode) {
+    await page.goto('/connexion')
+    await settle(page)
+    const requests = await openLockers(page, mode)
+    await waitForLockerState(page, mode)
+    return requests
+  }
+
+  test('flow: the status is read from the API, shown in the shell, and the page asks nothing else', async ({ page }) => {
+    const requests = await openLockerPage(page, 'nominal')
+    await expect(page).toHaveTitle('Casiers — Aegis Manager')
+    await expect(page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Casiers' })).toHaveAttribute('aria-current', 'page')
+    await expect(page.getByRole('heading', { level: 2, name: /Laboratoire de démonstration · AEGIS-DEMO-01/ })).toBeVisible()
+    const panel = page.getByRole('region', { name: /AEGIS-DEMO-01/ })
+    await expect(panel).toContainText('En ligne')
+    await expect(panel).toContainText('Dernier signal')
+    await expect(panel).toContainText('Fermeture')
+    await expect(panel).toContainText('17 h 00 HNE')
+    await expect(panel.getByRole('row')).toHaveCount(3)
+    // Only reads: the catalog list that places the unit, then the locker status, nothing else.
+    expect(requests.every((request) => /^GET \/api\/v1\/(admin\/assets\?|lockers\/[0-9a-f-]{36}\/status$)/.test(request))).toBe(true)
+    expect(requests.some((request) => request.endsWith('/status'))).toBe(true)
+  })
+
+  test('flow: the page offers no control that changes a state, forces a readiness, opens a compartment or sends a command', async ({ page }) => {
+    await openLockerPage(page, 'nominal')
+    await expect(page.locator('main').getByRole('button')).toHaveCount(0)
+    await expect(page.locator('main').locator('input, select, textarea, form')).toHaveCount(0)
+    await expect(page.locator('main')).toContainText("Lecture seule : aucune commande n'est envoyée au casier depuis cet écran.")
+  })
+
+  test('flow: OFFLINE and never-seen say so in words and symbols, and show no healthy compartment', async ({ page }) => {
+    await openLockerPage(page, 'offline')
+    const panel = page.getByRole('region', { name: /AEGIS-DEMO-01/ })
+    await expect(panel).toContainText('Hors ligne')
+    await expect(panel).toContainText("Le casier n'envoie plus de signal valide.")
+    await expect(panel).not.toContainText('En ligne')
+    // The status is a chip with a symbol, not a colour.
+    await expect(panel.locator('.ag-diag .ag-chip svg')).toHaveCount(1)
+    // As the server sends it: the cells keep the last heartbeat values, shown as a memory and not as current health.
+    await expect(panel).toContainText('Dernier état connu, à la dernière observation')
+    await expect(panel.getByRole('table')).toContainText('Connectée')
+    await expect(panel.getByRole('table').locator('.ag-chip')).toHaveCount(0)
+  })
+
+  test('flow: never seen shows « État inconnu » and no signal', async ({ page }) => {
+    await openLockerPage(page, 'unknown')
+    const panel = page.getByRole('region', { name: /AEGIS-DEMO-01/ })
+    await expect(panel).toContainText('État inconnu')
+    await expect(panel).toContainText('Aucun signal reçu')
+    await expect(panel).not.toContainText(/En ligne|Connectée|Fermée|Verrouillée/)
+  })
+
+  test('flow: a stale status keeps the last good data, says it is not up to date and retries from the keyboard', async ({ page }) => {
+    const requests = await openLockerPage(page, 'stale')
+    const panel = page.getByRole('region', { name: /AEGIS-DEMO-01/ })
+    await expect(panel.getByRole('alert')).toContainText('Données non actualisées.')
+    await expect(panel.getByRole('heading', { level: 2, name: /AEGIS-DEMO-01/ })).toBeVisible()
+    await expect(panel.getByRole('table')).toBeVisible()
+    const retry = panel.getByRole('button', { name: 'Réessayer' })
+    // From the page heading, the next stops are the controls of the page: here the retry button, with no empty stop before it.
+    await page.getByRole('heading', { level: 1, name: 'Casiers' }).focus()
+    await page.keyboard.press('Tab')
+    await expect(retry).toBeFocused()
+    expect(await retry.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe('none')
+    const before = requests.filter((request) => request.endsWith('/status')).length
+    await page.keyboard.press('Enter')
+    await expect.poll(() => requests.filter((request) => request.endsWith('/status')).length).toBeGreaterThan(before)
+  })
+
+  test('flow: 404 says the locker is not found, and the sidebar still reaches the other sections', async ({ page }) => {
+    await openLockerPage(page, 'notFound')
+    await expect(page.getByRole('alert')).toContainText('Casier introuvable.')
+    await expect(page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Équipements' })).toBeVisible()
+  })
+
+  test('flow: on a phone the compartments stack as labelled lines, with no horizontal scroll', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 720 })
+    await openLockerPage(page, 'long')
+    await expectNoHorizontalScroll(page)
+    const rows = page.getByRole('row')
+    await expect(rows).toHaveCount(7)
+    // The column labels are repeated inside each row, hidden from the accessibility tree.
+    await expect(page.locator('.ag-lk-table__label').first()).toBeVisible()
+    await expect(page.locator('.ag-lk-table__label').first()).toHaveAttribute('aria-hidden', 'true')
+    const clipped = await page.evaluate(() =>
+      // The visually hidden caption, header row and live regions are clipped on purpose.
+      [...document.querySelectorAll<HTMLElement>('main .ag-lk *')].filter(
+        (element) => !element.closest('.ag-sr-only, thead') && element.scrollWidth > element.clientWidth + 1 && getComputedStyle(element).overflowX !== 'visible',
+      ).length,
+    )
+    expect(clipped).toBe(0)
+  })
+
+  test('flow: long French content wraps without clipping or horizontal scroll at 200 % zoom', async ({ page }) => {
+    await page.setViewportSize({ width: 640, height: 400 })
+    await openLockerPage(page, 'long')
+    await expectNoHorizontalScroll(page)
+  })
+
+  test('flow: the list of panels is a tab stop only while it scrolls', async ({ page }) => {
+    await openLockerPage(page, 'nominal')
+    // Everything fits: no scrolling region, so no stop and no role.
+    await expect(page.locator('.ag-lockers')).not.toHaveAttribute('tabindex', /.*/)
+    await expect(page.locator('.ag-lockers')).not.toHaveAttribute('role', /.*/)
+  })
+
+  // Rendered evidence for the longest valid codes, long cell codes and faults, and the last-known note: the page never
+  // scrolls sideways at 320 px, 390 px or at 200 % zoom (640x400). Numbers go to the log; shots and the accessibility read
+  // go to test-results/casiers-reflow/ (ignored by Git).
+  for (const mode of ['code20', 'code24', 'long', 'codeUnbroken', 'offlineLong'] as const) {
+    for (const [width, height, label] of [[320, 720, '320'], [390, 844, '390'], [640, 400, 'zoom200']] as const) {
+      test(`flow: reflow evidence, ${mode} at ${label}`, async ({ page }) => {
+        await page.setViewportSize({ width, height })
+        await openLockerPage(page, mode)
+        const widths = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }))
+        console.log(`REFLOW ${mode} ${label}: scrollWidth ${widths.scrollWidth} <= clientWidth ${widths.clientWidth}`)
+        const dir = fileURLToPath(new URL('../test-results/casiers-reflow/', import.meta.url))
+        await page.screenshot({ path: `${dir}${mode}-${label}.png`, fullPage: true, animations: 'disabled' })
+        if (mode === 'offlineLong' && label === '320') {
+          const { writeFile, mkdir } = await import('node:fs/promises')
+          await mkdir(dir, { recursive: true })
+          await writeFile(`${dir}offlineLong-320.aria.txt`, await page.locator('main').ariaSnapshot())
+        }
+        expect(widths.scrollWidth, `${mode} at ${label}`).toBeLessThanOrEqual(widths.clientWidth)
+        await expectNoHorizontalScroll(page)
+        await expectNoAxeViolations(page)
       })
     }
   }
+
+  test('flow: a long list of cells makes the region scroll, and then it is reachable by keyboard with a name', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 640 })
+    await openLockerPage(page, 'long')
+    await expect(page.locator('.ag-lockers')).toHaveAttribute('tabindex', '0')
+    await expect(page.getByRole('group', { name: 'Casiers' })).toBeVisible()
+    // On a phone the page scrolls, not the region: the stop goes away.
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect(page.locator('.ag-lockers')).not.toHaveAttribute('tabindex', /.*/)
+  })
+
+  test('flow: AEGIS-DEMO-01 stays on one line on a phone', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 720 })
+    await openLockerPage(page, 'nominal')
+    const code = page.locator('.ag-lk__title .ag-lk__code')
+    await expect(code).toHaveText('AEGIS-DEMO-01')
+    expect((await code.boundingBox())?.height ?? 99).toBeLessThan(40)
+  })
+
+  for (const [mode, width] of [['code20', 320], ['code20', 390], ['code24', 320], ['code24', 390]] as const) {
+    test(`flow: a ${mode === 'code20' ? 20 : 24}-character code does not overflow at ${width} px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 720 })
+      await openLockerPage(page, mode)
+      await expectNoHorizontalScroll(page)
+      const code = page.locator('.ag-lk__title .ag-lk__code')
+      const box = await code.boundingBox()
+      const panel = await page.locator('.ag-lk').boundingBox()
+      expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual((panel?.x ?? 0) + (panel?.width ?? 0))
+    })
+  }
+
+  test('flow: at desktop width the compartments are a real table with column headers', async ({ page }) => {
+    await openLockerPage(page, 'nominal')
+    const headers = page.getByRole('columnheader')
+    await expect(headers).toHaveText(['Cellule', 'Activée', 'Liaison', 'Lecteur RFID', 'Porte', 'Serrure', 'Dernière observation'])
+    await expect(page.locator('.ag-lk-table__label').first()).toBeHidden()
+  })
 })

@@ -2,8 +2,9 @@
 
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
-**Date de révision :** 23 septembre 2026
-**Version documentaire :** 1.3 — choix MQTT ratifiés; sujets et payloads inchangés
+**Date de révision :** 3 novembre 2026  
+**Version documentaire :** 1.6 — schéma des messages 3.0 : code `DEVICE_ERROR` `INBOUND_MESSAGE_INVALID` pour un message `commands` ou `display` non corrélable ou retenu, décidé le 22 octobre 2026 (§3.2, §7.2, §13.2, §20, §23) (#98); topics et ACL inchangés  
+**Version documentaire précédente :** 1.5 — comportement du hub décidé par Philippe le 22 octobre 2026 : messages retenus, doublons tardifs, opération déjà exécutée, rétention et saturation du journal, rejets d’affichage, révision périmée, abonnements, `STORAGE_FAULT` (§7.2, §9, §10, §13.2, §16.1, §18, §20, §23, §27) (#39); schéma 2.0
 
 ---
 
@@ -49,7 +50,7 @@ Une commande MQTT est la conséquence d’une LockerOperation déjà autorisée.
 
 ### 3.1 Version MQTT
 
-Le P0 utilise MQTT 3.1.1 afin de maximiser la compatibilité des bibliothèques ESP32. Le contrat applicatif ne dépend pas des propriétés propres à MQTT 5.
+Le P0 utilise MQTT 3.1.1 afin de maximiser la compatibilité des bibliothèques ESP32. Le contrat applicatif ne dépend pas des propriétés propres à MQTT 5. Le schéma 3.0 des messages (§3.2) ne change pas cette version du protocole.
 
 ### 3.2 Version du schéma
 
@@ -57,7 +58,7 @@ Tous les messages contiennent :
 
 ```json
 {
-  "schemaVersion": "1.0"
+  "schemaVersion": "3.0"
 }
 ```
 
@@ -69,6 +70,28 @@ Règles :
 - un champ requis ne devient jamais facultatif dans la même major;
 - un changement de type, de sens ou de valeur contrôlée exige une nouvelle major.
 
+La version courante est **3.0** (#98, décision du 22 octobre 2026). Elle remplace 2.0
+pour un seul changement : la valeur contrôlée `INBOUND_MESSAGE_INVALID` s’ajoute aux
+codes de `DEVICE_ERROR` (§13.2), afin que le hub signale un message `commands` ou
+`display` qu’il ne peut pas corréler ou qu’il reçoit retenu (§7.2, §20). L’enveloppe,
+les champs, les topics et le sens des autres valeurs sont ceux de 2.0.
+
+La version 2.0 (#63, 21 octobre 2026) avait remplacé 1.0, qu’aucun producteur ni
+consommateur n’avait déployée, pour trois changements :
+
+- la valeur contrôlée `SHUTDOWN` s’ajoute aux raisons de disponibilité (§15);
+- `bootCount` devient requis dans l’enveloppe du hub (§8.1);
+- `connectionId` devient requis dans `DEVICE_AVAILABILITY` et `HEARTBEAT` (§14, §15).
+
+Une nouvelle valeur contrôlée exige une nouvelle major (règle ci-dessus); un nouveau
+champ requis aussi, car un producteur de l’ancienne version ne le fournirait pas. Le
+simulateur passe à 3.0 dans le même changement que ce document; l’ingestion backend
+(PHY-01), les producteurs backend de `commands` et `display` et le firmware (FW-00)
+s’écrivent directement en 3.0. Aucune flotte mixte n’existe en P0 : après le passage,
+un message 2.0 ou 1.0 est rejeté avec `UNSUPPORTED_SCHEMA`, côté backend
+(`processingError`, §21) comme côté hub (`COMMAND_REJECTED` `UNSUPPORTED_SCHEMA`; pour
+un message d’écran, `DISPLAY_REJECTED` `INVALID_DISPLAY_PAYLOAD`, §27.2).
+
 ### 3.3 Encodage
 
 - UTF-8;
@@ -76,7 +99,10 @@ Règles :
 - noms en camelCase;
 - content-type logique application/json;
 - taille maximale P0 : 16 KiB par message;
-- profondeur JSON et taille des tableaux bornées avant désérialisation.
+- profondeur JSON et taille des tableaux bornées avant désérialisation;
+- instants en chaînes RFC 3339 en UTC terminées par `Z` : la seconde est obligatoire,
+  une fraction de seconde de 1 à 3 chiffres est facultative. Le backend accepte les
+  deux formes et compare des instants analysés, jamais des chaînes.
 
 ---
 
@@ -142,7 +168,7 @@ aegis/v1/lockers/{lockerId}/display
 | Topic | Producteur | Consommateur | Contenu |
 |---|---|---|---|
 | commands | Backend | Hub ciblé | UNLOCK_COMPARTMENT |
-| events | Hub | Backend | ACK, rejet, porte, serrure, RFID, erreur |
+| events | Hub | Backend | ACK, rejet, porte, serrure, RFID, erreur, redémarrage (`DEVICE_RESTARTED`) |
 | status | Hub ou broker via LWT | Backend | Heartbeat et disponibilité de connexion |
 | display | Backend | Hub ciblé | QR temporaire et résultat backend |
 
@@ -154,6 +180,16 @@ Règles :
 4. Un événement opérationnel publié sur status est rejeté.
 5. Un heartbeat publié sur events est rejeté.
 6. Les cellules ne possèdent aucun sous-topic MQTT propre.
+
+### 5.1 Version des topics
+
+Le segment `v1` versionne l’arborescence des topics et les ACL qui en dépendent, pas le
+schéma des payloads. Il ne se déduit jamais de `schemaVersion` : les schémas 2.0 puis 3.0
+gardent les topics `aegis/v1/...` et ne modifient aucune ACL (§6). Seul un changement de
+l’arborescence (niveau ajouté, topic renommé ou déplacé) créerait `aegis/v2/...`; il
+exigerait de nouvelles ACL pour le hub et le backend, testées avant la démonstration,
+et un basculement coordonné des deux côtés. Un consommateur choisit son décodeur
+d’après `schemaVersion`, jamais d’après le topic.
 
 ---
 
@@ -200,14 +236,17 @@ Tout droit non explicitement accordé est refusé. Les ACL sont testées avec un
 | Accusé ou rejet | 1 | false | La décision technique doit atteindre le backend |
 | Porte, serrure, RFID, erreur | 1 | false | Les preuves peuvent être redélivrées sans double effet |
 | Heartbeat périodique | 0 | false | Fréquent et remplacé après 10 secondes |
-| Disponibilité ONLINE | 1 | true | État de connexion actuel visible au nouvel abonné |
-| Last Will OFFLINE | 1 | true | Signal rapide de rupture anormale |
+| Redémarrage `DEVICE_RESTARTED` | 1 | false | Fait unique par démarrage, dédupliqué par `messageId`; jamais retenu pour un nouvel abonné |
+| Disponibilité ONLINE | 1 | true | Dernier état publié, visible au nouvel abonné; jamais une preuve de fraîcheur |
+| Last Will OFFLINE `CONNECTION_LOST` | 1 | true | Signal rapide de rupture anormale, publié par le broker |
+| OFFLINE `SHUTDOWN` | 1 | true | Déconnexion propre annoncée par le hub; remplace le ONLINE retenu |
 
 ### 7.1 Session hub
 
 - clientId stable;
 - cleanSession=false;
 - keepAlive=30 secondes;
+- un nouveau `connectionId` et un nouveau Last Will préparés avant chaque tentative de connexion, sans réutilisation (§15.2);
 - resubscription si le broker ne restaure pas la session;
 - commandes expirées refusées après reconnexion.
 
@@ -217,7 +256,9 @@ Le backend ne compte jamais sur une livraison exactement une fois. Toute livrais
 
 Une commande ou une instruction d’écran `retain=true` est strictement interdite. Une ancienne commande ne doit jamais être livrée à un hub simplement parce qu’il vient de se reconnecter.
 
-Seuls DEVICE_AVAILABILITY ONLINE et le Last Will OFFLINE sont retenus.
+Si le hub en reçoit une malgré tout, il ne l’exécute pas, ne l’affiche pas et ne la consigne pas dans son journal des commandes (§16.1) : elle ne consomme ni son `messageId` ni son `operationId`, et ne change pas la réponse faite à la même commande livrée sans retain. Il la signale par un `DEVICE_ERROR` `INBOUND_MESSAGE_INVALID` (§13.2), dans la limite de signalement du §13.2 : ce signalement ne porte ni `operationId` ni le contenu du message, et ne vaut ni accusé ni rejet de la commande.
+
+Seuls les messages DEVICE_AVAILABILITY sont retenus : ONLINE, OFFLINE `SHUTDOWN` et le Last Will OFFLINE `CONNECTION_LOST`. Un statut retenu ne remplace jamais la vérification de fraîcheur (§15.3).
 
 ---
 
@@ -227,17 +268,40 @@ Seuls DEVICE_AVAILABILITY ONLINE et le Last Will OFFLINE sont retenus.
 
 | Champ | Type | Requis | Règle |
 |---|---|---:|---|
-| schemaVersion | string | oui | 1.0 |
+| schemaVersion | string | oui | 3.0 |
 | messageId | UUID | oui | Nouveau pour chaque fait logique |
 | type | string | oui | Autorisé sur le topic |
 | lockerId | UUID | oui | Concorde avec identité et topic |
 | timestamp | instant UTC | oui | Horloge device synchronisée |
 | deviceSessionId | UUID | oui | Nouveau à chaque démarrage |
-| sequence | entier >= 0 | oui | Croissant dans la session |
+| bootCount | entier de 1 à 4 294 967 295 | oui | Augmente de 1 à chaque démarrage; identique pour tous les messages d’un démarrage |
+| sequence | entier >= 0 | oui | Croissant dans la session, attribué à la préparation du message, Last Will compris |
 | operationId | UUID | selon type | Requis pour un événement opérationnel |
 | compartmentId | UUID | selon type | Requis pour une cellule précise |
 
 messageId est l’identité idempotente. sequence aide au diagnostic et à l’ordre local, mais ne remplace jamais messageId.
+
+`deviceSessionId` identifie un démarrage; `bootCount` ordonne les démarrages d’un même
+hub. Le firmware conserve `bootCount` en mémoire non volatile (NVS), sur un entier non
+signé de 32 bits, et l’incrémente au démarrage, avant tout message; deux démarrages ne
+partagent jamais la même valeur. Le compteur appartient à l’identité du hub
+(`deviceKey`, §4.1) : un autre `deviceKey` est un autre device (`locker_devices`,
+doc 08), dont le compteur et la référence backend partent de zéro. Un nouveau
+provisionnement, qui efface la NVS, fait repartir le hub à 1. Le plafond n’est pas
+atteignable en usage normal; s’il l’était, le hub devrait être reprovisionné.
+`connectionId` (§15) identifie une connexion MQTT à l’intérieur d’un démarrage.
+
+Le hub ne publie rien tant que le nouveau `bootCount` n’est pas écrit en NVS. Si
+l’écriture échoue durablement, il reste déconnecté plutôt que de réutiliser une valeur :
+le locker apparaît OFFLINE et demande une intervention.
+
+Le reprovisionnement est une procédure d’exploitation, hors API P0 : arrêter le hub;
+attendre que le backend, connecté, ait reçu les messages encore en file pour lui; effacer
+le statut retenu du locker sur le broker; enregistrer l’instant du provisionnement côté
+backend (`provisioned_at`, doc 08 §4.4); effacer la NVS et remettre le hub en service.
+Les règles du §15.3 ne considèrent que les faits reçus depuis `provisioned_at`; l’attente
+préalable évite qu’un message de l’ancien démarrage, livré tard, ne dépasse les nouveaux
+`bootCount`.
 
 ### 8.2 Commandes émises par le backend
 
@@ -281,7 +345,7 @@ Payload :
 
 ```json
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "3.0",
   "messageId": "55c71961-21a3-4b2e-8b92-7f237e881a20",
   "type": "UNLOCK_COMPARTMENT",
   "operationId": "2f38d3b6-c18f-4a74-aa9a-2d574286013f",
@@ -294,7 +358,7 @@ Payload :
 
 ### 9.1 Validation locale
 
-Avant toute action, le hub vérifie :
+Avant toute action, le hub vérifie les points ci-dessous. La déduplication passe avant les contrôles 4 à 12 : dès que les étapes 1 à 3 rendent `messageId` lisible, une commande déjà journalisée reçoit son résultat connu (§10.1), même après `expiresAt`, sans nouvel actionnement et sans réévaluer ses gardes.
 
 1. JSON valide et taille acceptable;
 2. schemaVersion supportée;
@@ -303,11 +367,17 @@ Avant toute action, le hub vérifie :
 5. compartmentId connu et adressable;
 6. horloge synchronisée;
 7. instant courant strictement antérieur à expiresAt;
-8. messageId et operationId non déjà consommés;
+8. messageId et operationId non déjà consommés : une opération est consommée dès que l’une de ses commandes a atteint EXECUTING (exécutée, en cours, incertaine ou en échec d’actionnement `LOCK_ACTUATION_FAILED`); une commande seulement rejetée avant actionnement ne la consomme pas;
 9. aucune autre ouverture locale active;
 10. cellule connectée;
 11. porte dans un état sûr;
 12. alimentation et actionneur disponibles.
+
+Une nouvelle commande (nouveau `messageId`) pour une opération déjà consommée ne réactionne rien :
+
+- même cellule : le hub répond le résultat connu de l’opération, `COMMAND_ACKNOWLEDGED` `ALREADY_APPLIED` si elle a été acquittée, sinon son rejet journalisé;
+- autre cellule : `COMMAND_REJECTED` `INVALID_PAYLOAD`; la cellule nommée reste verrouillée et aucun accusé ne la cite comme actionnée;
+- une exécution incertaine (`PREVIOUS_EXECUTION_UNCERTAIN`) ne devient jamais un succès : elle reste un rejet pour toute commande de la même opération.
 
 Avant l’action irréversible, le hub persiste la commande dans un état local EXECUTING. Après l’actionnement, il enregistre son résultat final ACKNOWLEDGED ou REJECTED. Si le hub redémarre avec une commande restée EXECUTING, il ne réactive jamais la serrure : il publie PREVIOUS_EXECUTION_UNCERTAIN afin que le backend crée ou maintienne une anomalie.
 
@@ -316,6 +386,8 @@ Avant l’action irréversible, le hub persiste la commande dans un état local 
 Le hub impose une durée maximale de déverrouillage indépendante de la connexion réseau. À son expiration, il tente de remettre la serrure dans son état sûr et publie l’état observé.
 
 La valeur exacte dépend du mécanisme de serrure et doit être fixée dans l’ADR matériel. Elle ne peut pas dépasser la fenêtre de LockerOperation.
+
+La minuterie est locale et continue pendant une perte de réseau; les événements produits hors ligne attendent dans la file locale (§18). La durée de 15 secondes du simulateur est un paramètre de simulation, sans valeur normative. La durée réelle, le reverrouillage et la sécurité électrique relèvent de l’ADR matériel et des POC (POC-02 #20, POC-03 #21).
 
 ---
 
@@ -327,7 +399,7 @@ Un accusé positif signifie que le hub a validé la commande, que la cellule cib
 
 ```json
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "3.0",
   "messageId": "b7ce3d98-f78f-4c1a-a96f-36663bdcfe3c",
   "type": "COMMAND_ACKNOWLEDGED",
   "commandMessageId": "55c71961-21a3-4b2e-8b92-7f237e881a20",
@@ -336,6 +408,7 @@ Un accusé positif signifie que le hub a validé la commande, que la cellule cib
   "compartmentId": "1ae77ae3-8490-4f09-9412-a7816b77bff9",
   "timestamp": "2026-09-16T14:31:01Z",
   "deviceSessionId": "a36e9e94-b690-4e41-a14c-3cf8032742b0",
+  "bootCount": 3,
   "sequence": 41,
   "result": "ACCEPTED"
 }
@@ -343,13 +416,17 @@ Un accusé positif signifie que le hub a validé la commande, que la cellule cib
 
 result vaut ACCEPTED ou ALREADY_APPLIED.
 
-Pour une commande dupliquée, le hub republie l’accusé logique connu avec un nouveau messageId d’événement, le même commandMessageId et result=ALREADY_APPLIED. Il ne réactive pas la serrure.
+Pour une commande dupliquée, le hub republie l’accusé logique connu avec un nouveau messageId d’événement, le même commandMessageId et result=ALREADY_APPLIED. Il ne réactive pas la serrure. Cette réponse vaut aussi pour un doublon livré après `expiresAt` (§9.1).
+
+Un rejet connu reste un rejet : un doublon d’une commande rejetée republie le même rejet, avec un nouveau messageId d’événement, même si sa cause a disparu. Une nouvelle tentative relève d’une nouvelle décision du backend, avec une nouvelle commande et un nouveau `messageId` (§16.3).
+
+`messageId` identifie la commande (§16.1). Un message qui réutilise un `messageId` déjà journalisé avec un autre contenu reçoit le résultat de la commande journalisée, avec son `operationId` et son `compartmentId`, jamais ceux du nouveau message; aucune cellule n’est actionnée. Le backend ne réutilise jamais un `messageId` pour un autre contenu.
 
 ### 10.2 COMMAND_REJECTED
 
 ```json
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "3.0",
   "messageId": "ac370f20-52a2-4e07-9791-f9f64dabdd93",
   "type": "COMMAND_REJECTED",
   "commandMessageId": "55c71961-21a3-4b2e-8b92-7f237e881a20",
@@ -358,6 +435,7 @@ Pour une commande dupliquée, le hub republie l’accusé logique connu avec un 
   "compartmentId": "1ae77ae3-8490-4f09-9412-a7816b77bff9",
   "timestamp": "2026-09-16T14:31:01Z",
   "deviceSessionId": "a36e9e94-b690-4e41-a14c-3cf8032742b0",
+  "bootCount": 3,
   "sequence": 41,
   "reason": "CELL_UNREACHABLE",
   "detail": "La cellule ciblée ne répond pas sur le bus local."
@@ -374,14 +452,14 @@ Raisons P0 :
 - COMMAND_EXPIRED;
 - LOCAL_OPERATION_IN_PROGRESS;
 - CELL_UNREACHABLE;
-- COMPARTMENT_DISABLED;
+- COMPARTMENT_DISABLED (réservée : aucun mécanisme de désactivation n’est défini côté hub; le hub ne l’émet pas tant qu’il ne l’est pas);
 - DOOR_STATE_UNSAFE;
 - LOCK_ACTUATION_FAILED;
-- POWER_STATE_UNSAFE;
+- POWER_STATE_UNSAFE (défaut technique local d’alimentation ou d’actionneur détecté par le hub, §9.1 étape 12; ce contrat ne fixe aucun seuil électrique);
 - PREVIOUS_EXECUTION_UNCERTAIN;
 - INTERNAL_DEVICE_ERROR.
 
-detail est borné à 240 caractères et ne contient aucun secret.
+detail est borné à 240 caractères et ne contient aucun secret. Il sert au diagnostic : aucun consommateur n’en déduit une règle métier; seuls `reason` et les identifiants comptent.
 
 ---
 
@@ -397,7 +475,7 @@ aegis/v1/lockers/{lockerId}/events
 
 ```json
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "3.0",
   "messageId": "19dc9b16-b1db-4f26-a48a-073034ea35b8",
   "type": "DOOR_OPENED",
   "operationId": "2f38d3b6-c18f-4a74-aa9a-2d574286013f",
@@ -405,6 +483,7 @@ aegis/v1/lockers/{lockerId}/events
   "compartmentId": "1ae77ae3-8490-4f09-9412-a7816b77bff9",
   "timestamp": "2026-09-16T14:31:05Z",
   "deviceSessionId": "a36e9e94-b690-4e41-a14c-3cf8032742b0",
+  "bootCount": 3,
   "sequence": 42,
   "doorState": "OPEN"
 }
@@ -424,11 +503,11 @@ Un événement de serrure ne remplace pas un événement de porte. Une serrure d
 
 ### 12.1 RFID_SCAN_COMPLETED
 
-Chaque cellule lit localement les tags. À la fin d’une fenêtre de stabilisation, le hub publie une preuve positive que la lecture a réellement été exécutée. Cette preuve contient l’état du lecteur et les identifiants observés, y compris un tableau vide lorsqu’aucun tag n’a été détecté.
+Chaque cellule lit localement les tags. Pendant une opération, le hub lance le scan de la cellule après la fermeture de sa porte; aucune commande de scan n’existe. À la fin d’une fenêtre de stabilisation, le hub publie une preuve positive que la lecture a réellement été exécutée. Cette preuve contient l’état du lecteur et les identifiants observés, y compris un tableau vide lorsqu’aucun tag n’a été détecté.
 
 ```json
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "3.0",
   "messageId": "55bb8489-fe94-4d21-94df-84cb6fca134a",
   "type": "RFID_SCAN_COMPLETED",
   "operationId": "2f38d3b6-c18f-4a74-aa9a-2d574286013f",
@@ -436,6 +515,7 @@ Chaque cellule lit localement les tags. À la fin d’une fenêtre de stabilisat
   "compartmentId": "1ae77ae3-8490-4f09-9412-a7816b77bff9",
   "timestamp": "2026-09-16T14:31:09Z",
   "deviceSessionId": "a36e9e94-b690-4e41-a14c-3cf8032742b0",
+  "bootCount": 3,
   "sequence": 45,
   "windowStartedAt": "2026-09-16T14:31:06Z",
   "windowEndedAt": "2026-09-16T14:31:09Z",
@@ -463,6 +543,12 @@ Règles :
 
 Un tableau vide avec readerStatus=HEALTHY atteste qu’un scan complet n’a observé aucun tag. L’absence de message MQTT ne constitue jamais une preuve d’absence.
 
+`readerStatus` est le nom du champ dans les messages MQTT (`HEARTBEAT`,
+`RFID_SCAN_COMPLETED`). Le backend le projette vers l’attribut `rfidReaderStatus`
+(doc 03), persisté dans `compartments.rfid_reader_status` (doc 08) et exposé dans
+`CompartmentStatusView` (doc 09 §8.6). Les valeurs sont identiques (`HEALTHY`,
+`FAULTED`, `UNKNOWN`). Le champ MQTT n’est pas renommé.
+
 ### 12.2 Présence et absence normalisées
 
 ASSET_IDENTIFIER_DETECTED, ASSET_PRESENT et ASSET_ABSENT sont des PhysicalObservation produites par le backend à partir de RFID_SCAN_COMPLETED. Le hub n’a pas à connaître l’actif attendu.
@@ -483,19 +569,32 @@ Publié après restauration de la connectivité :
 
 ```json
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "3.0",
   "messageId": "ec491081-28bd-46d4-87b2-57da75f670bb",
   "type": "DEVICE_RESTARTED",
   "lockerId": "d46a74ae-39dc-460b-8af0-38fc791b376a",
   "timestamp": "2026-09-16T14:35:00Z",
   "deviceSessionId": "bd6a6594-09f7-4ff5-b0df-dae65da7c249",
-  "sequence": 0,
+  "bootCount": 4,
+  "sequence": 2,
   "resetReason": "WATCHDOG",
   "firmwareVersion": "0.1.0"
 }
 ```
 
-Si une opération physique était en cours, le redémarrage est une preuve d’incertitude. Le backend décide entre FAILED, EXPIRED ou ANOMALY selon les événements déjà reçus; le hub ne conclut rien.
+`resetReason` est une valeur contrôlée : `POWER_ON`, `EXTERNAL_RESET`, `SOFTWARE_RESET`,
+`WATCHDOG`, `PANIC`, `BROWNOUT` ou `UNKNOWN`. Le firmware convertit la cause matérielle
+vers cette liste (ESP32 : `ESP_RST_POWERON` → `POWER_ON`, `ESP_RST_EXT` →
+`EXTERNAL_RESET`, `ESP_RST_SW` → `SOFTWARE_RESET`, `ESP_RST_INT_WDT`/`ESP_RST_TASK_WDT`/
+`ESP_RST_WDT` → `WATCHDOG`, `ESP_RST_PANIC` → `PANIC`, `ESP_RST_BROWNOUT` → `BROWNOUT`,
+toute autre cause → `UNKNOWN`). Une valeur hors liste n’invalide pas le message : le
+backend la traite comme `UNKNOWN` et conserve le payload brut.
+
+`DEVICE_RESTARTED` est publié une fois par démarrage, sur `events`, QoS 1, sans retain, après le ONLINE de la première connexion (§18); sa `sequence` suit donc celles du Last Will et du ONLINE.
+Son `bootCount` situe le démarrage parmi les autres; un `DEVICE_RESTARTED` ancien,
+livré tard, ne remplace jamais une session plus récente (§15.3).
+
+Si une opération physique était en cours, le redémarrage est une preuve d’incertitude, quelle que soit sa cause. Le backend décide entre FAILED, EXPIRED ou ANOMALY selon les événements déjà reçus; le hub ne conclut rien.
 
 ### 13.2 DEVICE_ERROR
 
@@ -514,7 +613,89 @@ Codes initiaux :
 - LOCK_ACTUATOR_FAULT;
 - POWER_FAULT;
 - CLOCK_SYNC_LOST;
-- STORAGE_FAULT.
+- STORAGE_FAULT;
+- INBOUND_MESSAGE_INVALID (schéma 3.0, ci-dessous).
+
+`detail` suit la règle du §10.2 : borné à 240 caractères, sans secret, pour le diagnostic seulement.
+
+`STORAGE_FAULT` après un débordement de la file locale (§18) :
+
+- un `DEVICE_ERROR` `CRITICAL` par opération touchée, avec son `operationId` et son `compartmentId`;
+- un `DEVICE_ERROR` `WARNING` pour les événements perdus hors opération, avec `compartmentId` seulement si une seule cellule est touchée;
+- publié après `DEVICE_AVAILABILITY` ONLINE, le heartbeat et les rejets `PREVIOUS_EXECUTION_UNCERTAIN`, avant les événements gardés en file;
+- une perte n’est signalée qu’une fois;
+- un redémarrage efface la file et ses pertes : `DEVICE_RESTARTED` porte déjà l’incertitude (§13.1), sans `STORAGE_FAULT`;
+- aucune preuve perdue n’est reconstituée (§23.6 point 4).
+
+#### `INBOUND_MESSAGE_INVALID`
+
+Le hub publie ce code pour un message reçu sur son topic `commands` ou `display` dans
+l’un des deux cas suivants (#98) :
+
+- **message retenu** : reçu avec `retain=true` (§7.2), même s’il est valide par
+  ailleurs. Ce cas prime sur le suivant;
+- **message non corrélable** : plus de 16 KiB (§3.3), JSON illisible ou autre chose
+  qu’un objet, ou `messageId`, `operationId` ou `compartmentId` absent ou qui n’est pas
+  un UUID canonique (§9.1 étapes 1 et 3, §20).
+
+Un message corrélable mais invalide, y compris d’une major non supportée, reçoit son
+`COMMAND_REJECTED` ou son `DISPLAY_REJECTED` (§10.2, §27.2), jamais ce code. Un doublon
+reçoit sa réponse connue.
+
+Le signalement :
+
+- est un `DEVICE_ERROR` sur `events`, QoS 1, sans retain, avec l’enveloppe hub du §8.1
+  et un nouveau `messageId` d’événement;
+- porte `errorCode` = `INBOUND_MESSAGE_INVALID` et `severity` = `WARNING`;
+- ne porte jamais d’`operationId`, même lisible, ni aucun identifiant fabriqué; le
+  `messageId` du message reçu n’y figure pas;
+- porte `compartmentId` seulement si le champ `compartmentId` du message reçu est un
+  UUID canonique désignant une cellule de ce hub; sinon le champ est absent;
+- a un `detail` borné (§10.2) composé de textes fixes du hub : le topic, le cas et le
+  nombre de messages non signalés (limite ci-dessous). Il ne recopie jamais le payload
+  ni aucune de ses valeurs, en particulier le token ou l’URI du QR (§4.3, §22.1).
+
+Il n’exécute, n’affiche ni ne journalise rien (§16.1) : il ne consomme aucun
+`messageId` ni `operationId`. Le backend l’accepte et le conserve comme un fait technique
+du hub, sans PhysicalObservation ni transition (§19.1, §23.3 point 8); sa présentation dans
+l’administration relève de l’ingestion (PHY-01, #29).
+
+Exemple (commande retenue visant une cellule connue) :
+
+```json
+{
+  "schemaVersion": "3.0",
+  "messageId": "4c0f5a2e-7b1d-4e8a-9c3f-2a6b8d0e1f47",
+  "type": "DEVICE_ERROR",
+  "lockerId": "d46a74ae-39dc-460b-8af0-38fc791b376a",
+  "compartmentId": "1ae77ae3-8490-4f09-9412-a7816b77bff9",
+  "timestamp": "2026-09-16T14:36:00Z",
+  "deviceSessionId": "bd6a6594-09f7-4ff5-b0df-dae65da7c249",
+  "bootCount": 4,
+  "sequence": 7,
+  "errorCode": "INBOUND_MESSAGE_INVALID",
+  "severity": "WARNING",
+  "detail": "A retained commands message was ignored: neither executed, displayed nor journaled."
+}
+```
+
+**Limite de signalement (proposition #98, à confirmer).** Une rafale de messages
+invalides ne doit pas inonder `events`. Le hub publie au plus un signalement par couple
+(topic `commands` ou `display`, cas retenu ou non corrélable) par fenêtre de
+60 secondes, soit au plus quatre par minute :
+
+- le premier message d’un couple est signalé aussitôt si aucun signalement de ce couple
+  n’a été publié depuis 60 secondes; les suivants sont seulement comptés;
+- le signalement suivant du même couple indique dans `detail` le nombre de messages non
+  signalés depuis le précédent; ce nombre sert au diagnostic seulement (§10.2);
+- la fenêtre se mesure sur l’horloge monotone du hub, jamais sur l’horloge NTP, qui peut
+  ne pas être synchronisée;
+- le compteur vit en mémoire vive et repart à zéro au démarrage, sans écriture en NVS;
+- la limite ne change ni les champs ni le sens du signalement, et ne retient jamais un
+  message ignoré. Le backend ne déduit rien de l’absence d’un signalement.
+
+Ce comportement est local au hub. Les paramètres (couple, 60 secondes, compteur dans
+`detail`) attendent la confirmation de l’équipe avant la qualification de FW-00 (#23).
 
 ---
 
@@ -530,15 +711,17 @@ Fréquence nominale : toutes les 10 secondes.
 
 ```json
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "3.0",
   "messageId": "9445c92f-95da-4806-a911-ff60db45f713",
   "type": "HEARTBEAT",
   "lockerId": "d46a74ae-39dc-460b-8af0-38fc791b376a",
   "timestamp": "2026-09-16T14:31:10Z",
   "deviceSessionId": "a36e9e94-b690-4e41-a14c-3cf8032742b0",
+  "bootCount": 3,
   "sequence": 46,
+  "connectionId": "5b0f3c1e-7d2a-4c8e-9f61-2a4d8e7b9c03",
   "firmwareVersion": "0.1.0",
-  "uptimeSeconds": 4821,
+  "uptimeSeconds": 75,
   "clockSynchronized": true,
   "network": {
     "rssiDbm": -57
@@ -560,11 +743,16 @@ Le backend :
 
 - authentifie le device;
 - déduplique messageId;
+- enregistre le fait, même ancien ou d’une autre connexion (§15.3);
 - met à jour lastSeenAt avec receivedAt;
 - conserve timestamp pour diagnostic;
 - ne recule pas une projection de compartiment avec une observation plus ancienne;
-- calcule ONLINE si le dernier heartbeat valide date de 30 secondes ou moins;
-- calcule OFFLINE après plus de 30 secondes.
+- calcule la disponibilité selon le §15.3 : ONLINE exige que le heartbeat de référence
+  (valide, de plus grande `sequence` dans la session courante) ait été reçu depuis
+  30 secondes ou moins et que sa connexion n’ait pas été déclarée fermée; UNKNOWN sans
+  aucun heartbeat valide depuis le provisionnement; OFFLINE sinon.
+
+`connectionId` est celui de la connexion qui publie le heartbeat (§15.2).
 
 Le heartbeat ne produit aucune transition de prêt ou de réservation.
 
@@ -574,43 +762,149 @@ Le heartbeat ne produit aucune transition de prêt ou de réservation.
 
 ### 15.1 ONLINE
 
-Après connexion et synchronisation de l’horloge, le hub publie avec QoS 1 et retain=true :
+Après connexion et synchronisation de l’horloge, le hub publie avec QoS 1 et retain=true, avec le `connectionId` de la connexion et une `sequence` supérieure à celle du Last Will préparé avant elle :
 
 ```json
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "3.0",
   "messageId": "79adb482-4a28-4bef-8e7a-016574901eee",
   "type": "DEVICE_AVAILABILITY",
   "lockerId": "d46a74ae-39dc-460b-8af0-38fc791b376a",
   "timestamp": "2026-09-16T14:30:00Z",
   "deviceSessionId": "a36e9e94-b690-4e41-a14c-3cf8032742b0",
-  "sequence": 0,
+  "bootCount": 3,
+  "sequence": 1,
+  "connectionId": "5b0f3c1e-7d2a-4c8e-9f61-2a4d8e7b9c03",
   "status": "ONLINE",
   "reason": "CONNECTED"
 }
 ```
 
+`reason` vaut `CONNECTED` pour ONLINE, `CONNECTION_LOST` pour l’OFFLINE publié par le
+broker au titre du Last Will et `SHUTDOWN` pour l’OFFLINE publié par le hub lui-même
+avant une déconnexion propre. `reason` sert au diagnostic. Un ONLINE ne rend jamais le
+locker ONLINE à lui seul (§15.3).
+
 ### 15.2 OFFLINE par Last Will
 
-Avant la connexion, le hub configure un Last Will sur le même topic avec QoS 1 et retain=true.
+Un Last Will est préparé avant chaque tentative de connexion MQTT, pas seulement au
+démarrage, sur le même topic, avec QoS 1 et retain=true. Il porte un nouveau
+`messageId` et un nouveau `connectionId`, que partagent le ONLINE et les heartbeats
+publiés sur cette connexion. Aucune tentative ne réutilise le Will ni le `connectionId`
+d’une tentative précédente : un broker qui accepte le CONNECT arme le Will même si le
+CONNACK se perd (MQTT 3.1.1, [MQTT-3.1.2-8]), puis le publie à la fermeture du socket,
+ce qui ferme cette connexion pour le backend (§15.3, R3).
 
-Le payload OFFLINE est préparé pour la session. Son timestamp représente la préparation du Will, pas l’instant exact de rupture. Le backend utilise receivedAt comme instant de signalement.
+Sa `sequence` et son `timestamp` sont attribués à la préparation : ils peuvent être
+inférieurs à ceux de messages livrés avant lui, car le broker ne le publie qu’à la
+rupture. Le backend ne rejette jamais un `DEVICE_AVAILABILITY` pour sa `sequence` ou
+son `timestamp`; il le déduplique sur `messageId` (§16.2) et date le signalement avec
+`receivedAt`.
 
 ```json
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "3.0",
   "messageId": "e92228c7-91db-4831-ab79-21dd44f84550",
   "type": "DEVICE_AVAILABILITY",
   "lockerId": "d46a74ae-39dc-460b-8af0-38fc791b376a",
   "timestamp": "2026-09-16T14:29:59Z",
   "deviceSessionId": "a36e9e94-b690-4e41-a14c-3cf8032742b0",
+  "bootCount": 3,
   "sequence": 0,
+  "connectionId": "5b0f3c1e-7d2a-4c8e-9f61-2a4d8e7b9c03",
   "status": "OFFLINE",
   "reason": "CONNECTION_LOST"
 }
 ```
 
-Le Last Will accélère la détection, mais la règle métier de référence reste l’absence de heartbeat valide pendant plus de 30 secondes. Une déconnexion propre publie OFFLINE avant de fermer la session.
+Avant une déconnexion propre, le hub publie lui-même un OFFLINE `SHUTDOWN` avec QoS 1,
+retain=true et le `connectionId` courant, puis envoie DISCONNECT; le broker ne publie
+alors pas le Last Will. Après `SHUTDOWN`, le hub ne publie plus rien sur cette
+connexion.
+
+Le Last Will et `SHUTDOWN` accélèrent la détection, mais la règle de référence reste
+l’absence de heartbeat valide pendant plus de 30 secondes (ADR-004, §15.3).
+
+### 15.3 Faits enregistrés et projection de disponibilité
+
+Le backend sépare deux étapes, dans la transaction d’ingestion du message :
+
+1. **Enregistrer le fait.** Tout message authentifié et conforme est réservé une fois
+   par (`lockerDeviceId`, `messageId`) avec `receivedAt` (§16.2), même ancien, retenu,
+   d’une autre connexion ou d’un démarrage précédent. Un ancien Last Will valide est
+   enregistré et dédupliqué comme les autres : ni sa `sequence` faible ni son
+   `timestamp` de préparation ne suffisent à le rejeter.
+2. **Mettre à jour la projection** du locker selon les règles ci-dessous. Un fait
+   périmé est conservé sans effet sur elle; il ne la fait jamais régresser.
+
+Un heartbeat est **valide** s’il est authentifié, conforme, avec
+`clockSynchronized=true` et un `timestamp` ni antérieur de plus de 30 secondes, ni
+postérieur de plus de 5 secondes à `receivedAt` (§17.2).
+
+Seuls les faits acceptés (non rejetés, §19.2) et reçus depuis le dernier
+provisionnement du device comptent pour la projection. Un heartbeat accepté mais hors
+de la fenêtre de temps est enregistré comme traité; il n’est simplement pas valide.
+
+**R1 — ONLINE vient seulement d’un heartbeat valide.** Le heartbeat de référence est,
+dans la session courante, le heartbeat valide de plus grande `sequence` : la `sequence`
+ordonne les messages d’un démarrage, donc aussi ses connexions successives, quel que
+soit l’ordre de réception. Le locker est ONLINE si et seulement si ce heartbeat a été
+reçu il y a 30 secondes ou moins et que sa connexion n’est pas fermée (R3). Un
+`DEVICE_AVAILABILITY` ONLINE, retenu ou non, ne rend jamais le locker ONLINE à lui seul.
+Tant qu’aucun heartbeat valide n’a été reçu depuis le provisionnement, l’état est
+UNKNOWN; ensuite, il est ONLINE ou OFFLINE.
+
+**R2 — Session courante.** La session courante d’un device est le démarrage de plus
+grand `bootCount` parmi ses faits acceptés. L’ordre de réception ne compte pas : un
+`DEVICE_RESTARTED`, un heartbeat ou une disponibilité d’un `bootCount` inférieur est
+enregistré sans effet sur la projection, même reçu en dernier. Un fait d’un
+`bootCount` supérieur fait de son démarrage la session courante, même avant l’arrivée
+de son `DEVICE_RESTARTED`; le heartbeat de référence de l’ancienne session est écarté et
+le locker reste OFFLINE tant qu’aucun heartbeat valide de cette session n’est reçu. Deux `deviceSessionId` différents pour le même `bootCount`
+révèlent un compteur non conforme : les faits sont enregistrés, la projection ne
+change pas et le backend signale une anomalie technique. Le démarrage suivant, d’un
+`bootCount` supérieur, rétablit une session courante normale.
+
+**R3 — Connexion fermée et OFFLINE accéléré.** Une connexion est fermée dès qu’un
+`DEVICE_AVAILABILITY` OFFLINE de la session courante portant son `connectionId` est
+enregistré, Last Will (`CONNECTION_LOST`) ou arrêt propre (`SHUTDOWN`). Elle ne
+redevient jamais ouverte. L’OFFLINE de la connexion qui porte le heartbeat de
+référence rend donc le locker OFFLINE immédiatement, sans attendre les 30 secondes, et un
+heartbeat retardé de cette connexion fermée ne rétablit pas ONLINE. L’OFFLINE d’une
+connexion plus ancienne est enregistré sans effet : un ancien Will livré après une
+reconnexion ne dégrade pas l’état courant.
+
+**R4 — Retour à ONLINE.** Après un OFFLINE accéléré, seul un nouveau heartbeat de
+référence, c’est-à-dire un heartbeat valide de plus grande `sequence` provenant d’une
+nouvelle connexion, ou d’un nouveau démarrage, rétablit ONLINE; le ONLINE de cette
+connexion ne suffit pas. Sans Will ni `SHUTDOWN`, des heartbeats valides qui reprennent
+sur une connexion non fermée après plus de 30 secondes de silence rétablissent ONLINE.
+
+**R1 et R3 réconciliées.** La fraîcheur (R1) ne compte que les heartbeats des
+connexions non fermées (R3) : un heartbeat récent ne rend pas ONLINE une connexion
+depuis déclarée fermée. À l’inverse, l’absence de heartbeat valide pendant plus de
+30 secondes rend toujours le locker OFFLINE, avec ou sans Will.
+
+**Reprise du backend.** La projection dépend seulement des faits enregistrés et de
+l’instant présent :
+
+- dans la transaction qui enregistre le fait, le backend persiste pour le device la
+  session courante (`deviceSessionId`, `bootCount`) et le heartbeat de référence
+  (`connectionId`, `sequence`, `receivedAt`, fermeture éventuelle de sa connexion)
+  (doc 08 §4.4); les connexions fermées se lisent dans les faits `DEVICE_AVAILABILITY`
+  OFFLINE enregistrés (doc 08, `inbound_device_messages`);
+- après son propre redémarrage, il relit cet état et recalcule ONLINE contre l’instant
+  présent, comme à toute lecture : un heartbeat de référence reçu moins de 30 secondes
+  avant l’arrêt compte encore jusqu’à ses 30 secondes; un Will publié pendant l’arrêt,
+  reçu au réabonnement comme message retenu ou livraison QoS 1, s’applique selon R3;
+  après plus de 30 secondes d’arrêt, le locker reste OFFLINE jusqu’au prochain
+  heartbeat valide;
+- la projection peut être reconstruite à tout moment en rejouant les faits enregistrés
+  du device dans l’ordre de `receivedAt` avec R1 à R4; le résultat doit égaler la
+  projection persistée;
+- les messages retenus et les livraisons QoS 1 reçus au réabonnement sont des faits
+  comme les autres : déjà enregistrés, ils sont des doublons sans effet (§16.2);
+  nouveaux, ils suivent R1 à R4. Aucun ne rend le locker ONLINE sans heartbeat valide.
 
 ---
 
@@ -629,11 +923,17 @@ Le hub conserve durablement un journal borné des commandes consommées :
 - raison;
 - horodatage.
 
-Rétention P0 recommandée :
+Rétention P0 :
 
 - au moins 24 heures;
 - au moins les 64 dernières commandes;
 - stockage en anneau afin de limiter l’usure de la mémoire flash.
+
+Le hub garde en outre, quel que soit leur âge, les entrées dont l’oubli pourrait permettre un second actionnement : une commande EXECUTING, un rejet `PREVIOUS_EXECUTION_UNCERTAIN` dont le broker n’a pas encore accusé la publication, et une commande dont `expiresAt` n’est pas passé, sauf si elle a été rejetée avant actionnement pour une raison qui ne peut pas changer (`INVALID_PAYLOAD`, `UNSUPPORTED_SCHEMA`, `WRONG_LOCKER`, `UNKNOWN_COMPARTMENT`, `COMMAND_EXPIRED`).
+
+Exceptions aux minimums, quand le journal atteint son plafond : le hub oublie d’abord, de la plus ancienne à la plus récente, les entrées non protégées qui n’ont mené à aucun actionnement (rejets, et réponses à une nouvelle commande d’une opération déjà exécutée), même à l’intérieur des 24 heures. Il n’oublie jamais, dans les minimums, une commande qui a atteint EXECUTING. Si seules des entrées protégées restent, il refuse la nouvelle commande par `COMMAND_REJECTED` `INTERNAL_DEVICE_ERROR`, sans actionnement, plutôt que d’oublier une entrée protégée.
+
+Le plafond dépend de la mémoire du hub et n’est pas fixé par ce contrat : le simulateur utilise 1024 entrées, sans l’imposer au firmware.
 
 L’état EXECUTING est persisté avant l’actionnement. Après redémarrage, un doublon ne peut pas rouvrir la serrure. Une entrée EXECUTING retrouvée au démarrage devient un rejet PREVIOUS_EXECUTION_UNCERTAIN; elle exige une réconciliation physique plutôt qu’une nouvelle action.
 
@@ -661,6 +961,8 @@ L’idempotence des messages d’écran est indépendante de celle des commandes
 | commandMessageId | Commande dont un ACK ou REJECT décrit le résultat |
 | operationId | Workflow physique complet |
 | deviceSessionId | Démarrage courant du hub |
+| bootCount | Ordre des démarrages d’un même hub |
+| connectionId | Connexion MQTT à l’intérieur d’un démarrage |
 | sequence | Ordre local de diagnostic dans la session |
 
 ---
@@ -684,7 +986,7 @@ Le backend demeure l’autorité pour :
 - une commande est refusée lorsque now >= expiresAt;
 - un événement opérationnel futur de plus de 5 secondes est rejeté;
 - un événement opérationnel reçu avec plus de 30 secondes de retard est conservé mais n’avance pas automatiquement une opération sans réévaluation;
-- un heartbeat dont timestamp est ancien ne rend pas le locker ONLINE;
+- un heartbeat dont timestamp est ancien ne rend pas le locker ONLINE (validité au §15.3);
 - receivedAt permet le diagnostic même si l’horloge device est incorrecte.
 
 ### 17.3 Désordre réseau
@@ -711,15 +1013,18 @@ Le hub utilise un backoff exponentiel avec jitter :
 1 s, 2 s, 4 s, 8 s, 16 s, puis maximum 30 s
 ```
 
-Après reconnexion :
+Avant chaque tentative de connexion, le hub prépare un nouveau `connectionId` et un
+nouveau Last Will (§15.2). Après reconnexion :
 
 1. vérifier si la session broker a été restaurée;
-2. se réabonner à commands si nécessaire;
-3. publier DEVICE_AVAILABILITY ONLINE;
+2. se réabonner à commands et display si nécessaire;
+3. publier DEVICE_AVAILABILITY ONLINE avec le `connectionId` de la connexion;
 4. publier DEVICE_RESTARTED lorsque le hub a réellement redémarré;
 5. publier immédiatement un HEARTBEAT et l’état courant des cellules;
 6. traiter les commandes reçues en vérifiant expiresAt et la déduplication;
 7. ne jamais inventer une confirmation pour combler une période hors ligne.
+
+Une déconnexion volontaire publie d’abord OFFLINE `SHUTDOWN` (§15.2).
 
 Les événements non publiés peuvent être mis en file locale de taille bornée. Les événements de porte, de commande et d’erreur ont priorité sur les mesures de diagnostic. Si la file déborde, le hub publie STORAGE_FAULT après reconnexion et le backend considère toute opération touchée comme incertaine.
 
@@ -769,7 +1074,7 @@ Un payload trop volumineux ou impossible à parser est rejeté avant désériali
 | LOCK_LOCKED | non | oui | non | requis en opération | requis |
 | RFID_SCAN_COMPLETED | non | oui | non | requis en opération | requis |
 | DEVICE_RESTARTED | non | oui | non | non | non |
-| DEVICE_ERROR | non | oui | non | facultatif | facultatif |
+| DEVICE_ERROR | non | oui | non | facultatif (jamais pour `INBOUND_MESSAGE_INVALID`) | facultatif |
 | HEARTBEAT | non | non | oui | non | non |
 | DEVICE_AVAILABILITY | non | non | oui | non | non |
 
@@ -787,7 +1092,7 @@ Les types ajoutés pour l’écran sont exclus des trois topics de commande/éta
 | ACCESS_CHALLENGE_DISPLAYED | events | requis | requis |
 | DISPLAY_REJECTED | events | requis si le message est corrélable | requis si corrélable |
 
-Un message impossible à corréler produit un `DEVICE_ERROR` expurgé, pas un faux `DISPLAY_REJECTED` sans identifiants obligatoires.
+Un message impossible à corréler ne produit jamais un faux `DISPLAY_REJECTED` ou `COMMAND_REJECTED` sans identifiants obligatoires. Le hub ne l’actionne pas, ne l’affiche pas et le signale par un `DEVICE_ERROR` `INBOUND_MESSAGE_INVALID` expurgé, sans `operationId`, avec `compartmentId` seulement s’il est lu dans un champ valide, dans la limite de signalement du §13.2. Un message `commands` ou `display` retenu reçoit le même signalement (§7.2).
 
 ## 21. Codes de rejet backend
 
@@ -879,6 +1184,15 @@ Les logs n’incluent aucun secret, mot de passe ou payload complet par défaut.
 5. Une commande dupliquée republie son résultat sans nouvel actionnement.
 6. Un redémarrage du hub n’efface pas immédiatement la déduplication.
 7. Une cellule déconnectée produit CELL_UNREACHABLE.
+8. Un doublon livré après `expiresAt` reçoit son résultat connu, pas `COMMAND_EXPIRED`.
+9. Une nouvelle commande d’une opération déjà exécutée n’actionne rien : même cellule, résultat connu; autre cellule, `INVALID_PAYLOAD`.
+10. Un `messageId` réutilisé avec un autre contenu reçoit le résultat journalisé, avec l’`operationId` et le `compartmentId` journalisés; aucune autre cellule n’est actionnée ni citée comme actionnée.
+11. Une commande ou une instruction d’écran retenue n’est ni exécutée, ni affichée, ni journalisée; elle produit un `DEVICE_ERROR` `INBOUND_MESSAGE_INVALID`.
+12. Un journal saturé d’entrées protégées refuse la nouvelle commande par `INTERNAL_DEVICE_ERROR` sans actionnement.
+13. Une commande ou une instruction d’écran non corrélable (JSON illisible, trop volumineuse, sans `messageId`, `operationId` ou `compartmentId` valide) n’actionne et n’affiche rien et produit un `DEVICE_ERROR` `INBOUND_MESSAGE_INVALID` `WARNING`, QoS 1, sans retain.
+14. Ce signalement ne contient ni `operationId`, ni le payload reçu, ni aucune de ses valeurs, ni le token ou l’URI du QR; il porte `compartmentId` seulement si ce champ désigne une cellule du hub.
+15. Une rafale de messages invalides donne au plus un signalement par topic et par cas en 60 secondes; le suivant compte les messages non signalés (§13.2, proposition #98 à confirmer).
+16. Une commande 2.0 est rejetée `UNSUPPORTED_SCHEMA`, une instruction d’écran 2.0 `INVALID_DISPLAY_PAYLOAD`, sans actionnement ni affichage.
 
 ### 23.3 Événements
 
@@ -889,6 +1203,8 @@ Les logs n’incluent aucun secret, mot de passe ou payload complet par défaut.
 5. Seul un RFID_SCAN_COMPLETED sain et vide du tag attendu peut contribuer à confirmer un checkout après fermeture.
 6. L’absence d’un message RFID ne confirme jamais l’absence de l’actif.
 7. Une ambiguïté entre cellules produit une anomalie ou UNKNOWN.
+8. Un `DEVICE_ERROR` `INBOUND_MESSAGE_INVALID` est enregistré sans PhysicalObservation ni transition, et n’est rattaché à aucune opération.
+9. Un message device 2.0 ou 1.0 est rejeté `UNSUPPORTED_SCHEMA`.
 
 ### 23.4 Déduplication backend
 
@@ -897,13 +1213,39 @@ Les logs n’incluent aucun secret, mot de passe ou payload complet par défaut.
 3. Elles n’avancent la machine à états qu’une fois.
 4. Deux consommateurs concurrents respectent la contrainte unique.
 
-### 23.5 Heartbeat et reconnexion
+### 23.5 Heartbeat, connexions et reconnexion
 
-1. Le hub publie toutes les 10 secondes.
-2. Le backend passe OFFLINE après plus de 30 secondes.
-3. Le Last Will accélère l’affichage sans remplacer le seuil métier.
-4. La reconnexion republie ONLINE et un heartbeat courant.
-5. Une commande mise en file mais expirée n’est pas exécutée.
+Côté hub (vérifiables avec le simulateur) :
+
+1. Le hub publie un heartbeat toutes les 10 secondes.
+2. Chaque tentative de connexion reçoit un nouveau `connectionId` et un nouveau Last Will (nouveau
+   `messageId`); son Will, son ONLINE et ses heartbeats portent ce `connectionId`.
+3. Un arrêt propre publie OFFLINE `SHUTDOWN` sans Will; une rupture fait publier par le
+   broker le Will `CONNECTION_LOST` de la connexion rompue.
+4. La reconnexion republie ONLINE et un heartbeat courant; `bootCount` augmente de 1 à
+   chaque démarrage et reste constant dans un démarrage.
+
+Côté backend (ingestion PHY-01). Pour rejouer un message ancien, le simulateur
+republie son corps exact; rejouer un Will retenu remplace aussi le statut retenu du
+broker, comme le ferait un Will réellement tardif :
+
+5. Un ancien Will livré après une reconnexion et un heartbeat de la nouvelle connexion
+   est enregistré; le locker reste ONLINE.
+6. Le Will de la connexion du heartbeat de référence rend le locker OFFLINE immédiatement, malgré une
+   `sequence` inférieure à son ONLINE; un heartbeat retardé de cette connexion ne
+   rétablit pas ONLINE.
+7. Un ONLINE retenu rejoué à l’abonnement, sans heartbeat frais, ne rend pas le locker
+   ONLINE; un heartbeat dont le `timestamp` date de 45 secondes non plus.
+8. Un `DEVICE_RESTARTED` ou un heartbeat d’un `bootCount` inférieur, reçu après la
+   nouvelle session, est enregistré sans effet sur la projection.
+9. Le même `messageId` livré deux fois donne un seul fait et aucun second effet.
+10. Sans heartbeat pendant plus de 30 secondes, et sans Will, le locker passe OFFLINE.
+11. Après `SHUTDOWN`, un nouveau démarrage et un heartbeat valide rendent le locker
+    ONLINE.
+12. Après un redémarrage du backend, l’état relu égale celui reconstruit à partir des
+    faits; un Will publié pendant l’arrêt s’applique au réabonnement; après plus de
+    30 secondes d’arrêt, ONLINE attend un heartbeat valide reçu après la reprise.
+13. Une commande mise en file mais expirée n’est pas exécutée.
 
 ### 23.6 Panne
 
@@ -961,12 +1303,13 @@ Le contrat est respecté si :
 6. le hub déduplique avant l’actionnement;
 7. le backend déduplique avant tout effet;
 8. le heartbeat est émis toutes les 10 secondes;
-9. OFFLINE est dérivé après plus de 30 secondes sans heartbeat valide;
-10. les cellules n’utilisent jamais MQTT;
-11. aucune observation ne décide seule d’un prêt;
-12. une coupure réseau ne provoque ni double ouverture ni confirmation silencieuse;
-13. les tests de doublon, expiration, reconnexion et ACL passent;
-14. les payloads réels correspondent aux exemples et schémas de cette version.
+9. ONLINE n’est dérivé que du heartbeat de référence (valide, de plus grande `sequence` de la session courante), reçu depuis 30 secondes ou moins et dont la connexion n’est pas fermée; OFFLINE est dérivé sinon, en particulier après plus de 30 secondes sans heartbeat valide ou dès l’OFFLINE de cette connexion (§15.3);
+10. un fait ancien est enregistré sans faire régresser la projection;
+11. les cellules n’utilisent jamais MQTT;
+12. aucune observation ne décide seule d’un prêt;
+13. une coupure réseau ne provoque ni double ouverture ni confirmation silencieuse;
+14. les tests de doublon, expiration, reconnexion et ACL passent;
+15. les payloads réels correspondent aux exemples et schémas de cette version.
 
 ## 27. Contrat de l’écran du hub
 
@@ -976,7 +1319,7 @@ Topic : `aegis/v1/lockers/{lockerId}/display`. QoS 1, `retain=false`, TLS et ACL
 
 ```json
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "3.0",
   "messageId": "fd6c4a94-4ac4-4a91-9249-59347c3b648b",
   "type": "DISPLAY_ACCESS_CHALLENGE",
   "lockerId": "d46a74ae-39dc-460b-8af0-38fc791b376a",
@@ -1021,6 +1364,18 @@ Cet extrait est ajouté à l’enveloppe complète, pas publié seul. Il est ém
 
 `DISPLAY_REJECTED` utilise la même corrélation (`challengeId` seulement pour un défi) et une raison : `SCREEN_UNAVAILABLE`, `TARGET_SESSION_MISMATCH`, `DISPLAY_EXPIRED`, `STALE_DISPLAY_REVISION` ou `INVALID_DISPLAY_PAYLOAD`. Aucun de ces événements ne contient le token ni `commandMessageId`.
 
+Correspondance des cas, pour un message corrélable :
+
+| Cas | Raison |
+|---|---|
+| Schéma non supporté, champ invalide, autre `lockerId`, `compartmentId` inconnu | `INVALID_DISPLAY_PAYLOAD` |
+| `targetDeviceSessionId` d’un autre démarrage | `TARGET_SESSION_MISMATCH` |
+| Horloge non synchronisée, ou écran indisponible | `SCREEN_UNAVAILABLE` |
+| Échéance d’affichage passée | `DISPLAY_EXPIRED` |
+| Nouveau `messageId` dont la révision est inférieure ou égale à la plus grande révision acceptée pendant ce démarrage | `STALE_DISPLAY_REVISION` (§27.4) |
+
+Un doublon (même `messageId`) reçoit à nouveau sa réponse connue avant ces contrôles, sans réafficher (§27.4).
+
 ### 27.3 DISPLAY_OPERATION_STATUS
 
 Même enveloppe backend que §27.1, nouveau `messageId`, révision supérieure, échéance d’affichage de 30 secondes, et payload :
@@ -1040,7 +1395,7 @@ Ce message n’exige pas d’accusé applicatif positif au P0; sa distribution r
 
 ### 27.4 Ordre, reconnexion et purge
 
-Le backend alloue `displayRevision` sous verrou du locker. Le hub conserve la plus grande révision acceptée pendant son démarrage; un doublon identique peut être acquitté à nouveau sans réafficher un QR masqué ou consommé. Une ancienne révision est ignorée.
+Le backend alloue `displayRevision` sous verrou du locker. Le hub conserve la plus grande révision acceptée pendant son démarrage; un doublon identique peut être acquitté à nouveau sans réafficher un QR masqué ou consommé. Une ancienne révision n’est pas affichée : le hub publie `DISPLAY_REJECTED` `STALE_DISPLAY_REVISION`. Ce rejet ne masque pas et n’invalide pas l’affichage plus récent; le backend le traite comme une information, pas comme l’échec du défi courant.
 
 Un nouveau démarrage efface tout QR et génère un nouveau `deviceSessionId`. Les anciennes instructions ciblant l’ancienne session sont rejetées, même si une session MQTT persistante les restitue. Avant autorisation, une perte de connexion invalide le défi côté backend et masque l’écran côté hub.
 

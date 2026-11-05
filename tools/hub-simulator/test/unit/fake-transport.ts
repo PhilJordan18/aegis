@@ -1,5 +1,5 @@
 import type { Delivery } from '../../src/contract.ts';
-import type { Transport, TransportEvents, TransportFactory, TransportOptions, WillMessage } from '../../src/transport.ts';
+import type { InboundMeta, Transport, TransportEvents, TransportFactory, TransportOptions, WillMessage } from '../../src/transport.ts';
 
 export interface PublishedRecord {
   topic: string;
@@ -17,7 +17,24 @@ export class FakeTransport implements Transport {
   reconnects = 0;
   disconnects = 0;
   destroys = 0;
-  readonly #listeners: { [E in keyof TransportEvents]: TransportEvents[E][] } = { connect: [], close: [], error: [] };
+  /** false: the broker never acknowledges a QoS 1 publish (lost PUBACK). */
+  acknowledge = true;
+  /** true: the broker reads DISCONNECT but keeps the socket half-open. */
+  hangDisconnect = false;
+  /** Socket state as the broker sees it. */
+  socketOpen = false;
+  /** Every SUBSCRIBE, in order. */
+  readonly subscriptions: string[][] = [];
+  /** Inbound messages the hub acknowledged (PUBACK), by body. */
+  readonly acknowledged: string[] = [];
+  #abandoned = false;
+  #inFlight = 0;
+  readonly #listeners: { [E in keyof TransportEvents]: TransportEvents[E][] } = {
+    connect: [],
+    close: [],
+    error: [],
+    message: [],
+  };
 
   constructor(options: TransportOptions) {
     this.options = options;
@@ -31,7 +48,33 @@ export class FakeTransport implements Transport {
   publish(topic: string, body: string, delivery: Delivery): Promise<void> {
     if (!this.connected) return Promise.reject(new Error('not connected'));
     this.published.push({ topic, body, payload: JSON.parse(body) as Record<string, unknown>, delivery });
+    if (delivery.qos === 1 && !this.acknowledge) {
+      this.#inFlight++;
+      return new Promise(() => {});
+    }
     return Promise.resolve();
+  }
+
+  subscribe(topics: readonly string[]): Promise<void> {
+    if (!this.connected) return Promise.reject(new Error('not connected'));
+    this.subscriptions.push([...topics]);
+    return Promise.resolve();
+  }
+
+  /**
+   * The broker delivers a PUBLISH to the hub. Like mqtt.js, the PUBACK follows the
+   * synchronous listener, unless the hub destroyed the transport meanwhile.
+   */
+  deliver(topic: string, body: string, meta: Partial<InboundMeta> = {}): boolean {
+    const full: InboundMeta = { retain: false, qos: 1, dup: false, ...meta };
+    for (const l of this.#listeners.message) l(topic, Buffer.from(body, 'utf8'), full);
+    if (this.#abandoned || full.qos === 0) return false;
+    this.acknowledged.push(body);
+    return true;
+  }
+
+  withholdAcknowledgements(): void {
+    this.#abandoned = true;
   }
 
   setWill(will: WillMessage): void {
@@ -46,21 +89,32 @@ export class FakeTransport implements Transport {
     this.brokerClose();
   }
 
+  get inFlight(): number {
+    return this.#inFlight;
+  }
+
+  /** Abandons in-flight QoS 1 messages and writes DISCONNECT, like the mqtt transport. */
   disconnect(): Promise<void> {
+    this.#inFlight = 0;
     this.disconnects++;
     this.connected = false;
+    if (this.hangDisconnect) return new Promise(() => {});
+    this.socketOpen = false;
     return Promise.resolve();
   }
 
   destroy(): Promise<void> {
+    this.#abandoned = true;
     this.destroys++;
     this.connected = false;
+    this.socketOpen = false;
     return Promise.resolve();
   }
 
   /** The broker accepts the CONNECT. */
   brokerAccept(): void {
     this.connected = true;
+    this.socketOpen = true;
     for (const l of this.#listeners.connect) l(false);
   }
 
