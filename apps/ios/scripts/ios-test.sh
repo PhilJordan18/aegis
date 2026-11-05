@@ -4,6 +4,12 @@
 #   standalone  Unit and UI tests that need no backend, then the String Catalog
 #               check. Live tests are excluded, not skipped, and any skipped
 #               test fails the recipe.
+#   pr          The fast pull request subset: every unit test (contracts,
+#               decoding, strings, view models), one UI test per critical path,
+#               then the String Catalog check.
+#   extended    The remaining UI tests: both languages, both appearances,
+#               largest text sizes and accessibility audits. pr and extended
+#               together run exactly the standalone tests.
 #   live        Tests against a running Aegis Control with demo accounts. Fails
 #               when a variable is missing, the API is unreachable, or a live
 #               test is skipped.
@@ -32,14 +38,37 @@ LIVE_TESTS=(
     "AegisMobileTests/LiveAPIIntegrationTests"
     "AegisMobileTests/LiveAuthIntegrationTests"
     "AegisMobileTests/LiveCatalogIntegrationTests"
+    "AegisMobileTests/LiveReservationIntegrationTests"
     "AegisMobileUITests/HealthScreenUITests/testLiveServiceShowsHealth"
     "AegisMobileUITests/SignInLiveUITests"
+    "AegisMobileUITests/ReservationLiveUITests"
 )
-# 1 health + 4 authentication + 1 catalogue client tests, 1 health + 3 sign-in and catalogue UI tests.
-LIVE_TEST_COUNT=10
+# 1 health + 4 authentication + 1 catalogue + 3 reservation client tests, 1 health + 3 sign-in and
+# catalogue + 1 reservation UI tests.
+LIVE_TEST_COUNT=14
+
+# One UI test per critical path, in one language. Every other standalone UI
+# test runs in extended, so no test is dropped by the split.
+PR_UI_TESTS=(
+    "AegisMobileUITests/HealthScreenUITests/testUnreachableServiceShowsErrorAndRetryInFrench"
+    "AegisMobileUITests/SignInUITests/testSignInAndSignOutInFrench"
+    "AegisMobileUITests/SignInUITests/testRejectedCredentialsKeepTheAddressInBothLanguages"
+    "AegisMobileUITests/SignInUITests/testAdministratorAccountIsRefused"
+    "AegisMobileUITests/SignInUITests/testRefusedStoredTokenEndsTheSession"
+    "AegisMobileUITests/CatalogUITests/testEveryCardStatesItsStatusInWords"
+    "AegisMobileUITests/CatalogUITests/testNextPageIsReadWhenTheLastCardIsReached"
+    "AegisMobileUITests/CatalogUITests/testOfflineRefreshKeepsTheLastListThenTryAgainRecovers"
+    "AegisMobileUITests/CatalogUITests/testRemovedAssetOffersTheWayBack"
+    "AegisMobileUITests/ReservationUITests/testTheProductionRefusalReadsAsARefusal"
+    "AegisMobileUITests/ReservationUITests/testALostAnswerIsRetriedAsTheSameIntent"
+    "AegisMobileUITests/ReservationUITests/testAClosedLockerCannotBeConfirmed"
+    "AegisMobileUITests/ReservationUITests/testMyOwnReservationReplacesReserveOnTheSheet"
+    "AegisMobileUITests/ReservationUITests/testARefusedCancelFollowsTheNewRead"
+    "AegisMobileUITests/ReservationUITests/testALoanReadFailureStaysInTheLoanSection"
+)
 
 usage() {
-    echo "usage: $0 standalone|live" >&2
+    echo "usage: $0 standalone|pr|extended|live" >&2
     exit 64
 }
 
@@ -85,6 +114,23 @@ standalone() {
     return "$status"
 }
 
+pr() {
+    local bundle="$RESULTS_DIR/pr.xcresult" status=0
+    run_tests "$bundle" -only-testing:AegisMobileTests "${PR_UI_TESTS[@]/#/-only-testing:}" \
+        "${LIVE_TESTS[@]/#/-skip-testing:}" || status=$?
+    check_results "$bundle" pr
+    python3 scripts/check-strings.py "$DERIVED_DATA"
+    return "$status"
+}
+
+extended() {
+    local bundle="$RESULTS_DIR/extended.xcresult" status=0
+    run_tests "$bundle" -only-testing:AegisMobileUITests "${PR_UI_TESTS[@]/#/-skip-testing:}" \
+        "${LIVE_TESTS[@]/#/-skip-testing:}" || status=$?
+    check_results "$bundle" extended
+    return "$status"
+}
+
 live() {
     local name
     for name in AEGIS_LIVE_API_BASE_URL AEGIS_LIVE_TECHNICIAN_PASSWORD AEGIS_LIVE_ADMIN_PASSWORD; do
@@ -111,6 +157,8 @@ live() {
 
 case "${1:-}" in
     standalone) standalone ;;
+    pr) pr ;;
+    extended) extended ;;
     live) live ;;
     *) usage ;;
 esac

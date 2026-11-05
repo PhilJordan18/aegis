@@ -665,6 +665,8 @@ function ingestDeviceMessage(deviceIdentity, topic, rawPayload):
     commit
 ```
 
+Exception unique (décision du 4 novembre 2026, #41) : un accusé de commande corrélé et valide qui précède le marquage du dispatcher enregistre `AUTHORIZED → COMMAND_SENT → COMMAND_ACKNOWLEDGED` dans la même transaction, deux transitions auditées dans cet ordre (document 08, §9.3).
+
 ### 9.3 Événements retardés ou désordonnés
 
 L’algorithme ne conclut pas uniquement selon l’ordre d’arrivée réseau. Il conserve les faits puis vérifie leur cohérence temporelle et causale :

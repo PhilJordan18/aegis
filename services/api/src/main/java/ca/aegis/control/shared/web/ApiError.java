@@ -35,6 +35,9 @@ public enum ApiError {
     /** The technician holds no ACTIVE reservation (document 09, section 14.2). */
     ACTIVE_RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "Aucune réservation active",
             "Vous ne possédez aucune réservation active."),
+    /** The technician holds no open loan, ACTIVE or RETURN_PENDING (document 09, section 15.3). */
+    ACTIVE_LOAN_NOT_FOUND(HttpStatus.NOT_FOUND, "Aucun prêt en cours",
+            "Vous ne détenez aucun prêt en cours."),
     ASSET_ALREADY_RESERVED(HttpStatus.CONFLICT, "Actif déjà réservé",
             "L'actif possède déjà une réservation active."),
     USER_ALREADY_HAS_ACTIVE_RESERVATION(HttpStatus.CONFLICT, "Réservation active existante",

@@ -16,7 +16,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS = ROOT / ".github" / "scripts"
-COMPONENTS = ("api", "web", "simulator", "agents", "adrs", "ios", "ci")
+COMPONENTS = ("api", "web", "simulator", "agents", "adrs", "ios", "ios_fast", "ci")
+# Every component a full run selects; the fast iOS recipe never runs on a full run.
+FULL = set(COMPONENTS) - {"ios_fast"}
 
 
 def run(args, cwd=None, env=None):
@@ -60,9 +62,9 @@ class ChangedComponentsTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def detect(self, event="pull_request", base=None, head=None, summary=None):
+    def detect(self, event="pull_request", base=None, head=None, summary=None, base_ref="dev"):
         env = {"EVENT_NAME": event, "BASE_SHA": self.base if base is None else base,
-               "HEAD_SHA": head or self.repo.git("rev-parse", "HEAD")}
+               "HEAD_SHA": head or self.repo.git("rev-parse", "HEAD"), "BASE_REF": base_ref}
         if summary is not None:
             env["GITHUB_STEP_SUMMARY"] = str(summary)
         result = run(["sh", str(SCRIPTS / "changed-components.sh")], cwd=self.repo.folder, env=env)
@@ -93,6 +95,45 @@ class ChangedComponentsTests(unittest.TestCase):
                 self.repo.commit({path: f"{path}\n"})
                 self.assertEqual(self.detect(), expected)
 
+    def test_non_visual_ios_change_into_dev_selects_the_fast_recipe(self):
+        for path in ("apps/ios/AegisMobile/Networking/Client.swift",
+                     "apps/ios/AegisMobileTests/ClientTests.swift", "apps/ios/README.md"):
+            with self.subTest(path=path):
+                self.base = self.repo.git("rev-parse", "HEAD")
+                self.repo.commit({path: f"{path}\n"})
+                self.assertIn("ios_fast", self.detect())
+                self.assertIn("ios", self.detect())
+
+    def test_visual_or_unknown_ios_change_keeps_the_full_recipe(self):
+        for path in ("apps/ios/AegisMobile/Catalog/CatalogView.swift",
+                     "apps/ios/AegisMobile/Assets.xcassets/Canvas.colorset/Contents.json",
+                     "apps/ios/AegisMobile/Localizable.xcstrings", "apps/ios/AegisMobileUITests/CatalogUITests.swift",
+                     "apps/ios/scripts/ios-test.sh", "apps/ios/AegisMobile.xcodeproj/project.pbxproj",
+                     "apps/ios/AegisMobile/Session/SessionModel.swift", "apps/ios/NewFolder/Thing.swift"):
+            with self.subTest(path=path):
+                self.base = self.repo.git("rev-parse", "HEAD")
+                self.repo.commit({path: f"{path}\n"})
+                self.assertEqual({"ios"} - self.detect(), set())
+                self.assertNotIn("ios_fast", self.detect())
+
+    def test_one_visual_file_among_non_visual_ones_keeps_the_full_recipe(self):
+        self.repo.commit({"apps/ios/AegisMobile/Networking/Client.swift": "a\n",
+                          "apps/ios/AegisMobile/SignIn/SignInView.swift": "b\n"})
+        self.assertNotIn("ios_fast", self.detect())
+
+    def test_fast_recipe_only_for_a_pull_request_into_dev(self):
+        self.repo.commit({"apps/ios/AegisMobile/Networking/Client.swift": "a\n"})
+        self.assertNotIn("ios_fast", self.detect(base_ref="main"))
+        self.assertNotIn("ios_fast", self.detect(base_ref=""))
+        for event in ("push", "workflow_dispatch"):
+            with self.subTest(event=event):
+                self.assertNotIn("ios_fast", self.detect(event=event))
+
+    def test_ios_summary_script_change_keeps_the_full_recipe(self):
+        self.repo.commit({"apps/ios/AegisMobile/Networking/Client.swift": "a\n",
+                          ".github/scripts/xcresult-summary.py": "b\n"})
+        self.assertEqual(self.detect() & {"ios", "ios_fast"}, {"ios"})
+
     def test_deleted_or_renamed_file_runs_the_link_validator(self):
         self.repo.commit({"docs/diagrams/view.html": "<html/>\n", "firmware/a.ino": "a\n"})
         self.base = self.repo.git("rev-parse", "HEAD")
@@ -113,7 +154,7 @@ class ChangedComponentsTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.base = self.repo.git("rev-parse", "HEAD")
                 self.repo.commit({path: f"{path}\n"})
-                self.assertEqual(self.detect(), set(COMPONENTS))
+                self.assertEqual(self.detect(), FULL)
 
     def test_known_ci_script_runs_its_tests_and_the_jobs_that_execute_it(self):
         cases = {
@@ -135,7 +176,7 @@ class ChangedComponentsTests(unittest.TestCase):
         self.repo.commit({"docs/notes.md": "x\n"})
         for event in ("push", "workflow_dispatch"):
             with self.subTest(event=event):
-                self.assertEqual(self.detect(event=event), set(COMPONENTS) - {"adrs"})
+                self.assertEqual(self.detect(event=event), FULL - {"adrs"})
 
     def test_stacked_pull_request_names_the_commits_that_select_ios(self):
         summary = Path(self.temp.name) / "summary.md"
@@ -154,8 +195,8 @@ class ChangedComponentsTests(unittest.TestCase):
 
     def test_unreadable_pull_request_diff_runs_everything(self):
         self.repo.commit({"docs/notes.md": "x\n"})
-        self.assertEqual(self.detect(base=""), set(COMPONENTS))
-        self.assertEqual(self.detect(base="0" * 40), set(COMPONENTS))
+        self.assertEqual(self.detect(base=""), FULL)
+        self.assertEqual(self.detect(base="0" * 40), FULL)
 
 
 class CiResultTests(unittest.TestCase):
@@ -380,8 +421,8 @@ class WorkflowWiringTests(unittest.TestCase):
         ios = self.text[self.text.index("  ios:\n"):self.text.index("  scripts:\n")]
         boot = ios.index("- name: Boot the simulator")
         self.assertLess(ios.index("- name: Choose a simulator"), boot)
-        self.assertLess(boot, ios.index("- name: Standalone recipe"))
-        step = ios[boot:ios.index("- name: Standalone recipe")]
+        self.assertLess(boot, ios.index("- name: iOS recipe"))
+        step = ios[boot:ios.index("- name: iOS recipe")]
         self.assertIn("timeout-minutes: 8", step)
         self.assertIn("xcrun simctl bootstatus", step)
 
@@ -421,6 +462,16 @@ class WorkflowWiringTests(unittest.TestCase):
         for job, name in outside:
             with self.subTest(job=job):
                 self.assertIn(name, note, f"{name} is outside CI result but not named in its summary")
+
+    def test_ios_runs_the_chosen_recipe_and_defaults_to_standalone(self):
+        ios = self.text[self.text.index("  ios:\n"):self.text.index("  scripts:\n")]
+        choose = ios[ios.index("- name: Choose the recipe"):ios.index("- name: iOS recipe")]
+        self.assertLess(ios.index("- name: Boot the simulator"), ios.index("- name: Choose the recipe"))
+        self.assertIn("${{ needs.changes.outputs.ios_fast }}", choose)
+        self.assertIn("recipe=standalone\n", choose)
+        self.assertIn("recipe=pr\n", choose)
+        self.assertIn('scripts/ios-test.sh "$IOS_RECIPE"', ios)
+        self.assertNotIn("ios-test.sh standalone", ios)
 
 
 if __name__ == "__main__":

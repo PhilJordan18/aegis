@@ -29,6 +29,19 @@ class InboundMessageRepository {
         this.jdbc = jdbc;
     }
 
+    /** Records how a stored command report was applied (document 08, section 9.3). */
+    void markProcessed(UUID id) {
+        jdbc.sql("UPDATE aegis.inbound_device_messages SET processing_status = 'PROCESSED' WHERE id = :id")
+                .param("id", id).update();
+    }
+
+    void markRejected(UUID id, ProcessingError error) {
+        jdbc.sql("""
+                UPDATE aegis.inbound_device_messages SET processing_status = 'REJECTED', processing_error = :error
+                WHERE id = :id
+                """).param("id", id).param("error", error.name()).update();
+    }
+
     /**
      * Reserves the pair (device, messageId) before any effect (document 10, section 16.2). Empty when the pair is
      * already taken: the unique constraint, not a prior read, decides between concurrent consumers.

@@ -7,6 +7,7 @@ extension AssetStatus.Tone {
         case .blocked: .statusBlockedText
         case .unknown: .statusUnknownText
         case .neutral: .statusNeutralText
+        case .mine: .statusMineText
         }
     }
 
@@ -16,6 +17,7 @@ extension AssetStatus.Tone {
         case .blocked: .statusBlockedFill
         case .unknown: .statusUnknownFill
         case .neutral: .statusNeutralFill
+        case .mine: .statusMineFill
         }
     }
 
@@ -25,6 +27,8 @@ extension AssetStatus.Tone {
         case .blocked: .blockedIcon
         case .unknown: .unknownIcon
         case .neutral: .neutralIcon
+        // The symbol takes the text colour: 6.1:1 and 6.3:1 on its fill (handoff §9).
+        case .mine: .statusMineText
         }
     }
 }
@@ -173,12 +177,16 @@ struct FailureNotice: View {
     var receivedAt: Date?
     var isRetrying = false
     var retry: (() -> Void)?
+    /// Replaces the catalogue title derived from the failure.
+    var title: String?
+    /// Prefix of the accessibility identifiers.
+    var identifier = "catalog"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(Self.title(failure)).font(.subheadline.weight(.semibold))
+                    Text(resolvedTitle).font(.subheadline.weight(.semibold))
                     if case let .service(traceId?) = failure {
                         Text("Identifiant de suivi : \(traceId)").font(.footnote)
                     }
@@ -193,7 +201,7 @@ struct FailureNotice: View {
             }
             .foregroundStyle(Color.errorText)
             .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("catalog.notice")
+            .accessibilityIdentifier("\(identifier).notice")
             if let retry {
                 Button(action: retry) {
                     HStack(spacing: 8) {
@@ -203,16 +211,18 @@ struct FailureNotice: View {
                 }
                 .buttonStyle(CompactButtonStyle())
                 .allowsHitTesting(!isRetrying)
-                .accessibilityIdentifier("catalog.retry")
+                .accessibilityIdentifier("\(identifier).retry")
             }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.errorFill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .onAppear {
-            AccessibilityNotification.Announcement(Self.title(failure)).post()
+            AccessibilityNotification.Announcement(resolvedTitle).post()
         }
     }
+
+    private var resolvedTitle: String { title ?? Self.title(failure) }
 
     static func title(_ failure: CatalogFailure) -> String {
         switch failure {

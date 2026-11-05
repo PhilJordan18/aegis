@@ -11,6 +11,10 @@ enum AssetStatus: Hashable, Sendable {
     case unavailable
     /// The readiness result is a value this client does not know: never ready.
     case unrecognized
+    /// The technician's own active reservation or loan. Never derived from an
+    /// asset: only `GET /me/reservation` or `GET /me/loan` names it.
+    case reservedForYou
+    case borrowedByYou
 
     init(_ asset: TechnicianAsset) {
         // §1.2 defensive rule: a borrowed asset is never shown as ready,
@@ -37,7 +41,7 @@ enum AssetStatus: Hashable, Sendable {
         }
     }
 
-    enum Tone: Hashable, Sendable { case ready, blocked, unknown, neutral }
+    enum Tone: Hashable, Sendable { case ready, blocked, unknown, neutral, mine }
 
     var tone: Tone {
         switch self {
@@ -45,6 +49,7 @@ enum AssetStatus: Hashable, Sendable {
         case .blocked: .blocked
         case .needsChecking: .unknown
         case .borrowed, .alreadyReserved, .unavailable, .unrecognized: .neutral
+        case .reservedForYou, .borrowedByYou: .mine
         }
     }
 
@@ -58,6 +63,8 @@ enum AssetStatus: Hashable, Sendable {
         case .alreadyReserved: "bookmark.slash"
         case .unavailable: "nosign"
         case .unrecognized: "questionmark.circle"
+        case .reservedForYou: "bookmark.fill"
+        case .borrowedByYou: "person.crop.circle.badge.checkmark"
         }
     }
 
@@ -70,6 +77,8 @@ enum AssetStatus: Hashable, Sendable {
         case .alreadyReserved: String(localized: "Déjà réservé")
         case .unavailable: String(localized: "Indisponible")
         case .unrecognized: String(localized: "État indisponible")
+        case .reservedForYou: String(localized: "Réservé pour vous")
+        case .borrowedByYou: String(localized: "Emprunté par vous")
         }
     }
 }
@@ -138,6 +147,22 @@ enum ReasonItem: Hashable, Sendable {
         }
     }
 
+    /// Why Reserve is unavailable, under the disabled button (handoff §4) and
+    /// as the `422 ASSET_NOT_READY` refusal of the reservation sheet.
+    var reservationRefusal: String {
+        switch self {
+        case .known(.notAvailable): String(localized: "Réservation impossible : équipement non disponible.")
+        case .known(.notPresent): String(localized: "Réservation impossible : équipement absent de sa cellule.")
+        case .known(.damaged): String(localized: "Réservation impossible : équipement endommagé.")
+        case .known(.maintenance): String(localized: "Réservation impossible : équipement en maintenance.")
+        case .known(.calibrationExpired): String(localized: "Réservation impossible : calibration expirée.")
+        case .known(.accessDenied): String(localized: "Réservation impossible : niveau d’accès insuffisant.")
+        case .known(.unknownPhysicalState):
+            String(localized: "Réservation impossible : présence non confirmée par le casier.")
+        case .unrecognized: String(localized: "Réservation impossible : équipement non prêt.")
+        }
+    }
+
     /// The actionable next step of §1.3.
     var guidance: String {
         switch self {
@@ -184,6 +209,8 @@ enum AssetPresentation {
             return CardDetail(symbol: "questionmark.diamond.fill",
                               text: String(localized: "Présence non confirmée par le casier"),
                               guidance: String(localized: "Réessayez plus tard."))
+        case .reservedForYou, .borrowedByYou:
+            return nil
         case .blocked, .unrecognized:
             let reasons = ReasonItem.ordered(asset.readiness.reasons)
             guard let main = reasons.first else {
@@ -201,11 +228,15 @@ enum AssetPresentation {
 
     /// "MM-001 · Fluke 117": code, then manufacturer and model number when known.
     static func identityLine(for asset: TechnicianAsset) -> String {
-        let model = [asset.model.manufacturer, asset.model.modelNumber]
+        identityLine(code: asset.assetCode, model: asset.model)
+    }
+
+    static func identityLine(code: String, model summary: AssetModelSummary) -> String {
+        let model = [summary.manufacturer, summary.modelNumber]
             .compactMap { $0?.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
             .joined(separator: " ")
-        return model.isEmpty ? asset.assetCode : "\(asset.assetCode) · \(model)"
+        return model.isEmpty ? code : "\(code) · \(model)"
     }
 
     static func calibration(_ calibration: CalibrationView) -> String {
@@ -260,9 +291,29 @@ enum AegisTime {
             .timeZone(.specificName(.short)))
     }
 
-    static func laboratoryTime(_ date: Date, locale: Locale = .autoupdatingCurrent) -> String {
-        date.formatted(Date.FormatStyle(locale: locale, timeZone: laboratoryZone)
+    /// A business time of the locker, followed by its zone abbreviation.
+    static func laboratoryTime(_ date: Date, zone: TimeZone = laboratoryZone,
+                               locale: Locale = .autoupdatingCurrent) -> String {
+        date.formatted(Date.FormatStyle(locale: locale, timeZone: zone)
             .hour().minute().timeZone(.specificName(.short)))
+    }
+
+    /// Business time with its day when it is not the locker's current day.
+    static func laboratoryDayTime(_ date: Date, zone: TimeZone = laboratoryZone, now: Date = .now,
+                                  locale: Locale = .autoupdatingCurrent) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let time = Date.FormatStyle(locale: locale, timeZone: zone).hour().minute().timeZone(.specificName(.short))
+        return calendar.isDate(date, inSameDayAs: now) ? date.formatted(time)
+            : date.formatted(time.weekday(.abbreviated).day().month(.abbreviated))
+    }
+
+    /// "heure normale de l’Est" / "Eastern Standard Time", as the device names
+    /// the zone at that instant: the approved note names the summer zone, which
+    /// would be wrong from November to March.
+    static func zoneName(_ zone: TimeZone, at date: Date = .now, locale: Locale = .autoupdatingCurrent) -> String {
+        let style: NSTimeZone.NameStyle = zone.isDaylightSavingTime(for: date) ? .daylightSaving : .standard
+        return zone.localizedName(for: style, locale: locale) ?? zone.identifier
     }
 
     /// Device zone; the day is added when it is not today.

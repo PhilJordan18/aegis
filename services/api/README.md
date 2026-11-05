@@ -714,6 +714,25 @@ suivant décide de nouveau. Les tests d'intégration désactivent le job
 `ReservationCancellationApiTests`, `ReservationExpiryTests` et
 `ReservationExpirySchedulingTests` le vérifient.
 
+## Lecture du prêt courant (LOAN-01, lecture seule)
+
+`GET /api/v1/me/loan` et `GET /api/v1/loans/{loanId}` (document 09, sections
+8.4, 8.10 et 15.3) sont réservés au rôle `TECHNICIAN` et ne modifient aucun
+état. `/me/loan` renvoie le prêt ouvert (`ACTIVE` ou `RETURN_PENDING`) du
+demandeur; sans prêt ouvert, la réponse est `404 ACTIVE_LOAN_NOT_FOUND`, jamais
+le `404 RESOURCE_NOT_FOUND` générique. Un prêt `COMPLETED` n'est plus courant,
+mais son titulaire le relit par son identifiant. Le prêt d'un autre titulaire,
+comme un identifiant inconnu, donne `404 RESOURCE_NOT_FOUND`.
+
+`overdue` est dérivé à chaque lecture (`status != COMPLETED` et instant
+postérieur à `dueAt`) et ne ferme jamais le prêt. `currentOperationId` désigne
+la dernière tentative de retour d'un prêt ouvert, une tentative non terminale
+d'abord, et vaut `null` pour un prêt clos. `availableActions` reste vide tant
+que la route de retour (section 15.2) n'existe pas. Aucune route ne crée encore
+de prêt : la confirmation du retrait (#47) le fera. Si un technicien détenait
+plusieurs prêts ouverts, ce que P0 n'attend pas et qu'aucune contrainte
+n'interdit, le plus ancien est renvoyé et l'anomalie est journalisée.
+
 ## Recette présence et réservation
 
 Ce parcours valide le logiciel avec des observations simulées; il ne qualifie

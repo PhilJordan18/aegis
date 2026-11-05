@@ -10,6 +10,7 @@ struct StatusContrastTests {
         ("StatusBlockedText", "StatusBlockedFill"),
         ("StatusUnknownText", "StatusUnknownFill"),
         ("StatusNeutralText", "StatusNeutralFill"),
+        ("StatusMineText", "StatusMineFill"),
     ], [UIUserInterfaceStyle.light, .dark])
     func chipTextReachesNormalTextContrast(_ pair: (String, String), _ style: UIUserInterfaceStyle) throws {
         let ratio = try Self.contrast(pair.0, pair.1, style)

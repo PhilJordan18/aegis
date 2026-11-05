@@ -1697,6 +1697,14 @@ Le délai de lease de 15 secondes est un choix d’exploitation P0; il ne doit p
 
 L’ingestion d’un `COMMAND_ACKNOWLEDGED` ou `COMMAND_REJECTED` vérifie `operation_id`, le `command_message_id` référant au `message_id` de l’outbox, le locker, le type et la fenêtre de validité. Elle met à jour `command_outbox` et `locker_operations` dans la même transaction que l’insertion du message entrant. Un accusé dupliqué ne change rien.
 
+Décisions du 4 novembre 2026 (IOT-02, #41) :
+
+- La fenêtre de validité se juge sur l’instant de réception du backend, jamais sur l’horloge du hub. Un `COMMAND_ACKNOWLEDGED` reçu hors de `[issued_at, expires_at[` ne fait avancer ni la commande ni l’opération; le message est conservé `REJECTED` (`TIMESTAMP_OUT_OF_RANGE`).
+- Un accusé corrélé peut précéder le marquage du dispatcher (ligne encore `CLAIMED` ou `PENDING`, opération encore `AUTHORIZED`). Il prouve que la commande a quitté le backend : la même transaction enregistre alors `AUTHORIZED → COMMAND_SENT` (`command_sent_at` = réception, borne supérieure) puis `COMMAND_SENT → COMMAND_ACKNOWLEDGED`, deux transitions auditées dans cet ordre. C’est la seule exception à « au plus une transition » (document 06, §9.2 et §9.4) : un `COMMAND_REJECTED` sûr reçu avant le marquage fait échouer un retrait en une seule transition `AUTHORIZED → FAILED` (document 05, §5 : publication sans possibilité d’exécution); un retour garde son état pour l’expiration de l’opération. Le marquage tardif, protégé par `attempt_count`, ne change plus rien.
+- Un rapport dont `result` ou `reason` n’est pas une valeur du document 10, §10, est conservé `REJECTED` (`REQUIRED_FIELD_MISSING`) sans effet.
+- Un rejet sûr fait échouer un retrait; un retour garde son état, car son échec sûr rétablit aussi le prêt (document 05, §4 et §7) dans l’expiration de l’opération. Un rejet `LOCK_ACTUATION_FAILED` ou `PREVIOUS_EXECUTION_UNCERTAIN` laisse l’opération en l’état et crée ou maintient l’anomalie `INCONSISTENT_PHYSICAL_STATE` `HIGH` (document 10, §9.1).
+- Un `ACCEPTED` corrélé d’une commande `CANCELLED` ou d’une opération terminale ne modifie ni la commande ni l’opération. Il est conservé `PROCESSED` et ouvre une seule anomalie `INCONSISTENT_PHYSICAL_STATE` `HIGH` pour inspection du casier; une redélivrance n’en ouvre pas d’autre (`ux_anomalies_one_open_per_operation`). Un rejet dans ce cas est conservé `REJECTED` (`TERMINAL_OPERATION_EVENT_IGNORED`). L’accusé seul n’établit jamais un retrait ni un retour.
+
 Une perte du dispatcher après publication n’est pas interprétée comme un échec sûr. Le système assume une livraison au moins une fois et s’appuie sur l’identité stable de commande et la déduplication du hub.
 
 ---

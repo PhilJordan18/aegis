@@ -2,7 +2,7 @@
 
 `xcresult_mesures.py` reproduit les mesures de
 [diagnostic-duree-ios.md](../diagnostic-duree-ios.md) à partir d'un bundle
-`standalone.xcresult` téléchargé depuis l'artefact `ios-standalone-results` d'un run.
+`standalone.xcresult` ou `pr.xcresult` téléchargé depuis l'artefact `ios-test-results` d'un run (`ios-standalone-results` avant le 4 novembre 2026).
 La CI ne l'exécute pas ; ses tests (`.github/scripts/tests/test_xcresult_mesures.py`)
 tournent avec ceux des scripts CI.
 
