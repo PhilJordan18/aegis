@@ -838,7 +838,7 @@ test('search q (09 §22.3, ADR-014): the API agrees with the Web reading of ever
   test.setTimeout(150_000)
   const stamp = Date.now()
   const requests = apiRequests(page)
-  const accessToken = await signInWhenAllowed(page)
+  const { accessToken } = await signInWhenAllowed(page)
   await expect(page).toHaveURL(/\/equipements$/)
   const auth = { Authorization: `Bearer ${accessToken}` }
 
