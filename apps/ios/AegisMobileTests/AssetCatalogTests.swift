@@ -145,19 +145,22 @@ struct AssetCatalogTests {
     @Test(arguments: [
         ("  MM-001  ", "MM-001" as String?),
         ("", nil),
-        ("   \n ", nil),
+        ("   \u{00A0}\u{202F} ", nil),
+        ("   \n ", "\n"),
         ("Fluke", "Fluke"),
     ])
     func normalizesTheSearch(_ text: String, _ expected: String?) {
         #expect(AssetQuery.normalizedSearch(text) == expected)
     }
 
-    @Test func limitsTheSearchToOneHundredUnitsWithoutSplittingACharacter() throws {
-        #expect(AssetQuery.normalizedSearch(String(repeating: "a", count: 140))?.count == 100)
+    /// ADR-014: the server counts graphemes and answers 400 beyond 100, so
+    /// the client never truncates, not even by UTF-16 units.
+    @Test func sendsTheWholeSearchWithoutTruncating() throws {
+        #expect(AssetQuery.normalizedSearch(String(repeating: "a", count: 140))?.count == 140)
         let emoji = String(repeating: "a", count: 99) + "👍🏽"
-        let limited = try #require(AssetQuery.normalizedSearch(emoji))
-        #expect(limited == String(repeating: "a", count: 99))
-        #expect(limited.utf16.count <= 100)
+        let sent = try #require(AssetQuery.normalizedSearch(emoji))
+        #expect(Array(sent.unicodeScalars) == Array(emoji.unicodeScalars))
+        #expect(sent.count == 100)
     }
 
     @Test func requestsOneAssetByLowercasedIdentifier() async throws {
