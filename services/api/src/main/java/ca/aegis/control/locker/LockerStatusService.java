@@ -11,9 +11,11 @@ import java.util.UUID;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import ca.aegis.control.device.LockerAvailability;
+import ca.aegis.control.device.ReportedDeviceErrors;
 import ca.aegis.control.shared.web.ResourceNotFoundException;
 
 /**
@@ -29,16 +31,20 @@ class LockerStatusService {
     private final JdbcClient jdbc;
     private final LockerAvailability availability;
     private final LockerSchedules schedules;
+    private final ReportedDeviceErrors deviceErrors;
     private final Clock clock;
 
-    LockerStatusService(JdbcClient jdbc, LockerAvailability availability, LockerSchedules schedules, Clock clock) {
+    LockerStatusService(JdbcClient jdbc, LockerAvailability availability, LockerSchedules schedules,
+            ReportedDeviceErrors deviceErrors, Clock clock) {
         this.jdbc = jdbc;
         this.availability = availability;
         this.schedules = schedules;
+        this.deviceErrors = deviceErrors;
         this.clock = clock;
     }
 
-    @Transactional(readOnly = true)
+    /** One snapshot, so that the connection status and the device errors describe the same device session. */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     LockerStatusView status(UUID lockerId) {
         Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
         Locker locker = jdbc.sql("SELECT id, code, name, topology FROM aegis.lockers WHERE id = :id")
@@ -56,7 +62,14 @@ class LockerStatusService {
                 })
                 .orElse(CurrentWindowView.NONE);
         return new LockerStatusView(locker.id(), locker.code(), locker.name(), locker.topology(), hub.status(),
-                hub.lastSeenAt(), now, window, compartments(lockerId));
+                hub.lastSeenAt(), now, window, compartments(lockerId), deviceErrors(lockerId));
+    }
+
+    private List<DeviceErrorView> deviceErrors(UUID lockerId) {
+        return deviceErrors.ofCurrentSession(lockerId).stream()
+                .map(group -> new DeviceErrorView(group.errorCode(), group.severity(), group.compartmentId(),
+                        group.firstReceivedAt(), group.lastReceivedAt(), group.occurrences()))
+                .toList();
     }
 
     private List<CompartmentStatusView> compartments(UUID lockerId) {

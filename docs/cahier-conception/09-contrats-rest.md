@@ -16,7 +16,8 @@
 **Mise à jour ciblée :** 28 octobre 2026 — réservation (RES-01, #37), décisions de Philippe du 28 octobre 2026 : ordre des contrôles implémenté, `reservedUntil` non postérieur à l’instant courant, locker sans horaire, horaire du placement courant et actif inconnu (§14.1); `availableActions` vide tant que ses actions ne sont pas implémentées (§8.10); codes de refus de l’archivage (§12.2); `ACTIVE_RESERVATION_NOT_FOUND` et `ASSET_OPERATION_IN_PROGRESS` ajoutés à §21  
 **Mise à jour ciblée :** 28 octobre 2026 — recherche `q` commune à l’API, au Web et à iOS : espaces Unicode de bordure, longueur en grappes de graphèmes, corpus partagé (§11.1, §22.3, §26.6), décision commune consignée par l’[ADR-014](../adr/ADR-014-recherche-q-graphemes.md), acceptée par Philippe le 6 novembre 2026 (#109)  
 **Mise à jour ciblée :** 6 novembre 2026 — lectures administratives approuvées par Philippe (#25, #26, #28) : `GET /admin/lockers` et `AdminLockerView` (§9.3, §16.2), historique des identifiants `GET /admin/assets/{assetId}/identifiers` (§9.3, §12.3); aucune migration  
-**Mise à jour ciblée :** 6 novembre 2026 — refus du catalogue liés à la garde de l’actif (#26) : placement refusé pendant une réservation active, un prêt ouvert ou une opération non terminale, attribution refusée pendant une opération non terminale et révocation de l’identifiant qu’elle attend, avec les codes de l’archivage (§12.3, §12.4, §21); ordre des refus approuvé par Philippe le 6 novembre 2026; aucun code ni champ nouveau
+**Mise à jour ciblée :** 6 novembre 2026 — refus du catalogue liés à la garde de l’actif (#26) : placement refusé pendant une réservation active, un prêt ouvert ou une opération non terminale, attribution refusée pendant une opération non terminale et révocation de l’identifiant qu’elle attend, avec les codes de l’archivage (§12.3, §12.4, §21); ordre des refus approuvé par Philippe le 6 novembre 2026; aucun code ni champ nouveau  
+**Mise à jour ciblée :** 6 novembre 2026 — erreurs signalées par le hub (#29) : champ requis `deviceErrors` et `DeviceErrorView` de `LockerStatusView` (§8.6, §16.1), limités à la session courante du hub, approuvés par Philippe le 6 novembre 2026; ajout compatible, aucune migration
 
 ---
 
@@ -474,8 +475,31 @@ LockerOperationStatus :
 | evaluatedAt | instant | oui |
 | currentWindow | OperatingWindowView | oui |
 | compartments | CompartmentStatusView[] | oui |
+| deviceErrors | DeviceErrorView[], éventuellement vide | oui |
 
 Un CompartmentStatusView contient id, code, enabled, connectionStatus, rfidReaderStatus, doorState, lockState et lastObservedAt. Il ne contient pas de message MQTT brut.
+
+`deviceErrors` liste les erreurs **signalées** par le hub dans sa session courante (#29, approuvé par Philippe le 6 novembre 2026). Un `DeviceErrorView` regroupe les `DEVICE_ERROR` (document 10, §13.2) d’un même couple (`errorCode`, `compartmentId`) :
+
+| Champ | Type | Requis |
+|---|---|---:|
+| errorCode | string, code du document 10, §13.2, y compris `INBOUND_MESSAGE_INVALID` | oui |
+| severity | WARNING ou CRITICAL | oui |
+| compartmentId | UUID ou null | oui |
+| firstReceivedAt | instant | oui |
+| lastReceivedAt | instant | oui |
+| occurrences | entier ≥ 1 | oui |
+
+Règles :
+
+- **Source.** Les `DEVICE_ERROR` acceptés (jamais `REJECTED`) du hub actif du locker, reçus depuis son provisionnement, dont `deviceSessionId` et `bootCount` sont ceux de la session courante de sa projection (document 10, §15.3). Une livraison dupliquée n’est stockée qu’une fois et ne compte qu’une fois. Sans hub actif ou avant toute session, la liste est vide.
+- **Session.** Une nouvelle session (redémarrage, `bootCount` supérieur) vide la liste affichée; l’historique stocké n’est ni modifié ni effacé. Un signalement tardif d’une session antérieure n’y entre pas. Un redémarrage ne prouve pas une réparation.
+- **Regroupement.** Un groupe par couple (`errorCode`, `compartmentId`). `compartmentId` vaut l’identifiant de la cellule seulement si le signalement nomme une cellule de ce locker; sinon il vaut null et le signalement rejoint le groupe du locker pour ce code.
+- **Gravité.** `severity` vaut CRITICAL si au moins un signalement du groupe l’était, sinon WARNING.
+- **Instants et nombre.** `firstReceivedAt` et `lastReceivedAt` sont la première et la dernière réception par le backend (horloge serveur, jamais celle du hub); `occurrences` compte les signalements du groupe.
+- **Ordre et limite.** CRITICAL d’abord, puis `lastReceivedAt` décroissant, puis `errorCode` croissant, puis `compartmentId` (null d’abord). Au plus 20 groupes : au-delà, les moins prioritaires selon cet ordre sont omis.
+- **Contenu exclu.** Ni `detail`, ni charge utile, ni `messageId`, ni `deviceSessionId`, ni jeton ou secret. Un signalement dont la charge analysée n’a pas pu être conservée n’a pas de code lisible et n’est pas listé.
+- **Sens.** Une erreur signalée n’est pas la preuve d’une panne encore active : le document 10 ne définit aucun message de levée. Elle ne modifie ni `connectionStatus`, ni l’état des cellules, ni la disponibilité, ni `availableActions`, ni une réservation, un prêt ou une autorisation. Un hub `OFFLINE` ou `UNKNOWN` le reste à côté de ses erreurs; le client affiche les deux.
 
 `OperatingWindowView` fournit `timeZone` (identifiant IANA), `open` (booléen), `closesAt` (instant UTC ou null) et `nextOpensAt` (instant UTC ou null), calculés par le serveur à `evaluatedAt`. Quand la plage est ouverte, `closesAt` est son échéance et `nextOpensAt` vaut null. Quand elle est fermée, `closesAt` vaut null et `nextOpensAt` indique la prochaine ouverture, ou null si aucune n’est configurée. Sans horaire exploitable, `open=false` et les deux instants valent null. Ces données permettent l’affichage et la sélection d’une échéance; elles n’autorisent jamais une action sans revalidation serveur.
 
@@ -1218,6 +1242,8 @@ Accessible au technicien et à l’administrateur. Retourne LockerStatusView.
 ONLINE signifie que le heartbeat de référence du hub, valide, date de 30 secondes ou moins et que sa connexion MQTT n’a pas été fermée par un OFFLINE. OFFLINE signifie l’inverse. UNKNOWN signifie qu’aucun heartbeat valide n’a été reçu depuis le provisionnement du hub. Les règles sont celles du document 10, §15.3.
 
 Cette lecture ne garantit pas qu’une ouverture sera autorisée : l’autorisation recalcule toutes les gardes dans sa transaction.
+
+`deviceErrors` (§8.6) est lu dans le même instantané que `connectionStatus` et suit les mêmes droits : technicien et administrateur.
 
 ### 16.2 GET /admin/lockers
 

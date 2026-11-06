@@ -377,6 +377,31 @@ messages retenus dans leur ordre, et la déduplication absorbe ceux déjà
 enregistrés. Un message refusé par une contrainte de la base est seulement
 journalisé, avec son SQLState, le nom de la contrainte et son identifiant.
 
+Le statut porte aussi `deviceErrors` (#29, document 09, §8.6) : les
+`DEVICE_ERROR` acceptés de la session courante du hub, regroupés par code et
+cellule, au plus 20 groupes, sans `detail` ni charge utile. Ce sont des
+erreurs signalées, sans effet sur la connexion, la disponibilité ou une
+autorisation; une nouvelle session vide la liste sans effacer l'historique.
+`LockerDeviceErrorsApiTests` couvre le regroupement, l'ordre, la limite, le
+changement de session, les doublons et rejets, et l'absence de contenu brut.
+
+Recette sur une pile réelle (PostgreSQL, Mosquitto et Spring jetables, projet
+Compose `aegis-device-errors` sur ses propres ports, hub simulé), environ
+3 minutes, depuis la racine du dépôt :
+
+```bash
+services/api/scripts/check-device-errors.sh
+```
+
+Contrôles E1 à E4 : liste vide sans session, signalements
+`INBOUND_MESSAGE_INVALID` du scénario `invalid-inbound-local.json` regroupés
+par cellule avec un total égal aux lignes acceptées stockées, hub `OFFLINE`
+31 s après son arrêt avec ses erreurs toujours listées, puis liste vide après
+un nouveau démarrage sans perte des lignes stockées. Chaque lecture vérifie
+aussi qu'aucun `detail`, payload, `messageId` ni `deviceSessionId` n'apparaît.
+Le code de sortie est le nombre d'échecs. Le hub est simulé : cette recette
+prouve le chemin serveur, pas un hub physique.
+
 ### Compte MQTT du hub de test
 
 Les tests du broker (`MqttIngestionBrokerTests`) ne publient jamais sous
