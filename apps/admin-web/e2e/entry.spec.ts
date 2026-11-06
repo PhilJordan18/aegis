@@ -362,9 +362,10 @@ test.describe('flow: casiers (production page, routed fakes)', () => {
 
   test('flow: the page offers no control that changes a state, forces a readiness, opens a compartment or sends a command', async ({ page }) => {
     await openLockerPage(page, 'nominal')
-    await expect(page.locator('main').getByRole('button')).toHaveCount(0)
+    // The only action opens the schedule editor (CFG-02 #28); nothing else writes.
+    await expect(page.locator('main').getByRole('button')).toHaveText(['Modifier l’horaire'])
     await expect(page.locator('main').locator('input, select, textarea, form')).toHaveCount(0)
-    await expect(page.locator('main')).toContainText("Lecture seule : aucune commande n'est envoyée au casier depuis cet écran.")
+    await expect(page.locator('main')).toContainText("Aucune commande n'est envoyée au casier depuis cet écran.")
   })
 
   test('flow: OFFLINE and never-seen say so in words and symbols, and show no healthy compartment', async ({ page }) => {

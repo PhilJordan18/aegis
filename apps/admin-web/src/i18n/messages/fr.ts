@@ -339,7 +339,7 @@ export const fr = {
     lastSignal: ({ time }: { time: string }) => `Dernier signal${NBSP}: ${time}`,
     neverSignal: 'Aucun signal reçu',
     evaluatedNote: ({ time }: { time: string }) => `Évalué par le serveur à ${time}. Cette lecture n'autorise aucune ouverture.`,
-    readOnlyNote: `Lecture seule${NBSP}: aucune commande n'est envoyée au casier depuis cet écran.`,
+    readOnlyNote: "Aucune commande n'est envoyée au casier depuis cet écran.",
 
     windowTitle: "Horaire d'exploitation",
     windowOpen: 'Ouvert',
@@ -384,6 +384,40 @@ export const fr = {
       UNLOCKED: 'Déverrouillée',
       UNKNOWN: 'Inconnue',
     },
+  },
+
+  /** Operating-schedule editor (CFG-02 #28). All texts [P]: the form awaits visual approval (docs/design/manager-forms/). */
+  schedule: {
+    edit: "Modifier l’horaire",
+    title: ({ code }: { code: string }) => `Horaire d’exploitation du casier ${code}`,
+    description: 'Les heures sont locales au fuseau du casier. Le serveur enregistre une nouvelle version et calcule la fenêtre en cours.',
+    loading: 'Chargement de l’horaire…',
+    loadErrorTitle: 'L’horaire n’a pas pu être lu.',
+    loadErrorBody: 'Réessayez. Rien n’a été modifié.',
+    notConfigured: `Aucun horaire n’est configuré${NBSP}: tous les jours sont fermés tant que vous n’enregistrez pas.`,
+    fieldTimeZone: 'Fuseau horaire',
+    fieldTimeZoneHelp: 'Identifiant IANA, par exemple America/Toronto.',
+    open: 'Ouvert',
+    closed: 'Fermé toute la journée',
+    opensAt: 'Ouverture',
+    closesAt: 'Fermeture',
+    day: {
+      MONDAY: 'Lundi',
+      TUESDAY: 'Mardi',
+      WEDNESDAY: 'Mercredi',
+      THURSDAY: 'Jeudi',
+      FRIDAY: 'Vendredi',
+      SATURDAY: 'Samedi',
+      SUNDAY: 'Dimanche',
+    },
+    violation: {
+      requiredWhenOpen: 'Indiquez une heure pour un jour ouvert.',
+      notAllowedWhenClosed: 'Un jour fermé n’a pas d’heures.',
+      notAfterOpensAt: 'La fermeture doit suivre l’ouverture, le même jour.',
+      duplicateDay: 'Ce jour apparaît deux fois.',
+      invalid: 'Valeur non reconnue par le serveur.',
+    },
+    saved: ({ code }: { code: string }) => `Horaire du casier ${code} enregistré.`,
   },
 
   /** Identifiers and placement of a unit (CAT-02 #26). All texts [P]: the forms await visual approval (docs/design/manager-forms/). */

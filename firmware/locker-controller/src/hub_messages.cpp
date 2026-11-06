@@ -71,6 +71,33 @@ bool buildDeviceRestarted(Message* out, const Envelope& env, const char* resetRe
   return w.ok;
 }
 
+bool buildCommandAck(Message* out, const Envelope& env, const char* commandMessageId, const char* operationId,
+                     const char* compartmentId, const char* result) {
+  Writer w;
+  if (!start(out, &w, env, "COMMAND_ACKNOWLEDGED", "events", 1, false)) return false;
+  w.add(",\"commandMessageId\":\"%s\",\"operationId\":\"%s\",\"compartmentId\":\"%s\",\"result\":\"%s\"}",
+        commandMessageId, operationId, compartmentId, result);
+  return w.ok;
+}
+
+bool buildCommandRejected(Message* out, const Envelope& env, const char* commandMessageId, const char* operationId,
+                          const char* compartmentId, const char* reason, const char* detail) {
+  Writer w;
+  if (!start(out, &w, env, "COMMAND_REJECTED", "events", 1, false)) return false;
+  w.add(",\"commandMessageId\":\"%s\",\"operationId\":\"%s\",\"compartmentId\":\"%s\",\"reason\":\"%s\","
+        "\"detail\":\"%s\"}",
+        commandMessageId, operationId, compartmentId, reason, detail);
+  return w.ok;
+}
+
+bool buildInboundInvalid(Message* out, const Envelope& env, const char* compartmentId, const char* detail) {
+  Writer w;
+  if (!start(out, &w, env, "DEVICE_ERROR", "events", 1, false)) return false;
+  if (compartmentId != nullptr) w.add(",\"compartmentId\":\"%s\"", compartmentId);
+  w.add(",\"errorCode\":\"INBOUND_MESSAGE_INVALID\",\"severity\":\"WARNING\",\"detail\":\"%s\"}", detail);
+  return w.ok;
+}
+
 bool buildHeartbeat(Message* out, const Envelope& env, const HeartbeatFacts& facts) {
   Writer w;
   if (!start(out, &w, env, "HEARTBEAT", "status", 0, false)) return false;

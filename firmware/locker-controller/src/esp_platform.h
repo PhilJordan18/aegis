@@ -2,6 +2,9 @@
 
 #include <mqtt_client.h>
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+
 #include <atomic>
 
 #include "platform.h"
@@ -21,6 +24,8 @@ class EspPlatform : public Platform {
   uint32_t random(uint32_t bound) override;
   bool incrementBootCount(uint32_t* bootCount) override;
   const char* resetReason() override;
+  bool journalRead(size_t slot, void* buf, size_t len) override;
+  bool journalWrite(size_t slot, const void* buf, size_t len) override;
   void log(const char* line) override;
 };
 
@@ -38,11 +43,13 @@ struct MqttSettings {
 // Last Will and connectionId before every attempt, so each attempt builds a new client.
 class EspMqttTransport : public Transport {
  public:
-  explicit EspMqttTransport(const MqttSettings& settings) : settings_(settings) {}
-  ~EspMqttTransport() override { teardown(); }
+  explicit EspMqttTransport(const MqttSettings& settings);
+  ~EspMqttTransport() override;
 
   void connect(const Message& will) override;
   bool publish(const Message& message) override;
+  bool subscribe(const char* topic, int qos) override;
+  bool pollMessage(Message* out) override;
   void abort() override { teardown(); }
   Event pollEvent() override;
 
@@ -55,6 +62,10 @@ class EspMqttTransport : public Transport {
   // The client keeps pointers to its Last Will until it is destroyed.
   char willTopic_[sizeof(Message::topic)] = {};
   char willPayload_[sizeof(Message::payload)] = {};
+  // Filled by the esp-mqtt task from possibly fragmented DATA events, then queued whole.
+  QueueHandle_t inbox_ = nullptr;
+  Message assembling_ = {};
+  bool dropping_ = false;
   std::atomic<bool> changed_{false};
   std::atomic<bool> connected_{false};
 };

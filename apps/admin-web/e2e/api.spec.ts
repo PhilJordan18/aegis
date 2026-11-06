@@ -344,8 +344,8 @@ test('Casiers (catalog discovery): the chip and every compartment row match a di
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${LIVE_SHOTS}casiers-live-desktop-1440-light.png`, fullPage: true, animations: 'disabled' })
 
-  // Read only: no control on the page, and the page wrote nothing.
-  await expect(page.locator('main').getByRole('button')).toHaveCount(0)
+  // No command: the only control opens the schedule editor (CFG-02 #28), and the page wrote nothing.
+  await expect(page.locator('main').getByRole('button')).toHaveText(['Modifier l’horaire'])
   expectOnlyReads(requests)
 })
 
@@ -376,7 +376,7 @@ test('Casiers (?casier=): the named locker is read directly and matches a direct
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${LIVE_SHOTS}casiers-live-mobile-390-dark.png`, fullPage: true, animations: 'disabled' })
   await expectNoHorizontalScrollLive(page)
-  await expect(page.locator('main').getByRole('button')).toHaveCount(0)
+  await expect(page.locator('main').getByRole('button')).toHaveText(['Modifier l’horaire'])
   expectOnlyReads(requests)
 })
 
@@ -485,7 +485,91 @@ test('CAT-01 forms: an administrator creates, edits and archives a model and a u
   for (const post of posts) expect(await post.headerValue('idempotency-key'), post.url()).toMatch(/^[0-9a-f-]{36}$/)
 })
 
-/** Signs in through the page; a 429 is waited out with its Retry-After, then the same sign-in is sent again. */
+test('CFG-02 schedule: an administrator edits the seven-day schedule of a locker and reads it back from the real API', async ({ page, request }) => {
+  test.setTimeout(150_000)
+  // A closing minute that changes at each run, so the PUT always records a new version (an identical PUT is a no-op).
+  const minute = String(new Date().getUTCMinutes()).padStart(2, '0')
+  const accessToken = await signInWhenAllowed(page)
+  await expect(page).toHaveURL(/\/equipements$/)
+  const auth = { Authorization: `Bearer ${accessToken}` }
+  const schedulePath = `/api/v1/admin/lockers/${DEMO_LOCKER_ID}/operating-schedule`
+
+  await page.evaluate((lockerId) => {
+    window.history.pushState(null, '', `/casiers?casier=${lockerId}`)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }, DEMO_LOCKER_ID)
+  await expect(page.locator('.ag-lk__title')).toBeVisible()
+
+  // The editor reads the active version (or the not-configured answer) at each opening.
+  const firstRead = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname === schedulePath)
+  await page.getByRole('button', { name: 'Modifier l’horaire' }).click()
+  expect([200, 404]).toContain((await firstRead).status())
+  const dialog = page.getByRole('dialog', { name: /Horaire d’exploitation du casier/ })
+  const zone = dialog.getByRole('textbox', { name: /Fuseau horaire/ })
+  await expect(zone).toBeFocused()
+  const day = (name: string) => dialog.getByRole('group', { name })
+
+  // A day closing before it opens is caught before any request.
+  await zone.fill('America/Toronto')
+  for (const name of ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi']) {
+    await day(name).getByRole('checkbox', { name: 'Ouvert' }).check()
+    await day(name).getByLabel(/Ouverture/).fill('07:00')
+    await day(name).getByLabel(/Fermeture/).fill(`18:${minute}`)
+  }
+  for (const name of ['Samedi', 'Dimanche']) await day(name).getByRole('checkbox', { name: 'Ouvert' }).uncheck()
+  await day('Mardi').getByLabel(/Fermeture/).fill('06:00')
+  let puts = 0
+  page.on('request', (sent) => {
+    if (sent.method() === 'PUT' && new URL(sent.url()).pathname === schedulePath) puts += 1
+  })
+  await dialog.getByRole('button', { name: 'Enregistrer' }).click()
+  await expect(day('Mardi').getByLabel(/Fermeture/)).toHaveAttribute('aria-invalid', 'true')
+  await expect(day('Mardi')).toContainText('La fermeture doit suivre l’ouverture')
+  expect(puts).toBe(0)
+
+  // An unknown zone is the server's to refuse: its violation lands on the zone field.
+  await day('Mardi').getByLabel(/Fermeture/).fill(`18:${minute}`)
+  await zone.fill('Mars/Olympus')
+  const refused = page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname === schedulePath)
+  await dialog.getByRole('button', { name: 'Enregistrer' }).click()
+  expect((await refused).status()).toBe(400)
+  await expect(zone).toHaveAttribute('aria-invalid', 'true')
+
+  // A valid save: one PUT, no Idempotency-Key (09 §13), the answer is the new active version.
+  await zone.fill('America/Toronto')
+  const saved = page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname === schedulePath)
+  await dialog.getByRole('button', { name: 'Enregistrer' }).click()
+  const response = await saved
+  expect(response.status()).toBe(200)
+  expect(await response.request().headerValue('idempotency-key')).toBeNull()
+  const sent = response.request().postDataJSON() as { timeZone: string; windows: { dayOfWeek: string; enabled: boolean; opensAt: string | null; closesAt: string | null }[] }
+  expect(sent.timeZone).toBe('America/Toronto')
+  expect(sent.windows.map((window) => window.dayOfWeek)).toEqual(['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'])
+  expect(sent.windows[1]).toEqual({ dayOfWeek: 'TUESDAY', enabled: true, opensAt: '07:00:00', closesAt: `18:${minute}:00` })
+  expect(sent.windows[5]).toEqual({ dayOfWeek: 'SATURDAY', enabled: false, opensAt: null, closesAt: null })
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Modifier l’horaire' })).toBeFocused()
+  await expect(page.getByRole('status').filter({ hasText: 'Horaire du casier AEGIS-DEMO-01 enregistré.' })).toHaveCount(1)
+
+  // A direct read returns what was sent, and the panel shows the server's window in the locker's zone.
+  const direct = await request.get(schedulePath, { headers: auth })
+  expect(direct.status()).toBe(200)
+  const active = (await direct.json()) as { timeZone: string; windows: unknown[] }
+  expect(active.timeZone).toBe('America/Toronto')
+  expect(active.windows).toEqual(sent.windows)
+  await expect(page.locator('.ag-lk__window')).toContainText(/Fuseau du casier\s: America\/Toronto/)
+
+  // Opening again reads the saved version back.
+  const reread = page.waitForResponse((answer) => answer.request().method() === 'GET' && new URL(answer.url()).pathname === schedulePath)
+  await page.getByRole('button', { name: 'Modifier l’horaire' }).click()
+  expect((await reread).status()).toBe(200)
+  await expect(day('Mardi').getByLabel(/Fermeture/)).toHaveValue(`18:${minute}`)
+  await expect(day('Samedi').getByRole('checkbox', { name: 'Ouvert' })).not.toBeChecked()
+  await dialog.getByRole('button', { name: 'Annuler' }).click()
+  await expect(dialog).toHaveCount(0)
+  expect(puts).toBe(2)
+})
+
 interface LiveCompartment {
   readonly id: string
   readonly code: string
@@ -647,6 +731,7 @@ test('#26 custody: an administrator assigns and revokes an identifier, then move
   expect(writes.every((candidate) => new URL(candidate.url()).pathname.startsWith('/api/v1/admin/assets/'))).toBe(true)
 })
 
+/** Signs in through the page; a 429 is waited out with its Retry-After, then the same sign-in is sent again. */
 async function signInWhenAllowed(page: Page): Promise<string> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const login = page.waitForResponse((response) => response.url().endsWith('/api/v1/auth/login'))

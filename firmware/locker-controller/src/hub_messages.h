@@ -50,6 +50,16 @@ bool buildAvailability(Message* out, const Envelope& env, const char* connection
 // Doc 10 §13.1, on `events`, QoS 1, not retained.
 bool buildDeviceRestarted(Message* out, const Envelope& env, const char* resetReason, const char* firmwareVersion);
 
+// Doc 10 §10, on `events`, QoS 1, not retained. `result` is ACCEPTED or ALREADY_APPLIED; `reason` and
+// `detail` come from the controlled list of §10.2 (detail is a fixed text, never a received value).
+bool buildCommandAck(Message* out, const Envelope& env, const char* commandMessageId, const char* operationId,
+                     const char* compartmentId, const char* result);
+bool buildCommandRejected(Message* out, const Envelope& env, const char* commandMessageId, const char* operationId,
+                          const char* compartmentId, const char* reason, const char* detail);
+
+// Doc 10 §13.2 INBOUND_MESSAGE_INVALID: a DEVICE_ERROR WARNING without operationId. `compartmentId` may be null.
+bool buildInboundInvalid(Message* out, const Envelope& env, const char* compartmentId, const char* detail);
+
 // Doc 10 §14, on `status`, QoS 0, not retained.
 bool buildHeartbeat(Message* out, const Envelope& env, const HeartbeatFacts& facts);
 

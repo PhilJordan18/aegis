@@ -289,7 +289,7 @@ export const en: Messages = {
     lastSignal: ({ time }) => `Last seen: ${time}`,
     neverSignal: 'No signal received',
     evaluatedNote: ({ time }) => `Evaluated by the server at ${time}. This reading authorizes no opening.`,
-    readOnlyNote: 'Read only: no command is sent to the locker from this screen.',
+    readOnlyNote: 'No command is sent to the locker from this screen.',
 
     windowTitle: 'Operating hours',
     windowOpen: 'Open',
@@ -332,6 +332,39 @@ export const en: Messages = {
       UNLOCKED: 'Unlocked',
       UNKNOWN: 'Unknown',
     },
+  },
+
+  schedule: {
+    edit: 'Edit schedule',
+    title: ({ code }: { code: string }) => `Operating schedule of locker ${code}`,
+    description: "Times are local to the locker's time zone. The server records a new version and computes the current window.",
+    loading: 'Loading the schedule…',
+    loadErrorTitle: 'The schedule could not be read.',
+    loadErrorBody: 'Try again. Nothing was changed.',
+    notConfigured: 'No schedule is configured: every day stays closed until you save.',
+    fieldTimeZone: 'Time zone',
+    fieldTimeZoneHelp: 'IANA identifier, for example America/Toronto.',
+    open: 'Open',
+    closed: 'Closed all day',
+    opensAt: 'Opens',
+    closesAt: 'Closes',
+    day: {
+      MONDAY: 'Monday',
+      TUESDAY: 'Tuesday',
+      WEDNESDAY: 'Wednesday',
+      THURSDAY: 'Thursday',
+      FRIDAY: 'Friday',
+      SATURDAY: 'Saturday',
+      SUNDAY: 'Sunday',
+    },
+    violation: {
+      requiredWhenOpen: 'Enter a time for an open day.',
+      notAllowedWhenClosed: 'A closed day has no times.',
+      notAfterOpensAt: 'Closing must come after opening, on the same day.',
+      duplicateDay: 'This day appears twice.',
+      invalid: 'Value not recognized by the server.',
+    },
+    saved: ({ code }: { code: string }) => `Schedule of locker ${code} saved.`,
   },
 
   custody: {

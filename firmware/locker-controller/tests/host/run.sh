@@ -9,7 +9,7 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
 "${CXX:-c++}" -std=c++17 -Wall -Wextra -Werror -O0 -fsanitize=address,undefined \
-  "$here/test_hub.cpp" "$src/hub_messages.cpp" "$src/hub_link.cpp" -o "$work/test_hub"
+  "$here/test_hub.cpp" "$src/hub_messages.cpp" "$src/hub_link.cpp" "$src/command_inbox.cpp" -o "$work/test_hub"
 "$work/test_hub" "$work/payloads.jsonl"
 
 python3 -I - "$work/payloads.jsonl" <<'PY'

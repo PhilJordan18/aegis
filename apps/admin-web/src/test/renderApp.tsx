@@ -12,6 +12,8 @@ import { unconfiguredCatalogGateway, type CatalogGateway } from '../features/cat
 import { CatalogGatewayContext } from '../features/catalog/CatalogGatewayContext'
 import { unconfiguredLockerGateway, type LockerGateway } from '../features/lockers/lockerGateway'
 import { LockerGatewayContext } from '../features/lockers/LockerGatewayContext'
+import { unconfiguredScheduleGateway, type ScheduleGateway } from '../features/schedule/scheduleGateway'
+import { ScheduleGatewayContext } from '../features/schedule/ScheduleGatewayContext'
 import { unconfiguredCustodyGateway, type CustodyGateway } from '../features/custody/custodyGateway'
 import { CustodyGatewayContext } from '../features/custody/CustodyGatewayContext'
 import { createLocaleController, type Locale, type LocaleController } from '../i18n/locale'
@@ -23,6 +25,7 @@ export function renderWithProviders(
     gateway = unconfiguredAuthGateway,
     catalogGateway = unconfiguredCatalogGateway,
     lockerGateway = unconfiguredLockerGateway,
+    scheduleGateway = unconfiguredScheduleGateway,
     custodyGateway = unconfiguredCustodyGateway,
     session = createSessionStore(),
     router = createHistoryRouter(window),
@@ -33,6 +36,7 @@ export function renderWithProviders(
     gateway?: AuthGateway
     catalogGateway?: CatalogGateway
     lockerGateway?: LockerGateway
+    scheduleGateway?: ScheduleGateway
     custodyGateway?: CustodyGateway
     session?: SessionStore
     router?: Router
@@ -53,7 +57,7 @@ export function renderWithProviders(
               <AuthGatewayContext value={gateway}>
                 <CatalogGatewayContext value={catalogGateway}>
                   <LockerGatewayContext value={lockerGateway}>
-                    <CustodyGatewayContext value={custodyGateway}>{ui}</CustodyGatewayContext>
+                    <ScheduleGatewayContext value={scheduleGateway}><CustodyGatewayContext value={custodyGateway}>{ui}</CustodyGatewayContext></ScheduleGatewayContext>
                   </LockerGatewayContext>
                 </CatalogGatewayContext>
               </AuthGatewayContext>
