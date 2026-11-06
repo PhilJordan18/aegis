@@ -24,15 +24,18 @@
 | Archivage | `alertdialog`, focus initial sur « Annuler », conséquence puis garde du serveur; un refus s'affiche dans le dialogue |
 | Onglet Modèles | Liste paginée, archivés compris, actions « Modifier » et « Archiver » par ligne active |
 | Horaire (CFG-02 #28) | Bouton « Modifier l’horaire » dans l’en-tête de la fenêtre du casier; dialogue 640 px : fuseau IANA, puis un groupe par jour (lundi à dimanche) avec « Ouvert » et deux heures, ou « Fermé toute la journée » |
-| Textes | Tous [P] dans `src/i18n/messages/fr.ts` et `en.ts` (`catalogEdit`, `schedule`) |
+| Garde (#26) | Dans le dossier, après les réglages : « Placement attendu » avec « Modifier le placement », puis « Identifiants physiques » avec « Attribuer un identifiant » et l’historique (actifs d’abord, révoqués conservés); révocation par `alertdialog`, focus initial sur « Annuler » |
+| Placement | Dialogue 640 px : casier, cellule (libre, placement actuel, occupée par X ou désactivée, à titre indicatif : le serveur juge), motif obligatoire |
+| Textes | Tous [P] dans `src/i18n/messages/fr.ts` et `en.ts` (`catalogEdit`, `schedule`, `custody`) |
 
 ## Lot de rendus
 
-`captures/` contient 28 rendus produits par `npm run capture:forms` (faux
+`captures/` contient 40 rendus produits par `npm run capture:forms` (faux
 routés, aucune API) : formulaire d’exemplaire vide et en conflit (l’alerte
 reçoit le focus, le champ porte l’erreur), refus
 d'archivage, onglet Modèles et formulaire de modèle, horaire lu du serveur puis
-avec une erreur locale sur son jour, chacun en 1280 px et
+avec une erreur locale sur son jour, section garde, conflit d’identifiant et
+conflit de cellule, chacun en 1280 px et
 320 px, clair et sombre. Les mêmes états passent axe WCAG 2.x A/AA, le clavier
 et l'absence de défilement horizontal (`npm run test:forms`).
 
@@ -42,6 +45,8 @@ et l'absence de défilement horizontal (`npm run test:forms`).
 2. Radios pour le niveau d'accès et l'état de service, plutôt que des listes.
 3. Emplacement des commandes : en-tête de page pour créer, dossier ou ligne
    pour modifier et archiver.
-4. Textes [P] des catalogues `catalogEdit` et `schedule`.
+4. Textes [P] des catalogues `catalogEdit`, `schedule` et `custody`.
 5. Horaire : sept groupes empilés plutôt qu’une grille jours × heures, et un
    seul créneau par jour, comme le contrat (09 §13).
+6. Garde : section dans le dossier plutôt qu’un onglet, et occupation des
+   cellules affichée dans la liste sans en interdire le choix.
