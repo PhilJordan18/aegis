@@ -70,7 +70,7 @@ Lancez `docs/qualite/recette-cloud/run.sh` depuis la racine, sur la machine qui 
 | #142 `49bd8ff` | API : `deviceErrors` de la session courante du hub (#29) | MQTT vers API réel, hub simulé : regroupement, doublon stocké une fois, liste gardée hors ligne, vidée à la nouvelle session | Indépendante |
 | #148 `98b98f9` | Manager : rendu des `deviceErrors` (#29) | Avec #142 : page égale au GET direct en 4 étapes (aucun signal, 2 groupes avec doublon, hors ligne, nouvelle session). Script Web W1/W2 réussi | Après #142 |
 | #143 `0570b2c` | Tests iOS : ordre des audits, plus de reprise masquante | Run 42258729058 : 218 sur 218 en 22,8 min, 31 audits terminés, le plus lent 9,4 s. Une seule exécution : l'instabilité n'est **pas** prouvée corrigée | Prête. Puis resynchroniser #132 |
-| #146 `ab1a597` | Manager : recherche `q` par graphèmes | **Non revue par QA** | À préciser par Web |
+| #146 `ab1a597` | Manager : recherche `q` par graphèmes (#109, partie Web) | Recette 36 sur 36. Test en direct « search q » réussi (44 cas du corpus d'accord avec l'API). **Conflit avec #140** : la seconde fusionnée doit être resynchronisée par Web | Après #140, une fois resynchronisée |
 | #147 `6f11da6` | API : présence inconnue si deux démarrages partagent le compteur | Recette 36 sur 36. Script jumeau 4 sur 4 ; sur `dev` le même script échoue T2 et T3 (lacune reproduite). Hub simulé | Indépendante. Interprétation à décider (Philippe) |
 | #144 `e8fb536` | CI : iOS sur un push `dev` seulement si un chemin iOS change | 59 tests de scripts CI | **Décision de Philippe** |
 | #132 | iOS : recherche par graphèmes (#109) | Rouge iOS hérité, à resynchroniser après #143 | Après #131, ADR-014 et un iOS vert |
