@@ -393,6 +393,38 @@ export const fr = {
       UNLOCKED: 'Déverrouillée',
       UNKNOWN: 'Inconnue',
     },
+
+    /** Errors the hub reported in its current session (#29, 09 §8.6). [P] Texts await review with the QA recipe. */
+    errorsTitle: ({ count: value }: { count: number }) =>
+      plural(value, { one: `${count.format(value)} erreur signalée`, other: `${count.format(value)} erreurs signalées` }),
+    errorsIntro: `Erreurs signalées par le casier depuis son dernier démarrage. Une erreur signalée n'est pas forcément une panne en cours${NBSP}: elle ne change ni l'état du casier, ni celui des cellules, ni la disponibilité.`,
+    errorsNone: 'Aucune erreur signalée depuis le dernier démarrage du casier.',
+    errorsNoSignal: `Aucun signal reçu du casier${NBSP}: aucune erreur signalée à afficher.`,
+    errorsNotOnline: `Le casier n'est pas en ligne${NBSP}: cette liste peut ne plus refléter son état.`,
+    errorsLimit: ({ max }: { max: number }) => `Seules les ${max} erreurs les plus importantes sont affichées${NBSP}; d'autres peuvent exister.`,
+    severity: {
+      CRITICAL: 'Critique',
+      WARNING: 'Avertissement',
+    },
+    errorCode: {
+      CELL_COMMUNICATION_LOST: 'Communication avec une cellule perdue',
+      RFID_READER_FAULT: 'Défaut du lecteur RFID',
+      DOOR_SENSOR_FAULT: 'Défaut du capteur de porte',
+      LOCK_ACTUATOR_FAULT: "Défaut de l'actionneur de serrure",
+      POWER_FAULT: "Défaut d'alimentation",
+      CLOCK_SYNC_LOST: "Synchronisation de l'horloge perdue",
+      STORAGE_FAULT: 'Défaut du stockage local',
+      INBOUND_MESSAGE_INVALID: 'Message reçu invalide',
+    } as Record<string, string>,
+    errorUnknownCode: 'Code non reconnu par cette version de Manager',
+    errorWholeLocker: 'Casier entier',
+    errorCompartment: ({ code }: { code: string }) => `Cellule ${code}`,
+    errorUnlistedCompartment: 'Cellule non listée',
+    errorOccurrences: ({ count: value }: { count: number }) =>
+      plural(value, { one: `${count.format(value)} signalement`, other: `${count.format(value)} signalements` }),
+    errorReceived: ({ time }: { time: string }) => `Reçue${NBSP}: ${time}`,
+    errorFirstReceived: ({ time }: { time: string }) => `Première réception${NBSP}: ${time}`,
+    errorLastReceived: ({ time }: { time: string }) => `Dernière réception${NBSP}: ${time}`,
   },
 
   /** Operating-schedule editor (CFG-02 #28). Texts approved with their corrections on 6 November 2026 (docs/design/manager-forms/README.md). */

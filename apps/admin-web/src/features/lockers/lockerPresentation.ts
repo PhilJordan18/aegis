@@ -2,7 +2,7 @@ import type { I18n } from '../../i18n/useI18n'
 import type { IconName } from '../../ui/Icon'
 import type { StatusRole } from '../../ui/StatusChip'
 import { UNRECOGNIZED, type Unrecognized } from '../catalog/contract'
-import type { CompartmentStatus, LockerStatus, OperatingWindow } from './contract'
+import type { CompartmentStatus, DeviceError, LockerStatus, OperatingWindow } from './contract'
 
 /**
  * How a state is drawn. `ok` and `neutral` are plain text; the others add a status chip with its symbol, so
@@ -108,6 +108,29 @@ export function hasUnrecognizedValue(locker: LockerStatus): boolean {
     is(locker.topology) ||
     locker.compartments.some((c) => is(c.connectionStatus) || is(c.rfidReaderStatus) || is(c.doorState) || is(c.lockState))
   )
+}
+
+/**
+ * A reported device error (#29, 09 §8.6). CRITICAL is drawn as an exception and WARNING as information; neither is a
+ * verdict on the locker: the connection chip and the compartment states stay the server's own.
+ */
+export function severityChip(severity: DeviceError['severity'], i18n: I18n): { role: StatusRole; icon: IconName; label: string } {
+  if (severity === UNRECOGNIZED) return { role: 'unknown', icon: 'status-clock', label: i18n.m.equipment.unrecognized }
+  const label = i18n.m.lockers.severity[severity]
+  return severity === 'CRITICAL' ? { role: 'blocked', icon: 'status-error', label } : { role: 'info', icon: 'status-info', label }
+}
+
+/** The translated meaning of a 10 §13.2 code, or null for a code this client does not know (the code itself is always shown). */
+export function errorCodeLabel(code: string, { m }: I18n): string | null {
+  const labels: Readonly<Record<string, string>> = m.lockers.errorCode
+  return Object.hasOwn(labels, code) ? (labels[code] ?? null) : null
+}
+
+/** Where the error was reported: the locker itself, one of its compartments by code, or an id the status does not list. */
+export function errorPlace(error: DeviceError, locker: LockerStatus, { m }: I18n): string {
+  if (error.compartmentId === null) return m.lockers.errorWholeLocker
+  const compartment = locker.compartments.find((candidate) => candidate.id === error.compartmentId)
+  return compartment === undefined ? m.lockers.errorUnlistedCompartment : m.lockers.errorCompartment({ code: compartment.code })
 }
 
 export function deviceTimeZone(): string {

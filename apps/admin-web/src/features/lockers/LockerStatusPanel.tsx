@@ -7,7 +7,7 @@ import { StaleNotice } from '../catalog/StaleNotice'
 import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
 import { ScheduleDialog } from '../schedule/ScheduleDialog'
 import { Button } from '../../ui/Button'
-import type { CompartmentStatus, LockerStatus } from './contract'
+import { DEVICE_ERRORS_LIMIT, type CompartmentStatus, type DeviceError, type LockerStatus } from './contract'
 import { LockerAlert } from './LockerAlert'
 import {
   asLastKnown,
@@ -16,11 +16,14 @@ import {
   connectionNote,
   doorState,
   enabledState,
+  errorCodeLabel,
+  errorPlace,
   evaluatedTimeLabel,
   hasUnrecognizedValue,
   linkState,
   lockState,
   readerState,
+  severityChip,
   technicalInstantLabel,
   windowView,
   type StateView,
@@ -177,6 +180,7 @@ function LockerBody({ locker, titleId, stale, retrying, onRetry, returnFocus }: 
         <ReadOnlyMark />
       </h3>
       {locker.compartments.length === 0 ? <p className="ag-help">{m.lockers.noCompartments}</p> : <CompartmentTable locker={locker} />}
+      <DeviceErrors locker={locker} />
       <p className="ag-help ag-lk__foot">{m.lockers.readOnlyNote}</p>
     </div>
   )
@@ -299,5 +303,72 @@ function Cell({ label, state }: { readonly label: string; readonly state: StateV
         </StatusChip>
       )}
     </td>
+  )
+}
+
+/**
+ * Errors the hub reported in its current session (#29, 09 §8.6), in the server's order and as the server grouped them.
+ * Read-only and informative: a reported error is not proof of an active fault, so nothing here changes the connection
+ * chip, a compartment state, a readiness or an action. The connection state stays shown above, and is restated here
+ * when the locker is not online.
+ */
+function DeviceErrors({ locker }: { readonly locker: LockerStatus }) {
+  const { m } = useI18n()
+  const t = m.lockers
+  const titleId = useId()
+  const errors = locker.deviceErrors
+  return (
+    <section className="ag-lk-errs" aria-labelledby={titleId}>
+      <h3 className="ag-overline ag-sec-title ag-lk__sec" id={titleId}>
+        {t.errorsTitle({ count: errors.length })}
+        <ReadOnlyMark />
+      </h3>
+      <p className="ag-help ag-lk-errs__intro">{t.errorsIntro}</p>
+      {locker.connectionStatus !== 'ONLINE' && locker.lastSeenAt !== null && <p className="ag-lk-errs__offline">{t.errorsNotOnline}</p>}
+      {errors.length === 0 ? (
+        <p className="ag-lk-errs__empty">{locker.lastSeenAt === null ? t.errorsNoSignal : t.errorsNone}</p>
+      ) : (
+        <ul className="ag-lk-errs__list" aria-labelledby={titleId}>
+          {errors.map((error) => (
+            <DeviceErrorItem key={`${error.errorCode}|${error.compartmentId ?? ''}`} error={error} locker={locker} />
+          ))}
+        </ul>
+      )}
+      {errors.length >= DEVICE_ERRORS_LIMIT && <p className="ag-help ag-lk-errs__note">{t.errorsLimit({ max: DEVICE_ERRORS_LIMIT })}</p>}
+    </section>
+  )
+}
+
+function DeviceErrorItem({ error, locker }: { readonly error: DeviceError; readonly locker: LockerStatus }) {
+  const i18n = useI18n()
+  const t = i18n.m.lockers
+  const chip = severityChip(error.severity, i18n)
+  const label = errorCodeLabel(error.errorCode, i18n)
+  const first = technicalInstantLabel(error.firstReceivedAt, i18n)
+  const last = technicalInstantLabel(error.lastReceivedAt, i18n)
+  return (
+    <li className="ag-lk-err">
+      <div className="ag-lk-err__head">
+        <StatusChip role={chip.role} icon={chip.icon}>
+          {chip.label}
+        </StatusChip>
+        <span className="ag-lk-err__title">{label ?? t.errorUnknownCode}</span>
+      </div>
+      <p className="ag-lk-err__meta">
+        <code className="ag-lk-err__code">{error.errorCode}</code>
+        <span aria-hidden="true"> · </span>
+        <span>{errorPlace(error, locker, i18n)}</span>
+        <span aria-hidden="true"> · </span>
+        <span className="ag-tnum">{t.errorOccurrences({ count: error.occurrences })}</span>
+      </p>
+      {error.occurrences === 1 || first === last ? (
+        <p className="ag-lk-err__times ag-tnum">{t.errorReceived({ time: last ?? '' })}</p>
+      ) : (
+        <p className="ag-lk-err__times ag-tnum">
+          <span>{t.errorLastReceived({ time: last ?? '' })}</span>
+          <span>{t.errorFirstReceived({ time: first ?? '' })}</span>
+        </p>
+      )}
+    </li>
   )
 }

@@ -7,7 +7,7 @@ import { PREVIEW_EMAIL, PREVIEW_PASSWORD } from './support.ts'
  * in the demo locker (how the page finds it), and `GET /api/v1/lockers/{id}/status`. The live recipe is
  * api.spec.ts, run by `npm run test:e2e:api`.
  */
-export type LockerMode = 'nominal' | 'offline' | 'unknown' | 'closed' | 'noSchedule' | 'faulted' | 'long' | 'code20' | 'code24' | 'codeUnbroken' | 'offlineLong' | 'empty' | 'loading' | 'notFound' | 'serviceError' | 'unreachable' | 'stale'
+export type LockerMode = 'nominal' | 'offline' | 'unknown' | 'closed' | 'noSchedule' | 'faulted' | 'long' | 'code20' | 'code24' | 'codeUnbroken' | 'offlineLong' | 'deviceErrors' | 'offlineErrors' | 'empty' | 'loading' | 'notFound' | 'serviceError' | 'unreachable' | 'stale'
 
 export const DEMO_LOCKER_ID = 'd46a74ae-39dc-460b-8af0-38fc791b376a'
 const TRACE_ID = '5f4bc22e-66a4-48ef-8bf3-6e7184d71c30'
@@ -29,6 +29,20 @@ const compartment = (code: string, overrides: Record<string, unknown> = {}) => (
   ...overrides,
 })
 
+const deviceError = (errorCode: string, severity: string, compartment: string | null, firstReceivedAt: string, lastReceivedAt: string, occurrences: number) => ({
+  errorCode,
+  severity,
+  compartmentId: compartment,
+  firstReceivedAt,
+  lastReceivedAt,
+  occurrences,
+})
+
+const DEVICE_ERRORS = [
+  deviceError('RFID_READER_FAULT', 'CRITICAL', compartmentId('A2'), '2026-11-03T18:10:00Z', '2026-11-03T18:50:00Z', 3),
+  deviceError('INBOUND_MESSAGE_INVALID', 'WARNING', null, '2026-11-03T18:55:00Z', '2026-11-03T18:55:00Z', 1),
+]
+
 function status(mode: LockerMode) {
   const base = {
     lockerId: DEMO_LOCKER_ID,
@@ -40,6 +54,7 @@ function status(mode: LockerMode) {
     evaluatedAt: EVALUATED_AT,
     currentWindow: { timeZone: 'America/Toronto', open: true, closesAt: '2026-11-03T22:00:00Z', nextOpensAt: null },
     compartments: [compartment('A1'), compartment('A2')],
+    deviceErrors: [] as unknown[],
   }
   switch (mode) {
     case 'offline': {
@@ -72,6 +87,24 @@ function status(mode: LockerMode) {
         compartments: [
           compartment('CELLULE-GAUCHE-SUPERIEURE-AVEC-UN-CODE-TRES-LONG-0001', { ...kept, rfidReaderStatus: 'FAULTED', doorState: 'OPEN', lockState: 'UNLOCKED', connectionStatus: 'DISCONNECTED' }),
           compartment('CELLULE-DROITE-INFERIEURE-AVEC-UN-CODE-TRES-LONG-0002', { ...kept, enabled: false, rfidReaderStatus: 'FAULTED' }),
+        ],
+      }
+    }
+    case 'deviceErrors':
+      // Errors the hub reported (#29, 09 §8.6), in the server order; the cells stay healthy, as the server sends them.
+      return { ...base, deviceErrors: DEVICE_ERRORS }
+    case 'offlineErrors': {
+      // Offline beside its errors, with the longest code and a compartment-level group: the connection stays « Hors ligne ».
+      const kept = { lastObservedAt: '2026-11-03T18:31:50Z' }
+      return {
+        ...base,
+        connectionStatus: 'OFFLINE',
+        lastSeenAt: '2026-11-03T18:32:00Z',
+        compartments: [compartment('A1', kept), compartment('A2', kept)],
+        deviceErrors: [
+          ...DEVICE_ERRORS,
+          deviceError('CELL_COMMUNICATION_LOST', 'CRITICAL', null, '2026-11-03T18:20:00Z', '2026-11-03T18:31:00Z', 12),
+          deviceError('A_CODE_THIS_CLIENT_DOES_NOT_KNOW_YET_WITH_NO_BREAK_POINT', 'WARNING', compartmentId('A1'), '2026-11-03T18:00:00Z', '2026-11-03T18:00:00Z', 1),
         ],
       }
     }

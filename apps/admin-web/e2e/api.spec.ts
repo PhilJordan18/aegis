@@ -216,6 +216,11 @@ test('an administrator opens Équipements, sees the units from the API and opens
  */
 const DEMO_LOCKER_ID = process.env.AEGIS_DEMO_LOCKER_ID ?? 'd46a74ae-39dc-460b-8af0-38fc791b376a'
 const LIVE_SHOTS = fileURLToPath(new URL('../test-results/live/', import.meta.url))
+/**
+ * Set by scripts/check-device-errors-live.sh after the hub simulator reported errors: `listed` requires a
+ * non-empty list, `stale` also requires a locker that is no longer ONLINE. Unset, any list the API returns is checked.
+ */
+const EXPECT_DEVICE_ERRORS = process.env.AEGIS_LIVE_EXPECT_DEVICE_ERRORS ?? ''
 
 interface LiveStatus {
   lockerId: string
@@ -233,6 +238,7 @@ interface LiveStatus {
     lockState: string
     lastObservedAt: string | null
   }[]
+  deviceErrors: { errorCode: string; severity: string; compartmentId: string | null; occurrences: number }[]
 }
 
 // Test-side translation of the contract enumerations into the words the page must show (fr.ts `lockers`).
@@ -287,6 +293,25 @@ async function expectPageShows(page: Page, status: LiveStatus) {
     await expect(note).toContainText('Dernier état connu')
     await expect(panel.locator('table.ag-lk-table')).toHaveAttribute('aria-describedby', (await note.getAttribute('id')) ?? 'missing')
   } else await expect(note).toHaveCount(0)
+
+  // Reported device errors (#29, 09 §8.6): the same groups, in the server order, each with its code and count.
+  expect(Array.isArray(status.deviceErrors), 'deviceErrors is a required list (#142)').toBe(true)
+  if (EXPECT_DEVICE_ERRORS !== '') expect(status.deviceErrors.length, 'the simulator reported errors in this session').toBeGreaterThan(0)
+  if (EXPECT_DEVICE_ERRORS === 'stale') expect(status.connectionStatus, 'the stopped hub went stale').not.toBe('ONLINE')
+  const errors = panel.getByRole('region', { name: /erreurs? signalées?/ })
+  await expect(errors.getByRole('heading', { level: 3 })).toContainText(`${status.deviceErrors.length} erreur`)
+  await expect(errors.getByRole('listitem')).toHaveCount(status.deviceErrors.length)
+  for (const [index, error] of status.deviceErrors.entries()) {
+    await expect(errors.getByRole('listitem').nth(index)).toContainText(error.errorCode)
+    await expect(errors.getByRole('listitem').nth(index)).toContainText(`${error.occurrences} signalement`)
+  }
+  // Errors never override the connection: away from ONLINE, the list says it may be out of date.
+  const offlineNote = errors.locator('.ag-lk-errs__offline')
+  if (status.connectionStatus !== 'ONLINE' && status.lastSeenAt !== null) await expect(offlineNote).toContainText("n'est pas en ligne")
+  else await expect(offlineNote).toHaveCount(0)
+  if (status.deviceErrors.length === 0) {
+    await expect(errors).toContainText(status.lastSeenAt === null ? 'Aucun signal reçu du casier' : 'Aucune erreur signalée depuis le dernier démarrage')
+  }
 
   const rows = panel.getByRole('row')
   await expect(rows).toHaveCount(status.compartments.length + 1)
