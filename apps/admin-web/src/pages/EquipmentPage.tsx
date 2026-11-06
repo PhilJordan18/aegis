@@ -68,7 +68,8 @@ function revealDossier(target: HTMLElement | null) {
 /**
  * Protected Équipements page (CAT-01): the units and the models of the administrator catalog, from the real API,
  * with their creation, modification and archive. The server decides every rule; the forms only anticipate the
- * single-field ones. The forms are proposals awaiting visual approval (docs/design/manager-forms/).
+ * single-field ones. The forms follow the direction
+ * approved for P0 on 6 November 2026 (docs/design/manager-forms/README.md).
  */
 export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: UserProfile }) {
   const { m } = useI18n()

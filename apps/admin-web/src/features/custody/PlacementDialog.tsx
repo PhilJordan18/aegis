@@ -27,7 +27,7 @@ const FIELDS = { compartmentId: undefined, reason: LIMITS.placementReason }
 /**
  * Sets the expected placement of a unit (CAT-02 #26, 09 §12.4) from the locker list (§16.2), read at each opening.
  * Occupancy and disabled cells are shown as read, never enforced here: the server judges the compartment when saving.
- * Proposed form: awaits visual approval (docs/design/manager-forms/). Mount one instance per opening (`key`).
+ * Form direction approved for P0 on 6 November 2026 (docs/design/manager-forms/README.md). Mount one instance per opening (`key`).
  */
 export function PlacementDialog({ open, assetId, assetCode, current, place, busy, onClose, onPlaced }: PlacementDialogProps) {
   const i18n = useI18n()

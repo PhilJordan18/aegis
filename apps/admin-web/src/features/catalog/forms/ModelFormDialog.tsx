@@ -64,7 +64,7 @@ function localErrors(request: AssetModelRequest, i18n: ReturnType<typeof useI18n
   return errors
 }
 
-/** Create or edit an asset model (CAT-01). Proposed form: awaits visual approval (docs/design/manager-forms/). */
+/** Create or edit an asset model (CAT-01). Form direction approved for P0 on 6 November 2026 (docs/design/manager-forms/README.md). */
 // Mount one instance per opening (a new `key`): the draft, the idempotency key and the mutation then start fresh.
 export function ModelFormDialog({ open, model, onClose, onSaved }: ModelFormDialogProps) {
   const i18n = useI18n()

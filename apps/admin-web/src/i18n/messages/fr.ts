@@ -8,7 +8,8 @@ import { createPluralSelector } from '../plural'
  * French catalog: the reference for the shape of every other catalog (en.ts is
  * typed against it, so a missing key fails `tsc`) and the fallback language.
  * Texts are those of docs/design/manager-entree/ (states.md §3, handoff §7):
- * [A] = approved, everything else [P] = proposed, awaiting Philippe's approval.
+ * [A] = approved, everything else [P] = proposed, awaiting Philippe's approval, except the
+ * catalogEdit, schedule and custody form texts, approved on 6 November 2026 (docs/design/manager-forms/README.md).
  *
  * Rules (docs/localisation/convention.md): one complete sentence per message,
  * values inserted already formatted, named parameters, plurals through
@@ -386,7 +387,7 @@ export const fr = {
     },
   },
 
-  /** Operating-schedule editor (CFG-02 #28). All texts [P]: the form awaits visual approval (docs/design/manager-forms/). */
+  /** Operating-schedule editor (CFG-02 #28). Texts approved with their corrections on 6 November 2026 (docs/design/manager-forms/README.md). */
   schedule: {
     edit: "Modifier l’horaire",
     title: ({ code }: { code: string }) => `Horaire d’exploitation du casier ${code}`,
@@ -420,7 +421,7 @@ export const fr = {
     saved: ({ code }: { code: string }) => `Horaire du casier ${code} enregistré.`,
   },
 
-  /** Identifiers and placement of a unit (CAT-02 #26). All texts [P]: the forms await visual approval (docs/design/manager-forms/). */
+  /** Identifiers and placement of a unit (CAT-02 #26). Texts approved with their corrections on 6 November 2026 (docs/design/manager-forms/README.md). */
   custody: {
     identifiersTitle: 'Identifiants physiques',
     identifiersLoading: 'Chargement des identifiants…',
@@ -479,7 +480,7 @@ export const fr = {
     close: 'Fermer',
   },
 
-  /** Catalog forms (CAT-01 #25). All texts [P]: the forms await Philippe's visual approval (docs/design/manager-forms/). */
+  /** Catalog forms (CAT-01 #25). Texts approved with their corrections on 6 November 2026 (docs/design/manager-forms/README.md). */
   catalogEdit: {
     newAsset: 'Nouvel exemplaire',
     newModel: 'Nouveau modèle',

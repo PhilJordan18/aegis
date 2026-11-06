@@ -4,7 +4,8 @@ import { createPluralSelector } from '../plural'
 /**
  * English catalog, typed against the French one: a missing key, an extra key or
  * a different parameter list fails `tsc`. Every string is a proposal, awaiting
- * Philippe's review. Terms follow docs/localisation/glossaire.md: equipment,
+ * Philippe's review, except the catalogEdit, schedule and custody form texts, approved on
+ * 6 November 2026 (docs/design/manager-forms/README.md). Terms follow docs/localisation/glossaire.md: equipment,
  * compartment, checkout, return, chain of custody; a borrowed asset is never
  * « Ready ». Product names (Aegis, Aegis Manager) are never translated.
  */

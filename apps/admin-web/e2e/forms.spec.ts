@@ -6,9 +6,9 @@ import { DEMO_LOCKER_ID, openLockers, waitForLockerState } from './lockerFakes.t
 import { expectNoAxeViolations, expectNoHorizontalScroll } from './support.ts'
 
 /**
- * Proposed CAT-01 forms (unit, model, archive confirmation, Modèles tab) CFG-02 schedule editor and #26 identifiers and placement, offline on routed fakes: axe WCAG A/AA,
+ * CAT-01 forms (unit, model, archive confirmation, Modèles tab) CFG-02 schedule editor and #26 identifiers and placement, offline on routed fakes: axe WCAG A/AA,
  * keyboard, no horizontal scroll at 320 px, light and dark. `AEGIS_FORMS_CAPTURE=1` also writes the compact review
- * batch to docs/design/manager-forms/captures/ — a proposal awaiting visual approval, never an approved design.
+ * batch to docs/design/manager-forms/captures/: the forms whose direction Philippe approved for P0 on 6 November 2026.
  */
 const CAPTURE = process.env.AEGIS_FORMS_CAPTURE === '1'
 const OUT = fileURLToPath(new URL('../../../docs/design/manager-forms/captures/', import.meta.url))

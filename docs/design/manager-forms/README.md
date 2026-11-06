@@ -16,9 +16,9 @@
 - Structure du dossier d'exemplaire (`docs/design/asset-lifecycle/sections.md`
   §5.2/5.4) : la section « Réglages » est la seule modifiable.
 
-## Ce qui est proposé
+## Ce qui est approuvé
 
-| Élément | Proposition |
+| Élément | Direction approuvée |
 |---|---|
 | Dialogue | `<dialog>` natif modal, 640 px (formulaire) ou 480 px (confirmation), corps défilant, titre et actions toujours visibles; presque pleine largeur (marge de 8 px) sous 480 px |
 | Exemplaire | Modèle (liste des modèles actifs), code, numéro de série, niveau d'accès et état de service en boutons radio, calibration requise, échéance en date et heure du laboratoire |
@@ -28,7 +28,7 @@
 | Horaire (CFG-02 #28) | Bouton « Modifier l’horaire » dans l’en-tête de la fenêtre du casier; dialogue 640 px : fuseau IANA, puis un groupe par jour (lundi à dimanche) avec « Ouvert » et deux heures, ou « Fermé toute la journée » |
 | Garde (#26) | Dans le dossier, après les réglages : « Placement attendu » avec « Modifier le placement », puis « Identifiants physiques » avec « Attribuer un identifiant » et l’historique (actifs d’abord, révoqués conservés); révocation par `alertdialog`, focus initial sur « Annuler » |
 | Placement | Dialogue 640 px : casier, cellule (libre, placement actuel, occupée par X ou désactivée, à titre indicatif : le serveur juge), motif obligatoire |
-| Textes | Tous [P] dans `src/i18n/messages/fr.ts` et `en.ts` (`catalogEdit`, `schedule`, `custody`) |
+| Textes | `catalogEdit`, `schedule` et `custody` de `src/i18n/messages/fr.ts` et `en.ts`, approuvés avec les corrections listées ci-dessous |
 
 ## Lot de rendus
 

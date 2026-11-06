@@ -23,7 +23,8 @@ const FIELDS = { type: undefined, value: LIMITS.identifierValue }
 
 /**
  * Assigns an identifier (CAT-02 #26, 09 §12.3) with one Idempotency-Key per intent. The value is sent trimmed and
- * otherwise as typed: the server compares it as is. Proposed form: awaits visual approval (docs/design/manager-forms/).
+ * otherwise as typed: the server compares it as is. Form direction approved for P0
+ * (docs/design/manager-forms/README.md).
  * Mount one instance per opening (`key`).
  */
 export function AssignIdentifierDialog({ open, assetCode, assign, busy, onClose, onAssigned }: AssignIdentifierDialogProps) {
