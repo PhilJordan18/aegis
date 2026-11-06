@@ -3,7 +3,7 @@
 Ce document est le seul point de départ de la recette humaine de Philippe et Jimmy. Il
 renvoie aux recettes détaillées et ne les recopie pas.
 
-État au **6 novembre 2026, 15 h 15 (Toronto)**. Avant de commencer, relevez le SHA réel :
+État au **6 novembre 2026, 15 h 40 (Toronto)**. Avant de commencer, relevez le SHA réel :
 
 ```bash
 git fetch origin dev && git rev-parse --short origin/dev
@@ -63,7 +63,7 @@ Lancez `docs/qualite/recette-cloud/run.sh` depuis la racine, sur la machine qui 
 | Identifiants : attribuer, révoquer ; placement attendu (#26, #140) | Manager | Test en direct `#26 custody` sur `d722ff9` (base neuve) | Attribuer puis révoquer un identifiant, déplacer un placement |
 | Échéance de calibration sans glissement à l'heure d'été (#25, #141) | Manager | **Sur branche** : API réelle, trou de printemps refusé, deux occurrences d'automne. Non refait sur `d722ff9` | Navigateur à l'heure de Toronto : saisir une échéance le 8 mars 2026 à 2 h 30 (refusée), puis le 1er novembre 2026 à 1 h 30 (deux choix) |
 | Horaire hebdomadaire d'un casier (#28, #139) | Manager | Suite en direct CFG-02. Recette R3 | Modifier un jour, relire |
-| Lecture du catalogue et réservation (#37, #38) | iOS | Recette R5. CI iOS du push `dev` : en file d'attente ; une seule exécution n'est pas une preuve | Réserver un actif `READY`. Aucune ouverture de porte |
+| Lecture du catalogue et réservation (#37, #38) | iOS | Recette R5. CI du push `dev` `70f4065` : iOS vert en 27 min ; celle de `d722ff9` en cours | Réserver un actif `READY`. Aucune ouverture de porte |
 | Présence par scan, hub hors ligne (R4, R6) | API | Recette R4 et R6 (simulé) | Avec le vrai hub : couper le Wi-Fi plus de 30 s. L'actif passe à `UNKNOWN`, puis redevient `READY` seulement après un nouveau scan |
 | Refus de déplacer un actif réservé (#133) | API | Recette R9 (réservation). Prêt et opération : **fixtures seulement** | — |
 
@@ -72,11 +72,11 @@ Lancez `docs/qualite/recette-cloud/run.sh` depuis la racine, sur la machine qui 
 | PR | Apporte | Vérification QA | Ordre proposé |
 |---|---|---|---|
 | #142 `49bd8ff` | API : `deviceErrors` de la session courante du hub (#29) | MQTT vers API réel, hub simulé : regroupement, doublon stocké une fois, liste gardée hors ligne, vidée à la nouvelle session | Indépendante |
-| #148 `98b98f9` | Manager : rendu des `deviceErrors` (#29) | Avec #142 : page égale au GET direct en 4 étapes (aucun signal, 2 groupes avec doublon, hors ligne, nouvelle session). Script Web W1/W2 réussi | Après #142. Sonar rouge à corriger par Web |
-| #146 `ab1a597` | Manager : recherche `q` par graphèmes (#109, partie Web) | Sur l'ancienne base : recette 36 sur 36, test « search q » réussi (44 cas). **En conflit avec `dev`** depuis #140 : Web resynchronise | Après la resynchronisation par Web, puis nouvelle vérification QA |
-| #147 `6f11da6` | API : présence inconnue si deux démarrages partagent le compteur | Recette 36 sur 36. Script jumeau 4 sur 4 ; sur `dev` le même script échoue T2 et T3 (lacune reproduite). Hub simulé | Recommandation en discussion, **non approuvée** (Philippe) |
+| #148 `1943e60` | Manager : rendu des `deviceErrors` (#29) | QA a vérifié `98b98f9` avec #142 : page égale au GET direct en 4 étapes, script Web W1/W2 réussi. **Tête `1943e60` non revérifiée** (correctif Sonar par Web) | Après #142, puis revérification QA |
+| #146 `60afdb5` | Manager : recherche `q` par graphèmes (#109, partie Web) | QA a vérifié `ab1a597` : « search q » 44 sur 44 d'accord avec l'API. Resynchronisée sur `dev` par Web ; **tête `60afdb5` non revérifiée par QA** | Après revérification QA |
+| #147 `2466a45` | API : présence inconnue si deux démarrages partagent le compteur | QA a vérifié `6f11da6` : script jumeau 4 sur 4 ; sur `dev` le même script échoue T2 et T3. Nouveaux commits « règle approuvée » : **approbation non vue par QA**, tête non revérifiée | Philippe confirme la règle |
 | #144 `e8fb536` | CI : iOS sur un push `dev` seulement si un chemin iOS change | **Approuvée par Philippe.** 59 tests de scripts CI sur l'arbre fusionné avec `d722ff9`. Sortie du brouillon | Indépendante |
-| #132 `de0ee1b` | iOS : recherche par graphèmes (#109) | `dev` `d722ff9` fusionné sans conflit ; ADR-014 et corpus inchangés. Une exécution iOS hébergée, sans relance | Après un iOS vert sur `de0ee1b` |
+| #132 `de0ee1b` | iOS : recherche par graphèmes (#109) | `dev` `d722ff9` fusionné sans conflit ; ADR-014 et corpus inchangés. Exécution unique 42285488109 : **rouge**, 219 sur 220. Ses propres tests passent (corpus 45, catalogue 34, modèle de vue 18). Échec : premier audit d'accessibilité à froid de `CatalogUITests`, abandonné après 15,2 s (-56) | Décision de Philippe. L'instabilité d'audit n'est pas corrigée |
 
 ## Après chaque fusion
 
@@ -87,3 +87,11 @@ Lancez `docs/qualite/recette-cloud/run.sh` depuis la racine, sur la machine qui 
 
 Une carte passe en **In Testing** seulement si elle est intégrée sur `dev` et vérifiée sur
 ce SHA. Les cartes matérielles gardent leurs critères physiques.
+
+Sur `d722ff9`, sont intégrés et vérifiés :
+- #26, partie Manager (identifiants et placement) ;
+- #25, formulaires du catalogue ;
+- #28, horaire.
+
+Chacun ne passe en In Testing que pour cette portée. Le chemin heure d'été de #25 n'a
+qu'une preuve sur branche.
