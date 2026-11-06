@@ -150,6 +150,8 @@ La continuité est rompue par une ouverture de porte, un redémarrage ou une rec
 
 Une rupture invalide le scan antérieur. La présence reste alors `UNKNOWN` jusqu’à un nouveau scan qualifiant, postérieur à la reprise à la fois par sa réception, sa séquence et sa fenêtre. Un doublon, un scan retardé ou un scan fait avant la reprise ne la rétablit pas. Aucune tolérance d’horloge n’est ajoutée : un horodatage ambigu laisse la présence `UNKNOWN`.
 
+**Conflit de session** (décision de Philippe du 6 novembre 2026, PR #147, #31). Deux `deviceSessionId` acceptés qui partagent le `bootCount` courant d’un hub (doc 10 §15.3, R2) rendent la présence `UNKNOWN` pour toutes les cellules de ce casier. Les faits et l’historique sont conservés. Dans ce démarrage ambigu, ni un scan, ni un heartbeat, ni une simple reconnexion MQTT ne lèvent le conflit. Un démarrage accepté d’un `bootCount` strictement supérieur rétablit une session non ambiguë, sans établir par lui-même `PRESENT` ni `READY` : il faut un nouveau scan qualifiant dans cette session, après quoi présence et readiness sont dérivées par les règles ordinaires et toutes les autres conditions de readiness.
+
 ### 4.3 Priorité des résultats
 
 1. Une condition qui prouve que l’actif ne peut pas être utilisé produit `BLOCKED`.
