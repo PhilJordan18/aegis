@@ -96,8 +96,8 @@ Lancez `docs/qualite/recette-cloud/run.sh` depuis la racine, sur la machine qui 
 | PR | Apporte | Vérification QA | Ordre proposé |
 |---|---|---|---|
 | #147 `2466a45` | API : présence inconnue si deux démarrages partagent le compteur | Règle **approuvée** (#147, commentaire 6694553221). QA a vérifié `6f11da6` : script jumeau 4 sur 4, lacune reproduite sur `dev`. Contrôle iOS rouge : même audit à froid que #132, sans lien avec #147 | Après #149, puis resynchronisation et une vérification |
-| #149 `2c6a51a` | Tests iOS : absorber le démarrage à froid avant le premier audit complet | Exécution 42294577453 : 328 sur 328, aucun problème, saut ni échec attendu. Préchauffage 1,1 s, premier audit complet 6,4 s, maximum 9,8 s. Une exécution verte ne prouve rien | **Prochaine fusion nécessaire** (prête) |
-| #132 `de0ee1b` | iOS : recherche par graphèmes (#109, partie iOS) | `dev` `d722ff9` fusionné ; ADR-014 et corpus inchangés. Exécution 42285488109 rouge (219 sur 220) sur l'audit à froid ; ses propres tests passent | Après #149 : une seule synchronisation, puis les contrôles de la nouvelle tête |
+| #149 `2c6a51a` | Tests iOS : absorber le démarrage à froid avant le premier audit complet | Exécution 42294577453 : 218 tests sur 218 réussis (328 exécutions enregistrées, car certains tests s'exécutent plusieurs fois), aucun problème, saut ni échec attendu. Préchauffage 1,1 s, premier audit complet 6,4 s, maximum 9,8 s. Une exécution verte ne prouve rien | **Fusionnée** par Philippe (`dev` `a40c0da`) |
+| #132 `221b900` | iOS : recherche par graphèmes (#109, partie iOS) | `dev` `a40c0da` (avec #149) fusionné une seule fois, sans conflit ; ADR-014 et corpus inchangés. Ancienne tête `de0ee1b` : exécution 42285488109 rouge (219 tests sur 220) sur l'audit à froid. Verdict : les contrôles de `221b900` sur la PR, sans relance | Fusionnable seulement si ces contrôles sont verts |
 
 ## Après chaque fusion
 
