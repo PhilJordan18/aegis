@@ -271,6 +271,59 @@ class RfidPresenceTests extends ApiIntegrationTest {
     }
 
     /**
+     * R2 (document 10, section 15.3): a second start under the current bootCount is kept without effect on the
+     * projection, but nothing orders its door or restart facts against the scans, so presence stays UNKNOWN until a
+     * higher bootCount, whatever the twin reports and even after a new scan of the current session.
+     */
+    @Test
+    void aSecondStartSharingTheBootCountMakesPresenceUnknownUntilAHigherBoot() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"));
+
+        Session twin = new Session(session.bootCount, locker);
+        clock.advance(Duration.ofSeconds(1));
+        ingest(twin.door("DOOR_OPENED", clock.instant(), cellA));
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"), "twin door event");
+        assertEquals("ONLINE", read(lockerStatus(), "$.connectionStatus"), "the projection is unchanged");
+
+        clock.advance(Duration.ofSeconds(5));
+        heartbeat("HEALTHY", "HEALTHY");
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"), "a new scan of the same boot");
+
+        clock.advance(Duration.ofSeconds(1));
+        session = new Session(BOOTS.incrementAndGet(), locker);
+        ingest(session.restarted(clock.instant()));
+        heartbeat("HEALTHY", "HEALTHY");
+        clock.advance(Duration.ofSeconds(5));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"), "a higher bootCount");
+    }
+
+    @Test
+    void aTwinStartThatOnlyHeartbeatsStillVoidsPresence() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        Session twin = new Session(session.bootCount, locker);
+        clock.advance(Duration.ofSeconds(1));
+        ingest(twin.heartbeat(clock.instant(), List.of(
+                cell(cellA, 1, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED"),
+                cell(cellB, 2, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED"))));
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"));
+    }
+
+    @Test
+    void aRejectedTwinMessageIsLeftToTheRejectedMessageRules() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        Session twin = new Session(session.bootCount, locker);
+        clock.advance(Duration.ofSeconds(1));
+        Map<String, Object> malformed = twin.envelope("DEVICE_ERROR", clock.instant());
+        assertEquals(Outcome.REJECTED, ingestion.ingest(events(), bytes(malformed)));
+        assertEquals("REJECTED", message(malformed).get("processing_status"));
+        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"),
+                "a rejected error report moves no door and claims no session");
+    }
+
+    /**
      * Review HIGH 1 (a): door messages the backend rejects still show that the door may have moved, and so does a
      * later heartbeat reporting it open, even once a closed one follows.
      */
@@ -932,6 +985,11 @@ class RfidPresenceTests extends ApiIntegrationTest {
 
     private String technicianView(UUID asset) throws Exception {
         return mvc.perform(get("/api/v1/assets/" + asset).header(AUTHORIZATION, bearer(technician)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+    }
+
+    private String lockerStatus() throws Exception {
+        return mvc.perform(get("/api/v1/lockers/" + locker + "/status").header(AUTHORIZATION, bearer(technician)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
     }
 
