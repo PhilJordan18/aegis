@@ -59,7 +59,9 @@ class LockerStatusApiTests extends ApiIntegrationTest {
                     .andExpect(jsonPath("$.compartments[0].rfidReaderStatus").value("UNKNOWN"))
                     .andExpect(jsonPath("$.compartments[0].doorState").value("UNKNOWN"))
                     .andExpect(jsonPath("$.compartments[0].lockState").value("UNKNOWN"))
-                    .andExpect(jsonPath("$.compartments[0].lastObservedAt").value(nullValue()));
+                    .andExpect(jsonPath("$.compartments[0].lastObservedAt").value(nullValue()))
+                    .andExpect(jsonPath("$.deviceErrors").isArray())
+                    .andExpect(jsonPath("$.deviceErrors.length()").value(0));
         }
     }
 

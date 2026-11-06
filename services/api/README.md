@@ -377,6 +377,14 @@ messages retenus dans leur ordre, et la déduplication absorbe ceux déjà
 enregistrés. Un message refusé par une contrainte de la base est seulement
 journalisé, avec son SQLState, le nom de la contrainte et son identifiant.
 
+Le statut porte aussi `deviceErrors` (#29, document 09, §8.6) : les
+`DEVICE_ERROR` acceptés de la session courante du hub, regroupés par code et
+cellule, au plus 20 groupes, sans `detail` ni charge utile. Ce sont des
+erreurs signalées, sans effet sur la connexion, la disponibilité ou une
+autorisation; une nouvelle session vide la liste sans effacer l'historique.
+`LockerDeviceErrorsApiTests` couvre le regroupement, l'ordre, la limite, le
+changement de session, les doublons et rejets, et l'absence de contenu brut.
+
 ### Compte MQTT du hub de test
 
 Les tests du broker (`MqttIngestionBrokerTests`) ne publient jamais sous
