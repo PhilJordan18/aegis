@@ -224,6 +224,12 @@ tels que le document 08, sections 4.4 et 5.1, les définit. Aucune route ne cré
 de locker en P0 : le casier de démonstration est provisionné au démarrage
 (section suivante).
 
+Deux lectures réservées à `ADMIN` (approuvées le 6 novembre 2026) servent
+l'administration sans identifiant écrit en dur : `GET /admin/lockers`
+(document 09, section 16.2) liste les lockers, leurs compartiments et l'actif
+du placement actif; `GET /admin/assets/{assetId}/identifiers` (section 12.3)
+retourne l'historique des identifiants d'un actif, actifs d'abord.
+
 `POST /admin/assets/{assetId}/identifiers` et
 `POST /admin/assets/{assetId}/identifiers/{identifierId}/revoke` exigent une
 `Idempotency-Key`. Une paire `type + valeur` active n'appartient qu'à un actif

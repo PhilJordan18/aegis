@@ -190,6 +190,8 @@ describe('Équipements — edit and archive a unit', () => {
     expect(gateway.archiveAsset.mock.calls[0]?.[1]).toBe(MM001.id)
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    // The closed dialog stays mounted, so focus goes back to the button that opened it.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Archiver' }))
   })
 
   it('offers no command for an archived unit', async () => {

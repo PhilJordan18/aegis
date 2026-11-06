@@ -52,7 +52,8 @@ type EditIntent =
   | { readonly kind: 'createAsset' | 'createModel' }
   | { readonly kind: 'editAsset' | 'archiveAsset'; readonly asset: AdminAssetView }
   | { readonly kind: 'editModel' | 'archiveModel'; readonly model: AssetModelView }
-type Editing = EditIntent & { readonly session: number }
+// A closed session keeps its key: the dialog stays mounted with `open=false`, so it can give focus back to its opener.
+type Editing = EditIntent & { readonly session: number; readonly open: boolean }
 
 /** The dossier sits under the list below 1024 px, out of sight after a selection (handoff §5). */
 function isStackedLayout(): boolean {
@@ -91,9 +92,9 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
   const open = (next: EditIntent) => {
     sessions.current += 1
     setOutcome('')
-    setEditing({ ...next, session: sessions.current })
+    setEditing({ ...next, session: sessions.current, open: true })
   }
-  const close = () => setEditing(null)
+  const close = () => setEditing((current) => (current === null ? null : { ...current, open: false }))
 
   // A page past the end (a stale bookmark, a shrunk catalog, an archive on the last page) goes back to the last one.
   const lastPage = page !== undefined && !list.isPlaceholderData ? Math.max(page.totalPages - 1, 0) : null
@@ -276,21 +277,21 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
 
       <AssetFormDialog
         key={`asset-${editing?.session ?? 0}`}
-        open={editing?.kind === 'createAsset' || editing?.kind === 'editAsset'}
+        open={editing?.open === true && (editing.kind === 'createAsset' || editing.kind === 'editAsset')}
         asset={editing?.kind === 'editAsset' ? editing.asset : null}
         onClose={close}
         onSaved={savedAsset}
       />
       <ModelFormDialog
         key={`model-${editing?.session ?? 0}`}
-        open={editing?.kind === 'createModel' || editing?.kind === 'editModel'}
+        open={editing?.open === true && (editing.kind === 'createModel' || editing.kind === 'editModel')}
         model={editing?.kind === 'editModel' ? editing.model : null}
         onClose={close}
         onSaved={savedModel}
       />
       <ArchiveDialog
         key={`archive-${editing?.session ?? 0}`}
-        open={editing?.kind === 'archiveAsset' || editing?.kind === 'archiveModel'}
+        open={editing?.open === true && (editing.kind === 'archiveAsset' || editing.kind === 'archiveModel')}
         title={
           editing?.kind === 'archiveAsset'
             ? t.archiveAssetTitle({ code: editing.asset.assetCode })
