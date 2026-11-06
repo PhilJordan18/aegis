@@ -104,6 +104,68 @@ class LockerDeviceErrorsApiTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.deviceErrors[4].lastReceivedAt").value(t3.toString()));
     }
 
+    /** Review: the latest reception orders, not the first; on a tie the locker-level group precedes its cells. */
+    @Test
+    void theLatestReceptionOrdersGroupsAndALockerLevelGroupPrecedesItsCellsOnATie() throws Exception {
+        report("STORAGE_FAULT", "WARNING", null);
+        tick();
+        report("CLOCK_SYNC_LOST", "WARNING", null);
+        tick();
+        report("STORAGE_FAULT", "WARNING", null);
+        report("POWER_FAULT", "WARNING", CELL_A1);
+        report("POWER_FAULT", "WARNING", null);
+
+        String body = body();
+        assertEquals(List.of("POWER_FAULT", "POWER_FAULT", "STORAGE_FAULT", "CLOCK_SYNC_LOST"),
+                JsonPath.read(body, "$.deviceErrors[*].errorCode"));
+        assertEquals(java.util.Arrays.asList(null, CELL_A1.toString(), null, null),
+                JsonPath.read(body, "$.deviceErrors[*].compartmentId"));
+    }
+
+    /** R2: a second session sharing the bootCount, or a report of an older boot, is not the current session. */
+    @Test
+    void reportsOutsideTheProjectionSessionAreLeftOut() throws Exception {
+        report("POWER_FAULT", "WARNING", null);
+        Session conflicting = new Session(session.bootCount);
+        assertEquals(Outcome.ACCEPTED, ingestion.ingest(EVENTS,
+                bytes(conflicting.deviceError(clock.instant(), "STORAGE_FAULT", "CRITICAL"))));
+        Map<String, Object> olderBoot = session.deviceError(clock.instant(), "LOCK_ACTUATOR_FAULT", "CRITICAL");
+        olderBoot.put("bootCount", session.bootCount - 1);
+        assertEquals(Outcome.ACCEPTED, ingestion.ingest(EVENTS, bytes(olderBoot)));
+
+        read().andExpect(jsonPath("$.deviceErrors[*].errorCode").value(contains("POWER_FAULT")));
+    }
+
+    /** A replaced hub starts from no session: the errors of the disabled device are not the new one's. */
+    @Test
+    void aReplacedDeviceDoesNotInheritTheErrorsOfTheDisabledOne() throws Exception {
+        report("POWER_FAULT", "CRITICAL", null);
+        UUID original = jdbc.sql(
+                "SELECT id FROM aegis.locker_devices WHERE locker_id = :locker AND disabled_at IS NULL")
+                .param("locker", LOCKER).query(UUID.class).single();
+        UUID replacement = null;
+        try {
+            jdbc.sql("UPDATE aegis.locker_devices SET disabled_at = now() WHERE id = :id").param("id", original)
+                    .update();
+            replacement = jdbc.sql("""
+                    INSERT INTO aegis.locker_devices (locker_id, device_key, firmware_version, device_session_id,
+                                                      boot_count)
+                    VALUES (:locker, :key, 'test', :session, :boot)
+                    RETURNING id
+                    """).param("locker", LOCKER).param("key", "replacement-" + UUID.randomUUID())
+                    .param("session", session.deviceSessionId).param("boot", session.bootCount)
+                    .query(UUID.class).single();
+            read().andExpect(jsonPath("$.deviceErrors.length()").value(0));
+        } finally {
+            if (replacement != null) {
+                jdbc.sql("UPDATE aegis.locker_devices SET disabled_at = now() WHERE id = :id")
+                        .param("id", replacement).update();
+            }
+            jdbc.sql("UPDATE aegis.locker_devices SET disabled_at = NULL WHERE id = :id").param("id", original)
+                    .update();
+        }
+    }
+
     @Test
     void atMostTwentyGroupsAreListedAndTheOldestWarningsAreLeftOut() throws Exception {
         List<String> expected = new ArrayList<>();

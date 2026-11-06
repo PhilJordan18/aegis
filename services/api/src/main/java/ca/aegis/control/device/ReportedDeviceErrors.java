@@ -30,7 +30,8 @@ public class ReportedDeviceErrors {
      * The current session is the one of the active device's projection, since provisioning. A REJECTED row never
      * counts; a duplicate delivery is never stored (uq_inbound_messages_device_message). A row without a parsed
      * payload carries no readable code and is left out. A compartmentId that is not a cell of this locker reads as
-     * null, so the group stays visible without naming a foreign cell.
+     * null, so the group stays visible without naming a foreign cell. The text comparison cannot fail on a stored
+     * value that is not a UUID, which would otherwise break this read for good.
      */
     private static final String GROUPS = """
             WITH reports AS (
@@ -42,7 +43,7 @@ public class ReportedDeviceErrors {
                   ON m.locker_device_id = d.id
                  AND m.device_session_id = d.device_session_id AND m.boot_count = d.boot_count
                 LEFT JOIN aegis.compartments c
-                  ON c.locker_id = d.locker_id AND c.id = (m.parsed_payload ->> 'compartmentId')::uuid
+                  ON c.locker_id = d.locker_id AND c.id::text = m.parsed_payload ->> 'compartmentId'
                 WHERE d.locker_id = :locker AND d.disabled_at IS NULL
                   AND m.message_type = 'DEVICE_ERROR' AND m.processing_status <> 'REJECTED'
                   AND m.received_at >= d.provisioned_at AND m.parsed_payload IS NOT NULL
