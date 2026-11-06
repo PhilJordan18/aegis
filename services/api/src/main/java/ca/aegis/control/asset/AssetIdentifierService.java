@@ -24,22 +24,23 @@ class AssetIdentifierService {
 
     private final AssetRepository assets;
     private final AssetIdentifierRepository identifiers;
+    private final AssetCustodyRepository custody;
     private final CatalogAudit audit;
     private final Clock clock;
 
-    AssetIdentifierService(AssetRepository assets, AssetIdentifierRepository identifiers, CatalogAudit audit,
-            Clock clock) {
+    AssetIdentifierService(AssetRepository assets, AssetIdentifierRepository identifiers,
+            AssetCustodyRepository custody, CatalogAudit audit, Clock clock) {
         this.assets = assets;
         this.identifiers = identifiers;
+        this.custody = custody;
         this.audit = audit;
         this.clock = clock;
     }
 
     /**
      * An asset carries at most one active identifier of each type (decided on 28 October 2026): a new one revokes the previous
-     * one of its type in the same transaction, and both changes are audited. Locker operations do not exist yet; the
-     * slice that creates them must refuse here with {@code 409 ASSET_OPERATION_IN_PROGRESS} while a non-terminal
-     * operation concerns the asset.
+     * one of its type in the same transaction, and both changes are audited. A non-terminal locker operation on the
+     * asset refuses it with {@code 409 ASSET_OPERATION_IN_PROGRESS} (document 09, section 12.3).
      */
     @Transactional
     AssetIdentifierView assign(UUID assetId, AssetIdentifierRequest request, UUID actor) {
@@ -49,6 +50,7 @@ class AssetIdentifierService {
         if (asset.archived()) {
             throw new CatalogConflictException(ApiError.ASSET_ARCHIVED);
         }
+        refuseDuringOperation(assetId);
         if (identifiers.activeValueExists(type, request.value())) {
             throw new CatalogConflictException(ApiError.IDENTIFIER_ALREADY_ASSIGNED);
         }
@@ -70,8 +72,8 @@ class AssetIdentifierService {
 
     /**
      * Revocation keeps the row and its history. Revoking a revoked identifier returns it unchanged and is audited as
-     * already applied, like a repeated archival. Locker operations do not exist yet; the slice that creates them must
-     * refuse here while a physical operation uses this identifier.
+     * already applied, like a repeated archival. An active identifier is not revoked while a non-terminal locker
+     * operation concerns its asset (document 09, section 12.3): that operation's RFID proof relies on it.
      */
     @Transactional
     AssetIdentifierView revoke(UUID assetId, UUID identifierId, UUID actor) {
@@ -86,10 +88,17 @@ class AssetIdentifierService {
             audit.identifierRevoked(current, actor, now, true);
             return current;
         }
+        refuseDuringOperation(assetId);
         identifiers.revoke(identifierId, now);
         AssetIdentifierView revoked = identifiers.find(identifierId).orElseThrow();
         audit.identifierRevoked(revoked, actor, now, false);
         return revoked;
+    }
+
+    private void refuseDuringOperation(UUID assetId) {
+        custody.operationBlocker(assetId).ifPresent(blocker -> {
+            throw new CatalogConflictException(blocker);
+        });
     }
 
     private Instant now() {

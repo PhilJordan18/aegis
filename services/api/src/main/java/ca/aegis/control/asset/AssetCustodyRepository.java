@@ -42,6 +42,14 @@ class AssetCustodyRepository {
      * while the archival decides.
      */
     Optional<ApiError> archivalBlocker(UUID assetId) {
+        return custodyBlocker(assetId).or(() -> operationBlocker(assetId));
+    }
+
+    /**
+     * An active reservation, then an unfinished loan, locked after the asset row (document 08, section 7.1, rank 3).
+     * A placement change checks it before locking its compartments.
+     */
+    Optional<ApiError> custodyBlocker(UUID assetId) {
         if (exists("SELECT id FROM aegis.reservations WHERE asset_id = :id AND status = 'ACTIVE' FOR UPDATE",
                 assetId)) {
             return Optional.of(ApiError.ASSET_ALREADY_RESERVED);
@@ -51,6 +59,15 @@ class AssetCustodyRepository {
                 """, assetId)) {
             return Optional.of(ApiError.ASSET_HAS_OPEN_LOAN);
         }
+        return Optional.empty();
+    }
+
+    /**
+     * A non-terminal locker operation on the asset (document 08, section 7.1, rank 6, so after any compartment). It
+     * refuses an archival, a placement change and an identifier change (document 09, sections 12.2 to 12.4): the
+     * operation was decided on the asset's current placement and identifiers.
+     */
+    Optional<ApiError> operationBlocker(UUID assetId) {
         if (exists("""
                 SELECT id FROM aegis.locker_operations
                 WHERE asset_id = :id AND status NOT IN ('CONFIRMED', 'FAILED', 'EXPIRED', 'ANOMALY') FOR UPDATE
