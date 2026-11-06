@@ -6,3 +6,10 @@ export function equipmentHref({ page, assetId }: { readonly page: number; readon
   const query = params.toString()
   return query === '' ? '/equipements' : `/equipements?${query}`
 }
+
+/** Models view of the same page: `?vue=modeles`, one-based page. */
+export function modelsHref({ page }: { readonly page: number }): string {
+  const params = new URLSearchParams({ vue: 'modeles' })
+  if (page > 0) params.set('page', String(page + 1))
+  return `/equipements?${params.toString()}`
+}

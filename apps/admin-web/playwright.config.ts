@@ -16,7 +16,9 @@ const reducedMotion = process.env.AEGIS_MOTION === 'no-preference' ? 'no-prefere
  *   docs/design/manager-entree/captures/, the only path outside apps/admin-web
  *   this tooling writes to;
  * - `integration` (npm run capture:integration): the curated FR/EN captures of the
- *   integrated identity v3 in docs/design/manager-v3/captures-integration/.
+ *   integrated identity v3 in docs/design/manager-v3/captures-integration/;
+ * - `forms` (npm run test:forms): the proposed CAT-01 forms, axe, keyboard and 320 px; with
+ *   AEGIS_FORMS_CAPTURE=1 (npm run capture:forms) it writes the review batch to docs/design/manager-forms/captures/.
  * All start their own Vite dev server, where the design-review preview is enabled.
  */
 export default defineConfig({
@@ -40,6 +42,7 @@ export default defineConfig({
     { name: 'identity', testMatch: 'identity.spec.ts' },
     { name: 'evidence', testMatch: 'evidence.spec.ts' },
     { name: 'integration', testMatch: 'integration.spec.ts' },
+    { name: 'forms', testMatch: 'forms.spec.ts' },
   ],
   webServer: {
     command: `npm run dev -- --host 127.0.0.1 --port ${PORT} --strictPort`,

@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useRef, type Ref } from 'react'
+import { useId, useLayoutEffect, useRef, type ReactNode, type Ref } from 'react'
 import { useI18n } from '../../i18n/useI18n'
 import { ReadOnlyMark } from '../../ui/ReadOnlyMark'
 import { StatusChip } from '../../ui/StatusChip'
@@ -35,13 +35,15 @@ interface AssetDossierProps {
   readonly focusRef?: Ref<HTMLDivElement>
   readonly onRetry: () => void
   readonly onBack: () => void
+  /** Edit and archive commands, shown under the title for a unit that is not archived. */
+  readonly actions?: ReactNode
 }
 
 /**
- * Read-only dossier of one unit (handoff §3.1). The reasons are the server's non-personal diagnostic
+ * Dossier of one unit (handoff §3.1); its settings change through `actions`, never in place. The reasons are the server's non-personal diagnostic
  * as sent: the page shows no readiness verdict, no « ready » and no invented presence or compartment.
  */
-export function AssetDossier({ asset, loading, failure, stale, retrying, focusRef, onRetry, onBack }: AssetDossierProps) {
+export function AssetDossier({ asset, loading, failure, stale, retrying, focusRef, onRetry, onBack, actions }: AssetDossierProps) {
   const { m } = useI18n()
   const titleId = useId()
   const groupId = useId()
@@ -86,6 +88,7 @@ export function AssetDossier({ asset, loading, failure, stale, retrying, focusRe
           retrying={retrying}
           onRetry={onRetry}
           returnFocus={() => (focusLost.current = true)}
+          actions={actions}
         />
       </div>
     </section>
@@ -99,9 +102,10 @@ interface DossierBodyProps {
   readonly retrying: boolean
   readonly onRetry: () => void
   readonly returnFocus: () => void
+  readonly actions?: ReactNode
 }
 
-function DossierBody({ asset, titleId, stale, retrying, onRetry, returnFocus }: DossierBodyProps) {
+function DossierBody({ asset, titleId, stale, retrying, onRetry, returnFocus, actions }: DossierBodyProps) {
   const i18n = useI18n()
   const { m } = i18n
   const t = m.equipment
@@ -125,6 +129,15 @@ function DossierBody({ asset, titleId, stale, retrying, onRetry, returnFocus }: 
       </h2>
       {model !== '' && <p className="ag-dossier__sub">{model}</p>}
       {archived !== null && <p className="ag-dossier__sub">{archived}</p>}
+      {asset.archivedAt !== null ? (
+        <p className="ag-dossier__sub">{m.catalogEdit.archivedAssetNote}</p>
+      ) : (
+        actions !== undefined && (
+          <div className="ag-dossier__actions" role="group" aria-label={m.catalogEdit.assetActions}>
+            {actions}
+          </div>
+        )
+      )}
 
       <div className={`ag-diag ag-diag--${tone}`}>
         <p className="ag-overline">{t.diagnosticTitle}</p>
@@ -182,7 +195,6 @@ function DossierBody({ asset, titleId, stale, retrying, onRetry, returnFocus }: 
         <div>
           <h3 className="ag-overline ag-sec-title">
             {t.settings}
-            <ReadOnlyMark />
           </h3>
           <dl className="ag-facts">
             <div>
