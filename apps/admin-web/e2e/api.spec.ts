@@ -233,6 +233,7 @@ interface LiveStatus {
     lockState: string
     lastObservedAt: string | null
   }[]
+  deviceErrors: { errorCode: string; severity: string; compartmentId: string | null; occurrences: number }[]
 }
 
 // Test-side translation of the contract enumerations into the words the page must show (fr.ts `lockers`).
@@ -287,6 +288,19 @@ async function expectPageShows(page: Page, status: LiveStatus) {
     await expect(note).toContainText('Dernier état connu')
     await expect(panel.locator('table.ag-lk-table')).toHaveAttribute('aria-describedby', (await note.getAttribute('id')) ?? 'missing')
   } else await expect(note).toHaveCount(0)
+
+  // Reported device errors (#29, 09 §8.6): the same groups, in the server order, each with its code and count.
+  expect(Array.isArray(status.deviceErrors), 'deviceErrors is a required list (#142)').toBe(true)
+  const errors = panel.getByRole('region', { name: /erreurs? signalées?/ })
+  await expect(errors.getByRole('heading', { level: 3 })).toContainText(`${status.deviceErrors.length} erreur`)
+  await expect(errors.getByRole('listitem')).toHaveCount(status.deviceErrors.length)
+  for (const [index, error] of status.deviceErrors.entries()) {
+    await expect(errors.getByRole('listitem').nth(index)).toContainText(error.errorCode)
+    await expect(errors.getByRole('listitem').nth(index)).toContainText(`${error.occurrences} signalement`)
+  }
+  if (status.deviceErrors.length === 0) {
+    await expect(errors).toContainText(status.lastSeenAt === null ? 'Aucun signal reçu du casier' : 'Aucune erreur signalée depuis le dernier démarrage')
+  }
 
   const rows = panel.getByRole('row')
   await expect(rows).toHaveCount(status.compartments.length + 1)

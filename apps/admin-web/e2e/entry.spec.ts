@@ -447,7 +447,7 @@ test.describe('flow: casiers (production page, routed fakes)', () => {
   // Rendered evidence for the longest valid codes, long cell codes and faults, and the last-known note: the page never
   // scrolls sideways at 320 px, 390 px or at 200 % zoom (640x400). Numbers go to the log; shots and the accessibility read
   // go to test-results/casiers-reflow/ (ignored by Git).
-  for (const mode of ['code20', 'code24', 'long', 'codeUnbroken', 'offlineLong'] as const) {
+  for (const mode of ['code20', 'code24', 'long', 'codeUnbroken', 'offlineLong', 'offlineErrors'] as const) {
     for (const [width, height, label] of [[320, 720, '320'], [390, 844, '390'], [640, 400, 'zoom200']] as const) {
       test(`flow: reflow evidence, ${mode} at ${label}`, async ({ page }) => {
         await page.setViewportSize({ width, height })
