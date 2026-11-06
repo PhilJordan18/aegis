@@ -24,8 +24,8 @@ import ca.aegis.control.support.ApiIntegrationTest;
 
 /**
  * Document 09, sections 12.3 and 12.4: a placement change is refused while the asset is reserved, borrowed or in a
- * non-terminal locker operation, and an identifier change while it is in such an operation, with the codes of the
- * archival (section 12.2). A refusal changes no row and writes no audit event; terminal custody blocks nothing.
+ * non-terminal locker operation, an identifier assignment while it is in such an operation and the revocation of
+ * the identifier that operation expects, with the codes of the archival (section 12.2). A refusal changes no row and writes no audit event; terminal custody blocks nothing.
  */
 class CatalogCustodyGuardApiTests extends ApiIntegrationTest {
 
@@ -82,9 +82,12 @@ class CatalogCustodyGuardApiTests extends ApiIntegrationTest {
     void anIdentifierChangeIsRefusedWhileTheAssetIsInOperation() throws Exception {
         UUID asset = inOperation("AWAITING_LOCAL_PROOF");
         UUID rfid = activeRfid(asset);
+        String refusedKey = key();
 
-        expectProblem(assign(asset, "NFC", "NFC-" + UUID.randomUUID()), 409, "ASSET_OPERATION_IN_PROGRESS");
+        expectProblem(assign(asset, "NFC", "NFC-" + UUID.randomUUID(), refusedKey), 409,
+                "ASSET_OPERATION_IN_PROGRESS");
         expectProblem(assign(asset, "RFID_UHF", "E2-" + UUID.randomUUID()), 409, "ASSET_OPERATION_IN_PROGRESS");
+        // The operation expects this tag as its physical proof.
         expectProblem(revoke(asset, rfid), 409, "ASSET_OPERATION_IN_PROGRESS");
 
         assertEquals(1L, fixtures.count("SELECT count(*) FROM aegis.asset_identifiers WHERE asset_id = :id", asset));
@@ -95,18 +98,23 @@ class CatalogCustodyGuardApiTests extends ApiIntegrationTest {
                 SELECT count(*) FROM aegis.audit_events
                 WHERE subject_id IN (SELECT id FROM aegis.asset_identifiers WHERE asset_id = :id)
                 """, asset));
+        assertEquals(0L, jdbc.sql("SELECT count(*) FROM aegis.rest_idempotency_keys WHERE idempotency_key = :key")
+                .param("key", refusedKey).query(Long.class).single());
+    }
+
+    @Test
+    void anotherIdentifierOfTheAssetStaysRevocableDuringAnOperation() throws Exception {
+        UUID asset = inOperation("REQUESTED");
+        UUID nfc = identifier(asset, true);
+
+        revoke(asset, nfc).andExpect(status().isOk()).andExpect(jsonPath("$.active").value(false));
+        expectProblem(revoke(asset, activeRfid(asset)), 409, "ASSET_OPERATION_IN_PROGRESS");
     }
 
     @Test
     void anAlreadyRevokedIdentifierStaysRevocableDuringAnOperation() throws Exception {
         UUID asset = inOperation("REQUESTED");
-        UUID revoked = jdbc.sql("""
-                INSERT INTO aegis.asset_identifiers (asset_id, identifier_type, identifier_value, active,
-                                                     assigned_at, revoked_at)
-                VALUES (:asset, 'NFC', :value, false, :past, :past)
-                RETURNING id
-                """).param("asset", asset).param("value", "NFC-" + UUID.randomUUID())
-                .param("past", ReservationFixtures.utc(ReservationFixtures.PAST)).query(UUID.class).single();
+        UUID revoked = identifier(asset, false);
 
         revoke(asset, revoked).andExpect(status().isOk()).andExpect(jsonPath("$.active").value(false));
     }
@@ -130,6 +138,17 @@ class CatalogCustodyGuardApiTests extends ApiIntegrationTest {
                 START.minusSeconds(60));
         fixtures.checkout(asset, holder, expired, status, START.minusSeconds(120));
         return asset;
+    }
+
+    /** An NFC identifier of {@code asset}, active or already revoked, assigned before the test clock. */
+    private UUID identifier(UUID asset, boolean active) {
+        return jdbc.sql("""
+                INSERT INTO aegis.asset_identifiers (asset_id, identifier_type, identifier_value, active,
+                                                     assigned_at, revoked_at)
+                VALUES (:asset, 'NFC', :value, :active, :past, CASE WHEN :active THEN NULL ELSE :past END)
+                RETURNING id
+                """).param("asset", asset).param("value", "NFC-" + UUID.randomUUID()).param("active", active)
+                .param("past", ReservationFixtures.utc(ReservationFixtures.PAST)).query(UUID.class).single();
     }
 
     private UUID freeCompartment() {
@@ -161,8 +180,12 @@ class CatalogCustodyGuardApiTests extends ApiIntegrationTest {
     }
 
     private ResultActions assign(UUID asset, String type, String value) throws Exception {
+        return assign(asset, type, value, key());
+    }
+
+    private ResultActions assign(UUID asset, String type, String value, String idempotencyKey) throws Exception {
         return mvc.perform(post(ASSETS + asset + "/identifiers").header(AUTHORIZATION, bearer(admin))
-                .header("Idempotency-Key", key()).contentType(MediaType.APPLICATION_JSON)
+                .header("Idempotency-Key", idempotencyKey).contentType(MediaType.APPLICATION_JSON)
                 .content(jsonMapper.writeValueAsString(Map.of("type", type, "value", value))));
     }
 

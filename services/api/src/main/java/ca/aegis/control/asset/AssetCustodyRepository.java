@@ -68,10 +68,25 @@ class AssetCustodyRepository {
      * operation was decided on the asset's current placement and identifiers.
      */
     Optional<ApiError> operationBlocker(UUID assetId) {
-        if (exists("""
-                SELECT id FROM aegis.locker_operations
-                WHERE asset_id = :id AND status NOT IN ('CONFIRMED', 'FAILED', 'EXPIRED', 'ANOMALY') FOR UPDATE
-                """, assetId)) {
+        return blockingOperation("asset_id = :id", assetId);
+    }
+
+    /**
+     * A non-terminal locker operation that expects this identifier as its physical proof (document 09, section
+     * 12.3: revocation is refused "pendant une opération physique utilisant cet identifiant").
+     */
+    Optional<ApiError> operationUsingIdentifier(UUID identifierId) {
+        return blockingOperation("expected_asset_identifier_id = :id", identifierId);
+    }
+
+    /**
+     * {@code FOR NO KEY UPDATE}, as in {@code command/**}: device ingestion holds a {@code KEY SHARE} lock on the
+     * operation through the inbound message foreign key, then updates compartments, so {@code FOR UPDATE} taken
+     * after a compartment lock could deadlock with it. This mode still serializes every writer of the operation.
+     */
+    private Optional<ApiError> blockingOperation(String condition, UUID id) {
+        if (exists("SELECT id FROM aegis.locker_operations WHERE " + condition
+                + " AND status NOT IN ('CONFIRMED', 'FAILED', 'EXPIRED', 'ANOMALY') FOR NO KEY UPDATE", id)) {
             return Optional.of(ApiError.ASSET_OPERATION_IN_PROGRESS);
         }
         return Optional.empty();

@@ -73,7 +73,8 @@ class AssetIdentifierService {
     /**
      * Revocation keeps the row and its history. Revoking a revoked identifier returns it unchanged and is audited as
      * already applied, like a repeated archival. An active identifier is not revoked while a non-terminal locker
-     * operation concerns its asset (document 09, section 12.3): that operation's RFID proof relies on it.
+     * operation expects it as its physical proof (document 09, section 12.3); another identifier of the asset stays
+     * revocable.
      */
     @Transactional
     AssetIdentifierView revoke(UUID assetId, UUID identifierId, UUID actor) {
@@ -88,7 +89,9 @@ class AssetIdentifierService {
             audit.identifierRevoked(current, actor, now, true);
             return current;
         }
-        refuseDuringOperation(assetId);
+        custody.operationUsingIdentifier(identifierId).ifPresent(blocker -> {
+            throw new CatalogConflictException(blocker);
+        });
         identifiers.revoke(identifierId, now);
         AssetIdentifierView revoked = identifiers.find(identifierId).orElseThrow();
         audit.identifierRevoked(revoked, actor, now, false);

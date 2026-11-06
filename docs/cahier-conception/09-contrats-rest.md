@@ -14,7 +14,7 @@
 **Mise à jour ciblée :** 28 octobre 2026 — sous-objets `AssetModelSummary`, `CalibrationView` et `PlacementSummary` de `AssetView` (§8.2); sérialisation existante documentée; code `404 ASSET_NOT_FOUND` de §11.2 ajouté à §21 (#33, #34)  
 **Mise à jour ciblée :** 28 octobre 2026 — décisions de Philippe pour #33 et #34 : ordre stable des raisons et raison principale choisie par la convention de présentation, jamais par `reasons[0]` (§8.1); actif archivé exclu de la liste mais lisible par son identifiant (§11.1, §11.2)  
 **Mise à jour ciblée :** 28 octobre 2026 — réservation (RES-01, #37), décisions de Philippe du 28 octobre 2026 : ordre des contrôles implémenté, `reservedUntil` non postérieur à l’instant courant, locker sans horaire, horaire du placement courant et actif inconnu (§14.1); `availableActions` vide tant que ses actions ne sont pas implémentées (§8.10); codes de refus de l’archivage (§12.2); `ACTIVE_RESERVATION_NOT_FOUND` et `ASSET_OPERATION_IN_PROGRESS` ajoutés à §21  
-**Mise à jour ciblée :** 6 novembre 2026 — refus du catalogue liés à la garde de l’actif (#26) : placement refusé pendant une réservation active, un prêt ouvert ou une opération non terminale, identifiant refusé pendant une opération non terminale, avec les codes de l’archivage (§12.3, §12.4, §21); aucun code ni champ nouveau
+**Mise à jour ciblée :** 6 novembre 2026 — refus du catalogue liés à la garde de l’actif (#26) : placement refusé pendant une réservation active, un prêt ouvert ou une opération non terminale, attribution refusée pendant une opération non terminale et révocation de l’identifiant qu’elle attend, avec les codes de l’archivage (§12.3, §12.4, §21); aucun code ni champ nouveau
 
 ---
 
@@ -911,7 +911,10 @@ POST /admin/assets/{assetId}/identifiers/{identifierId}/revoke exige une clé d�
 - Révoquer un identifiant déjà révoqué suit la règle d’archivage répété de §12.1 : `200` avec la représentation courante, `revokedAt` conservé et un événement de résultat `ALREADY_APPLIED`.
 - Audit, avec `subjectType` `ASSET_IDENTIFIER` : une attribution écrit `ASSET_IDENTIFIER_ASSIGNED`. Le document 08 n’ayant pas de type de révocation, une révocation écrit `ASSET_UPDATED`. Un rejeu de même clé et une mutation refusée n’écrivent aucun événement.
 - L’archivage d’un actif (§12.2) révoque ses identifiants actifs dans la même transaction, sans supprimer leur historique, et écrit un événement `ASSET_UPDATED` par identifiant révoqué.
-- Une opération physique non terminale sur l’actif (état autre que `CONFIRMED`, `FAILED`, `EXPIRED` ou `ANOMALY`) refuse l’attribution et la révocation d’un identifiant actif par `409 ASSET_OPERATION_IN_PROGRESS`, sans écriture ni événement : l’opération a été décidée sur ses identifiants. Révoquer un identifiant déjà révoqué reste le cas d’archivage répété ci-dessus. Le contrôle suit le refus `ASSET_ARCHIVED` et précède `IDENTIFIER_ALREADY_ASSIGNED` (#26, 6 novembre 2026).
+- `409 ASSET_OPERATION_IN_PROGRESS`, sans écriture ni événement (#26, 6 novembre 2026). Une opération est non terminale dans un état autre que `CONFIRMED`, `FAILED`, `EXPIRED` ou `ANOMALY`.
+  - **Attribution :** refusée pendant toute opération physique non terminale sur l’actif. Ce contrôle suit `ASSET_ARCHIVED` et précède `IDENTIFIER_ALREADY_ASSIGNED`.
+  - **Révocation :** refusée seulement pour l’identifiant qu’une opération non terminale attend comme preuve (`expected_asset_identifier_id`). Un autre identifiant du même actif reste révocable.
+  - **Identifiant déjà révoqué :** sa révocation reste le cas d’archivage répété ci-dessus.
 
 ### 12.4 Placement attendu
 
