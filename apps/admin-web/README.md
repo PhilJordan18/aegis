@@ -346,6 +346,27 @@ avis de données périmées (`StaleNotice`) sont ceux d'Équipements.
   `test-results/live/` (1440 clair, 390 sombre). Comme le reste du fichier, il
   échoue sans API. Le limiteur de débit de l'API compte chaque connexion : ne pas
   enchaîner deux exécutions en moins d'une minute.
+- **Erreurs signalées** (`deviceErrors`, 09 §8.6, après #142) : une section après
+  les cellules liste, dans l'ordre du serveur, au plus 20 groupes. Chaque groupe
+  affiche sa gravité (pastille avec symbole), son libellé et son code, la cellule
+  ou « Casier entier », le nombre de signalements et les heures de première et de
+  dernière réception. Une erreur signalée n'est pas forcément une panne en cours :
+  elle ne change ni la connexion, ni les cellules, ni la disponibilité, ni aucune
+  action. Hors `ONLINE`, une note dit que la liste peut ne plus refléter l'état du
+  casier. Liste vide : « Aucune erreur signalée depuis le dernier démarrage » ou,
+  sans aucun signal, « Aucun signal reçu du casier ». Une réponse sans
+  `deviceErrors` est hors contrat. Un code inconnu reste affiché brut avec « Code
+  non reconnu par cette version de Manager »; une gravité inconnue, « État
+  indisponible ».
+- **Parcours réel broker → API → Manager** :
+  `apps/admin-web/scripts/check-device-errors-live.sh`, depuis la racine du dépôt,
+  environ 4 minutes, avec Docker. Il démarre PostgreSQL, Mosquitto et l'API
+  (`AEGIS_API_JAR`, une API qui sert `deviceErrors`) dans un projet Compose
+  jetable, sur leurs propres ports. Il fait jouer au simulateur de hub
+  `invalid-inbound-local.json`, puis lance la recette `?casier=` avec
+  `AEGIS_LIVE_EXPECT_DEVICE_ERRORS` : W1 exige une liste non vide identique à
+  l'API; W2, 31 s après l'arrêt du hub, exige `OFFLINE`, les mêmes groupes et la
+  note. Le hub est simulé.
 
 ## Routage
 
