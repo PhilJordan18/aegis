@@ -32,6 +32,7 @@ A2 = "5c1d0b7e-2f4a-4d3b-9a61-0e8b7c2d4f10"
 # Tags placed by tools/hub-simulator/scenarios/presence-demo-local.json.
 TAG_A1 = "E20034120123456789000001"
 TAG_A2 = "E20034120123456789000002"
+TAG_EXTRA = "E2003412012345678900ABCD"
 STATE = os.path.join(os.environ.get("RECETTE_DIR", "."), "state.json")
 
 ROUTE_CHARACTERS = set("abcdefghijklmnopqrstuvwxyz0123456789-")
@@ -222,6 +223,21 @@ def schedule(enabled_today):
          "closesAt": "23:59" if enabled_today else None} for day in days]}
 
 
+def custody_guards(admin, asset1):
+    # Only the reservation case is reachable over HTTP and MQTT: an open loan or a non-terminal
+    # operation needs the withdrawal chain (#43-#47), so those refusals stay proven by fixtures.
+    status, body = call("PUT", f"/admin/assets/{asset1}/placement", admin, {"compartmentId": A2, "reason": "Recette R9"})
+    check("R9.1 placement change while reserved is refused for the reservation first",
+          status == 409 and code_of(body) == "ASSET_ALREADY_RESERVED", f"HTTP {status} {code_of(body)}")
+    status, body = call("POST", f"/admin/assets/{asset1}/identifiers", admin, {"type": "RFID_UHF", "value": TAG_EXTRA}, True)
+    check("R9.2 identifier assignment stays allowed while only reserved", status == 201, f"HTTP {status} {code_of(body)}")
+    status, body = call("PUT", f"/admin/assets/{asset1}/placement", admin, {"compartmentId": A1, "reason": "Recette R9"})
+    check("R9.3 a PUT to the current compartment stays a no-op", status == 200, f"HTTP {status} {code_of(body)}")
+    _, lockers = call("GET", "/admin/lockers", admin)
+    occupants = {c["code"]: (c.get("currentAsset") or {}).get("id") for c in lockers["items"][0]["compartments"]}
+    check("R9.4 P1 still shows asset 1 in A1 after the refused move", occupants.get("A1") == asset1, f"{occupants}")
+
+
 def physical_phase(admin, tech):
     with open(STATE, encoding="utf-8") as source:
         state = json.load(source)
@@ -272,6 +288,9 @@ def physical_phase(admin, tech):
     _, view = tech_asset(tech, asset1)
     check("R5.3 the asset reads RESERVED", view["availability"] == "RESERVED",
           f"availability={view['availability']} readiness={view['readiness']['result']} {view['readiness']['reasons']}")
+
+    if reservation_ok:
+        custody_guards(admin, asset1)
 
     pid = int(os.environ["RECETTE_SIM_PID"])
     os.kill(pid, signal.SIGSTOP)

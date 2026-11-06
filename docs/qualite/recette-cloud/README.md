@@ -36,7 +36,7 @@ Maven restent ceux de la CI.
 3. **Phase catalogue** (`checks.py`, `RECETTE_PHASE=catalog`) : contrôles R1 et R2.
 4. **Hub simulé.** Le simulateur exécute `scenarios/presence-demo-local.json` : 30 s en
    ligne, puis les étiquettes de A1 et A2 sont posées et scannées.
-5. **Phase physique** (`RECETTE_PHASE=physical`) : contrôles R3 à R6.
+5. **Phase physique** (`RECETTE_PHASE=physical`) : contrôles R3 à R6 et R9.
 6. **Fin.** Le script affiche `RECETTE: all checks passed` ou le nombre d'échecs, et son
    code de sortie est ce nombre. Les journaux de l'API et du simulateur restent dans le
    dossier temporaire affiché.
@@ -66,10 +66,17 @@ Maven restent ceux de la CI.
 | R8.2, R8.5 | lectures P1 et P2 par le technicien | `403 FORBIDDEN` |
 | R8.3 | lecture P2 `GET /admin/assets/{id}/identifiers` | l'étiquette liée, active |
 | R8.4 | révocation, puis la même étiquette liée de nouveau | `200`, puis `201` ; l'historique garde la révoquée (`revokedAt`), l'active d'abord ; le scan R4.2 reconnaît ensuite l'étiquette liée de nouveau |
+| R9.1 | déplacement d’un actif réservé (#133) | `409 ASSET_ALREADY_RESERVED`, avant le contrôle d’occupation (ordre approuvé le 6 nov.) |
+| R9.2 | nouvel identifiant sur un actif seulement réservé | `201` : seule une opération non terminale bloque l’attribution |
+| R9.3 | placement inchangé (même cellule) | `200`, sans effet |
+| R9.4 | lecture P1 après le refus | l’actif reste en A1 |
 | R7 | corpus partagé de recherche `q` (#109), s'il est sur la branche | chaque cas donne `200` (`VALID`) ou `400` avec la violation `q` attendue (`SIZE`, `INVALID_VALUE`), document 09, §22.3 ; sinon `SKIP` |
 
 ## Preuve du 6 novembre 2026
 
+- **Recette consolidée, sur `dev` `60ccc35`** (après #131, #133, #137 et #139), API
+  reconstruite : **36 contrôles sur 36 réussis en 100 s**, dont R7 (44 cas sur 44), R8 et
+  R9.
 - **Après #134, sur `dev` `644cced`** : 31 contrôles sur 31 réussis en 105 s, R8 compris.
   R7 est sauté, le corpus de #109 n'étant pas encore sur `dev`.
 
@@ -98,6 +105,7 @@ Maven restent ceux de la CI.
 |---|---|
 | PostgreSQL, migrations Flyway, Spring, authentification JWT, broker Mosquitto avec ACL et comptes | **réels** |
 | Hub | **simulé** (`tools/hub-simulator`) : aucune preuve matérielle |
+| Refus de garde liés à un **prêt ouvert** ou à une **opération non terminale** (#133) | **fixtures seulement** (`CatalogCustodyGuardApiTests`) : sans chaîne de retrait (#43 à #47), aucun prêt ni aucune opération ne peut être créé par HTTP ou MQTT. R9 ne prouve que le cas de la réservation |
 | Interface Manager | **non exercée** : la recette appelle les mêmes routes REST que le Manager. Les écrans restent à recevoir et à vérifier (#25, #26, #28) |
 
 Les contrôles R4 et R6 prouvent le traitement serveur des messages du hub, pas le lecteur
