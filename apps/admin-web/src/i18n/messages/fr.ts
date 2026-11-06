@@ -224,6 +224,14 @@ export const fr = {
     nextPage: 'Suivant',
     pageOf: ({ page, pages }: { page: number; pages: number }) => `Page ${count.format(page)} sur ${count.format(pages)}`,
 
+    searchLabel: 'Rechercher un exemplaire',
+    searchHelp: 'Code ou nom du modèle, sans tenir compte de la casse.',
+    searchSubmit: 'Rechercher',
+    searchClear: 'Tout afficher',
+    searchTooLong: ({ max }: { max: number }) => `La recherche compte au plus ${max} caractères.`,
+    searchInvalid: 'La recherche contient un caractère non autorisé (tabulation, saut de ligne ou caractère de contrôle).',
+    searchEmptyTitle: ({ search }: { search: string }) => `Aucun exemplaire ne correspond à «${NBSP}${search}${NBSP}».`,
+    searchEmptyBody: 'Vérifiez le code ou le nom du modèle, ou affichez tous les exemplaires.',
     emptyTitle: 'Aucun exemplaire.',
     emptyBody: "Dès qu'un exemplaire est enregistré, il apparaît ici avec son diagnostic opérationnel.",
 

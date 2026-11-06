@@ -86,6 +86,8 @@ export interface AssetListQuery {
   readonly page: number
   readonly size: number
   readonly sort: `${AssetSortField},${'asc' | 'desc'}`
+  /** Search on code and model name (§22.3), already trimmed and valid (`readSearchText`); absent means no filter. */
+  readonly q?: string
 }
 
 export const DEFAULT_PAGE_SIZE = 20

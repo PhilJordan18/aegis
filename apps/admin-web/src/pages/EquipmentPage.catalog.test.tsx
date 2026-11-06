@@ -464,8 +464,10 @@ describe('Équipements — commands', () => {
     renderEquipment(fakeCatalogGateway({ pages: [ok(pageOf([MM001]))], units: { [MM001.id]: ok(MM001) } }))
     await screen.findByRole('heading', { level: 2, name: /Multimètre 1 · MM-001/ })
     const main = screen.getByRole('main')
-    expect(within(main).getAllByRole('button').map((button) => plain(button.textContent))).toEqual(['Nouvel exemplaire', 'Modifier', 'Archiver'])
+    expect(within(main).getAllByRole('button').map((button) => plain(button.textContent))).toEqual(['Nouvel exemplaire', 'Rechercher', 'Modifier', 'Archiver'])
+    // The only text input is the search, which filters the list and sets nothing.
     expect(within(main).queryAllByRole('textbox')).toEqual([])
+    expect(within(main).getAllByRole('searchbox').map((input) => input.getAttribute('id') !== null)).toEqual([true])
     expect(within(main).queryAllByRole('combobox')).toEqual([])
   })
 })

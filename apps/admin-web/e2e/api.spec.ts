@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { expect, test, type APIRequestContext, type Page, type Request } from '@playwright/test'
 
@@ -195,10 +196,10 @@ test('an administrator opens Équipements, sees the units from the API and opens
   await expect(dossier).toContainText(/15\sjanv\.\s2027,\s00\sh\s00\sHNE/)
   await expect(dossier).toContainText('America/Toronto')
   await expect(page.locator('main')).not.toContainText(/\bPrêt\b/)
-  // The only commands are create, edit and archive (CAT-01 forms); readiness is never a control. The kept database
-  // may hold more than one page, whose pager has buttons.
+  // The only commands are create, edit and archive (CAT-01 forms), plus the search submit (#109); readiness is never a
+  // control. The kept database may hold more than one page, whose pager has buttons.
   const pagerButtons = await page.getByRole('navigation', { name: 'Pagination des exemplaires' }).getByRole('button').count()
-  await expect(page.locator('main').getByRole('button')).toHaveCount(pagerButtons + 3)
+  await expect(page.locator('main').getByRole('button')).toHaveCount(pagerButtons + 4)
   await expect(page.getByRole('group', { name: 'Actions de l’exemplaire' }).getByRole('button')).toHaveText(['Modifier', 'Archiver'])
 
   // Clicking a listed unit selects it through the address and reads it by id.
@@ -591,3 +592,84 @@ async function pageToModel(page: Page, name: string) {
     await page.waitForLoadState('networkidle')
   }
 }
+
+interface CorpusPart {
+  readonly text: string
+  readonly times?: number
+}
+interface CorpusCase {
+  readonly id: string
+  readonly parts: readonly CorpusPart[]
+  readonly trimmed?: readonly CorpusPart[]
+  readonly result: 'VALID' | 'SIZE' | 'INVALID_VALUE'
+}
+const CORPUS = JSON.parse(readFileSync(fileURLToPath(new URL('../../../docs/cahier-conception/09-corpus-recherche-q.json', import.meta.url)), 'utf8')) as {
+  readonly cases: readonly CorpusCase[]
+}
+const joinParts = (parts: readonly CorpusPart[]) => parts.map((part) => part.text.repeat(part.times ?? 1)).join('')
+
+test('search q (09 §22.3, ADR-014): the API agrees with the Web reading of every corpus case, and the page filters through it', async ({ page, request }) => {
+  test.setTimeout(150_000)
+  const stamp = Date.now()
+  const requests = apiRequests(page)
+  const accessToken = await signInWhenAllowed(page)
+  await expect(page).toHaveURL(/\/equipements$/)
+  const auth = { Authorization: `Bearer ${accessToken}` }
+
+  // Each case as the Web client handles it: a VALID case is sent trimmed (searchText.test.ts proves this reading),
+  // a refused one is never sent, so the raw input goes straight to the API, which must refuse it with the same code.
+  expect(CORPUS.cases).toHaveLength(44)
+  for (const entry of CORPUS.cases) {
+    const sent = entry.result === 'VALID' ? joinParts(entry.trimmed ?? entry.parts) : joinParts(entry.parts)
+    const response = await request.get('/api/v1/admin/assets', { headers: auth, params: { q: sent, size: '1' } })
+    if (entry.result === 'VALID') {
+      expect(response.status(), entry.id).toBe(200)
+    } else {
+      expect(response.status(), entry.id).toBe(400)
+      const problem = (await response.json()) as { code: string; violations?: { field: string; code: string }[] }
+      expect(problem.code, entry.id).toBe('VALIDATION_ERROR')
+      expect(problem.violations?.map(({ field, code }) => ({ field, code })), entry.id).toEqual([{ field: 'q', code: entry.result }])
+    }
+  }
+
+  // The page: a unit of this run, found by a padded, mixed-case search, with q sent trimmed and kept in the address.
+  const code = `SRCH-${stamp}`
+  const model = await request.post('/api/v1/admin/asset-models', {
+    headers: { ...auth, 'Idempotency-Key': randomUUID() },
+    data: { name: `Recherche E2E ${stamp}`, manufacturer: null, modelNumber: null, description: null, defaultCalibrationRequired: false },
+  })
+  expect(model.status()).toBe(201)
+  const { id: assetModelId } = (await model.json()) as { id: string }
+  const created = await request.post('/api/v1/admin/assets', {
+    headers: { ...auth, 'Idempotency-Key': randomUUID() },
+    data: { assetModelId, assetCode: code, serialNumber: null, requiredAccessLevel: 'STANDARD', operationalStatus: 'SERVICEABLE', calibrationRequired: false, calibrationDueAt: null },
+  })
+  expect(created.status()).toBe(201)
+
+  const search = page.getByRole('search', { name: 'Rechercher un exemplaire' })
+  const listed = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/v1/admin/assets' && new URL(response.url()).searchParams.has('q'))
+  await search.getByRole('searchbox').fill(`\u3000 ${code.toLowerCase()}\u00A0`)
+  await search.getByRole('button', { name: 'Rechercher' }).click()
+  const response = await listed
+  expect(response.status()).toBe(200)
+  expect(new URL(response.url()).searchParams.getAll('q')).toEqual([code.toLowerCase()])
+  await expect(page).toHaveURL(new RegExp(`recherche=${code.toLowerCase()}`))
+  await expect(page.getByRole('heading', { level: 2, name: '1 exemplaire' })).toBeVisible()
+  await expect(page.locator('.ag-list__items a')).toHaveCount(1)
+  await expect(page.locator('.ag-list__items a').first()).toContainText(code)
+
+  // A refused search stays on the page: no request carries it.
+  const before = requests.length
+  await search.getByRole('searchbox').fill('a'.repeat(101))
+  await search.getByRole('button', { name: 'Rechercher' }).click()
+  await expect(search.getByRole('searchbox')).toBeFocused()
+  await expect(search.getByRole('searchbox')).toHaveAttribute('aria-invalid', 'true')
+  expect(requests.slice(before).filter((candidate) => new URL(candidate.url()).searchParams.get('q')?.startsWith('aaa'))).toEqual([])
+
+  // Tout afficher drops q (the unfiltered first page may come from the query cache, read at sign-in).
+  await search.getByRole('button', { name: 'Tout afficher' }).click()
+  await expect(page).not.toHaveURL(/recherche=/)
+  await expect(search.getByRole('searchbox')).toHaveValue('')
+  await expect(search.getByRole('button', { name: 'Tout afficher' })).toHaveCount(0)
+  await expect(page.locator('.ag-list__items a').first()).toBeVisible()
+})

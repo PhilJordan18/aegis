@@ -86,6 +86,24 @@ for (const theme of ['light', 'dark'] as const) {
         await expect(page.getByRole('button', { name: 'Nouvel exemplaire' })).toBeFocused()
       })
 
+      test('unit search: a search over 100 graphemes is refused on its field, without a request', async ({ page }) => {
+        const searched: string[] = []
+        page.on('request', (request) => {
+          const q = new URL(request.url()).searchParams.get('q')
+          if (q !== null) searched.push(q)
+        })
+        await start(page)
+        const search = page.getByRole('search', { name: 'Rechercher un exemplaire' })
+        await search.getByRole('searchbox').fill('a'.repeat(101))
+        await search.getByRole('button', { name: 'Rechercher' }).click()
+        await expect(search.getByRole('searchbox')).toBeFocused()
+        await expect(search.getByRole('searchbox')).toHaveAttribute('aria-invalid', 'true')
+        expect(searched).toEqual([])
+        await expectNoAxeViolations(page)
+        await expectNoHorizontalScroll(page)
+        await shot(page, `unit-search-error-${suffix}`)
+      })
+
       test('archive confirmation: Cancel first, then the refusal explained by its code', async ({ page }) => {
         await start(page)
         await page.getByRole('group', { name: 'Actions de l’exemplaire' }).getByRole('button', { name: 'Archiver' }).click()

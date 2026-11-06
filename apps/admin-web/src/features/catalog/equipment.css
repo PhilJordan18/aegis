@@ -135,3 +135,9 @@ a.ag-item:hover { background: var(--ag-field); }
   .ag-model { grid-template-columns: minmax(0, 1fr); }
   .ag-model__actions { justify-content: flex-start; }
 }
+
+/* Search above the units (09 §22.3): the approved field, its buttons on the same line, below it under 560 px. */
+.ag-search { margin-bottom: 4px; max-width: 720px; }
+.ag-search__row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ag-search__row .ag-ff__control { flex: 1 1 240px; }
+.ag-search__actions { display: flex; flex-wrap: wrap; gap: 8px; }
