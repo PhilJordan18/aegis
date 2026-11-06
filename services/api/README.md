@@ -768,6 +768,16 @@ route de lecture : le script le lit dans une transaction PostgreSQL en
 lecture seule. Une API, un broker ou une base absente fait échouer la
 recette. La fiche manuelle est `docs/qualite/recette-presence-reservation.md`.
 
+Un second démarrage qui reprend le `bootCount` courant avec un autre
+`deviceSessionId` (document 10, section 15.3, R2) laisse la présence du casier
+`UNKNOWN` jusqu'à un `bootCount` supérieur, même après un nouveau scan du même
+démarrage. `scripts/check-presence-twin.sh`, lancé depuis la racine du dépôt,
+le vérifie en environ 2 minutes sur un projet Compose jetable : deux
+simulateurs partagent le compte du casier de démonstration et démarrent au même
+`bootCount`. Les quatre contrôles T1 à T4 doivent afficher `PASS` et le code de
+sortie est le nombre d'échecs. La preuve est simulée; elle ne qualifie pas le
+lecteur RFID réel.
+
 ## Rôles PostgreSQL
 
 Le document 08, section 12.1, sépare le propriétaire des migrations du rôle
