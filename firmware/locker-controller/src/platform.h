@@ -27,6 +27,10 @@ class Transport {
   virtual void connect(const Message& will) = 0;
   // False when the message could not be handed to the client.
   virtual bool publish(const Message& message) = 0;
+  // Asks the broker for `topic`; false when the client refused it.
+  virtual bool subscribe(const char* topic, int qos) = 0;
+  // Next received message, false when none is waiting. `retain` is the flag of the received message.
+  virtual bool pollMessage(Message* out) = 0;
   // Drops the connection without a DISCONNECT, so the broker publishes the Will.
   virtual void abort() = 0;
   virtual Event pollEvent() = 0;
@@ -45,6 +49,10 @@ class Platform {
   // Persists the incremented boot counter before returning it (doc 10 §8.1).
   virtual bool incrementBootCount(uint32_t* bootCount) = 0;
   virtual const char* resetReason() = 0;  // controlled value of doc 10 §13.1
+  // Durable slots of the command journal (doc 10 §16.1), one record per slot so a write wears
+  // one flash entry only. Read returns false for a missing record or one of another size.
+  virtual bool journalRead(size_t slot, void* buf, size_t len) = 0;
+  virtual bool journalWrite(size_t slot, const void* buf, size_t len) = 0;
   virtual void log(const char*) {}
 };
 
