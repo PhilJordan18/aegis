@@ -230,7 +230,7 @@ l'onglet « Mon activité » sont décrits plus bas (#37, #38).
 |---|---|
 | Chargement | Cartes neutres, sans couleur d'état |
 | Liste | Pile de navigation native; une carte ouvre la fiche, retour natif; pages de 20, la suivante en fin de liste; tirer pour actualiser |
-| Recherche | `q` sans espaces de bord, 1 à 100 caractères (UTF-16), jamais envoyé vide; appliquée à la validation, retirée quand le champ est vidé |
+| Recherche | `q` sans séparateurs Unicode de bord (catégorie Z), jamais envoyé vide ni tronqué; le serveur compte 1 à 100 graphèmes et refuse les caractères de contrôle (ADR-014, corpus `docs/cahier-conception/09-corpus-recherche-q.json`), un refus `400` suit le traitement générique; appliquée à la validation, retirée quand le champ est vidé |
 | Filtres | Tous / Prêt / Bloqué / À vérifier envoient rien / `READY` / `BLOCKED` / `UNKNOWN`; cibles de 44 pt; menu « Filtre : Tous » aux tailles d'accessibilité |
 | Vide | « Aucun équipement ne correspond. » avec « Effacer les filtres », ou « Aucun équipement n'est encore disponible. » sans filtre |
 | Erreur sans liste | Message contrôlé (réseau, service avec identifiant de suivi, 403) et Réessayer |

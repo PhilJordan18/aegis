@@ -112,11 +112,10 @@ final class CatalogViewModel {
         appliedSearch = AssetQuery.normalizedSearch(searchText)
     }
 
-    /// Keeps the field within the contract limit; an emptied field shows the
-    /// whole catalogue again without waiting for a submission.
+    /// An emptied field shows the whole catalogue again without waiting for a
+    /// submission. The field is never truncated, so text being composed is
+    /// never cut (§22.3, ADR-014).
     func searchTextChanged() {
-        let limited = AssetQuery.limited(searchText)
-        if limited != searchText { searchText = limited }
         if AssetQuery.normalizedSearch(searchText) == nil { appliedSearch = nil }
     }
 

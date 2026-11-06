@@ -149,11 +149,12 @@ struct CatalogViewModelTests {
         #expect(service.queries.allSatisfy { $0.search == nil })
     }
 
-    @Test func searchFieldIsCappedAtTheContractLimit() {
+    @Test func searchFieldIsNeverTruncated() {
         let model = model()
-        model.searchText = String(repeating: "x", count: 130)
+        let long = String(repeating: "x", count: 130) + "e\u{0301}"
+        model.searchText = long
         model.searchTextChanged()
-        #expect(model.searchText.count == 100)
+        #expect(Array(model.searchText.unicodeScalars) == Array(long.unicodeScalars))
     }
 
     @Test func clearingCriteriaShowsEverythingAgain() async {
