@@ -66,6 +66,7 @@ final class ApiRoutes {
             route(GET, "/admin/assets/{assetId}", Access.ADMIN),
             route(PUT, "/admin/assets/{assetId}", Access.ADMIN),
             route(POST, "/admin/assets/{assetId}/archive", Access.ADMIN),
+            route(GET, "/admin/assets/{assetId}/identifiers", Access.ADMIN),
             route(POST, "/admin/assets/{assetId}/identifiers", Access.ADMIN),
             route(POST, "/admin/assets/{assetId}/identifiers/{identifierId}/revoke", Access.ADMIN),
             route(PUT, "/admin/assets/{assetId}/placement", Access.ADMIN),
