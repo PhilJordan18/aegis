@@ -13,6 +13,7 @@ constexpr uint32_t KEEPALIVE_SECONDS = 30;     // §7.1
 constexpr uint32_t HEARTBEAT_INTERVAL_MS = 10000;  // §14
 constexpr uint32_t RECONNECT_BASE_MS = 1000;   // §18
 constexpr uint32_t RECONNECT_MAX_MS = 30000;   // §18
+constexpr uint32_t INBOUND_REPORT_WINDOW_MS = 60000;  // §13.2, proposal #98 to be confirmed
 // Not in the contract: bounds an attempt that neither connects nor reports an error.
 constexpr uint32_t CONNECT_TIMEOUT_MS = 15000;
 

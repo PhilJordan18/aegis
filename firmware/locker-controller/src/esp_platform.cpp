@@ -66,7 +66,44 @@ const char* EspPlatform::resetReason() {
   }
 }
 
+bool EspPlatform::journalRead(size_t slot, void* buf, size_t len) {
+  Preferences prefs;
+  char key[8];
+  snprintf(key, sizeof(key), "j%u", static_cast<unsigned>(slot));
+  if (!prefs.begin("aegis", true)) return false;
+  bool ok = prefs.getBytesLength(key) == len && prefs.getBytes(key, buf, len) == len;
+  prefs.end();
+  return ok;
+}
+
+// Read back after writing: a command is only EXECUTING once it is really stored.
+bool EspPlatform::journalWrite(size_t slot, const void* buf, size_t len) {
+  Preferences prefs;
+  char key[8];
+  snprintf(key, sizeof(key), "j%u", static_cast<unsigned>(slot));
+  if (!prefs.begin("aegis", false)) return false;
+  bool ok = prefs.putBytes(key, buf, len) == len && prefs.getBytesLength(key) == len;
+  prefs.end();
+  return ok;
+}
+
 void EspPlatform::log(const char* line) { Serial.println(line); }
+
+constexpr UBaseType_t INBOX_DEPTH = 4;
+
+EspMqttTransport::EspMqttTransport(const MqttSettings& settings)
+    : settings_(settings), inbox_(xQueueCreate(INBOX_DEPTH, sizeof(Message))) {}
+
+EspMqttTransport::~EspMqttTransport() {
+  teardown();
+  vQueueDelete(inbox_);
+}
+
+bool EspMqttTransport::subscribe(const char* topic, int qos) {
+  return client_ != nullptr && esp_mqtt_client_subscribe(client_, topic, qos) >= 0;
+}
+
+bool EspMqttTransport::pollMessage(Message* out) { return xQueueReceive(inbox_, out, 0) == pdTRUE; }
 
 void EspMqttTransport::teardown() {
   if (client_ == nullptr) return;
@@ -75,6 +112,7 @@ void EspMqttTransport::teardown() {
   client_ = nullptr;
   connected_ = false;
   changed_ = false;
+  dropping_ = false;
 }
 
 void EspMqttTransport::connect(const Message& will) {
@@ -122,7 +160,7 @@ Transport::Event EspMqttTransport::pollEvent() {
 }
 
 // Runs on the esp-mqtt task: it only records the latest connection state.
-void EspMqttTransport::onEvent(void* handlerArgs, esp_event_base_t, int32_t eventId, void*) {
+void EspMqttTransport::onEvent(void* handlerArgs, esp_event_base_t, int32_t eventId, void* eventData) {
   auto* self = static_cast<EspMqttTransport*>(handlerArgs);
   if (eventId == MQTT_EVENT_CONNECTED) {
     self->connected_ = true;
@@ -130,6 +168,25 @@ void EspMqttTransport::onEvent(void* handlerArgs, esp_event_base_t, int32_t even
   } else if (eventId == MQTT_EVENT_DISCONNECTED) {
     self->connected_ = false;
     self->changed_ = true;
+  } else if (eventId == MQTT_EVENT_DATA) {
+    auto* ev = static_cast<esp_mqtt_event_handle_t>(eventData);
+    Message& m = self->assembling_;
+    if (ev->current_data_offset == 0) {  // first fragment carries the topic and the flags
+      self->dropping_ = ev->topic_len >= static_cast<int>(sizeof(m.topic)) ||
+                        ev->total_data_len >= static_cast<int>(sizeof(m.payload));
+      if (!self->dropping_) {
+        memcpy(m.topic, ev->topic, ev->topic_len);
+        m.topic[ev->topic_len] = '\0';
+        m.qos = ev->qos;
+        m.retain = ev->retain;
+      }
+    }
+    if (self->dropping_) return;  // oversized: never delivered, so never acted on
+    memcpy(m.payload + ev->current_data_offset, ev->data, ev->data_len);
+    if (ev->current_data_offset + ev->data_len >= ev->total_data_len) {
+      m.payload[ev->total_data_len] = '\0';
+      xQueueSend(self->inbox_, &m, 0);  // full queue: dropped, the backend republishes with the same messageId
+    }
   }
 }
 

@@ -22,7 +22,15 @@ executes authorized commands (not implemented yet) and reports facts.
 
 ## Not done yet
 
-- No subscription to `commands` or `display`, so no unlock, acknowledgement or QR display.
+- `commands` is subscribed (QoS 1, on every connection) and checked (retained, uncorrelable, schema,
+  locker, cell, clock, `expiresAt`, duplicates). A command is persisted in NVS (one record per slot,
+  64 slots) as EXECUTING before `HubLink::onCommand`'s handler runs; a restart turns it into
+  `PREVIOUS_EXECUTION_UNCERTAIN`, reported once. Answers: `COMMAND_ACKNOWLEDGED`, `COMMAND_REJECTED`,
+  and `INBOUND_MESSAGE_INVALID` (one per case per 60 s). No handler is wired, so every valid command
+  is rejected `INTERNAL_DEVICE_ERROR` until the solenoid slice sets one. `display` is not subscribed.
+- Journal limits: the uncertain report is kept in RAM only (a second reboot before it is published
+  loses it, a redelivery still gets the known rejection); a message over 1.5 KB is dropped without
+  `INBOUND_MESSAGE_INVALID`; a record layout change makes old records read as empty.
 - No cell bus: every compartment is reported with `UNKNOWN` states (doc 10 §14).
 - No clean `OFFLINE` `SHUTDOWN` before a deliberate disconnect, no bounded local queue,
   no `DEVICE_ERROR`.
