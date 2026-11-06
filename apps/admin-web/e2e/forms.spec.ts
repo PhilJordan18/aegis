@@ -6,7 +6,7 @@ import { DEMO_LOCKER_ID, openLockers, waitForLockerState } from './lockerFakes.t
 import { expectNoAxeViolations, expectNoHorizontalScroll } from './support.ts'
 
 /**
- * Proposed CAT-01 forms (unit, model, archive confirmation, Modèles tab) and CFG-02 schedule editor, offline on routed fakes: axe WCAG A/AA,
+ * Proposed CAT-01 forms (unit, model, archive confirmation, Modèles tab) CFG-02 schedule editor and #26 identifiers and placement, offline on routed fakes: axe WCAG A/AA,
  * keyboard, no horizontal scroll at 320 px, light and dark. `AEGIS_FORMS_CAPTURE=1` also writes the compact review
  * batch to docs/design/manager-forms/captures/ — a proposal awaiting visual approval, never an approved design.
  */
@@ -38,6 +38,57 @@ const SCHEDULE = {
   windows: DAYS.map((dayOfWeek, index) =>
     index < 5 ? { dayOfWeek, enabled: true, opensAt: '07:00:00', closesAt: '17:00:00' } : { dayOfWeek, enabled: false, opensAt: null, closesAt: null },
   ),
+}
+
+const LOCKER_ID = DEMO_LOCKER_ID
+const A1 = '1ae77ae3-8490-4f09-9412-a7816b77bff9'
+const A2 = '5c1d0b7e-2f4a-4d3b-9a61-0e8b7c2d4f10'
+const A3 = '6d2e1c8f-3a5b-4e4c-8b72-1f9c8d3e5a21'
+const IDENTIFIERS = [
+  { id: '2b3c4d5e-6f70-4a81-9b92-a3b4c5d6e7f8', assetId: 'mm-002', type: 'RFID_UHF', value: 'E20034120123456789000001', active: true, assignedAt: '2026-11-02T14:00:00Z', revokedAt: null },
+  { id: '4d5e6f70-8192-4aa3-9bb4-c5d6e7f8091a', assetId: 'mm-002', type: 'NFC', value: '04A224B2C35E80', active: false, assignedAt: '2026-10-20T13:00:00Z', revokedAt: '2026-11-02T14:00:00Z' },
+]
+const ADMIN_LOCKERS = {
+  items: [
+    {
+      id: LOCKER_ID,
+      code: 'AEGIS-DEMO-01',
+      name: 'Casier de démonstration',
+      topology: 'HUB_CELL',
+      compartments: [
+        { id: A1, code: 'A1', enabled: true, currentAsset: { id: '9a1f0000-0000-4000-8000-000000000203', assetCode: 'TH-203' } },
+        { id: A2, code: 'A2', enabled: true, currentAsset: null },
+        { id: A3, code: 'A3', enabled: false, currentAsset: null },
+      ],
+    },
+  ],
+  page: 0,
+  size: 100,
+  totalItems: 1,
+  totalPages: 1,
+}
+
+/** Identifier history, locker list and the two custody refusals (09 §12.3–12.4, §16.2). */
+async function routeCustody(page: Page) {
+  const problemOf = (status: number, code: string) => ({
+    type: `https://aegis.local/problems/${code.toLowerCase()}`,
+    title: 'Fictif',
+    status,
+    code,
+    detail: 'Détail serveur fictif, jamais affiché.',
+    instance: '/api/v1/admin/assets',
+    traceId: '5f4bc22e-66a4-48ef-8bf3-6e7184d71c30',
+    timestamp: '2026-11-03T19:00:00Z',
+  })
+  await page.route(/\/api\/v1\/admin\/assets\/[^/]+\/identifiers$/, (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(IDENTIFIERS) })
+      : route.fulfill({ status: 409, contentType: 'application/problem+json', body: JSON.stringify(problemOf(409, 'IDENTIFIER_ALREADY_ASSIGNED')) }),
+  )
+  await page.route(/\/api\/v1\/admin\/assets\/[^/]+\/placement$/, (route) =>
+    route.fulfill({ status: 409, contentType: 'application/problem+json', body: JSON.stringify(problemOf(409, 'COMPARTMENT_ALREADY_OCCUPIED')) }),
+  )
+  await page.route('**/api/v1/admin/lockers?**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(ADMIN_LOCKERS) }))
 }
 
 const VIEWPORTS = [
@@ -135,6 +186,51 @@ for (const theme of ['light', 'dark'] as const) {
         await page.keyboard.press('Escape')
         await expect(dialog).toHaveCount(0)
         await expect(page.getByRole('button', { name: 'Modifier l’horaire' })).toBeFocused()
+      })
+
+      test('custody: identifier history, then the assign and placement conflicts on their fields', async ({ page }) => {
+        await start(page)
+        // Registered after the catalog fakes, so they answer first; MM-002's history is read through them.
+        await routeCustody(page)
+        await page.locator('.ag-list__items a', { hasText: 'MM-002' }).click()
+        await expect(page.getByRole('heading', { level: 2, name: /· MM-002$/ })).toBeVisible()
+        const history = page.getByRole('list', { name: 'Historique des identifiants' })
+        await expect(history).toContainText('E20034120123456789000001')
+        await expect(history).toContainText('Révoqué')
+        await page.getByRole('button', { name: 'Attribuer un identifiant' }).scrollIntoViewIfNeeded()
+        await expectNoAxeViolations(page)
+        await expectNoHorizontalScroll(page)
+        await shot(page, `custody-section-${suffix}`)
+
+        await page.getByRole('button', { name: 'Attribuer un identifiant' }).click()
+        const assign = page.getByRole('dialog', { name: 'Attribuer un identifiant à MM-002' })
+        await expect(assign.getByLabel(/^Type/)).toBeFocused()
+        await assign.getByLabel(/^Valeur/).fill('E20034120123456789000001')
+        await assign.getByRole('button', { name: 'Attribuer un identifiant' }).click()
+        await expect(assign.getByText('Cette valeur est déjà attribuée à un identifiant actif.')).toBeVisible()
+        await expect(assign.getByLabel(/^Valeur/)).toHaveAttribute('aria-invalid', 'true')
+        await expectNoAxeViolations(page)
+        await expectNoHorizontalScroll(page)
+        await shot(page, `custody-assign-conflict-${suffix}`)
+        await page.keyboard.press('Escape')
+        await expect(assign).toHaveCount(0)
+        await expect(page.getByRole('button', { name: 'Attribuer un identifiant' })).toBeFocused()
+
+        await page.getByRole('button', { name: 'Modifier le placement' }).click()
+        const placement = page.getByRole('dialog', { name: 'Placement de MM-002' })
+        await placement.getByLabel(/^Casier/).selectOption({ value: LOCKER_ID })
+        await expect(placement.getByLabel(/^Cellule/).locator('option')).toHaveText(['Choisir une cellule', 'A1 — occupée par TH-203', 'A2 — libre', 'A3 — désactivée'])
+        await placement.getByLabel(/^Cellule/).selectOption({ value: A1 })
+        await placement.getByLabel(/^Motif/).fill('Rangement après étalonnage')
+        await placement.getByRole('button', { name: 'Enregistrer' }).click()
+        await expect(placement.getByText('Un autre exemplaire occupe déjà cette cellule.')).toBeVisible()
+        await expect(placement.getByLabel(/^Cellule/)).toHaveAttribute('aria-invalid', 'true')
+        await expectNoAxeViolations(page)
+        await expectNoHorizontalScroll(page)
+        await shot(page, `custody-placement-conflict-${suffix}`)
+        await page.keyboard.press('Escape')
+        await expect(placement).toHaveCount(0)
+        await expect(page.getByRole('button', { name: 'Modifier le placement' })).toBeFocused()
       })
 
       test('Modèles tab and model form', async ({ page }) => {
