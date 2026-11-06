@@ -1,6 +1,6 @@
 # Matrice des cartes en cours (QA d'intégration)
 
-État au **6 novembre 2026, 09 h 30 (Toronto)**, sur `dev` à `47f34ac`.
+État au **6 novembre 2026, 08 h 55 (Toronto)**, sur `dev` à `47f34ac`.
 
 **Sources :** corps et commentaires des issues, corps des PR #61 à #129, et `git grep`
 sur `origin/dev`. Les relevés de l'inventaire ont été revérifiés sur `dev`.
@@ -30,10 +30,10 @@ revue ou une recette humaine. Aucune carte n'est à fermer.
 | #28 CFG-02 | Horaire avec fuseau (#103 `71d1f81`), refus `422` (#106). Recette cloud R3 : refus hors plage et après fermeture **sur la pile réelle**, une première | **Éditeur d'horaire** Manager (Web) | In Progress |
 | #29 PHY-01 | `ONLINE` en 30 s ou moins, déduplication, aucun effet sur les prêts (#115 `5ce22b9`, run 41868105338). Portes visibles côté Web (#118 `84a0133`). Recette cloud R4.1 et R6.1 | **Erreurs d'appareil non exposées** : proposition de contrat (Backend), décision (Philippe). Validation avec un vrai hub (#30) | In Progress |
 | #31 PHY-02 | Payload brut conservé, scans stables seulement, absence jamais déduite (#113, #119 `e6f405b`). Recette cloud R4.2 et R6.2 (pile réelle, hub simulé) | **Validation avec le vrai lecteur** (#19, Jimmy) | Blocked (matériel) |
-| #34 RDY-02 | Même résultat Web et iOS, A2 `CALIBRATION_EXPIRED`, aucune étiquette exposée (API #105, iOS #107, contrôle humain du 5 nov.). iOS hébergé 218/218 (run 41908148728) | Réconciliation QA publiée sur #34. Fermer #117 (voir #67). Revue de Jimmy | In Progress, puis In Review après la réconciliation |
+| #34 RDY-02 | Même résultat Web et iOS, A2 `CALIBRATION_EXPIRED`, aucune étiquette exposée (API #105, iOS #107, contrôle humain du 5 nov.). iOS hébergé 218/218 (run 41908148728) | Réconciliation QA publiée sur #34. #117 est dépassée par #116 (`891702d`), fermeture recommandée sur #67, sans merge. Revue de Jimmy | In Progress, puis In Review après la réconciliation |
 | #48 LOAN-01 | Lecture technicien (#127 `0f96b53`, iOS #128 `decb9c6`). Prêt en retard jamais disponible, un seul prêt ouvert (fixture) | **`GET /admin/loans` autorisé mais sans handler** (Backend). Vue Manager (Web). Démonstration impossible sans #47, exclu | In Progress |
 | #41 IOT-02 | Ingestion idempotente des ACK (#123 `1a1c26a`, Mosquitto). Chaîne prouvée par simulateur sur `af3729f` | Trois critères matériels, via #42 (Jimmy) | Blocked (matériel) |
-| #109 FIX-01 | Rien sur `dev` : `SearchText` compte encore en UTF-16 (`text.length() > MAX_LENGTH`). Le correctif n'existe qu'en patch local dans un commentaire | Branche API, contrat et corpus (Backend), puis Web, puis adaptateur iOS (QA, macOS hébergé). ADR-014 absent de `dev` et du registre (Philippe) | Todo |
+| #109 FIX-01 | `dev` compte encore en UTF-16. **API et contrat : #131** (`7d530f0`, ADR-014 `PROPOSED`) : la recette cloud R7 donne 44/44 sur la pile réelle ; le même R7 échoue sur `dev`, comme attendu. **iOS : #132** (`8bb720c`, empilée sur #131), en attente du macOS hébergé | Acceptation d'ADR-014 (Philippe). PR Web (Web). Vert du job iOS de #132 (QA) | In Progress |
 | #19 POC-01 | Aucun critère rempli. Le banc (PR #124) n'a lu aucune vraie étiquette | Étiquettes, seuils, essais d'orientation, faux positifs et faux négatifs, ADR-003 (Jimmy, Philippe) | Blocked |
 | #20 POC-02 | Une liaison RS-485 qualifiée sur le matériel (#62 `248fba9`) | Tension T1, seconde liaison A2, actionnement (avec #21), ADR du connecteur (Jimmy, Philippe) | In Progress |
 | #23 FW-00 | Squelette compilé (#126 `47f34ac`) et tests sur hôte | Jamais flashé, jamais lancé contre le broker TLS (#129 `cf023ed`), bus de cellules non commencé (Jimmy). Revue indépendante de #126 (QA) | In Progress |
@@ -71,5 +71,5 @@ revue ou une recette humaine. Aucune carte n'est à fermer.
   - fuseau de la date de calibration (#25).
 - **Hors périmètre de la nuit.** #43 à #47 sont exclus. La démonstration de bout en bout
   de #48 et l'expiration réelle de #38 en dépendent.
-- **Manager.** Aucun formulaire sur `dev` pour #25, #26, #27 et #28. À 09 h 30, aucune
+- **Manager.** Aucun formulaire sur `dev` pour #25, #26, #27 et #28. À 08 h 55, aucune
   branche Web ou Backend de la nuit n'est publiée sur `origin`.
