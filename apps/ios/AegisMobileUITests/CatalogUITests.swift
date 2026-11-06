@@ -41,8 +41,13 @@ final class CatalogUITests: XCTestCase {
 
     @MainActor
     func testCatalogueFilterSheetAndBackInBothLanguagesAndAppearances() throws {
-        for language in [Language.french, .english] {
-            for appearance in [XCUIDevice.Appearance.light, .dark] {
+        // Appearance is the outer loop so the run switches light to dark once and never dark to
+        // light: in 12 hosted runs every audit slower than 10 s, including the three that XCTest
+        // abandoned, came right after a dark-to-light switch or was the cold first audit (#67).
+        // This is a hypothesis under measurement; all four combinations are still audited, and
+        // the test still ends in dark mode, as before, for the tests that follow.
+        for appearance in [XCUIDevice.Appearance.light, .dark] {
+            for language in [Language.french, .english] {
                 XCUIDevice.shared.appearance = appearance
                 let theme = appearance == .dark ? "dark" : "light"
                 let app = launch(language, scenario: "catalog")
@@ -297,8 +302,8 @@ final class CatalogUITests: XCTestCase {
     ///   sizes (checked by `testLargestTextUsesTheFilterMenu`).
     /// `atLargestSize` skips the Dynamic Type check when the text already uses
     /// the largest accessibility size and cannot grow further.
-    /// The audit waits for a still screen, and is run again only when XCTest
-    /// abandons it before completion (`performCompletedAccessibilityAudit`).
+    /// The audit waits for a still screen and runs once: an audit XCTest
+    /// abandons fails the test (`performMeasuredAccessibilityAudit`).
     /// Height above the floating tab bar covered by its scroll-edge fade.
     private let fadeHeight: CGFloat = 120
 
@@ -335,7 +340,7 @@ final class CatalogUITests: XCTestCase {
         // the list at the largest size.
         if ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26 { types.remove(.dynamicType) }
         var unhandled: [String] = []
-        try app.performCompletedAccessibilityAudit(for: types) { issue in
+        try app.performMeasuredAccessibilityAudit(for: types) { issue in
             let tolerated: Bool
             if let target = issue.element {
                 let center = CGPoint(x: target.frame.midX, y: target.frame.midY)
