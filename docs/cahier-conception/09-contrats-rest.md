@@ -14,7 +14,8 @@
 **Mise à jour ciblée :** 28 octobre 2026 — sous-objets `AssetModelSummary`, `CalibrationView` et `PlacementSummary` de `AssetView` (§8.2); sérialisation existante documentée; code `404 ASSET_NOT_FOUND` de §11.2 ajouté à §21 (#33, #34)  
 **Mise à jour ciblée :** 28 octobre 2026 — décisions de Philippe pour #33 et #34 : ordre stable des raisons et raison principale choisie par la convention de présentation, jamais par `reasons[0]` (§8.1); actif archivé exclu de la liste mais lisible par son identifiant (§11.1, §11.2)  
 **Mise à jour ciblée :** 28 octobre 2026 — réservation (RES-01, #37), décisions de Philippe du 28 octobre 2026 : ordre des contrôles implémenté, `reservedUntil` non postérieur à l’instant courant, locker sans horaire, horaire du placement courant et actif inconnu (§14.1); `availableActions` vide tant que ses actions ne sont pas implémentées (§8.10); codes de refus de l’archivage (§12.2); `ACTIVE_RESERVATION_NOT_FOUND` et `ASSET_OPERATION_IN_PROGRESS` ajoutés à §21  
-**Mise à jour ciblée :** 6 novembre 2026 — lectures administratives approuvées par Philippe (#25, #26, #28) : `GET /admin/lockers` et `AdminLockerView` (§9.3, §16.2), historique des identifiants `GET /admin/assets/{assetId}/identifiers` (§9.3, §12.3); aucune migration
+**Mise à jour ciblée :** 6 novembre 2026 — lectures administratives approuvées par Philippe (#25, #26, #28) : `GET /admin/lockers` et `AdminLockerView` (§9.3, §16.2), historique des identifiants `GET /admin/assets/{assetId}/identifiers` (§9.3, §12.3); aucune migration  
+**Mise à jour ciblée :** 6 novembre 2026 — refus du catalogue liés à la garde de l’actif (#26) : placement refusé pendant une réservation active, un prêt ouvert ou une opération non terminale, attribution refusée pendant une opération non terminale et révocation de l’identifiant qu’elle attend, avec les codes de l’archivage (§12.3, §12.4, §21); ordre des refus approuvé par Philippe le 6 novembre 2026; aucun code ni champ nouveau
 
 ---
 
@@ -913,7 +914,10 @@ POST /admin/assets/{assetId}/identifiers/{identifierId}/revoke exige une clé d�
 - Révoquer un identifiant déjà révoqué suit la règle d’archivage répété de §12.1 : `200` avec la représentation courante, `revokedAt` conservé et un événement de résultat `ALREADY_APPLIED`.
 - Audit, avec `subjectType` `ASSET_IDENTIFIER` : une attribution écrit `ASSET_IDENTIFIER_ASSIGNED`. Le document 08 n’ayant pas de type de révocation, une révocation écrit `ASSET_UPDATED`. Un rejeu de même clé et une mutation refusée n’écrivent aucun événement.
 - L’archivage d’un actif (§12.2) révoque ses identifiants actifs dans la même transaction, sans supprimer leur historique, et écrit un événement `ASSET_UPDATED` par identifiant révoqué.
-- `409 ASSET_OPERATION_IN_PROGRESS` et le refus de révocation pendant une opération physique doivent être en place avant l’introduction des opérations physiques : la tranche qui crée les opérations les applique.
+- `409 ASSET_OPERATION_IN_PROGRESS`, sans écriture ni événement (#26, 6 novembre 2026). Une opération est non terminale dans un état autre que `CONFIRMED`, `FAILED`, `EXPIRED` ou `ANOMALY`.
+  - **Attribution :** refusée pendant toute opération physique non terminale sur l’actif. Ordre des refus, approuvé par Philippe le 6 novembre 2026 : `ASSET_ARCHIVED`, opération, `IDENTIFIER_ALREADY_ASSIGNED`.
+  - **Révocation :** refusée seulement pour l’identifiant qu’une opération non terminale attend comme preuve (`expected_asset_identifier_id`). Un autre identifiant du même actif reste révocable.
+  - **Identifiant déjà révoqué :** sa révocation reste le cas d’archivage répété ci-dessus.
 
 ### 12.4 Placement attendu
 
@@ -942,7 +946,7 @@ La mutation est refusée si :
 - Un changement termine le placement précédent (`removedAt`) au lieu de le supprimer, et écrit un seul événement `ASSET_PLACEMENT_CHANGED` sur l’actif, avec l’ancien et le nouveau placement. Un PUT vers le compartiment actuel est un no-op : la réponse est le placement courant, motif compris, sans événement.
 - Refus vérifiables aujourd’hui : actif archivé, `409 ASSET_ARCHIVED`; compartiment inconnu, `400 VALIDATION_ERROR` avec la violation `{field: compartmentId, code: COMPARTMENT_NOT_FOUND}`; compartiment désactivé, `409 COMPARTMENT_DISABLED`; compartiment occupé par un autre actif, `409 COMPARTMENT_ALREADY_OCCUPIED`. `COMPARTMENT_DISABLED` vise un compartiment désactivé dans la configuration du backend; il ne définit aucun mécanisme de désactivation du firmware.
 - L’archivage d’un actif (§12.2) termine son placement actif dans la même transaction (décision approuvée le 22 octobre 2026, confirmée le 28 octobre 2026), conserve la ligne et écrit `ASSET_PLACEMENT_CHANGED` vers `null`.
-- Le refus pour réservation active, prêt ouvert ou opération non terminale sera appliqué par les tranches qui créent ces objets.
+- Un changement de placement est refusé, sans écriture ni événement, avec les codes et l’ordre de l’archivage (§12.2) : réservation active, `409 ASSET_ALREADY_RESERVED`; prêt `ACTIVE` ou `RETURN_PENDING`, `409 ASSET_HAS_OPEN_LOAN`; opération physique non terminale, `409 ASSET_OPERATION_IN_PROGRESS`. Les deux premiers suivent `ASSET_ARCHIVED`; le troisième suit la lecture du compartiment visé (`COMPARTMENT_NOT_FOUND`) et précède `COMPARTMENT_DISABLED` et `COMPARTMENT_ALREADY_OCCUPIED`, selon l’ordre de verrouillage du document 08, §7.1. Un PUT vers le compartiment actuel reste un no-op, même pendant une réservation (#26). Ordre complet des refus du placement, approuvé par Philippe le 6 novembre 2026 : `ASSET_ARCHIVED`, réservation, prêt, `COMPARTMENT_NOT_FOUND`, opération, `COMPARTMENT_DISABLED`, `COMPARTMENT_ALREADY_OCCUPIED`.
 - La condition « le compartiment n’appartient pas au locker visé par la configuration » n’est pas définie : aucune configuration ne désigne de locker cible. Elle n’est pas appliquée tant qu’elle n’est pas décidée.
 
 ---
@@ -1427,7 +1431,7 @@ Les PUT sont idempotents par définition. Une répétition identique ne crée pa
 | 409 | ASSET_CODE_ALREADY_EXISTS | Code d’actif déjà utilisé, archives comprises (§12.2) |
 | 409 | ASSET_SERIAL_NUMBER_ALREADY_EXISTS | Numéro de série déjà utilisé, archives comprises (§12.2) |
 | 409 | ASSET_ARCHIVED | Modification d’un actif archivé (§12.2) |
-| 409 | ASSET_OPERATION_IN_PROGRESS | Opération physique non terminale sur l’actif : archivage ou identifiant refusés (§12.2, §12.3) |
+| 409 | ASSET_OPERATION_IN_PROGRESS | Opération physique non terminale sur l’actif : archivage, identifiant ou placement refusés (§12.2 à §12.4) |
 | 409 | IDENTIFIER_ALREADY_ASSIGNED | Paire type + valeur déjà active (§12.3) |
 | 409 | COMPARTMENT_DISABLED | Placement dans un compartiment désactivé (§12.4) |
 | 409 | COMPARTMENT_ALREADY_OCCUPIED | Compartiment déjà attribué à un autre actif (§12.4) |
