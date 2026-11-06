@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { useIdempotencyKey } from '../../../api/idempotency'
-import { instantToZonedInput, zonedInputToInstant } from '../../../i18n/zonedTime'
+import { instantToZonedInput, resolveZonedInput, utcOffsetLabel } from '../../../i18n/zonedTime'
 import { useI18n } from '../../../i18n/useI18n'
 import type { AccessLevel } from '../../auth/contract'
 import { Button } from '../../../ui/Button'
@@ -31,11 +31,16 @@ const FIELDS = {
   operationalStatus: undefined,
   calibrationRequired: undefined,
   calibrationDueAt: undefined,
+  calibrationOccurrence: undefined,
 }
 
 const ACCESS_LEVELS: readonly AccessLevel[] = ['STANDARD', 'RESTRICTED']
 const SERVICE_STATES: readonly OperationalStatus[] = ['SERVICEABLE', 'MAINTENANCE', 'DAMAGED']
 const MODEL_QUERY = { page: 0, size: MAX_PAGE_SIZE } as const
+
+/** Which instant of a wall time repeated when the clocks go back; empty until the person chooses. */
+type Occurrence = 'earlier' | 'later'
+const OCCURRENCES: readonly Occurrence[] = ['earlier', 'later']
 
 interface Draft {
   readonly assetModelId: string
@@ -46,9 +51,19 @@ interface Draft {
   readonly calibrationRequired: boolean
   /** `datetime-local` value in the laboratory zone. */
   readonly calibrationDue: string
+  readonly calibrationOccurrence: Occurrence | ''
+}
+
+/** The occurrence `instant` is, when its wall time is repeated; empty otherwise. */
+function occurrenceOf(instant: string, input: string): Occurrence | '' {
+  const resolved = resolveZonedInput(input, LAB_TIME_ZONE)
+  if (resolved.kind !== 'ambiguous') return ''
+  return utcOffsetLabel(instant, LAB_TIME_ZONE) === utcOffsetLabel(resolved.earlier, LAB_TIME_ZONE) ? 'earlier' : 'later'
 }
 
 function draftOf(asset: AdminAssetView | null): Draft {
+  const dueAt = asset?.calibration.dueAt ?? null
+  const calibrationDue = dueAt ? (instantToZonedInput(dueAt, LAB_TIME_ZONE) ?? '') : ''
   const known = <T extends string>(value: string, allowed: readonly T[]): T | '' => ((allowed as readonly string[]).includes(value) ? (value as T) : '')
   return {
     assetModelId: asset?.model.id ?? '',
@@ -57,7 +72,8 @@ function draftOf(asset: AdminAssetView | null): Draft {
     requiredAccessLevel: asset === null ? 'STANDARD' : known(asset.requiredAccessLevel, ACCESS_LEVELS),
     operationalStatus: asset === null ? 'SERVICEABLE' : known(asset.operationalStatus, SERVICE_STATES),
     calibrationRequired: asset?.calibration.required ?? false,
-    calibrationDue: asset?.calibration.dueAt ? (instantToZonedInput(asset.calibration.dueAt, LAB_TIME_ZONE) ?? '') : '',
+    calibrationDue,
+    calibrationOccurrence: dueAt ? occurrenceOf(dueAt, calibrationDue) : '',
   }
 }
 
@@ -78,10 +94,17 @@ function validate(draft: Draft, original: AdminAssetView | null, i18n: ReturnTyp
   if (draft.calibrationRequired) {
     // An untouched value keeps the server's exact instant (seconds included): editing other fields changes nothing here.
     const originalDue = original?.calibration.dueAt ?? null
-    const unchanged = originalDue !== null && instantToZonedInput(originalDue, LAB_TIME_ZONE) === draft.calibrationDue
-    calibrationDueAt = unchanged ? originalDue : zonedInputToInstant(draft.calibrationDue, LAB_TIME_ZONE)
+    const before = draftOf(original)
+    const unchanged = originalDue !== null && before.calibrationDue === draft.calibrationDue && before.calibrationOccurrence === draft.calibrationOccurrence
+    // Never shifted silently: a skipped time is refused and a repeated one needs an explicit occurrence.
+    const resolved = resolveZonedInput(draft.calibrationDue, LAB_TIME_ZONE)
     if (draft.calibrationDue === '') errors.calibrationDueAt = v.calibrationDueRequired
-    else if (calibrationDueAt === null) errors.calibrationDueAt = v.invalid
+    else if (unchanged) calibrationDueAt = originalDue
+    else if (resolved.kind === 'invalid') errors.calibrationDueAt = v.invalid
+    else if (resolved.kind === 'nonexistent') errors.calibrationDueAt = v.calibrationDueNonexistent
+    else if (resolved.kind === 'exact') calibrationDueAt = resolved.instant
+    else if (draft.calibrationOccurrence === '') errors.calibrationOccurrence = v.calibrationOccurrenceRequired
+    else calibrationDueAt = resolved[draft.calibrationOccurrence]
   }
   if (Object.keys(errors).length > 0 || draft.requiredAccessLevel === '' || draft.operationalStatus === '') return { request: null, errors }
   return {
@@ -150,6 +173,7 @@ export function AssetFormDialog({ open, asset, onClose, onSaved }: AssetFormDial
   }
 
   const error = (field: string) => feedback.fieldErrors[field] ?? null
+  const repeated = draft.calibrationRequired ? resolveZonedInput(draft.calibrationDue, LAB_TIME_ZONE) : null
   // Active models, plus the unit's current model when it is archived, so the form never changes it silently.
   const options: readonly AssetModelView[] = (models.data?.items ?? []).filter((model) => model.archivedAt === null || model.id === asset?.model.id)
   const currentMissing = asset !== null && !options.some((model) => model.id === asset.model.id)
@@ -241,10 +265,27 @@ export function AssetFormDialog({ open, asset, onClose, onSaved }: AssetFormDial
               label={t.fieldCalibrationDue}
               help={t.fieldCalibrationDueHelp({ zone: LAB_TIME_ZONE })}
               value={draft.calibrationDue}
-              onChange={(event) => setDraft({ ...draft, calibrationDue: event.target.value })}
+              onChange={(event) => setDraft({ ...draft, calibrationDue: event.target.value, calibrationOccurrence: '' })}
               error={error('calibrationDueAt')}
               required
               readOnly={busy}
+            />
+          )}
+          {repeated?.kind === 'ambiguous' && (
+            <ChoiceField
+              legend={t.fieldCalibrationOccurrence}
+              name="calibrationOccurrence"
+              value={draft.calibrationOccurrence}
+              options={OCCURRENCES.map((value) => {
+                const instant = repeated[value]
+                return {
+                  value,
+                  label: t.calibrationOccurrence[value]({ time: i18n.format.time(new Date(instant), LAB_TIME_ZONE), offset: utcOffsetLabel(instant, LAB_TIME_ZONE) }),
+                }
+              })}
+              onChange={(value) => setDraft({ ...draft, calibrationOccurrence: value })}
+              error={error('calibrationOccurrence')}
+              disabled={busy}
             />
           )}
         </DialogBody>

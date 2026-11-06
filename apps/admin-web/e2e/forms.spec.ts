@@ -86,6 +86,40 @@ for (const theme of ['light', 'dark'] as const) {
         await expect(page.getByRole('button', { name: 'Nouvel exemplaire' })).toBeFocused()
       })
 
+      test('calibration due: a skipped spring time is refused, a repeated autumn time asks which occurrence', async ({ page }) => {
+        const writes: string[] = []
+        await start(page)
+        await page.route('**/api/v1/admin/assets', (route) => {
+          if (route.request().method() === 'POST') writes.push('POST')
+          return route.fallback()
+        })
+        await page.getByRole('button', { name: 'Nouvel exemplaire' }).click()
+        const dialog = page.getByRole('dialog', { name: 'Nouvel exemplaire' })
+        await dialog.getByLabel(/^Modèle/).selectOption({ label: 'Multimètre 1' })
+        await dialog.getByLabel(/^Code de l’exemplaire/).fill('MM-020')
+        const due = dialog.getByLabel(/^Échéance de calibration/)
+
+        await due.fill('2026-03-08T02:30')
+        await dialog.getByRole('button', { name: 'Créer' }).click()
+        await expect(due).toBeFocused()
+        await expect(dialog.getByText(/Cette heure n’existe pas ce jour-là/)).toBeVisible()
+
+        await due.fill('2026-11-01T01:30')
+        const group = dialog.getByRole('group', { name: /Cette heure se produit deux fois/ })
+        await expect(group.getByRole('radio')).toHaveCount(2)
+        await dialog.getByRole('button', { name: 'Créer' }).click()
+        const first = group.getByRole('radio', { name: /La première/ })
+        await expect(first).toBeFocused()
+        await expect(group.getByText('Choisissez laquelle des deux occurrences.')).toBeVisible()
+        expect(writes).toEqual([])
+        await expectNoAxeViolations(page)
+        await expectNoHorizontalScroll(page)
+        await shot(page, `unit-form-dst-${suffix}`)
+        // Arrow keys move between the two occurrences, as in any radio group.
+        await page.keyboard.press('ArrowDown')
+        await expect(group.getByRole('radio', { name: /La seconde/ })).toBeChecked()
+      })
+
       test('archive confirmation: Cancel first, then the refusal explained by its code', async ({ page }) => {
         await start(page)
         await page.getByRole('group', { name: 'Actions de l’exemplaire' }).getByRole('button', { name: 'Archiver' }).click()

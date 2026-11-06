@@ -9,6 +9,11 @@ import type { FormFeedback } from './formFeedback'
 export function useFeedbackFocus(feedback: FormFeedback, alertRef: RefObject<HTMLElement | null>, formRef: RefObject<HTMLFormElement | null>) {
   useEffect(() => {
     if (feedback.alert !== null) alertRef.current?.focus()
-    else formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+    else {
+      const invalid = formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')
+      // A group of radios is not focusable itself: its first choice is.
+      const target = invalid instanceof HTMLFieldSetElement ? invalid.querySelector<HTMLElement>('input') : invalid
+      target?.focus()
+    }
   }, [feedback, alertRef, formRef])
 }
