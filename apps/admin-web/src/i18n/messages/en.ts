@@ -180,6 +180,14 @@ export const en: Messages = {
     nextPage: 'Next',
     pageOf: ({ page, pages }) => `Page ${count.format(page)} of ${count.format(pages)}`,
 
+    searchLabel: 'Search units',
+    searchHelp: 'Code or model name, case-insensitive.',
+    searchSubmit: 'Search',
+    searchClear: 'Show all',
+    searchTooLong: ({ max }: { max: number }) => `A search has at most ${max} characters.`,
+    searchInvalid: 'The search contains a character that is not allowed (tab, line break or control character).',
+    searchEmptyTitle: ({ search }: { search: string }) => `No unit matches “${search}”.`,
+    searchEmptyBody: 'Check the code or model name, or show all units.',
     emptyTitle: 'No units.',
     emptyBody: 'As soon as a unit is registered, it appears here with its operational diagnostic.',
 

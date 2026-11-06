@@ -24,9 +24,11 @@ interface AssetListProps {
   readonly onRetry: () => void
   readonly onSelect: (asset: AdminAssetView, event: MouseEvent<HTMLAnchorElement>) => void
   readonly onPage: (page: number) => void
+  /** The active search, kept in each row's address; null when every unit is listed. */
+  readonly search?: string | null
 }
 
-export function AssetList({ page, selectedId, loading, refreshing, failure, stale, retrying, onRetry, onSelect, onPage }: AssetListProps) {
+export function AssetList({ page, selectedId, loading, refreshing, failure, stale, retrying, onRetry, onSelect, onPage, search = null }: AssetListProps) {
   const { m } = useI18n()
   const titleId = useId()
   const t = m.equipment
@@ -55,8 +57,8 @@ export function AssetList({ page, selectedId, loading, refreshing, failure, stal
 
       {page !== undefined && items.length === 0 && (
         <div className="ag-list__empty">
-          <p className="ag-list__empty-title">{t.emptyTitle}</p>
-          <p className="ag-list__empty-body">{t.emptyBody}</p>
+          <p className="ag-list__empty-title">{search === null ? t.emptyTitle : t.searchEmptyTitle({ search })}</p>
+          <p className="ag-list__empty-body">{search === null ? t.emptyBody : t.searchEmptyBody}</p>
         </div>
       )}
 
@@ -64,7 +66,7 @@ export function AssetList({ page, selectedId, loading, refreshing, failure, stal
         <ul className="ag-list__items">
           {items.map((asset) => (
             <li key={asset.id}>
-              <AssetRow asset={asset} selected={asset.id === selectedId} page={page?.page ?? 0} onSelect={onSelect} />
+              <AssetRow asset={asset} selected={asset.id === selectedId} page={page?.page ?? 0} search={search} onSelect={onSelect} />
             </li>
           ))}
         </ul>
@@ -80,18 +82,20 @@ function AssetRow({
   asset,
   selected,
   page,
+  search,
   onSelect,
 }: {
   readonly asset: AdminAssetView
   readonly selected: boolean
   readonly page: number
+  readonly search: string | null
   readonly onSelect: AssetListProps['onSelect']
 }) {
   const i18n = useI18n()
   const chip = diagnosticChip(asset, i18n)
   const firstReason = asset.operationalDiagnostic.reasons[0]
   return (
-    <Link className="ag-item" to={equipmentHref({ page, assetId: asset.id })} aria-current={selected ? 'true' : undefined} onClick={(event) => onSelect(asset, event)}>
+    <Link className="ag-item" to={equipmentHref({ page, assetId: asset.id, search })} aria-current={selected ? 'true' : undefined} onClick={(event) => onSelect(asset, event)}>
       <span className="ag-item__chips">
         <StatusChip role={chip.role} icon={chip.icon}>
           {chip.label}

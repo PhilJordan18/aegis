@@ -10,7 +10,9 @@ import { useCurrentAdminProfile } from '../features/auth/useCurrentAdminProfile'
 import { assetName } from '../features/catalog/assetPresentation'
 import { AssetDossier } from '../features/catalog/AssetDossier'
 import { AssetList } from '../features/catalog/AssetList'
+import { AssetSearch } from '../features/catalog/AssetSearch'
 import { equipmentHref, modelsHref } from '../features/catalog/equipmentHref'
+import { readSearchText } from '../features/catalog/searchText'
 import { classifyCatalogFailure } from '../features/catalog/catalogFailure'
 import { LIST_QUERY_BASE, type AdminAssetView, type AssetListQuery, type AssetModelView } from '../features/catalog/contract'
 import { ArchiveDialog } from '../features/catalog/forms/ArchiveDialog'
@@ -36,7 +38,7 @@ const MODEL_PAGE_SIZE = 20
  * `?page=2&exemplaire=<id>`, or `?vue=modeles&page=2`: the page is one-based in the address, zero-based in the API.
  * An unusable value is ignored.
  */
-function readLocation(search: string): { view: 'units' | 'models'; page: number; assetId: string | null } {
+function readLocation(search: string): { view: 'units' | 'models'; page: number; assetId: string | null; search: string | null } {
   const params = new URLSearchParams(search)
   const page = Number.parseInt(params.get('page') ?? '', 10)
   const assetId = params.get('exemplaire')
@@ -44,6 +46,7 @@ function readLocation(search: string): { view: 'units' | 'models'; page: number;
     view: params.get('vue') === 'modeles' ? 'models' : 'units',
     page: Number.isInteger(page) && page >= 1 && page - 1 <= MAX_PAGE_INDEX ? page - 1 : 0,
     assetId: assetId !== null && UUID.test(assetId) ? assetId.toLowerCase() : null,
+    search: params.get('recherche'),
   }
 }
 
@@ -82,7 +85,10 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
 
   const location = readLocation(search)
   const modelsView = location.view === 'models'
-  const query: AssetListQuery = { ...LIST_QUERY_BASE, page: modelsView ? 0 : location.page }
+  // Only a valid search filters (09 §22.3); an unusable one in the address filters nothing and the field says why.
+  const searchRead = location.search === null ? null : readSearchText(location.search)
+  const activeSearch = searchRead?.kind === 'valid' ? searchRead.q : null
+  const query: AssetListQuery = { ...LIST_QUERY_BASE, page: modelsView ? 0 : location.page, ...(activeSearch === null ? {} : { q: activeSearch }) }
   const list = useAssetList(query, { enabled: !modelsView })
   const page = list.data
   const models = useModelList({ page: modelsView ? location.page : 0, size: MODEL_PAGE_SIZE }, { enabled: modelsView })
@@ -103,8 +109,8 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
   useEffect(() => {
     if (modelsView) {
       if (lastModelPage !== null && location.page > lastModelPage) router.navigate(modelsHref({ page: lastModelPage }), { replace: true })
-    } else if (lastPage !== null && location.page > lastPage) router.navigate(equipmentHref({ page: lastPage, assetId: null }), { replace: true })
-  }, [modelsView, lastPage, lastModelPage, location.page, router])
+    } else if (lastPage !== null && location.page > lastPage) router.navigate(equipmentHref({ page: lastPage, assetId: null, search: activeSearch }), { replace: true })
+  }, [modelsView, lastPage, lastModelPage, location.page, router, activeSearch])
 
   const items = modelsView ? [] : (page?.items ?? [])
   const selectedId = modelsView ? null : location.assetId ?? items[0]?.id ?? null
@@ -220,6 +226,14 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
           {outcome}
         </div>
 
+        {!modelsView && (
+          <AssetSearch
+            key={location.search ?? ''}
+            value={location.search}
+            onSearch={(next) => router.navigate(equipmentHref({ page: 0, assetId: null, search: next }))}
+          />
+        )}
+
         {modelsView ? (
           <div className="ag-eq ag-eq--single">
             <ModelList
@@ -245,7 +259,8 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
               retrying={list.isFetching}
               onRetry={() => void list.refetch()}
               onSelect={select}
-              onPage={(next) => router.navigate(equipmentHref({ page: next, assetId: null }))}
+              onPage={(next) => router.navigate(equipmentHref({ page: next, assetId: null, search: activeSearch }))}
+              search={activeSearch}
             />
             {showDossier && (
               <AssetDossier
@@ -256,7 +271,7 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
                 retrying={asset.isFetching}
                 focusRef={dossierRef}
                 onRetry={() => void asset.refetch()}
-                onBack={() => router.navigate(equipmentHref({ page: location.page, assetId: null }))}
+                onBack={() => router.navigate(equipmentHref({ page: location.page, assetId: null, search: activeSearch }))}
                 actions={dossierActions}
                 custody={
                   asset.data !== undefined && !assetGone ? (

@@ -310,8 +310,10 @@ test.describe('flow: équipements (production page, routed fakes)', () => {
 
   test('flow: changes go through explicit actions only, and opening the page writes nothing', async ({ page }) => {
     const requests = await openEquipment(page, 'nominal')
-    await expect(page.locator('main').getByRole('button')).toHaveText(['Nouvel exemplaire', 'Modifier', 'Archiver', 'Modifier le placement', 'Attribuer un identifiant'])
-    await expect(page.locator('main').locator('input, select, textarea')).toHaveCount(0)
+    await expect(page.locator('main').getByRole('button')).toHaveText(['Nouvel exemplaire', 'Rechercher', 'Modifier', 'Archiver', 'Modifier le placement', 'Attribuer un identifiant'])
+    // The search box (#109) is the only field: it filters a read, it never writes.
+    await expect(page.locator('main').locator('input, select, textarea')).toHaveCount(1)
+    await expect(page.locator('main').getByRole('search').getByRole('searchbox')).toHaveCount(1)
     expect(requests.every((request) => request.startsWith('GET '))).toBe(true)
   })
 
