@@ -30,10 +30,10 @@ compose=(docker compose -p "$project" --env-file "$work/env" -f infra/docker/com
 
 api_pid= sim_pid=
 cleanup() {
-  [ -z "$sim_pid" ] || kill -CONT "$sim_pid" 2>/dev/null || true
-  [ -z "$sim_pid" ] || kill "$sim_pid" 2>/dev/null || true
-  [ -z "$api_pid" ] || kill "$api_pid" 2>/dev/null || true
-  if [ "${RECETTE_KEEP:-0}" != 1 ]; then "${compose[@]}" down -v >/dev/null 2>&1 || true; fi
+  [[ -z "$sim_pid" ]] || kill -CONT "$sim_pid" 2>/dev/null || true
+  [[ -z "$sim_pid" ]] || kill "$sim_pid" 2>/dev/null || true
+  [[ -z "$api_pid" ]] || kill "$api_pid" 2>/dev/null || true
+  if [[ "${RECETTE_KEEP:-0}" != 1 ]]; then "${compose[@]}" down -v >/dev/null 2>&1 || true; fi
   echo "logs: $work"
 }
 trap cleanup EXIT
@@ -69,7 +69,7 @@ RECETTE_PSQL="docker exec -i $project-postgres-1 psql -U aegis -d aegis -tA"
 set +a
 
 jar=$(ls services/api/target/aegis-control-*.jar 2>/dev/null | head -1 || true)
-if [ -z "$jar" ]; then
+if [[ -z "$jar" ]]; then
   (cd services/api && ./mvnw -B -q -ntp -DskipTests package)
   jar=$(ls services/api/target/aegis-control-*.jar | head -1)
 fi
@@ -85,7 +85,7 @@ curl -fs "$RECETTE_API/system/health" >/dev/null || { tail -20 "$work/api.log"; 
 status=0
 RECETTE_PHASE=catalog python3 -I docs/qualite/recette-cloud/checks.py || status=$?
 
-(cd tools/hub-simulator && { [ -d node_modules ] || npm ci --ignore-scripts >/dev/null; })
+(cd tools/hub-simulator && { [[ -d node_modules ]] || npm ci --ignore-scripts >/dev/null; })
 AEGIS_MQTT_DEVICE_PASSWORD=$(grep '^AEGIS_MQTT_DEVICE_PASSWORD=' "$work/env" | cut -d= -f2) \
 AEGIS_MQTT_URL=mqtt://127.0.0.1:$mqtt_port AEGIS_SIM_BOOT_COUNT_FILE="$work/boot.json" \
   bash -c 'cd tools/hub-simulator && exec node src/cli.ts --scenario scenarios/presence-demo-local.json' >"$work/simulator.log" 2>&1 &
@@ -98,5 +98,5 @@ RECETTE_PHASE=physical python3 -I docs/qualite/recette-cloud/checks.py || physic
 status=$((status + physical))
 
 echo
-if [ "$status" -eq 0 ]; then echo "RECETTE: all checks passed"; else echo "RECETTE: $status check(s) failed"; fi
+if [[ "$status" -eq 0 ]]; then echo "RECETTE: all checks passed"; else echo "RECETTE: $status check(s) failed"; fi
 exit "$status"

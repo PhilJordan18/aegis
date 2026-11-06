@@ -15,6 +15,7 @@ Environment (set by run.sh):
 """
 
 import json
+import re
 import os
 import signal
 import subprocess
@@ -34,6 +35,7 @@ TAG_A1 = "E20034120123456789000001"
 TAG_A2 = "E20034120123456789000002"
 STATE = os.path.join(os.environ.get("RECETTE_DIR", "."), "state.json")
 
+SAFE_ROUTE = re.compile(r"/[a-z]+(?:[-/][a-z0-9-]+)*")
 failures = 0
 
 
@@ -54,7 +56,13 @@ def call(method, path, token=None, body=None, idempotent=False):
         headers["Authorization"] = f"Bearer {token}"
     if idempotent:
         headers["Idempotency-Key"] = str(uuid.uuid4())
-    request = urllib.request.Request(API + path, data=data, method=method, headers=headers)
+    # Only this script's own API routes: the path may carry identifiers read back from
+    # state.json, so anything that could leave the API prefix is refused (Sonar S7044).
+    route, _, query = path.partition("?")
+    if not SAFE_ROUTE.fullmatch(route) or ".." in route:
+        raise ValueError(f"refused route {route!r}")
+    request = urllib.request.Request(API + route + ("?" + query if query else ""), data=data, method=method,
+                                     headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
             text = response.read().decode()
@@ -180,7 +188,7 @@ def schedule(enabled_today):
 def physical_phase(admin, tech):
     with open(STATE, encoding="utf-8") as source:
         state = json.load(source)
-    asset1 = state["asset1"]
+    asset1 = str(uuid.UUID(state["asset1"]))
 
     deadline = time.time() + 90
     status_body, view = None, None
