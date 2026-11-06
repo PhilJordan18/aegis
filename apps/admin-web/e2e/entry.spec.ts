@@ -397,8 +397,11 @@ test.describe('flow: casiers (production page, routed fakes)', () => {
     await expect(panel.getByRole('heading', { level: 2, name: /AEGIS-DEMO-01/ })).toBeVisible()
     await expect(panel.getByRole('table')).toBeVisible()
     const retry = panel.getByRole('button', { name: 'Réessayer' })
-    // From the page heading, the next stops are the controls of the page: here the retry button, with no empty stop before it.
+    // From the page heading, the next stops are the controls of the page. The reported-errors section (#29) makes the
+    // list scroll at 1280 × 800, so the named scrolling region comes first, then the retry button, with no empty stop.
     await page.getByRole('heading', { level: 1, name: 'Casiers' }).focus()
+    await page.keyboard.press('Tab')
+    await expect(page.getByRole('group', { name: 'Casiers' })).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(retry).toBeFocused()
     expect(await retry.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe('none')
