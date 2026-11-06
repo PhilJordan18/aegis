@@ -10,11 +10,18 @@ import { useCurrentAdminProfile } from '../features/auth/useCurrentAdminProfile'
 import { assetName } from '../features/catalog/assetPresentation'
 import { AssetDossier } from '../features/catalog/AssetDossier'
 import { AssetList } from '../features/catalog/AssetList'
-import { equipmentHref } from '../features/catalog/equipmentHref'
+import { equipmentHref, modelsHref } from '../features/catalog/equipmentHref'
 import { classifyCatalogFailure } from '../features/catalog/catalogFailure'
-import { LIST_QUERY_BASE, type AdminAssetView, type AssetListQuery } from '../features/catalog/contract'
-import { useAsset, useAssetList } from '../features/catalog/useCatalogQueries'
+import { LIST_QUERY_BASE, type AdminAssetView, type AssetListQuery, type AssetModelView } from '../features/catalog/contract'
+import { ArchiveDialog } from '../features/catalog/forms/ArchiveDialog'
+import { AssetFormDialog } from '../features/catalog/forms/AssetFormDialog'
+import { ModelFormDialog } from '../features/catalog/forms/ModelFormDialog'
+import { ModelList } from '../features/catalog/ModelList'
+import { useCatalogMutations } from '../features/catalog/useCatalogMutations'
+import { useAsset, useAssetList, useModelList } from '../features/catalog/useCatalogQueries'
 import { useI18n } from '../i18n/useI18n'
+import { Button } from '../ui/Button'
+import { Icon } from '../ui/Icon'
 import '../app/page.css'
 import '../features/catalog/equipment.css'
 
@@ -22,16 +29,29 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 /** The API reads `page` as a Java int (PageQuery): a larger index is a 400, not a page past the end. */
 const MAX_PAGE_INDEX = 2_147_483_647
 
-/** `?page=2&exemplaire=<id>`: the page is one-based in the address, zero-based in the API. An unusable value is ignored. */
-function readLocation(search: string): { page: number; assetId: string | null } {
+const MODEL_PAGE_SIZE = 20
+
+/**
+ * `?page=2&exemplaire=<id>`, or `?vue=modeles&page=2`: the page is one-based in the address, zero-based in the API.
+ * An unusable value is ignored.
+ */
+function readLocation(search: string): { view: 'units' | 'models'; page: number; assetId: string | null } {
   const params = new URLSearchParams(search)
   const page = Number.parseInt(params.get('page') ?? '', 10)
   const assetId = params.get('exemplaire')
   return {
+    view: params.get('vue') === 'modeles' ? 'models' : 'units',
     page: Number.isInteger(page) && page >= 1 && page - 1 <= MAX_PAGE_INDEX ? page - 1 : 0,
     assetId: assetId !== null && UUID.test(assetId) ? assetId.toLowerCase() : null,
   }
 }
+
+/** One open dialog at a time; `session` remounts it, so each opening starts from a fresh draft and idempotency key. */
+type EditIntent =
+  | { readonly kind: 'createAsset' | 'createModel' }
+  | { readonly kind: 'editAsset' | 'archiveAsset'; readonly asset: AdminAssetView }
+  | { readonly kind: 'editModel' | 'archiveModel'; readonly model: AssetModelView }
+type Editing = EditIntent & { readonly session: number }
 
 /** The dossier sits under the list below 1024 px, out of sight after a selection (handoff §5). */
 function isStackedLayout(): boolean {
@@ -44,8 +64,9 @@ function revealDossier(target: HTMLElement | null) {
 }
 
 /**
- * Protected Équipements page (CAT-01, read-only): the units of the administrator catalog and the
- * selected unit's dossier, both from the real API. Mutations and forms are not part of this slice.
+ * Protected Équipements page (CAT-01): the units and the models of the administrator catalog, from the real API,
+ * with their creation, modification and archive. The server decides every rule; the forms only anticipate the
+ * single-field ones. The forms are proposals awaiting visual approval (docs/design/manager-forms/).
  */
 export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: UserProfile }) {
   const { m } = useI18n()
@@ -57,18 +78,33 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
   const profile = currentProfile.data ?? sessionProfile
 
   const location = readLocation(search)
-  const query: AssetListQuery = { ...LIST_QUERY_BASE, page: location.page }
-  const list = useAssetList(query)
+  const modelsView = location.view === 'models'
+  const query: AssetListQuery = { ...LIST_QUERY_BASE, page: modelsView ? 0 : location.page }
+  const list = useAssetList(query, { enabled: !modelsView })
   const page = list.data
+  const models = useModelList({ page: modelsView ? location.page : 0, size: MODEL_PAGE_SIZE }, { enabled: modelsView })
+  const { archiveAsset, archiveModel } = useCatalogMutations()
+  const [editing, setEditing] = useState<Editing | null>(null)
+  const [outcome, setOutcome] = useState('')
+  const sessions = useRef(0)
+  const open = (next: EditIntent) => {
+    sessions.current += 1
+    setOutcome('')
+    setEditing({ ...next, session: sessions.current })
+  }
+  const close = () => setEditing(null)
 
-  // A page past the end (a stale bookmark, a shrunk catalog) goes back to the last one that exists.
+  // A page past the end (a stale bookmark, a shrunk catalog, an archive on the last page) goes back to the last one.
   const lastPage = page !== undefined && !list.isPlaceholderData ? Math.max(page.totalPages - 1, 0) : null
+  const lastModelPage = models.data !== undefined && !models.isPlaceholderData ? Math.max(models.data.totalPages - 1, 0) : null
   useEffect(() => {
-    if (lastPage !== null && location.page > lastPage) router.navigate(equipmentHref({ page: lastPage, assetId: null }), { replace: true })
-  }, [lastPage, location.page, router])
+    if (modelsView) {
+      if (lastModelPage !== null && location.page > lastModelPage) router.navigate(modelsHref({ page: lastModelPage }), { replace: true })
+    } else if (lastPage !== null && location.page > lastPage) router.navigate(equipmentHref({ page: lastPage, assetId: null }), { replace: true })
+  }, [modelsView, lastPage, lastModelPage, location.page, router])
 
-  const items = page?.items ?? []
-  const selectedId = location.assetId ?? items[0]?.id ?? null
+  const items = modelsView ? [] : (page?.items ?? [])
+  const selectedId = modelsView ? null : location.assetId ?? items[0]?.id ?? null
   const listed = items.find((asset) => asset.id === selectedId)
   const asset = useAsset(selectedId, listed)
 
@@ -113,6 +149,41 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
   const empty = page !== undefined && page.totalItems === 0
   const showDossier = !empty && !(list.isError && shownPage === undefined)
 
+  const modelFailure = models.isError ? classifyCatalogFailure(models.error) : null
+  const modelPage = models.isError && modelFailure?.kind === 'forbidden' ? undefined : models.data
+  const modelAnnouncement = !modelsView
+    ? ''
+    : models.isPending
+      ? m.catalogEdit.modelsListLoading
+      : modelPage !== undefined && !models.isPlaceholderData
+        ? m.catalogEdit.modelsLoaded({ count: modelPage.totalItems })
+        : ''
+
+  function savedAsset(saved: AdminAssetView, created: boolean) {
+    close()
+    setOutcome(created ? m.catalogEdit.assetCreated({ code: saved.assetCode }) : m.catalogEdit.assetSaved({ code: saved.assetCode }))
+    // A new unit is shown at once; its list page is unknown (the order is the server's), so the list restarts at the first.
+    if (created) router.navigate(equipmentHref({ page: 0, assetId: saved.id }))
+  }
+
+  function savedModel(saved: AssetModelView, created: boolean) {
+    close()
+    setOutcome(created ? m.catalogEdit.modelCreated({ name: saved.name }) : m.catalogEdit.modelSaved({ name: saved.name }))
+  }
+
+  const t = m.catalogEdit
+  const dossierActions =
+    asset.data !== undefined && asset.data.archivedAt === null ? (
+      <>
+        <Button variant="secondary" size="sm" onClick={() => asset.data && open({ kind: 'editAsset', asset: asset.data })}>
+          {t.edit}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => asset.data && open({ kind: 'archiveAsset', asset: asset.data })}>
+          {t.archive}
+        </Button>
+      </>
+    ) : undefined
+
   return (
     <ManagerShell currentPath={pathOf('equipment')} profile={profile} onSignOut={signOut}>
       <main id="contenu" className="ag-page" tabIndex={-1}>
@@ -120,52 +191,115 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
           <div className="ag-page__titles">
             <PageHeading className="ag-page__title">{m.equipment.heading}</PageHeading>
             <nav className="ag-tabs" aria-label={m.equipment.viewsLabel}>
-              <Link className="ag-tabs__tab" to={pathOf('equipment')} aria-current="page">
+              <Link className="ag-tabs__tab" to={equipmentHref({ page: 0, assetId: null })} aria-current={modelsView ? undefined : 'page'}>
                 {m.equipment.unitsTab}
               </Link>
-              <span className="ag-tabs__tab" aria-disabled="true">
+              <Link className="ag-tabs__tab" to={modelsHref({ page: 0 })} aria-current={modelsView ? 'page' : undefined}>
                 {m.equipment.modelsTab}
-                <span className="ag-sr-only">{m.shell.soonSuffix}</span>
-                <span className="ag-soon" aria-hidden="true" />
-              </span>
+              </Link>
             </nav>
+          </div>
+          <div className="ag-page__actions">
+            <Button onClick={() => open({ kind: modelsView ? 'createModel' : 'createAsset' })}>
+              <Icon name="plus" />
+              {modelsView ? t.newModel : t.newAsset}
+            </Button>
           </div>
         </header>
 
         <div className="ag-sr-only" role="status">
-          {listAnnouncement}
+          {modelsView ? modelAnnouncement : listAnnouncement}
         </div>
         <div className="ag-sr-only" role="status">
           {selectionNote}
         </div>
-
-        <div className={showDossier ? 'ag-eq' : 'ag-eq ag-eq--single'}>
-          <AssetList
-            page={shownPage}
-            selectedId={selectedId}
-            loading={list.isPending}
-            refreshing={list.isPlaceholderData}
-            failure={listFailure}
-            stale={list.isRefetchError && !listGone}
-            retrying={list.isFetching}
-            onRetry={() => void list.refetch()}
-            onSelect={select}
-            onPage={(next) => router.navigate(equipmentHref({ page: next, assetId: null }))}
-          />
-          {showDossier && (
-            <AssetDossier
-              asset={assetGone ? undefined : asset.data}
-              loading={asset.isPending || list.isPending}
-              failure={assetFailure}
-              stale={asset.isRefetchError && !assetGone}
-              retrying={asset.isFetching}
-              focusRef={dossierRef}
-              onRetry={() => void asset.refetch()}
-              onBack={() => router.navigate(equipmentHref({ page: location.page, assetId: null }))}
-            />
-          )}
+        <div className="ag-sr-only" role="status">
+          {outcome}
         </div>
+
+        {modelsView ? (
+          <div className="ag-eq ag-eq--single">
+            <ModelList
+              page={modelPage}
+              loading={models.isPending}
+              refreshing={models.isPlaceholderData}
+              failure={modelPage === undefined ? modelFailure : null}
+              onRetry={() => void models.refetch()}
+              onPage={(next) => router.navigate(modelsHref({ page: next }))}
+              onEdit={(model) => open({ kind: 'editModel', model })}
+              onArchive={(model) => open({ kind: 'archiveModel', model })}
+            />
+          </div>
+        ) : (
+          <div className={showDossier ? 'ag-eq' : 'ag-eq ag-eq--single'}>
+            <AssetList
+              page={shownPage}
+              selectedId={selectedId}
+              loading={list.isPending}
+              refreshing={list.isPlaceholderData}
+              failure={listFailure}
+              stale={list.isRefetchError && !listGone}
+              retrying={list.isFetching}
+              onRetry={() => void list.refetch()}
+              onSelect={select}
+              onPage={(next) => router.navigate(equipmentHref({ page: next, assetId: null }))}
+            />
+            {showDossier && (
+              <AssetDossier
+                asset={assetGone ? undefined : asset.data}
+                loading={asset.isPending || list.isPending}
+                failure={assetFailure}
+                stale={asset.isRefetchError && !assetGone}
+                retrying={asset.isFetching}
+                focusRef={dossierRef}
+                onRetry={() => void asset.refetch()}
+                onBack={() => router.navigate(equipmentHref({ page: location.page, assetId: null }))}
+                actions={dossierActions}
+              />
+            )}
+          </div>
+        )}
       </main>
+
+      <AssetFormDialog
+        key={`asset-${editing?.session ?? 0}`}
+        open={editing?.kind === 'createAsset' || editing?.kind === 'editAsset'}
+        asset={editing?.kind === 'editAsset' ? editing.asset : null}
+        onClose={close}
+        onSaved={savedAsset}
+      />
+      <ModelFormDialog
+        key={`model-${editing?.session ?? 0}`}
+        open={editing?.kind === 'createModel' || editing?.kind === 'editModel'}
+        model={editing?.kind === 'editModel' ? editing.model : null}
+        onClose={close}
+        onSaved={savedModel}
+      />
+      <ArchiveDialog
+        key={`archive-${editing?.session ?? 0}`}
+        open={editing?.kind === 'archiveAsset' || editing?.kind === 'archiveModel'}
+        title={
+          editing?.kind === 'archiveAsset'
+            ? t.archiveAssetTitle({ code: editing.asset.assetCode })
+            : editing?.kind === 'archiveModel'
+              ? t.archiveModelTitle({ name: editing.model.name })
+              : ''
+        }
+        consequence={editing?.kind === 'archiveModel' ? t.archiveModelBody : t.archiveAssetBody}
+        guard={editing?.kind === 'archiveModel' ? t.archiveModelGuard : t.archiveAssetGuard}
+        archive={(idempotencyKey) =>
+          editing?.kind === 'archiveModel'
+            ? archiveModel.mutateAsync({ modelId: editing.model.id, idempotencyKey }).then((model) => t.modelArchived({ name: model.name }))
+            : editing?.kind === 'archiveAsset'
+              ? archiveAsset.mutateAsync({ assetId: editing.asset.id, idempotencyKey }).then((archived) => t.assetArchived({ code: archived.assetCode }))
+              : Promise.reject(new Error('No archive target'))
+        }
+        onClose={close}
+        onArchived={(message) => {
+          close()
+          setOutcome(message)
+        }}
+      />
     </ManagerShell>
   )
 }

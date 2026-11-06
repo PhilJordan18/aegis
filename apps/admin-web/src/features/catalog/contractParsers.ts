@@ -5,6 +5,8 @@ import {
   type Unrecognized,
   type AdminAssetPage,
   type AdminAssetView,
+  type AssetModelPage,
+  type AssetModelView,
   type Availability,
   type CalibrationStatus,
   type DiagnosticReason,
@@ -116,6 +118,29 @@ export function parseAdminAssetPage(body: unknown): AdminAssetPage | null {
     const asset = parseAdminAssetView(item)
     if (asset === null) return null
     parsed.push(asset)
+  }
+  return { items: parsed, page, size, totalItems, totalPages }
+}
+
+/** 09 §12.1 `AssetModelView`. Any structural break rejects the whole response. */
+export function parseAssetModelView(body: unknown): AssetModelView | null {
+  if (!isRecord(body)) return null
+  const { id, name, manufacturer, modelNumber, description, defaultCalibrationRequired, archivedAt } = body
+  if (!isText(id) || !isText(name) || !isTextOrNull(manufacturer) || !isTextOrNull(modelNumber) || !isTextOrNull(description)) return null
+  if (typeof defaultCalibrationRequired !== 'boolean' || !isTextOrNull(archivedAt)) return null
+  return { id, name, manufacturer, modelNumber, description, defaultCalibrationRequired, archivedAt }
+}
+
+/** 09 §11.1 envelope around `AssetModelView` items. */
+export function parseAssetModelPage(body: unknown): AssetModelPage | null {
+  if (!isRecord(body)) return null
+  const { items, page, size, totalItems, totalPages } = body
+  if (!Array.isArray(items) || !isCount(page) || !isCount(size) || !isCount(totalItems) || !isCount(totalPages)) return null
+  const parsed: AssetModelView[] = []
+  for (const item of items) {
+    const model = parseAssetModelView(item)
+    if (model === null) return null
+    parsed.push(model)
   }
   return { items: parsed, page, size, totalItems, totalPages }
 }

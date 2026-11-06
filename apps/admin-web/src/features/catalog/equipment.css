@@ -122,3 +122,16 @@ a.ag-item:hover { background: var(--ag-field); }
   .ag-tabs__tab[aria-current='page'] { outline: 2px solid Highlight; outline-offset: -2px; }
   .ag-skel__bar { background: GrayText; }
 }
+
+/* Models view and catalog actions: proposed, awaiting visual approval (docs/design/manager-forms/). */
+.ag-page__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ag-model { grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px 16px; }
+.ag-model__text { display: grid; gap: 4px; min-width: 0; }
+.ag-model__description { font-size: var(--ag-type-small-size); color: var(--ag-text-2); overflow-wrap: anywhere; }
+.ag-model__actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.ag-models .ag-list__items { max-width: 880px; }
+.ag-dossier__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+@media (max-width: 559px) {
+  .ag-model { grid-template-columns: minmax(0, 1fr); }
+  .ag-model__actions { justify-content: flex-start; }
+}

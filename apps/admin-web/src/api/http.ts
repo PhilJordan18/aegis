@@ -20,12 +20,14 @@ export interface HttpClientOptions {
 }
 
 export interface JsonRequest<T> {
-  readonly method: 'GET' | 'POST'
+  readonly method: 'GET' | 'POST' | 'PUT'
   /** Path below /api/v1, starting with a slash. */
   readonly path: string
   readonly body?: unknown
   /** Sent as `Authorization: Bearer` (09 §4.3). Never logged. */
   readonly accessToken?: string
+  /** Sent as `Idempotency-Key` (09 §6.2): the caller keeps one key per intent and reuses it to repeat that intent. */
+  readonly idempotencyKey?: string
   readonly signal?: AbortSignal
   /** Validates a 2xx body against the contract; null when it does not match. */
   readonly parse: (body: unknown) => T | null
@@ -65,7 +67,7 @@ export function createHttpClient({
   createRequestId = randomRequestId,
 }: HttpClientOptions = {}): HttpClient {
   return {
-    async send<T>({ method, path, body, accessToken, signal, parse }: JsonRequest<T>): Promise<GatewayResult<T>> {
+    async send<T>({ method, path, body, accessToken, idempotencyKey, signal, parse }: JsonRequest<T>): Promise<GatewayResult<T>> {
       if (signal?.aborted) return { kind: 'aborted' }
       const controller = new AbortController()
       let timedOut = false
@@ -82,6 +84,7 @@ export function createHttpClient({
       }
       if (body !== undefined) headers['Content-Type'] = 'application/json'
       if (accessToken !== undefined) headers.Authorization = `Bearer ${accessToken}`
+      if (idempotencyKey !== undefined) headers['Idempotency-Key'] = idempotencyKey
 
       try {
         const response = await fetchImpl(`${baseUrl}${API_BASE_PATH}${path}`, {
