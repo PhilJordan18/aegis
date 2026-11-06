@@ -18,5 +18,6 @@ export const queryKeys = {
   lockers: {
     all: ['lockers'] as const,
     status: (lockerId: string) => ['lockers', 'status', lockerId] as const,
+    schedule: (lockerId: string) => ['lockers', 'schedule', lockerId] as const,
   },
 } as const
