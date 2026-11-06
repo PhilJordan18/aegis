@@ -15,7 +15,6 @@ Environment (set by run.sh):
 """
 
 import json
-import re
 import os
 import signal
 import subprocess
@@ -35,7 +34,16 @@ TAG_A1 = "E20034120123456789000001"
 TAG_A2 = "E20034120123456789000002"
 STATE = os.path.join(os.environ.get("RECETTE_DIR", "."), "state.json")
 
-SAFE_ROUTE = re.compile(r"/[a-z]+(?:[-/][a-z0-9-]+)*")
+ROUTE_CHARACTERS = set("abcdefghijklmnopqrstuvwxyz0123456789-")
+
+
+def safe_route(route):
+    """An API route of this script: '/'-separated, non-empty segments of [a-z0-9-], no '.'."""
+    segments = route.split("/")
+    return segments[0] == "" and len(segments) > 1 and all(
+        segment and set(segment) <= ROUTE_CHARACTERS for segment in segments[1:])
+
+
 failures = 0
 
 
@@ -59,7 +67,7 @@ def call(method, path, token=None, body=None, idempotent=False):
     # Only this script's own API routes: the path may carry identifiers read back from
     # state.json, so anything that could leave the API prefix is refused (Sonar S7044).
     route, _, query = path.partition("?")
-    if not SAFE_ROUTE.fullmatch(route) or ".." in route:
+    if not safe_route(route):
         raise ValueError(f"refused route {route!r}")
     request = urllib.request.Request(API + route + ("?" + query if query else ""), data=data, method=method,
                                      headers=headers)
