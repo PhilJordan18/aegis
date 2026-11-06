@@ -6,6 +6,7 @@ import { Dialog, DialogActions, DialogBody } from '../../ui/Dialog'
 import { Alert } from '../../ui/Alert'
 import { FormAlert } from '../catalog/forms/FormAlert'
 import { feedbackFor, violationMessage, type FormFeedback } from '../catalog/forms/formFeedback'
+import { useFeedbackFocus } from '../catalog/forms/useFeedbackFocus'
 import { classifyMutationFailure } from '../catalog/mutationFailure'
 import type { OperatingScheduleView } from './contract'
 import { draftOf, fieldOf, requestOf, type LocalViolation, type ScheduleDraft } from './scheduleDraft'
@@ -119,13 +120,7 @@ function ScheduleForm({ initial, configured, busy, onCancel, onSubmit, onSaved }
     form.querySelector<HTMLElement>('[data-autofocus]')?.focus()
   }, [])
 
-  function show(next: FormFeedback) {
-    setFeedback(next)
-    requestAnimationFrame(() => {
-      if (next.alert !== null) alertRef.current?.focus()
-      else formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
-    })
-  }
+  useFeedbackFocus(feedback, alertRef, formRef)
 
   function setDay(index: number, patch: Partial<ScheduleDraft['days'][number]>) {
     setDraft((current) => ({ ...current, days: current.days.map((day, at) => (at === index ? { ...day, ...patch } : day)) }))
@@ -136,7 +131,7 @@ function ScheduleForm({ initial, configured, busy, onCancel, onSubmit, onSaved }
     if (busy) return
     const { request, errors } = requestOf(draft)
     if (Object.keys(errors).length > 0) {
-      show({ fieldErrors: Object.fromEntries(Object.entries(errors).map(([field, violation]) => [field, localMessage(violation, i18n)])), alert: null })
+      setFeedback({ fieldErrors: Object.fromEntries(Object.entries(errors).map(([field, violation]) => [field, localMessage(violation, i18n)])), alert: null })
       return
     }
     setFeedback({ fieldErrors: {}, alert: null })
@@ -144,7 +139,7 @@ function ScheduleForm({ initial, configured, busy, onCancel, onSubmit, onSaved }
       onSaved(await onSubmit(request))
     } catch (error) {
       const failure = classifyMutationFailure(error)
-      if (failure.kind !== 'validation') return show(feedbackFor(failure, {}, i18n))
+      if (failure.kind !== 'validation') return setFeedback(feedbackFor(failure, {}, i18n))
       const known = new Set(['timeZone', ...draft.days.flatMap((_, index) => [fieldOf(index, 'opensAt'), fieldOf(index, 'closesAt')])])
       const fieldErrors: Record<string, string> = {}
       let other = false
@@ -155,7 +150,7 @@ function ScheduleForm({ initial, configured, busy, onCancel, onSubmit, onSaved }
       const alert = other || Object.keys(fieldErrors).length === 0
         ? { title: i18n.m.catalogEdit.validationOtherTitle, body: null, traceId: failure.traceId, retryable: false }
         : { title: i18n.m.catalogEdit.validationTitle, body: null, traceId: null, retryable: false }
-      show({ fieldErrors, alert })
+      setFeedback({ fieldErrors, alert })
     }
   }
 
