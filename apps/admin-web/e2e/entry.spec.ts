@@ -307,18 +307,19 @@ test.describe('flow: équipements (production page, routed fakes)', () => {
     expect(requests.some((request) => request.includes('page=1&size=20&sort=assetCode%2Casc'))).toBe(true)
   })
 
-  test('flow: the page offers no control that creates, edits, archives or saves', async ({ page }) => {
-    await openEquipment(page, 'nominal')
-    await expect(page.locator('main').getByRole('button')).toHaveCount(0)
+  test('flow: changes go through explicit actions only, and opening the page writes nothing', async ({ page }) => {
+    const requests = await openEquipment(page, 'nominal')
+    await expect(page.locator('main').getByRole('button')).toHaveText(['Nouvel exemplaire', 'Modifier', 'Archiver'])
     await expect(page.locator('main').locator('input, select, textarea')).toHaveCount(0)
+    expect(requests.every((request) => request.startsWith('GET '))).toBe(true)
   })
 
-  test('flow: the « Modèles » tab is a dormant, non-focusable tab announced as coming', async ({ page }) => {
+  test('flow: the « Modèles » tab is a real link to the models view', async ({ page }) => {
     await openEquipment(page, 'nominal')
     const tabs = page.getByRole('navigation', { name: 'Vues des équipements' })
     await expect(tabs.getByRole('link', { name: 'Exemplaires' })).toHaveAttribute('aria-current', 'page')
-    await expect(tabs.getByRole('link', { name: 'Modèles' })).toHaveCount(0)
-    await expect(tabs).toContainText('Modèles, à venir')
+    await expect(tabs.getByRole('link', { name: 'Modèles' })).toHaveAttribute('href', '/equipements?vue=modeles')
+    await expect(tabs.getByRole('link', { name: 'Modèles' })).not.toHaveAttribute('aria-current', 'page')
   })
 
   test('flow: long French content wraps without clipping or horizontal scroll at 200 % zoom', async ({ page }) => {
