@@ -236,8 +236,9 @@ test.describe('flow: équipements (production page, routed fakes)', () => {
     await expect(page.locator('main')).not.toContainText(/\bPrêt\b/)
     await expect(page.locator('main')).toContainText('Présence inconnue')
     await expect(page.locator('main')).toContainText('Aucun placement connu')
-    // Only the two catalog routes, through the routed fakes.
-    expect(requests.every((request) => /^GET \/api\/v1\/admin\/assets(\/[0-9a-f-]{36})?(\?|$)/.test(request))).toBe(true)
+    // Only reads through the routed fakes: the two catalog routes and the unit's identifier history (09 §12.3).
+    expect(requests.every((request) => /^GET \/api\/v1\/admin\/assets(\/[0-9a-f-]{36}(\/identifiers)?)?(\?|$)/.test(request))).toBe(true)
+    expect(requests.some((request) => request.endsWith('/identifiers'))).toBe(true)
   })
 
   test('flow: keyboard selection with Tab and Enter changes the dossier, keeps the focus on the row and announces it', async ({ page }) => {
