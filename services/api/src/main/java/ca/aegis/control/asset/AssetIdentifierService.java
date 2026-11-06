@@ -3,11 +3,13 @@ package ca.aegis.control.asset;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import ca.aegis.control.shared.web.ApiError;
@@ -96,6 +98,16 @@ class AssetIdentifierService {
         AssetIdentifierView revoked = identifiers.find(identifierId).orElseThrow();
         audit.identifierRevoked(revoked, actor, now, false);
         return revoked;
+    }
+
+    /**
+     * The identifiers of an asset with their history (document 09, section 12.3, approved on 6 November 2026). An
+     * archived asset stays readable; an unknown one is not found.
+     */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    List<AssetIdentifierView> history(UUID assetId) {
+        assets.find(assetId).orElseThrow(ResourceNotFoundException::new);
+        return identifiers.historyOfAsset(assetId);
     }
 
     private void refuseDuringOperation(UUID assetId) {
