@@ -303,6 +303,71 @@ class RfidPresenceTests extends ApiIntegrationTest {
         assertEquals("PRESENT", read(technicianView(assetA), "$.presence"), "a higher bootCount");
     }
 
+    /**
+     * Recovery rule approved by Philippe on PR #147: within the ambiguous boot, a heartbeat, a reconnection or a scan
+     * cannot clear the conflict; a strictly higher bootCount ends it but establishes nothing until a fresh scan of
+     * that session, after which presence and readiness follow the ordinary rules.
+     */
+    @Test
+    void aHigherBootEndsTheConflictButOnlyAFreshScanOfThatBootRestoresPresence() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("READY", read(technicianView(assetA), "$.readiness.result"));
+
+        Session twin = new Session(session.bootCount, locker);
+        clock.advance(Duration.ofSeconds(1));
+        ingest(twin.door("DOOR_OPENED", clock.instant(), cellA));
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"), "twin door event");
+
+        clock.advance(Duration.ofSeconds(1));
+        session.connectionId = UUID.randomUUID();
+        ingest(session.availability(clock.instant(), "ONLINE", "CONNECTED"));
+        heartbeat("HEALTHY", "HEALTHY");
+        clock.advance(Duration.ofSeconds(5));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        String view = technicianView(assetA);
+        assertEquals("UNKNOWN", read(view, "$.presence"), "reconnection, heartbeat and scan in the ambiguous boot");
+        assertEquals("UNKNOWN", read(view, "$.readiness.result"));
+
+        clock.advance(Duration.ofSeconds(1));
+        session = new Session(BOOTS.incrementAndGet(), locker);
+        ingest(session.restarted(clock.instant()));
+        heartbeat("HEALTHY", "HEALTHY");
+        view = technicianView(assetA);
+        assertEquals("UNKNOWN", read(view, "$.presence"), "higher bootCount without a new scan");
+        assertEquals("UNKNOWN", read(view, "$.readiness.result"));
+        assertEquals(List.of("UNKNOWN_PHYSICAL_STATE"), read(view, "$.readiness.reasons"));
+
+        clock.advance(Duration.ofSeconds(5));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        view = technicianView(assetA);
+        assertEquals("PRESENT", read(view, "$.presence"), "fresh scan in the higher boot");
+        assertEquals("READY", read(view, "$.readiness.result"));
+        assertEquals(List.of(), read(view, "$.readiness.reasons"));
+    }
+
+    @Test
+    void aHigherBootAfterTheConflictStillHonoursTheOtherReadinessConditions() throws Exception {
+        jdbc.sql("""
+                UPDATE aegis.assets SET calibration_required = true, calibration_due_at = :due WHERE id = :id
+                """).param("due", DeviceTestSupport.utc(START.minus(Duration.ofDays(1)))).param("id", assetA)
+                .update();
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        Session twin = new Session(session.bootCount, locker);
+        clock.advance(Duration.ofSeconds(1));
+        ingest(twin.door("DOOR_OPENED", clock.instant(), cellA));
+
+        clock.advance(Duration.ofSeconds(1));
+        session = new Session(BOOTS.incrementAndGet(), locker);
+        ingest(session.restarted(clock.instant()));
+        heartbeat("HEALTHY", "HEALTHY");
+        clock.advance(Duration.ofSeconds(5));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        String view = technicianView(assetA);
+        assertEquals("PRESENT", read(view, "$.presence"), "fresh scan in the higher boot");
+        assertEquals("BLOCKED", read(view, "$.readiness.result"), "presence alone never makes it READY");
+        assertEquals(List.of("CALIBRATION_EXPIRED"), read(view, "$.readiness.reasons"));
+    }
+
     @Test
     void aTwinStartThatOnlyHeartbeatsStillVoidsPresence() throws Exception {
         ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
