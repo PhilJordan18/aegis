@@ -195,10 +195,14 @@ test('an administrator opens Équipements, sees the units from the API and opens
   await expect(dossier).toContainText(/15\sjanv\.\s2027,\s00\sh\s00\sHNE/)
   await expect(dossier).toContainText('America/Toronto')
   await expect(page.locator('main')).not.toContainText(/\bPrêt\b/)
-  // The only commands are create, edit and archive (CAT-01 forms); readiness is never a control. The kept database
-  // may hold more than one page, whose pager has buttons.
+  // The only commands are create, edit and archive (CAT-01 forms), placement and identifiers (#26), each one
+  // explicit; readiness is never a control. The kept database may hold more than one page, whose pager has buttons,
+  // and identifiers, each with its revoke button.
   const pagerButtons = await page.getByRole('navigation', { name: 'Pagination des exemplaires' }).getByRole('button').count()
-  await expect(page.locator('main').getByRole('button')).toHaveCount(pagerButtons + 3)
+  const revokeButtons = await page.locator('main').getByRole('button', { name: /^Révoquer / }).count()
+  await expect(page.locator('main').getByRole('button')).toHaveCount(pagerButtons + 5 + revokeButtons)
+  await expect(page.getByRole('button', { name: 'Modifier le placement' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Attribuer un identifiant' })).toBeVisible()
   await expect(page.getByRole('group', { name: 'Actions de l’exemplaire' }).getByRole('button')).toHaveText(['Modifier', 'Archiver'])
 
   // Clicking a listed unit selects it through the address and reads it by id.
@@ -442,7 +446,7 @@ test('CAT-01 forms: an administrator creates, edits and archives a model and a u
   await expect(duplicate).toHaveCount(0)
 
   // Edit: PUT without an Idempotency-Key; the untouched calibration instant is sent back unchanged.
-  await page.getByRole('button', { name: 'Modifier' }).click()
+  await page.getByRole('group', { name: 'Actions de l’exemplaire' }).getByRole('button', { name: 'Modifier' }).click()
   const edit = page.getByRole('dialog', { name: `Modifier l’exemplaire ${code}` })
   await edit.getByLabel(/^Numéro de série/).fill(`SN-${stamp}`)
   await edit.getByRole('radio', { name: 'En maintenance' }).check()
@@ -482,6 +486,167 @@ test('CAT-01 forms: an administrator creates, edits and archives a model and a u
 })
 
 /** Signs in through the page; a 429 is waited out with its Retry-After, then the same sign-in is sent again. */
+interface LiveCompartment {
+  readonly id: string
+  readonly code: string
+  readonly enabled: boolean
+  readonly currentAsset: { readonly id: string; readonly assetCode: string } | null
+}
+interface LiveLocker {
+  readonly id: string
+  readonly code: string
+  readonly compartments: readonly LiveCompartment[]
+}
+
+test('#26 custody: an administrator assigns and revokes an identifier, then moves a placement, through the real API', async ({ page, request }) => {
+  // The suite's earlier sign-ins may fill the five-per-minute window (09 §23.4): this test waits it out.
+  test.setTimeout(150_000)
+  const stamp = Date.now()
+  const requests = apiRequests(page)
+  const accessToken = await signInWhenAllowed(page)
+  await expect(page).toHaveURL(/\/equipements$/)
+  const auth = { Authorization: `Bearer ${accessToken}` }
+  const withKey = () => ({ ...auth, 'Idempotency-Key': randomUUID() })
+  const readLocker = async () => {
+    const lockers = await request.get('/api/v1/admin/lockers?page=0&size=100', { headers: auth })
+    expect(lockers.status()).toBe(200)
+    const locker = ((await lockers.json()) as { items: LiveLocker[] }).items.find((candidate) => candidate.id === DEMO_LOCKER_ID)
+    expect(locker, 'demo locker listed by GET /admin/lockers').toBeTruthy()
+    return locker as LiveLocker
+  }
+  const createUnit = async (code: string) => {
+    const model = await request.post('/api/v1/admin/asset-models', {
+      headers: withKey(),
+      data: { name: `Garde E2E ${code}`, manufacturer: null, modelNumber: null, description: null, defaultCalibrationRequired: false },
+    })
+    expect(model.status()).toBe(201)
+    const unit = await request.post('/api/v1/admin/assets', {
+      headers: withKey(),
+      data: { assetModelId: ((await model.json()) as { id: string }).id, assetCode: code, serialNumber: null, requiredAccessLevel: 'STANDARD', operationalStatus: 'SERVICEABLE', calibrationRequired: false, calibrationDueAt: null },
+    })
+    expect(unit.status()).toBe(201)
+    return ((await unit.json()) as { id: string }).id
+  }
+  const openUnit = async (assetId: string, code: string) => {
+    await page.evaluate((id) => {
+      window.history.pushState(null, '', `/equipements?exemplaire=${id}`)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }, assetId)
+    await expect(page.getByRole('heading', { level: 2, name: new RegExp(`· ${code}$`) })).toBeVisible()
+  }
+
+  // A fresh unit B carries the identifier steps and the placement conflict.
+  const codeB = `GARDE-${stamp}`
+  const unitB = await createUnit(codeB)
+  await openUnit(unitB, codeB)
+  await expect(page.getByText('Aucun identifiant attribué.')).toBeVisible()
+
+  // Assign: a POST with an Idempotency-Key, then the history is read again (09 §12.3).
+  const value = `E2E${stamp}`
+  await page.getByRole('button', { name: 'Attribuer un identifiant' }).click()
+  const assign = page.getByRole('dialog', { name: `Attribuer un identifiant à ${codeB}` })
+  await expect(assign.getByLabel(/^Type/)).toBeFocused()
+  await assign.getByLabel(/^Type/).selectOption({ label: 'RFID UHF' })
+  await assign.getByLabel(/^Valeur/).fill(value)
+  const assigned = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `/api/v1/admin/assets/${unitB}/identifiers`)
+  await assign.getByRole('button', { name: 'Attribuer un identifiant' }).click()
+  const assignResponse = await assigned
+  expect(assignResponse.status()).toBe(201)
+  expect(await assignResponse.request().headerValue('idempotency-key')).toMatch(/^[0-9a-f-]{36}$/)
+  await expect(assign).toHaveCount(0)
+  const history = page.getByRole('list', { name: 'Historique des identifiants' })
+  await expect(history).toContainText(value)
+  await expect(history).toContainText('Actif')
+
+  // The same value again: IDENTIFIER_ALREADY_ASSIGNED lands on the value field, nothing is written.
+  await page.getByRole('button', { name: 'Attribuer un identifiant' }).click()
+  await assign.getByLabel(/^Type/).selectOption({ label: 'RFID UHF' })
+  await assign.getByLabel(/^Valeur/).fill(value)
+  const refusedAssign = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `/api/v1/admin/assets/${unitB}/identifiers`)
+  await assign.getByRole('button', { name: 'Attribuer un identifiant' }).click()
+  expect((await refusedAssign).status()).toBe(409)
+  await expect(assign.getByLabel(/^Valeur/)).toHaveAttribute('aria-invalid', 'true')
+  await expect(assign.getByText('Cette valeur est déjà attribuée à un identifiant actif.')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(assign).toHaveCount(0)
+
+  // Revoke: a confirmation that starts on Cancel, then a POST with a key; the history keeps the identifier.
+  await page.getByRole('button', { name: `Révoquer RFID UHF ${value}` }).click()
+  const confirm = page.getByRole('alertdialog')
+  await expect(confirm.getByRole('button', { name: 'Annuler' })).toBeFocused()
+  const revoked = page.waitForResponse((response) => response.request().method() === 'POST' && /\/identifiers\/[^/]+\/revoke$/.test(new URL(response.url()).pathname))
+  await confirm.getByRole('button', { name: 'Révoquer' }).click()
+  const revokeResponse = await revoked
+  expect(revokeResponse.status()).toBe(200)
+  expect(await revokeResponse.request().headerValue('idempotency-key')).toMatch(/^[0-9a-f-]{36}$/)
+  await expect(history).toContainText('Révoqué')
+  await expect(page.getByRole('button', { name: `Révoquer RFID UHF ${value}` })).toHaveCount(0)
+  const direct = await request.get(`/api/v1/admin/assets/${unitB}/identifiers`, { headers: auth })
+  expect(((await direct.json()) as { value: string; active: boolean }[]).map(({ value: v, active }) => ({ value: v, active }))).toEqual([{ value, active: false }])
+
+  // Placement. The Casiers tests find the demo locker through a unit placed in it, so this test keeps one there:
+  // it moves that unit A to a free cell and back, and never leaves a cell occupied that was free.
+  let locker = await readLocker()
+  let source = locker.compartments.find((compartment) => compartment.currentAsset !== null)
+  if (source === undefined) {
+    const seeded = await createUnit(`PLACE-${stamp}`)
+    const first = locker.compartments.find((compartment) => compartment.enabled)
+    expect(first, 'an enabled compartment in the demo locker').toBeTruthy()
+    const put = await request.put(`/api/v1/admin/assets/${seeded}/placement`, { headers: auth, data: { compartmentId: first?.id, reason: 'Préparation de la recette #26' } })
+    expect(put.status()).toBe(200)
+    locker = await readLocker()
+    source = locker.compartments.find((compartment) => compartment.currentAsset !== null)
+  }
+  const unitA = source?.currentAsset as { id: string; assetCode: string }
+  const target = locker.compartments.find((compartment) => compartment.enabled && compartment.currentAsset === null)
+  expect(target, 'a free enabled compartment in the demo locker').toBeTruthy()
+
+  try {
+    await openUnit(unitA.id, unitA.assetCode)
+    await page.getByRole('button', { name: 'Modifier le placement' }).click()
+    const placement = page.getByRole('dialog', { name: `Placement de ${unitA.assetCode}` })
+    await placement.getByLabel(/^Casier/).selectOption({ value: DEMO_LOCKER_ID })
+    await expect(placement.getByLabel(/^Cellule/).locator('option', { hasText: `${source?.code} — placement actuel` })).toHaveCount(1)
+    await placement.getByLabel(/^Cellule/).selectOption({ value: target?.id ?? '' })
+    await placement.getByLabel(/^Motif/).fill('Recette #26 : déplacement')
+    const placed = page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname === `/api/v1/admin/assets/${unitA.id}/placement`)
+    await placement.getByRole('button', { name: 'Enregistrer' }).click()
+    const placeResponse = await placed
+    expect(placeResponse.status()).toBe(200)
+    expect(await placeResponse.request().headerValue('idempotency-key')).toBeNull()
+    await expect(placement).toHaveCount(0)
+    const moved = await readLocker()
+    expect(moved.compartments.find((compartment) => compartment.id === target?.id)?.currentAsset?.id).toBe(unitA.id)
+    expect(moved.compartments.find((compartment) => compartment.id === source?.id)?.currentAsset).toBeNull()
+
+    // Unit B into the cell A now holds: COMPARTMENT_ALREADY_OCCUPIED lands on the compartment, nothing is written.
+    await openUnit(unitB, codeB)
+    await page.getByRole('button', { name: 'Modifier le placement' }).click()
+    const conflict = page.getByRole('dialog', { name: `Placement de ${codeB}` })
+    await conflict.getByLabel(/^Casier/).selectOption({ value: DEMO_LOCKER_ID })
+    await expect(conflict.getByLabel(/^Cellule/).locator('option', { hasText: `${target?.code} — occupée par ${unitA.assetCode}` })).toHaveCount(1)
+    await conflict.getByLabel(/^Cellule/).selectOption({ value: target?.id ?? '' })
+    await conflict.getByLabel(/^Motif/).fill('Recette #26 : conflit attendu')
+    const refusedPlacement = page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname === `/api/v1/admin/assets/${unitB}/placement`)
+    await conflict.getByRole('button', { name: 'Enregistrer' }).click()
+    expect((await refusedPlacement).status()).toBe(409)
+    await expect(conflict.getByLabel(/^Cellule/)).toHaveAttribute('aria-invalid', 'true')
+    await expect(conflict.getByText('Un autre exemplaire occupe déjà cette cellule.')).toBeVisible()
+    await page.keyboard.press('Escape')
+    expect((await readLocker()).compartments.find((compartment) => compartment.id === target?.id)?.currentAsset?.id).toBe(unitA.id)
+  } finally {
+    // Back where it was, so the next run and the Casiers tests find the same state.
+    const back = await request.put(`/api/v1/admin/assets/${unitA.id}/placement`, { headers: auth, data: { compartmentId: source?.id, reason: 'Recette #26 : retour' } })
+    expect(back.status()).toBe(200)
+  }
+
+  // Apart from the sign-in, every write went to the unit's /admin routes; the page never sent a command to the locker.
+  const writes = requests.filter((candidate) => candidate.method() !== 'GET' && new URL(candidate.url()).pathname !== '/api/v1/auth/login')
+  // Assign, refused assign, revoke, move, refused move.
+  expect(writes.length).toBe(5)
+  expect(writes.every((candidate) => new URL(candidate.url()).pathname.startsWith('/api/v1/admin/assets/'))).toBe(true)
+})
+
 async function signInWhenAllowed(page: Page): Promise<string> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const login = page.waitForResponse((response) => response.url().endsWith('/api/v1/auth/login'))
