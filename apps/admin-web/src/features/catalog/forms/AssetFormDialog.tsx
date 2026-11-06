@@ -13,6 +13,7 @@ import { useCatalogMutations } from '../useCatalogMutations'
 import { useModelList } from '../useCatalogQueries'
 import { FormAlert } from './FormAlert'
 import { feedbackFor, LIMITS, type FormFeedback } from './formFeedback'
+import { useFeedbackFocus } from './useFeedbackFocus'
 
 interface AssetFormDialogProps {
   readonly open: boolean
@@ -116,21 +117,14 @@ export function AssetFormDialog({ open, asset, onClose, onSaved }: AssetFormDial
   const formRef = useRef<HTMLFormElement>(null)
   const busy = (asset === null ? createAsset : updateAsset).isPending
 
-
-  function show(next: FormFeedback) {
-    setFeedback(next)
-    requestAnimationFrame(() => {
-      if (next.alert !== null) alertRef.current?.focus()
-      else formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
-    })
-  }
+  useFeedbackFocus(feedback, alertRef, formRef)
 
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (busy) return
     const { request, errors } = validate(draft, asset, i18n)
     if (request === null) {
-      show({ fieldErrors: errors, alert: null })
+      setFeedback({ fieldErrors: errors, alert: null })
       return
     }
     setFeedback({ fieldErrors: {}, alert: null })
@@ -141,7 +135,7 @@ export function AssetFormDialog({ open, asset, onClose, onSaved }: AssetFormDial
           : await updateAsset.mutateAsync({ assetId: asset.id, request })
       onSaved(saved, asset === null)
     } catch (error) {
-      show(feedbackFor(classifyMutationFailure(error), FIELDS, i18n))
+      setFeedback(feedbackFor(classifyMutationFailure(error), FIELDS, i18n))
     }
   }
 

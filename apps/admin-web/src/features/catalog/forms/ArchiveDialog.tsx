@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useIdempotencyKey } from '../../../api/idempotency'
 import { useI18n } from '../../../i18n/useI18n'
 import { Button } from '../../../ui/Button'
@@ -28,7 +28,10 @@ export function ArchiveDialog<T>({ open, title, consequence, guard, archive, onC
   const [busy, setBusy] = useState(false)
   const [alert, setAlert] = useState<FormAlertContent | null>(null)
   const alertRef = useRef<HTMLDivElement>(null)
-
+  // Once the refusal is rendered, not in an animation frame that may run before it exists.
+  useEffect(() => {
+    if (alert !== null) alertRef.current?.focus()
+  }, [alert])
 
   async function confirm() {
     if (busy) return
@@ -42,7 +45,6 @@ export function ArchiveDialog<T>({ open, title, consequence, guard, archive, onC
       setBusy(false)
       const next = feedbackFor(classifyMutationFailure(error), {}, i18n).alert
       setAlert(next)
-      requestAnimationFrame(() => alertRef.current?.focus())
     }
   }
 
