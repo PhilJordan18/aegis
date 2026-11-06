@@ -852,7 +852,7 @@ Les lectures `GET /admin/assets` et `GET /admin/assets/{assetId}` retournent res
 
 `GET /admin/assets` accepte `q`, `page`, `size` et `sort` avec les règles de §11.1, sans les filtres `readiness` et `availability` du technicien. `q` cherche, sans casse, dans `assetCode` et le nom du modèle (§22.3). `sort` vaut `assetCode` ou `modelName`, suivi de `,asc` ou `,desc` (`assetCode,asc` par défaut); l’ordre est stable : `modelName` départage par `assetCode`, puis `id` départage toujours (§22.1). Les actifs archivés y figurent, avec leur `archivedAt`. Une valeur invalide retourne `400 VALIDATION_ERROR` (`SIZE` ou `INVALID_VALUE`, §7.1).
 
-Sur ces lectures du catalogue administrateur seulement (`GET /admin/asset-models` et `GET /admin/assets`), un paramètre de requête inconnu est ignoré. Cette tolérance ne s’étend pas aux autres routes et ne concerne pas les champs d’un corps, toujours refusés (§3). Les réponses de création et de modification emploient la même vue administrative, jamais une readiness calculée pour un administrateur traité comme technicien.
+Sur ces lectures du catalogue administrateur (`GET /admin/asset-models` et `GET /admin/assets`) et sur `GET /admin/lockers` (§16.2) seulement, un paramètre de requête inconnu est ignoré. Cette tolérance ne s’étend pas aux autres routes et ne concerne pas les champs d’un corps, toujours refusés (§3). Les réponses de création et de modification emploient la même vue administrative, jamais une readiness calculée pour un administrateur traité comme technicien.
 
 CreateAssetRequest et UpdateAssetRequest :
 

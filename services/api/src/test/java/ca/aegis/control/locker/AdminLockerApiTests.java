@@ -73,6 +73,8 @@ class AdminLockerApiTests extends ApiIntegrationTest {
         assertNull(cells.get(0).get("currentAsset"));
         assertEquals(Map.of("id", occupant.toString(), "assetCode", prefix + "-OCC"), cells.get(1).get("currentAsset"));
         assertNull(cells.get(2).get("currentAsset"));
+        // A free compartment carries "currentAsset": null, present rather than omitted.
+        assertTrue(cells.get(2).containsKey("currentAsset"));
         assertTrue(compartments(mine.get(1)).isEmpty());
     }
 
