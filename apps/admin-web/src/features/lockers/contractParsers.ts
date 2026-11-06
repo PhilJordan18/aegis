@@ -2,6 +2,8 @@ import { UNRECOGNIZED, type Unrecognized } from '../catalog/contract'
 import type {
   CompartmentConnectionStatus,
   CompartmentStatus,
+  DeviceError,
+  DeviceErrorSeverity,
   DoorState,
   LockerConnectionStatus,
   LockerStatus,
@@ -74,6 +76,7 @@ const COMPARTMENT_CONNECTIONS: readonly CompartmentConnectionStatus[] = ['CONNEC
 const READER_STATUSES: readonly RfidReaderStatus[] = ['HEALTHY', 'FAULTED', 'UNKNOWN']
 const DOOR_STATES: readonly DoorState[] = ['OPEN', 'CLOSED', 'UNKNOWN']
 const LOCK_STATES: readonly LockState[] = ['LOCKED', 'UNLOCKED', 'UNKNOWN']
+const SEVERITIES: readonly DeviceErrorSeverity[] = ['WARNING', 'CRITICAL']
 
 function parseWindow(value: unknown): OperatingWindow | null {
   if (!isRecord(value)) return null
@@ -94,6 +97,16 @@ function parseCompartment(value: unknown): CompartmentStatus | null {
   return { id, code, enabled, connectionStatus: connection, rfidReaderStatus: reader, doorState: door, lockState: lock, lastObservedAt }
 }
 
+function parseDeviceError(value: unknown): DeviceError | null {
+  if (!isRecord(value)) return null
+  const { errorCode, severity, compartmentId, firstReceivedAt, lastReceivedAt, occurrences } = value
+  if (!isText(errorCode) || !(compartmentId === null || isUuid(compartmentId)) || !isInstant(firstReceivedAt) || !isInstant(lastReceivedAt)) return null
+  if (typeof occurrences !== 'number' || !Number.isSafeInteger(occurrences) || occurrences < 1) return null
+  const parsedSeverity = lenientEnum(severity, SEVERITIES, 'deviceErrors.severity')
+  if (parsedSeverity === undefined) return null
+  return { errorCode, severity: parsedSeverity, compartmentId, firstReceivedAt, lastReceivedAt, occurrences }
+}
+
 /**
  * 09 §8.6. A structural break (a missing field, a wrong type, a boolean that is not a boolean, an id that is not a
  * UUID, an instant that is not a UTC RFC 3339 date) rejects
@@ -102,7 +115,7 @@ function parseCompartment(value: unknown): CompartmentStatus | null {
  */
 export function parseLockerStatus(body: unknown): LockerStatus | null {
   if (!isRecord(body)) return null
-  const { lockerId, code, name, topology, connectionStatus, lastSeenAt, evaluatedAt, currentWindow, compartments } = body
+  const { lockerId, code, name, topology, connectionStatus, lastSeenAt, evaluatedAt, currentWindow, compartments, deviceErrors } = body
   if (!isUuid(lockerId) || !isText(code) || typeof name !== 'string' || !isInstantOrNull(lastSeenAt) || !isInstant(evaluatedAt)) return null
   const parsedTopology = lenientEnum(topology, TOPOLOGIES, 'topology')
   const parsedConnection = lenientEnum(connectionStatus, LOCKER_CONNECTIONS, 'connectionStatus')
@@ -114,6 +127,14 @@ export function parseLockerStatus(body: unknown): LockerStatus | null {
     if (compartment === null) return null
     parsedCompartments.push(compartment)
   }
+  // Required since #142: an API without it is older than this client, and the list is not guessed empty.
+  if (!Array.isArray(deviceErrors)) return null
+  const parsedErrors: DeviceError[] = []
+  for (const item of deviceErrors) {
+    const error = parseDeviceError(item)
+    if (error === null) return null
+    parsedErrors.push(error)
+  }
   return {
     lockerId,
     code,
@@ -124,5 +145,6 @@ export function parseLockerStatus(body: unknown): LockerStatus | null {
     evaluatedAt,
     currentWindow: window,
     compartments: parsedCompartments,
+    deviceErrors: parsedErrors,
   }
 }

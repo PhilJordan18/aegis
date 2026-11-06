@@ -24,8 +24,25 @@ aura livré les deux recettes et leurs nombres attendus.
 | Tests unitaires et de contrat : 222 cas, sans backend, `Live*` exclus par nom | rapide et étendue | idem | oui | idem |
 | Contrôle du String Catalog FR/EN (`check-strings.py`) | rapide et étendue | idem | oui | idem |
 | Petite suite UI : connexion, catalogue, navigation et retour, reprise après erreur réseau (sélection ci-dessous) | rapide | PR iOS sans changement visuel | oui | iOS (sélection), cloud (déclenchement) |
-| Suite UI complète : 27 tests, combinaisons FR/EN × clair/sombre, grandes tailles, audits d'accessibilité | étendue = recette `standalone` actuelle, inchangée | PR qui touche un chemin visuel ; PR vers `main` (avant livraison) ; push sur `dev` et `main` ; `ci.yml` modifié ; lancement manuel | oui sur PR ; sur push, le rouge est signalé après fusion | idem |
-| Pas de job iOS | — | PR sans impact iOS, sauf `ci.yml` ou `xcresult-summary.py` modifié | — | cloud |
+| Suite UI complète : 27 tests, combinaisons FR/EN × clair/sombre, grandes tailles, audits d'accessibilité | étendue = recette `standalone` actuelle, inchangée | PR qui touche un chemin visuel ; PR vers `main` (avant livraison) ; push sur `dev` dont la plage touche un chemin iOS (voir ci-dessous) ; tout push sur `main` ; `ci.yml` modifié ; lancement manuel | oui sur PR ; sur push, le rouge est signalé après fusion | idem |
+| Pas de job iOS | — | PR sans impact iOS, sauf `ci.yml` ou `xcresult-summary.py` modifié ; push sur `dev` sans chemin iOS dans sa plage | — | cloud |
+
+**Push sur `dev` (proposition du 6 novembre 2026, à décider par Philippe).**
+
+- Les jobs Linux tournent tous, comme avant. Seule la suite iOS devient conditionnelle.
+- Elle tourne si la plage poussée (`github.event.before..github.sha`) touche :
+  - `apps/ios/`, ce qui couvre le projet Xcode, `xcconfig`, `Package.resolved` et les recettes ;
+  - le corpus partagé `docs/cahier-conception/09-corpus-recherche-q.json` ;
+  - le contrat REST `docs/cahier-conception/09-contrats-rest.md` ;
+  - n'importe quel fichier de `.github/`.
+- Une suppression ou un renommage compte des deux côtés (`--no-renames`). Un fichier sorti d'`apps/ios/` déclenche donc la suite.
+- **Sécurité par défaut :** sans plage prouvée, la suite tourne quand même. C'est le cas d'un `before` absent ou nul, d'un commit inconnu, ou d'une plage qui n'est pas une avance rapide.
+- **Sauts visibles :** un push qui saute iOS l'écrit dans le résumé du job « Changed components ».
+- **Inchangés :**
+  - `main` et le lancement manuel (`workflow_dispatch`) restent complets : c'est le chemin de qualification ;
+  - iOS n'est pas dans `CI result`, si bien que le check requis ne change pas.
+- **Preuves :** les tests de `test_ci_scripts.py` couvrent l'exécution, le saut, les renommages, les plages non prouvées et le câblage de `ci.yml`.
+  - La preuve hébergée du saut viendra du premier push `dev` sans chemin iOS après la fusion.
 
 Règles :
 

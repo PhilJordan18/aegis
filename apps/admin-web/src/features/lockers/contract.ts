@@ -37,6 +37,24 @@ export interface CompartmentStatus {
   readonly lastObservedAt: string | null
 }
 
+/** §8.6 `DeviceErrorView`: one group of `DEVICE_ERROR` reports (10 §13.2) of the hub's current session, per (`errorCode`, `compartmentId`). */
+export type DeviceErrorSeverity = 'WARNING' | 'CRITICAL'
+
+export interface DeviceError {
+  /** A code of 10 §13.2; a code this client does not know is still shown, as sent. */
+  readonly errorCode: string
+  readonly severity: DeviceErrorSeverity | Unrecognized
+  /** A compartment of this locker, or null for the locker itself. */
+  readonly compartmentId: string | null
+  /** Backend reception instants, never the hub's clock. */
+  readonly firstReceivedAt: string
+  readonly lastReceivedAt: string
+  readonly occurrences: number
+}
+
+/** The server sends at most this many groups (§8.6), the least urgent omitted. */
+export const DEVICE_ERRORS_LIMIT = 20
+
 export interface LockerStatus {
   readonly lockerId: string
   readonly code: string
@@ -49,4 +67,9 @@ export interface LockerStatus {
   readonly evaluatedAt: string
   readonly currentWindow: OperatingWindow
   readonly compartments: readonly CompartmentStatus[]
+  /**
+   * Errors the hub reported in its current session, in the server's order (#29, §8.6). A reported error is not proof of
+   * an active fault: it changes no connection state, compartment state, readiness or action.
+   */
+  readonly deviceErrors: readonly DeviceError[]
 }

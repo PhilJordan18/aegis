@@ -82,3 +82,21 @@
 /* Heading of the schedule with its edit action (CFG-02 #28, approved for P0). */
 .ag-lk__window-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .ag-lk__window-head .ag-sec-title { margin: 0; }
+
+/* Errors reported by the hub (#29): a plain list of the v3 chip and text styles, no alert colour on the whole block, since a
+   reported error is information about the device, not a verdict on the locker. */
+.ag-lk-errs__intro { margin-top: 4px; }
+.ag-lk-errs__note { margin-top: 8px; }
+.ag-lk-errs__offline { margin-top: 8px; font-size: var(--ag-type-small-size); line-height: 1.45; color: var(--ag-text-2); }
+.ag-lk-errs__empty { margin-top: 12px; font-size: 0.875rem; color: var(--ag-text-2); }
+.ag-lk-errs__list { margin: 12px 0 0; padding: 0; list-style: none; }
+.ag-lk-err { padding: 12px 0; border-bottom: 1px solid var(--ag-separator); display: grid; gap: 4px; }
+.ag-lk-err:last-child { border-bottom: 0; }
+.ag-lk-err__head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.ag-lk-err__title { font-size: 0.9375rem; font-weight: 600; overflow-wrap: anywhere; }
+.ag-lk-err__meta, .ag-lk-err__times { font-size: var(--ag-type-small-size); line-height: 1.45; color: var(--ag-text-2); overflow-wrap: anywhere; }
+.ag-lk-err__times { display: flex; flex-wrap: wrap; gap: 0 16px; }
+.ag-lk-err__code { font-family: inherit; font-weight: 500; color: var(--ag-text); }
+@media (forced-colors: active) {
+  .ag-lk-err { border-color: CanvasText; }
+}

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { expect, test, type APIRequestContext, type Page, type Request } from '@playwright/test'
 
@@ -190,12 +191,12 @@ test('an administrator opens Équipements, sees the units from the API and opens
   await expect(dossier).toContainText(/15\sjanv\.\s2027,\s00\sh\s00\sHNE/)
   await expect(dossier).toContainText('America/Toronto')
   await expect(page.locator('main')).not.toContainText(/\bPrêt\b/)
-  // The only commands are create, edit and archive (CAT-01 forms), placement and identifiers (#26), each one
-  // explicit; readiness is never a control. The kept database may hold more than one page, whose pager has buttons,
-  // and identifiers, each with its revoke button.
+  // The only commands are create, edit and archive (CAT-01 forms), placement and identifiers (#26), and the search
+  // submit (#109), each one explicit; readiness is never a control. The kept database may hold more than one page,
+  // whose pager has buttons, and identifiers, each with its revoke button.
   const pagerButtons = await page.getByRole('navigation', { name: 'Pagination des exemplaires' }).getByRole('button').count()
   const revokeButtons = await page.locator('main').getByRole('button', { name: /^Révoquer / }).count()
-  await expect(page.locator('main').getByRole('button')).toHaveCount(pagerButtons + 5 + revokeButtons)
+  await expect(page.locator('main').getByRole('button')).toHaveCount(pagerButtons + 6 + revokeButtons)
   await expect(page.getByRole('button', { name: 'Modifier le placement' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Attribuer un identifiant' })).toBeVisible()
   await expect(page.getByRole('group', { name: 'Actions de l’exemplaire' }).getByRole('button')).toHaveText(['Modifier', 'Archiver'])
@@ -215,6 +216,11 @@ test('an administrator opens Équipements, sees the units from the API and opens
  */
 const DEMO_LOCKER_ID = process.env.AEGIS_DEMO_LOCKER_ID ?? 'd46a74ae-39dc-460b-8af0-38fc791b376a'
 const LIVE_SHOTS = fileURLToPath(new URL('../test-results/live/', import.meta.url))
+/**
+ * Set by scripts/check-device-errors-live.sh after the hub simulator reported errors: `listed` requires a
+ * non-empty list, `stale` also requires a locker that is no longer ONLINE. Unset, any list the API returns is checked.
+ */
+const EXPECT_DEVICE_ERRORS = process.env.AEGIS_LIVE_EXPECT_DEVICE_ERRORS ?? ''
 
 interface LiveStatus {
   lockerId: string
@@ -232,6 +238,7 @@ interface LiveStatus {
     lockState: string
     lastObservedAt: string | null
   }[]
+  deviceErrors: { errorCode: string; severity: string; compartmentId: string | null; occurrences: number }[]
 }
 
 // Test-side translation of the contract enumerations into the words the page must show (fr.ts `lockers`).
@@ -286,6 +293,25 @@ async function expectPageShows(page: Page, status: LiveStatus) {
     await expect(note).toContainText('Dernier état connu')
     await expect(panel.locator('table.ag-lk-table')).toHaveAttribute('aria-describedby', (await note.getAttribute('id')) ?? 'missing')
   } else await expect(note).toHaveCount(0)
+
+  // Reported device errors (#29, 09 §8.6): the same groups, in the server order, each with its code and count.
+  expect(Array.isArray(status.deviceErrors), 'deviceErrors is a required list (#142)').toBe(true)
+  if (EXPECT_DEVICE_ERRORS !== '') expect(status.deviceErrors.length, 'the simulator reported errors in this session').toBeGreaterThan(0)
+  if (EXPECT_DEVICE_ERRORS === 'stale') expect(status.connectionStatus, 'the stopped hub went stale').not.toBe('ONLINE')
+  const errors = panel.getByRole('region', { name: /erreurs? signalées?/ })
+  await expect(errors.getByRole('heading', { level: 3 })).toContainText(`${status.deviceErrors.length} erreur`)
+  await expect(errors.getByRole('listitem')).toHaveCount(status.deviceErrors.length)
+  for (const [index, error] of status.deviceErrors.entries()) {
+    await expect(errors.getByRole('listitem').nth(index)).toContainText(error.errorCode)
+    await expect(errors.getByRole('listitem').nth(index)).toContainText(`${error.occurrences} signalement`)
+  }
+  // Errors never override the connection: away from ONLINE, the list says it may be out of date.
+  const offlineNote = errors.locator('.ag-lk-errs__offline')
+  if (status.connectionStatus !== 'ONLINE' && status.lastSeenAt !== null) await expect(offlineNote).toContainText("n'est pas en ligne")
+  else await expect(offlineNote).toHaveCount(0)
+  if (status.deviceErrors.length === 0) {
+    await expect(errors).toContainText(status.lastSeenAt === null ? 'Aucun signal reçu du casier' : 'Aucune erreur signalée depuis le dernier démarrage')
+  }
 
   const rows = panel.getByRole('row')
   await expect(rows).toHaveCount(status.compartments.length + 1)
@@ -817,3 +843,84 @@ async function pageToModel(page: Page, name: string) {
     await page.waitForLoadState('networkidle')
   }
 }
+
+interface CorpusPart {
+  readonly text: string
+  readonly times?: number
+}
+interface CorpusCase {
+  readonly id: string
+  readonly parts: readonly CorpusPart[]
+  readonly trimmed?: readonly CorpusPart[]
+  readonly result: 'VALID' | 'SIZE' | 'INVALID_VALUE'
+}
+const CORPUS = JSON.parse(readFileSync(fileURLToPath(new URL('../../../docs/cahier-conception/09-corpus-recherche-q.json', import.meta.url)), 'utf8')) as {
+  readonly cases: readonly CorpusCase[]
+}
+const joinParts = (parts: readonly CorpusPart[]) => parts.map((part) => part.text.repeat(part.times ?? 1)).join('')
+
+test('search q (09 §22.3, ADR-014): the API agrees with the Web reading of every corpus case, and the page filters through it', async ({ page, request }) => {
+  test.setTimeout(150_000)
+  const stamp = Date.now()
+  const requests = apiRequests(page)
+  const { accessToken } = await signInWhenAllowed(page)
+  await expect(page).toHaveURL(/\/equipements$/)
+  const auth = { Authorization: `Bearer ${accessToken}` }
+
+  // Each case as the Web client handles it: a VALID case is sent trimmed (searchText.test.ts proves this reading),
+  // a refused one is never sent, so the raw input goes straight to the API, which must refuse it with the same code.
+  expect(CORPUS.cases).toHaveLength(44)
+  for (const entry of CORPUS.cases) {
+    const sent = entry.result === 'VALID' ? joinParts(entry.trimmed ?? entry.parts) : joinParts(entry.parts)
+    const response = await request.get('/api/v1/admin/assets', { headers: auth, params: { q: sent, size: '1' } })
+    if (entry.result === 'VALID') {
+      expect(response.status(), entry.id).toBe(200)
+    } else {
+      expect(response.status(), entry.id).toBe(400)
+      const problem = (await response.json()) as { code: string; violations?: { field: string; code: string }[] }
+      expect(problem.code, entry.id).toBe('VALIDATION_ERROR')
+      expect(problem.violations?.map(({ field, code }) => ({ field, code })), entry.id).toEqual([{ field: 'q', code: entry.result }])
+    }
+  }
+
+  // The page: a unit of this run, found by a padded, mixed-case search, with q sent trimmed and kept in the address.
+  const code = `SRCH-${stamp}`
+  const model = await request.post('/api/v1/admin/asset-models', {
+    headers: { ...auth, 'Idempotency-Key': randomUUID() },
+    data: { name: `Recherche E2E ${stamp}`, manufacturer: null, modelNumber: null, description: null, defaultCalibrationRequired: false },
+  })
+  expect(model.status()).toBe(201)
+  const { id: assetModelId } = (await model.json()) as { id: string }
+  const created = await request.post('/api/v1/admin/assets', {
+    headers: { ...auth, 'Idempotency-Key': randomUUID() },
+    data: { assetModelId, assetCode: code, serialNumber: null, requiredAccessLevel: 'STANDARD', operationalStatus: 'SERVICEABLE', calibrationRequired: false, calibrationDueAt: null },
+  })
+  expect(created.status()).toBe(201)
+
+  const search = page.getByRole('search', { name: 'Rechercher un exemplaire' })
+  const listed = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/v1/admin/assets' && new URL(response.url()).searchParams.has('q'))
+  await search.getByRole('searchbox').fill(`\u3000 ${code.toLowerCase()}\u00A0`)
+  await search.getByRole('button', { name: 'Rechercher' }).click()
+  const response = await listed
+  expect(response.status()).toBe(200)
+  expect(new URL(response.url()).searchParams.getAll('q')).toEqual([code.toLowerCase()])
+  await expect(page).toHaveURL(new RegExp(`recherche=${code.toLowerCase()}`))
+  await expect(page.getByRole('heading', { level: 2, name: '1 exemplaire' })).toBeVisible()
+  await expect(page.locator('.ag-list__items a')).toHaveCount(1)
+  await expect(page.locator('.ag-list__items a').first()).toContainText(code)
+
+  // A refused search stays on the page: no request carries it.
+  const before = requests.length
+  await search.getByRole('searchbox').fill('a'.repeat(101))
+  await search.getByRole('button', { name: 'Rechercher' }).click()
+  await expect(search.getByRole('searchbox')).toBeFocused()
+  await expect(search.getByRole('searchbox')).toHaveAttribute('aria-invalid', 'true')
+  expect(requests.slice(before).filter((candidate) => new URL(candidate.url()).searchParams.get('q')?.startsWith('aaa'))).toEqual([])
+
+  // Tout afficher drops q (the unfiltered first page may come from the query cache, read at sign-in).
+  await search.getByRole('button', { name: 'Tout afficher' }).click()
+  await expect(page).not.toHaveURL(/recherche=/)
+  await expect(search.getByRole('searchbox')).toHaveValue('')
+  await expect(search.getByRole('button', { name: 'Tout afficher' })).toHaveCount(0)
+  await expect(page.locator('.ag-list__items a').first()).toBeVisible()
+})

@@ -143,3 +143,55 @@ describe('parseLockerStatus (09 §8.6, §16.1)', () => {
     })
   })
 })
+
+describe('parseLockerStatus — deviceErrors (#29, 09 §8.6)', () => {
+  const group = (overrides: Record<string, unknown> = {}) => ({
+    errorCode: 'RFID_READER_FAULT',
+    severity: 'CRITICAL',
+    compartmentId: '6c0d7d3e-3b6e-4a0e-9f5d-1f6d2f0a1a01',
+    firstReceivedAt: '2026-11-03T14:10:00Z',
+    lastReceivedAt: '2026-11-03T14:50:00.123456Z',
+    occurrences: 3,
+    ...overrides,
+  })
+
+  it('reads the groups in the server order, a locker-level group with a null compartment included', () => {
+    const body = { ...wire(), deviceErrors: [group(), group({ errorCode: 'INBOUND_MESSAGE_INVALID', severity: 'WARNING', compartmentId: null, occurrences: 1 })] }
+    expect(parseLockerStatus(body)?.deviceErrors).toEqual([
+      group(),
+      { errorCode: 'INBOUND_MESSAGE_INVALID', severity: 'WARNING', compartmentId: null, firstReceivedAt: '2026-11-03T14:10:00Z', lastReceivedAt: '2026-11-03T14:50:00.123456Z', occurrences: 1 },
+    ])
+  })
+
+  it('keeps a code it does not know as sent, and an unknown severity as unrecognized', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const parsed = parseLockerStatus({ ...wire(), deviceErrors: [group({ errorCode: 'FUTURE_FAULT', severity: 'FATAL' })] })
+    expect(parsed?.deviceErrors[0]?.errorCode).toBe('FUTURE_FAULT')
+    expect(parsed?.deviceErrors[0]?.severity).toBe(UNRECOGNIZED)
+  })
+
+  it.each([
+    ['missing (an API older than #142)', (body: Record<string, unknown>) => delete body.deviceErrors],
+    ['null', (body: Record<string, unknown>) => (body.deviceErrors = null)],
+    ['an object', (body: Record<string, unknown>) => (body.deviceErrors = {})],
+  ])('rejects the whole response when deviceErrors is %s', (_label, mutate) => {
+    const body = wire()
+    mutate(body)
+    expect(parseLockerStatus(body)).toBeNull()
+  })
+
+  it.each([
+    ['an empty errorCode', { errorCode: '' }],
+    ['a missing severity', { severity: undefined }],
+    ['a compartmentId that is not a UUID', { compartmentId: 'A1' }],
+    ['a missing compartmentId', { compartmentId: undefined }],
+    ['a firstReceivedAt that is not an instant', { firstReceivedAt: '2026-11-03 14:10' }],
+    ['a null lastReceivedAt', { lastReceivedAt: null }],
+    ['zero occurrences', { occurrences: 0 }],
+    ['a fractional occurrence count', { occurrences: 1.5 }],
+    ['a textual occurrence count', { occurrences: '3' }],
+  ])('rejects the whole response for a group with %s', (_label, overrides) => {
+    const item = JSON.parse(JSON.stringify(group(overrides)))
+    expect(parseLockerStatus({ ...wire(), deviceErrors: [item] })).toBeNull()
+  })
+})

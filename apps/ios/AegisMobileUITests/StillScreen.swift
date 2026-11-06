@@ -34,6 +34,8 @@ extension XCUIApplication {
 
 /// Audits run so far by this UI test process: the first one is the cold start of the run.
 @MainActor private var accessibilityAuditCount = 0
+/// Whether this UI test process has run its warm-up audit, passed or not: it runs once.
+@MainActor private var accessibilityAuditWarmedUp = false
 
 extension XCUIApplication {
     /// Runs the accessibility audit once and records how long it took, so that
@@ -45,6 +47,10 @@ extension XCUIApplication {
         for types: XCUIAccessibilityAuditType,
         _ issueHandler: ((XCUIAccessibilityAuditIssue) throws -> Bool)?
     ) throws {
+        if !accessibilityAuditWarmedUp {
+            accessibilityAuditWarmedUp = true
+            try warmUpAccessibilityAudit()
+        }
         accessibilityAuditCount += 1
         let number = accessibilityAuditCount
         let start = Date.now
@@ -55,6 +61,33 @@ extension XCUIApplication {
         }
         do {
             try performAccessibilityAudit(for: types, issueHandler)
+            record("completed")
+        } catch {
+            record("ended with an error")
+            throw error
+        }
+    }
+
+    /// The first audit of a UI test process pays the cold start of the audit
+    /// stack on a simulator that has just run its first launches. In the five
+    /// hosted runs after #143 it took 7.5 to 10.1 s when it passed, and both
+    /// failures were abandoned at about 15 s within the first two audits of the
+    /// run (#67). One narrow audit, element descriptions only, takes that start
+    /// before the first full audit, which still runs once. Whether this is
+    /// enough is measured from the result bundles, not assumed.
+    ///
+    /// This adds a check and hides nothing: any issue it reports, or its
+    /// abandonment, fails the test, and its duration is recorded beside the
+    /// others.
+    @MainActor
+    private func warmUpAccessibilityAudit() throws {
+        let start = Date.now
+        func record(_ outcome: String) {
+            let seconds = String(format: "%.1f", Date.now.timeIntervalSince(start))
+            XCTContext.runActivity(named: "Accessibility audit warm-up \(outcome) in \(seconds) s") { _ in }
+        }
+        do {
+            try performAccessibilityAudit(for: .sufficientElementDescription) { _ in false }
             record("completed")
         } catch {
             record("ended with an error")

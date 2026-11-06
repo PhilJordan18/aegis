@@ -310,8 +310,10 @@ test.describe('flow: équipements (production page, routed fakes)', () => {
 
   test('flow: changes go through explicit actions only, and opening the page writes nothing', async ({ page }) => {
     const requests = await openEquipment(page, 'nominal')
-    await expect(page.locator('main').getByRole('button')).toHaveText(['Nouvel exemplaire', 'Modifier', 'Archiver', 'Modifier le placement', 'Attribuer un identifiant'])
-    await expect(page.locator('main').locator('input, select, textarea')).toHaveCount(0)
+    await expect(page.locator('main').getByRole('button')).toHaveText(['Nouvel exemplaire', 'Rechercher', 'Modifier', 'Archiver', 'Modifier le placement', 'Attribuer un identifiant'])
+    // The search box (#109) is the only field: it filters a read, it never writes.
+    await expect(page.locator('main').locator('input, select, textarea')).toHaveCount(1)
+    await expect(page.locator('main').getByRole('search').getByRole('searchbox')).toHaveCount(1)
     expect(requests.every((request) => request.startsWith('GET '))).toBe(true)
   })
 
@@ -398,8 +400,11 @@ test.describe('flow: casiers (production page, routed fakes)', () => {
     await expect(panel.getByRole('heading', { level: 2, name: /AEGIS-DEMO-01/ })).toBeVisible()
     await expect(panel.getByRole('table')).toBeVisible()
     const retry = panel.getByRole('button', { name: 'Réessayer' })
-    // From the page heading, the next stops are the controls of the page: here the retry button, with no empty stop before it.
+    // From the page heading, the next stops are the controls of the page. The reported-errors section (#29) makes the
+    // list scroll at 1280 × 800, so the named scrolling region comes first, then the retry button, with no empty stop.
     await page.getByRole('heading', { level: 1, name: 'Casiers' }).focus()
+    await page.keyboard.press('Tab')
+    await expect(page.getByRole('group', { name: 'Casiers' })).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(retry).toBeFocused()
     expect(await retry.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe('none')
@@ -448,7 +453,7 @@ test.describe('flow: casiers (production page, routed fakes)', () => {
   // Rendered evidence for the longest valid codes, long cell codes and faults, and the last-known note: the page never
   // scrolls sideways at 320 px, 390 px or at 200 % zoom (640x400). Numbers go to the log; shots and the accessibility read
   // go to test-results/casiers-reflow/ (ignored by Git).
-  for (const mode of ['code20', 'code24', 'long', 'codeUnbroken', 'offlineLong'] as const) {
+  for (const mode of ['code20', 'code24', 'long', 'codeUnbroken', 'offlineLong', 'offlineErrors'] as const) {
     for (const [width, height, label] of [[320, 720, '320'], [390, 844, '390'], [640, 400, 'zoom200']] as const) {
       test(`flow: reflow evidence, ${mode} at ${label}`, async ({ page }) => {
         await page.setViewportSize({ width, height })

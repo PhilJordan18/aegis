@@ -8,8 +8,9 @@ export function createHttpCatalogGateway(options?: HttpClientOptions): CatalogGa
   const asset = (assetId: string) => `/admin/assets/${encodeURIComponent(assetId)}`
   const model = (modelId: string) => `/admin/asset-models/${encodeURIComponent(modelId)}`
   return {
-    listAssets(accessToken, { page, size, sort }, signal) {
+    listAssets(accessToken, { page, size, sort, q }, signal) {
       const params = new URLSearchParams({ page: String(page), size: String(size), sort })
+      if (q !== undefined) params.set('q', q)
       return http.send({ method: 'GET', path: `/admin/assets?${params.toString()}`, accessToken, signal, parse: parseAdminAssetPage })
     },
     getAsset(accessToken, assetId, signal) {
