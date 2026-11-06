@@ -460,12 +460,21 @@ describe('Équipements — unknown enumeration values (09 §3)', () => {
 })
 
 describe('Équipements — commands', () => {
-  it('offers only create, edit and archive; readiness, availability and presence are never controls', async () => {
+  it('offers only explicit commands; readiness, availability and presence are never controls', async () => {
     renderEquipment(fakeCatalogGateway({ pages: [ok(pageOf([MM001]))], units: { [MM001.id]: ok(MM001) } }))
     await screen.findByRole('heading', { level: 2, name: /Multimètre 1 · MM-001/ })
     const main = screen.getByRole('main')
-    expect(within(main).getAllByRole('button').map((button) => plain(button.textContent))).toEqual(['Nouvel exemplaire', 'Modifier', 'Archiver'])
+    expect(within(main).getAllByRole('button').map((button) => plain(button.textContent)).slice(0, 6)).toEqual([
+      'Nouvel exemplaire',
+      'Rechercher',
+      'Modifier',
+      'Archiver',
+      'Modifier le placement',
+      'Attribuer un identifiant',
+    ])
+    // The only text input is the search, which filters the list and sets nothing.
     expect(within(main).queryAllByRole('textbox')).toEqual([])
+    expect(within(main).getAllByRole('searchbox').map((input) => input.getAttribute('id') !== null)).toEqual([true])
     expect(within(main).queryAllByRole('combobox')).toEqual([])
   })
 })

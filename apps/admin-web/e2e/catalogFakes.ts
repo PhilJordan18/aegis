@@ -115,6 +115,8 @@ export async function routeCatalog(page: Page, mode: CatalogMode): Promise<strin
     if (mode === 'forbidden') return json(route, 403, problem(403, 'FORBIDDEN', url.pathname), 'application/problem+json')
     if (mode === 'serviceError') return json(route, 500, problem(500, 'INTERNAL_ERROR', url.pathname), 'application/problem+json')
     const units = unitsOf(mode)
+    // The identifier history of a unit (09 §12.3): none in the offline fakes.
+    if (/\/admin\/assets\/[^/]+\/identifiers$/.test(url.pathname)) return json(route, 200, [])
     const byId = url.pathname.match(/\/admin\/assets\/([^/]+)$/)
     if (byId) {
       const reads = (unitReads.get(byId[1] ?? '') ?? 0) + 1

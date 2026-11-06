@@ -2,7 +2,7 @@ import type { I18n } from '../../../i18n/useI18n'
 import type { MutationFailure } from '../mutationFailure'
 
 /** Field limits of 09 §12.1–12.2, anticipated by the forms; the server stays the authority. */
-export const LIMITS = { modelName: 160, manufacturer: 120, modelNumber: 120, description: 2000, assetCode: 64, serialNumber: 120 } as const
+export const LIMITS = { modelName: 160, manufacturer: 120, modelNumber: 120, description: 2000, assetCode: 64, serialNumber: 120, identifierValue: 255, placementReason: 500 } as const
 
 export interface FormAlertContent {
   readonly title: string
@@ -24,6 +24,10 @@ const REFUSAL_FIELD: Partial<Record<RefusalCode, string>> = {
   ASSET_MODEL_NAME_ALREADY_EXISTS: 'name',
   ASSET_CODE_ALREADY_EXISTS: 'assetCode',
   ASSET_SERIAL_NUMBER_ALREADY_EXISTS: 'serialNumber',
+  IDENTIFIER_ALREADY_ASSIGNED: 'value',
+  IDENTIFIER_TYPE_UNSUPPORTED: 'type',
+  COMPARTMENT_DISABLED: 'compartmentId',
+  COMPARTMENT_ALREADY_OCCUPIED: 'compartmentId',
 }
 
 function isRefusalCode(code: string, { m }: I18n): code is RefusalCode {
@@ -48,6 +52,8 @@ export function violationMessage(code: string, max: number | undefined, { m }: I
       return v.calibrationDueRequired
     case 'NOT_ALLOWED_WITHOUT_CALIBRATION':
       return v.calibrationDueNotAllowed
+    case 'COMPARTMENT_NOT_FOUND':
+      return m.custody.violation.compartmentNotFound
     default:
       return v.refused
   }

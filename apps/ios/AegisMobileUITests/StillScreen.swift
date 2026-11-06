@@ -32,25 +32,33 @@ extension XCUIApplication {
     }
 }
 
+/// Audits run so far by this UI test process: the first one is the cold start of the run.
+@MainActor private var accessibilityAuditCount = 0
+
 extension XCUIApplication {
-    /// Runs the accessibility audit; when XCTest abandons the audit itself
-    /// ("Audit failed to complete in time", seen on loaded CI runners), runs
-    /// it once more on a still screen. Issues found by a completed audit are
-    /// never retried away, and a second timeout fails. This is not a
-    /// tolerance on findings: an abandoned audit produced none, so the
-    /// retry only obtains the measurement the test asks for.
+    /// Runs the accessibility audit once and records how long it took, so that
+    /// slow audits can be measured from the result bundle. An audit that XCTest
+    /// abandons ("Audit failed to complete in time", code -56) fails the test at
+    /// its first occurrence: no retry hides it.
     @MainActor
-    func performCompletedAccessibilityAudit(
+    func performMeasuredAccessibilityAudit(
         for types: XCUIAccessibilityAuditType,
         _ issueHandler: ((XCUIAccessibilityAuditIssue) throws -> Bool)?
     ) throws {
+        accessibilityAuditCount += 1
+        let number = accessibilityAuditCount
+        let start = Date.now
+        func record(_ outcome: String) {
+            let seconds = String(format: "%.1f", Date.now.timeIntervalSince(start))
+            let cold = number == 1 ? ", cold: first audit of this test process" : ""
+            XCTContext.runActivity(named: "Accessibility audit \(number) \(outcome) in \(seconds) s\(cold)") { _ in }
+        }
         do {
             try performAccessibilityAudit(for: types, issueHandler)
-        } catch let error as NSError where error.domain == "com.apple.xcode.xctest.accessibilityAudit"
-                                            && error.code == -56 {
-            XCTContext.runActivity(named: "Audit did not complete in time; auditing again") { _ in }
-            _ = waitForStillScreen()
-            try performAccessibilityAudit(for: types, issueHandler)
+            record("completed")
+        } catch {
+            record("ended with an error")
+            throw error
         }
     }
 }

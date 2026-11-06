@@ -33,6 +33,7 @@ export function lockerStatus(overrides: Partial<LockerStatus> = {}): LockerStatu
     evaluatedAt: EVALUATED_AT,
     currentWindow: { timeZone: 'America/Toronto', open: true, closesAt: '2026-11-03T22:00:00Z', nextOpensAt: null },
     compartments: [A1, A2],
+    deviceErrors: [],
     ...overrides,
   }
 }

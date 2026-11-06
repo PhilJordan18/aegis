@@ -8,7 +8,8 @@ import { createPluralSelector } from '../plural'
  * French catalog: the reference for the shape of every other catalog (en.ts is
  * typed against it, so a missing key fails `tsc`) and the fallback language.
  * Texts are those of docs/design/manager-entree/ (states.md §3, handoff §7):
- * [A] = approved, everything else [P] = proposed, awaiting Philippe's approval.
+ * [A] = approved, everything else [P] = proposed, awaiting Philippe's approval, except the
+ * catalogEdit, schedule and custody form texts, approved on 6 November 2026 (docs/design/manager-forms/README.md).
  *
  * Rules (docs/localisation/convention.md): one complete sentence per message,
  * values inserted already formatted, named parameters, plurals through
@@ -224,6 +225,14 @@ export const fr = {
     nextPage: 'Suivant',
     pageOf: ({ page, pages }: { page: number; pages: number }) => `Page ${count.format(page)} sur ${count.format(pages)}`,
 
+    searchLabel: 'Rechercher un exemplaire',
+    searchHelp: 'Code ou nom du modèle, sans tenir compte de la casse.',
+    searchSubmit: 'Rechercher',
+    searchClear: 'Tout afficher',
+    searchTooLong: ({ max }: { max: number }) => `La recherche compte au plus ${max} caractères.`,
+    searchInvalid: 'La recherche contient un caractère non autorisé (tabulation, saut de ligne ou caractère de contrôle).',
+    searchEmptyTitle: ({ search }: { search: string }) => `Aucun exemplaire ne correspond à «${NBSP}${search}${NBSP}».`,
+    searchEmptyBody: 'Vérifiez le code ou le nom du modèle, ou affichez tous les exemplaires.',
     emptyTitle: 'Aucun exemplaire.',
     emptyBody: "Dès qu'un exemplaire est enregistré, il apparaît ici avec son diagnostic opérationnel.",
 
@@ -384,13 +393,45 @@ export const fr = {
       UNLOCKED: 'Déverrouillée',
       UNKNOWN: 'Inconnue',
     },
+
+    /** Errors the hub reported in its current session (#29, 09 §8.6). [P] Texts await review with the QA recipe. */
+    errorsTitle: ({ count: value }: { count: number }) =>
+      plural(value, { one: `${count.format(value)} erreur signalée`, other: `${count.format(value)} erreurs signalées` }),
+    errorsIntro: `Erreurs signalées par le casier depuis son dernier démarrage. Une erreur signalée n'est pas forcément une panne en cours${NBSP}: elle ne change ni l'état du casier, ni celui des cellules, ni la disponibilité.`,
+    errorsNone: 'Aucune erreur signalée depuis le dernier démarrage du casier.',
+    errorsNoSignal: `Aucun signal reçu du casier${NBSP}: aucune erreur signalée à afficher.`,
+    errorsNotOnline: `Le casier n'est pas en ligne${NBSP}: cette liste peut ne plus refléter son état.`,
+    errorsLimit: ({ max }: { max: number }) => `Seules les ${max} erreurs les plus importantes sont affichées${NBSP}; d'autres peuvent exister.`,
+    severity: {
+      CRITICAL: 'Critique',
+      WARNING: 'Avertissement',
+    },
+    errorCode: {
+      CELL_COMMUNICATION_LOST: 'Communication avec une cellule perdue',
+      RFID_READER_FAULT: 'Défaut du lecteur RFID',
+      DOOR_SENSOR_FAULT: 'Défaut du capteur de porte',
+      LOCK_ACTUATOR_FAULT: "Défaut de l'actionneur de serrure",
+      POWER_FAULT: "Défaut d'alimentation",
+      CLOCK_SYNC_LOST: "Synchronisation de l'horloge perdue",
+      STORAGE_FAULT: 'Défaut du stockage local',
+      INBOUND_MESSAGE_INVALID: 'Message reçu invalide',
+    } as Record<string, string>,
+    errorUnknownCode: 'Code non reconnu par cette version de Manager',
+    errorWholeLocker: 'Casier entier',
+    errorCompartment: ({ code }: { code: string }) => `Cellule ${code}`,
+    errorUnlistedCompartment: 'Cellule non listée',
+    errorOccurrences: ({ count: value }: { count: number }) =>
+      plural(value, { one: `${count.format(value)} signalement`, other: `${count.format(value)} signalements` }),
+    errorReceived: ({ time }: { time: string }) => `Reçue${NBSP}: ${time}`,
+    errorFirstReceived: ({ time }: { time: string }) => `Première réception${NBSP}: ${time}`,
+    errorLastReceived: ({ time }: { time: string }) => `Dernière réception${NBSP}: ${time}`,
   },
 
-  /** Operating-schedule editor (CFG-02 #28). All texts [P]: the form awaits visual approval (docs/design/manager-forms/). */
+  /** Operating-schedule editor (CFG-02 #28). Texts approved with their corrections on 6 November 2026 (docs/design/manager-forms/README.md). */
   schedule: {
     edit: "Modifier l’horaire",
     title: ({ code }: { code: string }) => `Horaire d’exploitation du casier ${code}`,
-    description: 'Les heures sont locales au fuseau du casier. Le serveur enregistre une nouvelle version et calcule la fenêtre en cours.',
+    description: 'Définissez les heures d’ouverture dans le fuseau horaire du casier.',
     loading: 'Chargement de l’horaire…',
     loadErrorTitle: 'L’horaire n’a pas pu être lu.',
     loadErrorBody: 'Réessayez. Rien n’a été modifié.',
@@ -420,11 +461,66 @@ export const fr = {
     saved: ({ code }: { code: string }) => `Horaire du casier ${code} enregistré.`,
   },
 
+  /** Identifiers and placement of a unit (CAT-02 #26). Texts approved with their corrections on 6 November 2026 (docs/design/manager-forms/README.md). */
+  custody: {
+    identifiersTitle: 'Identifiants physiques',
+    identifiersLoading: 'Chargement des identifiants…',
+    identifiersUnavailable: 'Les identifiants n’ont pas pu être lus.',
+    noIdentifier: 'Aucun identifiant attribué.',
+    assign: 'Attribuer un identifiant',
+    revoke: 'Révoquer',
+    revokeLabel: ({ type, value }: { type: string; value: string }) => `Révoquer ${type} ${value}`,
+    active: 'Actif',
+    revoked: 'Révoqué',
+    assignedOn: ({ time }: { time: string }) => `Attribué le ${time}`,
+    revokedOn: ({ time }: { time: string }) => `Révoqué le ${time}`,
+    historyLabel: 'Historique des identifiants',
+    type: {
+      RFID_UHF: 'RFID UHF',
+      NFC: 'NFC',
+      QR: 'QR',
+    },
+    unknownType: ({ type }: { type: string }) => `Type non reconnu (${type})`,
+
+    assignTitle: ({ code }: { code: string }) => `Attribuer un identifiant à ${code}`,
+    assignDescription: `Un exemplaire porte au plus un identifiant actif par type${NBSP}: en attribuer un nouveau révoque l’ancien. L’historique est conservé.`,
+    fieldType: 'Type',
+    fieldValue: 'Valeur',
+    fieldValueHelp: 'Respectez la casse de la valeur lue. Les espaces au début et à la fin sont retirés. 255 caractères au maximum.',
+    assigned: ({ code }: { code: string }) => `Identifiant attribué à ${code}.`,
+    revokeTitle: ({ type, value }: { type: string; value: string }) => `Révoquer l’identifiant ${type} ${value}${NBSP}?`,
+    revokeBody: 'Il ne sera plus reconnu pour cet exemplaire. Son historique est conservé et la valeur pourra être attribuée de nouveau.',
+    revokeGuard: 'Le serveur refuse la révocation pendant une opération du casier qui utilise cet identifiant.',
+    revokedOutcome: ({ code }: { code: string }) => `Identifiant de ${code} révoqué.`,
+
+    placementTitle: 'Placement attendu',
+    changePlacement: 'Modifier le placement',
+    placementDialogTitle: ({ code }: { code: string }) => `Placement de ${code}`,
+    placementDescription: 'L’occupation peut avoir changé depuis l’affichage. La disponibilité de la cellule sera vérifiée à l’enregistrement.',
+    fieldLocker: 'Casier',
+    chooseLocker: 'Choisir un casier',
+    fieldCompartment: 'Cellule',
+    chooseCompartment: 'Choisir une cellule',
+    compartmentFree: ({ code }: { code: string }) => `${code} — libre`,
+    compartmentCurrent: ({ code }: { code: string }) => `${code} — placement actuel`,
+    compartmentOccupied: ({ code, asset }: { code: string; asset: string }) => `${code} — occupée par ${asset}`,
+    compartmentDisabled: ({ code }: { code: string }) => `${code} — désactivée`,
+    fieldReason: 'Motif',
+    fieldReasonHelp: 'Conservé dans l’historique du placement. 500 caractères au maximum.',
+    lockersLoading: 'Chargement des casiers…',
+    lockersUnavailable: 'Les casiers n’ont pas pu être lus. Fermez, puis réessayez.',
+    noLocker: 'Aucun casier n’est configuré.',
+    placed: ({ code, locker, compartment }: { code: string; locker: string; compartment: string }) => `Placement attendu de ${code} enregistré${NBSP}: ${locker} · ${compartment}.`,
+    violation: {
+      compartmentNotFound: 'Cette cellule n’existe plus. Choisissez-en une autre.',
+    },
+  },
+
   dialog: {
     close: 'Fermer',
   },
 
-  /** Catalog forms (CAT-01 #25). All texts [P]: the forms await Philippe's visual approval (docs/design/manager-forms/). */
+  /** Catalog forms (CAT-01 #25). Texts approved with their corrections on 6 November 2026 (docs/design/manager-forms/README.md). */
   catalogEdit: {
     newAsset: 'Nouvel exemplaire',
     newModel: 'Nouveau modèle',
@@ -438,7 +534,7 @@ export const fr = {
 
     createAssetTitle: 'Nouvel exemplaire',
     editAssetTitle: ({ code }: { code: string }) => `Modifier l’exemplaire ${code}`,
-    assetFormDescription: `La disponibilité, la présence et le diagnostic ne se saisissent pas${NBSP}: le serveur les calcule.`,
+    assetFormDescription: 'La disponibilité, la présence et le diagnostic sont déterminés automatiquement.',
     createModelTitle: 'Nouveau modèle',
     editModelTitle: ({ name }: { name: string }) => `Modifier le modèle ${name}`,
     archiveAssetTitle: ({ code }: { code: string }) => `Archiver l’exemplaire ${code}${NBSP}?`,
@@ -465,6 +561,11 @@ export const fr = {
     fieldCalibrationRequired: 'Calibration requise',
     fieldCalibrationDue: 'Échéance de calibration',
     fieldCalibrationDueHelp: ({ zone }: { zone: string }) => `Date et heure dans le fuseau du laboratoire (${zone}).`,
+    fieldCalibrationOccurrence: `Cette heure se produit deux fois ce jour-là, au retour à l’heure normale${NBSP}: laquelle${NBSP}?`,
+    calibrationOccurrence: {
+      earlier: ({ time, offset }: { time: string; offset: string }) => `La première${NBSP}: ${time} (${offset})`,
+      later: ({ time, offset }: { time: string; offset: string }) => `La seconde${NBSP}: ${time} (${offset})`,
+    },
     modelsLoading: 'Chargement des modèles…',
     modelsUnavailable: 'Les modèles n’ont pas pu être chargés. Fermez, puis réessayez.',
     noActiveModel: 'Aucun modèle actif. Créez d’abord un modèle dans l’onglet Modèles.',
@@ -476,6 +577,8 @@ export const fr = {
       chooseModel: 'Choisissez un modèle.',
       modelNotActive: 'Ce modèle est archivé ou introuvable. Choisissez un modèle actif.',
       calibrationDueRequired: `Indiquez l’échéance${NBSP}: la calibration est requise.`,
+      calibrationDueNonexistent: 'Cette heure n’existe pas ce jour-là dans le fuseau du laboratoire (passage à l’heure avancée). Choisissez une autre heure.',
+      calibrationOccurrenceRequired: 'Choisissez laquelle des deux occurrences.',
       calibrationDueNotAllowed: 'Aucune échéance n’est acceptée sans calibration requise.',
       refused: 'Valeur refusée par le serveur.',
     },
@@ -490,6 +593,10 @@ export const fr = {
       ASSET_HAS_OPEN_LOAN: 'Impossible pendant un emprunt en cours.',
       ASSET_OPERATION_IN_PROGRESS: 'Impossible pendant une opération du casier en cours.',
       CONCURRENT_MODIFICATION: 'Modifié entre-temps. Fermez, rechargez, puis recommencez.',
+      IDENTIFIER_ALREADY_ASSIGNED: 'Cette valeur est déjà attribuée à un identifiant actif.',
+      IDENTIFIER_TYPE_UNSUPPORTED: 'Ce type d’identifiant n’est pas pris en charge.',
+      COMPARTMENT_DISABLED: 'Cette cellule est désactivée.',
+      COMPARTMENT_ALREADY_OCCUPIED: 'Un autre exemplaire occupe déjà cette cellule.',
     },
     refusedTitle: 'Le serveur a refusé la demande.',
     refusedBody: 'Rien n’a été modifié.',

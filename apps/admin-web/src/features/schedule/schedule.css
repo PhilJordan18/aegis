@@ -1,4 +1,4 @@
-/* Seven-day schedule editor (CFG-02 #28): proposed, awaiting visual approval (docs/design/manager-forms/). */
+/* Seven-day schedule editor (CFG-02 #28): direction approved for P0 on 6 November 2026 (docs/design/manager-forms/README.md). */
 .ag-sched { display: grid; gap: 8px; margin-top: 16px; }
 .ag-sched__day {
   display: grid; grid-template-columns: 8.5rem auto minmax(0, 1fr); align-items: start; gap: 8px 16px;

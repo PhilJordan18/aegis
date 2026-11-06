@@ -330,7 +330,7 @@ final class ReservationUITests: XCTestCase {
         var types = XCUIAccessibilityAuditType.all
         if atLargestSize { types.remove(.dynamicType) }
         var unhandled: [String] = []
-        try app.performCompletedAccessibilityAudit(for: types) { issue in
+        try app.performMeasuredAccessibilityAudit(for: types) { issue in
             let tolerated: Bool
             if let target = issue.element {
                 let center = CGPoint(x: target.frame.midX, y: target.frame.midY)

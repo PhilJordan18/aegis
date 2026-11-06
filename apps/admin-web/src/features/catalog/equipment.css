@@ -123,7 +123,7 @@ a.ag-item:hover { background: var(--ag-field); }
   .ag-skel__bar { background: GrayText; }
 }
 
-/* Models view and catalog actions: proposed, awaiting visual approval (docs/design/manager-forms/). */
+/* Models view and catalog actions: direction approved for P0 on 6 November 2026 (docs/design/manager-forms/README.md). */
 .ag-page__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .ag-model { grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px 16px; }
 .ag-model__text { display: grid; gap: 4px; min-width: 0; }
@@ -135,3 +135,9 @@ a.ag-item:hover { background: var(--ag-field); }
   .ag-model { grid-template-columns: minmax(0, 1fr); }
   .ag-model__actions { justify-content: flex-start; }
 }
+
+/* Search above the units (09 §22.3): the approved field, its buttons on the same line, below it under 560 px. */
+.ag-search { margin-bottom: 4px; max-width: 720px; }
+.ag-search__row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ag-search__row .ag-ff__control { flex: 1 1 240px; }
+.ag-search__actions { display: flex; flex-wrap: wrap; gap: 8px; }
