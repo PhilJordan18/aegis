@@ -64,7 +64,7 @@ Lancez `docs/qualite/recette-cloud/run.sh` depuis la racine, sur la machine qui 
 | #140 `3b480d7` | Manager : identifiants et placement (#26) | Recette 36 sur 36. Live 11 sur 11, dépendant de l'état de la base. Vitest 743 | 1 |
 | #141 `a768561` | Manager : échéance de calibration sans glissement à l'heure d'été (#25) | Trou de printemps refusé. Deux occurrences d'automne stockées et relues sur l'API réelle | 2 (aucun conflit avec #140) |
 | #142 `727e298` | API : `deviceErrors` de la session courante du hub (#29) | MQTT vers API réel, hub simulé : regroupement, doublon stocké une fois, liste gardée hors ligne, vidée à la nouvelle session | Indépendante. **Le rendu Manager manque (Web)** |
-| #143 `0570b2c` | Tests iOS : ordre des audits, plus de reprise masquante | Une exécution hébergée, mesurée sur #143 | Après la mesure |
+| #143 `0570b2c` | Tests iOS : ordre des audits, plus de reprise masquante | Run 42258729058 : 218 sur 218 en 22,8 min, 31 audits terminés, le plus lent 9,4 s. Une seule exécution : l'instabilité n'est **pas** prouvée corrigée | Prête. Puis resynchroniser #132 |
 | #144 `e8fb536` | CI : iOS sur un push `dev` seulement si un chemin iOS change | 59 tests de scripts CI | **Décision de Philippe** |
 | #132 | iOS : recherche par graphèmes (#109) | Rouge iOS hérité, à resynchroniser après #143 | Après #131, ADR-014 et un iOS vert |
 
