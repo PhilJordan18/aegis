@@ -176,7 +176,7 @@ describe('Équipements — placement (CAT-02 #26)', () => {
     expect(gateway.setPlacement).toHaveBeenCalledWith('token-value', PLACED.id, { compartmentId: A2_ID, reason: 'Rotation' })
     expect(gateway.setPlacement.mock.calls[0]).toHaveLength(3)
     await waitFor(() => expect(catalogGateway.getAsset.mock.calls.length + catalogGateway.listAssets.mock.calls.length).toBeGreaterThan(reads))
-    expect(await screen.findByText('MM-001 placé dans AEGIS-DEMO-01 · A2.')).toBeDefined()
+    expect(await screen.findByText('Placement attendu de MM-001 enregistré : AEGIS-DEMO-01 · A2.')).toBeDefined()
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Modifier le placement' }))
   })
 
