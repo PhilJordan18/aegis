@@ -3,15 +3,19 @@
 Ce document est le seul point de départ de la recette humaine de Philippe et Jimmy. Il
 renvoie aux recettes détaillées et ne les recopie pas.
 
-État au **6 novembre 2026, 14 h 50 (Toronto)**. Avant de commencer, relevez le SHA réel :
+État au **6 novembre 2026, 15 h 15 (Toronto)**. Avant de commencer, relevez le SHA réel :
 
 ```bash
 git fetch origin dev && git rev-parse --short origin/dev
 ```
 
-- **À la rédaction, `dev` est à `60ccc35`.**
-- Si les PR ouvertes ci-dessous sont fusionnées, ce SHA change. Notez alors le SHA testé
-  dans le compte rendu.
+- **À la rédaction, `dev` est à `d722ff9`.** Il contient #143, #136, #140 et #141.
+- Si d'autres PR sont fusionnées, ce SHA change. Notez alors le SHA testé dans le compte
+  rendu.
+- Deux niveaux de preuve sont séparés ci-dessous :
+  - **sur `dev`** : vérifié sur le SHA intégré ;
+  - **sur branche** : vérifié sur un arbre local qui fusionne la PR. Cette preuve est à
+    refaire après la fusion.
 
 ## Prérequis
 
@@ -41,39 +45,38 @@ git fetch origin dev && git rev-parse --short origin/dev
 Lancez `docs/qualite/recette-cloud/run.sh` depuis la racine, sur la machine qui a Docker.
 
 - **Attendu :** `RECETTE: all checks passed`.
-- **Dernier résultat consigné :** 36 sur 36 sur `dev` `60ccc35`, avec #136.
+- **Dernier résultat consigné :** 36 sur 36 en 101 s sur `dev` `d722ff9`.
 - **Ce que couvre ce script :** la pile réelle avec le hub simulé.
 - **Ce qu'il ne couvre pas :** ni les écrans, ni le matériel.
 - **Attention :** ce script occupe tous les compartiments du casier de démonstration. La
   suite Web en direct (`apps/admin-web`, `playwright.api.config.ts`) doit donc tourner
   **avant** lui, ou sur une base neuve. Sinon le test `#26 custody` s'arrête sur sa
   précondition explicite.
+- **Suite Web en direct sur `dev` `d722ff9`, base neuve :** 11 sur 11 en 80 s.
 
-## Ce qu'un utilisateur peut faire sur `dev` (`60ccc35`)
+## Ce qu'un utilisateur peut faire sur `dev` (`d722ff9`)
 
 | Parcours | Où | Preuve existante | À vérifier par l'humain |
 |---|---|---|---|
-| Connexion Manager, refus du technicien | Manager | Suite Web en direct 11 sur 11 (pile cloud) | Connexion, message de refus |
+| Connexion Manager, refus du technicien | Manager | Suite Web en direct 11 sur 11 sur `d722ff9` | Connexion, message de refus |
 | Catalogue : créer, modifier et archiver un modèle et un exemplaire (#25) | Manager | Suite en direct CAT-01. Archivage répété conforme à 09 §12.1 | Formulaires FR/EN, archivage |
+| Identifiants : attribuer, révoquer ; placement attendu (#26, #140) | Manager | Test en direct `#26 custody` sur `d722ff9` (base neuve) | Attribuer puis révoquer un identifiant, déplacer un placement |
+| Échéance de calibration sans glissement à l'heure d'été (#25, #141) | Manager | **Sur branche** : API réelle, trou de printemps refusé, deux occurrences d'automne. Non refait sur `d722ff9` | Navigateur à l'heure de Toronto : saisir une échéance le 8 mars 2026 à 2 h 30 (refusée), puis le 1er novembre 2026 à 1 h 30 (deux choix) |
 | Horaire hebdomadaire d'un casier (#28, #139) | Manager | Suite en direct CFG-02. Recette R3 | Modifier un jour, relire |
-| Lecture du catalogue et réservation (#37, #38) | iOS | CI iOS. Recette R5 | Réserver un actif `READY`. Aucune ouverture de porte |
+| Lecture du catalogue et réservation (#37, #38) | iOS | Recette R5. CI iOS du push `dev` : en file d'attente ; une seule exécution n'est pas une preuve | Réserver un actif `READY`. Aucune ouverture de porte |
 | Présence par scan, hub hors ligne (R4, R6) | API | Recette R4 et R6 (simulé) | Avec le vrai hub : couper le Wi-Fi plus de 30 s. L'actif passe à `UNKNOWN`, puis redevient `READY` seulement après un nouveau scan |
 | Refus de déplacer un actif réservé (#133) | API | Recette R9 (réservation). Prêt et opération : **fixtures seulement** | — |
 
-## En attente de fusion (Philippe fusionne)
+## En attente de fusion (Philippe fusionne) : preuves sur branche
 
 | PR | Apporte | Vérification QA | Ordre proposé |
 |---|---|---|---|
-| #136 `0e52322` | Recette : lectures admin, garde R9, API toujours reconstruite | 36 sur 36 en 100 s | Indépendante |
-| #140 `3f1d4d9` | Manager : identifiants et placement (#26) | Recette 36 sur 36. Live 11 sur 11 deux fois de suite sur la même base neuve ; exige un compartiment libre | 1 |
-| #141 `a768561` | Manager : échéance de calibration sans glissement à l'heure d'été (#25) | Trou de printemps refusé. Deux occurrences d'automne stockées et relues sur l'API réelle | 2 (aucun conflit avec #140) |
 | #142 `49bd8ff` | API : `deviceErrors` de la session courante du hub (#29) | MQTT vers API réel, hub simulé : regroupement, doublon stocké une fois, liste gardée hors ligne, vidée à la nouvelle session | Indépendante |
-| #148 `98b98f9` | Manager : rendu des `deviceErrors` (#29) | Avec #142 : page égale au GET direct en 4 étapes (aucun signal, 2 groupes avec doublon, hors ligne, nouvelle session). Script Web W1/W2 réussi | Après #142 |
-| #143 `0570b2c` | Tests iOS : ordre des audits, plus de reprise masquante | Run 42258729058 : 218 sur 218 en 22,8 min, 31 audits terminés, le plus lent 9,4 s. Une seule exécution : l'instabilité n'est **pas** prouvée corrigée | Prête. Puis resynchroniser #132 |
-| #146 `ab1a597` | Manager : recherche `q` par graphèmes (#109, partie Web) | Recette 36 sur 36. Test en direct « search q » réussi (44 cas du corpus d'accord avec l'API). **Conflit avec #140** : la seconde fusionnée doit être resynchronisée par Web | Après #140, une fois resynchronisée |
-| #147 `6f11da6` | API : présence inconnue si deux démarrages partagent le compteur | Recette 36 sur 36. Script jumeau 4 sur 4 ; sur `dev` le même script échoue T2 et T3 (lacune reproduite). Hub simulé | Indépendante. Interprétation à décider (Philippe) |
-| #144 `e8fb536` | CI : iOS sur un push `dev` seulement si un chemin iOS change | 59 tests de scripts CI | **Décision de Philippe** |
-| #132 | iOS : recherche par graphèmes (#109) | Rouge iOS hérité, à resynchroniser après #143 | Après #131, ADR-014 et un iOS vert |
+| #148 `98b98f9` | Manager : rendu des `deviceErrors` (#29) | Avec #142 : page égale au GET direct en 4 étapes (aucun signal, 2 groupes avec doublon, hors ligne, nouvelle session). Script Web W1/W2 réussi | Après #142. Sonar rouge à corriger par Web |
+| #146 `ab1a597` | Manager : recherche `q` par graphèmes (#109, partie Web) | Sur l'ancienne base : recette 36 sur 36, test « search q » réussi (44 cas). **En conflit avec `dev`** depuis #140 : Web resynchronise | Après la resynchronisation par Web, puis nouvelle vérification QA |
+| #147 `6f11da6` | API : présence inconnue si deux démarrages partagent le compteur | Recette 36 sur 36. Script jumeau 4 sur 4 ; sur `dev` le même script échoue T2 et T3 (lacune reproduite). Hub simulé | Recommandation en discussion, **non approuvée** (Philippe) |
+| #144 `e8fb536` | CI : iOS sur un push `dev` seulement si un chemin iOS change | **Approuvée par Philippe.** 59 tests de scripts CI sur l'arbre fusionné avec `d722ff9`. Sortie du brouillon | Indépendante |
+| #132 `de0ee1b` | iOS : recherche par graphèmes (#109) | `dev` `d722ff9` fusionné sans conflit ; ADR-014 et corpus inchangés. Une exécution iOS hébergée, sans relance | Après un iOS vert sur `de0ee1b` |
 
 ## Après chaque fusion
 
