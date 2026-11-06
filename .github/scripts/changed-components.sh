@@ -2,6 +2,8 @@
 # Decide which CI components must run, written as "name=true|false" lines to
 # $GITHUB_OUTPUT (or stdout). Fail-safe: anything but a readable pull request
 # diff runs every component, so a required check is never skipped by mistake.
+# The one exception is the iOS suite on a push to dev, below; it is not a
+# required check, and any doubt about the pushed range still runs it.
 #
 # Exception: the accepted ADR guard compares a pull request with its base, so
 # it applies to pull requests only (adrs=false on push and workflow_dispatch).
@@ -14,9 +16,37 @@ all() {
   exit 0
 }
 
+# Paths whose change can alter an iOS result: the app with its Xcode project,
+# configuration and recipes, the search corpus its tests read at the repository
+# root, the REST contract it consumes, and every CI workflow or script.
+ios_paths='^(apps/ios/|docs/cahier-conception/09-corpus-recherche-q\.json$|docs/cahier-conception/09-contrats-rest\.md$|\.github/)'
+
+# A push to dev runs every Linux job, as before, but the iOS suite only when the
+# pushed range touches an iOS path. Anything unproven (a new branch, an unknown
+# or unreachable before commit, a range that is not a fast-forward) runs it.
+# Pushes to main and manual runs stay full: they are the qualification path.
+push_dev() {
+  [ -n "${BEFORE_SHA:-}" ] && [ -n "${HEAD_SHA:-}" ] || all false
+  git merge-base --is-ancestor "$BEFORE_SHA" "$HEAD_SHA" 2>/dev/null || all false
+  # --no-renames lists both sides of a rename, so a file moved out of apps/ios still counts.
+  pushed=$(git diff --name-only --no-renames "$BEFORE_SHA" "$HEAD_SHA") || all false
+  if printf '%s\n' "$pushed" | grep -Eq "$ios_paths"; then
+    ios=true
+  else
+    ios=false
+    if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+      printf 'iOS skipped: no iOS path changed in %.7s..%.7s. Run CI manually for a full qualification.\n' \
+        "$BEFORE_SHA" "$HEAD_SHA" >>"$GITHUB_STEP_SUMMARY"
+    fi
+  fi
+  printf 'api=true\nweb=true\nsimulator=true\nagents=true\nadrs=false\nios=%s\nios_fast=false\nci=true\n' "$ios" >>"$out"
+  exit 0
+}
+
+if [ "${EVENT_NAME:-}" = push ] && [ "${REF_NAME:-}" = dev ]; then push_dev; fi
 [ "${EVENT_NAME:-}" = "pull_request" ] || all false
 [ -n "${BASE_SHA:-}" ] && [ -n "${HEAD_SHA:-}" ] || all true
-files=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA") || all true
+files=$(git diff --name-only --no-renames "$BASE_SHA" "$HEAD_SHA") || all true
 
 # A workflow change re-runs everything, and so does a CI script this filter does
 # not know. A known script reruns its unit tests and the jobs that execute it on

@@ -62,9 +62,13 @@ class ChangedComponentsTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def detect(self, event="pull_request", base=None, head=None, summary=None, base_ref="dev"):
+    def detect(self, event="pull_request", base=None, head=None, summary=None, base_ref="dev", before=None, ref=None):
         env = {"EVENT_NAME": event, "BASE_SHA": self.base if base is None else base,
                "HEAD_SHA": head or self.repo.git("rev-parse", "HEAD"), "BASE_REF": base_ref}
+        if before is not None:
+            env["BEFORE_SHA"] = before
+        if ref is not None:
+            env["REF_NAME"] = ref
         if summary is not None:
             env["GITHUB_STEP_SUMMARY"] = str(summary)
         result = run(["sh", str(SCRIPTS / "changed-components.sh")], cwd=self.repo.folder, env=env)
@@ -174,9 +178,57 @@ class ChangedComponentsTests(unittest.TestCase):
 
     def test_push_runs_everything_except_the_pull_request_guard(self):
         self.repo.commit({"docs/notes.md": "x\n"})
-        for event in ("push", "workflow_dispatch"):
-            with self.subTest(event=event):
-                self.assertEqual(self.detect(event=event), FULL - {"adrs"})
+        # main and manual runs stay full whatever the range: they are the qualification path.
+        for event, ref in (("push", "main"), ("workflow_dispatch", "dev"), ("workflow_dispatch", "main"), ("push", None)):
+            with self.subTest(event=event, ref=ref):
+                self.assertEqual(self.detect(event=event, before=self.base, ref=ref), FULL - {"adrs"})
+
+    def push_to_dev(self, before=None, summary=None):
+        return self.detect(event="push", base="", before=self.base if before is None else before, ref="dev", summary=summary)
+
+    def test_push_to_dev_without_an_ios_path_skips_only_ios(self):
+        summary = Path(self.temp.name) / "summary.md"
+        for path in ("services/api/src/Main.java", "apps/admin-web/src/App.tsx", "firmware/bench/sketch.ino",
+                     "docs/notes.md", "docs/cahier-conception/10-contrats-mqtt.md", "infra/docker/compose.yaml"):
+            with self.subTest(path=path):
+                self.base = self.repo.git("rev-parse", "HEAD")
+                head = self.repo.commit({path: f"{path}\n"})
+                self.assertEqual(self.push_to_dev(summary=summary), FULL - {"adrs", "ios"})
+                self.assertIn(f"iOS skipped: no iOS path changed in {self.base[:7]}..{head[:7]}", summary.read_text(encoding="utf-8"))
+
+    def test_push_to_dev_with_an_ios_path_runs_the_full_ios_suite(self):
+        for path in ("apps/ios/AegisMobile/View.swift", "apps/ios/AegisMobile.xcodeproj/project.pbxproj",
+                     "apps/ios/Config/Shared.xcconfig", "apps/ios/scripts/ios-test.sh",
+                     "apps/ios/AegisMobile.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
+                     "docs/cahier-conception/09-corpus-recherche-q.json", "docs/cahier-conception/09-contrats-rest.md",
+                     ".github/workflows/ci.yml", ".github/scripts/ci-result.py", ".github/scripts/new-tool.sh"):
+            with self.subTest(path=path):
+                self.base = self.repo.git("rev-parse", "HEAD")
+                self.repo.commit({path: f"{path}\n"})
+                # Never the fast recipe on a push: the full standalone suite qualifies the merged branch.
+                self.assertEqual(self.push_to_dev(), FULL - {"adrs"})
+
+    def test_push_to_dev_counts_an_ios_file_deleted_or_moved_away(self):
+        self.repo.commit({"apps/ios/AegisMobile/Old.swift": "a\n" * 20})
+        self.base = self.repo.git("rev-parse", "HEAD")
+        self.repo.commit({}, delete=["apps/ios/AegisMobile/Old.swift"])
+        self.assertIn("ios", self.push_to_dev())
+        self.repo.commit({"apps/ios/AegisMobile/Moved.swift": "b\n" * 20})
+        self.base = self.repo.git("rev-parse", "HEAD")
+        (self.repo.folder / "attic").mkdir()
+        self.repo.git("mv", "apps/ios/AegisMobile/Moved.swift", "attic/Moved.swift")
+        self.repo.git("commit", "-q", "-m", "move")
+        self.assertIn("ios", self.push_to_dev())
+
+    def test_push_to_dev_with_an_unproven_range_runs_ios(self):
+        self.repo.commit({"docs/notes.md": "x\n"})
+        side = self.repo.git("rev-parse", "HEAD~1")
+        self.repo.git("checkout", "-q", "-b", "side", side)
+        rewritten = self.repo.commit({"docs/other.md": "y\n"})
+        self.repo.git("checkout", "-q", "main")
+        for before in ("", "0" * 40, "f" * 40, rewritten):
+            with self.subTest(before=before):
+                self.assertEqual(self.push_to_dev(before=before), FULL - {"adrs"})
 
     def test_stacked_pull_request_names_the_commits_that_select_ios(self):
         summary = Path(self.temp.name) / "summary.md"
@@ -462,6 +514,22 @@ class WorkflowWiringTests(unittest.TestCase):
         for job, name in outside:
             with self.subTest(job=job):
                 self.assertIn(name, note, f"{name} is outside CI result but not named in its summary")
+
+    def test_change_detection_receives_the_pushed_range(self):
+        step = self.text[self.text.index("      - id: filter\n"):self.text.index("changed-components.sh")]
+        self.assertIn("BEFORE_SHA: ${{ github.event.before }}", step)
+        self.assertIn("REF_NAME: ${{ github.ref_name }}", step)
+        self.assertIn("HEAD_SHA: ${{ github.sha }}", step)
+
+    def test_ios_is_gated_by_its_output_and_stays_outside_ci_result(self):
+        # Skipping iOS on a push to dev must not change the required check: iOS is
+        # not in CI result's needs, and its job runs only on the ios output.
+        ios = self.text[self.text.index("  ios:\n"):self.text.index("  scripts:\n")]
+        self.assertIn("if: needs.changes.outputs.ios == 'true'", ios)
+        result = self.text[self.text.index("  result:\n"):]
+        needs = {name.strip() for name in re.search(r"needs: \[([^\]]*)\]", result).group(1).split(",")}
+        self.assertNotIn("ios", needs)
+        self.assertIn("workflow_dispatch:", self.text[:self.text.index("permissions:")])
 
     def test_ios_runs_the_chosen_recipe_and_defaults_to_standalone(self):
         ios = self.text[self.text.index("  ios:\n"):self.text.index("  scripts:\n")]
