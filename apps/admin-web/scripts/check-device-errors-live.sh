@@ -13,8 +13,8 @@
 # The server path alone is services/api/scripts/check-device-errors.sh. The hub is simulated: this proves
 # the Web path, not a physical hub.
 #
-# Needs: docker with compose, Java 21, Node 22.18+, openssl, and an API jar that serves deviceErrors
-# (#142): AEGIS_API_JAR, else services/api/target/aegis-control-*.jar, else a fresh build.
+# Needs: docker with compose, Java 21, Node 22.18+, openssl, the Manager's dependencies (npm ci in
+# apps/admin-web), and an API jar that serves deviceErrors (#142): AEGIS_API_JAR, else services/api/target/aegis-control-*.jar, else a fresh build.
 # Overrides: WEB_DEVICE_ERRORS_DB_PORT (57532), WEB_DEVICE_ERRORS_MQTT_PORT (53983),
 # WEB_DEVICE_ERRORS_API_PORT (19280). The exit code is the number of failed steps.
 set -euo pipefail
@@ -26,6 +26,10 @@ work=$(mktemp -d "${TMPDIR:-/tmp}/aegis-web-device-errors.XXXXXX")
 db_port=${WEB_DEVICE_ERRORS_DB_PORT:-57532}
 mqtt_port=${WEB_DEVICE_ERRORS_MQTT_PORT:-53983}
 api_port=${WEB_DEVICE_ERRORS_API_PORT:-19280}
+
+# The Manager's own installed Playwright, never one npx would fetch and run on demand.
+playwright=$root/apps/admin-web/node_modules/.bin/playwright
+[[ -x "$playwright" ]] || { echo "missing $playwright: run 'npm ci' in apps/admin-web first" >&2; exit 1; }
 
 # The example credentials, on this recipe's own ports. Never a real secret.
 sed -e "s/^AEGIS_DB_PORT=.*/AEGIS_DB_PORT=$db_port/" -e "s/^AEGIS_MQTT_PORT=.*/AEGIS_MQTT_PORT=$mqtt_port/" \
@@ -90,7 +94,7 @@ AEGIS_MQTT_URL=mqtt://127.0.0.1:$mqtt_port AEGIS_SIM_BOOT_COUNT_FILE="$work/boot
 failures=0
 manager() {
   if (cd apps/admin-web && AEGIS_LIVE_EXPECT_DEVICE_ERRORS=$2 \
-    npx playwright test -c playwright.api.config.ts --trace off -g 'Casiers \(\?casier=\)' >"$work/$1.log" 2>&1); then
+    "$playwright" test -c playwright.api.config.ts --trace off -g 'Casiers \(\?casier=\)' >"$work/$1.log" 2>&1); then
     echo "PASS $1 $3"
   else
     echo "FAIL $1 $3 (see $work/$1.log)"
