@@ -21,6 +21,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 
@@ -144,6 +145,29 @@ def catalog_phase(admin, tech):
 
     with open(STATE, "w", encoding="utf-8") as out:
         json.dump({"asset1": asset1["id"], "asset2": asset2["id"], "code1": code1}, out)
+
+    search_corpus(tech)
+
+
+def search_corpus(tech):
+    """Replays the shared search corpus of #109 (doc 09, section 22.3) against the technician catalogue, if present."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "cahier-conception",
+                        "09-corpus-recherche-q.json")
+    if not os.path.exists(path):
+        print("SKIP  R7 search corpus  ::  docs/cahier-conception/09-corpus-recherche-q.json is not on this branch", flush=True)
+        return
+    with open(path, encoding="utf-8") as source:
+        cases = json.load(source)["cases"]
+    mismatches = []
+    for case in cases:
+        text = "".join(part["text"] * part.get("times", 1) for part in case["parts"])
+        status, body = call("GET", "/assets?size=1&q=" + urllib.parse.quote(text, safe=""), tech)
+        codes = sorted({v.get("code") for v in (body or {}).get("violations", []) if v.get("field") == "q"})
+        observed = "VALID" if status == 200 else (codes[0] if status == 400 and len(codes) == 1 else f"HTTP {status} {codes}")
+        if observed != case["result"]:
+            mismatches.append(f"{case['id']}: expected {case['result']}, got {observed}")
+    check(f"R7 API answers the {len(cases)} cases of the shared search corpus", not mismatches,
+          "; ".join(mismatches[:5]) or f"{len(cases)}/{len(cases)} as expected")
 
 
 def schedule(enabled_today):

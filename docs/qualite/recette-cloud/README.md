@@ -62,6 +62,7 @@ Maven restent ceux de la CI.
 | R5.3 | lecture après réservation | `availability = RESERVED` |
 | R6.1 | hub figé par `SIGSTOP` : plus de heartbeat, mais aucune déconnexion | casier `OFFLINE` après plus de 30 s |
 | R6.2 | interruption de continuité | présence `UNKNOWN` : le scan antérieur est annulé |
+| R7 | corpus partagé de recherche `q` (#109), s'il est sur la branche | chaque cas donne `200` (`VALID`) ou `400` avec la violation `q` attendue (`SIZE`, `INVALID_VALUE`), document 09, §22.3 ; sinon `SKIP` |
 
 ## Preuve du 6 novembre 2026
 
@@ -71,6 +72,13 @@ Maven restent ceux de la CI.
   - conteneur cloud Linux, Docker 29.9.2 ;
   - PostgreSQL 17 et Mosquitto 2 aux digests de `compose.yaml` ;
   - Java 21.0.12, Node 22.23.
+- **R7, corpus de #109, le même jour :**
+  - sur la branche de #131 (`7d530f0`, fusionnée en local avec cette recette) : 44 cas
+    sur 44 conformes, recette complète verte ;
+  - sur `dev` (`47f34ac`), avec le corpus copié temporairement : **R7 échoue**, comme
+    attendu. Par exemple, `e-combining-100`, `emoji-simple-100` et `emoji-zwj-100` donnent
+    `SIZE` au lieu de `VALID`, puisque `dev` compte en UTF-16.
+  - Le contrôle distingue donc l'ancienne règle de la nouvelle.
 - **Correction de la recette elle-même :** le premier passage attendait `409` pour
   l'horaire fermé. L'API répond `422 OUTSIDE_OPERATING_HOURS`, ce que prévoit le document
   09 (§14.1). La recette a été corrigée ; l'API n'avait pas de défaut.
