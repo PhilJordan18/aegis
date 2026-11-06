@@ -6,6 +6,7 @@ import { Dialog, DialogActions, DialogBody } from '../../ui/Dialog'
 import { SelectField, TextField } from '../../ui/FormField'
 import { FormAlert } from '../catalog/forms/FormAlert'
 import { feedbackFor, LIMITS, type FormFeedback } from '../catalog/forms/formFeedback'
+import { useFeedbackFocus } from '../catalog/forms/useFeedbackFocus'
 import { classifyMutationFailure } from '../catalog/mutationFailure'
 import { IDENTIFIER_TYPES, type AssetIdentifierView, type AssignIdentifierRequest, type IdentifierType } from './contract'
 
@@ -36,25 +37,19 @@ export function AssignIdentifierDialog({ open, assetCode, assign, busy, onClose,
   const formRef = useRef<HTMLFormElement>(null)
   const alertRef = useRef<HTMLDivElement>(null)
 
-  function show(next: FormFeedback) {
-    setFeedback(next)
-    requestAnimationFrame(() => {
-      if (next.alert !== null) alertRef.current?.focus()
-      else formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
-    })
-  }
+  useFeedbackFocus(feedback, alertRef, formRef)
 
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (busy) return
     const request = { type, value: value.trim() }
-    if (request.value === '') return show({ fieldErrors: { value: c.violation.required }, alert: null })
-    if (request.value.length > LIMITS.identifierValue) return show({ fieldErrors: { value: c.violation.tooLong({ max: LIMITS.identifierValue }) }, alert: null })
+    if (request.value === '') return setFeedback({ fieldErrors: { value: c.violation.required }, alert: null })
+    if (request.value.length > LIMITS.identifierValue) return setFeedback({ fieldErrors: { value: c.violation.tooLong({ max: LIMITS.identifierValue }) }, alert: null })
     setFeedback({ fieldErrors: {}, alert: null })
     try {
       onAssigned(await assign(request, idempotency.keyFor(request)))
     } catch (error) {
-      show(feedbackFor(classifyMutationFailure(error), FIELDS, i18n))
+      setFeedback(feedbackFor(classifyMutationFailure(error), FIELDS, i18n))
     }
   }
 

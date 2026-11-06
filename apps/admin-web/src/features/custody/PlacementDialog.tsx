@@ -6,6 +6,7 @@ import { SelectField, TextAreaField } from '../../ui/FormField'
 import type { PlacementSummary } from '../catalog/contract'
 import { FormAlert } from '../catalog/forms/FormAlert'
 import { feedbackFor, LIMITS, type FormFeedback } from '../catalog/forms/formFeedback'
+import { useFeedbackFocus } from '../catalog/forms/useFeedbackFocus'
 import { classifyMutationFailure } from '../catalog/mutationFailure'
 import type { AdminCompartmentView, AdminLockerView, AssetPlacementView, PlacementRequest } from './contract'
 import { useAdminLockers } from './useCustody'
@@ -90,13 +91,7 @@ function PlacementForm({ lockers, assetId, current, place, busy, onCancel, onPla
     form.querySelector<HTMLElement>('[data-autofocus]:not(:disabled)')?.focus()
   }, [])
 
-  function show(next: FormFeedback) {
-    setFeedback(next)
-    requestAnimationFrame(() => {
-      if (next.alert !== null) alertRef.current?.focus()
-      else formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
-    })
-  }
+  useFeedbackFocus(feedback, alertRef, formRef)
 
   function optionLabel(compartment: AdminCompartmentView): string {
     if (!compartment.enabled) return t.compartmentDisabled({ code: compartment.code })
@@ -114,12 +109,12 @@ function PlacementForm({ lockers, assetId, current, place, busy, onCancel, onPla
     else if (compartmentId === '') errors.compartmentId = c.violation.required
     if (request.reason === '') errors.reason = c.violation.required
     else if (request.reason.length > LIMITS.placementReason) errors.reason = c.violation.tooLong({ max: LIMITS.placementReason })
-    if (Object.keys(errors).length > 0) return show({ fieldErrors: errors, alert: null })
+    if (Object.keys(errors).length > 0) return setFeedback({ fieldErrors: errors, alert: null })
     setFeedback({ fieldErrors: {}, alert: null })
     try {
       onPlaced(await place(request))
     } catch (error) {
-      show(feedbackFor(classifyMutationFailure(error), FIELDS, i18n))
+      setFeedback(feedbackFor(classifyMutationFailure(error), FIELDS, i18n))
     }
   }
 
