@@ -87,6 +87,14 @@ class AssetIdentifierRepository {
                 .list();
     }
 
+    /** Every identifier of the asset, history included: active first, then the latest assignment, then id. */
+    List<AssetIdentifierView> historyOfAsset(UUID assetId) {
+        return jdbc.sql(SELECT_IDENTIFIER + "WHERE asset_id = :assetId ORDER BY active DESC, assigned_at DESC, id")
+                .param("assetId", assetId)
+                .query(AssetIdentifierRepository::map)
+                .list();
+    }
+
     private static AssetIdentifierView map(ResultSet row, int rowNumber) throws SQLException {
         return new AssetIdentifierView(
                 row.getObject("id", UUID.class),

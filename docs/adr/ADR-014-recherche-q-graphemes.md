@@ -1,10 +1,12 @@
 # ADR-014 — Recherche `q` comptée en graphèmes, commune à l’API, au Web et à iOS
 
-**Statut :** PROPOSED — consigne la décision commune API, Web et iOS du 28 octobre 2026; la liste des espaces retirés et le corpus partagé sont à confirmer à la revue de #109
+**Statut :** ACCEPTED — Philippe Jordan Monfouayi Mba, le 6 novembre 2026 (PR #131), tel que proposé; consigne la décision commune API, Web et iOS du 28 octobre 2026, avec la liste des espaces retirés et le corpus partagé
 
 **Date de la décision :** 28 octobre 2026
 
 **Date de consignation :** 28 octobre 2026
+
+**Date d’acceptation :** 6 novembre 2026
 
 ## Contexte
 
