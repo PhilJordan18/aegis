@@ -45,6 +45,9 @@ class RfidPresenceTests extends ApiIntegrationTest {
     @Autowired
     JdbcClient jdbc;
 
+    @Autowired
+    InboundMessageRepository inboundMessages;
+
     private ReservationFixtures fixtures;
     private UUID locker;
     private UUID assetA;
@@ -312,15 +315,32 @@ class RfidPresenceTests extends ApiIntegrationTest {
     }
 
     @Test
-    void aRejectedTwinMessageIsLeftToTheRejectedMessageRules() throws Exception {
+    void aTwinReportRejectedAfterStorageIsNoConflict() throws Exception {
         ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
         Session twin = new Session(session.bootCount, locker);
         clock.advance(Duration.ofSeconds(1));
-        Map<String, Object> malformed = twin.envelope("DEVICE_ERROR", clock.instant());
-        assertEquals(Outcome.REJECTED, ingestion.ingest(events(), bytes(malformed)));
-        assertEquals("REJECTED", message(malformed).get("processing_status"));
-        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"),
-                "a rejected error report moves no door and claims no session");
+        Map<String, Object> report = ingest(twin.deviceError(clock.instant(), "POWER_FAULT", "WARNING"));
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"), "an accepted twin fact");
+
+        // A command report rejected after storage (CommandAcknowledgements, NOT_CORRELATED) keeps its session.
+        inboundMessages.markRejected((UUID) message(report).get("id"), ProcessingError.COMMAND_CORRELATION_INVALID);
+        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"), "a rejected twin fact");
+    }
+
+    @Test
+    void aTwinStartBeforeTheDeviceWasProvisionedIsNoConflict() throws Exception {
+        Session twin = new Session(session.bootCount, locker);
+        ingest(twin.door("DOOR_OPENED", clock.instant(), cellA));
+        clock.advance(Duration.ofSeconds(1));
+        jdbc.sql("UPDATE aegis.locker_devices SET provisioned_at = :at WHERE locker_id = :locker AND disabled_at IS NULL")
+                .param("at", DeviceTestSupport.utc(clock.instant())).param("locker", locker).update();
+        clock.advance(Duration.ofSeconds(1));
+        session.connectionId = UUID.randomUUID();
+        ingest(session.availability(clock.instant(), "ONLINE", "CONNECTED"));
+        heartbeat("HEALTHY", "HEALTHY");
+        clock.advance(Duration.ofSeconds(5));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"));
     }
 
     /**
