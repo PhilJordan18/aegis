@@ -12,6 +12,10 @@ import { unconfiguredCatalogGateway, type CatalogGateway } from '../features/cat
 import { CatalogGatewayContext } from '../features/catalog/CatalogGatewayContext'
 import { unconfiguredLockerGateway, type LockerGateway } from '../features/lockers/lockerGateway'
 import { LockerGatewayContext } from '../features/lockers/LockerGatewayContext'
+import { unconfiguredScheduleGateway, type ScheduleGateway } from '../features/schedule/scheduleGateway'
+import { ScheduleGatewayContext } from '../features/schedule/ScheduleGatewayContext'
+import { unconfiguredCustodyGateway, type CustodyGateway } from '../features/custody/custodyGateway'
+import { CustodyGatewayContext } from '../features/custody/CustodyGatewayContext'
 import { createLocaleController, type Locale, type LocaleController } from '../i18n/locale'
 import { LocaleContext } from '../i18n/useI18n'
 
@@ -21,6 +25,8 @@ export function renderWithProviders(
     gateway = unconfiguredAuthGateway,
     catalogGateway = unconfiguredCatalogGateway,
     lockerGateway = unconfiguredLockerGateway,
+    scheduleGateway = unconfiguredScheduleGateway,
+    custodyGateway = unconfiguredCustodyGateway,
     session = createSessionStore(),
     router = createHistoryRouter(window),
     queryClient = createQueryClient(),
@@ -30,6 +36,8 @@ export function renderWithProviders(
     gateway?: AuthGateway
     catalogGateway?: CatalogGateway
     lockerGateway?: LockerGateway
+    scheduleGateway?: ScheduleGateway
+    custodyGateway?: CustodyGateway
     session?: SessionStore
     router?: Router
     queryClient?: QueryClient
@@ -48,7 +56,9 @@ export function renderWithProviders(
             <SessionContext value={session}>
               <AuthGatewayContext value={gateway}>
                 <CatalogGatewayContext value={catalogGateway}>
-                  <LockerGatewayContext value={lockerGateway}>{ui}</LockerGatewayContext>
+                  <LockerGatewayContext value={lockerGateway}>
+                    <ScheduleGatewayContext value={scheduleGateway}><CustodyGatewayContext value={custodyGateway}>{ui}</CustodyGatewayContext></ScheduleGatewayContext>
+                  </LockerGatewayContext>
                 </CatalogGatewayContext>
               </AuthGatewayContext>
             </SessionContext>

@@ -1,9 +1,12 @@
-import { useId, useLayoutEffect, useRef } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { useI18n } from '../../i18n/useI18n'
 import { ReadOnlyMark } from '../../ui/ReadOnlyMark'
 import { StatusChip } from '../../ui/StatusChip'
 import { classifyCatalogFailure } from '../catalog/catalogFailure'
 import { StaleNotice } from '../catalog/StaleNotice'
+import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
+import { ScheduleDialog } from '../schedule/ScheduleDialog'
+import { Button } from '../../ui/Button'
 import type { CompartmentStatus, LockerStatus } from './contract'
 import { LockerAlert } from './LockerAlert'
 import {
@@ -25,9 +28,9 @@ import {
 import { useLockerStatus } from './useLockerStatus'
 
 /**
- * Read-only status of one locker (PHY-01 #29, 09 §8.6, §16.1): connection, operating window and compartments,
- * exactly as the server evaluated them. There is no control here that changes a state, forces a readiness,
- * opens a compartment or sends a command: the Manager has no such route (09 §17, §25).
+ * Status of one locker (PHY-01 #29, 09 §8.6, §16.1): connection, operating window and compartments, exactly as the
+ * server evaluated them. The only write is the operating schedule (CFG-02 #28, 09 §13), through its editor. There is
+ * no control that changes a state, forces a readiness, opens a compartment or sends a command (09 §17, §25).
  */
 export function LockerStatusPanel({ lockerId }: { readonly lockerId: string }) {
   const i18n = useI18n()
@@ -102,6 +105,11 @@ function LockerBody({ locker, titleId, stale, retrying, onRetry, returnFocus }: 
   const evaluated = technicalInstantLabel(locker.evaluatedAt, i18n)
   const tone = locker.connectionStatus === 'ONLINE' ? 'none' : locker.connectionStatus === 'OFFLINE' ? 'blocked' : 'unknown'
   const window = windowView(locker.currentWindow, i18n)
+  // One editor instance per opening (a new `key`): it reads the schedule again and starts from the server's version.
+  // It stays mounted once closed, so the dialog can give focus back to its opener.
+  const [editor, setEditor] = useState<{ readonly session: number; readonly open: boolean } | null>(null)
+  const sessions = useRef(0)
+  const [outcome, setOutcome] = useState('')
 
   return (
     <div className="ag-lk__body">
@@ -130,12 +138,38 @@ function LockerBody({ locker, titleId, stale, retrying, onRetry, returnFocus }: 
         </div>
 
         <div className="ag-lk__window">
-          <h3 className="ag-overline ag-sec-title">
-            {m.lockers.windowTitle}
-            <ReadOnlyMark />
-          </h3>
+          <div className="ag-lk__window-head">
+            <h3 className="ag-overline ag-sec-title">{m.lockers.windowTitle}</h3>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setOutcome('')
+                setEditor({ session: ++sessions.current, open: true })
+              }}
+            >
+              {m.schedule.edit}
+            </Button>
+          </div>
           <WindowFacts view={window} />
+          <p className="ag-sr-only" role="status">
+            {outcome}
+          </p>
         </div>
+        {editor !== null && (
+          <ScheduleDialog
+            key={editor.session}
+            open={editor.open}
+            lockerId={locker.lockerId}
+            lockerCode={locker.code}
+            suggestedZone={locker.currentWindow.timeZone ?? LAB_TIME_ZONE}
+            onClose={() => setEditor({ ...editor, open: false })}
+            onSaved={() => {
+              setEditor({ ...editor, open: false })
+              setOutcome(m.schedule.saved({ code: locker.code }))
+            }}
+          />
+        )}
       </div>
 
       <h3 className="ag-overline ag-sec-title ag-lk__sec">

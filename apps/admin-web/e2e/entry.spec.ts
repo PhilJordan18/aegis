@@ -236,8 +236,9 @@ test.describe('flow: équipements (production page, routed fakes)', () => {
     await expect(page.locator('main')).not.toContainText(/\bPrêt\b/)
     await expect(page.locator('main')).toContainText('Présence inconnue')
     await expect(page.locator('main')).toContainText('Aucun placement connu')
-    // Only the two catalog routes, through the routed fakes.
-    expect(requests.every((request) => /^GET \/api\/v1\/admin\/assets(\/[0-9a-f-]{36})?(\?|$)/.test(request))).toBe(true)
+    // Only reads through the routed fakes: the two catalog routes and the unit's identifier history (09 §12.3).
+    expect(requests.every((request) => /^GET \/api\/v1\/admin\/assets(\/[0-9a-f-]{36}(\/identifiers)?)?(\?|$)/.test(request))).toBe(true)
+    expect(requests.some((request) => request.endsWith('/identifiers'))).toBe(true)
   })
 
   test('flow: keyboard selection with Tab and Enter changes the dossier, keeps the focus on the row and announces it', async ({ page }) => {
@@ -307,18 +308,19 @@ test.describe('flow: équipements (production page, routed fakes)', () => {
     expect(requests.some((request) => request.includes('page=1&size=20&sort=assetCode%2Casc'))).toBe(true)
   })
 
-  test('flow: the page offers no control that creates, edits, archives or saves', async ({ page }) => {
-    await openEquipment(page, 'nominal')
-    await expect(page.locator('main').getByRole('button')).toHaveCount(0)
+  test('flow: changes go through explicit actions only, and opening the page writes nothing', async ({ page }) => {
+    const requests = await openEquipment(page, 'nominal')
+    await expect(page.locator('main').getByRole('button')).toHaveText(['Nouvel exemplaire', 'Modifier', 'Archiver', 'Modifier le placement', 'Attribuer un identifiant'])
     await expect(page.locator('main').locator('input, select, textarea')).toHaveCount(0)
+    expect(requests.every((request) => request.startsWith('GET '))).toBe(true)
   })
 
-  test('flow: the « Modèles » tab is a dormant, non-focusable tab announced as coming', async ({ page }) => {
+  test('flow: the « Modèles » tab is a real link to the models view', async ({ page }) => {
     await openEquipment(page, 'nominal')
     const tabs = page.getByRole('navigation', { name: 'Vues des équipements' })
     await expect(tabs.getByRole('link', { name: 'Exemplaires' })).toHaveAttribute('aria-current', 'page')
-    await expect(tabs.getByRole('link', { name: 'Modèles' })).toHaveCount(0)
-    await expect(tabs).toContainText('Modèles, à venir')
+    await expect(tabs.getByRole('link', { name: 'Modèles' })).toHaveAttribute('href', '/equipements?vue=modeles')
+    await expect(tabs.getByRole('link', { name: 'Modèles' })).not.toHaveAttribute('aria-current', 'page')
   })
 
   test('flow: long French content wraps without clipping or horizontal scroll at 200 % zoom', async ({ page }) => {
@@ -361,9 +363,10 @@ test.describe('flow: casiers (production page, routed fakes)', () => {
 
   test('flow: the page offers no control that changes a state, forces a readiness, opens a compartment or sends a command', async ({ page }) => {
     await openLockerPage(page, 'nominal')
-    await expect(page.locator('main').getByRole('button')).toHaveCount(0)
+    // The only action opens the schedule editor (CFG-02 #28); nothing else writes.
+    await expect(page.locator('main').getByRole('button')).toHaveText(['Modifier l’horaire'])
     await expect(page.locator('main').locator('input, select, textarea, form')).toHaveCount(0)
-    await expect(page.locator('main')).toContainText("Lecture seule : aucune commande n'est envoyée au casier depuis cet écran.")
+    await expect(page.locator('main')).toContainText("Aucune commande n'est envoyée au casier depuis cet écran.")
   })
 
   test('flow: OFFLINE and never-seen say so in words and symbols, and show no healthy compartment', async ({ page }) => {

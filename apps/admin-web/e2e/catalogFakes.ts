@@ -115,6 +115,8 @@ export async function routeCatalog(page: Page, mode: CatalogMode): Promise<strin
     if (mode === 'forbidden') return json(route, 403, problem(403, 'FORBIDDEN', url.pathname), 'application/problem+json')
     if (mode === 'serviceError') return json(route, 500, problem(500, 'INTERNAL_ERROR', url.pathname), 'application/problem+json')
     const units = unitsOf(mode)
+    // The identifier history of a unit (09 §12.3): none in the offline fakes.
+    if (/\/admin\/assets\/[^/]+\/identifiers$/.test(url.pathname)) return json(route, 200, [])
     const byId = url.pathname.match(/\/admin\/assets\/([^/]+)$/)
     if (byId) {
       const reads = (unitReads.get(byId[1] ?? '') ?? 0) + 1
@@ -190,4 +192,33 @@ export async function makeDossierStale(page: Page, english: boolean) {
   // The failed read is retried twice with a growing delay before it counts as failed.
   await page.clock.fastForward(10_000)
   await page.locator('.ag-dossier [role="alert"]').getByText(english ? 'Data not refreshed.' : 'Données non actualisées.').waitFor({ timeout: 20_000 })
+}
+
+const MODELS = [
+  { id: MODEL_ID, name: 'Multimètre 1', manufacturer: 'Fluke', modelNumber: '117', description: 'Multimètre numérique de terrain.', defaultCalibrationRequired: true, archivedAt: null },
+  { id: '8f1f3c52-5f2a-4c43-9b6b-0d2f6c1f3a02', name: 'Thermomètre infrarouge', manufacturer: 'Testo', modelNumber: '830-T2', description: null, defaultCalibrationRequired: false, archivedAt: null },
+  { id: '8f1f3c52-5f2a-4c43-9b6b-0d2f6c1f3a03', name: 'Ancien oscilloscope', manufacturer: null, modelNumber: null, description: null, defaultCalibrationRequired: false, archivedAt: '2026-10-01T12:00:00Z' },
+]
+
+/**
+ * Model list and catalog commands for the forms spec. Commands answer with the refusals the forms must explain:
+ * a unit code already used, a model still in use, a unit on loan. Registered after routeCatalog, so it answers first.
+ */
+export async function routeCatalogCommands(page: Page): Promise<string[]> {
+  const requests: string[] = []
+  await page.route('**/api/v1/admin/asset-models**', async (route) => {
+    const url = new URL(route.request().url())
+    requests.push(`${route.request().method()} ${url.pathname}`)
+    if (route.request().method() === 'GET') return json(route, 200, { items: MODELS, page: 0, size: 100, totalItems: MODELS.length, totalPages: 1 })
+    if (url.pathname.endsWith('/archive')) return json(route, 409, problem(409, 'ASSET_MODEL_IN_USE', url.pathname), 'application/problem+json')
+    return route.fallback()
+  })
+  await page.route(/\/api\/v1\/admin\/assets(\/[^/]+\/archive)?$/, async (route) => {
+    const url = new URL(route.request().url())
+    if (route.request().method() === 'GET') return route.fallback()
+    requests.push(`${route.request().method()} ${url.pathname}`)
+    if (url.pathname.endsWith('/archive')) return json(route, 409, problem(409, 'ASSET_HAS_OPEN_LOAN', url.pathname), 'application/problem+json')
+    return json(route, 409, problem(409, 'ASSET_CODE_ALREADY_EXISTS', url.pathname), 'application/problem+json')
+  })
+  return requests
 }

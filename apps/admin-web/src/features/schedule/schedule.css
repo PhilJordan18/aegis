@@ -1,0 +1,18 @@
+/* Seven-day schedule editor (CFG-02 #28): direction approved for P0 on 6 November 2026 (docs/design/manager-forms/README.md). */
+.ag-sched { display: grid; gap: 8px; margin-top: 16px; }
+.ag-sched__day {
+  display: grid; grid-template-columns: 8.5rem auto minmax(0, 1fr); align-items: start; gap: 8px 16px;
+  margin: 0; padding: 12px 14px; border: 1px solid var(--ag-border); border-radius: var(--ag-r-item); background: var(--ag-surface);
+}
+.ag-sched__day[data-open] { background: var(--ag-field); }
+.ag-sched__name { float: left; padding: 0; font-weight: 600; font-size: 0.9375rem; padding-top: 2px; }
+.ag-sched__times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.ag-sched__closed { margin: 0; padding-top: 2px; color: var(--ag-text-2); font-size: var(--ag-type-small-size); }
+.ag-sched__note { margin: 0 0 12px; color: var(--ag-text-2); }
+@media (max-width: 639px) {
+  .ag-sched__day { grid-template-columns: minmax(0, 1fr) auto; }
+  .ag-sched__times, .ag-sched__closed { grid-column: 1 / -1; }
+}
+@media (forced-colors: active) {
+  .ag-sched__day { border-color: CanvasText; }
+}

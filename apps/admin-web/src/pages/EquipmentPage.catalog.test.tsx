@@ -459,15 +459,19 @@ describe('Équipements — unknown enumeration values (09 §3)', () => {
   })
 })
 
-describe('Équipements — read-only', () => {
-  it('offers no control that creates, edits, archives or saves', async () => {
+describe('Équipements — commands', () => {
+  it('offers only explicit commands; readiness, availability and presence are never controls', async () => {
     renderEquipment(fakeCatalogGateway({ pages: [ok(pageOf([MM001]))], units: { [MM001.id]: ok(MM001) } }))
     await screen.findByRole('heading', { level: 2, name: /Multimètre 1 · MM-001/ })
     const main = screen.getByRole('main')
-    expect(within(main).queryAllByRole('button')).toEqual([])
+    expect(within(main).getAllByRole('button').map((button) => plain(button.textContent)).slice(0, 5)).toEqual([
+      'Nouvel exemplaire',
+      'Modifier',
+      'Archiver',
+      'Modifier le placement',
+      'Attribuer un identifiant',
+    ])
     expect(within(main).queryAllByRole('textbox')).toEqual([])
     expect(within(main).queryAllByRole('combobox')).toEqual([])
-    expect(plain(main.textContent)).not.toMatch(/Nouvel équipement|Enregistrer/)
   })
 })
-

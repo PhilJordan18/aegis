@@ -109,16 +109,16 @@ describe('Casiers — nominal', () => {
     expect(within(panel()).queryByRole('table')).toBeNull()
   })
 
-  it('is read only: no button, field, form or command, and the gateway is only asked to read', async () => {
+  it('sends no command: its only action opens the schedule editor, and the gateway is only asked to read', async () => {
     const gateway = fakeLockerGateway({ [DEMO_LOCKER_ID]: [ok(lockerStatus())] })
     renderLockers(gateway)
     await screen.findByRole('heading', { level: 2, name: SECTION })
     const main = screen.getByRole('main')
-    expect(within(main).queryAllByRole('button')).toHaveLength(0)
+    expect(within(main).getAllByRole('button').map((button) => button.textContent)).toEqual(['Modifier l’horaire'])
     expect(main.querySelectorAll('input, select, textarea, form, [contenteditable], [role="switch"], [role="checkbox"]')).toHaveLength(0)
-    expect(within(main).queryByText(/ouvrir|forcer|déverrouiller|débloquer|modifier|enregistrer/i)).toBeNull()
+    expect(within(main).queryByText(/ouvrir|forcer|déverrouiller|débloquer|enregistrer/i)).toBeNull()
     expect(Object.keys(gateway)).toEqual(['getStatus'])
-    expect(plain(main.textContent)).toContain("Lecture seule : aucune commande n'est envoyée au casier depuis cet écran.")
+    expect(plain(main.textContent)).toContain("Aucune commande n'est envoyée au casier depuis cet écran.")
   })
 
   it('shows the same screen in English', async () => {

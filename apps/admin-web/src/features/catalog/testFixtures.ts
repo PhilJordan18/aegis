@@ -1,7 +1,7 @@
 import { vi } from 'vitest'
 import type { GatewayResult } from '../auth/authGateway'
 import type { CatalogGateway } from './catalogGateway'
-import type { AdminAssetPage, AdminAssetView } from './contract'
+import type { AdminAssetPage, AdminAssetView, AssetModelPage, AssetModelView } from './contract'
 
 export const EVALUATED_AT = '2026-10-21T14:30:00Z'
 
@@ -47,23 +47,60 @@ async function resolve<T>(answer: Answer<T>): Promise<GatewayResult<T>> {
   return typeof answer === 'function' ? answer() : answer
 }
 
-/** A fake gateway: the lists by zero-based page index, and the units by id. Anything not provided is unreachable. */
+type Mocked<T> = { [K in keyof T]: T[K] & ReturnType<typeof vi.fn> }
+
+/**
+ * A fake gateway: the lists by zero-based page index, and the units by id. Anything not provided is
+ * unreachable. `overrides` replaces any method, typically a mutation under test.
+ */
 export function fakeCatalogGateway({
   pages = [],
   units = {},
+  modelPages = [],
+  overrides = {},
 }: {
   pages?: readonly Answer<AdminAssetPage>[]
   units?: Readonly<Record<string, Answer<AdminAssetView>>>
-} = {}): CatalogGateway & { listAssets: ReturnType<typeof vi.fn>; getAsset: ReturnType<typeof vi.fn> } {
-  const offline = { kind: 'network', reason: 'offline' } as const
-  return {
-    listAssets: vi.fn(async (_token: string, query: { page: number }) => {
+  modelPages?: readonly Answer<AssetModelPage>[]
+  overrides?: Partial<CatalogGateway>
+} = {}): Mocked<CatalogGateway> {
+  const offline = async () => ({ kind: 'network', reason: 'offline' }) as const
+  const base: CatalogGateway = {
+    listAssets: async (_token, query) => {
       const answer = pages[query.page]
-      return answer === undefined ? offline : resolve(answer)
-    }),
-    getAsset: vi.fn(async (_token: string, assetId: string) => {
+      return answer === undefined ? offline() : resolve(answer)
+    },
+    getAsset: async (_token, assetId) => {
       const answer = units[assetId]
-      return answer === undefined ? offline : resolve(answer)
-    }),
+      return answer === undefined ? offline() : resolve(answer)
+    },
+    listModels: async (_token, query) => {
+      const answer = modelPages[query.page]
+      return answer === undefined ? offline() : resolve(answer)
+    },
+    createAsset: offline,
+    updateAsset: offline,
+    archiveAsset: offline,
+    createModel: offline,
+    updateModel: offline,
+    archiveModel: offline,
+    ...overrides,
   }
+  return Object.fromEntries(Object.entries(base).map(([name, fn]) => [name, vi.fn(fn)])) as unknown as Mocked<CatalogGateway>
+}
+
+export function model(overrides: Partial<AssetModelView> & { id: string; name: string }): AssetModelView {
+  return { manufacturer: null, modelNumber: null, description: null, defaultCalibrationRequired: false, archivedAt: null, ...overrides }
+}
+
+export const FLUKE_117 = model({
+  id: '8f1f3c52-5f2a-4c43-9b6b-0d2f6c1f3a01',
+  name: 'Multimètre 1',
+  manufacturer: 'Fluke',
+  modelNumber: '117',
+  defaultCalibrationRequired: true,
+})
+
+export function modelPageOf(items: readonly AssetModelView[], overrides: Partial<AssetModelPage> = {}): AssetModelPage {
+  return { items, page: 0, size: 100, totalItems: items.length, totalPages: items.length === 0 ? 0 : 1, ...overrides }
 }

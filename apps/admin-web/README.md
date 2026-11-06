@@ -2,8 +2,9 @@
 
 Application React/TypeScript des administrateurs (ADR-010). Elle couvre
 l'accueil, la connexion avec tous ses états, le shell d'Aegis Manager et un
-aperçu statique de l'écran Équipements (WEB-00), puis la lecture seule du
-catalogue et du statut des casiers. Depuis WEB-01, la connexion
+aperçu statique de l'écran Équipements (WEB-00), le catalogue (lecture, puis
+création, modification et archivage des modèles et des exemplaires, CAT-01 #25)
+et le statut des casiers en lecture seule. Depuis WEB-01, la connexion
 et la session passent par l'API (`POST /api/v1/auth/login`,
 `GET /api/v1/auth/me`) hors du mode aperçu.
 
@@ -34,6 +35,8 @@ npm run capture        # mêmes contrôles, et écrit la matrice complète dans 
 npm run capture:evidence  # 16 captures choisies, à 1×, dans docs/design/manager-entree/captures/
 npm run capture:integration  # 14 captures FR/EN de l'identité v3, à 1×, dans docs/design/manager-v3/captures-integration/
 npm run test:identity  # mesures sur le rendu : saut de mise en page, contrastes peints, focus, texte coupé
+npm run test:forms     # formulaires CAT-01 proposés : axe, clavier, 320 px, clair et sombre, sur des faux routés
+npm run capture:forms  # mêmes contrôles, et écrit le lot de revue dans docs/design/manager-forms/captures/
 npm run test:e2e:api   # recette Playwright contre l'API réelle (build de production); échoue sans API ou sans identifiants
 ```
 
@@ -217,6 +220,34 @@ visuel », qui décrit ses actions inactives (`aria-disabled`). Hors aperçu,
 la passerelle HTTP (`features/auth/httpAuthGateway.ts`) remplace la
 passerelle d'aperçu, et l'Équipements protégé (`/equipements`) remplace
 l'aperçu statique.
+
+## Catalogue : formulaires (CAT-01 #25)
+
+Direction approuvée pour P0 par Philippe le 6 novembre 2026, avec ses six
+décisions : `docs/design/manager-forms/README.md`. Les formulaires reprennent
+les champs de connexion et les jetons v3.
+
+- **Onglets** : `/equipements` (exemplaires) et `/equipements?vue=modeles`
+  (modèles, archivés compris, dans l'ordre du serveur : nom puis `id`).
+- **Commandes** : « Nouvel exemplaire » ou « Nouveau modèle » dans l'en-tête;
+  « Modifier » et « Archiver » dans le dossier d'un exemplaire ou la ligne d'un
+  modèle. Un élément archivé n'offre plus aucune commande (09 §12.1–12.2).
+- **Contrat** : `POST` de création et d'archivage avec une `Idempotency-Key`
+  par intention (`src/api/idempotency.ts`), réutilisée par « Réessayer » après
+  une absence de réponse; `PUT` sans clé (09 §20). Une erreur métier n'est pas
+  enregistrée par le serveur : la même demande corrigée la renvoie.
+- **Erreurs** : textes par code, jamais le `title` ni le `detail` du serveur.
+  Un conflit d'unicité (nom, code, numéro de série) va sur son champ; un refus
+  (`ASSET_MODEL_IN_USE`, `ASSET_HAS_OPEN_LOAN`…) dans l'alerte du dialogue; une
+  absence de réponse propose « Réessayer » sans double application.
+- **Règles** : le formulaire n'anticipe que les règles d'un champ (requis,
+  longueur, échéance exigée avec la calibration); le serveur décide du reste.
+  La disponibilité, la présence et le diagnostic ne sont jamais des champs.
+- **Échéance de calibration** : saisie en date et heure dans le fuseau du
+  laboratoire (`America/Toronto`, `src/i18n/zonedTime.ts`); une échéance non
+  modifiée renvoie l'instant exact reçu.
+- **Limite** : le choix du modèle lit la première page de 100 modèles
+  (`PageQuery.MAX_SIZE`); au-delà, un modèle ne peut pas encore être choisi.
 
 ## Casiers : statut en lecture seule (PHY-01 #29)
 
