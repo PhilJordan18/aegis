@@ -1,0 +1,43 @@
+/*
+ * Fields of Manager forms: the approved sign-in field (persistent label, no placeholder, error under the field,
+ * 2 px focus ring offset by 2 px with the field halo) extended to text areas, selects, checkboxes and radios.
+ */
+.ag-ff { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.ag-ff__label { font-size: var(--ag-type-label-size); font-weight: var(--ag-type-label-weight); line-height: 1.3; color: var(--ag-text); padding: 0; }
+.ag-ff__optional { font-weight: 400; color: var(--ag-text-2); }
+.ag-ff__help { margin-top: -2px; font-size: var(--ag-type-caption-size); line-height: 1.4; color: var(--ag-text-2); }
+.ag-ff__control {
+  width: 100%; min-width: 0; min-height: var(--ag-control-h-lg); padding: 0 14px;
+  border-radius: var(--ag-r-field); border: 1px solid var(--ag-control-border); background: var(--ag-field);
+  font: inherit; font-size: 1rem; color: var(--ag-text);
+}
+.ag-ff__control--area { min-height: 112px; padding: 10px 14px; line-height: 1.45; resize: vertical; }
+.ag-ff__control--select { cursor: pointer; }
+.ag-ff__control:focus-visible {
+  border-color: var(--ag-focus); outline: 2px solid var(--ag-focus); outline-offset: 2px; box-shadow: 0 0 0 5px var(--ag-focus-halo);
+}
+.ag-ff__control[aria-invalid='true'] { border: 1.5px solid var(--ag-blocked-fg); }
+.ag-ff__control:disabled { background: var(--ag-disabled-bg); color: var(--ag-text-disabled); cursor: not-allowed; }
+.ag-ff__slot { min-height: 20px; }
+.ag-ff__error {
+  display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px;
+  font-size: var(--ag-type-caption-size); line-height: 1.4; color: var(--ag-blocked-fg);
+}
+.ag-ff__error .ag-icon { width: 16px; height: 16px; margin-top: 2px; color: var(--ag-blocked-fg); }
+.ag-ff__check, .ag-ff__choice { display: flex; align-items: flex-start; gap: 10px; min-height: 28px; cursor: pointer; }
+.ag-ff__check input, .ag-ff__choice input { flex: none; width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--ag-accent); cursor: pointer; }
+.ag-ff__check input:focus-visible, .ag-ff__choice input:focus-visible { outline: 2px solid var(--ag-focus); outline-offset: 2px; }
+.ag-ff__check .ag-ff__label { font-weight: 500; cursor: pointer; }
+.ag-ff__choices { display: flex; flex-wrap: wrap; gap: 8px 20px; padding-top: 2px; }
+.ag-ff__choice span { font-size: 0.9375rem; line-height: 1.4; }
+.ag-ff--choice[disabled] .ag-ff__choice { color: var(--ag-text-disabled); cursor: not-allowed; }
+.ag-ff-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
+@media (max-width: 559px) {
+  .ag-ff-row { grid-template-columns: minmax(0, 1fr); }
+}
+@media (forced-colors: active) {
+  .ag-ff__control { border-color: CanvasText; }
+  .ag-ff__control:focus-visible { outline-color: Highlight; }
+  .ag-ff__control[aria-invalid='true'] { border-width: 2px; }
+  .ag-ff__error .ag-icon { forced-color-adjust: none; }
+}

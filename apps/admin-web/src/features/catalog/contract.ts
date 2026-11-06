@@ -3,8 +3,8 @@ import type { AccessLevel } from '../auth/contract'
 /**
  * Administrator catalog contract mirrored from docs/cahier-conception/09-contrats-rest.md:
  * §8.1 reasons, §8.2 summaries, §8.9 `AdminAssetView` (no `readiness`), §11.1 page envelope,
- * §12.2 `GET /admin/assets[/{assetId}]`. Read-only: the create, replace and archive routes
- * are not consumed by this slice.
+ * §12.1 `AssetModelView` and the model routes, §12.2 `GET /admin/assets[/{assetId}]` and the
+ * asset create, replace and archive routes. Identifier and placement routes (§12.3–12.4) are not here.
  */
 
 /**
@@ -95,3 +95,55 @@ export const DEFAULT_PAGE_SIZE = 20
  * definition, or the two screens would silently stop sharing (and Casiers would read another page).
  */
 export const LIST_QUERY_BASE = { size: DEFAULT_PAGE_SIZE, sort: 'assetCode,asc' } as const
+
+/** §12.1 `AssetModelView`: the response of every model route. Archived models stay listed. */
+export interface AssetModelView {
+  readonly id: string
+  readonly name: string
+  readonly manufacturer: string | null
+  readonly modelNumber: string | null
+  readonly description: string | null
+  readonly defaultCalibrationRequired: boolean
+  readonly archivedAt: string | null
+}
+
+/** §11.1 envelope around `AssetModelView` items, sorted by name without case, then id (§12.1). */
+export interface AssetModelPage {
+  readonly items: readonly AssetModelView[]
+  readonly page: number
+  readonly size: number
+  readonly totalItems: number
+  readonly totalPages: number
+}
+
+export interface ModelListQuery {
+  readonly page: number
+  readonly size: number
+}
+
+/** The API's largest page (PageQuery.MAX_SIZE): the model choice of the unit form reads one page of this size. */
+export const MAX_PAGE_SIZE = 100
+
+/**
+ * §12.1 `CreateAssetModelRequest` and `UpdateAssetModelRequest`. Every key is sent, `null` included: an
+ * omitted nullable field is a `REQUIRED` violation, an explicit `null` clears it.
+ */
+export interface AssetModelRequest {
+  readonly name: string
+  readonly manufacturer: string | null
+  readonly modelNumber: string | null
+  readonly description: string | null
+  readonly defaultCalibrationRequired: boolean
+}
+
+/** §12.2 `CreateAssetRequest` and `UpdateAssetRequest`; same rule for `null`. Readiness is never sent. */
+export interface AssetRequest {
+  readonly assetModelId: string
+  readonly assetCode: string
+  readonly serialNumber: string | null
+  readonly requiredAccessLevel: AccessLevel
+  readonly operationalStatus: OperationalStatus
+  readonly calibrationRequired: boolean
+  /** RFC 3339 instant, or null when calibration is not required. */
+  readonly calibrationDueAt: string | null
+}

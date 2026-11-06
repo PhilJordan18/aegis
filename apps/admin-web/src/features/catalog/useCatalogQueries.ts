@@ -3,7 +3,7 @@ import { queryKeys } from '../../api/queryKeys'
 import { authorizedRequest } from '../auth/authorizedRequest'
 import { useSessionStore } from '../auth/session'
 import { useCatalogGateway } from './CatalogGatewayContext'
-import type { AdminAssetView, AssetListQuery } from './contract'
+import type { AdminAssetView, AssetListQuery, ModelListQuery } from './contract'
 
 /**
  * One page of units. The previous page stays on screen while the next one loads. `enabled: false` reads
@@ -32,5 +32,17 @@ export function useAsset(assetId: string | null, listed: AdminAssetView | undefi
     queryFn: ({ signal }) => authorizedRequest(session, (accessToken) => gateway.getAsset(accessToken, assetId ?? '', signal)),
     enabled: assetId !== null,
     placeholderData: listed,
+  })
+}
+
+/** One page of models (09 §12.1), archived ones included. */
+export function useModelList(query: ModelListQuery, { enabled = true }: { readonly enabled?: boolean } = {}) {
+  const gateway = useCatalogGateway()
+  const session = useSessionStore()
+  return useQuery({
+    queryKey: queryKeys.catalog.modelList(query),
+    queryFn: ({ signal }) => authorizedRequest(session, (accessToken) => gateway.listModels(accessToken, query, signal)),
+    placeholderData: keepPreviousData,
+    enabled,
   })
 }
