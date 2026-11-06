@@ -37,13 +37,15 @@ interface AssetDossierProps {
   readonly onBack: () => void
   /** Edit and archive commands, shown under the title for a unit that is not archived. */
   readonly actions?: ReactNode
+  /** Identifiers and placement (CAT-02 #26), below the facts. */
+  readonly custody?: ReactNode
 }
 
 /**
  * Dossier of one unit (handoff §3.1); its settings change through `actions`, never in place. The reasons are the server's non-personal diagnostic
  * as sent: the page shows no readiness verdict, no « ready » and no invented presence or compartment.
  */
-export function AssetDossier({ asset, loading, failure, stale, retrying, focusRef, onRetry, onBack, actions }: AssetDossierProps) {
+export function AssetDossier({ asset, loading, failure, stale, retrying, focusRef, onRetry, onBack, actions, custody }: AssetDossierProps) {
   const { m } = useI18n()
   const titleId = useId()
   const groupId = useId()
@@ -89,6 +91,7 @@ export function AssetDossier({ asset, loading, failure, stale, retrying, focusRe
           onRetry={onRetry}
           returnFocus={() => (focusLost.current = true)}
           actions={actions}
+          custody={custody}
         />
       </div>
     </section>
@@ -103,9 +106,11 @@ interface DossierBodyProps {
   readonly onRetry: () => void
   readonly returnFocus: () => void
   readonly actions?: ReactNode
+  /** Identifiers and placement (CAT-02 #26), below the facts. */
+  readonly custody?: ReactNode
 }
 
-function DossierBody({ asset, titleId, stale, retrying, onRetry, returnFocus, actions }: DossierBodyProps) {
+function DossierBody({ asset, titleId, stale, retrying, onRetry, returnFocus, actions, custody }: DossierBodyProps) {
   const i18n = useI18n()
   const { m } = i18n
   const t = m.equipment
@@ -217,6 +222,7 @@ function DossierBody({ asset, titleId, stale, retrying, onRetry, returnFocus, ac
           </dl>
         </div>
       </div>
+      {custody}
     </>
   )
 }

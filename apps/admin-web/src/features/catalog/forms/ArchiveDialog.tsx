@@ -17,11 +17,13 @@ interface ArchiveDialogProps<T> {
   readonly archive: (idempotencyKey: string) => Promise<T>
   readonly onClose: () => void
   readonly onArchived: (result: T) => void
+  /** The confirming verb when it is not « Archiver » (an identifier is revoked, 09 §12.3). */
+  readonly confirmLabel?: string
 }
 
 /** Confirmation of an archive (model or unit). `alertdialog`: focus starts on the safe choice, Cancel. */
 // Mount one instance per opening (a new `key`): the draft, the idempotency key and the mutation then start fresh.
-export function ArchiveDialog<T>({ open, title, consequence, guard, archive, onClose, onArchived }: ArchiveDialogProps<T>) {
+export function ArchiveDialog<T>({ open, title, consequence, guard, archive, onClose, onArchived, confirmLabel }: ArchiveDialogProps<T>) {
   const i18n = useI18n()
   const t = i18n.m.catalogEdit
   const idempotency = useIdempotencyKey()
@@ -71,7 +73,7 @@ export function ArchiveDialog<T>({ open, title, consequence, guard, archive, onC
           {t.cancel}
         </Button>
         <Button onClick={() => void confirm()} busy={busy} inert={alert !== null && !alert.retryable}>
-          {alert?.retryable ? t.retry : t.archive}
+          {alert?.retryable ? t.retry : (confirmLabel ?? t.archive)}
         </Button>
       </DialogActions>
     </Dialog>

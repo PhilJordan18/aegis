@@ -14,6 +14,7 @@ import { equipmentHref, modelsHref } from '../features/catalog/equipmentHref'
 import { classifyCatalogFailure } from '../features/catalog/catalogFailure'
 import { LIST_QUERY_BASE, type AdminAssetView, type AssetListQuery, type AssetModelView } from '../features/catalog/contract'
 import { ArchiveDialog } from '../features/catalog/forms/ArchiveDialog'
+import { CustodySection } from '../features/custody/CustodySection'
 import { AssetFormDialog } from '../features/catalog/forms/AssetFormDialog'
 import { ModelFormDialog } from '../features/catalog/forms/ModelFormDialog'
 import { ModelList } from '../features/catalog/ModelList'
@@ -255,6 +256,18 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
                 onRetry={() => void asset.refetch()}
                 onBack={() => router.navigate(equipmentHref({ page: location.page, assetId: null }))}
                 actions={dossierActions}
+                custody={
+                  asset.data !== undefined && !assetGone ? (
+                    <CustodySection
+                      key={asset.data.id}
+                      asset={asset.data}
+                      onOutcome={(message) => {
+                        setOutcome('')
+                        requestAnimationFrame(() => setOutcome(message))
+                      }}
+                    />
+                  ) : undefined
+                }
               />
             )}
           </div>
