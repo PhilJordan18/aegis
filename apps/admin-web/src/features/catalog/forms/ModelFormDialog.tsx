@@ -9,6 +9,7 @@ import { classifyMutationFailure } from '../mutationFailure'
 import { useCatalogMutations } from '../useCatalogMutations'
 import { FormAlert } from './FormAlert'
 import { feedbackFor, LIMITS, type FormFeedback } from './formFeedback'
+import { useFeedbackFocus } from './useFeedbackFocus'
 
 interface ModelFormDialogProps {
   readonly open: boolean
@@ -77,14 +78,7 @@ export function ModelFormDialog({ open, model, onClose, onSaved }: ModelFormDial
   const mutation = model === null ? createModel : updateModel
   const busy = mutation.isPending
 
-
-  function show(next: FormFeedback) {
-    setFeedback(next)
-    requestAnimationFrame(() => {
-      if (next.alert !== null) alertRef.current?.focus()
-      else formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
-    })
-  }
+  useFeedbackFocus(feedback, alertRef, formRef)
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -92,7 +86,7 @@ export function ModelFormDialog({ open, model, onClose, onSaved }: ModelFormDial
     const request = requestOf(draft)
     const errors = localErrors(request, i18n)
     if (Object.keys(errors).length > 0) {
-      show({ fieldErrors: errors, alert: null })
+      setFeedback({ fieldErrors: errors, alert: null })
       return
     }
     setFeedback({ fieldErrors: {}, alert: null })
@@ -103,7 +97,7 @@ export function ModelFormDialog({ open, model, onClose, onSaved }: ModelFormDial
           : await updateModel.mutateAsync({ modelId: model.id, request })
       onSaved(saved, model === null)
     } catch (error) {
-      show(feedbackFor(classifyMutationFailure(error), FIELDS, i18n))
+      setFeedback(feedbackFor(classifyMutationFailure(error), FIELDS, i18n))
     }
   }
 
