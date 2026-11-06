@@ -863,7 +863,9 @@ de son `DEVICE_RESTARTED`; le heartbeat de référence de l’ancienne session e
 le locker reste OFFLINE tant qu’aucun heartbeat valide de cette session n’est reçu. Deux `deviceSessionId` différents pour le même `bootCount`
 révèlent un compteur non conforme : les faits sont enregistrés, la projection ne
 change pas et le backend signale une anomalie technique. Le démarrage suivant, d’un
-`bootCount` supérieur, rétablit une session courante normale.
+`bootCount` supérieur, rétablit une session courante normale. Tant que dure ce conflit,
+la présence de toutes les cellules du casier est `UNKNOWN`; la session suivante ne la
+rétablit qu’après un nouveau scan qualifiant (doc 06 §4.2, décision du 6 novembre 2026).
 
 **R3 — Connexion fermée et OFFLINE accéléré.** Une connexion est fermée dès qu’un
 `DEVICE_AVAILABILITY` OFFLINE de la session courante portant son `connectionId` est
