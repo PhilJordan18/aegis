@@ -4,7 +4,8 @@ import { createPluralSelector } from '../plural'
 /**
  * English catalog, typed against the French one: a missing key, an extra key or
  * a different parameter list fails `tsc`. Every string is a proposal, awaiting
- * Philippe's review. Terms follow docs/localisation/glossaire.md: equipment,
+ * Philippe's review, except the catalogEdit, schedule and custody form texts, approved on
+ * 6 November 2026 (docs/design/manager-forms/README.md). Terms follow docs/localisation/glossaire.md: equipment,
  * compartment, checkout, return, chain of custody; a borrowed asset is never
  * « Ready ». Product names (Aegis, Aegis Manager) are never translated.
  */
@@ -345,7 +346,7 @@ export const en: Messages = {
   schedule: {
     edit: 'Edit schedule',
     title: ({ code }: { code: string }) => `Operating schedule of locker ${code}`,
-    description: "Times are local to the locker's time zone. The server records a new version and computes the current window.",
+    description: 'Set opening hours in the locker’s time zone.',
     loading: 'Loading the schedule…',
     loadErrorTitle: 'The schedule could not be read.',
     loadErrorBody: 'Try again. Nothing was changed.',
@@ -375,6 +376,60 @@ export const en: Messages = {
     saved: ({ code }: { code: string }) => `Schedule of locker ${code} saved.`,
   },
 
+  custody: {
+    identifiersTitle: 'Physical identifiers',
+    identifiersLoading: 'Loading identifiers…',
+    identifiersUnavailable: 'The identifiers could not be read.',
+    noIdentifier: 'No identifier assigned.',
+    assign: 'Assign an identifier',
+    revoke: 'Revoke',
+    revokeLabel: ({ type, value }: { type: string; value: string }) => `Revoke ${type} ${value}`,
+    active: 'Active',
+    revoked: 'Revoked',
+    assignedOn: ({ time }: { time: string }) => `Assigned ${time}`,
+    revokedOn: ({ time }: { time: string }) => `Revoked ${time}`,
+    historyLabel: 'Identifier history',
+    type: {
+      RFID_UHF: 'UHF RFID',
+      NFC: 'NFC',
+      QR: 'QR',
+    },
+    unknownType: ({ type }: { type: string }) => `Unrecognized type (${type})`,
+
+    assignTitle: ({ code }: { code: string }) => `Assign an identifier to ${code}`,
+    assignDescription: 'A unit holds at most one active identifier per type: assigning a new one revokes the old one. History is kept.',
+    fieldType: 'Type',
+    fieldValue: 'Value',
+    fieldValueHelp: 'Preserve the case of the scanned value. Leading and trailing spaces are removed. Maximum 255 characters.',
+    assigned: ({ code }: { code: string }) => `Identifier assigned to ${code}.`,
+    revokeTitle: ({ type, value }: { type: string; value: string }) => `Revoke identifier ${type} ${value}?`,
+    revokeBody: 'It will no longer be recognized for this unit. Its history is kept and the value can be assigned again.',
+    revokeGuard: 'The server refuses revocation during a locker operation that uses this identifier.',
+    revokedOutcome: ({ code }: { code: string }) => `Identifier of ${code} revoked.`,
+
+    placementTitle: 'Expected placement',
+    changePlacement: 'Change placement',
+    placementDialogTitle: ({ code }: { code: string }) => `Placement of ${code}`,
+    placementDescription: 'Occupancy may have changed since this view loaded. Compartment availability will be checked when you save.',
+    fieldLocker: 'Locker',
+    chooseLocker: 'Choose a locker',
+    fieldCompartment: 'Compartment',
+    chooseCompartment: 'Choose a compartment',
+    compartmentFree: ({ code }: { code: string }) => `${code} — free`,
+    compartmentCurrent: ({ code }: { code: string }) => `${code} — current placement`,
+    compartmentOccupied: ({ code, asset }: { code: string; asset: string }) => `${code} — occupied by ${asset}`,
+    compartmentDisabled: ({ code }: { code: string }) => `${code} — disabled`,
+    fieldReason: 'Reason',
+    fieldReasonHelp: 'Kept in the placement history. 500 characters at most.',
+    lockersLoading: 'Loading lockers…',
+    lockersUnavailable: 'The lockers could not be read. Close, then try again.',
+    noLocker: 'No locker is configured.',
+    placed: ({ code, locker, compartment }: { code: string; locker: string; compartment: string }) => `Expected placement for ${code} saved: ${locker} · ${compartment}.`,
+    violation: {
+      compartmentNotFound: 'This compartment no longer exists. Choose another one.',
+    },
+  },
+
   dialog: {
     close: 'Close',
   },
@@ -392,7 +447,7 @@ export const en: Messages = {
 
     createAssetTitle: 'New unit',
     editAssetTitle: ({ code }: { code: string }) => `Edit unit ${code}`,
-    assetFormDescription: 'Availability, presence and the diagnostic are not entered: the server computes them.',
+    assetFormDescription: 'Availability, presence and readiness are determined automatically.',
     createModelTitle: 'New model',
     editModelTitle: ({ name }: { name: string }) => `Edit model ${name}`,
     archiveAssetTitle: ({ code }: { code: string }) => `Archive unit ${code}?`,
@@ -419,6 +474,11 @@ export const en: Messages = {
     fieldCalibrationRequired: 'Calibration required',
     fieldCalibrationDue: 'Calibration due',
     fieldCalibrationDueHelp: ({ zone }: { zone: string }) => `Date and time in the laboratory time zone (${zone}).`,
+    fieldCalibrationOccurrence: 'This time occurs twice that day, when clocks go back: which one?',
+    calibrationOccurrence: {
+      earlier: ({ time, offset }: { time: string; offset: string }) => `The first: ${time} (${offset})`,
+      later: ({ time, offset }: { time: string; offset: string }) => `The second: ${time} (${offset})`,
+    },
     modelsLoading: 'Loading models…',
     modelsUnavailable: 'The models could not be loaded. Close, then try again.',
     noActiveModel: 'No active model. Create a model in the Models tab first.',
@@ -430,6 +490,8 @@ export const en: Messages = {
       chooseModel: 'Choose a model.',
       modelNotActive: 'This model is archived or not found. Choose an active model.',
       calibrationDueRequired: 'Enter the due date: calibration is required.',
+      calibrationDueNonexistent: 'This time does not exist that day in the laboratory time zone (clocks go forward). Choose another time.',
+      calibrationOccurrenceRequired: 'Choose one of the two occurrences.',
       calibrationDueNotAllowed: 'No due date is accepted unless calibration is required.',
       refused: 'Value refused by the server.',
     },
@@ -444,6 +506,10 @@ export const en: Messages = {
       ASSET_HAS_OPEN_LOAN: 'Not possible during an open loan.',
       ASSET_OPERATION_IN_PROGRESS: 'Not possible during a locker operation in progress.',
       CONCURRENT_MODIFICATION: 'Changed in the meantime. Close, reload, then start again.',
+      IDENTIFIER_ALREADY_ASSIGNED: 'This value is already held by an active identifier.',
+      IDENTIFIER_TYPE_UNSUPPORTED: 'This identifier type is not supported.',
+      COMPARTMENT_DISABLED: 'This compartment is disabled.',
+      COMPARTMENT_ALREADY_OCCUPIED: 'Another unit already occupies this compartment.',
     },
     refusedTitle: 'The server refused the request.',
     refusedBody: 'Nothing was changed.',

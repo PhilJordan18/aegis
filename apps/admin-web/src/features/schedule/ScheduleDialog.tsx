@@ -47,7 +47,7 @@ function localMessage(violation: LocalViolation, i18n: I18n): string {
 
 /**
  * Seven-day operating schedule of one locker (CFG-02 #28, 09 §13), read from the server at each opening.
- * Proposed form: awaits visual approval (docs/design/manager-forms/). Mount one instance per opening (`key`).
+ * Form direction approved for P0 on 6 November 2026 (docs/design/manager-forms/README.md). Mount one instance per opening (`key`).
  */
 export function ScheduleDialog({ open, lockerId, lockerCode, suggestedZone, onClose, onSaved }: ScheduleDialogProps) {
   const i18n = useI18n()

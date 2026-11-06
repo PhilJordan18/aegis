@@ -145,6 +145,109 @@ describe('Équipements — new unit', () => {
   })
 })
 
+describe('Équipements — calibration due across a daylight-saving change', () => {
+  async function openNewUnit(gateway: ReturnType<typeof fakeCatalogGateway>, locale: Locale = 'fr') {
+    const user = userEvent.setup()
+    renderEquipment(gateway, { locale })
+    await user.click(await screen.findByRole('button', { name: locale === 'fr' ? 'Nouvel exemplaire' : 'New unit' }))
+    const dialog = openDialog()
+    const select = within(dialog).getByRole('combobox', { name: locale === 'fr' ? /Modèle/ : /Model/ })
+    await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(2))
+    await user.selectOptions(select, FLUKE_117.id)
+    await user.type(within(dialog).getByRole('textbox', { name: locale === 'fr' ? /Code de l’exemplaire/ : /Unit code/ }), 'MM-012')
+    return { user, dialog }
+  }
+  const gatewayFor = () => {
+    const created = asset({ id: '9b1e0c3a-7d4f-4a2b-9c5d-1e2f3a4b5c6d', assetCode: 'MM-012' })
+    return fakeCatalogGateway({
+      pages: [ok(pageOf([MM001]))],
+      units: { [MM001.id]: ok(MM001), [created.id]: ok(created) },
+      modelPages: [ok(modelPageOf([FLUKE_117]))],
+      overrides: { createAsset: async () => ok(created) },
+    })
+  }
+
+  it('refuses a time skipped by the spring change instead of moving it, and sends nothing', async () => {
+    const gateway = gatewayFor()
+    const { user, dialog } = await openNewUnit(gateway)
+    const due = within(dialog).getByLabelText(/Échéance de calibration/)
+    fireEvent.change(due, { target: { value: '2026-03-08T02:30' } })
+    await user.click(within(dialog).getByRole('button', { name: 'Créer' }))
+    expect(await within(dialog).findByText(/Cette heure n’existe pas ce jour-là/)).toBeDefined()
+    expect(due.getAttribute('aria-invalid')).toBe('true')
+    await waitFor(() => expect(document.activeElement).toBe(due))
+    expect(gateway.createAsset).not.toHaveBeenCalled()
+  })
+
+  it('asks which occurrence of a repeated autumn time, then sends exactly the chosen instant', async () => {
+    const gateway = gatewayFor()
+    const { user, dialog } = await openNewUnit(gateway)
+    fireEvent.change(within(dialog).getByLabelText(/Échéance de calibration/), { target: { value: '2026-11-01T01:30' } })
+    const group = within(dialog).getByRole('group', { name: /Cette heure se produit deux fois/ })
+    const [first, second] = within(group).getAllByRole('radio') as HTMLInputElement[]
+    expect(plain(first?.labels?.[0]?.textContent)).toBe('La première : 01 h 30 HAE (UTC−04:00)')
+    expect(plain(second?.labels?.[0]?.textContent)).toBe('La seconde : 01 h 30 HNE (UTC−05:00)')
+    expect(first?.checked || second?.checked).toBe(false)
+
+    await user.click(within(dialog).getByRole('button', { name: 'Créer' }))
+    expect(await within(group).findByText('Choisissez laquelle des deux occurrences.')).toBeDefined()
+    await waitFor(() => expect(document.activeElement).toBe(first))
+    expect(gateway.createAsset).not.toHaveBeenCalled()
+
+    await user.click(second as HTMLInputElement)
+    await user.click(within(dialog).getByRole('button', { name: 'Créer' }))
+    await waitFor(() => expect(gateway.createAsset).toHaveBeenCalledTimes(1))
+    expect(gateway.createAsset.mock.calls[0]?.[1]).toMatchObject({ calibrationRequired: true, calibrationDueAt: '2026-11-01T06:30:00Z' })
+  })
+
+  it('offers the same choice in English, and forgets it when the time changes', async () => {
+    const gateway = gatewayFor()
+    const { user, dialog } = await openNewUnit(gateway, 'en')
+    const due = within(dialog).getByLabelText(/Calibration due/)
+    fireEvent.change(due, { target: { value: '2026-11-01T01:30' } })
+    const group = within(dialog).getByRole('group', { name: 'This time occurs twice that day, when clocks go back: which one?' })
+    const [first] = within(group).getAllByRole('radio') as HTMLInputElement[]
+    expect(plain(first?.labels?.[0]?.textContent)).toBe('The first: 1:30 a.m. EDT (UTC−04:00)')
+    await user.click(first as HTMLInputElement)
+    fireEvent.change(due, { target: { value: '2026-11-01T01:45' } })
+    expect((within(dialog).getAllByRole('radio', { name: /^The / }) as HTMLInputElement[]).some((radio) => radio.checked)).toBe(false)
+    fireEvent.change(due, { target: { value: '2026-03-08T02:30' } })
+    await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+    expect(await within(dialog).findByText(/This time does not exist that day/)).toBeDefined()
+    expect(gateway.createAsset).not.toHaveBeenCalled()
+  })
+
+  it('keeps the stored occurrence of a repeated time when editing something else', async () => {
+    const user = userEvent.setup()
+    const due = '2026-11-01T06:30:00Z'
+    const unit = asset({ id: MM001.id, assetCode: 'MM-001', calibration: { required: true, dueAt: due, status: 'VALID' } })
+    const gateway = fakeCatalogGateway({
+      pages: [ok(pageOf([unit]))],
+      units: { [unit.id]: ok(unit) },
+      modelPages: [ok(modelPageOf([FLUKE_117]))],
+      overrides: { updateAsset: async () => ok(unit) },
+    })
+    renderEquipment(gateway)
+    await screen.findByRole('heading', { level: 2, name: /MM-001/ })
+    await user.click(screen.getByRole('button', { name: 'Modifier' }))
+    const dialog = openDialog()
+    const group = within(dialog).getByRole('group', { name: /Cette heure se produit deux fois/ })
+    expect((within(group).getByRole('radio', { name: /La seconde/ }) as HTMLInputElement).checked).toBe(true)
+    await user.click(within(dialog).getByRole('radio', { name: 'En maintenance' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Enregistrer' }))
+    await waitFor(() => expect(gateway.updateAsset).toHaveBeenCalledTimes(1))
+    expect(gateway.updateAsset.mock.calls[0]?.[2]).toMatchObject({ calibrationDueAt: due })
+
+    // Choosing the other occurrence sends that instant instead.
+    await user.click(screen.getByRole('button', { name: 'Modifier' }))
+    const again = openDialog()
+    await user.click(within(again).getByRole('radio', { name: /La première/ }))
+    await user.click(within(again).getByRole('button', { name: 'Enregistrer' }))
+    await waitFor(() => expect(gateway.updateAsset).toHaveBeenCalledTimes(2))
+    expect(gateway.updateAsset.mock.calls[1]?.[2]).toMatchObject({ calibrationDueAt: '2026-11-01T05:30:00Z' })
+  })
+})
+
 describe('Équipements — edit and archive a unit', () => {
   it('replaces the settings with PUT, keeping the untouched calibration instant exactly', async () => {
     const user = userEvent.setup()
@@ -192,6 +295,31 @@ describe('Équipements — edit and archive a unit', () => {
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     // The closed dialog stays mounted, so focus goes back to the button that opened it.
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Archiver' }))
+  })
+
+  it('keeps one archive key per opening: a retry reuses it, a new opening never does', async () => {
+    const user = userEvent.setup()
+    const gateway = fakeCatalogGateway({ pages: [ok(pageOf([MM001]))], units: { [MM001.id]: ok(MM001) } })
+    renderEquipment(gateway)
+    await screen.findByRole('heading', { level: 2, name: /MM-001/ })
+    await user.click(screen.getByRole('button', { name: 'Archiver' }))
+    let dialog = screen.getByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Archiver' }))
+    expect(await within(dialog).findByText('Aucune réponse du service.')).toBeDefined()
+    await user.click(within(dialog).getByRole('button', { name: 'Réessayer' }))
+    await waitFor(() => expect(gateway.archiveAsset).toHaveBeenCalledTimes(2))
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+
+    await user.click(screen.getByRole('button', { name: 'Archiver' }))
+    dialog = screen.getByRole('alertdialog')
+    expect(within(dialog).queryByText('Aucune réponse du service.')).toBeNull()
+    await user.click(within(dialog).getByRole('button', { name: 'Archiver' }))
+    await waitFor(() => expect(gateway.archiveAsset).toHaveBeenCalledTimes(3))
+    const keys = gateway.archiveAsset.mock.calls.map((call) => call[2])
+    expect(keys[1]).toBe(keys[0])
+    expect(keys[2]).not.toBe(keys[0])
+    expect(gateway.archiveAsset.mock.calls.every((call) => call[1] === MM001.id)).toBe(true)
   })
 
   it('offers no command for an archived unit', async () => {

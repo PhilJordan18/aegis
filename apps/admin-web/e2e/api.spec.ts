@@ -46,14 +46,10 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('an administrator signs in, reaches the Manager shell, and the token stays in memory', async ({ page }) => {
+  test.setTimeout(150_000)
   const requests = apiRequests(page)
-  const login = page.waitForResponse((response) => response.url().endsWith('/api/v1/auth/login'))
   const me = page.waitForResponse((response) => response.url().endsWith('/api/v1/auth/me'))
-  await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
-
-  const loginResponse = await login
-  expect(loginResponse.status()).toBe(200)
-  const { user } = (await loginResponse.json()) as { user: { displayName: string; role: string } }
+  const { user } = await signInWhenAllowed(page)
   expect(user.role).toBe('ADMIN')
 
   await expect(page).toHaveURL(/\/equipements$/)
@@ -85,16 +81,16 @@ test('an administrator signs in, reaches the Manager shell, and the token stays 
 })
 
 test('a technician account is refused, its token is dropped and no request follows', async ({ page }) => {
+  test.setTimeout(150_000)
   const requests = apiRequests(page)
-  const login = page.waitForResponse((response) => response.url().endsWith('/api/v1/auth/login'))
-  await signIn(page, TECHNICIAN_EMAIL, TECHNICIAN_PASSWORD)
-  expect((await login).status()).toBe(200)
+  await signInWhenAllowed(page, TECHNICIAN_EMAIL, TECHNICIAN_PASSWORD)
 
   await expect(page.getByRole('heading', { level: 1, name: 'Accès réservé aux administrateurs' })).toBeFocused()
   await expect(page.getByRole('alert')).toContainText("Ce compte technicien s'utilise dans Aegis Mobile.")
   await expect(page.locator('form')).toHaveCount(0)
   await page.waitForLoadState('networkidle')
-  expect(requests.map((request) => new URL(request.url()).pathname)).toEqual(['/api/v1/auth/login'])
+  // Only sign-in attempts (a 429 waited out is one more): nothing follows the accepted one.
+  expect(requests.map((request) => new URL(request.url()).pathname).filter((path) => path !== '/api/v1/auth/login')).toEqual([])
   await expect(page).toHaveURL(/\/connexion$/)
 })
 
@@ -138,9 +134,8 @@ test('repeated attempts reach the rate limit and use its Retry-After delay', asy
 
 test('an administrator opens Équipements, sees the units from the API and opens one', async ({ page, request }) => {
   // The API holds no seed: this run registers its own unit (document 09 §12.1-12.2), through the same proxy.
-  const login = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
-  expect(login.status()).toBe(200)
-  const { accessToken } = (await login.json()) as { accessToken: string }
+  test.setTimeout(150_000)
+  const accessToken = await adminToken(request)
   const headers = () => ({ Authorization: `Bearer ${accessToken}`, 'Idempotency-Key': randomUUID() })
   // Unique per run: model names are unique among active models, and the database outlives the run.
   const stamp = Date.now()
@@ -160,7 +155,7 @@ test('an administrator opens Équipements, sees the units from the API and opens
   const unit = (await created.json()) as { id: string }
 
   const requests = apiRequests(page)
-  await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
+  await signInWhenAllowed(page)
   await expect(page).toHaveURL(/\/equipements$/)
   await expect(page.getByRole('heading', { level: 1, name: 'Équipements' })).toBeFocused()
 
@@ -196,10 +191,14 @@ test('an administrator opens Équipements, sees the units from the API and opens
   await expect(dossier).toContainText(/15\sjanv\.\s2027,\s00\sh\s00\sHNE/)
   await expect(dossier).toContainText('America/Toronto')
   await expect(page.locator('main')).not.toContainText(/\bPrêt\b/)
-  // The only commands are create, edit and archive (CAT-01 forms), plus the search submit (#109); readiness is never a
-  // control. The kept database may hold more than one page, whose pager has buttons.
+  // The only commands are create, edit and archive (CAT-01 forms), placement and identifiers (#26), and the search
+  // submit (#109), each one explicit; readiness is never a control. The kept database may hold more than one page,
+  // whose pager has buttons, and identifiers, each with its revoke button.
   const pagerButtons = await page.getByRole('navigation', { name: 'Pagination des exemplaires' }).getByRole('button').count()
-  await expect(page.locator('main').getByRole('button')).toHaveCount(pagerButtons + 4)
+  const revokeButtons = await page.locator('main').getByRole('button', { name: /^Révoquer / }).count()
+  await expect(page.locator('main').getByRole('button')).toHaveCount(pagerButtons + 6 + revokeButtons)
+  await expect(page.getByRole('button', { name: 'Modifier le placement' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Attribuer un identifiant' })).toBeVisible()
   await expect(page.getByRole('group', { name: 'Actions de l’exemplaire' }).getByRole('button')).toHaveText(['Modifier', 'Archiver'])
 
   // Clicking a listed unit selects it through the address and reads it by id.
@@ -315,9 +314,12 @@ function expectOnlyReads(requests: Request[]) {
 }
 
 test('Casiers (catalog discovery): the chip and every compartment row match a direct GET of the same status', async ({ page, request }) => {
+  test.setTimeout(150_000)
   await page.setViewportSize({ width: 1440, height: 900 })
+  // The page discovers lockers through the units of the first catalog page: the run provides one, before signing in.
+  await ensureDiscoverablePlacement(request, await adminToken(request))
   const requests = apiRequests(page)
-  await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
+  await signInWhenAllowed(page)
   await expect(page).toHaveURL(/\/equipements$/)
   // Through the shell link, in the same session: no reload, so the in-memory token survives.
   const statusPromise = page.waitForRequest((candidate) => /\/api\/v1\/lockers\/[^/]+\/status$/.test(new URL(candidate.url()).pathname))
@@ -349,8 +351,9 @@ test('Casiers (catalog discovery): the chip and every compartment row match a di
 test('Casiers (?casier=): the named locker is read directly and matches a direct GET of the same status', async ({ page, request }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.emulateMedia({ colorScheme: 'dark' })
+  test.setTimeout(150_000)
   const requests = apiRequests(page)
-  await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
+  await signInWhenAllowed(page)
   await expect(page).toHaveURL(/\/equipements$/)
   const statusPromise = page.waitForRequest((candidate) => /\/api\/v1\/lockers\/[^/]+\/status$/.test(new URL(candidate.url()).pathname))
   await page.evaluate((lockerId) => {
@@ -389,7 +392,7 @@ test('CAT-01 forms: an administrator creates, edits and archives a model and a u
   const modelName = `Formulaire E2E ${stamp}`
   const code = `FORM-${stamp}`
   const requests = apiRequests(page)
-  const accessToken = await signInWhenAllowed(page)
+  const { accessToken } = await signInWhenAllowed(page)
   await expect(page).toHaveURL(/\/equipements$/)
   const auth = { Authorization: `Bearer ${accessToken}` }
 
@@ -443,7 +446,7 @@ test('CAT-01 forms: an administrator creates, edits and archives a model and a u
   await expect(duplicate).toHaveCount(0)
 
   // Edit: PUT without an Idempotency-Key; the untouched calibration instant is sent back unchanged.
-  await page.getByRole('button', { name: 'Modifier' }).click()
+  await page.getByRole('group', { name: 'Actions de l’exemplaire' }).getByRole('button', { name: 'Modifier' }).click()
   const edit = page.getByRole('dialog', { name: `Modifier l’exemplaire ${code}` })
   await edit.getByLabel(/^Numéro de série/).fill(`SN-${stamp}`)
   await edit.getByRole('radio', { name: 'En maintenance' }).check()
@@ -482,12 +485,11 @@ test('CAT-01 forms: an administrator creates, edits and archives a model and a u
   for (const post of posts) expect(await post.headerValue('idempotency-key'), post.url()).toMatch(/^[0-9a-f-]{36}$/)
 })
 
-/** Signs in through the page; a 429 is waited out with its Retry-After, then the same sign-in is sent again. */
 test('CFG-02 schedule: an administrator edits the seven-day schedule of a locker and reads it back from the real API', async ({ page, request }) => {
   test.setTimeout(150_000)
   // A closing minute that changes at each run, so the PUT always records a new version (an identical PUT is a no-op).
   const minute = String(new Date().getUTCMinutes()).padStart(2, '0')
-  const accessToken = await signInWhenAllowed(page)
+  const { accessToken } = await signInWhenAllowed(page)
   await expect(page).toHaveURL(/\/equipements$/)
   const auth = { Authorization: `Bearer ${accessToken}` }
   const schedulePath = `/api/v1/admin/lockers/${DEMO_LOCKER_ID}/operating-schedule`
@@ -568,18 +570,242 @@ test('CFG-02 schedule: an administrator edits the seven-day schedule of a locker
   expect(puts).toBe(2)
 })
 
-async function signInWhenAllowed(page: Page): Promise<string> {
+interface LiveCompartment {
+  readonly id: string
+  readonly code: string
+  readonly enabled: boolean
+  readonly currentAsset: { readonly id: string; readonly assetCode: string } | null
+}
+interface LiveLocker {
+  readonly id: string
+  readonly code: string
+  readonly compartments: readonly LiveCompartment[]
+}
+
+test('#26 custody: an administrator assigns and revokes an identifier, then moves a placement, through the real API', async ({ page, request }) => {
+  // The suite's earlier sign-ins may fill the five-per-minute window (09 §23.4): this test waits it out.
+  test.setTimeout(150_000)
+  const stamp = Date.now()
+  const requests = apiRequests(page)
+  const { accessToken } = await signInWhenAllowed(page)
+  await expect(page).toHaveURL(/\/equipements$/)
+  const auth = { Authorization: `Bearer ${accessToken}` }
+  const withKey = () => ({ ...auth, 'Idempotency-Key': randomUUID() })
+  const readLocker = async () => {
+    const lockers = await request.get('/api/v1/admin/lockers?page=0&size=100', { headers: auth })
+    expect(lockers.status()).toBe(200)
+    const locker = ((await lockers.json()) as { items: LiveLocker[] }).items.find((candidate) => candidate.id === DEMO_LOCKER_ID)
+    expect(locker, 'demo locker listed by GET /admin/lockers').toBeTruthy()
+    return locker as LiveLocker
+  }
+  const createUnit = async (code: string) => {
+    const model = await request.post('/api/v1/admin/asset-models', {
+      headers: withKey(),
+      data: { name: `Garde E2E ${code}`, manufacturer: null, modelNumber: null, description: null, defaultCalibrationRequired: false },
+    })
+    expect(model.status()).toBe(201)
+    const unit = await request.post('/api/v1/admin/assets', {
+      headers: withKey(),
+      data: { assetModelId: ((await model.json()) as { id: string }).id, assetCode: code, serialNumber: null, requiredAccessLevel: 'STANDARD', operationalStatus: 'SERVICEABLE', calibrationRequired: false, calibrationDueAt: null },
+    })
+    expect(unit.status()).toBe(201)
+    return ((await unit.json()) as { id: string }).id
+  }
+  const openUnit = async (assetId: string, code: string) => {
+    await page.evaluate((id) => {
+      window.history.pushState(null, '', `/equipements?exemplaire=${id}`)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }, assetId)
+    await expect(page.getByRole('heading', { level: 2, name: new RegExp(`· ${code}$`) })).toBeVisible()
+  }
+
+  // Checked before anything is written; see the guard on `target` below.
+  expect(
+    (await readLocker()).compartments.filter((compartment) => compartment.enabled && compartment.currentAsset === null).length,
+    'precondition: a free enabled compartment in the demo locker (fresh database, or free one cell)',
+  ).toBeGreaterThan(0)
+
+  // A fresh unit B carries the identifier steps and the placement conflict.
+  const codeB = `GARDE-${stamp}`
+  const unitB = await createUnit(codeB)
+  await openUnit(unitB, codeB)
+  await expect(page.getByText('Aucun identifiant attribué.')).toBeVisible()
+
+  // Assign: a POST with an Idempotency-Key, then the history is read again (09 §12.3).
+  const value = `E2E${stamp}`
+  await page.getByRole('button', { name: 'Attribuer un identifiant' }).click()
+  const assign = page.getByRole('dialog', { name: `Attribuer un identifiant à ${codeB}` })
+  await expect(assign.getByLabel(/^Type/)).toBeFocused()
+  await assign.getByLabel(/^Type/).selectOption({ label: 'RFID UHF' })
+  await assign.getByLabel(/^Valeur/).fill(value)
+  const assigned = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `/api/v1/admin/assets/${unitB}/identifiers`)
+  await assign.getByRole('button', { name: 'Attribuer un identifiant' }).click()
+  const assignResponse = await assigned
+  expect(assignResponse.status()).toBe(201)
+  expect(await assignResponse.request().headerValue('idempotency-key')).toMatch(/^[0-9a-f-]{36}$/)
+  await expect(assign).toHaveCount(0)
+  const history = page.getByRole('list', { name: 'Historique des identifiants' })
+  await expect(history).toContainText(value)
+  await expect(history).toContainText('Actif')
+
+  // The same value again: IDENTIFIER_ALREADY_ASSIGNED lands on the value field, nothing is written.
+  await page.getByRole('button', { name: 'Attribuer un identifiant' }).click()
+  await assign.getByLabel(/^Type/).selectOption({ label: 'RFID UHF' })
+  await assign.getByLabel(/^Valeur/).fill(value)
+  const refusedAssign = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `/api/v1/admin/assets/${unitB}/identifiers`)
+  await assign.getByRole('button', { name: 'Attribuer un identifiant' }).click()
+  expect((await refusedAssign).status()).toBe(409)
+  await expect(assign.getByLabel(/^Valeur/)).toHaveAttribute('aria-invalid', 'true')
+  await expect(assign.getByText('Cette valeur est déjà attribuée à un identifiant actif.')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(assign).toHaveCount(0)
+
+  // Revoke: a confirmation that starts on Cancel, then a POST with a key; the history keeps the identifier.
+  await page.getByRole('button', { name: `Révoquer RFID UHF ${value}` }).click()
+  const confirm = page.getByRole('alertdialog')
+  await expect(confirm.getByRole('button', { name: 'Annuler' })).toBeFocused()
+  const revoked = page.waitForResponse((response) => response.request().method() === 'POST' && /\/identifiers\/[^/]+\/revoke$/.test(new URL(response.url()).pathname))
+  await confirm.getByRole('button', { name: 'Révoquer' }).click()
+  const revokeResponse = await revoked
+  expect(revokeResponse.status()).toBe(200)
+  expect(await revokeResponse.request().headerValue('idempotency-key')).toMatch(/^[0-9a-f-]{36}$/)
+  await expect(history).toContainText('Révoqué')
+  await expect(page.getByRole('button', { name: `Révoquer RFID UHF ${value}` })).toHaveCount(0)
+  const direct = await request.get(`/api/v1/admin/assets/${unitB}/identifiers`, { headers: auth })
+  expect(((await direct.json()) as { value: string; active: boolean }[]).map(({ value: v, active }) => ({ value: v, active }))).toEqual([{ value, active: false }])
+
+  // Placement. The Casiers tests find the demo locker through a unit placed in it, so this test keeps one there:
+  // it moves that unit A to a free cell and back, and never leaves a cell occupied that was free.
+  let locker = await readLocker()
+  let source = locker.compartments.find((compartment) => compartment.currentAsset !== null)
+  if (source === undefined) {
+    const seeded = await createUnit(`PLACE-${stamp}`)
+    const first = locker.compartments.find((compartment) => compartment.enabled)
+    expect(first, 'an enabled compartment in the demo locker').toBeTruthy()
+    const put = await request.put(`/api/v1/admin/assets/${seeded}/placement`, { headers: auth, data: { compartmentId: first?.id, reason: 'Préparation de la recette #26' } })
+    expect(put.status()).toBe(200)
+    locker = await readLocker()
+    source = locker.compartments.find((compartment) => compartment.currentAsset !== null)
+  }
+  const unitA = source?.currentAsset as { id: string; assetCode: string }
+  const target = locker.compartments.find((compartment) => compartment.enabled && compartment.currentAsset === null)
+  // A guard, not a skip: without a free enabled cell (the cloud recipe fills A1 and A2) the move cannot be shown, and this
+  // test never moves or empties a unit it did not place. Run it on a fresh database or after freeing one cell.
+  expect(target, 'precondition: a free enabled compartment in the demo locker (fresh database, or free one cell)').toBeTruthy()
+
+  try {
+    await openUnit(unitA.id, unitA.assetCode)
+    await page.getByRole('button', { name: 'Modifier le placement' }).click()
+    const placement = page.getByRole('dialog', { name: `Placement de ${unitA.assetCode}` })
+    await placement.getByLabel(/^Casier/).selectOption({ value: DEMO_LOCKER_ID })
+    await expect(placement.getByLabel(/^Cellule/).locator('option', { hasText: `${source?.code} — placement actuel` })).toHaveCount(1)
+    await placement.getByLabel(/^Cellule/).selectOption({ value: target?.id ?? '' })
+    await placement.getByLabel(/^Motif/).fill('Recette #26 : déplacement')
+    const placed = page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname === `/api/v1/admin/assets/${unitA.id}/placement`)
+    await placement.getByRole('button', { name: 'Enregistrer' }).click()
+    const placeResponse = await placed
+    expect(placeResponse.status()).toBe(200)
+    expect(await placeResponse.request().headerValue('idempotency-key')).toBeNull()
+    await expect(placement).toHaveCount(0)
+    const moved = await readLocker()
+    expect(moved.compartments.find((compartment) => compartment.id === target?.id)?.currentAsset?.id).toBe(unitA.id)
+    expect(moved.compartments.find((compartment) => compartment.id === source?.id)?.currentAsset).toBeNull()
+
+    // Unit B into the cell A now holds: COMPARTMENT_ALREADY_OCCUPIED lands on the compartment, nothing is written.
+    await openUnit(unitB, codeB)
+    await page.getByRole('button', { name: 'Modifier le placement' }).click()
+    const conflict = page.getByRole('dialog', { name: `Placement de ${codeB}` })
+    await conflict.getByLabel(/^Casier/).selectOption({ value: DEMO_LOCKER_ID })
+    await expect(conflict.getByLabel(/^Cellule/).locator('option', { hasText: `${target?.code} — occupée par ${unitA.assetCode}` })).toHaveCount(1)
+    await conflict.getByLabel(/^Cellule/).selectOption({ value: target?.id ?? '' })
+    await conflict.getByLabel(/^Motif/).fill('Recette #26 : conflit attendu')
+    const refusedPlacement = page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname === `/api/v1/admin/assets/${unitB}/placement`)
+    await conflict.getByRole('button', { name: 'Enregistrer' }).click()
+    expect((await refusedPlacement).status()).toBe(409)
+    await expect(conflict.getByLabel(/^Cellule/)).toHaveAttribute('aria-invalid', 'true')
+    await expect(conflict.getByText('Un autre exemplaire occupe déjà cette cellule.')).toBeVisible()
+    await page.keyboard.press('Escape')
+    expect((await readLocker()).compartments.find((compartment) => compartment.id === target?.id)?.currentAsset?.id).toBe(unitA.id)
+  } finally {
+    // Back where it was, so the next run and the Casiers tests find the same state.
+    const back = await request.put(`/api/v1/admin/assets/${unitA.id}/placement`, { headers: auth, data: { compartmentId: source?.id, reason: 'Recette #26 : retour' } })
+    expect(back.status()).toBe(200)
+  }
+
+  // Apart from the sign-in, every write went to the unit's /admin routes; the page never sent a command to the locker.
+  const writes = requests.filter((candidate) => candidate.method() !== 'GET' && new URL(candidate.url()).pathname !== '/api/v1/auth/login')
+  // Assign, refused assign, revoke, move, refused move.
+  expect(writes.length).toBe(5)
+  expect(writes.every((candidate) => new URL(candidate.url()).pathname.startsWith('/api/v1/admin/assets/'))).toBe(true)
+})
+
+interface LoginBody {
+  readonly accessToken: string
+  readonly user: { readonly displayName: string; readonly role: string }
+}
+
+/**
+ * Signs in through the page. The API keeps its five-per-minute limit (09 §23.4) and the run respects it: a 429 is waited out
+ * with its Retry-After, then the same sign-in is sent again, so back-to-back runs wait instead of failing.
+ */
+async function signInWhenAllowed(page: Page, email = ADMIN_EMAIL, password = ADMIN_PASSWORD): Promise<LoginBody> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const login = page.waitForResponse((response) => response.url().endsWith('/api/v1/auth/login'))
-    await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
+    await signIn(page, email, password)
     const response = await login
-    if (response.status() === 200) return ((await response.json()) as { accessToken: string }).accessToken
+    if (response.status() === 200) return (await response.json()) as LoginBody
     expect(response.status()).toBe(429)
     const seconds = Number(response.headers()['retry-after'] ?? '60')
     await page.waitForTimeout((seconds + 1) * 1000)
     await page.goto('/connexion')
   }
   throw new Error('sign-in still rate limited')
+}
+
+/** The same rule for a direct sign-in, used to prepare data through the API. */
+async function adminToken(request: APIRequestContext): Promise<string> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
+    if (response.status() === 200) return ((await response.json()) as LoginBody).accessToken
+    expect(response.status()).toBe(429)
+    await new Promise((resolve) => setTimeout(resolve, (Number(response.headers()['retry-after'] ?? '60') + 1) * 1000))
+  }
+  throw new Error('sign-in still rate limited')
+}
+
+/**
+ * The Casiers page finds a locker through the units of the first catalog page (knownLockers.ts). On a fresh database no unit
+ * is placed: the run creates one, sorted first, and places it in a free enabled cell of the demo locker. When every cell is
+ * already taken, a unit is placed there already; if none of them is on the first page, the test fails on this precondition.
+ */
+async function ensureDiscoverablePlacement(request: APIRequestContext, accessToken: string) {
+  const auth = { Authorization: `Bearer ${accessToken}` }
+  const firstPage = await request.get('/api/v1/admin/assets', { headers: auth })
+  expect(firstPage.status()).toBe(200)
+  const placed = ((await firstPage.json()) as { items: { placement: { lockerId: string } | null }[] }).items.some((unit) => unit.placement?.lockerId === DEMO_LOCKER_ID)
+  if (placed) return
+  const lockers = await request.get('/api/v1/admin/lockers?page=0&size=100', { headers: auth })
+  expect(lockers.status()).toBe(200)
+  const locker = ((await lockers.json()) as { items: LiveLocker[] }).items.find((candidate) => candidate.id === DEMO_LOCKER_ID)
+  const free = locker?.compartments.find((compartment) => compartment.enabled && compartment.currentAsset === null)
+  expect(free, 'precondition: a unit of the first catalog page placed in the demo locker, or a free enabled cell to place one').toBeTruthy()
+  const stamp = Date.now()
+  const model = await request.post('/api/v1/admin/asset-models', {
+    headers: { ...auth, 'Idempotency-Key': randomUUID() },
+    data: { name: `Casier E2E ${stamp}`, manufacturer: null, modelNumber: null, description: null, defaultCalibrationRequired: false },
+  })
+  expect(model.status()).toBe(201)
+  const unit = await request.post('/api/v1/admin/assets', {
+    headers: { ...auth, 'Idempotency-Key': randomUUID() },
+    // « 0 » sorts before the letters, so the unit is on the first page in the default assetCode order (09 §12.2).
+    data: { assetModelId: ((await model.json()) as { id: string }).id, assetCode: `0CASIER-${stamp}`, serialNumber: null, requiredAccessLevel: 'STANDARD', operationalStatus: 'SERVICEABLE', calibrationRequired: false, calibrationDueAt: null },
+  })
+  expect(unit.status()).toBe(201)
+  const put = await request.put(`/api/v1/admin/assets/${((await unit.json()) as { id: string }).id}/placement`, {
+    headers: auth,
+    data: { compartmentId: free?.id, reason: 'Préparation de la recette Casiers' },
+  })
+  expect(put.status()).toBe(200)
 }
 
 /** Models are sorted by name; on a database with many models the new one may be on a later page. */

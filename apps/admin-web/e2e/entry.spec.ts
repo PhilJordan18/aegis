@@ -236,8 +236,9 @@ test.describe('flow: équipements (production page, routed fakes)', () => {
     await expect(page.locator('main')).not.toContainText(/\bPrêt\b/)
     await expect(page.locator('main')).toContainText('Présence inconnue')
     await expect(page.locator('main')).toContainText('Aucun placement connu')
-    // Only the two catalog routes, through the routed fakes.
-    expect(requests.every((request) => /^GET \/api\/v1\/admin\/assets(\/[0-9a-f-]{36})?(\?|$)/.test(request))).toBe(true)
+    // Only reads through the routed fakes: the two catalog routes and the unit's identifier history (09 §12.3).
+    expect(requests.every((request) => /^GET \/api\/v1\/admin\/assets(\/[0-9a-f-]{36}(\/identifiers)?)?(\?|$)/.test(request))).toBe(true)
+    expect(requests.some((request) => request.endsWith('/identifiers'))).toBe(true)
   })
 
   test('flow: keyboard selection with Tab and Enter changes the dossier, keeps the focus on the row and announces it', async ({ page }) => {
@@ -309,7 +310,7 @@ test.describe('flow: équipements (production page, routed fakes)', () => {
 
   test('flow: changes go through explicit actions only, and opening the page writes nothing', async ({ page }) => {
     const requests = await openEquipment(page, 'nominal')
-    await expect(page.locator('main').getByRole('button')).toHaveText(['Nouvel exemplaire', 'Rechercher', 'Modifier', 'Archiver'])
+    await expect(page.locator('main').getByRole('button')).toHaveText(['Nouvel exemplaire', 'Rechercher', 'Modifier', 'Archiver', 'Modifier le placement', 'Attribuer un identifiant'])
     // The search box (#109) is the only field: it filters a read, it never writes.
     await expect(page.locator('main').locator('input, select, textarea')).toHaveCount(1)
     await expect(page.locator('main').getByRole('search').getByRole('searchbox')).toHaveCount(1)

@@ -32,6 +32,7 @@ A2 = "5c1d0b7e-2f4a-4d3b-9a61-0e8b7c2d4f10"
 # Tags placed by tools/hub-simulator/scenarios/presence-demo-local.json.
 TAG_A1 = "E20034120123456789000001"
 TAG_A2 = "E20034120123456789000002"
+TAG_EXTRA = "E2003412012345678900ABCD"
 STATE = os.path.join(os.environ.get("RECETTE_DIR", "."), "state.json")
 
 ROUTE_CHARACTERS = set("abcdefghijklmnopqrstuvwxyz0123456789-")
@@ -159,10 +160,39 @@ def catalog_phase(admin, tech):
           placement == "A1" and view["presence"] != "PRESENT" and view["readiness"]["result"] != "READY",
           f"placement={placement} presence={view['presence']} readiness={view['readiness']['result']} {view['readiness']['reasons']}")
 
+    admin_reads(admin, tech, asset1["id"], code1, code2)
+
     with open(STATE, "w", encoding="utf-8") as out:
         json.dump({"asset1": asset1["id"], "asset2": asset2["id"], "code1": code1}, out)
 
     search_corpus(tech)
+
+
+def admin_reads(admin, tech, asset1, code1, code2):
+    """The Manager's reads P1 and P2 (#134, approved 6 November 2026)."""
+    status, page = call("GET", "/admin/lockers?page=0&size=20", admin)
+    locker = next((item for item in (page or {}).get("items", []) if item.get("id") == LOCKER), {})
+    occupants = {c["code"]: (c.get("currentAsset") or {}).get("assetCode") for c in locker.get("compartments", [])}
+    check("R8.1 Manager lists the locker with its compartment occupants (P1)",
+          status == 200 and occupants == {"A1": code1, "A2": code2}, f"HTTP {status} {locker.get('code')} {occupants}")
+    status, body = call("GET", "/admin/lockers", tech)
+    check("R8.2 technician is refused the locker list", status == 403, f"HTTP {status} {code_of(body)}")
+
+    status, history = call("GET", f"/admin/assets/{asset1}/identifiers", admin)
+    first = (history or [{}])[0] if isinstance(history, list) else {}
+    check("R8.3 Manager reads the identifier of asset 1 (P2)",
+          status == 200 and first.get("value") == TAG_A1 and first.get("active") is True,
+          f"HTTP {status} {[(i.get('value'), i.get('active')) for i in history or []] if isinstance(history, list) else history}")
+    identifier = str(uuid.UUID(first["id"])) if first.get("id") else None
+    status, _ = call("POST", f"/admin/assets/{asset1}/identifiers/{identifier}/revoke", admin, {}, True)
+    status_again, _ = call("POST", f"/admin/assets/{asset1}/identifiers", admin, {"type": "RFID_UHF", "value": TAG_A1}, True)
+    _, history = call("GET", f"/admin/assets/{asset1}/identifiers", admin)
+    shape = [(i.get("value"), i.get("active"), i.get("revokedAt") is not None) for i in history or []]
+    check("R8.4 revoked tag stays in the history and can be bound again, active first",
+          status == 200 and status_again == 201 and shape == [(TAG_A1, True, False), (TAG_A1, False, True)],
+          f"revoke HTTP {status}, re-bind HTTP {status_again}, history={shape}")
+    status, body = call("GET", f"/admin/assets/{asset1}/identifiers", tech)
+    check("R8.5 technician is refused the identifier history", status == 403, f"HTTP {status} {code_of(body)}")
 
 
 def search_corpus(tech):
@@ -191,6 +221,21 @@ def schedule(enabled_today):
     return {"timeZone": "America/Toronto", "windows": [
         {"dayOfWeek": day, "enabled": enabled_today, "opensAt": "00:00" if enabled_today else None,
          "closesAt": "23:59" if enabled_today else None} for day in days]}
+
+
+def custody_guards(admin, asset1):
+    # Only the reservation case is reachable over HTTP and MQTT: an open loan or a non-terminal
+    # operation needs the withdrawal chain (#43-#47), so those refusals stay proven by fixtures.
+    status, body = call("PUT", f"/admin/assets/{asset1}/placement", admin, {"compartmentId": A2, "reason": "Recette R9"})
+    check("R9.1 placement change while reserved is refused for the reservation first",
+          status == 409 and code_of(body) == "ASSET_ALREADY_RESERVED", f"HTTP {status} {code_of(body)}")
+    status, body = call("POST", f"/admin/assets/{asset1}/identifiers", admin, {"type": "RFID_UHF", "value": TAG_EXTRA}, True)
+    check("R9.2 identifier assignment stays allowed while only reserved", status == 201, f"HTTP {status} {code_of(body)}")
+    status, body = call("PUT", f"/admin/assets/{asset1}/placement", admin, {"compartmentId": A1, "reason": "Recette R9"})
+    check("R9.3 a PUT to the current compartment stays a no-op", status == 200, f"HTTP {status} {code_of(body)}")
+    _, lockers = call("GET", "/admin/lockers", admin)
+    occupants = {c["code"]: (c.get("currentAsset") or {}).get("id") for c in lockers["items"][0]["compartments"]}
+    check("R9.4 P1 still shows asset 1 in A1 after the refused move", occupants.get("A1") == asset1, f"{occupants}")
 
 
 def physical_phase(admin, tech):
@@ -243,6 +288,9 @@ def physical_phase(admin, tech):
     _, view = tech_asset(tech, asset1)
     check("R5.3 the asset reads RESERVED", view["availability"] == "RESERVED",
           f"availability={view['availability']} readiness={view['readiness']['result']} {view['readiness']['reasons']}")
+
+    if reservation_ok:
+        custody_guards(admin, asset1)
 
     pid = int(os.environ["RECETTE_SIM_PID"])
     os.kill(pid, signal.SIGSTOP)

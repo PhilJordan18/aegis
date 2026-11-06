@@ -14,6 +14,8 @@ import { unconfiguredLockerGateway, type LockerGateway } from '../features/locke
 import { LockerGatewayContext } from '../features/lockers/LockerGatewayContext'
 import { unconfiguredScheduleGateway, type ScheduleGateway } from '../features/schedule/scheduleGateway'
 import { ScheduleGatewayContext } from '../features/schedule/ScheduleGatewayContext'
+import { unconfiguredCustodyGateway, type CustodyGateway } from '../features/custody/custodyGateway'
+import { CustodyGatewayContext } from '../features/custody/CustodyGatewayContext'
 import { createLocaleController, type Locale, type LocaleController } from '../i18n/locale'
 import { LocaleContext } from '../i18n/useI18n'
 
@@ -24,6 +26,7 @@ export function renderWithProviders(
     catalogGateway = unconfiguredCatalogGateway,
     lockerGateway = unconfiguredLockerGateway,
     scheduleGateway = unconfiguredScheduleGateway,
+    custodyGateway = unconfiguredCustodyGateway,
     session = createSessionStore(),
     router = createHistoryRouter(window),
     queryClient = createQueryClient(),
@@ -34,6 +37,7 @@ export function renderWithProviders(
     catalogGateway?: CatalogGateway
     lockerGateway?: LockerGateway
     scheduleGateway?: ScheduleGateway
+    custodyGateway?: CustodyGateway
     session?: SessionStore
     router?: Router
     queryClient?: QueryClient
@@ -53,7 +57,7 @@ export function renderWithProviders(
               <AuthGatewayContext value={gateway}>
                 <CatalogGatewayContext value={catalogGateway}>
                   <LockerGatewayContext value={lockerGateway}>
-                    <ScheduleGatewayContext value={scheduleGateway}>{ui}</ScheduleGatewayContext>
+                    <ScheduleGatewayContext value={scheduleGateway}><CustodyGatewayContext value={custodyGateway}>{ui}</CustodyGatewayContext></ScheduleGatewayContext>
                   </LockerGatewayContext>
                 </CatalogGatewayContext>
               </AuthGatewayContext>

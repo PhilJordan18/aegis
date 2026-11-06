@@ -223,9 +223,9 @@ l'aperçu statique.
 
 ## Catalogue : formulaires (CAT-01 #25)
 
-Proposition en attente de validation visuelle : `docs/design/manager-forms/`.
-Les formulaires reprennent les champs de connexion et les jetons v3; aucune
-maquette n'est approuvée.
+Direction approuvée pour P0 par Philippe le 6 novembre 2026, avec ses six
+décisions : `docs/design/manager-forms/README.md`. Les formulaires reprennent
+les champs de connexion et les jetons v3.
 
 - **Onglets** : `/equipements` (exemplaires) et `/equipements?vue=modeles`
   (modèles, archivés compris, dans l'ordre du serveur : nom puis `id`).

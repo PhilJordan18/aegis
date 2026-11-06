@@ -16,6 +16,7 @@ import { readSearchText } from '../features/catalog/searchText'
 import { classifyCatalogFailure } from '../features/catalog/catalogFailure'
 import { LIST_QUERY_BASE, type AdminAssetView, type AssetListQuery, type AssetModelView } from '../features/catalog/contract'
 import { ArchiveDialog } from '../features/catalog/forms/ArchiveDialog'
+import { CustodySection } from '../features/custody/CustodySection'
 import { AssetFormDialog } from '../features/catalog/forms/AssetFormDialog'
 import { ModelFormDialog } from '../features/catalog/forms/ModelFormDialog'
 import { ModelList } from '../features/catalog/ModelList'
@@ -70,7 +71,8 @@ function revealDossier(target: HTMLElement | null) {
 /**
  * Protected Équipements page (CAT-01): the units and the models of the administrator catalog, from the real API,
  * with their creation, modification and archive. The server decides every rule; the forms only anticipate the
- * single-field ones. The forms are proposals awaiting visual approval (docs/design/manager-forms/).
+ * single-field ones. The forms follow the direction
+ * approved for P0 on 6 November 2026 (docs/design/manager-forms/README.md).
  */
 export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: UserProfile }) {
   const { m } = useI18n()
@@ -271,6 +273,18 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
                 onRetry={() => void asset.refetch()}
                 onBack={() => router.navigate(equipmentHref({ page: location.page, assetId: null, search: activeSearch }))}
                 actions={dossierActions}
+                custody={
+                  asset.data !== undefined && !assetGone ? (
+                    <CustodySection
+                      key={asset.data.id}
+                      asset={asset.data}
+                      onOutcome={(message) => {
+                        setOutcome('')
+                        requestAnimationFrame(() => setOutcome(message))
+                      }}
+                    />
+                  ) : undefined
+                }
               />
             )}
           </div>
