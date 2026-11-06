@@ -9,7 +9,9 @@ hub**, jamais d'un ESP32 réel.
 
 La recette automatisée correspondante est `npm run test:e2e:api` (12 tests,
 `apps/admin-web/README.md`). Le parcours broker → API → Manager des erreurs
-signalées est `apps/admin-web/scripts/check-device-errors-live.sh`.
+signalées est `apps/admin-web/scripts/check-device-errors-live.sh`. Sur `dev`
+`49bf5f8`, ces deux recettes passent (12/12, puis W1 et W2), ainsi que le projet
+Playwright `forms` (28/28) qui couvre la saisie au changement d'heure.
 
 ## Préparation
 
@@ -92,7 +94,7 @@ Dans **Exemplaires**, champ « Rechercher un exemplaire » :
 
 ## 6. Erreurs signalées par le casier (#29, simulateur)
 
-Ce parcours dépend de #142 (API) puis de #148 (Web). Le hub est **simulé**.
+Disponible sur `dev` depuis `49bf5f8` (#142 puis #148). Le hub est **simulé**.
 
 - [ ] Avant toute session du hub : la section « Erreurs signalées » affiche
   « Aucun signal reçu du casier ».
