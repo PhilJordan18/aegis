@@ -18,29 +18,33 @@ import ca.aegis.control.shared.web.ResourceNotFoundException;
 
 /**
  * Expected placement of an asset (document 09, section 12.4; document 04, section 4.2). A change ends the previous
- * placement instead of deleting it. Lock order: the asset row, then the target and previous compartments in
- * identifier order; the partial unique indexes of V003 remain the final guard.
+ * placement instead of deleting it. Lock order (document 08, section 7.1): the asset row, its active reservation and
+ * open loan, the target and previous compartments in identifier order, then its non-terminal operations; the partial
+ * unique indexes of V003 remain the final guard.
  */
 @Service
 class AssetPlacementService {
 
     private final AssetRepository assets;
     private final AssetPlacementRepository placements;
+    private final AssetCustodyRepository custody;
     private final CatalogAudit audit;
     private final Clock clock;
 
-    AssetPlacementService(AssetRepository assets, AssetPlacementRepository placements, CatalogAudit audit,
-            Clock clock) {
+    AssetPlacementService(AssetRepository assets, AssetPlacementRepository placements,
+            AssetCustodyRepository custody, CatalogAudit audit, Clock clock) {
         this.assets = assets;
         this.placements = placements;
+        this.custody = custody;
         this.audit = audit;
         this.clock = clock;
     }
 
     /**
-     * Placing an asset where it already is changes nothing, not even the reason, and writes no event. Reservations,
-     * loans and locker operations do not exist yet; their slices must refuse a placement change here while one of
-     * them is active, open or non-terminal for the asset.
+     * Placing an asset where it already is changes nothing, not even the reason, and writes no event. A change is
+     * refused while the asset has an active reservation, an unfinished loan or a non-terminal locker operation
+     * (document 09, section 12.4), with the codes and order of the archival (section 12.2): each was decided on the
+     * current compartment.
      */
     @Transactional
     AssetPlacementView place(UUID assetId, PlacementRequest request, UUID actor) {
@@ -52,6 +56,9 @@ class AssetPlacementService {
         if (previous.filter(current -> current.compartmentId().equals(request.compartmentId())).isPresent()) {
             return previous.get();
         }
+        custody.custodyBlocker(assetId).ifPresent(blocker -> {
+            throw new CatalogConflictException(blocker);
+        });
         Set<UUID> touched = new LinkedHashSet<>();
         touched.add(request.compartmentId());
         previous.ifPresent(current -> touched.add(current.compartmentId()));
@@ -60,6 +67,9 @@ class AssetPlacementService {
                 .findFirst()
                 .orElseThrow(() -> InvalidRequestException.of("compartmentId", "COMPARTMENT_NOT_FOUND",
                         "Le compartiment est introuvable."));
+        custody.operationBlocker(assetId).ifPresent(blocker -> {
+            throw new CatalogConflictException(blocker);
+        });
         if (!target.enabled()) {
             throw new CatalogConflictException(ApiError.COMPARTMENT_DISABLED);
         }
