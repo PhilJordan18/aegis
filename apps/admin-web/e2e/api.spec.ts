@@ -45,14 +45,10 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('an administrator signs in, reaches the Manager shell, and the token stays in memory', async ({ page }) => {
+  test.setTimeout(150_000)
   const requests = apiRequests(page)
-  const login = page.waitForResponse((response) => response.url().endsWith('/api/v1/auth/login'))
   const me = page.waitForResponse((response) => response.url().endsWith('/api/v1/auth/me'))
-  await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
-
-  const loginResponse = await login
-  expect(loginResponse.status()).toBe(200)
-  const { user } = (await loginResponse.json()) as { user: { displayName: string; role: string } }
+  const { user } = await signInWhenAllowed(page)
   expect(user.role).toBe('ADMIN')
 
   await expect(page).toHaveURL(/\/equipements$/)
@@ -84,16 +80,16 @@ test('an administrator signs in, reaches the Manager shell, and the token stays 
 })
 
 test('a technician account is refused, its token is dropped and no request follows', async ({ page }) => {
+  test.setTimeout(150_000)
   const requests = apiRequests(page)
-  const login = page.waitForResponse((response) => response.url().endsWith('/api/v1/auth/login'))
-  await signIn(page, TECHNICIAN_EMAIL, TECHNICIAN_PASSWORD)
-  expect((await login).status()).toBe(200)
+  await signInWhenAllowed(page, TECHNICIAN_EMAIL, TECHNICIAN_PASSWORD)
 
   await expect(page.getByRole('heading', { level: 1, name: 'Accès réservé aux administrateurs' })).toBeFocused()
   await expect(page.getByRole('alert')).toContainText("Ce compte technicien s'utilise dans Aegis Mobile.")
   await expect(page.locator('form')).toHaveCount(0)
   await page.waitForLoadState('networkidle')
-  expect(requests.map((request) => new URL(request.url()).pathname)).toEqual(['/api/v1/auth/login'])
+  // Only sign-in attempts (a 429 waited out is one more): nothing follows the accepted one.
+  expect(requests.map((request) => new URL(request.url()).pathname).filter((path) => path !== '/api/v1/auth/login')).toEqual([])
   await expect(page).toHaveURL(/\/connexion$/)
 })
 
@@ -137,9 +133,8 @@ test('repeated attempts reach the rate limit and use its Retry-After delay', asy
 
 test('an administrator opens Équipements, sees the units from the API and opens one', async ({ page, request }) => {
   // The API holds no seed: this run registers its own unit (document 09 §12.1-12.2), through the same proxy.
-  const login = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
-  expect(login.status()).toBe(200)
-  const { accessToken } = (await login.json()) as { accessToken: string }
+  test.setTimeout(150_000)
+  const accessToken = await adminToken(request)
   const headers = () => ({ Authorization: `Bearer ${accessToken}`, 'Idempotency-Key': randomUUID() })
   // Unique per run: model names are unique among active models, and the database outlives the run.
   const stamp = Date.now()
@@ -159,7 +154,7 @@ test('an administrator opens Équipements, sees the units from the API and opens
   const unit = (await created.json()) as { id: string }
 
   const requests = apiRequests(page)
-  await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
+  await signInWhenAllowed(page)
   await expect(page).toHaveURL(/\/equipements$/)
   await expect(page.getByRole('heading', { level: 1, name: 'Équipements' })).toBeFocused()
 
@@ -318,9 +313,12 @@ function expectOnlyReads(requests: Request[]) {
 }
 
 test('Casiers (catalog discovery): the chip and every compartment row match a direct GET of the same status', async ({ page, request }) => {
+  test.setTimeout(150_000)
   await page.setViewportSize({ width: 1440, height: 900 })
+  // The page discovers lockers through the units of the first catalog page: the run provides one, before signing in.
+  await ensureDiscoverablePlacement(request, await adminToken(request))
   const requests = apiRequests(page)
-  await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
+  await signInWhenAllowed(page)
   await expect(page).toHaveURL(/\/equipements$/)
   // Through the shell link, in the same session: no reload, so the in-memory token survives.
   const statusPromise = page.waitForRequest((candidate) => /\/api\/v1\/lockers\/[^/]+\/status$/.test(new URL(candidate.url()).pathname))
@@ -352,8 +350,9 @@ test('Casiers (catalog discovery): the chip and every compartment row match a di
 test('Casiers (?casier=): the named locker is read directly and matches a direct GET of the same status', async ({ page, request }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.emulateMedia({ colorScheme: 'dark' })
+  test.setTimeout(150_000)
   const requests = apiRequests(page)
-  await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
+  await signInWhenAllowed(page)
   await expect(page).toHaveURL(/\/equipements$/)
   const statusPromise = page.waitForRequest((candidate) => /\/api\/v1\/lockers\/[^/]+\/status$/.test(new URL(candidate.url()).pathname))
   await page.evaluate((lockerId) => {
@@ -392,7 +391,7 @@ test('CAT-01 forms: an administrator creates, edits and archives a model and a u
   const modelName = `Formulaire E2E ${stamp}`
   const code = `FORM-${stamp}`
   const requests = apiRequests(page)
-  const accessToken = await signInWhenAllowed(page)
+  const { accessToken } = await signInWhenAllowed(page)
   await expect(page).toHaveURL(/\/equipements$/)
   const auth = { Authorization: `Bearer ${accessToken}` }
 
@@ -489,7 +488,7 @@ test('CFG-02 schedule: an administrator edits the seven-day schedule of a locker
   test.setTimeout(150_000)
   // A closing minute that changes at each run, so the PUT always records a new version (an identical PUT is a no-op).
   const minute = String(new Date().getUTCMinutes()).padStart(2, '0')
-  const accessToken = await signInWhenAllowed(page)
+  const { accessToken } = await signInWhenAllowed(page)
   await expect(page).toHaveURL(/\/equipements$/)
   const auth = { Authorization: `Bearer ${accessToken}` }
   const schedulePath = `/api/v1/admin/lockers/${DEMO_LOCKER_ID}/operating-schedule`
@@ -587,7 +586,7 @@ test('#26 custody: an administrator assigns and revokes an identifier, then move
   test.setTimeout(150_000)
   const stamp = Date.now()
   const requests = apiRequests(page)
-  const accessToken = await signInWhenAllowed(page)
+  const { accessToken } = await signInWhenAllowed(page)
   await expect(page).toHaveURL(/\/equipements$/)
   const auth = { Authorization: `Bearer ${accessToken}` }
   const withKey = () => ({ ...auth, 'Idempotency-Key': randomUUID() })
@@ -618,6 +617,12 @@ test('#26 custody: an administrator assigns and revokes an identifier, then move
     }, assetId)
     await expect(page.getByRole('heading', { level: 2, name: new RegExp(`· ${code}$`) })).toBeVisible()
   }
+
+  // Checked before anything is written; see the guard on `target` below.
+  expect(
+    (await readLocker()).compartments.filter((compartment) => compartment.enabled && compartment.currentAsset === null).length,
+    'precondition: a free enabled compartment in the demo locker (fresh database, or free one cell)',
+  ).toBeGreaterThan(0)
 
   // A fresh unit B carries the identifier steps and the placement conflict.
   const codeB = `GARDE-${stamp}`
@@ -683,7 +688,9 @@ test('#26 custody: an administrator assigns and revokes an identifier, then move
   }
   const unitA = source?.currentAsset as { id: string; assetCode: string }
   const target = locker.compartments.find((compartment) => compartment.enabled && compartment.currentAsset === null)
-  expect(target, 'a free enabled compartment in the demo locker').toBeTruthy()
+  // A guard, not a skip: without a free enabled cell (the cloud recipe fills A1 and A2) the move cannot be shown, and this
+  // test never moves or empties a unit it did not place. Run it on a fresh database or after freeing one cell.
+  expect(target, 'precondition: a free enabled compartment in the demo locker (fresh database, or free one cell)').toBeTruthy()
 
   try {
     await openUnit(unitA.id, unitA.assetCode)
@@ -731,19 +738,73 @@ test('#26 custody: an administrator assigns and revokes an identifier, then move
   expect(writes.every((candidate) => new URL(candidate.url()).pathname.startsWith('/api/v1/admin/assets/'))).toBe(true)
 })
 
-/** Signs in through the page; a 429 is waited out with its Retry-After, then the same sign-in is sent again. */
-async function signInWhenAllowed(page: Page): Promise<string> {
+interface LoginBody {
+  readonly accessToken: string
+  readonly user: { readonly displayName: string; readonly role: string }
+}
+
+/**
+ * Signs in through the page. The API keeps its five-per-minute limit (09 §23.4) and the run respects it: a 429 is waited out
+ * with its Retry-After, then the same sign-in is sent again, so back-to-back runs wait instead of failing.
+ */
+async function signInWhenAllowed(page: Page, email = ADMIN_EMAIL, password = ADMIN_PASSWORD): Promise<LoginBody> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const login = page.waitForResponse((response) => response.url().endsWith('/api/v1/auth/login'))
-    await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
+    await signIn(page, email, password)
     const response = await login
-    if (response.status() === 200) return ((await response.json()) as { accessToken: string }).accessToken
+    if (response.status() === 200) return (await response.json()) as LoginBody
     expect(response.status()).toBe(429)
     const seconds = Number(response.headers()['retry-after'] ?? '60')
     await page.waitForTimeout((seconds + 1) * 1000)
     await page.goto('/connexion')
   }
   throw new Error('sign-in still rate limited')
+}
+
+/** The same rule for a direct sign-in, used to prepare data through the API. */
+async function adminToken(request: APIRequestContext): Promise<string> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
+    if (response.status() === 200) return ((await response.json()) as LoginBody).accessToken
+    expect(response.status()).toBe(429)
+    await new Promise((resolve) => setTimeout(resolve, (Number(response.headers()['retry-after'] ?? '60') + 1) * 1000))
+  }
+  throw new Error('sign-in still rate limited')
+}
+
+/**
+ * The Casiers page finds a locker through the units of the first catalog page (knownLockers.ts). On a fresh database no unit
+ * is placed: the run creates one, sorted first, and places it in a free enabled cell of the demo locker. When every cell is
+ * already taken, a unit is placed there already; if none of them is on the first page, the test fails on this precondition.
+ */
+async function ensureDiscoverablePlacement(request: APIRequestContext, accessToken: string) {
+  const auth = { Authorization: `Bearer ${accessToken}` }
+  const firstPage = await request.get('/api/v1/admin/assets', { headers: auth })
+  expect(firstPage.status()).toBe(200)
+  const placed = ((await firstPage.json()) as { items: { placement: { lockerId: string } | null }[] }).items.some((unit) => unit.placement?.lockerId === DEMO_LOCKER_ID)
+  if (placed) return
+  const lockers = await request.get('/api/v1/admin/lockers?page=0&size=100', { headers: auth })
+  expect(lockers.status()).toBe(200)
+  const locker = ((await lockers.json()) as { items: LiveLocker[] }).items.find((candidate) => candidate.id === DEMO_LOCKER_ID)
+  const free = locker?.compartments.find((compartment) => compartment.enabled && compartment.currentAsset === null)
+  expect(free, 'precondition: a unit of the first catalog page placed in the demo locker, or a free enabled cell to place one').toBeTruthy()
+  const stamp = Date.now()
+  const model = await request.post('/api/v1/admin/asset-models', {
+    headers: { ...auth, 'Idempotency-Key': randomUUID() },
+    data: { name: `Casier E2E ${stamp}`, manufacturer: null, modelNumber: null, description: null, defaultCalibrationRequired: false },
+  })
+  expect(model.status()).toBe(201)
+  const unit = await request.post('/api/v1/admin/assets', {
+    headers: { ...auth, 'Idempotency-Key': randomUUID() },
+    // « 0 » sorts before the letters, so the unit is on the first page in the default assetCode order (09 §12.2).
+    data: { assetModelId: ((await model.json()) as { id: string }).id, assetCode: `0CASIER-${stamp}`, serialNumber: null, requiredAccessLevel: 'STANDARD', operationalStatus: 'SERVICEABLE', calibrationRequired: false, calibrationDueAt: null },
+  })
+  expect(unit.status()).toBe(201)
+  const put = await request.put(`/api/v1/admin/assets/${((await unit.json()) as { id: string }).id}/placement`, {
+    headers: auth,
+    data: { compartmentId: free?.id, reason: 'Préparation de la recette Casiers' },
+  })
+  expect(put.status()).toBe(200)
 }
 
 /** Models are sorted by name; on a database with many models the new one may be on a later page. */
