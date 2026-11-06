@@ -99,8 +99,8 @@ function validate(draft: Draft, original: AdminAssetView | null, i18n: ReturnTyp
 }
 
 /**
- * Create or edit a unit (CAT-01). Readiness, availability and presence are never fields. Proposed form:
- * awaits visual approval (docs/design/manager-forms/).
+ * Create or edit a unit (CAT-01). Readiness, availability and presence are never fields.
+ * Form direction approved for P0 on 6 November 2026 (docs/design/manager-forms/README.md).
  */
 // Mount one instance per opening (a new `key`): the draft, the idempotency key and the mutation then start fresh.
 export function AssetFormDialog({ open, asset, onClose, onSaved }: AssetFormDialogProps) {

@@ -1,0 +1,18 @@
+/* Identifiers and placement of a unit (CAT-02 #26): direction approved for P0 on 6 November 2026 (docs/design/manager-forms/README.md). */
+.ag-custody { display: grid; gap: 20px; margin-top: 24px; }
+.ag-custody__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.ag-custody__head .ag-sec-title { margin: 0; }
+.ag-custody__block > p { margin: 0; }
+.ag-custody__ids { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.ag-custody__id {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+  padding: 10px 12px; border: 1px solid var(--ag-border); border-radius: var(--ag-r-item);
+}
+.ag-custody__id:not([data-active]) { color: var(--ag-text-2); }
+.ag-custody__id-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-width: 0; }
+.ag-custody__type { font-weight: 600; }
+.ag-custody__value { overflow-wrap: anywhere; }
+.ag-custody__id-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+@media (forced-colors: active) {
+  .ag-custody__id { border-color: CanvasText; }
+}

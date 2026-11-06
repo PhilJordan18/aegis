@@ -194,6 +194,31 @@ describe('Équipements — edit and archive a unit', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Archiver' }))
   })
 
+  it('keeps one archive key per opening: a retry reuses it, a new opening never does', async () => {
+    const user = userEvent.setup()
+    const gateway = fakeCatalogGateway({ pages: [ok(pageOf([MM001]))], units: { [MM001.id]: ok(MM001) } })
+    renderEquipment(gateway)
+    await screen.findByRole('heading', { level: 2, name: /MM-001/ })
+    await user.click(screen.getByRole('button', { name: 'Archiver' }))
+    let dialog = screen.getByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Archiver' }))
+    expect(await within(dialog).findByText('Aucune réponse du service.')).toBeDefined()
+    await user.click(within(dialog).getByRole('button', { name: 'Réessayer' }))
+    await waitFor(() => expect(gateway.archiveAsset).toHaveBeenCalledTimes(2))
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+
+    await user.click(screen.getByRole('button', { name: 'Archiver' }))
+    dialog = screen.getByRole('alertdialog')
+    expect(within(dialog).queryByText('Aucune réponse du service.')).toBeNull()
+    await user.click(within(dialog).getByRole('button', { name: 'Archiver' }))
+    await waitFor(() => expect(gateway.archiveAsset).toHaveBeenCalledTimes(3))
+    const keys = gateway.archiveAsset.mock.calls.map((call) => call[2])
+    expect(keys[1]).toBe(keys[0])
+    expect(keys[2]).not.toBe(keys[0])
+    expect(gateway.archiveAsset.mock.calls.every((call) => call[1] === MM001.id)).toBe(true)
+  })
+
   it('offers no command for an archived unit', async () => {
     const archived = asset({ id: MM001.id, assetCode: 'MM-001', archivedAt: '2026-10-02T12:00:00Z' })
     renderEquipment(fakeCatalogGateway({ pages: [ok(pageOf([archived]))], units: { [archived.id]: ok(archived) } }))

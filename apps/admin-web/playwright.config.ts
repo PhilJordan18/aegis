@@ -17,7 +17,7 @@ const reducedMotion = process.env.AEGIS_MOTION === 'no-preference' ? 'no-prefere
  *   this tooling writes to;
  * - `integration` (npm run capture:integration): the curated FR/EN captures of the
  *   integrated identity v3 in docs/design/manager-v3/captures-integration/;
- * - `forms` (npm run test:forms): the proposed CAT-01 forms, axe, keyboard and 320 px; with
+ * - `forms` (npm run test:forms): the CAT-01, CFG-02 and #26 forms, axe, keyboard and 320 px; with
  *   AEGIS_FORMS_CAPTURE=1 (npm run capture:forms) it writes the review batch to docs/design/manager-forms/captures/.
  * All start their own Vite dev server, where the design-review preview is enabled.
  */

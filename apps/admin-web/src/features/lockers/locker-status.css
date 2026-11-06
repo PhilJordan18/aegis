@@ -79,6 +79,6 @@
 /* The note over a table of last-known values: a plain sentence, no alert colour, since it describes data and is not a fault. */
 .ag-lk__lastknown { margin-bottom: 8px; font-size: var(--ag-type-small-size); line-height: 1.45; color: var(--ag-text-2); }
 
-/* Heading of the schedule with its edit action (CFG-02 #28, proposed). */
+/* Heading of the schedule with its edit action (CFG-02 #28, approved for P0). */
 .ag-lk__window-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .ag-lk__window-head .ag-sec-title { margin: 0; }
