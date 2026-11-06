@@ -63,7 +63,7 @@ Lancez `docs/qualite/recette-cloud/run.sh` depuis la racine, sur la machine qui 
 | Identifiants : attribuer, révoquer ; placement attendu (#26, #140) | Manager | Test en direct `#26 custody` sur `d722ff9` (base neuve) | Attribuer puis révoquer un identifiant, déplacer un placement |
 | Échéance de calibration sans glissement à l'heure d'été (#25, #141) | Manager | **Sur branche** : API réelle, trou de printemps refusé, deux occurrences d'automne. Non refait sur `d722ff9` | Navigateur à l'heure de Toronto : saisir une échéance le 8 mars 2026 à 2 h 30 (refusée), puis le 1er novembre 2026 à 1 h 30 (deux choix) |
 | Horaire hebdomadaire d'un casier (#28, #139) | Manager | Suite en direct CFG-02. Recette R3 | Modifier un jour, relire |
-| Lecture du catalogue et réservation (#37, #38) | iOS | Recette R5. CI du push `dev` `70f4065` : iOS vert en 27 min ; celle de `d722ff9` en cours | Réserver un actif `READY`. Aucune ouverture de porte |
+| Lecture du catalogue et réservation (#37, #38) | iOS | Recette R5. CI des pushs `dev` `70f4065` et `d722ff9` : iOS vert (27 min, 26,7 min). Instabilité d'audit non corrigée (1 échec sur 4 depuis #143) | Réserver un actif `READY`. Aucune ouverture de porte |
 | Présence par scan, hub hors ligne (R4, R6) | API | Recette R4 et R6 (simulé) | Avec le vrai hub : couper le Wi-Fi plus de 30 s. L'actif passe à `UNKNOWN`, puis redevient `READY` seulement après un nouveau scan |
 | Refus de déplacer un actif réservé (#133) | API | Recette R9 (réservation). Prêt et opération : **fixtures seulement** | — |
 
