@@ -3,7 +3,7 @@
 Ce document est le seul point de départ de la recette humaine de Philippe et Jimmy. Il
 renvoie aux recettes détaillées et ne les recopie pas.
 
-État au **6 novembre 2026, 13 h (Toronto)**. Avant de commencer, relevez le SHA réel :
+État au **6 novembre 2026, 14 h 50 (Toronto)**. Avant de commencer, relevez le SHA réel :
 
 ```bash
 git fetch origin dev && git rev-parse --short origin/dev
@@ -44,6 +44,10 @@ Lancez `docs/qualite/recette-cloud/run.sh` depuis la racine, sur la machine qui 
 - **Dernier résultat consigné :** 36 sur 36 sur `dev` `60ccc35`, avec #136.
 - **Ce que couvre ce script :** la pile réelle avec le hub simulé.
 - **Ce qu'il ne couvre pas :** ni les écrans, ni le matériel.
+- **Attention :** ce script occupe tous les compartiments du casier de démonstration. La
+  suite Web en direct (`apps/admin-web`, `playwright.api.config.ts`) doit donc tourner
+  **avant** lui, ou sur une base neuve. Sinon le test `#26 custody` s'arrête sur sa
+  précondition explicite.
 
 ## Ce qu'un utilisateur peut faire sur `dev` (`60ccc35`)
 
@@ -61,10 +65,13 @@ Lancez `docs/qualite/recette-cloud/run.sh` depuis la racine, sur la machine qui 
 | PR | Apporte | Vérification QA | Ordre proposé |
 |---|---|---|---|
 | #136 `0e52322` | Recette : lectures admin, garde R9, API toujours reconstruite | 36 sur 36 en 100 s | Indépendante |
-| #140 `3b480d7` | Manager : identifiants et placement (#26) | Recette 36 sur 36. Live 11 sur 11, dépendant de l'état de la base. Vitest 743 | 1 |
+| #140 `3f1d4d9` | Manager : identifiants et placement (#26) | Recette 36 sur 36. Live 11 sur 11 deux fois de suite sur la même base neuve ; exige un compartiment libre | 1 |
 | #141 `a768561` | Manager : échéance de calibration sans glissement à l'heure d'été (#25) | Trou de printemps refusé. Deux occurrences d'automne stockées et relues sur l'API réelle | 2 (aucun conflit avec #140) |
-| #142 `727e298` | API : `deviceErrors` de la session courante du hub (#29) | MQTT vers API réel, hub simulé : regroupement, doublon stocké une fois, liste gardée hors ligne, vidée à la nouvelle session | Indépendante. **Le rendu Manager manque (Web)** |
+| #142 `49bd8ff` | API : `deviceErrors` de la session courante du hub (#29) | MQTT vers API réel, hub simulé : regroupement, doublon stocké une fois, liste gardée hors ligne, vidée à la nouvelle session | Indépendante |
+| #148 `98b98f9` | Manager : rendu des `deviceErrors` (#29) | Avec #142 : page égale au GET direct en 4 étapes (aucun signal, 2 groupes avec doublon, hors ligne, nouvelle session). Script Web W1/W2 réussi | Après #142 |
 | #143 `0570b2c` | Tests iOS : ordre des audits, plus de reprise masquante | Run 42258729058 : 218 sur 218 en 22,8 min, 31 audits terminés, le plus lent 9,4 s. Une seule exécution : l'instabilité n'est **pas** prouvée corrigée | Prête. Puis resynchroniser #132 |
+| #146 `ab1a597` | Manager : recherche `q` par graphèmes | **Non revue par QA** | À préciser par Web |
+| #147 `6f11da6` | API : présence inconnue si deux démarrages partagent le compteur | **Non revue par QA** | À préciser par Backend |
 | #144 `e8fb536` | CI : iOS sur un push `dev` seulement si un chemin iOS change | 59 tests de scripts CI | **Décision de Philippe** |
 | #132 | iOS : recherche par graphèmes (#109) | Rouge iOS hérité, à resynchroniser après #143 | Après #131, ADR-014 et un iOS vert |
 
