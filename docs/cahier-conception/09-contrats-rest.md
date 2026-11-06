@@ -14,6 +14,7 @@
 **Mise à jour ciblée :** 28 octobre 2026 — sous-objets `AssetModelSummary`, `CalibrationView` et `PlacementSummary` de `AssetView` (§8.2); sérialisation existante documentée; code `404 ASSET_NOT_FOUND` de §11.2 ajouté à §21 (#33, #34)  
 **Mise à jour ciblée :** 28 octobre 2026 — décisions de Philippe pour #33 et #34 : ordre stable des raisons et raison principale choisie par la convention de présentation, jamais par `reasons[0]` (§8.1); actif archivé exclu de la liste mais lisible par son identifiant (§11.1, §11.2)  
 **Mise à jour ciblée :** 28 octobre 2026 — réservation (RES-01, #37), décisions de Philippe du 28 octobre 2026 : ordre des contrôles implémenté, `reservedUntil` non postérieur à l’instant courant, locker sans horaire, horaire du placement courant et actif inconnu (§14.1); `availableActions` vide tant que ses actions ne sont pas implémentées (§8.10); codes de refus de l’archivage (§12.2); `ACTIVE_RESERVATION_NOT_FOUND` et `ASSET_OPERATION_IN_PROGRESS` ajoutés à §21  
+**Mise à jour ciblée :** 28 octobre 2026 — recherche `q` commune à l’API, au Web et à iOS : espaces Unicode de bordure, longueur en grappes de graphèmes, corpus partagé (§11.1, §22.3, §26.6), décision commune consignée par l’[ADR-014](../adr/ADR-014-recherche-q-graphemes.md), acceptée par Philippe le 6 novembre 2026 (#109)  
 **Mise à jour ciblée :** 6 novembre 2026 — lectures administratives approuvées par Philippe (#25, #26, #28) : `GET /admin/lockers` et `AdminLockerView` (§9.3, §16.2), historique des identifiants `GET /admin/assets/{assetId}/identifiers` (§9.3, §12.3); aucune migration  
 **Mise à jour ciblée :** 6 novembre 2026 — refus du catalogue liés à la garde de l’actif (#26) : placement refusé pendant une réservation active, un prêt ouvert ou une opération non terminale, attribution refusée pendant une opération non terminale et révocation de l’identifiant qu’elle attend, avec les codes de l’archivage (§12.3, §12.4, §21); ordre des refus approuvé par Philippe le 6 novembre 2026; aucun code ni champ nouveau
 
@@ -762,7 +763,7 @@ Paramètres :
 
 | Paramètre | Type | Défaut | Règle |
 |---|---|---|---|
-| q | string | absent | Recherche sur code et nom, 1 à 100 caractères |
+| q | string | absent | Recherche sur code et nom, 1 à 100 graphèmes après retrait des espaces de bordure (§22.3) |
 | readiness | enum | absent | READY, BLOCKED ou UNKNOWN |
 | availability | enum | absent | AVAILABLE, RESERVED, BORROWED ou UNAVAILABLE |
 | page | integer | 0 | Minimum 0 |
@@ -1461,13 +1462,30 @@ L’audit et les chronologies potentiellement volumineuses utilisent un curseur 
 
 ### 22.3 Recherche
 
-La recherche utilisateur :
+La recherche utilisateur `q` (§11.1, §12.2) suit une règle commune à l’API, au Web et à iOS ([ADR-014](../adr/ADR-014-recherche-q-graphemes.md), #109). L’API l’applique avant toute requête SQL :
 
-- retire les espaces extérieurs;
-- refuse une chaîne vide;
-- limite la taille avant toute requête SQL;
-- utilise des paramètres SQL, jamais une concaténation;
-- échappe les caractères propres à la stratégie de recherche.
+1. **Nettoyage.** Seuls les espaces Unicode de début et de fin sont retirés, point de code par point de code : les 19 caractères de catégorie générale `Z`, soit U+0020, U+00A0, U+1680, U+2000 à U+200A, U+2028, U+2029, U+202F, U+205F et U+3000. Les espaces intérieurs sont conservés. Un caractère de contrôle (tabulation, saut de ligne, U+0085) n’est pas un espace : il n’est jamais retiré et reste refusé (point 4). U+200B, U+200D, U+FE0F et U+FEFF ne sont pas des espaces et restent dans le texte.
+2. **Longueur.** La longueur est le nombre de grappes de graphèmes étendues (Unicode UAX #29) du texte nettoyé, ni unités UTF-16 ni points de code. `é` précomposé et `e` suivi d’un accent combinant comptent chacun 1; un emoji avec teinte, un drapeau ou une séquence ZWJ compte 1.
+3. **Bornes.** De 1 à 100 graphèmes, la recherche est admissible. Un texte vide après nettoyage ou de plus de 100 graphèmes retourne `400 VALIDATION_ERROR`, champ `q`, code `SIZE`; le texte n’est jamais tronqué.
+4. **Caractères refusés.** Le texte nettoyé suit §23.2 : code `INVALID_VALUE`.
+5. **Aucune normalisation ajoutée.** La validation ne change ni la casse, ni les accents, ni la forme de normalisation Unicode. La correspondance reste celle du catalogue : paramètres SQL, jamais de concaténation, comparaison en minuscules et `LIKE` dont `%`, `_` et `\` sont échappés.
+6. **Taille technique.** La limite en graphèmes ne borne pas la taille en octets, car un graphème peut contenir de nombreux points de code. La ligne de requête reste bornée par la limite des en-têtes HTTP de Spring Boot (`server.max-http-request-header-size`, 8 Kio par défaut, non modifiée); au-delà, le serveur HTTP peut répondre un `400` qui n’est pas un `problem+json`. Aucune seconde limite utilisateur n’existe.
+
+Côté client :
+
+- une recherche vide après nettoyage signifie « aucun filtre » : le client omet `q`. Un `q` vide envoyé explicitement reste refusé (`SIZE`);
+- Web et iOS appliquent la même règle avant l’envoi et affichent leur propre message traduit pour `SIZE` et `INVALID_VALUE`; l’API reste l’autorité;
+- un client ne tronque pas la saisie et ne bloque pas la composition au clavier (méthode de saisie, emoji) : aucune longueur maximale de champ comptée en UTF-16, et la règle s’évalue sur le texte composé.
+
+Le corpus [`09-corpus-recherche-q.json`](09-corpus-recherche-q.json) fixe, pour chaque cas, le texte nettoyé, le nombre de graphèmes et le résultat attendu. Les tests de l’API, du Web et d’iOS le lisent tel quel. Il se limite aux séquences dont la segmentation est stable depuis Unicode 11; les demi-paires de substitution restent dans les tests de l’API, car une `String` Swift ne peut pas en contenir.
+
+| Composant | Implémentation | Version Unicode |
+|---|---|---|
+| API | `Character.isSpaceChar` (catégorie `Z`) et `java.text.BreakIterator.getCharacterInstance()` (grappes étendues depuis le JDK 20) | Celle du JDK d’exécution : 15.0 avec le JDK 21 de la CI; 16.0 avec le JDK 25.0.4 des essais locaux du 28 octobre 2026 |
+| Web | À consigner par la PR Web de #109 | À consigner |
+| iOS | À consigner par la PR iOS de #109 | À consigner |
+
+Divergence connue : Unicode 15.1 a ajouté la règle GB9c, qui regroupe les conjonctions indiennes. `क्षि` (U+0915 U+094D U+0937 U+093F) compte 2 graphèmes sous Unicode 15.0 et 1 à partir de 15.1. Près de la borne de 100, un client et l’API peuvent donc diverger; la réponse de l’API fait foi.
 
 ---
 
@@ -1611,6 +1629,7 @@ Une ouverture passe obligatoirement par une réservation ou un prêt valide et p
 6. Archiver deux fois un actif ou un modèle, avec une nouvelle clé, retourne 200 avec le même `archivedAt`, sans nouvelle écriture; avec la même clé, la réponse initiale est rejouée.
 7. Un caractère de contrôle dans un texte du catalogue, `q` ou `Idempotency-Key` retourne 400 sans écriture, par MockMvc et par le serveur HTTP réel.
 8. Les codes `409` du catalogue de §21 sont retournés sans nom de contrainte SQL.
+9. Pour chaque cas du corpus `09-corpus-recherche-q.json`, l’API, le Web et iOS obtiennent le même texte nettoyé, le même nombre de graphèmes et le même résultat (§22.3).
 
 ### 26.7 Décisions et données de suivi du 23 septembre
 

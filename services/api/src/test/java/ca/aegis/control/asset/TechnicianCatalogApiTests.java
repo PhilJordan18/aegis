@@ -289,6 +289,13 @@ class TechnicianCatalogApiTests extends CatalogApiTest {
         expectViolation(get(CATALOG).param("sort", "serialNumber"), "sort", "INVALID_VALUE");
         expectViolation(get(CATALOG).param("sort", "assetCode,up"), "sort", "INVALID_VALUE");
         mvc.perform(asTechnician(get(CATALOG).param("q", "x".repeat(100)))).andExpect(status().isOk());
+        // Doc 09 §22.3: grapheme clusters, outer no-break spaces trimmed; a ZWJ emoji is 5 UTF-16 units.
+        String mechanic = "👩‍🔧";
+        mvc.perform(asTechnician(get(CATALOG).param("q", " " + mechanic.repeat(100) + " ")))
+                .andExpect(status().isOk());
+        expectViolation(get(CATALOG).param("q", mechanic.repeat(101)), "q", "SIZE");
+        expectViolation(get(CATALOG).param("q", "  "), "q", "SIZE");
+        expectViolation(get(CATALOG).param("q", "\tA1"), "q", "INVALID_VALUE");
         mvc.perform(asTechnician(get(CATALOG).param("size", "100"))).andExpect(status().isOk());
     }
 

@@ -1,0 +1,66 @@
+{
+  "contract": "docs/cahier-conception/09-contrats-rest.md section 22.3; docs/adr/ADR-014-recherche-q-graphemes.md",
+  "consumers": [
+    "services/api",
+    "apps/admin-web",
+    "apps/ios"
+  ],
+  "rules": {
+    "input": "Concatenation of each part's text repeated `times` times (default 1); every non-ASCII character is escaped to keep it visible.",
+    "trimmed": "Text after removing the outer characters of general category Z, one code point at a time; absent means equal to the input.",
+    "graphemes": "Extended grapheme clusters (Unicode UAX #29) of the trimmed text.",
+    "result": "API outcome for q: VALID, or 400 VALIDATION_ERROR on field q with SIZE or INVALID_VALUE. A client omits q instead of sending an empty search.",
+    "scope": "Only sequences whose segmentation is stable since Unicode 11; lone surrogates stay in the API tests because a Swift String cannot hold them."
+  },
+  "cases": [
+    {"id": "ascii-99", "parts": [{"text": "a", "times": 99}], "graphemes": 99, "result": "VALID"},
+    {"id": "ascii-100", "parts": [{"text": "a", "times": 100}], "graphemes": 100, "result": "VALID"},
+    {"id": "ascii-101", "parts": [{"text": "a", "times": 101}], "graphemes": 101, "result": "SIZE"},
+
+    {"id": "e-precomposed", "parts": [{"text": "\u00e9"}], "graphemes": 1, "result": "VALID"},
+    {"id": "e-combining", "parts": [{"text": "e\u0301"}], "graphemes": 1, "result": "VALID"},
+    {"id": "e-precomposed-100", "parts": [{"text": "\u00e9", "times": 100}], "graphemes": 100, "result": "VALID"},
+    {"id": "e-precomposed-101", "parts": [{"text": "\u00e9", "times": 101}], "graphemes": 101, "result": "SIZE"},
+    {"id": "e-combining-100", "parts": [{"text": "e\u0301", "times": 100}], "graphemes": 100, "result": "VALID"},
+    {"id": "e-combining-101", "parts": [{"text": "e\u0301", "times": 101}], "graphemes": 101, "result": "SIZE"},
+
+    {"id": "emoji-simple", "parts": [{"text": "\ud83d\udd27"}], "graphemes": 1, "result": "VALID"},
+    {"id": "emoji-simple-100", "parts": [{"text": "\ud83d\udd27", "times": 100}], "graphemes": 100, "result": "VALID"},
+    {"id": "emoji-simple-101", "parts": [{"text": "\ud83d\udd27", "times": 101}], "graphemes": 101, "result": "SIZE"},
+    {"id": "emoji-skin-tone", "parts": [{"text": "\ud83d\udc4d\ud83c\udffd"}], "graphemes": 1, "result": "VALID"},
+    {"id": "emoji-skin-tone-100", "parts": [{"text": "\ud83d\udc4d\ud83c\udffd", "times": 100}], "graphemes": 100, "result": "VALID"},
+    {"id": "emoji-skin-tone-101", "parts": [{"text": "\ud83d\udc4d\ud83c\udffd", "times": 101}], "graphemes": 101, "result": "SIZE"},
+    {"id": "emoji-flag", "parts": [{"text": "\ud83c\udde8\ud83c\udde6"}], "graphemes": 1, "result": "VALID"},
+    {"id": "emoji-flag-pair", "parts": [{"text": "\ud83c\udde8\ud83c\udde6\ud83c\uddeb\ud83c\uddf7"}], "graphemes": 2, "result": "VALID"},
+    {"id": "emoji-flag-100", "parts": [{"text": "\ud83c\udde8\ud83c\udde6", "times": 100}], "graphemes": 100, "result": "VALID"},
+    {"id": "emoji-flag-101", "parts": [{"text": "\ud83c\udde8\ud83c\udde6", "times": 101}], "graphemes": 101, "result": "SIZE"},
+    {"id": "emoji-zwj", "parts": [{"text": "\ud83d\udc69\u200d\ud83d\udd27"}], "graphemes": 1, "result": "VALID"},
+    {"id": "emoji-zwj-variation-selector", "parts": [{"text": "\ud83c\udff3\ufe0f\u200d\ud83c\udf08"}], "graphemes": 1, "result": "VALID"},
+    {"id": "emoji-zwj-100", "parts": [{"text": "\ud83d\udc69\u200d\ud83d\udd27", "times": 100}], "graphemes": 100, "result": "VALID"},
+    {"id": "emoji-zwj-101", "parts": [{"text": "\ud83d\udc69\u200d\ud83d\udd27", "times": 101}], "graphemes": 101, "result": "SIZE"},
+    {"id": "mixed-100", "parts": [{"text": "a", "times": 99}, {"text": "\ud83d\udc69\u200d\ud83d\udd27"}], "graphemes": 100, "result": "VALID"},
+    {"id": "mixed-101", "parts": [{"text": "a", "times": 100}, {"text": "\ud83c\udde8\ud83c\udde6"}], "graphemes": 101, "result": "SIZE"},
+
+    {"id": "outer-ordinary-spaces", "parts": [{"text": "  cl\u00e9  "}], "trimmed": [{"text": "cl\u00e9"}], "graphemes": 3, "result": "VALID"},
+    {"id": "outer-no-break-spaces", "parts": [{"text": "\u00a0\u202fcl\u00e9\u202f\u00a0"}], "trimmed": [{"text": "cl\u00e9"}], "graphemes": 3, "result": "VALID"},
+    {"id": "outer-every-z-separator", "parts": [{"text": " \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000"}, {"text": "a"}, {"text": " \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000"}], "trimmed": [{"text": "a"}], "graphemes": 1, "result": "VALID"},
+    {"id": "outer-spaces-around-100", "parts": [{"text": " \u00a0"}, {"text": "a", "times": 100}, {"text": "\u202f "}], "trimmed": [{"text": "a", "times": 100}], "graphemes": 100, "result": "VALID"},
+    {"id": "outer-spaces-around-101", "parts": [{"text": " \u00a0"}, {"text": "a", "times": 101}, {"text": "\u202f "}], "trimmed": [{"text": "a", "times": 101}], "graphemes": 101, "result": "SIZE"},
+    {"id": "outer-spaces-around-emoji-zwj", "parts": [{"text": " \ud83d\udc69\u200d\ud83d\udd27\u00a0"}], "trimmed": [{"text": "\ud83d\udc69\u200d\ud83d\udd27"}], "graphemes": 1, "result": "VALID"},
+    {"id": "inner-spaces-kept", "parts": [{"text": " cl\u00e9  \u00e0\u00a0molette\u202f"}], "trimmed": [{"text": "cl\u00e9  \u00e0\u00a0molette"}], "graphemes": 14, "result": "VALID"},
+    {"id": "space-before-combining-mark", "parts": [{"text": " \u0301a"}], "trimmed": [{"text": "\u0301a"}], "graphemes": 2, "result": "VALID"},
+    {"id": "byte-order-mark-is-not-a-space", "parts": [{"text": "\ufeffcl\u00e9"}], "graphemes": 4, "result": "VALID"},
+
+    {"id": "empty", "parts": [], "graphemes": 0, "result": "SIZE"},
+    {"id": "only-spaces", "parts": [{"text": " \u00a0\u202f\u3000"}], "trimmed": [], "graphemes": 0, "result": "SIZE"},
+
+    {"id": "control-nul", "parts": [{"text": "a\u0000b"}], "graphemes": 3, "result": "INVALID_VALUE"},
+    {"id": "control-tab-inner", "parts": [{"text": "a\tb"}], "graphemes": 3, "result": "INVALID_VALUE"},
+    {"id": "control-tab-outer", "parts": [{"text": "\tcl\u00e9"}], "graphemes": 4, "result": "INVALID_VALUE"},
+    {"id": "control-line-feed-outer", "parts": [{"text": "cl\u00e9\n"}], "graphemes": 4, "result": "INVALID_VALUE"},
+    {"id": "control-crlf", "parts": [{"text": "a\r\nb"}], "graphemes": 3, "result": "INVALID_VALUE"},
+    {"id": "control-del", "parts": [{"text": "a\u007fb"}], "graphemes": 3, "result": "INVALID_VALUE"},
+    {"id": "control-next-line-outer", "parts": [{"text": "\u0085cl\u00e9"}], "graphemes": 4, "result": "INVALID_VALUE"},
+    {"id": "control-c1", "parts": [{"text": "a\u009fb"}], "graphemes": 3, "result": "INVALID_VALUE"}
+  ]
+}
