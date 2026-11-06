@@ -15,7 +15,7 @@ docs/qualite/recette-cloud/run.sh   # depuis la racine du dépôt
 - Node 22.18 ou plus récent ;
 - `python3` et `openssl`.
 
-Le JAR de l'API est construit s'il manque (`./mvnw -DskipTests package`). Les tests
+Le JAR de l'API est **toujours reconstruit** depuis le commit extrait (`./mvnw -DskipTests clean package`), pour ne jamais tester un JAR périmé. Les tests
 Maven restent ceux de la CI.
 
 ## Ce que fait `run.sh`
@@ -62,9 +62,18 @@ Maven restent ceux de la CI.
 | R5.3 | lecture après réservation | `availability = RESERVED` |
 | R6.1 | hub figé par `SIGSTOP` : plus de heartbeat, mais aucune déconnexion | casier `OFFLINE` après plus de 30 s |
 | R6.2 | interruption de continuité | présence `UNKNOWN` : le scan antérieur est annulé |
+| R8.1 | lecture P1 `GET /admin/lockers` (#134) | `AEGIS-DEMO-01` avec l'occupant de A1 et de A2 |
+| R8.2, R8.5 | lectures P1 et P2 par le technicien | `403 FORBIDDEN` |
+| R8.3 | lecture P2 `GET /admin/assets/{id}/identifiers` | l'étiquette liée, active |
+| R8.4 | révocation, puis la même étiquette liée de nouveau | `200`, puis `201` ; l'historique garde la révoquée (`revokedAt`), l'active d'abord ; le scan R4.2 reconnaît ensuite l'étiquette liée de nouveau |
 | R7 | corpus partagé de recherche `q` (#109), s'il est sur la branche | chaque cas donne `200` (`VALID`) ou `400` avec la violation `q` attendue (`SIZE`, `INVALID_VALUE`), document 09, §22.3 ; sinon `SKIP` |
 
 ## Preuve du 6 novembre 2026
+
+- **Après #134, sur `dev` `644cced`** : 31 contrôles sur 31 réussis en 105 s, R8 compris.
+  R7 est sauté, le corpus de #109 n'étant pas encore sur `dev`.
+
+### Premier passage (avant #134)
 
 - **Résultat :** 26 contrôles sur 26 réussis en 89 s.
 - **Configuration :**

@@ -68,12 +68,10 @@ RECETTE_API=http://127.0.0.1:$api_port/api/v1
 RECETTE_PSQL="docker exec -i $project-postgres-1 psql -U aegis -d aegis -tA"
 set +a
 
-jar=$(ls services/api/target/aegis-control-*.jar 2>/dev/null | head -1 || true)
-if [[ -z "$jar" ]]; then
-  (cd services/api && ./mvnw -B -q -ntp -DskipTests package)
-  jar=$(ls services/api/target/aegis-control-*.jar | head -1)
-fi
-echo "api: $jar at commit $(git rev-parse --short HEAD)"
+# Always rebuilt from the checked-out commit, so the API under test is never a stale JAR.
+(cd services/api && ./mvnw -B -q -ntp -DskipTests clean package)
+jar=$(ls services/api/target/aegis-control-*.jar | head -1)
+echo "api: $jar built from commit $(git rev-parse --short HEAD)$(git diff --quiet HEAD -- services/api || echo ' plus local changes')"
 java -jar "$jar" >"$work/api.log" 2>&1 &
 api_pid=$!
 for _ in $(seq 1 60); do

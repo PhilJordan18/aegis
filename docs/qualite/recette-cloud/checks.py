@@ -159,10 +159,39 @@ def catalog_phase(admin, tech):
           placement == "A1" and view["presence"] != "PRESENT" and view["readiness"]["result"] != "READY",
           f"placement={placement} presence={view['presence']} readiness={view['readiness']['result']} {view['readiness']['reasons']}")
 
+    admin_reads(admin, tech, asset1["id"], code1, code2)
+
     with open(STATE, "w", encoding="utf-8") as out:
         json.dump({"asset1": asset1["id"], "asset2": asset2["id"], "code1": code1}, out)
 
     search_corpus(tech)
+
+
+def admin_reads(admin, tech, asset1, code1, code2):
+    """The Manager's reads P1 and P2 (#134, approved 6 November 2026)."""
+    status, page = call("GET", "/admin/lockers?page=0&size=20", admin)
+    locker = next((item for item in (page or {}).get("items", []) if item.get("id") == LOCKER), {})
+    occupants = {c["code"]: (c.get("currentAsset") or {}).get("assetCode") for c in locker.get("compartments", [])}
+    check("R8.1 Manager lists the locker with its compartment occupants (P1)",
+          status == 200 and occupants == {"A1": code1, "A2": code2}, f"HTTP {status} {locker.get('code')} {occupants}")
+    status, body = call("GET", "/admin/lockers", tech)
+    check("R8.2 technician is refused the locker list", status == 403, f"HTTP {status} {code_of(body)}")
+
+    status, history = call("GET", f"/admin/assets/{asset1}/identifiers", admin)
+    first = (history or [{}])[0] if isinstance(history, list) else {}
+    check("R8.3 Manager reads the identifier of asset 1 (P2)",
+          status == 200 and first.get("value") == TAG_A1 and first.get("active") is True,
+          f"HTTP {status} {[(i.get('value'), i.get('active')) for i in history or []] if isinstance(history, list) else history}")
+    identifier = str(uuid.UUID(first["id"])) if first.get("id") else None
+    status, _ = call("POST", f"/admin/assets/{asset1}/identifiers/{identifier}/revoke", admin, {}, True)
+    status_again, _ = call("POST", f"/admin/assets/{asset1}/identifiers", admin, {"type": "RFID_UHF", "value": TAG_A1}, True)
+    _, history = call("GET", f"/admin/assets/{asset1}/identifiers", admin)
+    shape = [(i.get("value"), i.get("active"), i.get("revokedAt") is not None) for i in history or []]
+    check("R8.4 revoked tag stays in the history and can be bound again, active first",
+          status == 200 and status_again == 201 and shape == [(TAG_A1, True, False), (TAG_A1, False, True)],
+          f"revoke HTTP {status}, re-bind HTTP {status_again}, history={shape}")
+    status, body = call("GET", f"/admin/assets/{asset1}/identifiers", tech)
+    check("R8.5 technician is refused the identifier history", status == 403, f"HTTP {status} {code_of(body)}")
 
 
 def search_corpus(tech):
