@@ -74,4 +74,8 @@
 
 @media (forced-colors: active) {
   .lp-zoom__card, .lp-screen { border: 1px solid CanvasText; }
+  /* The device colours are authored; name the system pair so text never meets a forced Canvas in its own colour. */
+  .lp-zoom__card, .lp-screen, .lp-screen__qr { background: Canvas; }
+  .lp-screen, .lp-screen * { color: CanvasText; }
+  .lp-screen__qr path { fill: CanvasText; }
 }
