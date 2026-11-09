@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aegis — direction A « Mise en scène » (composition statique, #153)</title>
+<!--
+  Static composition, French only, no network, no application code. ?theme=dark|light.
+  The locker is a drawn stand-in (device.js); Jimmy's render replaces it. Copy follows claims.md.
+-->
+<link rel="stylesheet" href="proto.css">
+<style>
+  :root { --wrap: 1280px; --gutter: clamp(20px, 4vw, 56px); }
+  .wrap { max-width: var(--wrap); margin: 0 auto; padding: 0 var(--gutter); }
+
+  /* sticky header: opaque canvas, one hairline */
+  .hdr { position: sticky; top: 0; z-index: 10; background: var(--ag-canvas); border-bottom: 1px solid var(--ag-border); }
+  .hdr .wrap { display: flex; align-items: center; gap: 24px; min-height: 64px; }
+  .nav { display: flex; gap: 4px; margin-left: 12px; }
+  .nav a { padding: 8px 10px; border-radius: var(--ag-r-small); text-decoration: none; font-size: .9375rem; font-weight: 500; color: var(--ag-text-2); }
+  .nav a:hover { color: var(--ag-text); background: var(--ag-surface-selected); }
+  .hdr__tools { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .menu-btn { display: none; }
+
+  /* hero: signature left, stage right */
+  .hero { position: relative; }
+  .hero .wrap { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(24px, 4vw, 64px); align-items: center; min-height: calc(100vh - 64px); padding-top: 48px; padding-bottom: 48px; }
+  .hero__copy { position: relative; }
+  .hero__copy::before { content: ''; position: absolute; pointer-events: none; left: -14%; top: -18%; width: 80%; height: 110%; background: radial-gradient(ellipse at 40% 40%, var(--ag-halo), transparent 68%); }
+  .hero__copy > * { position: relative; }
+  .hero h1 { margin-top: 20px; font-size: clamp(3rem, 1rem + 5.6vw, 5.25rem); line-height: 1; font-weight: 500; letter-spacing: -0.06em; }
+  .hero h1 span { display: block; }
+  .hero h1 .proof { color: var(--ag-accent-text); }
+  .hero__desc { margin-top: 26px; max-width: 30rem; font-size: var(--ag-type-lead-size); line-height: 1.55; color: var(--ag-text-2); }
+  .hero__system { margin-top: 14px; max-width: 34rem; color: var(--ag-text-2); }
+  .hero__cta { margin-top: 32px; display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+  .hero__mention { margin-top: 16px; font-size: var(--ag-type-caption-size); color: var(--ag-text-3); }
+  .stage { position: relative; }
+  .stage .device { width: 100%; max-width: 760px; margin: 0 auto; }
+  .stage__caption { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; margin-top: 8px; color: var(--ag-text-2); }
+
+  /* sections */
+  .sec { padding: clamp(64px, 9vw, 120px) 0; border-top: 1px solid var(--ag-separator); }
+  .sec:focus { outline: none; }
+  .sec h2 { margin-top: 14px; font-size: clamp(1.75rem, 1rem + 2.2vw, 2.75rem); line-height: 1.08; letter-spacing: -0.035em; font-weight: 600; max-width: 18ch; }
+  .sec__lead { margin-top: 20px; max-width: 36rem; color: var(--ag-text-2); line-height: 1.6; }
+  .split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(32px, 5vw, 80px); align-items: start; }
+
+  /* readiness example: opaque panel, rows with hairlines */
+  .diag { background: var(--ag-surface); border: 1px solid var(--ag-border); border-radius: var(--ag-r-card); box-shadow: var(--ag-shadow-float); padding: 22px 24px 8px; }
+  .diag__head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .diag__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; padding: 16px 0; border-top: 1px solid var(--ag-separator); align-items: start; }
+  .diag__row:first-of-type { border-top: 0; }
+  .diag__name { font-size: 1.125rem; font-weight: 600; letter-spacing: -0.015em; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .diag__code { color: var(--ag-text-2); font-weight: 500; }
+  .diag__reason { grid-column: 1 / -1; font-size: .9375rem; font-weight: 500; }
+  .diag__facts { grid-column: 1 / -1; font-size: var(--ag-type-code-size); color: var(--ag-text-2); }
+
+  /* journey: steps left, sticky stage right */
+  .steps { display: grid; gap: 4px; counter-reset: step; }
+  .step { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 4px 18px; padding: 22px 18px 22px 0; border-left: 3px solid transparent; padding-left: 20px; }
+  .step.is-active { border-left-color: var(--ag-accent-text); background: var(--ag-surface-selected); border-radius: 0 var(--ag-r-small) var(--ag-r-small) 0; }
+  .step__num { font-family: var(--ag-font-mono); font-size: 1.75rem; font-weight: 500; line-height: 1; color: var(--ag-text-3); font-variant-numeric: tabular-nums; }
+  .step.is-active .step__num { color: var(--ag-accent-text); }
+  .step__title { font-size: var(--ag-type-title-md-size); font-weight: 600; letter-spacing: -0.01em; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .step__text { grid-column: 2; color: var(--ag-text-2); font-size: .9375rem; line-height: 1.5; }
+  .tag { font-family: var(--ag-font-mono); font-size: .6875rem; letter-spacing: .06em; text-transform: uppercase; padding: 3px 7px; border-radius: 4px; border: 1px solid var(--ag-control-border); color: var(--ag-text-2); }
+  .tag--live { border-color: var(--ag-ready-icon); color: var(--ag-ready-fg); background: var(--ag-ready-bg); }
+  .sticky { position: sticky; top: 88px; }
+  .rail { display: flex; align-items: center; gap: 10px; margin-top: 10px; color: var(--ag-text-2); font-size: var(--ag-type-caption-size); }
+  .rail__dots { display: flex; gap: 6px; }
+  .rail__dots i { width: 22px; height: 4px; border-radius: 2px; background: var(--ag-border); }
+  .rail__dots i.on { background: var(--ag-accent-text); }
+
+  /* system diagram */
+  .sys { margin-top: 40px; }
+  .sys svg { width: 100%; height: auto; }
+  .sys text { font-family: var(--ag-font-sans); font-size: 15px; fill: var(--ag-text); }
+  .sys .t2 { fill: var(--ag-text-2); font-size: 13px; }
+  .sys .mono { font-family: var(--ag-font-mono); font-size: 12px; fill: var(--ag-text-2); letter-spacing: .04em; }
+  .sys .node { fill: var(--ag-surface); stroke: var(--ag-control-border); stroke-width: 1.2; }
+  .sys .node--authority { stroke: var(--ag-accent-text); stroke-width: 1.8; }
+  .sys .node--private { stroke-dasharray: 4 4; }
+  .sys .edge { stroke: var(--ag-text-3); stroke-width: 1.4; fill: none; }
+  .sys .edge--cable { stroke: var(--ag-accent-text); stroke-width: 2.4; }
+  .sys__notes { margin-top: 24px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; color: var(--ag-text-2); font-size: .9375rem; }
+  .sys__notes b { color: var(--ag-text); font-weight: 600; }
+
+  /* guarantees as a numbered ledger */
+  .ledger { margin-top: 40px; border-top: 1px solid var(--ag-separator); }
+  .ledger li { display: grid; grid-template-columns: 96px minmax(0, 5fr) minmax(0, 7fr); gap: 8px 24px; padding: 22px 0; border-bottom: 1px solid var(--ag-separator); align-items: baseline; }
+  .ledger__num { font-family: var(--ag-font-mono); font-size: 1.5rem; color: var(--ag-accent-text); font-variant-numeric: tabular-nums; }
+  .ledger h3 { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.02em; }
+  .ledger p { color: var(--ag-text-2); line-height: 1.55; }
+
+  .studio .split { grid-template-columns: minmax(0, 6fr) minmax(0, 6fr); }
+  .people { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 28px; }
+  .people div { border-top: 2px solid var(--ag-accent-text); padding-top: 12px; }
+  .people b { display: block; font-weight: 600; }
+  .people span { color: var(--ag-text-2); font-size: .9375rem; }
+  .status { margin-top: 8px; border-top: 1px solid var(--ag-separator); }
+  .status li { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--ag-separator); font-size: .9375rem; }
+  .status li span:first-child { color: var(--ag-text-2); font-family: var(--ag-font-mono); font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; padding-top: 3px; }
+
+  .foot { border-top: 1px solid var(--ag-border); padding: 28px 0 36px; color: var(--ag-text-2); font-size: var(--ag-type-caption-size); }
+  .foot .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 24px; align-items: center; }
+
+  @media (max-width: 1023px) {
+    /* Below the desktop width the section menu folds into a sheet; « Se connecter » stays in the header. */
+    .nav { display: none; }
+    .menu-btn { display: inline-flex; }
+    .hero .wrap { grid-template-columns: minmax(0, 1fr); min-height: 0; padding-top: 40px; }
+    .stage .device { max-width: 520px; }
+    .split, .studio .split { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+    .sticky { position: static; }
+    .ledger li { grid-template-columns: 64px minmax(0, 1fr); }
+    .ledger p { grid-column: 2; }
+    .sys__notes { grid-template-columns: 1fr; gap: 12px; }
+  }
+  @media (max-width: 767px) {
+    .hdr .wrap { gap: 12px; }
+    /* The language switch leaves the header and stays in the footer. */
+    .hdr .seg { display: none; }
+    .hdr .brand__app { display: none; }
+    .hero h1 { font-size: clamp(2.75rem, 12vw, 3.5rem); }
+    .hero__cta .btn--primary { width: 100%; }
+    .step { grid-template-columns: 40px minmax(0, 1fr); padding-right: 8px; }
+    .step__num { font-size: 1.375rem; }
+    .people { grid-template-columns: 1fr; }
+    .status li { grid-template-columns: 1fr; gap: 2px; }
+  }
+  @media (max-width: 359px) { :root { --gutter: 12px; } }
+  @media (forced-colors: active) { .hero__copy::before { display: none; } .step.is-active { border-left-color: Highlight; } }
+</style>
+</head>
+<body>
+<script>
+  (function () {
+    var q = new URLSearchParams(location.search).get('theme')
+    var dark = q ? q === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
+  })()
+</script>
+
+<header class="hdr">
+  <div class="wrap">
+    <a class="brand" href="#produit" aria-label="Aegis Manager, accueil">
+      <img class="brand__light" src="../../identite/assets/aegis-core-mark.svg" alt="" width="64" height="64">
+      <img class="brand__dark" src="../../identite/assets/aegis-core-mark-dark.svg" alt="" width="64" height="64">
+      <span class="brand__word">aegis</span><span class="brand__app">Manager</span>
+    </a>
+    <nav class="nav" aria-label="Sections">
+      <a href="#produit">Produit</a><a href="#readiness">Readiness</a><a href="#parcours">Parcours</a><a href="#systeme">Système</a><a href="#garanties">Garanties</a><a href="#studio">Studio</a>
+    </nav>
+    <div class="hdr__tools">
+      <button class="btn btn--secondary btn--sm menu-btn" type="button" aria-expanded="false">Sections</button>
+      <div class="seg" role="group" aria-label="Langue"><span aria-current="true" lang="fr">Français</span><span lang="en">English</span></div>
+      <a class="btn btn--primary btn--sm" href="/connexion">Se connecter</a>
+    </div>
+  </div>
+</header>
+
+<main id="contenu">
+  <section class="hero" id="produit" aria-labelledby="h1" tabindex="-1">
+    <div class="wrap">
+      <div class="hero__copy">
+        <p class="overline">L’essentiel, sous contrôle.</p>
+        <h1 id="h1"><span>Prêt.</span><span>Autorisé.</span><span class="proof">Prouvé.</span></h1>
+        <p class="hero__desc">Disponibilité, conformité et traçabilité de vos équipements.</p>
+        <p class="hero__system">Aegis relie l’application du technicien, l’administration Aegis Manager et un casier connecté. Il est conçu pour qu’un équipement critique ne sorte que s’il est prêt, autorisé et observé.</p>
+        <div class="hero__cta">
+          <a class="btn btn--primary btn--lg" href="/connexion">Se connecter <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+          <a class="link" href="#parcours">Voir le parcours</a>
+        </div>
+        <p class="hero__mention">Espace administrateur · compte fourni par votre administrateur.</p>
+      </div>
+      <figure class="stage">
+        <div class="device" id="hero-device"></div>
+        <figcaption class="stage__caption">
+          <span class="mono">Casier P0 · un hub avec écran · deux cellules indépendantes</span>
+          <span class="mock">Substitut dessiné · rendu de Jimmy à venir</span>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="sec" id="readiness" aria-labelledby="h-readiness" tabindex="-1">
+    <div class="wrap split">
+      <div>
+        <p class="overline">Readiness</p>
+        <h2 id="h-readiness">Un inventaire peut se tromper. Aegis dit pourquoi.</h2>
+        <p class="sec__lead">Un équipement inscrit comme disponible peut être emprunté, absent de sa cellule, endommagé, non calibré ou interdit à la personne qui le demande. Aegis évalue sa disponibilité opérationnelle pour chaque technicien : prêt, bloqué ou à vérifier, toujours avec la raison.</p>
+        <p class="sec__lead">Cette readiness est déduite des faits : présence, disponibilité, état de service, calibration, niveau d’accès. Personne ne la coche.</p>
+      </div>
+      <div class="diag" aria-label="Exemple de diagnostic">
+        <div class="diag__head"><span class="overline">Diagnostic pour un technicien</span><span class="mock">Exemple illustratif</span></div>
+        <div class="diag__row">
+          <p class="diag__name">Multimètre 1 <span class="diag__code mono">MM-001</span></p>
+          <span class="chip chip--ready"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M7.5 12.5l3 3 6-7" fill="none" stroke="var(--ag-glyph)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Prêt</span>
+          <p class="diag__facts">Cellule A1 · présent · calibration valide jusqu’au 30 nov. 2026 · accès standard</p>
+        </div>
+        <div class="diag__row">
+          <p class="diag__name">Multimètre 2 <span class="diag__code mono">MM-002</span></p>
+          <span class="chip chip--blocked"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.1 2.6h7.8l5.5 5.5v7.8l-5.5 5.5H8.1l-5.5-5.5V8.1z" fill="currentColor"/><path d="M7.5 12h9" fill="none" stroke="var(--ag-glyph)" stroke-width="2.2" stroke-linecap="round"/></svg>Bloqué</span>
+          <p class="diag__reason">Calibration expirée depuis le 8 sept. 2026</p>
+          <p class="diag__facts">Cellule A2 · présent · accès standard · le retour reste possible</p>
+        </div>
+        <div class="diag__row">
+          <p class="diag__name">Caméra thermique <span class="diag__code mono">CT-004</span></p>
+          <span class="chip chip--unknown"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.6L22.4 12 12 22.4 1.6 12z" fill="currentColor"/><path d="M12 7.4v5.4" fill="none" stroke="var(--ag-glyph)" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="16.5" r="1.3" fill="var(--ag-glyph)"/></svg>À vérifier</span>
+          <p class="diag__reason">État physique inconnu : le casier ne répond plus depuis 14 h 02</p>
+          <p class="diag__facts">Cellule A1 · dernière lecture 13 h 58 HNE</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="parcours" aria-labelledby="h-parcours" tabindex="-1">
+    <div class="wrap split">
+      <div>
+        <p class="overline">Parcours</p>
+        <h2 id="h-parcours">Six étapes, une seule porte.</h2>
+        <p class="sec__lead">Le casier suit l’étape que vous lisez. Rien ne s’ouvre sur une réservation ni sur un code affiché : seule une commande autorisée, pour une seule cellule, à durée limitée.</p>
+        <ol class="steps">
+          <li class="step"><span class="step__num">01</span><p class="step__title">Réserver <span class="tag tag--live">Disponible</span></p><p class="step__text">Le technicien réserve A1 depuis Aegis Mobile jusqu’à une heure de la plage d’exploitation. Aucune porte ne bouge.</p></li>
+          <li class="step"><span class="step__num">02</span><p class="step__title">Préparer <span class="tag">En conception</span></p><p class="step__text">Il prépare le retrait : le hub affichera un QR temporaire lié à son compte et à cette opération.</p></li>
+          <li class="step"><span class="step__num">03</span><p class="step__title">Scanner <span class="tag">En conception</span></p><p class="step__text">Il scanne le QR avec son téléphone. Le serveur revérifie droits, réservation, horaire et readiness.</p></li>
+          <li class="step is-active" aria-current="step"><span class="step__num">04</span><p class="step__title">Ouvrir <span class="tag">En conception</span></p><p class="step__text">Une seule commande, pour A1 seulement, valable deux minutes. Une commande expirée, rejouée ou destinée à une autre cellule n’est pas exécutée.</p></li>
+          <li class="step"><span class="step__num">05</span><p class="step__title">Prouver <span class="tag">En conception</span></p><p class="step__text">Porte refermée, lecture stable du bon tag : le serveur confirmera le retrait et créera le prêt. Jamais par un clic.</p></li>
+          <li class="step"><span class="step__num">06</span><p class="step__title">Retourner <span class="tag">En conception</span></p><p class="step__text">Même parcours au retour. La readiness sera recalculée; un équipement non prêt peut toujours revenir.</p></li>
+        </ol>
+      </div>
+      <figure class="sticky">
+        <div class="device" id="journey-device"></div>
+        <figcaption>
+          <div class="rail" aria-hidden="true"><span class="rail__dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
+          <p class="rail">Étape 04 · porte A1 ouverte, A2 fermée · écran : consignes</p>
+        </figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="sec" id="systeme" aria-labelledby="h-systeme" tabindex="-1">
+    <div class="wrap">
+      <p class="overline">Système</p>
+      <h2 id="h-systeme">Qui parle à qui.</h2>
+      <div class="sys">
+        <svg viewBox="0 0 1120 400" role="img" aria-label="Schéma : Aegis Mobile et Aegis Manager parlent en HTTPS à Aegis Control, qui garde PostgreSQL privé et échange en MQTT TLS avec le hub; le hub commande A1 et A2 par un câble dédié chacune.">
+          <rect class="node" x="40" y="60" width="230" height="84" rx="12"/><text x="60" y="94">Aegis Mobile</text><text class="t2" x="60" y="116">Technicien · iPhone</text>
+          <rect class="node" x="40" y="256" width="230" height="84" rx="12"/><text x="60" y="290">Aegis Manager</text><text class="t2" x="60" y="312">Administration · Web</text>
+          <rect class="node node--authority" x="400" y="150" width="270" height="100" rx="12"/><text x="420" y="186">Aegis Control</text><text class="t2" x="420" y="208">API Spring · seule autorité métier</text><text class="t2" x="420" y="230">Autorise, corrèle, confirme</text>
+          <rect class="node node--private" x="400" y="300" width="270" height="56" rx="12"/><text x="420" y="334">PostgreSQL</text><text class="t2" x="540" y="334">privé, jamais exposé</text>
+          <rect class="node" x="740" y="150" width="130" height="100" rx="12"/><text x="760" y="186">Broker</text><text class="t2" x="760" y="208">MQTT · TLS</text>
+          <rect class="node" x="930" y="40" width="160" height="84" rx="12"/><text x="950" y="74">Hub</text><text class="t2" x="950" y="96">Écran · exécute</text>
+          <rect class="node" x="930" y="200" width="160" height="60" rx="12"/><text x="950" y="236">Cellule A1</text>
+          <rect class="node" x="930" y="296" width="160" height="60" rx="12"/><text x="950" y="332">Cellule A2</text>
+          <path class="edge" d="M270 102 H340 Q360 102 360 122 V180 Q360 200 380 200 H400"/><text class="mono" x="290" y="92">HTTPS</text>
+          <path class="edge" d="M270 298 H340 Q360 298 360 278 V220 Q360 200 380 200 H400"/><text class="mono" x="290" y="326">HTTPS</text>
+          <path class="edge" d="M535 250 V300"/>
+          <path class="edge" d="M670 200 H740"/><text class="mono" x="676" y="190">MQTT</text>
+          <path class="edge" d="M870 200 H905 Q920 200 920 185 V97 Q920 82 930 82"/><text class="mono" x="878" y="150">TLS</text>
+          <path class="edge edge--cable" d="M1010 124 V200"/><text class="mono" x="1020" y="168">câble dédié</text>
+          <path class="edge edge--cable" d="M1060 124 V296"/><text class="mono" x="1020" y="284">câble dédié</text>
+        </svg>
+        <div class="sys__notes">
+          <p><b>Les clients parlent uniquement à l’API.</b> Aucun téléphone, aucun navigateur ne touche le casier ni la base.</p>
+          <p><b>Le hub exécute, il n’autorise pas.</b> Il affiche le QR, applique une commande autorisée et rapporte ce qu’il observe.</p>
+          <p><b>Une cellule, un câble.</b> Deux départs indépendants depuis le hub; les cellules n’ont ni écran, ni Wi-Fi, ni MQTT.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="garanties" aria-labelledby="h-garanties" tabindex="-1">
+    <div class="wrap">
+      <p class="overline">Garanties</p>
+      <h2 id="h-garanties">Cinq règles que le serveur ne négocie pas.</h2>
+      <ol class="ledger">
+        <li><span class="ledger__num">01</span><h3>Disponibilité réelle</h3><p>Chaque équipement indique s’il peut servir; sinon, la raison précise : calibration expirée, maintenance, absence de sa cellule.</p></li>
+        <li><span class="ledger__num">02</span><h3>Retrait conforme</h3><p>Le serveur refuse un retrait non autorisé ou non conforme; l’interface l’explique, elle ne le décide pas.</p></li>
+        <li><span class="ledger__num">03</span><h3>Bonne cellule</h3><p>Seule la cellule attendue s’ouvre, après une autorisation valide. Une réservation ou un code affiché n’ouvre rien.</p></li>
+        <li><span class="ledger__num">04</span><h3>Preuve physique</h3><p>Retrait et retour sont confirmés par des observations cohérentes du casier, jamais par un simple clic.</p></li>
+        <li><span class="ledger__num">05</span><h3>Chaîne de possession</h3><p>Chaque action et chaque observation restent consultables dans l’audit, sans effacement.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="sec studio" id="studio" aria-labelledby="h-studio" tabindex="-1">
+    <div class="wrap split">
+      <div>
+        <p class="overline">Aegis Studio</p>
+        <h2 id="h-studio">Deux personnes, un prototype.</h2>
+        <p class="sec__lead">Aegis est un prototype académique du cours Écosystème connecté (420-5X7-SO, Cégep de Sorel-Tracy, automne 2026). Le laboratoire est notre terrain de validation; le marché visé est celui des équipes de maintenance, d’inspection et de services techniques.</p>
+        <div class="people">
+          <div><b>Philippe Jordan Monfouayi Mba</b><span>Logiciel : API, Web, iOS, simulateur</span></div>
+          <div><b>Yoël Jimmy Razafindretsa</b><span>Matériel : mécanique, électronique, firmware</span></div>
+        </div>
+      </div>
+      <div>
+        <p class="overline">État du prototype · 9 novembre 2026</p>
+        <ul class="status">
+          <li><span>Intégré</span><span>Catalogue, readiness par technicien, réservations, statut du casier, firmware de connexion du hub</span></li>
+          <li><span>Simulé</span><span>Présence RFID, commandes et accusés, erreurs de l’appareil : avec le simulateur de hub, sans matériel</span></li>
+          <li><span>En conception</span><span>QR d’accès local, retrait et retour confirmés physiquement, chronologie d’audit</span></li>
+          <li><span>Non mesuré</span><span>Aucune validation physique n’est encore consignée; aucune performance n’est annoncée</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>Aegis Manager · Administration</span>
+    <span>Technicien ? Utilisez Aegis Mobile sur iPhone.</span>
+    <span>Aegis Studio · Philippe et Jimmy</span>
+    <div class="seg seg--foot" role="group" aria-label="Langue"><span aria-current="true" lang="fr">Français</span><span lang="en">English</span></div>
+  </div>
+</footer>
+
+<script src="device.js"></script>
+<script>
+  aegisDevice(document.getElementById('hero-device'), { state: 'qr', labels: {} })
+  aegisDevice(document.getElementById('journey-device'), { state: 'open-a1', labels: false, alt: 'Casier à l’étape 4 : la porte de la cellule A1 est ouverte, A2 reste fermée, l’écran affiche les consignes' })
+</script>
+</body>
+</html>

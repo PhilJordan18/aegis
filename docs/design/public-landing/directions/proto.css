@@ -1,0 +1,121 @@
+/*
+ * Prototype stylesheet of the public landing directions (issue #153). Static, no
+ * network: Geist and Geist Mono come from ../../manager-v3/prototype/fonts/.
+ * Token values are copied from apps/admin-web/src/styles/tokens.css (identity v3);
+ * the application file stays the source of truth. Nothing here is product code.
+ */
+@font-face { font-family: 'Geist Variable'; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url('../../manager-v3/prototype/fonts/geist-latin-wght-normal.woff2') format('woff2-variations'); }
+@font-face { font-family: 'Geist Mono Variable'; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url('../../manager-v3/prototype/fonts/geist-mono-latin-wght-normal.woff2') format('woff2-variations'); }
+
+:root {
+  --ag-font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --ag-font-mono: "Geist Mono Variable", ui-monospace, Menlo, monospace;
+  --ag-type-display-size: clamp(2.75rem, 0.9rem + 4.4vw, 4rem);
+  --ag-type-title-xl-size: 2rem; --ag-type-title-lg-size: 1.625rem; --ag-type-title-md-size: 1.0625rem;
+  --ag-type-lead-size: 1.0625rem; --ag-type-body-size: 1rem; --ag-type-caption-size: 0.875rem;
+  --ag-type-overline-size: 0.75rem; --ag-type-overline-track: 0.14em; --ag-type-code-size: 0.8125rem;
+  --ag-r-card: 16px; --ag-r-control: 12px; --ag-r-small: 8px; --ag-r-pill: 999px;
+  --ag-control-h: 44px; --ag-control-h-lg: 48px;
+  --ag-motion-fast: 120ms; --ag-motion-base: 200ms; --ag-motion-slow: 240ms; --ag-ease-out: cubic-bezier(.2,.8,.2,1);
+
+  color-scheme: light;
+  --ag-canvas: #F5F7FB; --ag-top: #EDF2FA; --ag-surface: #FFFFFF; --ag-surface-sunken: #EDF2FA; --ag-field: #F3F5F9;
+  --ag-surface-selected: #E8EEFC; --ag-text: #122339; --ag-text-2: #53647B; --ag-text-3: #5B6B80; --ag-text-on-accent: #FFFFFF;
+  --ag-border: #D7DFE9; --ag-separator: #D7DFE9; --ag-control-border: #7A8BA1;
+  --ag-accent: #234BCE; --ag-accent-hover: #1C3FB0; --ag-accent-text: #234BCE; --ag-accent-soft: #E8EEFC;
+  --ag-focus: #234BCE; --ag-halo: #92B8F73A;
+  --ag-ready-fg: #0B6B3F; --ag-ready-bg: #E1F4EA; --ag-ready-icon: #12824D;
+  --ag-blocked-fg: #9E2837; --ag-blocked-bg: #FFF0F1; --ag-blocked-icon: #C8262B;
+  --ag-unknown-fg: #7A4B00; --ag-unknown-bg: #FFF0D1; --ag-unknown-icon: #A86400;
+  --ag-progress-fg: #234BCE; --ag-progress-bg: #E8EEFC; --ag-progress-icon: #234BCE;
+  --ag-info-fg: #0B5C93; --ag-info-bg: #E5F1FB; --ag-info-icon: #1473B8;
+  --ag-neutral-fg: #3B4A60; --ag-neutral-bg: #E7ECF3; --ag-neutral-icon: #566680;
+  --ag-glyph: #FFFFFF;
+  --ag-mock-fg: #8E1277; --ag-mock-bg: #FCEAF8; --ag-mock-border: #B8349B;
+  --ag-shadow-tint: 18, 35, 57;
+  --ag-shadow-float: 0 16px 48px rgba(var(--ag-shadow-tint), 0.10), 0 2px 8px rgba(var(--ag-shadow-tint), 0.05);
+  /* device stand-in (prototype only) */
+  --dv-face-front: #FDFDFE; --dv-face-side: #E4E9F1; --dv-face-top: #F3F5F9; --dv-edge: #B9C4D4; --dv-seam: #C9D2DE;
+  --dv-screen: #0D1520; --dv-screen-ink: #F1F5FC; --dv-floor: rgba(18,35,57,.14);
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --ag-canvas: #070C13; --ag-top: #070D17; --ag-surface: #0D1520; --ag-surface-sunken: #0A111A; --ag-field: #141F2D;
+  --ag-surface-selected: #13213A; --ag-text: #F1F5FC; --ag-text-2: #ABB9CD; --ag-text-3: #9AA9BE; --ag-text-on-accent: #FFFFFF;
+  --ag-border: #2B3B50; --ag-separator: #2B3B50; --ag-control-border: #5B6F88;
+  --ag-accent: #315EE8; --ag-accent-hover: #3F6BF5; --ag-accent-text: #8CAEFF; --ag-accent-soft: #13213A;
+  --ag-focus: #8CAEFF; --ag-halo: #193E7355;
+  --ag-ready-fg: #6FE3A8; --ag-ready-bg: #0E2E2A; --ag-ready-icon: #4ED393;
+  --ag-blocked-fg: #FFC9CB; --ag-blocked-bg: #3B2024; --ag-blocked-icon: #FF7A70;
+  --ag-unknown-fg: #FFD27A; --ag-unknown-bg: #33280F; --ag-unknown-icon: #FFC247;
+  --ag-progress-fg: #8CAEFF; --ag-progress-bg: #13213A; --ag-progress-icon: #8CAEFF;
+  --ag-info-fg: #9CCBFF; --ag-info-bg: #0F2A45; --ag-info-icon: #6DB4F5;
+  --ag-neutral-fg: #C9D3E3; --ag-neutral-bg: #1A2535; --ag-neutral-icon: #A3B1C6;
+  --ag-glyph: #06102A;
+  --ag-mock-fg: #FF9CE8; --ag-mock-bg: #3A1336; --ag-mock-border: #E57AD0;
+  --ag-shadow-tint: 0, 0, 0;
+  --ag-shadow-float: 0 16px 48px rgba(0,0,0,.34), 0 2px 8px rgba(0,0,0,.2);
+  --dv-face-front: #1B2736; --dv-face-side: #101A27; --dv-face-top: #243246; --dv-edge: #3D5069; --dv-seam: #2F3F55;
+  --dv-screen: #070C13; --dv-screen-ink: #F1F5FC; --dv-floor: rgba(0,0,0,.5);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--ag-canvas); color: var(--ag-text); font-family: var(--ag-font-sans); font-size: var(--ag-type-body-size); line-height: 1.5; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+h1, h2, h3, p, ul, ol, figure, dl, dd { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+a { color: inherit; }
+img, svg { display: block; max-width: 100%; }
+:focus-visible { outline: 2px solid var(--ag-focus); outline-offset: 2px; }
+[tabindex="-1"]:focus:not(:focus-visible) { outline: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* shared primitives, same anatomy as the app's ag-* components */
+.overline { font-size: var(--ag-type-overline-size); font-weight: 500; letter-spacing: var(--ag-type-overline-track); text-transform: uppercase; color: var(--ag-text-2); line-height: 1.5; }
+.mono { font-family: var(--ag-font-mono); font-size: var(--ag-type-code-size); letter-spacing: 0.01em; font-variant-numeric: tabular-nums; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--ag-control-h); padding: 0 18px; border-radius: var(--ag-r-control); font-weight: 500; line-height: 1.2; border: 1px solid transparent; text-decoration: none; white-space: nowrap; transition: background-color var(--ag-motion-fast) var(--ag-ease-out); }
+.btn--primary { background: var(--ag-accent); color: var(--ag-text-on-accent); }
+.btn--primary:hover { background: var(--ag-accent-hover); }
+.btn--secondary { background: var(--ag-surface); color: var(--ag-text); border-color: var(--ag-control-border); }
+.btn--lg { min-height: var(--ag-control-h-lg); padding: 0 20px; }
+.btn--sm { min-height: 36px; padding: 0 14px; font-size: .875rem; border-radius: 10px; }
+.btn svg { width: 18px; height: 18px; }
+.link { color: var(--ag-accent-text); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 10px 0 8px; border-radius: var(--ag-r-pill); font-size: .8125rem; font-weight: 600; line-height: 1; white-space: nowrap; }
+.chip svg { width: 16px; height: 16px; }
+.chip--blocked { background: var(--ag-blocked-bg); color: var(--ag-blocked-fg); }
+.chip--blocked svg { color: var(--ag-blocked-icon); }
+.chip--ready { background: var(--ag-ready-bg); color: var(--ag-ready-fg); }
+.chip--ready svg { color: var(--ag-ready-icon); }
+.chip--unknown { background: var(--ag-unknown-bg); color: var(--ag-unknown-fg); }
+.chip--unknown svg { color: var(--ag-unknown-icon); }
+.chip--neutral { background: var(--ag-neutral-bg); color: var(--ag-neutral-fg); }
+.chip--neutral svg { color: var(--ag-neutral-icon); }
+.chip--progress { background: var(--ag-progress-bg); color: var(--ag-progress-fg); }
+.chip--progress svg { color: var(--ag-progress-icon); }
+.mock { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 7px; font-size: 11px; font-weight: 600; line-height: 1; letter-spacing: .01em; white-space: nowrap; color: var(--ag-mock-fg); background: var(--ag-mock-bg); border: 1px dashed var(--ag-mock-border); border-radius: 4px; }
+.mock::before { content: ''; width: 5px; height: 5px; border: 1.3px solid currentColor; transform: rotate(45deg); flex: none; }
+
+/* brand: symbol file + « aegis » in Geist, as src/ui/Brand.tsx */
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ag-text); }
+.brand img { width: 28px; height: 28px; }
+.brand__light, [data-theme="dark"] .brand__dark { display: block; }
+.brand__dark, [data-theme="dark"] .brand__light { display: none; }
+.brand__word { font-size: 1.5rem; font-weight: 600; line-height: 1; letter-spacing: -0.045em; }
+.brand__app { margin-left: 12px; padding-left: 12px; border-left: 1px solid var(--ag-border); font-size: .875rem; font-weight: 500; letter-spacing: .04em; color: var(--ag-text-2); line-height: 1; }
+
+/* language switch, same segmented control as the app */
+.seg { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--ag-control-border); border-radius: 10px; background: var(--ag-surface); }
+.seg span { min-height: 30px; min-width: 40px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; border-radius: 7px; font-size: .875rem; font-weight: 500; color: var(--ag-text-2); }
+.seg span[aria-current] { background: var(--ag-text); color: var(--ag-canvas); }
+
+/* device stand-in: the SVG is generated by device.js; this is its annotation layer */
+.device { position: relative; }
+.device svg { width: 100%; height: auto; }
+.device__note { position: absolute; left: 0; bottom: 0; }
+
+@media (forced-colors: active) {
+  .btn, .seg, .chip { border: 1px solid CanvasText; }
+}
