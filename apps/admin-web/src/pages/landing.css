@@ -34,7 +34,8 @@
 .lp-head__tools { display: flex; align-items: center; gap: 12px; margin-left: auto; }
 .lp-head__tools .ag-btn { white-space: nowrap; flex: none; }
 .lp-head__menu { display: none; }
-.lp-sheet { border-bottom: 1px solid var(--ag-border); background: var(--ag-canvas); }
+/* The sheet lives in the sticky header: on a short viewport (200 % zoom) it scrolls on its own so no link is out of reach. */
+.lp-sheet { max-height: calc(100dvh - var(--lp-head-h)); overflow-y: auto; overscroll-behavior: contain; border-bottom: 1px solid var(--ag-border); background: var(--ag-canvas); }
 .lp-sheet[hidden] { display: none; }
 .lp-sheet__body { display: grid; gap: 12px; padding-top: 8px; padding-bottom: 16px; }
 .lp-sheet nav { display: grid; }
