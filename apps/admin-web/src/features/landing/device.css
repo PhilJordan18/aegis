@@ -51,17 +51,19 @@
 /* Magnifier of the hub screen: an honest enlargement, with a leader to the real screen. */
 .lp-zoom { --lp-zoom: 260; position: relative; z-index: 3; width: calc(var(--lp-zoom) * 1px); margin-bottom: -9%; }
 .lp-zoom__label { margin-bottom: 8px; font-family: var(--ag-font-mono); font-size: var(--ag-type-caption-size); color: var(--ag-text-2); }
-.lp-zoom__card { overflow: hidden; border: 1px solid var(--ag-border); border-radius: 10px; background: #0B0F16; box-shadow: var(--ag-shadow-float); }
+/* A ring, not a border: the content box keeps the exact width of the screen it holds. */
+.lp-zoom__card { overflow: hidden; border-radius: 10px; background: #0B0F16; box-shadow: 0 0 0 1px var(--ag-border), var(--ag-shadow-float); }
 .lp-zoom__screen { width: calc(var(--lp-zoom) * 1px); height: calc(var(--lp-zoom) * 2px / 3); overflow: hidden; }
-/* Unitless ratio: dividing a length by a length is not yet supported everywhere. */
-.lp-zoom__screen .lp-screen { transform: scale(calc(var(--lp-zoom) / 300)); transform-origin: 0 0; }
+/* `zoom`, not a transform, so the layout box shrinks too and nothing overflows the card. Unitless
+   ratio: dividing a length by a length is not yet supported everywhere. */
+.lp-zoom__screen .lp-screen { zoom: calc(var(--lp-zoom) / 300); }
 .lp-device--vignette .lp-zoom { --lp-zoom: 200; }
 
 @media (max-width: 767px) {
   .lp-device--vignette .lp-zoom { width: 100%; margin-bottom: 8px; }
   .lp-device--vignette .lp-zoom__card { width: 300px; max-width: 100%; }
   .lp-device--vignette .lp-zoom__screen { width: 300px; max-width: 100%; height: 200px; }
-  .lp-device--vignette .lp-zoom__screen .lp-screen { transform: none; }
+  .lp-device--vignette .lp-zoom__screen .lp-screen { zoom: 1; }
   .lp-device--vignette .lp-device__lead { display: none; }
 }
 /* Below 420 px a full-size card no longer fits beside the step number: scale it instead of clipping it. */
@@ -69,11 +71,12 @@
   .lp-device--vignette .lp-zoom { --lp-zoom: 220; }
   .lp-device--vignette .lp-zoom__card, .lp-device--vignette .lp-zoom__screen { width: calc(var(--lp-zoom) * 1px); }
   .lp-device--vignette .lp-zoom__screen { height: calc(var(--lp-zoom) * 2px / 3); }
-  .lp-device--vignette .lp-zoom__screen .lp-screen { transform: scale(calc(var(--lp-zoom) / 300)); }
+  .lp-device--vignette .lp-zoom__screen .lp-screen { zoom: calc(var(--lp-zoom) / 300); }
 }
 
 @media (forced-colors: active) {
-  .lp-zoom__card, .lp-screen { border: 1px solid CanvasText; }
+  .lp-screen { border: 1px solid CanvasText; }
+  .lp-zoom__card { outline: 1px solid CanvasText; }
   /* The device colours are authored; name the system pair so text never meets a forced Canvas in its own colour. */
   .lp-zoom__card, .lp-screen, .lp-screen__qr { background: Canvas; }
   .lp-screen, .lp-screen * { color: CanvasText; }

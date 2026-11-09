@@ -255,19 +255,21 @@ test.describe('flow: language', () => {
   test('flow: switching by keyboard applies at once, persists across a reload, and the title follows the route', async ({ page }) => {
     await page.goto('/')
     await settle(page)
+    // The landing repeats the switch in its footer; the header one is the first stop.
+    const header = page.getByRole('banner')
     await expect(page.locator('html')).toHaveAttribute('lang', 'fr-CA')
 
-    await page.getByRole('radio', { name: 'Français' }).focus()
+    await header.getByRole('radio', { name: 'Français' }).focus()
     await page.keyboard.press('ArrowRight')
-    await expect(page.getByRole('radio', { name: 'English' })).toBeChecked()
-    await expect(page.getByRole('radio', { name: 'English' })).toBeFocused()
+    await expect(header.getByRole('radio', { name: 'English' })).toBeChecked()
+    await expect(header.getByRole('radio', { name: 'English' })).toBeFocused()
     await expect(page.locator('html')).toHaveAttribute('lang', 'en-CA')
-    await expect(page.getByRole('group', { name: 'Language' })).toBeVisible()
+    await expect(header.getByRole('group', { name: 'Language' })).toBeVisible()
     expect(await page.evaluate(() => ({ ...window.localStorage }))).toEqual({ [LANGUAGE_KEY]: 'en' })
 
     await page.reload()
     await expect(page.locator('html')).toHaveAttribute('lang', 'en-CA')
-    await expect(page.getByRole('radio', { name: 'English' })).toBeChecked()
+    await expect(header.getByRole('radio', { name: 'English' })).toBeChecked()
 
     await page.getByRole('link', { name: 'Sign in' }).first().click()
     await expect(page).toHaveURL(/\/connexion$/)
