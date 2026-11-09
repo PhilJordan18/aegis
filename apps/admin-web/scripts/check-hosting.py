@@ -5,6 +5,7 @@ import http.client
 import json
 import os
 from pathlib import Path
+from queue import Queue
 import socket
 import ssl
 import subprocess
@@ -32,11 +33,12 @@ class Api(BaseHTTPRequestHandler):
 
     def do_POST(self):
         payload = self.rfile.read(int(self.headers.get('Content-Length', 0)))
-        body = json.dumps({'path': self.path, 'method': self.command,
-                           'authorization': self.headers.get('Authorization'),
-                           'idempotency': self.headers.get('Idempotency-Key'),
-                           'host': self.headers.get('Host'),
-                           'body': payload.decode()}).encode()
+        self.server.received.put({'path': self.path, 'method': self.command,
+                                  'authorization': self.headers.get('Authorization'),
+                                  'idempotency': self.headers.get('Idempotency-Key'),
+                                  'host': self.headers.get('Host'),
+                                  'body': payload.decode()})
+        body = b'{"accepted":true}'
         self.send_response(201)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(body)))
@@ -100,6 +102,7 @@ def main():
                         '-days', '1', '-config', str(config), '-keyout', str(key),
                         '-out', str(cert)], check=True, capture_output=True)
         api = ThreadingHTTPServer(('127.0.0.1', 0), Api)
+        api.received = Queue()
         tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         tls.load_cert_chain(cert, key)
         api.socket = tls.wrap_socket(api.socket, server_side=True)
@@ -133,10 +136,18 @@ def main():
                     '{"example":true}', {'Authorization': 'Bearer test-only',
                     'Content-Type': 'application/json', 'Idempotency-Key': 'test-only'})
                 assert code == 201
-                assert json.loads(body) == {'path':'/api/v1/example?name=a%20b',
+                assert json.loads(body) == {'accepted': True}
+                assert api.received.get(timeout=5) == {'path':'/api/v1/example?name=a%20b',
                     'method':'POST', 'authorization':'Bearer test-only',
                     'idempotency':'test-only', 'host':upstream, 'body':'{"example":true}'}
                 print('PASS HTTPS upstream, method, path, query, body and headers')
+                marker = '<script>alert("test-only")</script>'
+                code, _, body = request(port, '/api/v1/example', 'POST', marker,
+                                        {'Content-Type': 'text/plain'})
+                assert code == 201 and body == b'{"accepted":true}'
+                assert marker.encode() not in body
+                assert api.received.get(timeout=5)['body'] == marker
+                print('PASS request content is observed in memory and never reflected')
             # The same trusted certificate must fail for a hostname outside its SAN.
             with hosting(folder, f'127.0.0.1:{api.server_port}', cert) as port:
                 assert request(port, '/api/v1/auth/me')[0] == 502

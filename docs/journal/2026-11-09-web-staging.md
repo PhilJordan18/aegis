@@ -28,3 +28,9 @@ Vérifications locales, Node 24.15.0 et Caddy 2.11.9 :
 Le test d'hébergement utilise une API HTTPS factice et des données fictives,
 uniquement en boucle locale. Il ne valide ni la connexion réelle dans le
 navigateur, ni le déploiement Railway, ni une restauration PostgreSQL.
+
+Après le premier contrôle SonarQube de la PR #152, Codex a remplacé la réponse
+réfléchissant les données du POST dans l'API factice native par une réponse
+fixe. Les données restent contrôlées via une file en mémoire. Les huit groupes
+de contrôles natifs passent, dont un test de non-réflexion d'un contenu HTML.
+Aucune règle SonarQube n'a été désactivée; aucun fichier de production modifié.
