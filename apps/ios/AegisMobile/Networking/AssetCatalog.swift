@@ -164,7 +164,6 @@ enum ReadinessFilter: String, CaseIterable, Hashable, Sendable {
 /// (`assetCode,asc`, then `id`, §22.1), so pages do not overlap.
 struct AssetQuery: Hashable, Sendable {
     static let pageSize = 20
-    static let maximumSearchLength = 100
 
     var search: String?
     var readiness: ReadinessFilter = .all
@@ -180,23 +179,40 @@ struct AssetQuery: Hashable, Sendable {
         return items
     }
 
-    /// §22.3: outer spaces removed, an empty search is not sent, and the
-    /// length stays within 1 to 100 (UTF-16 units, as the server counts them)
-    /// without splitting a character.
+    /// §22.3 and ADR-014: the outer characters of general category Z (Zs, Zl,
+    /// Zp) are removed one scalar at a time, and an empty search is not sent.
+    /// The text is never truncated: the server counts 1 to 100 grapheme
+    /// clusters and refuses control characters with a 400 on `q`, which the
+    /// catalogue already shows as a controlled error. Shared cases:
+    /// `docs/cahier-conception/09-corpus-recherche-q.json`.
     static func normalizedSearch(_ text: String) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        return limited(trimmed)
+        let trimmed = trimmingOuterSeparators(text)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
-    static func limited(_ text: String) -> String {
-        guard text.utf16.count > maximumSearchLength else { return text }
-        var result = ""
-        for character in text {
-            guard result.utf16.count + character.utf16.count <= maximumSearchLength else { break }
-            result.append(character)
+    /// Unlike `whitespacesAndNewlines`, this keeps outer control characters,
+    /// which the server refuses, and removes every Z separator, no-break
+    /// spaces included.
+    static func trimmingOuterSeparators(_ text: String) -> String {
+        let scalars = text.unicodeScalars
+        var start = scalars.startIndex
+        var end = scalars.endIndex
+        while start < end, isSeparator(scalars[start]) {
+            start = scalars.index(after: start)
         }
-        return result
+        while end > start, isSeparator(scalars[scalars.index(before: end)]) {
+            end = scalars.index(before: end)
+        }
+        return String(String.UnicodeScalarView(scalars[start..<end]))
+    }
+
+    private static func isSeparator(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.properties.generalCategory {
+        case .spaceSeparator, .lineSeparator, .paragraphSeparator:
+            return true
+        default:
+            return false
+        }
     }
 }
 
