@@ -45,6 +45,9 @@ class RfidPresenceTests extends ApiIntegrationTest {
     @Autowired
     JdbcClient jdbc;
 
+    @Autowired
+    InboundMessageRepository inboundMessages;
+
     private ReservationFixtures fixtures;
     private UUID locker;
     private UUID assetA;
@@ -265,6 +268,141 @@ class RfidPresenceTests extends ApiIntegrationTest {
         ingest(session.restarted(clock.instant()));
         heartbeat("HEALTHY", "HEALTHY");
         assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"), "restart");
+        clock.advance(Duration.ofSeconds(5));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"));
+    }
+
+    /**
+     * R2 (document 10, section 15.3): a second start under the current bootCount is kept without effect on the
+     * projection, but nothing orders its door or restart facts against the scans, so presence stays UNKNOWN until a
+     * higher bootCount, whatever the twin reports and even after a new scan of the current session.
+     */
+    @Test
+    void aSecondStartSharingTheBootCountMakesPresenceUnknownUntilAHigherBoot() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"));
+
+        Session twin = new Session(session.bootCount, locker);
+        clock.advance(Duration.ofSeconds(1));
+        ingest(twin.door("DOOR_OPENED", clock.instant(), cellA));
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"), "twin door event");
+        assertEquals("ONLINE", read(lockerStatus(), "$.connectionStatus"), "the projection is unchanged");
+
+        clock.advance(Duration.ofSeconds(5));
+        heartbeat("HEALTHY", "HEALTHY");
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"), "a new scan of the same boot");
+
+        clock.advance(Duration.ofSeconds(1));
+        session = new Session(BOOTS.incrementAndGet(), locker);
+        ingest(session.restarted(clock.instant()));
+        heartbeat("HEALTHY", "HEALTHY");
+        clock.advance(Duration.ofSeconds(5));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"), "a higher bootCount");
+    }
+
+    /**
+     * Recovery rule approved by Philippe on PR #147: within the ambiguous boot, a heartbeat, a reconnection or a scan
+     * cannot clear the conflict; a strictly higher bootCount ends it but establishes nothing until a fresh scan of
+     * that session, after which presence and readiness follow the ordinary rules.
+     */
+    @Test
+    void aHigherBootEndsTheConflictButOnlyAFreshScanOfThatBootRestoresPresence() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        assertEquals("READY", read(technicianView(assetA), "$.readiness.result"));
+
+        Session twin = new Session(session.bootCount, locker);
+        clock.advance(Duration.ofSeconds(1));
+        ingest(twin.door("DOOR_OPENED", clock.instant(), cellA));
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"), "twin door event");
+
+        clock.advance(Duration.ofSeconds(1));
+        session.connectionId = UUID.randomUUID();
+        ingest(session.availability(clock.instant(), "ONLINE", "CONNECTED"));
+        heartbeat("HEALTHY", "HEALTHY");
+        clock.advance(Duration.ofSeconds(5));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        String view = technicianView(assetA);
+        assertEquals("UNKNOWN", read(view, "$.presence"), "reconnection, heartbeat and scan in the ambiguous boot");
+        assertEquals("UNKNOWN", read(view, "$.readiness.result"));
+
+        clock.advance(Duration.ofSeconds(1));
+        session = new Session(BOOTS.incrementAndGet(), locker);
+        ingest(session.restarted(clock.instant()));
+        heartbeat("HEALTHY", "HEALTHY");
+        view = technicianView(assetA);
+        assertEquals("UNKNOWN", read(view, "$.presence"), "higher bootCount without a new scan");
+        assertEquals("UNKNOWN", read(view, "$.readiness.result"));
+        assertEquals(List.of("UNKNOWN_PHYSICAL_STATE"), read(view, "$.readiness.reasons"));
+
+        clock.advance(Duration.ofSeconds(5));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        view = technicianView(assetA);
+        assertEquals("PRESENT", read(view, "$.presence"), "fresh scan in the higher boot");
+        assertEquals("READY", read(view, "$.readiness.result"));
+        assertEquals(List.of(), read(view, "$.readiness.reasons"));
+    }
+
+    @Test
+    void aHigherBootAfterTheConflictStillHonoursTheOtherReadinessConditions() throws Exception {
+        jdbc.sql("""
+                UPDATE aegis.assets SET calibration_required = true, calibration_due_at = :due WHERE id = :id
+                """).param("due", DeviceTestSupport.utc(START.minus(Duration.ofDays(1)))).param("id", assetA)
+                .update();
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        Session twin = new Session(session.bootCount, locker);
+        clock.advance(Duration.ofSeconds(1));
+        ingest(twin.door("DOOR_OPENED", clock.instant(), cellA));
+
+        clock.advance(Duration.ofSeconds(1));
+        session = new Session(BOOTS.incrementAndGet(), locker);
+        ingest(session.restarted(clock.instant()));
+        heartbeat("HEALTHY", "HEALTHY");
+        clock.advance(Duration.ofSeconds(5));
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        String view = technicianView(assetA);
+        assertEquals("PRESENT", read(view, "$.presence"), "fresh scan in the higher boot");
+        assertEquals("BLOCKED", read(view, "$.readiness.result"), "presence alone never makes it READY");
+        assertEquals(List.of("CALIBRATION_EXPIRED"), read(view, "$.readiness.reasons"));
+    }
+
+    @Test
+    void aTwinStartThatOnlyHeartbeatsStillVoidsPresence() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        Session twin = new Session(session.bootCount, locker);
+        clock.advance(Duration.ofSeconds(1));
+        ingest(twin.heartbeat(clock.instant(), List.of(
+                cell(cellA, 1, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED"),
+                cell(cellB, 2, "CONNECTED", "HEALTHY", "CLOSED", "LOCKED"))));
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"));
+    }
+
+    @Test
+    void aTwinReportRejectedAfterStorageIsNoConflict() throws Exception {
+        ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
+        Session twin = new Session(session.bootCount, locker);
+        clock.advance(Duration.ofSeconds(1));
+        Map<String, Object> report = ingest(twin.deviceError(clock.instant(), "POWER_FAULT", "WARNING"));
+        assertEquals("UNKNOWN", read(technicianView(assetA), "$.presence"), "an accepted twin fact");
+
+        // A command report rejected after storage (CommandAcknowledgements, NOT_CORRELATED) keeps its session.
+        inboundMessages.markRejected((UUID) message(report).get("id"), ProcessingError.COMMAND_CORRELATION_INVALID);
+        assertEquals("PRESENT", read(technicianView(assetA), "$.presence"), "a rejected twin fact");
+    }
+
+    @Test
+    void aTwinStartBeforeTheDeviceWasProvisionedIsNoConflict() throws Exception {
+        Session twin = new Session(session.bootCount, locker);
+        ingest(twin.door("DOOR_OPENED", clock.instant(), cellA));
+        clock.advance(Duration.ofSeconds(1));
+        jdbc.sql("UPDATE aegis.locker_devices SET provisioned_at = :at WHERE locker_id = :locker AND disabled_at IS NULL")
+                .param("at", DeviceTestSupport.utc(clock.instant())).param("locker", locker).update();
+        clock.advance(Duration.ofSeconds(1));
+        session.connectionId = UUID.randomUUID();
+        ingest(session.availability(clock.instant(), "ONLINE", "CONNECTED"));
+        heartbeat("HEALTHY", "HEALTHY");
         clock.advance(Duration.ofSeconds(5));
         ingest(scan(cellA, "HEALTHY", reads(tagA, 3)));
         assertEquals("PRESENT", read(technicianView(assetA), "$.presence"));
@@ -932,6 +1070,11 @@ class RfidPresenceTests extends ApiIntegrationTest {
 
     private String technicianView(UUID asset) throws Exception {
         return mvc.perform(get("/api/v1/assets/" + asset).header(AUTHORIZATION, bearer(technician)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+    }
+
+    private String lockerStatus() throws Exception {
+        return mvc.perform(get("/api/v1/lockers/" + locker + "/status").header(AUTHORIZATION, bearer(technician)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
     }
 

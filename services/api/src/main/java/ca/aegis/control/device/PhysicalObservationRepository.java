@@ -176,6 +176,26 @@ class PhysicalObservationRepository {
     }
 
     /**
+     * Whether another start of the device shares the current {@code bootCount} (document 10, section 15.3, R2): its
+     * accepted facts are kept without effect on the projection, but no sequence orders them against the current
+     * session, so any of them may have moved a door after a scan.
+     */
+    boolean sessionConflict(UUID deviceId, DeviceProjection projection, Instant provisionedAt) {
+        return jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1 FROM aegis.inbound_device_messages
+                    WHERE locker_device_id = :device AND boot_count = :boot AND device_session_id <> :session
+                      AND processing_status <> 'REJECTED' AND received_at >= :provisionedAt)
+                """)
+                .param("device", deviceId)
+                .param("session", projection.deviceSessionId())
+                .param("boot", projection.bootCount())
+                .param("provisionedAt", utc(provisionedAt))
+                .query(Boolean.class)
+                .single();
+    }
+
+    /**
      * The latest lapse of heartbeat continuity in the device's current connection, rebuilt from the stored heartbeats
      * as {@link AvailabilityProjection} saw them, so a lapse that no read observed still counts: the valid reference
      * heartbeat received more than {@code freshness} after the previous one, or after the connection's first message.

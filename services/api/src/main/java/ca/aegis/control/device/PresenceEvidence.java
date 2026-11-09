@@ -117,7 +117,11 @@ public class PresenceEvidence {
         return verdicts;
     }
 
-    /** Facts of the current connection of an ONLINE locker; empty otherwise, which leaves its cells UNKNOWN. */
+    /**
+     * Facts of the current connection of an ONLINE locker; empty otherwise, which leaves its cells UNKNOWN. A start
+     * sharing the current {@code bootCount} also empties them until a higher one: the counter is not conforming and
+     * nothing orders that start's door and restart facts against the scans (document 06, section 4.2).
+     */
     private Optional<LockerFacts> lockerFacts(UUID lockerId, List<UUID> compartmentIds, Instant now) {
         Optional<ActiveDevice> active = devices.active(lockerId);
         if (active.isEmpty()
@@ -125,6 +129,9 @@ public class PresenceEvidence {
             return Optional.empty();
         }
         ActiveDevice device = active.get();
+        if (observations.sessionConflict(device.id(), device.projection(), device.provisionedAt())) {
+            return Optional.empty();
+        }
         return observations.connectionStart(device.id(), device.projection(), device.provisionedAt())
                 .map(start -> new LockerFacts(start,
                         observations.lastResumption(device.id(), device.projection(), device.provisionedAt(), start,
