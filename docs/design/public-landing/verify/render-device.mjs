@@ -44,6 +44,8 @@ patch("enclosure(g,mod); led(g,green);", "enclosure(g,mod); led(g,(window.__LED|
 patch("if(!state.wall){\n      const bk=", "if(window.__POWER&&!state.wall){\n      const bk=")
 // expose the closure so the harness can set doors and the camera
 patch("apply(false);\n\n  // ---------- loop ----------", "apply(false);\n  window.__aegis={mods:()=>mods,go,camera,controls,frame};\n\n  // ---------- loop ----------")
+// keep a handle on the screen plane to export its image-space corners
+patch("const scr=new THREE.Mesh(new THREE.PlaneGeometry(.094,.0627),M.screen);", "const scr=new THREE.Mesh(new THREE.PlaneGeometry(.094,.0627),M.screen);window.__screen=scr;")
 // hide the page chrome; transparent, fixed-size stage
 html = html.replace('</style>\n\n<div class="wrap">', '.ui,.hint,.note,.labels,.head,.specs,.foot{display:none!important}html,body{background:transparent!important}.stage{background:transparent!important;box-shadow:none!important;border-radius:0!important;height:1300px!important;width:1200px!important;max-width:none}body{padding:0!important}.wrap{max-width:none;gap:0}</style>\n\n<div class="wrap">')
 
@@ -75,6 +77,20 @@ try {
       controls.target.copy(frame.center).add(new THREE.Vector3(0.02, -0.02, 0))
     }, st.a1)
     await page.waitForTimeout(1500)
+    if (st === STATES[0]) {
+      // screen corners in output pixels (top-left, top-right, bottom-right, bottom-left)
+      const corners = await page.evaluate(() => {
+        const { camera } = window.__aegis
+        const scr = window.__screen
+        const W = 2400, H = 2600
+        return [[-.047, .03135], [.047, .03135], [.047, -.03135], [-.047, -.03135]].map(([x, y]) => {
+          const p = scr.localToWorld(new THREE.Vector3(x, y, 0)).project(camera)
+          return [Math.round((p.x + 1) / 2 * W), Math.round((1 - p.y) / 2 * H)]
+        })
+      })
+      writeFileSync(resolve(outDir, 'screen.json'), JSON.stringify({ image: { width: 2400, height: 2600 }, corners }, null, 2) + '\n')
+      console.log('screen corners', JSON.stringify(corners))
+    }
     const dataUrl = await page.evaluate(() => document.getElementById('c').toDataURL('image/png'))
     const out = resolve(outDir, st.file + '.png')
     writeFileSync(out, Buffer.from(dataUrl.split(',')[1], 'base64'))
