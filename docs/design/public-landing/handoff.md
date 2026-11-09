@@ -7,6 +7,42 @@ comment la reproduire dans `apps/admin-web` sans rien inventer de plus.
 Statut : **maquette soumise à l'approbation visuelle de Philippe**. Aucun code
 applicatif n'est écrit avant cette approbation.
 
+## 0. Propriété, commits et statut des décisions
+
+Répartition approuvée le 2026-11-09 (issue #153, commentaire de Philippe) :
+cette session livre uniquement le design et ce handoff; **Web Manager** est
+seul propriétaire de l'intégration dans `apps/admin-web`, après approbation
+visuelle; **QA et intégration** vérifie l'implémentation approuvée.
+
+Commits sur `153-feat-public-landing`, à partir de `origin/dev` `023ab51`,
+non poussés :
+
+| Commit | Contenu |
+|---|---|
+| `afd49cf` | brief, réclamations, états, maquettes basse fidélité, deux directions |
+| `ff21718` | demande de rendus à Jimmy |
+| `170d861` | scène source de Jimmy, `verify/render-device.mjs`, trois PNG du casier |
+| `fe41db8` | maquette haute fidélité, `screen.json`, `verify/render-mockups.mjs`, ce handoff |
+
+Emplacement des actifs : `assets/device/*.png` et `screen.json` (casier),
+`mockups/` (prototype statique et rendus), `source/` (scène three.js de
+référence, non modifiée).
+
+Statut des décisions : **approuvé** par Philippe — direction A, retrait de
+l'inscription « L-01 », bloc d'alimentation masqué, aucune métrique ni
+témoignage inventé. **Proposé**, en attente — les trois points de la section 2
+et la maquette elle-même (approbation visuelle non encore donnée).
+
+Composants Web existants à réutiliser, sans les dupliquer : `ui/Brand.tsx`,
+`ui/Button.tsx` et `buttonClass.ts`, `ui/StatusChip.tsx`, `ui/Icon.tsx`,
+`features/appearance` (thème) et `features/language` (langue), les catalogues
+`i18n/messages/{fr,en}.ts` avec les clés `landing.*` déjà présentes, la route
+`/` et `/connexion` existantes.
+
+Vérifications d'acceptation restantes : celles de la section 8, exécutées par
+Web Manager puis revues par QA et intégration, plus la vérification manuelle
+par Philippe de la copie FR/EN de la section 6 avant publication.
+
 ## 1. Périmètre et fichiers
 
 | Fichier | Action |
