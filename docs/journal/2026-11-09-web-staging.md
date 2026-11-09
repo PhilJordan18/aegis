@@ -18,7 +18,10 @@ Vérifications locales, Node 24.15.0 et Caddy 2.11.9 :
 - `CADDY_BIN=/chemin/vers/caddy python3 -I scripts/check-hosting.py` : sept
   groupes de contrôles réussis, dont TLS avec nom incorrect refusé, chemins
   conservés, erreurs API conservées et panne amont sans repli HTML;
-- Docker arrêté : construction et exécution du conteneur non vérifiées;
+- Après redémarrage de Docker par Philippe : `docker build -t aegis-web:151 .`
+  réussi; `python3 -I scripts/check-hosting-docker.py aegis-web:151` réussi
+  sur un réseau Docker interne, avec une API HTTPS factice. Utilisateur 10001,
+  absence de Node dans l’image finale, routes SPA, proxy et refus TLS vérifiés;
 - `npm audit` : 13 alertes préexistantes (10 modérées, 3 élevées), aucun
   changement de `package.json` ou du verrou; analyse/correction à suivre.
 

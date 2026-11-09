@@ -28,11 +28,23 @@ Pour vérifier aussi l'image sur une machine équipée de Docker :
 
 ```sh
 docker build -t aegis-web:151 .
+python3 -I scripts/check-hosting-docker.py aegis-web:151
+```
+
+Ce test crée un réseau Docker interne et des conteneurs temporaires aux noms
+uniques. Il vérifie l'image construite avec une API HTTPS factice, sans accès
+au staging : utilisateur sans privilèges, absence de Node dans l'image finale,
+pages, bundles, transmission API, panne amont et refus TLS (nom incorrect ou
+certificat non approuvé). Il nettoie uniquement ses propres conteneurs et réseau.
+
+Pour un essai manuel facultatif contre l'API staging :
+
+```sh
 docker run --rm -p 127.0.0.1:5182:8080 \
   -e AEGIS_API_HOST=aegis-api-staging-239f.up.railway.app aegis-web:151
 ```
 
-Cette seconde commande utilise l'API staging : limiter les vérifications à
+Cette commande utilise l'API staging : limiter les vérifications à
 `/healthz`, `/connexion`, `/api/v1/system/health` et `/api/v1/auth/me` sans jeton.
 Les résultats attendus sont respectivement 200, 200, 200 et 401.
 Les images de base sont fixées par version; leurs tags ne sont pas des digests
