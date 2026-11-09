@@ -81,18 +81,138 @@ export const fr = {
     },
   },
 
+  /**
+   * Public landing, direction A (#153), approved visually by Philippe on 2026-11-09
+   * (docs/design/public-landing/handoff.md §6, texts of mockups/mockup.js). The hero reuses `brand`.
+   * Product names, people, compartment and equipment codes, protocols and countdowns are not
+   * translated and live in the landing components, not here. « hub » is allowed in this group only
+   * (handoff §2.1). Every claim is traceable to docs/design/public-landing/claims.md.
+   */
   landing: {
     signIn: 'Se connecter',
-    seeGuarantees: 'Voir les cinq garanties',
-    /** [A] */
-    accountNote: 'Compte fourni par votre administrateur.',
-    mockCaption: "Diagnostic d'un exemplaire",
+    sectionsNavLabel: 'Sections de la page',
+    /** Toggle of the section sheet below 1024 px. */
+    sectionsMenu: 'Sections',
+    nav: {
+      produit: 'Produit',
+      readiness: 'Readiness',
+      parcours: 'Parcours',
+      systeme: 'Système',
+      garanties: 'Garanties',
+      studio: 'Studio',
+    },
+    heroSystem:
+      'Aegis relie l’application du technicien, l’administration Aegis Manager et un casier connecté. Il est conçu pour qu’un équipement critique ne sorte que s’il est prêt, autorisé et observé.',
+    seeJourney: 'Voir le parcours',
+    heroMention: 'Espace administrateur · compte fourni par votre administrateur.',
+    stageCaption: 'Casier P0 · un hub avec écran · deux cellules indépendantes',
+    stageSource: 'Modèle 3D de Jimmy · rendu fixe',
+    heroAlt: `Le casier Aegis${NBSP}: un module hub avec écran posé sur deux cellules A1 et A2, portes fermées.`,
+    deviceFallback: `Casier Aegis${NBSP}: un hub avec écran, deux cellules A1 et A2. L’image n’a pas pu être chargée.`,
+    readiness: {
+      overline: 'Readiness',
+      title: 'Un inventaire peut se tromper. Aegis dit pourquoi.',
+      lead: `Un équipement inscrit comme disponible peut être emprunté, absent de sa cellule, endommagé, non calibré ou interdit à la personne qui le demande. Aegis évalue sa disponibilité opérationnelle pour chaque technicien${NBSP}: prêt, bloqué ou à vérifier, toujours avec la raison.`,
+      derived: `Cette readiness est déduite des faits${NBSP}: présence, disponibilité, état de service, calibration, niveau d’accès. Personne ne la coche.`,
+    },
+    diagnostic: {
+      label: 'Exemple de diagnostic',
+      heading: 'Diagnostic pour un technicien',
+      ready: 'Prêt',
+      blocked: 'Bloqué',
+      unknown: 'À vérifier',
+      firstName: 'Multimètre 1',
+      firstFacts: ({ date }: { date: string }) => `Cellule A1 · présent · calibration valide jusqu’au ${date} · accès standard`,
+      secondName: 'Multimètre 2',
+      secondFacts: 'Cellule A2 · présent · accès standard · le retour reste possible',
+      thirdName: 'Caméra thermique',
+      thirdReason: ({ time }: { time: string }) => `État physique inconnu${NBSP}: le casier ne répond plus depuis ${time}`,
+      thirdFacts: ({ time }: { time: string }) => `Cellule A1 · dernière lecture ${time}`,
+    },
     mockBadge: 'Exemple illustratif',
-    blockers: ({ count: value }: { count: number }) =>
-      plural(value, { one: `${count.format(value)} empêchement`, other: `${count.format(value)} empêchements` }),
-    noBlockers: 'Aucun empêchement détecté',
     calibrationExpired: ({ date }: { date: string }) => `Calibration expirée depuis le ${date}`,
-    guaranteesLabel: 'Cinq garanties du P0',
+    journey: {
+      overline: 'Parcours',
+      title: 'Six étapes, une seule porte.',
+      lead: `Le casier suit l’étape que vous lisez. Rien ne s’ouvre sur une réservation ni sur un code affiché${NBSP}: seule une commande autorisée, pour une seule cellule, à durée limitée.`,
+      tagLive: 'Disponible',
+      tagPlanned: 'En conception',
+      stepCaption: ({ number, state }: { number: string; state: string }) => `Étape ${number} · ${state}`,
+      zoomLabel: 'Écran du hub, agrandi',
+      steps: {
+        reserve: {
+          title: 'Réserver',
+          text: 'Le technicien réserve A1 depuis Aegis Mobile jusqu’à une heure de la plage d’exploitation. Aucune porte ne bouge.',
+          alt: 'Casier fermé, écran en veille.',
+          state: 'portes fermées · écran en veille',
+        },
+        prepare: {
+          title: 'Préparer',
+          text: `Il prépare le retrait${NBSP}: le hub affichera un QR temporaire lié à son compte et à cette opération.`,
+          alt: 'Casier fermé, l’écran du hub affiche un QR temporaire pour le retrait A1.',
+          state: `écran${NBSP}: QR temporaire · retrait A1`,
+        },
+        scan: {
+          title: 'Scanner',
+          text: 'Il scanne le QR avec son téléphone. Le serveur revérifie droits, réservation, horaire et readiness.',
+          alt: 'Casier fermé, l’écran indique que le serveur vérifie.',
+          state: `écran${NBSP}: vérification par le serveur`,
+        },
+        open: {
+          title: 'Ouvrir',
+          text: 'Une seule commande, pour A1 seulement, valable deux minutes. Une commande expirée, rejouée ou destinée à une autre cellule n’est pas exécutée.',
+          alt: 'La porte A1 est ouverte, A2 reste fermée; l’écran donne la consigne.',
+          state: `porte A1 ouverte, A2 fermée · écran${NBSP}: consigne`,
+        },
+        prove: {
+          title: 'Prouver',
+          text: `Porte refermée, lecture stable du bon tag${NBSP}: le serveur confirmera le retrait et créera le prêt. Jamais par un clic.`,
+          alt: 'Portes fermées, le voyant A1 est vert, l’écran confirme le retrait.',
+          state: `portes fermées · voyant A1 · écran${NBSP}: retrait confirmé`,
+        },
+        return: {
+          title: 'Retourner',
+          text: 'Même parcours au retour. La readiness sera recalculée; un équipement non prêt peut toujours revenir.',
+          alt: 'Casier fermé, l’écran indique que le retour est enregistré.',
+          state: `portes fermées · écran${NBSP}: retour enregistré`,
+        },
+      },
+    },
+    /** The hub screen is part of the illustrated device; its texts describe future states (claims C3, C4). */
+    screen: {
+      idle: { over: 'Veille', text: 'Réservez depuis Aegis Mobile.', foot: 'Casier en ligne' },
+      qr: { over: 'Retrait · A1', title: 'Scannez', text: 'Code à usage unique' },
+      verify: { over: 'Retrait · A1', title: 'Vérification…', text: 'Droits, réservation, horaire, readiness', foot: 'Serveur' },
+      open: { over: 'Retrait · A1', title: 'A1 ouverte', text: 'Prenez MM-001, puis refermez la porte.' },
+      confirmed: { over: 'Retrait · A1', title: 'Retrait confirmé', text: 'Prêt créé · MM-001', foot: 'Porte fermée · tag lu' },
+      result: { over: 'Retour · A1', title: 'Retour enregistré', text: 'Readiness recalculée', foot: 'Merci' },
+    },
+    system: {
+      overline: 'Système',
+      title: 'Qui parle à qui.',
+      alt: `Schéma${NBSP}: Aegis Mobile et Aegis Manager parlent en HTTPS à Aegis Control, qui garde PostgreSQL privé et échange en MQTT TLS avec le hub; le hub commande A1 et A2 par un câble dédié chacune.`,
+      mobileRole: 'Technicien · iPhone',
+      managerRole: 'Administration · Web',
+      controlRole: 'API Spring · seule autorité métier',
+      controlDuty: 'Autorise, corrèle, confirme',
+      databaseRole: 'privé, jamais exposé',
+      hubRole: 'Écran · exécute',
+      compartmentA1: 'Cellule A1',
+      compartmentA2: 'Cellule A2',
+      cable: 'câble dédié',
+      notes: {
+        clients: { lead: 'Les clients parlent uniquement à l’API.', text: 'Aucun téléphone, aucun navigateur ne touche le casier ni la base.' },
+        hub: { lead: 'Le hub exécute, il n’autorise pas.', text: 'Il affiche le QR, applique une commande autorisée et rapporte ce qu’il observe.' },
+        cable: { lead: 'Une cellule, un câble.', text: 'Deux départs indépendants depuis le hub; les cellules n’ont ni écran, ni Wi-Fi, ni MQTT.' },
+      },
+      list: {
+        clients: { lead: 'Aegis Mobile et Aegis Manager', text: 'parlent en HTTPS à Aegis Control, la seule autorité métier.' },
+        control: { lead: 'Aegis Control', text: 'garde PostgreSQL privé et parle au hub par MQTT sur TLS.' },
+        hub: { lead: 'Le hub', text: 'exécute les commandes autorisées et pilote A1 et A2 par un câble dédié chacune.' },
+      },
+    },
+    guaranteesOverline: 'Garanties',
+    guaranteesTitle: 'Cinq règles que le serveur ne négocie pas.',
     guarantees: {
       readiness: {
         title: 'Disponibilité réelle',
@@ -115,7 +235,20 @@ export const fr = {
         text: "Chaque action et chaque observation restent consultables dans l'audit, sans effacement.",
       },
     },
-    footerPrototype: "Prototype académique en cours de validation en laboratoire, conçu pour les équipes de maintenance et d'inspection.",
+    studio: {
+      title: 'Deux personnes, un prototype.',
+      text: 'Aegis est un prototype académique du cours Écosystème connecté (420-5X7-SO, Cégep de Sorel-Tracy, automne 2026). Le laboratoire est notre terrain de validation; le marché visé est celui des équipes de maintenance, d’inspection et de services techniques.',
+      peopleLabel: 'Équipe',
+      /** Refresh the date and the four lines at each delivery; never a metric (handoff §4.5). */
+      statusTitle: ({ date }: { date: string }) => `État du prototype · ${date}`,
+      status: {
+        integrated: { label: 'Intégré', text: 'Catalogue, readiness par technicien, réservations, statut du casier, firmware de connexion du hub' },
+        simulated: { label: 'Simulé', text: `Présence RFID, commandes et accusés, erreurs de l’appareil${NBSP}: avec le simulateur de hub, sans matériel` },
+        design: { label: 'En conception', text: 'QR d’accès local, retrait et retour confirmés physiquement, chronologie d’audit' },
+        measured: { label: 'Non mesuré', text: 'Aucune validation physique n’est encore consignée; aucune performance n’est annoncée' },
+      },
+    },
+    footerStudio: 'Aegis Studio · Philippe et Jimmy',
     footerTechnician: `Technicien${NBSP}? Utilisez Aegis Mobile sur iPhone.`,
   },
 

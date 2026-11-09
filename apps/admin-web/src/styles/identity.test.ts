@@ -36,6 +36,24 @@ function withoutScrollShadow(file: string, css: string): string {
   return css.replace(/\.ag-dossier__scroll\s*\{[^}]*\}/g, (rule) => SCROLL_SHADOW_LAYERS.reduce((text, layer) => text.replace(layer, ''), rule))
 }
 
+/**
+ * The public landing (#153) stages the real locker and names its hub, by Philippe's decision of
+ * 2026-11-09 (docs/design/public-landing/handoff.md §2.1). The wording rule skips these files and the
+ * `landing` group of the two catalogs; every other rule still applies to them.
+ */
+const LANDING_FILES = /^(features\/landing\/|pages\/LandingPage\.tsx$|pages\/landing\.css$)/
+const CATALOG_FILES = ['i18n/messages/fr.ts', 'i18n/messages/en.ts']
+const LANDING_GROUP = /\n {2}landing: \{\n[\s\S]*?\n {2}\},\n/
+
+function relative(file: string): string {
+  return file.slice(SRC.length + 1)
+}
+
+function withoutLanding(file: string, source: string): string {
+  if (LANDING_FILES.test(relative(file))) return ''
+  return CATALOG_FILES.includes(relative(file)) ? source.replace(LANDING_GROUP, '\n') : source
+}
+
 function production(file: string): string {
   return withoutScrollShadow(file, readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''))
 }
@@ -53,10 +71,21 @@ describe('identity v3 in production sources', () => {
     ['indigo', /indigo/i],
     ['the former blue and indigo ramp values', /#(4B3BD9|6153F5|3B2DB0|1F4FE6|3366FF|8177FF|A9A2FF)/i],
     ['a gradient on a surface or a button', /(linear|conic)-gradient/],
-    ['hub, orbit or lit cell wording', /\b(orbit|hub|lit-cell|is-lit)\b/i],
+    ['orbit or lit cell wording', /\b(orbit|lit-cell|is-lit)\b/i],
   ])('has no %s', (_label, pattern) => {
     const hits = files.filter((file) => pattern.test(production(file)))
     expect(hits).toEqual([])
+  })
+
+  it('has no hub wording outside the public landing', () => {
+    const hits = files.filter((file) => /\bhub\b/i.test(withoutLanding(file, production(file))))
+    expect(hits).toEqual([])
+  })
+
+  it('exempts from the hub wording rule only the landing files and the landing group of the catalogs', () => {
+    const exempt = files.filter((file) => /\bhub\b/i.test(production(file)) && !/\bhub\b/i.test(withoutLanding(file, production(file))))
+    for (const file of exempt) expect(LANDING_FILES.test(relative(file)) || CATALOG_FILES.includes(relative(file)), relative(file)).toBe(true)
+    for (const catalog of CATALOG_FILES) expect(readFileSync(join(SRC, catalog), 'utf8')).toMatch(LANDING_GROUP)
   })
 
   it('allows exactly one gradient rule besides the halo: the four-layer scroll shadow of the dossier', () => {

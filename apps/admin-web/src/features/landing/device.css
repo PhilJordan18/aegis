@@ -1,0 +1,77 @@
+/*
+ * The Aegis locker of the landing (handoff §4.2, §4.3). The renders sit in a box with their own aspect
+ * ratio, so the page reserves the height before any image arrives. The contact shadow is drawn in
+ * pages/landing.css, the only page file allowed a radial gradient.
+ */
+.lp-device { position: relative; width: 100%; }
+.lp-device__box { position: relative; width: 100%; aspect-ratio: 2400 / 2600; }
+.lp-device__img {
+  position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: contain;
+  opacity: 0; transition: opacity var(--ag-motion-slow) var(--ag-ease-out);
+}
+.lp-device__img.is-shown { opacity: 1; }
+.lp-device__screen { position: absolute; left: 0; top: 0; z-index: 2; width: 300px; height: 200px; overflow: hidden; transform-origin: 0 0; }
+.lp-device__lead { position: absolute; left: 0; top: 0; z-index: 2; overflow: visible; pointer-events: none; }
+.lp-device__lead line { stroke: var(--ag-control-border); stroke-width: 1.2; }
+.lp-device__lead circle { fill: var(--ag-accent-text); }
+
+.lp-device__fallback {
+  position: absolute; inset: 6% 8%; display: grid; align-content: end; gap: 10px; padding: 20px;
+  border: 1px solid var(--ag-border); border-radius: var(--ag-r-card); background: var(--ag-surface);
+  color: var(--ag-text-2); font-family: var(--ag-font-mono); font-size: var(--ag-type-caption-size); line-height: 1.5;
+}
+.lp-device__fallback svg { width: 60%; max-width: 280px; margin: 0 auto 10px; }
+.lp-device__fallback rect { fill: none; stroke: var(--ag-control-border); stroke-width: 2; }
+.lp-device__fallback .lp-device__fallback-screen { fill: var(--ag-text); stroke: none; }
+
+/* Hub screen: an opaque device display in a fixed 300 × 200 space; it does not follow the theme. */
+.lp-screen {
+  box-sizing: border-box; display: grid; grid-template-rows: auto 1fr auto; width: 300px; height: 200px;
+  padding: 16px 18px 14px; background: #0B0F16; color: #F1F5FC; font-family: var(--ag-font-sans); text-align: left;
+}
+.lp-screen__top {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--ag-font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #8CAEFF;
+}
+.lp-screen__word { font-family: var(--ag-font-sans); font-size: 14px; font-weight: 600; letter-spacing: -0.04em; text-transform: none; color: #F1F5FC; }
+.lp-screen__body { display: grid; align-content: center; gap: 6px; }
+.lp-screen__title { font-size: 26px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.05; }
+.lp-screen__text { font-size: 14px; line-height: 1.3; color: #ABB9CD; }
+.lp-screen__foot { display: flex; justify-content: space-between; align-items: center; font-family: var(--ag-font-mono); font-size: 12px; color: #ABB9CD; }
+.lp-screen--qr .lp-screen__body { grid-template-columns: 120px minmax(0, 1fr); gap: 16px; align-items: center; }
+.lp-screen--qr .lp-screen__title { font-size: 20px; }
+.lp-screen__qr { box-sizing: border-box; width: 120px; height: 120px; padding: 6px; background: #F1F5FC; }
+.lp-screen__qr svg { display: block; width: 100%; height: 100%; }
+.lp-screen__qr path { fill: #0B0F16; }
+.lp-screen__bar { height: 4px; border-radius: 2px; background: #2B3B50; overflow: hidden; }
+.lp-screen__bar i { display: block; width: 62%; height: 100%; background: #8CAEFF; }
+.lp-screen__ok { color: #6FE3A8; }
+.lp-screen__dot { display: inline-block; width: 10px; height: 10px; margin-right: 8px; border-radius: 50%; background: #4ED393; vertical-align: middle; }
+
+/* Magnifier of the hub screen: an honest enlargement, with a leader to the real screen. */
+.lp-zoom { --lp-zoom: 260; position: relative; z-index: 3; width: calc(var(--lp-zoom) * 1px); margin-bottom: -9%; }
+.lp-zoom__label { margin-bottom: 8px; font-family: var(--ag-font-mono); font-size: var(--ag-type-caption-size); color: var(--ag-text-2); }
+.lp-zoom__card { overflow: hidden; border: 1px solid var(--ag-border); border-radius: 10px; background: #0B0F16; box-shadow: var(--ag-shadow-float); }
+.lp-zoom__screen { width: calc(var(--lp-zoom) * 1px); height: calc(var(--lp-zoom) * 2px / 3); overflow: hidden; }
+/* Unitless ratio: dividing a length by a length is not yet supported everywhere. */
+.lp-zoom__screen .lp-screen { transform: scale(calc(var(--lp-zoom) / 300)); transform-origin: 0 0; }
+.lp-device--vignette .lp-zoom { --lp-zoom: 200; }
+
+@media (max-width: 767px) {
+  .lp-device--vignette .lp-zoom { width: 100%; margin-bottom: 8px; }
+  .lp-device--vignette .lp-zoom__card { width: 300px; max-width: 100%; }
+  .lp-device--vignette .lp-zoom__screen { width: 300px; max-width: 100%; height: 200px; }
+  .lp-device--vignette .lp-zoom__screen .lp-screen { transform: none; }
+  .lp-device--vignette .lp-device__lead { display: none; }
+}
+/* Below 420 px a full-size card no longer fits beside the step number: scale it instead of clipping it. */
+@media (max-width: 419px) {
+  .lp-device--vignette .lp-zoom { --lp-zoom: 220; }
+  .lp-device--vignette .lp-zoom__card, .lp-device--vignette .lp-zoom__screen { width: calc(var(--lp-zoom) * 1px); }
+  .lp-device--vignette .lp-zoom__screen { height: calc(var(--lp-zoom) * 2px / 3); }
+  .lp-device--vignette .lp-zoom__screen .lp-screen { transform: scale(calc(var(--lp-zoom) / 300)); }
+}
+
+@media (forced-colors: active) {
+  .lp-zoom__card, .lp-screen { border: 1px solid CanvasText; }
+}
