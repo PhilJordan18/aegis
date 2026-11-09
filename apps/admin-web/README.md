@@ -557,3 +557,9 @@ Content-Security-Policy devra l'autoriser par empreinte.
 3. **Équipements** : la liste, ses états de chargement, vide, erreur et
    données périmées relèvent de CAT-01 et RDY-02. La page protégée n'affiche
    qu'une information [P] à faire approuver.
+
+## Hébergement staging
+
+Le [guide Railway](deploy/README.md) décrit le build Docker de production,
+le relais HTTPS `/api`, les vérifications isolées et le retour arrière du
+service Web. Il ne nécessite aucune modification du broker ni du firmware.
