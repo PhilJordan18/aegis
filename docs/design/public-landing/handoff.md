@@ -4,8 +4,9 @@ Référence visuelle : `mockups/a-mise-en-scene.html` et ses rendus dans
 `mockups/renders/`. La maquette est un prototype statique; ce document dit
 comment la reproduire dans `apps/admin-web` sans rien inventer de plus.
 
-Statut : **maquette soumise à l'approbation visuelle de Philippe**. Aucun code
-applicatif n'est écrit avant cette approbation.
+Statut : **maquette approuvée visuellement par Philippe le 2026-11-09**
+(direction A, rendus de `mockups/renders/`). L'intégration dans
+`apps/admin-web` appartient à Web Manager.
 
 ## 0. Propriété, commits et statut des décisions
 
@@ -28,10 +29,13 @@ Emplacement des actifs : `assets/device/*.png` et `screen.json` (casier),
 `mockups/` (prototype statique et rendus), `source/` (scène three.js de
 référence, non modifiée).
 
-Statut des décisions : **approuvé** par Philippe — direction A, retrait de
-l'inscription « L-01 », bloc d'alimentation masqué, aucune métrique ni
-témoignage inventé. **Proposé**, en attente — les trois points de la section 2
-et la maquette elle-même (approbation visuelle non encore donnée).
+Statut des décisions : **approuvé** par Philippe — la maquette direction A
+(2026-11-09), retrait de l'inscription « L-01 », bloc d'alimentation masqué,
+aucune métrique ni témoignage inventé, mot « hub » conservé avec exclusion
+ciblée dans `identity.test.ts` (section 2.1), signature Studio en prénoms
+seuls, sans rôles ni titres (section 2.3). **Proposé**, en attente — la note
+de supersession partielle de la référence d'identité (section 2.2); elle ne
+bloque pas l'intégration.
 
 Composants Web existants à réutiliser, sans les dupliquer : `ui/Brand.tsx`,
 `ui/Button.tsx` et `buttonClass.ts`, `ui/StatusChip.tsx`, `ui/Icon.tsx`,
@@ -70,13 +74,17 @@ firmware, les fichiers d'hébergement de #151 / #152.
    et les clés `landing.*` des catalogues, en gardant l'interdiction partout
    ailleurs; ajouter un test qui vérifie que ces exclusions restent les seules.
    Alternative sans changer le test : remplacer « hub » par « module central » dans
-   toute la copie. Décision de Philippe (brief §7.2).
+   toute la copie. **Décision de Philippe (2026-11-09) : garder « hub » et
+   exclure les fichiers de la landing du test**, selon la proposition ci-dessus.
 2. **Supersession partielle de la référence d'identité** (brief §7.1) : la page
    `/` montre le casier en 3D, contrairement à `reference.md` du 21 octobre. À
    consigner dans une courte note d'identité ou un ADR de design.
 3. **Signature Aegis Studio** (brief §7.4) : la maquette montre le pied de page
    « Aegis Studio · Philippe et Jimmy » et une section Studio avec les deux noms
-   et rôles. Retirer la section si Philippe préfère le pied de page seul.
+   et rôles. **Décision de Philippe (2026-11-09) : prénoms seuls.** À
+   l'intégration, retirer les rôles et titres de la section Studio et du
+   catalogue (`landing.studio.*`); le pied de page reste tel quel. La maquette
+   n'a pas été re-rendue après cette décision.
 
 ## 3. Jetons et typographie
 
