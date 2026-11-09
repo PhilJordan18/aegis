@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Landing publique Aegis — maquettes filaires (#153)</title>
+<!-- Low-fidelity wireframes of the two compositions, desktop and mobile. Grey boxes, real section order, no visual decision. -->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 28px 32px 40px; background: #F5F7FB; color: #122339; font: 14px/1.45 ui-sans-serif, system-ui, sans-serif; }
+  h1 { margin: 0 0 6px; font-size: 22px; letter-spacing: -0.02em; }
+  .lede { margin: 0 0 24px; color: #53647B; max-width: 90ch; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+  .row + .row { margin-top: 32px; }
+  h2 { margin: 0 0 10px; font-size: 15px; }
+  .frame { background: #fff; border: 1px solid #7A8BA1; border-radius: 6px; overflow: hidden; }
+  .frame--mobile { width: 300px; }
+  .b { border: 1px dashed #7A8BA1; background: #EDF2FA; border-radius: 3px; padding: 6px 8px; font-size: 11.5px; color: #3B4A60; min-height: 28px; }
+  .b.solid { background: #D7DFE9; border-style: solid; }
+  .b.cta { background: #234BCE; color: #fff; border-color: #234BCE; font-weight: 600; }
+  .b.dev { background: #E8EEFC; border-color: #234BCE; color: #234BCE; display: grid; place-items: center; text-align: center; }
+  .b.tall { min-height: 120px; }
+  .b.sec { background: transparent; border: 0; padding: 0; color: #122339; font-weight: 600; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+  .hdr { display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; padding: 10px 14px; border-bottom: 1px solid #D7DFE9; align-items: center; }
+  .hdr .b { min-height: 24px; padding: 4px 8px; }
+  .sec-wrap { padding: 14px; border-bottom: 1px solid #D7DFE9; display: grid; gap: 8px; }
+  .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .g7-5 { display: grid; grid-template-columns: 7fr 5fr; gap: 12px; }
+  .g5-7 { display: grid; grid-template-columns: 5fr 7fr; gap: 12px; }
+  .g6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .g5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .steps { display: grid; gap: 6px; }
+  .steps .b { min-height: 38px; }
+  .steps .b.on { border-color: #234BCE; background: #E8EEFC; }
+  .note { margin-top: 8px; color: #53647B; font-size: 12.5px; }
+  .legend { margin-top: 28px; padding-top: 14px; border-top: 1px solid #D7DFE9; color: #53647B; font-size: 12.5px; }
+  .legend b { color: #122339; }
+</style>
+</head>
+<body>
+<h1>Landing publique Aegis — maquettes filaires</h1>
+<p class="lede">Même flux et mêmes sections (states.md §2) dans deux compositions. A : le casier est le fil conducteur, il change d’état au fil des étapes. B : fiche technique éditoriale, le casier est une planche annotée, le parcours est une frise. Les boîtes bleues sont le casier (3D ou repli statique).</p>
+
+<div class="row">
+  <section>
+    <h2>A — Mise en scène · bureau 1440</h2>
+    <div class="frame">
+      <div class="hdr"><div class="b solid">aegis | Manager</div><div class="b">Produit · Readiness · Parcours · Système · Garanties · Studio</div><div class="b">FR | EN</div><div class="b cta">Se connecter</div></div>
+      <div class="sec-wrap">
+        <div class="b sec">1 · #produit — héros plein écran</div>
+        <div class="g7-5">
+          <div class="steps"><div class="b">surtitre</div><div class="b tall">PRÊT. AUTORISÉ. PROUVÉ. (h1, display)</div><div class="b">description + phrase système (S1)</div><div class="g2"><div class="b cta">Se connecter →</div><div class="b">Voir le parcours ↓</div></div></div>
+          <div class="b dev tall" style="min-height:220px">casier en scène<br>hub + A1 + A2<br>3 repères (écran, A1, A2)<br>repli : image statique</div>
+        </div>
+      </div>
+      <div class="sec-wrap"><div class="b sec">2 · #readiness</div><div class="g5-7"><div class="b tall">« Un inventaire peut se tromper. » + texte (P3, R1, R2)</div><div class="b tall">exemple A1 prêt / A2 bloqué + raison · marqueur « Exemple illustratif »</div></div></div>
+      <div class="sec-wrap"><div class="b sec">3 · #parcours — casier collant à droite</div><div class="g5-7"><div class="steps"><div class="b">1 Réserver · Disponible</div><div class="b">2 Préparer · En conception</div><div class="b">3 Scanner · En conception</div><div class="b on">4 Ouvrir — A1 seulement (étape active)</div><div class="b">5 Prouver · En conception</div><div class="b">6 Retourner · En conception</div></div><div class="b dev tall" style="min-height:230px">casier, état de l’étape visible<br>(sticky, défilement natif)<br>repli : six vignettes</div></div></div>
+      <div class="sec-wrap"><div class="b sec">4 · #systeme</div><div class="b tall">schéma SVG : Mobile → Control ← Manager · Control ↔ PostgreSQL privé · Control ↔ MQTT TLS ↔ hub → A1, A2</div></div>
+      <div class="sec-wrap"><div class="b sec">5 · #garanties</div><div class="steps"><div class="b">01 Disponibilité réelle</div><div class="b">02 Retrait conforme</div><div class="b">03 Bonne cellule</div><div class="b">04 Preuve physique</div><div class="b">05 Chaîne de possession</div></div></div>
+      <div class="sec-wrap"><div class="b sec">6 · #studio</div><div class="g2"><div class="b">Aegis Studio · Philippe (logiciel) · Jimmy (matériel) · cours · laboratoire</div><div class="b">état du prototype au 9 nov. 2026 (sans métrique)</div></div></div>
+      <div class="sec-wrap" style="border:0"><div class="g2"><div class="b">Aegis Manager · Administration</div><div class="b">Technicien ? Aegis Mobile sur iPhone · FR | EN</div></div></div>
+    </div>
+  </section>
+  <section>
+    <h2>B — Dossier technique · bureau 1440</h2>
+    <div class="frame">
+      <div class="hdr"><div class="b solid">aegis | Manager</div><div class="b">01 Produit · 02 Readiness · 03 Parcours · 04 Système · 05 Garanties · 06 Studio</div><div class="b">FR | EN</div><div class="b cta">Se connecter</div></div>
+      <div class="sec-wrap">
+        <div class="b sec">1 · #produit — héros typographique + fiche</div>
+        <div class="g7-5">
+          <div class="steps"><div class="b">surtitre</div><div class="b tall">PRÊT. AUTORISÉ. PROUVÉ. (h1, display, plus grand)</div><div class="b">description</div><div class="g2"><div class="b cta">Se connecter →</div><div class="b">Lire la fiche ↓</div></div></div>
+          <div class="steps"><div class="b">CATÉGORIE · plateforme de disponibilité opérationnelle…</div><div class="b">TERRAIN · laboratoire, Cégep de Sorel-Tracy</div><div class="b">ÉQUIPE · Aegis Studio</div><div class="b">ÉTAT · prototype P0, 9 nov. 2026</div></div>
+        </div>
+        <div class="b dev" style="min-height:200px">Fig. 01 — planche pleine largeur : casier annoté (écran, A1, A2, câbles), règle graduée, légende mono<br>repli : la même image statique</div>
+      </div>
+      <div class="sec-wrap"><div class="b sec">2 · #readiness — équations du scope §7.2</div><div class="g5-7"><div class="b tall">PRÉSENT + CALIBRATION EXPIRÉE = BLOQUÉ<br>PRÉSENT + ENDOMMAGÉ = BLOQUÉ<br>PRÉSENT + ACCÈS REFUSÉ = BLOQUÉ<br>PRÉSENT + CONFORME + AUTORISÉ + DISPONIBLE = PRÊT</div><div class="b tall">texte (P3, R1, R2) + exemple A1 / A2 · marqueur</div></div></div>
+      <div class="sec-wrap"><div class="b sec">3 · #parcours — frise horizontale</div><div class="g6"><div class="b tall">1 Réserver<br>vignette</div><div class="b tall">2 Préparer<br>vignette</div><div class="b tall">3 Scanner<br>vignette</div><div class="b tall">4 Ouvrir<br>vignette</div><div class="b tall">5 Prouver<br>vignette</div><div class="b tall">6 Retourner<br>vignette</div></div></div>
+      <div class="sec-wrap"><div class="b sec">4 · #systeme — Fig. 02</div><div class="b tall">planche SVG : mêmes acteurs, style plan coté, libellés mono</div></div>
+      <div class="sec-wrap"><div class="b sec">5 · #garanties</div><div class="g2"><div class="b">01 Disponibilité réelle</div><div class="b">02 Retrait conforme</div><div class="b">03 Bonne cellule</div><div class="b">04 Preuve physique</div><div class="b">05 Chaîne de possession</div></div></div>
+      <div class="sec-wrap"><div class="b sec">6 · #studio</div><div class="g2"><div class="b">Aegis Studio · deux personnes, deux métiers</div><div class="b">état du prototype</div></div></div>
+      <div class="sec-wrap" style="border:0"><div class="g2"><div class="b">Aegis Manager · Administration</div><div class="b">Technicien ? Aegis Mobile sur iPhone · FR | EN</div></div></div>
+    </div>
+  </section>
+</div>
+
+<div class="row">
+  <section>
+    <h2>A · mobile 390</h2>
+    <div class="frame frame--mobile">
+      <div class="hdr" style="grid-template-columns:auto 1fr auto"><div class="b solid">aegis</div><div class="b">Menu ☰</div><div class="b cta">Se connecter</div></div>
+      <div class="sec-wrap"><div class="b">surtitre</div><div class="b tall">PRÊT. AUTORISÉ. PROUVÉ.</div><div class="b">description</div><div class="b cta">Se connecter →</div><div class="b dev tall">casier (réduit, vue avant)<br>repli statique</div></div>
+      <div class="sec-wrap"><div class="b sec">readiness</div><div class="b">texte</div><div class="b tall">exemple A1 / A2</div></div>
+      <div class="sec-wrap"><div class="b sec">parcours</div><div class="b dev">casier collant en haut (hauteur bornée) · état de l’étape</div><div class="steps"><div class="b">1</div><div class="b">2</div><div class="b on">3 …</div></div></div>
+      <div class="sec-wrap"><div class="b sec">système · garanties · studio · pied</div><div class="b tall">une colonne</div></div>
+    </div>
+    <p class="note">Le menu de sections s’ouvre en feuille sous 768 px; « Se connecter » reste dans l’en-tête.</p>
+  </section>
+  <section>
+    <h2>B · mobile 390</h2>
+    <div class="frame frame--mobile">
+      <div class="hdr" style="grid-template-columns:auto 1fr auto"><div class="b solid">aegis</div><div class="b">Sommaire 01–06</div><div class="b cta">Se connecter</div></div>
+      <div class="sec-wrap"><div class="b">surtitre</div><div class="b tall">PRÊT. AUTORISÉ. PROUVÉ.</div><div class="b">description</div><div class="b cta">Se connecter →</div><div class="steps"><div class="b">CATÉGORIE</div><div class="b">TERRAIN</div><div class="b">ÉQUIPE</div><div class="b">ÉTAT</div></div><div class="b dev tall">Fig. 01 — planche annotée (repères sous l’image)</div></div>
+      <div class="sec-wrap"><div class="b sec">readiness</div><div class="b tall">équations, une par ligne</div><div class="b">exemple A1 / A2</div></div>
+      <div class="sec-wrap"><div class="b sec">parcours</div><div class="steps"><div class="b">1 Réserver · vignette</div><div class="b">2 Préparer · vignette</div><div class="b">3 …</div></div></div>
+      <div class="sec-wrap"><div class="b sec">système · garanties · studio · pied</div><div class="b tall">une colonne</div></div>
+    </div>
+    <p class="note">La frise devient une liste verticale; les planches gardent leur légende sous l’image.</p>
+  </section>
+</div>
+
+<p class="legend"><b>Porte A (flux et hiérarchie) :</b> dans les deux compositions, la tâche première (se connecter), l’état du système (prototype en validation, étapes livrées ou en conception) et le chemin de lecture sont identifiables sans couleur ni finition. Les ancres correspondent aux sections de states.md §2.</p>
+</body>
+</html>
