@@ -85,3 +85,13 @@ et du bouton principal; elles ne sont pas copiées.
 - À réception : remplacement du substitut dans les maquettes de la direction A,
   rendus haute fidélité (clair/sombre, FR/EN, 320/390/768/1440, reduced motion),
   puis approbation visuelle de Philippe avant tout code applicatif.
+
+## 4. Mise à jour du 9 novembre 2026
+
+Jimmy a transmis sa scène three.js (`source/casier-aegis-l-01.html`) plutôt que des
+PNG. Elle suffit : `verify/render-device.mjs` produit les trois états de la
+section 1.1 dans `assets/device/`, et pourra produire la rotation de la section
+1.2 de la même façon. Les sections 1.1 et 1.2 sont donc **closes**. Il ne reste
+que la section 1.3 (captures navbar et CTA). Points à signaler à Jimmy pour une
+éventuelle retouche, non bloquants : liseré jaune du multimètre visible dans le
+jeu supérieur des portes; dépendance à deux CDN pour three.js.
