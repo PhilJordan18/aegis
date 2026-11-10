@@ -105,7 +105,7 @@ export const fr = {
       'Aegis relie l’application du technicien, l’administration Aegis Manager et un casier connecté. Il est conçu pour qu’un équipement critique ne sorte que s’il est prêt, autorisé et observé.',
     seeJourney: 'Voir le parcours',
     heroMention: 'Espace administrateur · compte fourni par votre administrateur.',
-    stageCaption: 'Casier P0 · un hub avec écran · deux cellules indépendantes',
+    stageCaption: 'Casier Aegis · un hub avec écran · deux cellules indépendantes',
     stageSource: 'Modèle 3D de Jimmy · rendu fixe',
     heroAlt: `Le casier Aegis${NBSP}: un module hub avec écran posé sur deux cellules A1 et A2, portes fermées.`,
     deviceFallback: `Casier Aegis${NBSP}: un hub avec écran, deux cellules A1 et A2. L’image n’a pas pu être chargée.`,
@@ -124,10 +124,10 @@ export const fr = {
       firstName: 'Multimètre 1',
       firstFacts: ({ date }: { date: string }) => `Cellule A1 · présent · calibration valide jusqu’au ${date} · accès standard`,
       secondName: 'Multimètre 2',
-      secondFacts: 'Cellule A2 · présent · accès standard · le retour reste possible',
+      secondFacts: 'Cellule A2 · présent · accès standard',
       thirdName: 'Caméra thermique',
       thirdReason: ({ time }: { time: string }) => `État physique inconnu${NBSP}: le casier ne répond plus depuis ${time}`,
-      thirdFacts: ({ time }: { time: string }) => `Cellule A1 · dernière lecture ${time}`,
+      thirdFacts: ({ time }: { time: string }) => `Casier 2, cellule A1 · dernière lecture ${time}`,
     },
     mockBadge: 'Exemple illustratif',
     calibrationExpired: ({ date }: { date: string }) => `Calibration expirée depuis le ${date}`,
@@ -154,13 +154,13 @@ export const fr = {
         },
         scan: {
           title: 'Scanner',
-          text: 'Il scanne le QR avec son téléphone. Le serveur revérifie droits, réservation, horaire et readiness.',
+          text: 'Il scannera le QR avec son téléphone, et le serveur revérifiera droits, réservation, horaire et readiness.',
           alt: 'Casier fermé, l’écran indique que le serveur vérifie.',
           state: `écran${NBSP}: vérification par le serveur`,
         },
         open: {
           title: 'Ouvrir',
-          text: 'Une seule commande, pour A1 seulement, valable deux minutes. Une commande expirée, rejouée ou destinée à une autre cellule n’est pas exécutée.',
+          text: 'Une seule commande, pour A1 seulement, valable deux minutes. Une commande expirée, rejouée ou destinée à une autre cellule ne sera pas exécutée.',
           alt: 'La porte A1 est ouverte, A2 reste fermée; l’écran donne la consigne.',
           state: `porte A1 ouverte, A2 fermée · écran${NBSP}: consigne`,
         },
@@ -190,7 +190,7 @@ export const fr = {
     system: {
       overline: 'Système',
       title: 'Qui parle à qui.',
-      alt: `Schéma${NBSP}: Aegis Mobile et Aegis Manager parlent en HTTPS à Aegis Control, qui garde PostgreSQL privé et échange en MQTT TLS avec le hub; le hub commande A1 et A2 par un câble dédié chacune.`,
+      alt: `Schéma${NBSP}: Aegis Mobile et Aegis Manager parlent en HTTPS à Aegis Control, qui garde PostgreSQL privé et échange en MQTT TLS avec le hub; le hub est conçu pour piloter A1 et A2 par un câble dédié chacune.`,
       mobileRole: 'Technicien · iPhone',
       managerRole: 'Administration · Web',
       controlRole: 'API Spring · seule autorité métier',
@@ -203,7 +203,7 @@ export const fr = {
       notes: {
         clients: { lead: 'Les clients parlent uniquement à l’API.', text: 'Aucun téléphone, aucun navigateur ne touche le casier ni la base.' },
         hub: { lead: 'Le hub exécute, il n’autorise pas.', text: 'Il affichera le QR, appliquera une commande autorisée et rapportera ce qu’il observe.' },
-        cable: { lead: 'Une cellule, un câble.', text: 'Deux départs indépendants depuis le hub; les cellules n’ont ni écran, ni Wi-Fi, ni MQTT.' },
+        cable: { lead: 'Une cellule, un câble.', text: 'Le hub est conçu avec deux départs indépendants; les cellules n’ont ni écran, ni Wi-Fi, ni MQTT.' },
       },
       list: {
         clients: { lead: 'Aegis Mobile et Aegis Manager', text: 'parlent en HTTPS à Aegis Control, la seule autorité métier.' },
@@ -220,7 +220,7 @@ export const fr = {
       },
       checkout: {
         title: 'Retrait conforme',
-        text: "Le serveur refuse un retrait non autorisé ou non conforme; l'interface l'explique, elle ne le décide pas.",
+        text: "Le serveur refusera un retrait non autorisé ou non conforme; l'interface l'expliquera, elle ne le décidera pas.",
       },
       compartment: {
         title: 'Bonne cellule',

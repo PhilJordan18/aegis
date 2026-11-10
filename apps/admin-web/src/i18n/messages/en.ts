@@ -81,7 +81,7 @@ export const en: Messages = {
       'Aegis connects the technician’s app, the Aegis Manager administration and a connected locker. It is designed so that a critical item leaves only when it is ready, authorized and observed.',
     seeJourney: 'See the journey',
     heroMention: 'Administrator area · account provided by your administrator.',
-    stageCaption: 'P0 locker · one hub with a screen · two independent compartments',
+    stageCaption: 'Aegis locker · one hub with a screen · two independent compartments',
     stageSource: 'Jimmy’s 3D model · fixed render',
     heroAlt: 'The Aegis locker: a hub module with a screen on top of two compartments A1 and A2, doors closed.',
     deviceFallback: 'Aegis locker: a hub with a screen, two compartments A1 and A2. The image could not be loaded.',
@@ -100,10 +100,10 @@ export const en: Messages = {
       firstName: 'Multimeter 1',
       firstFacts: ({ date }) => `Compartment A1 · present · calibration valid until ${date} · standard access`,
       secondName: 'Multimeter 2',
-      secondFacts: 'Compartment A2 · present · standard access · return remains possible',
+      secondFacts: 'Compartment A2 · present · standard access',
       thirdName: 'Thermal camera',
       thirdReason: ({ time }) => `Physical state unknown: the locker has not answered since ${time}`,
-      thirdFacts: ({ time }) => `Compartment A1 · last reading ${time}`,
+      thirdFacts: ({ time }) => `Locker 2, compartment A1 · last reading ${time}`,
     },
     mockBadge: 'Illustrative example',
     calibrationExpired: ({ date }) => `Calibration expired on ${date}`,
@@ -130,13 +130,13 @@ export const en: Messages = {
         },
         scan: {
           title: 'Scan',
-          text: 'They scan the QR with their phone. The server re-checks rights, reservation, schedule and readiness.',
+          text: 'They will scan the QR with their phone, and the server will re-check rights, reservation, schedule and readiness.',
           alt: 'Locker closed, the screen says the server is verifying.',
           state: 'screen: server verification',
         },
         open: {
           title: 'Open',
-          text: 'A single command, for A1 only, valid for two minutes. An expired, replayed or wrong-compartment command is not executed.',
+          text: 'A single command, for A1 only, valid for two minutes. An expired, replayed or wrong-compartment command will not be executed.',
           alt: 'Door A1 is open, A2 stays closed; the screen gives the instruction.',
           state: 'door A1 open, A2 closed · screen: instruction',
         },
@@ -165,7 +165,7 @@ export const en: Messages = {
     system: {
       overline: 'System',
       title: 'Who talks to whom.',
-      alt: 'Diagram: Aegis Mobile and Aegis Manager talk over HTTPS to Aegis Control, which keeps PostgreSQL private and exchanges over MQTT TLS with the hub; the hub drives A1 and A2 through one dedicated cable each.',
+      alt: 'Diagram: Aegis Mobile and Aegis Manager talk over HTTPS to Aegis Control, which keeps PostgreSQL private and exchanges over MQTT TLS with the hub; the hub is designed to drive A1 and A2 through one dedicated cable each.',
       mobileRole: 'Technician · iPhone',
       managerRole: 'Administration · Web',
       controlRole: 'Spring API · sole business authority',
@@ -178,7 +178,7 @@ export const en: Messages = {
       notes: {
         clients: { lead: 'Clients talk only to the API.', text: 'No phone and no browser touches the locker or the database.' },
         hub: { lead: 'The hub executes, it does not authorize.', text: 'It will display the QR, apply an authorized command and report what it observes.' },
-        cable: { lead: 'One compartment, one cable.', text: 'Two independent runs from the hub; compartments have no screen, no Wi-Fi, no MQTT.' },
+        cable: { lead: 'One compartment, one cable.', text: 'The hub is designed with two independent runs; compartments have no screen, no Wi-Fi, no MQTT.' },
       },
       list: {
         clients: { lead: 'Aegis Mobile and Aegis Manager', text: 'talk over HTTPS to Aegis Control, the sole business authority.' },
@@ -195,7 +195,7 @@ export const en: Messages = {
       },
       checkout: {
         title: 'Compliant checkout',
-        text: 'The server refuses an unauthorized or non-compliant checkout; the interface explains it, it does not decide it.',
+        text: 'The server will refuse an unauthorized or non-compliant checkout; the interface will explain it, not decide it.',
       },
       compartment: {
         title: 'Right compartment',

@@ -2,7 +2,8 @@ import { useI18n } from '../../i18n/useI18n'
 import type { ScreenState } from './journeySteps'
 
 /** Countdowns and codes on the device: not words, never translated. */
-const QR_COUNTDOWN = '01:58'
+/** Under the 60 s challenge lifetime (doc 09 §15.5, ADR-009); the 120 s window starts at local authorization. */
+const QR_COUNTDOWN = '00:52'
 const OPEN_COUNTDOWN = '01:21'
 const COMPARTMENTS = 'A1 · A2'
 
