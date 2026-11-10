@@ -46,7 +46,7 @@ final class SignInLiveUITests: XCTestCase {
         openAccount(resumed)
 
         resumed.buttons["account.signOut"].tap()
-        let confirm = resumed.buttons.matching(identifier: "account.confirmSignOut").firstMatch
+        let confirm = resumed.alerts.firstMatch.buttons["Se déconnecter"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         confirm.tap()
         XCTAssertTrue(resumed.staticTexts["Vous êtes déconnecté."].waitForExistence(timeout: 10))

@@ -141,6 +141,16 @@
         }
       }
     },
+    "Annuler" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        }
+      }
+    },
     "Annuler la réservation" : {
       "localizations" : {
         "en" : {
@@ -1643,12 +1653,12 @@
         }
       }
     },
-    "Votre réservation et votre prêt restent actifs." : {
+    "La déconnexion n’annule pas les réservations ou les prêts en cours." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your reservation and loan stay active."
+            "value" : "Signing out does not cancel any current reservations or loans."
           }
         }
       }
