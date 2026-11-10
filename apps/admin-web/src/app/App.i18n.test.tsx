@@ -105,7 +105,8 @@ describe('language resolution through the real controller', () => {
     const first = renderWithResolution()
     expect(document.documentElement.lang).toBe('fr-CA')
 
-    await userEvent.setup().click(screen.getByRole('radio', { name: 'English' }))
+    // The landing shows the switch in its header and its footer; either one applies the choice.
+    await userEvent.setup().click(screen.getAllByRole('radio', { name: 'English' })[0] as HTMLElement)
     expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('en')
     first.unmount()
 
@@ -113,14 +114,16 @@ describe('language resolution through the real controller', () => {
     renderWithResolution()
     expect(document.documentElement.lang).toBe('en-CA')
     expect(screen.getAllByRole('link', { name: 'Sign in' }).length).toBeGreaterThan(0)
-    expect(screen.getByRole('radio', { name: 'English' })).toHaveProperty('checked', true)
+    for (const option of screen.getAllByRole('radio', { name: 'English' })) expect(option).toHaveProperty('checked', true)
   })
 })
 
 describe('the Français / English switch', () => {
   it('is on the landing page before sign-in, without flags, each option in its own language', async () => {
     renderWithProviders(<App />, { locale: 'fr' })
-    const group = screen.getByRole('group', { name: 'Langue' })
+    // Header and footer; the copy in the closed section sheet is hidden.
+    expect(screen.getAllByRole('group', { name: 'Langue' })).toHaveLength(2)
+    const group = screen.getAllByRole('group', { name: 'Langue' })[0] as HTMLElement
     const options = within(group).getAllByRole('radio')
     expect(options.map((option) => option.closest('label')?.textContent)).toEqual(['Français', 'English'])
     expect(options.map((option) => option.closest('label')?.querySelector('[lang]')?.getAttribute('lang'))).toEqual(['fr', 'en'])
@@ -129,7 +132,7 @@ describe('the Français / English switch', () => {
 
     const user = userEvent.setup()
     await user.click(within(group).getByRole('radio', { name: 'English' }))
-    expect(screen.getByRole('group', { name: 'Language' })).toBeDefined()
+    expect(screen.getAllByRole('group', { name: 'Language' })).toHaveLength(2)
     expect(screen.getAllByRole('link', { name: 'Sign in' }).length).toBeGreaterThan(0)
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Ready. Authorized. Proven.')
   })
@@ -137,12 +140,12 @@ describe('the Français / English switch', () => {
   it('is reachable by keyboard and changes with the arrow keys', async () => {
     renderWithProviders(<App />, { locale: 'fr' })
     const user = userEvent.setup()
-    await user.tab()
-    await user.tab()
-    const french = screen.getByRole('radio', { name: 'Français' })
+    // Skip link, brand, the six section links, « Sections » (shown below 1024 px; jsdom applies no media query), then the switch.
+    for (let stop = 0; stop < 10; stop++) await user.tab()
+    const french = screen.getAllByRole('radio', { name: 'Français' })[0]
     expect(document.activeElement).toBe(french)
     await user.keyboard('{ArrowRight}')
-    expect(screen.getByRole('radio', { name: 'English' })).toHaveProperty('checked', true)
+    expect(screen.getAllByRole('radio', { name: 'English' })[0]).toHaveProperty('checked', true)
     expect(document.documentElement.lang).toBe('en-CA')
   })
 
@@ -178,10 +181,9 @@ describe.each<Locale>(['fr', 'en'])('screens in %s', (locale) => {
     expect(screen.getByText(m.brand.tagline)).toBeDefined()
     expect(screen.getByText(m.brand.description)).toBeDefined()
     expect(screen.getByText(m.landing.footerTechnician.replace(/\u00A0/g, ' '))).toBeDefined()
-    for (const guarantee of Object.values(m.landing.guarantees)) expect(screen.getByRole('heading', { level: 2, name: guarantee.title })).toBeDefined()
-    expect(screen.getByRole('region', { name: m.landing.guaranteesLabel })).toBeDefined()
-    expect(screen.getByText(m.landing.noBlockers)).toBeDefined()
-    expect(screen.getByText(m.landing.blockers({ count: 1 }).replace(/\u00A0/g, ' '))).toBeDefined()
+    for (const guarantee of Object.values(m.landing.guarantees)) expect(screen.getByRole('heading', { level: 3, name: guarantee.title })).toBeDefined()
+    expect(screen.getByRole('region', { name: m.landing.guaranteesTitle })).toBeDefined()
+    expect(screen.getByText(m.landing.diagnostic.secondFacts)).toBeDefined()
     expect(screen.getByRole('link', { name: m.brand.homeLabel })).toBeDefined()
   })
 

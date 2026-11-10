@@ -25,6 +25,12 @@ const PATHS = {
       <circle cx="12" cy="16.5" r="1.3" fill="var(--ag-glyph)" />
     </>
   ),
+  'status-ready': (
+    <>
+      <circle cx="12" cy="12" r="10" fill="currentColor" />
+      <path d="M7.5 12.5l3 3 6-7" {...glyph} />
+    </>
+  ),
   'status-info': (
     <>
       <circle cx="12" cy="12" r="10" fill="currentColor" />

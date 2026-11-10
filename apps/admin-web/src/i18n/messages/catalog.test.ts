@@ -106,7 +106,7 @@ describe('catalog consistency (fr is the source of the shape)', () => {
 
   it('does not leave an English message identical to French, except a product name and words that really match', () => {
     // Product name and words that really are the same in both languages.
-    const shared = new Set(['pageTitle.landing', 'signIn.footerProduct', 'shell.sectionsLabel', 'shell.menuTitle', 'shell.sections.audit', 'shell.sections.anomalies', 'equipment.factCalibration', 'equipment.factPlacement', 'equipment.accessLevel.STANDARD', 'catalogEdit.fieldDescription', 'custody.type.NFC', 'custody.type.QR', 'custody.fieldType'])
+    const shared = new Set(['pageTitle.landing', 'signIn.footerProduct', 'shell.sectionsLabel', 'shell.menuTitle', 'shell.sections.audit', 'shell.sections.anomalies', 'equipment.factCalibration', 'equipment.factPlacement', 'equipment.accessLevel.STANDARD', 'catalogEdit.fieldDescription', 'custody.type.NFC', 'custody.type.QR', 'custody.fieldType', 'landing.sectionsMenu', 'landing.nav.readiness', 'landing.nav.studio', 'landing.readiness.overline', 'landing.system.managerRole', 'landing.system.list.control.lead'])
     const same = [...frLeaves]
       .filter(([key, leaf]) => typeof leaf === 'string' && enLeaves.get(key) === leaf && !shared.has(key))
       .map(([key]) => key)
@@ -160,7 +160,7 @@ describe('message functions', () => {
 
   it('selects plural forms with the CLDR rules of each language', () => {
     const plain = (value: string) => value.replace(/[\u00A0\u202F]/g, ' ')
-    expect([0, 1, 2].map((count) => plain(fr.landing.blockers({ count })))).toEqual(['0 empêchement', '1 empêchement', '2 empêchements'])
-    expect([0, 1, 2].map((count) => plain(en.landing.blockers({ count })))).toEqual(['0 blockers', '1 blocker', '2 blockers'])
+    expect([0, 1, 2].map((count) => plain(fr.equipment.blockers({ count })))).toEqual(['0 empêchement', '1 empêchement', '2 empêchements'])
+    expect([0, 1, 2].map((count) => plain(en.equipment.blockers({ count })))).toEqual(['0 blockers', '1 blocker', '2 blockers'])
   })
 })
