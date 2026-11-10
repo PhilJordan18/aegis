@@ -20,7 +20,7 @@ import './landing.css'
  * are shown at noon UTC so no zone can shift their day; the two times are shown in the locker's zone.
  */
 const EXAMPLE_ZONE = 'America/Toronto'
-const CALIBRATION_VALID_UNTIL = new Date('2026-11-30T12:00:00Z')
+const CALIBRATION_VALID_UNTIL = new Date('2027-05-31T12:00:00Z')
 const CALIBRATION_EXPIRED_ON = new Date('2026-09-08T12:00:00Z')
 const LAST_ANSWER = new Date('2026-11-09T19:02:00Z')
 const LAST_READING = new Date('2026-11-09T18:58:00Z')
@@ -42,11 +42,15 @@ export function LandingPage() {
   const d = t.diagnostic
   const signIn = pathOf('signIn')
 
-  // A reload on /#parcours: the page is rendered after the browser looked for the anchor, so look again.
+  // A reload on /#parcours: the page is rendered after the browser looked for the anchor, so look again,
+  // and move focus there (handoff §5). Section ids are ASCII, so the raw hash is compared: decoding a
+  // malformed one would throw and blank the page.
   useEffect(() => {
-    const id = decodeURIComponent(window.location.hash.slice(1))
+    const id = window.location.hash.slice(1)
     if (!(SECTION_IDS as readonly string[]).includes(id)) return
-    document.getElementById(id)?.scrollIntoView()
+    const section = document.getElementById(id)
+    section?.scrollIntoView()
+    section?.focus({ preventScroll: true })
   }, [])
 
   return (

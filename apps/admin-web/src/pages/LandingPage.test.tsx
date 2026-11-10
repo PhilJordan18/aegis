@@ -138,4 +138,20 @@ describe('LandingPage', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(document.activeElement).toBe(toggle)
   })
+
+  it('moves focus to the section named by the hash on load', () => {
+    window.history.replaceState(null, '', '/#parcours')
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    renderWithProviders(<LandingPage />)
+    expect(document.activeElement?.id).toBe('parcours')
+    expect(scroll).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores an unknown or malformed hash instead of failing', () => {
+    window.history.replaceState(null, '', '/#%E0%A4%A')
+    renderWithProviders(<LandingPage />)
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+    expect(document.activeElement).toBe(document.body)
+  })
 })
