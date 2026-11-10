@@ -1,0 +1,38 @@
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+:{$PORT:8080} {
+	bind {$AEGIS_WEB_BIND:0.0.0.0}
+	root * {$AEGIS_WEB_ROOT:/srv}
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+	}
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	@api path /api /api/*
+	handle @api {
+		header Cache-Control "no-store"
+		# Keep the /api prefix and validate the upstream's public TLS certificate.
+		reverse_proxy https://{$AEGIS_API_HOST}
+	}
+
+	# Missing bundles must be 404, never the SPA HTML document.
+	handle /assets/* {
+		header Cache-Control "no-cache"
+		file_server
+	}
+
+	handle {
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
