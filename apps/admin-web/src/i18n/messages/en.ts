@@ -78,7 +78,7 @@ export const en: Messages = {
       studio: 'Studio',
     },
     heroSystem:
-      'Aegis connects the technician’s app, the Aegis Manager administration and a connected locker. It is built so that a critical item leaves only when it is ready, authorized and observed.',
+      'Aegis connects the technician’s app, the Aegis Manager administration and a connected locker. It is designed so that a critical item leaves only when it is ready, authorized and observed.',
     seeJourney: 'See the journey',
     heroMention: 'Administrator area · account provided by your administrator.',
     stageCaption: 'P0 locker · one hub with a screen · two independent compartments',
@@ -118,7 +118,7 @@ export const en: Messages = {
       steps: {
         reserve: {
           title: 'Reserve',
-          text: 'The technician reserves A1 from Aegis Mobile up to one hour into the operating window. No door moves.',
+          text: 'The technician reserves MM-001 from Aegis Mobile, until a time of their choice before the operating window closes. No door moves.',
           alt: 'Locker closed, screen on standby.',
           state: 'doors closed · screen on standby',
         },
@@ -177,17 +177,17 @@ export const en: Messages = {
       cable: 'dedicated cable',
       notes: {
         clients: { lead: 'Clients talk only to the API.', text: 'No phone and no browser touches the locker or the database.' },
-        hub: { lead: 'The hub executes, it does not authorize.', text: 'It displays the QR, applies an authorized command and reports what it observes.' },
+        hub: { lead: 'The hub executes, it does not authorize.', text: 'It will display the QR, apply an authorized command and report what it observes.' },
         cable: { lead: 'One compartment, one cable.', text: 'Two independent runs from the hub; compartments have no screen, no Wi-Fi, no MQTT.' },
       },
       list: {
         clients: { lead: 'Aegis Mobile and Aegis Manager', text: 'talk over HTTPS to Aegis Control, the sole business authority.' },
         control: { lead: 'Aegis Control', text: 'keeps PostgreSQL private and talks to the hub over MQTT on TLS.' },
-        hub: { lead: 'The hub', text: 'executes authorized commands and drives A1 and A2 through one dedicated cable each.' },
+        hub: { lead: 'The hub', text: 'is designed to execute authorized commands and drive A1 and A2 through one dedicated cable each.' },
       },
     },
     guaranteesOverline: 'Guarantees',
-    guaranteesTitle: 'Five rules the server does not negotiate.',
+    guaranteesTitle: 'Five rules set at design time.',
     guarantees: {
       readiness: {
         title: 'True readiness',
@@ -199,15 +199,15 @@ export const en: Messages = {
       },
       compartment: {
         title: 'Right compartment',
-        text: 'Only the expected compartment opens, after a valid authorization. A reservation or a displayed code opens nothing.',
+        text: 'Only the expected compartment will open, after a valid authorization. A reservation or a displayed code opens nothing.',
       },
       proof: {
         title: 'Physical proof',
-        text: 'Checkout and return are confirmed by consistent observations from the locker, never by a simple click.',
+        text: 'Checkout and return will be confirmed by consistent observations from the locker, never by a simple click.',
       },
       custody: {
         title: 'Chain of custody',
-        text: 'Every action and every observation remain available in the audit trail, with nothing erased.',
+        text: 'Every action and every observation will be available in the audit trail, with nothing erased.',
       },
     },
     studio: {

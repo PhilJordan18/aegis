@@ -142,7 +142,7 @@ export const fr = {
       steps: {
         reserve: {
           title: 'Réserver',
-          text: 'Le technicien réserve A1 depuis Aegis Mobile jusqu’à une heure de la plage d’exploitation. Aucune porte ne bouge.',
+          text: 'Le technicien réserve MM-001 depuis Aegis Mobile, jusqu’à l’heure de son choix avant la fin de la plage d’exploitation. Aucune porte ne bouge.',
           alt: 'Casier fermé, écran en veille.',
           state: 'portes fermées · écran en veille',
         },
@@ -202,17 +202,17 @@ export const fr = {
       cable: 'câble dédié',
       notes: {
         clients: { lead: 'Les clients parlent uniquement à l’API.', text: 'Aucun téléphone, aucun navigateur ne touche le casier ni la base.' },
-        hub: { lead: 'Le hub exécute, il n’autorise pas.', text: 'Il affiche le QR, applique une commande autorisée et rapporte ce qu’il observe.' },
+        hub: { lead: 'Le hub exécute, il n’autorise pas.', text: 'Il affichera le QR, appliquera une commande autorisée et rapportera ce qu’il observe.' },
         cable: { lead: 'Une cellule, un câble.', text: 'Deux départs indépendants depuis le hub; les cellules n’ont ni écran, ni Wi-Fi, ni MQTT.' },
       },
       list: {
         clients: { lead: 'Aegis Mobile et Aegis Manager', text: 'parlent en HTTPS à Aegis Control, la seule autorité métier.' },
         control: { lead: 'Aegis Control', text: 'garde PostgreSQL privé et parle au hub par MQTT sur TLS.' },
-        hub: { lead: 'Le hub', text: 'exécute les commandes autorisées et pilote A1 et A2 par un câble dédié chacune.' },
+        hub: { lead: 'Le hub', text: 'est conçu pour exécuter les commandes autorisées et piloter A1 et A2 par un câble dédié chacune.' },
       },
     },
     guaranteesOverline: 'Garanties',
-    guaranteesTitle: 'Cinq règles que le serveur ne négocie pas.',
+    guaranteesTitle: 'Cinq règles posées dès la conception.',
     guarantees: {
       readiness: {
         title: 'Disponibilité réelle',
@@ -224,15 +224,15 @@ export const fr = {
       },
       compartment: {
         title: 'Bonne cellule',
-        text: "Seule la cellule attendue s'ouvre, après une autorisation valide. Une réservation ou un code affiché n'ouvre rien.",
+        text: "Seule la cellule attendue s'ouvrira, après une autorisation valide. Une réservation ou un code affiché n'ouvre rien.",
       },
       proof: {
         title: 'Preuve physique',
-        text: 'Retrait et retour sont confirmés par des observations cohérentes du casier, jamais par un simple clic.',
+        text: 'Retrait et retour seront confirmés par des observations cohérentes du casier, jamais par un simple clic.',
       },
       custody: {
         title: 'Chaîne de possession',
-        text: "Chaque action et chaque observation restent consultables dans l'audit, sans effacement.",
+        text: "Chaque action et chaque observation seront consultables dans l'audit, sans effacement.",
       },
     },
     studio: {
