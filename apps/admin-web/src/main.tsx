@@ -21,6 +21,8 @@ import { CustodyGatewayContext } from './features/custody/CustodyGatewayContext'
 import { createHttpCustodyGateway } from './features/custody/httpCustodyGateway'
 import { LockerGatewayContext } from './features/lockers/LockerGatewayContext'
 import { createHttpScheduleGateway } from './features/schedule/httpScheduleGateway'
+import { createHttpTransactionGateway } from './features/transactions/httpTransactionGateway'
+import { TransactionGatewayContext } from './features/transactions/TransactionGatewayContext'
 import { ScheduleGatewayContext } from './features/schedule/ScheduleGatewayContext'
 import { createLocaleController } from './i18n/locale'
 import { LocaleContext } from './i18n/useI18n'
@@ -50,6 +52,8 @@ const catalogGateway = createHttpCatalogGateway()
 const lockerGateway = createHttpLockerGateway()
 const scheduleGateway = createHttpScheduleGateway()
 const custodyGateway = createHttpCustodyGateway()
+// Reservations, loans and locker operations (09 §17): read only; design-review captures route /api/v1/admin/... themselves.
+const transactionGateway = createHttpTransactionGateway()
 
 const container = document.getElementById('root')
 if (!container) throw new Error('Missing #root element')
@@ -66,9 +70,11 @@ createRoot(container).render(
                   <LockerGatewayContext value={lockerGateway}>
                     <ScheduleGatewayContext value={scheduleGateway}>
                       <CustodyGatewayContext value={custodyGateway}>
-                        <PreviewContext value={previewControls}>
-                          <App />
-                        </PreviewContext>
+                        <TransactionGatewayContext value={transactionGateway}>
+                          <PreviewContext value={previewControls}>
+                            <App />
+                          </PreviewContext>
+                        </TransactionGatewayContext>
                       </CustodyGatewayContext>
                     </ScheduleGatewayContext>
                   </LockerGatewayContext>

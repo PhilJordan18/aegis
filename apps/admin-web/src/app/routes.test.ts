@@ -13,6 +13,12 @@ describe('matchRoute', () => {
     expect(matchRoute('/equipements', true)).toBe('equipment')
   })
 
+  it('serves the protected reservations and loans route in every build', () => {
+    expect(matchRoute('/reservations-prets', false)).toBe('reservationsLoans')
+    expect(matchRoute('/reservations-prets/', true)).toBe('reservationsLoans')
+    expect(pathOf('reservationsLoans')).toBe('/reservations-prets')
+  })
+
   it('serves preview routes only when the preview is enabled', () => {
     expect(matchRoute('/apercu/equipements', true)).toBe('equipmentPreview')
     expect(matchRoute('/apercu/equipements', false)).toBe('notFound')

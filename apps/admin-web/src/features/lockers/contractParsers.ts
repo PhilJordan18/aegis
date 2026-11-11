@@ -29,7 +29,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 // RFC 3339 in UTC, as the API writes it (09 §3): fractional seconds of any length, such as `.123456Z`.
 const INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,9})?Z$/
 
-function isUuid(value: unknown): value is string {
+export function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID.test(value)
 }
 
@@ -37,7 +37,7 @@ function isUuid(value: unknown): value is string {
  * A real UTC instant. `Date` rolls an impossible date over (30 February becomes 2 March), so the calendar fields are
  * read back and compared: month 13, day 30 of February or hour 25 are rejected here, and no later formatting can throw.
  */
-function isInstant(value: unknown): value is string {
+export function isInstant(value: unknown): value is string {
   if (typeof value !== 'string') return false
   const match = INSTANT.exec(value)
   if (match === null) return false
