@@ -33,10 +33,13 @@ import ca.aegis.control.locker.LockerSchedules;
 import ca.aegis.control.locker.OpenWindow;
 import ca.aegis.control.locker.OperatingHours;
 import ca.aegis.control.locker.OperatingHoursException;
+import ca.aegis.control.reservation.ReservationRepository.AdminFilter;
 import ca.aegis.control.reservation.ReservationRepository.LockedUser;
 import ca.aegis.control.reservation.ReservationRepository.ReservationRow;
 import ca.aegis.control.shared.web.ApiError;
 import ca.aegis.control.shared.web.InvalidRequestException;
+import ca.aegis.control.shared.web.PageQuery;
+import ca.aegis.control.shared.web.PageResponse;
 import ca.aegis.control.shared.web.ResourceNotFoundException;
 
 /**
@@ -199,6 +202,36 @@ class ReservationService {
         return reservations.find(reservationId).filter(row -> row.userId().equals(technicianId))
                 .map(row -> view(row, now))
                 .orElseThrow(ResourceNotFoundException::new);
+    }
+
+    /** Document 09, section 17: every reservation, read only; the count and the page see one snapshot. */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    PageResponse<ReservationView> adminList(AdminFilter filter, PageQuery page) {
+        long total = reservations.count(filter);
+        List<ReservationRow> rows = total == 0 ? List.of() : reservations.page(filter, page);
+        Map<UUID, AssetSummary> summaries = assets.summaries(rows.stream().map(ReservationRow::assetId).toList());
+        return PageResponse.of(rows.stream().map(row -> adminView(row, summaries.get(row.assetId()))).toList(),
+                page, total);
+    }
+
+    /** Document 09, section 17: any reservation, whoever holds it. */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    ReservationView adminGet(UUID reservationId) {
+        return reservations.find(reservationId)
+                .map(row -> adminView(row, assets.summaries(List.of(row.assetId())).get(row.assetId())))
+                .orElseThrow(ResourceNotFoundException::new);
+    }
+
+    /**
+     * Provisional rule D4 of the 11 November 2026 matrix (#67): section 8.10 lists the mutations of the requester, and
+     * an administrator performs none of them, so {@code availableActions} is always empty here.
+     */
+    private ReservationView adminView(ReservationRow row, AssetSummary asset) {
+        UUID currentOperation = row.status() == ReservationStatus.ACTIVE
+                ? reservations.currentOperationOf(row.id()).orElse(null) : null;
+        return new ReservationView(row.id(), asset, row.userId(), row.status(), row.reservedFrom(),
+                row.reservedUntil(), row.createdAt(), row.cancelledAt(), row.fulfilledAt(), row.expiredAt(),
+                currentOperation, List.of());
     }
 
     private OpenWindow openWindow(UUID lockerId, Instant now) {
