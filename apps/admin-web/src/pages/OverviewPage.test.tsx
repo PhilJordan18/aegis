@@ -128,7 +128,7 @@ describe("Vue d'ensemble: the five blocks", () => {
     // Cell code and equipment code come from the locker list (G3), the detection time from the lab zone.
     expect(anomalies).toContain('Cellule A1 · MM-001 · Détectée')
 
-    await waitFor(() => expect(blockText('Prêts en retard')).toContain('1 en retard'))
+    await waitFor(() => expect(blockText('Prêts en retard')).toContain('1 observé en retard'))
     const loans = blockText('Prêts en retard')
     expect(loans).toContain('Retour en cours')
     expect(loans).toContain('En retard')
@@ -144,7 +144,7 @@ describe("Vue d'ensemble: the five blocks", () => {
     expect(locker).toContain('Aucun équipement placé')
     expect(locker).toContain("Cette lecture n'autorise aucune ouverture.")
 
-    await waitFor(() => expect(blockText('Opération en cours')).toContain('1 en cours'))
+    await waitFor(() => expect(blockText('Opération en cours')).toContain('1 observée en cours'))
     const operations = blockText('Opération en cours')
     expect(operations).toContain('Commande acquittée')
     expect(operations).toContain('Retrait · MM-001')
@@ -158,7 +158,7 @@ describe("Vue d'ensemble: the five blocks", () => {
   it('links every row and every foot into the page that owns the dossier, and offers no corrective action', async () => {
     renderWith()
     await waitFor(() => expect(blockText('Réservations actives')).toContain('1 active'))
-    await waitFor(() => expect(blockText('Opération en cours')).toContain('1 en cours'))
+    await waitFor(() => expect(blockText('Opération en cours')).toContain('1 observée en cours'))
     const hrefs = (name: string) => within(block(name)).getAllByRole('link').map((link) => link.getAttribute('href'))
     expect(hrefs('Anomalies ouvertes')).toEqual([`/anomalies?anomalie=8a9b0c1d-2e3f-4a5b-9c6d-7e8f9a0b1c2d`, '/anomalies'])
     expect(hrefs('Prêts en retard')).toEqual([`/reservations-prets?vue=prets&dossier=${id(1)}`, '/reservations-prets?vue=prets'])
@@ -176,7 +176,7 @@ describe("Vue d'ensemble: the five blocks", () => {
     const user = userEvent.setup()
     renderWith()
     await waitFor(() => expect(blockText('Réservations actives')).toContain('1 active'))
-    await waitFor(() => expect(blockText('Opération en cours')).toContain('1 en cours'))
+    await waitFor(() => expect(blockText('Opération en cours')).toContain('1 observée en cours'))
     const links = [...document.querySelectorAll<HTMLAnchorElement>('main a[href]')].map((link) => link.getAttribute('href'))
     expect(links.map((href) => href?.split('?')[0])).toEqual(['/anomalies', '/anomalies', '/reservations-prets', '/reservations-prets', '/casiers', '/reservations-prets', '/reservations-prets', '/reservations-prets', '/reservations-prets'])
     await user.tab()
@@ -193,7 +193,7 @@ describe("Vue d'ensemble: the five blocks", () => {
       { status: 'ACTIVE', page: 0, size: 100 },
       { status: 'RETURN_PENDING', page: 0, size: 100 },
     ])
-    expect(fakes.transactionGateway.listLockerOperations.mock.calls.map((call) => (call as unknown[])[1])).toEqual(IN_PROGRESS_OPERATION_STATUSES.map((status) => ({ status, page: 0, size: 5 })))
+    expect(fakes.transactionGateway.listLockerOperations.mock.calls.map((call) => (call as unknown[])[1])).toEqual(IN_PROGRESS_OPERATION_STATUSES.map((status) => ({ status, page: 0, size: 100 })))
     expect(fakes.transactionGateway.listReservations.mock.calls.map((call) => (call as unknown[])[1])).toEqual([{ status: 'ACTIVE', page: 0, size: 5 }])
     expect(fakes.custodyGateway.listLockers).toHaveBeenCalledTimes(1)
     expect(fakes.lockerGateway.getStatus).toHaveBeenCalledTimes(1)
@@ -228,52 +228,72 @@ describe("Vue d'ensemble: authoritative counts", () => {
     expect(blockText('Anomalies ouvertes')).toContain('Affichage de 5 sur 8.')
   })
 
-  it('counts the reservations and the operations with the totals of the server, per status', async () => {
+  it('counts the reservations with the server total, and the operations as the distinct ones observed', async () => {
     renderWith(
       gateways({
         reservations: ok(pageOf([reservation({ id: id(3) })], 14)),
-        operations: { REQUESTED: ok(pageOf([operation({ id: id(4), status: 'REQUESTED' })], 2)), DOOR_OPENED: ok(pageOf([operation({ id: id(5), status: 'DOOR_OPENED' })], 3)) },
+        operations: { REQUESTED: ok(pageOf([operation({ id: id(4), status: 'REQUESTED' })], 1)), DOOR_OPENED: ok(pageOf([operation({ id: id(5), status: 'DOOR_OPENED' })], 1)) },
       }),
     )
     await waitFor(() => expect(blockText('Réservations actives')).toContain('14 actives'))
-    await waitFor(() => expect(blockText('Opération en cours')).toContain('5 en cours'))
+    await waitFor(() => expect(blockText('Opération en cours')).toContain('2 observées en cours'))
     expect(blockText('Opération en cours')).toContain('Porte ouverte')
+    expect(blockText('Opération en cours')).toContain("Chaque statut est lu par une requête distincte, pas au même instant : un élément qui change de statut entre deux lectures n'est compté qu'une fois, et peut manquer.")
+  })
+
+  it('shows one operation, not an exact 2, when it changed status between the two reads that saw it', async () => {
+    renderWith(
+      gateways({
+        operations: { AUTHORIZED: ok(pageOf([operation({ id: id(4), status: 'AUTHORIZED' })], 1)), COMMAND_SENT: ok(pageOf([operation({ id: id(4), status: 'COMMAND_SENT' })], 1)) },
+      }),
+    )
+    await waitFor(() => expect(blockText('Opération en cours')).toContain('1 observée en cours'))
+    const operations = blockText('Opération en cours')
+    expect(operations).not.toMatch(/\b2\b.*en cours/)
+    expect(within(block('Opération en cours')).getAllByRole('link')).toHaveLength(2)
+  })
+
+  it('gives no total of operations when a status holds more than one page', async () => {
+    renderWith(gateways({ operations: { REQUESTED: ok(pageOf([operation({ id: id(4), status: 'REQUESTED' })], 240)) } }))
+    await waitFor(() => expect(blockText('Opération en cours')).toContain('1 en cours parmi les opérations lues'))
+    expect(blockText('Opération en cours')).toContain('Un état compte plus de 100 opérations : seules les plus récentes ont été lues.')
+    expect(blockText('Opération en cours')).not.toContain('240')
   })
 
   it('takes the overdue loans from the server flag: a loan past its due date that the server does not flag is not overdue', async () => {
     renderWith(gateways({ loans: { ACTIVE: ok(pageOf([loan({ id: id(6), overdue: false, dueAt: '2020-01-01T00:00:00Z' })])), RETURN_PENDING: ok(pageOf([])) } }))
-    await waitFor(() => expect(blockText('Prêts en retard')).toContain('Aucun prêt en retard.'))
+    await waitFor(() => expect(blockText('Prêts en retard')).toContain('Aucun prêt en retard observé.'))
     expect(blockText('Prêts en retard')).not.toContain('En retard depuis')
   })
 
-  it('shows a minimum, not a total, when one loan status could not be read', async () => {
+  it('covers only the loans read, never a total, when one loan status could not be read', async () => {
     renderWith(gateways({ loans: { ACTIVE: ok(pageOf([loan({ id: id(6), overdue: true })])), RETURN_PENDING: offline } }))
-    await waitFor(() => expect(blockText('Prêts en retard')).toContain('Au moins 1 en retard'))
+    await waitFor(() => expect(blockText('Prêts en retard')).toContain('1 en retard parmi les prêts lus'))
     const loans = blockText('Prêts en retard')
     expect(loans).toContain('Lecture incomplète.')
-    expect(loans).toContain('Les prêts au statut Retour en cours n\'ont pas pu être lus. Le nombre affiché est un minimum.')
+    expect(loans).toContain('Les prêts au statut Retour en cours n\'ont pas pu être lus. Le nombre affiché ne porte que sur les prêts lus.')
     expect(within(block('Prêts en retard')).getByRole('button', { name: 'Réessayer' })).toBeDefined()
   })
 
-  it('shows a minimum when a status holds more loans than the page read, and never « none » for an unread remainder', async () => {
+  it('covers only the loans read when a status holds more loans than the page read, and never « none » for an unread remainder', async () => {
     renderWith(gateways({ loans: { ACTIVE: ok(pageOf([loan({ id: id(6), overdue: false })], 240)), RETURN_PENDING: ok(pageOf([])) } }))
     await waitFor(() => expect(blockText('Prêts en retard')).toContain('Aucun retard dans les prêts lus.'))
     const loans = blockText('Prêts en retard')
-    expect(loans).not.toContain('Aucun prêt en retard.')
-    expect(loans).toContain('Seuls 1 prêts sur 240 ont été lus, les plus récents. Le nombre affiché est un minimum.')
+    expect(loans).not.toContain('Aucun prêt en retard observé.')
+    expect(loans).toContain('Seuls 1 prêts sur 240 ont été lus, les plus récents. Le nombre affiché ne porte que sur les prêts lus.')
   })
 
-  it('shows a minimum of operations, and names how many statuses could not be read', async () => {
+  it('covers only the operations read, and names how many statuses could not be read', async () => {
     renderWith(gateways({ operations: { REQUESTED: ok(pageOf([operation({ id: id(4), status: 'REQUESTED' })], 1)), AUTHORIZED: problem(500, 'INTERNAL_ERROR'), COMMAND_SENT: offline } }))
-    await waitFor(() => expect(blockText('Opération en cours')).toContain('Au moins 1 en cours'))
-    expect(blockText('Opération en cours')).toContain("2 des 7 états d'opération n'ont pas pu être lus. Le nombre affiché est un minimum.")
+    await waitFor(() => expect(blockText('Opération en cours')).toContain('1 en cours parmi les opérations lues'))
+    expect(blockText('Opération en cours')).toContain("2 des 7 états d'opération n'ont pas pu être lus. Le nombre affiché ne porte que sur les opérations lues.")
   })
 
   it('says « none » only when every read answered with nothing', async () => {
     renderWith(gateways({ anomalies: ok(anomalyPageOf([])), loans: { ACTIVE: ok(pageOf([])), RETURN_PENDING: ok(pageOf([])) }, operations: {}, reservations: ok(pageOf([])) }))
     await waitFor(() => expect(blockText('Anomalies ouvertes')).toContain('Aucune anomalie ouverte.'))
-    await waitFor(() => expect(blockText('Prêts en retard')).toContain('Aucun prêt en retard.'))
-    await waitFor(() => expect(blockText('Opération en cours')).toContain('Aucune opération physique en cours.'))
+    await waitFor(() => expect(blockText('Prêts en retard')).toContain('Aucun prêt en retard observé.'))
+    await waitFor(() => expect(blockText('Opération en cours')).toContain('Aucune opération physique observée en cours.'))
     await waitFor(() => expect(blockText('Réservations actives')).toContain('Aucune réservation active.'))
     // The locker keeps its own line when everything else is clear.
     await waitFor(() => expect(blockText('Casier')).toContain('AEGIS-DEMO-01'))
@@ -290,7 +310,7 @@ describe("Vue d'ensemble: independent blocks", () => {
     expect(reservations).not.toMatch(/\b0\b/)
     expect(within(block('Réservations actives')).queryByRole('link')).toBeNull()
     expect(blockText('Anomalies ouvertes')).toContain('1 ouverte')
-    await waitFor(() => expect(blockText('Prêts en retard')).toContain('1 en retard'))
+    await waitFor(() => expect(blockText('Prêts en retard')).toContain('1 observé en retard'))
     expect(blockText('Casier')).toContain('En ligne')
   })
 
@@ -301,7 +321,7 @@ describe("Vue d'ensemble: independent blocks", () => {
     expect(anomalies).toContain('trace-404')
     expect(anomalies).not.toContain('Aucune anomalie ouverte.')
     expect(anomalies).not.toMatch(/introuvable|bientôt|disponible/i)
-    await waitFor(() => expect(blockText('Prêts en retard')).toContain('1 en retard'))
+    await waitFor(() => expect(blockText('Prêts en retard')).toContain('1 observé en retard'))
   })
 
   it('shows a network failure of every loan read as unreachable, not as « no overdue loan »', async () => {
@@ -475,11 +495,11 @@ describe("Vue d'ensemble: language and access", () => {
     expect(document.title).toBe('Overview — Aegis Manager')
     expect(screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual(['Open anomalies', 'Overdue loans', 'Locker', 'Operation in progress', 'Active reservations'])
     await waitFor(() => expect(blockText('Open anomalies')).toContain('1 open'))
-    await waitFor(() => expect(blockText('Overdue loans')).toContain('At least 1 overdue'))
+    await waitFor(() => expect(blockText('Overdue loans')).toContain('1 overdue among the loans read'))
     expect(blockText('Overdue loans')).toContain('Incomplete read.')
-    expect(blockText('Overdue loans')).toContain('Loans with the status Return in progress could not be read. The number shown is a minimum.')
+    expect(blockText('Overdue loans')).toContain('Loans with the status Return in progress could not be read. The number shown covers only the loans read.')
     await waitFor(() => expect(blockText('Locker')).toContain('Online'))
-    await waitFor(() => expect(blockText('Operation in progress')).toContain('1 in progress'))
+    await waitFor(() => expect(blockText('Operation in progress')).toContain('1 observed in progress'))
     await waitFor(() => expect(blockText('Active reservations')).toContain('1 active'))
     expect(plain(document.querySelector('main')?.textContent)).toContain('Laboratory time: America/Toronto')
     expect(within(block('Open anomalies')).getByRole('link', { name: 'View anomalies' })).toBeDefined()

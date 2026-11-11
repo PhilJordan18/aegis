@@ -59,19 +59,20 @@ describe.skipIf(!origin || !email || !password)("Vue d'ensemble reads against an
     const flagged = reads.flatMap((read) => (read.kind === 'ready' ? read.value.items.filter((loan) => loan.overdue) : []))
     expect(summary.value.overdue).toHaveLength(flagged.length)
     expect(summary.value.overdue.every((loan) => loan.overdue && loan.status !== 'COMPLETED')).toBe(true)
-    // The counts are exact only when each status was read in full.
+    // The count covers the whole population observed only when each status was read in full.
     const complete = reads.every((read) => read.kind === 'ready' && read.value.items.length >= read.value.totalItems)
-    expect(summary.value.count.exact).toBe(complete)
+    expect(summary.value.count.complete).toBe(complete)
   })
 
-  it('accepts every non-final operation status, and the total is the sum of the totals the server counted', async () => {
+  it('accepts every non-final operation status, and counts the distinct operations observed', async () => {
     const gateway = createHttpTransactionGateway(options)
     const reads = []
-    for (const status of IN_PROGRESS_OPERATION_STATUSES) reads.push(ready(await gateway.listLockerOperations(token, { status, page: 0, size: ROW_LIMIT })))
+    for (const status of IN_PROGRESS_OPERATION_STATUSES) reads.push(ready(await gateway.listLockerOperations(token, { status, page: 0, size: WIDE_PAGE_SIZE })))
     const summary = summarizeOperations(reads)
     if (summary.kind !== 'ready') return
-    expect(summary.value.count.exact).toBe(true)
-    expect(summary.value.count.n).toBe(reads.reduce((sum, read) => sum + (read.kind === 'ready' ? read.value.totalItems : 0), 0))
+    const ids = new Set(reads.flatMap((read) => (read.kind === 'ready' ? read.value.items.map((operation) => operation.id) : [])))
+    expect(summary.value.count.n).toBe(ids.size)
+    expect(summary.value.count.complete).toBe(reads.every((read) => read.kind === 'ready' && read.value.items.length >= read.value.totalItems))
     expect(summary.value.rows.every((operation) => operation.terminalAt === null)).toBe(true)
   })
 

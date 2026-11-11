@@ -49,15 +49,16 @@ export function useOpenLoanReads() {
 }
 
 /**
- * Operations in progress: §17 takes one `status`, so each non-final status is counted with its own `totalItems` and
- * the preview is the newest of them. Nothing is derived from reservations or loans, so the block depends on no other.
+ * Operations in progress: §17 takes one `status`, so each non-final status is read on its own, as wide as the contract
+ * allows, and the distinct operations observed are counted. Nothing is derived from reservations or loans, so the block
+ * depends on no other.
  */
 export function useInProgressOperationReads() {
   const gateway = useTransactionGateway()
   const session = useSessionStore()
   return useQueries({
     queries: IN_PROGRESS_OPERATION_STATUSES.map((status: LockerOperationStatus) => {
-      const query = { status, page: 0, size: ROW_LIMIT } as const
+      const query = { status, page: 0, size: WIDE_PAGE_SIZE } as const
       return {
         queryKey: queryKeys.overview.operations(query),
         queryFn: ({ signal }: { signal: AbortSignal }) => authorizedRequest(session, (accessToken) => gateway.listLockerOperations(accessToken, query, signal)),

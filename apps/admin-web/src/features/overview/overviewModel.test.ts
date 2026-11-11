@@ -91,35 +91,42 @@ describe('summarizeAnomalies', () => {
 describe('summarizeLoans', () => {
   const late = (n: number, overrides: Record<string, unknown> = {}) => loan({ id: id(n), overdue: true, ...overrides })
 
-  it('is exact when both statuses were read in full, and counts only the loans the server flags', () => {
+  it('is complete when both statuses were read in full, and counts only the loans the server flags', () => {
     const summary = summarizeLoans([
       ready(page([late(1), loan({ id: id(2), overdue: false })])),
       ready(page([late(3, { status: 'RETURN_PENDING' })])),
     ])
     if (summary.kind !== 'ready') throw new Error('not ready')
-    expect(summary.value.count).toEqual({ n: 2, exact: true })
+    expect(summary.value.count).toEqual({ n: 2, complete: true })
     expect(summary.value.gaps).toEqual([])
     expect(summary.value.overdue.map((row) => row.id).sort()).toEqual([id(1), id(3)])
+  })
+
+  it('counts once a loan seen in both reads because its return was requested between them', () => {
+    const summary = summarizeLoans([ready(page([late(4, { status: 'ACTIVE' })])), ready(page([late(4, { status: 'RETURN_PENDING' })]))])
+    if (summary.kind !== 'ready') throw new Error('not ready')
+    expect(summary.value.count).toEqual({ n: 1, complete: true })
+    expect(summary.value.overdue.map((row) => row.id)).toEqual([id(4)])
   })
 
   it('never computes a delay from `dueAt`: a loan past its due date but not flagged is not overdue', () => {
     const pastDue = loan({ id: id(1), dueAt: '2020-01-01T00:00:00Z', overdue: false })
     const summary = summarizeLoans([ready(page([pastDue])), ready(page([]))])
     if (summary.kind !== 'ready') throw new Error('not ready')
-    expect(summary.value.count).toEqual({ n: 0, exact: true })
+    expect(summary.value.count).toEqual({ n: 0, complete: true })
   })
 
-  it('is a minimum, with the missing status named, when one read failed', () => {
+  it('covers only the loans read, with the missing status named, when one read failed', () => {
     const summary = summarizeLoans([ready(page([late(1)])), failed])
     if (summary.kind !== 'ready') throw new Error('not ready')
-    expect(summary.value.count).toEqual({ n: 1, exact: false })
+    expect(summary.value.count).toEqual({ n: 1, complete: false })
     expect(summary.value.gaps).toEqual([{ kind: 'unread', statuses: ['RETURN_PENDING'] }])
   })
 
-  it('is a minimum when a status holds more loans than the page read', () => {
+  it('covers only the loans read when a status holds more loans than the page read', () => {
     const summary = summarizeLoans([ready(page([late(1)], 240)), ready(page([]))])
     if (summary.kind !== 'ready') throw new Error('not ready')
-    expect(summary.value.count.exact).toBe(false)
+    expect(summary.value.count.complete).toBe(false)
     expect(summary.value.gaps).toEqual([{ kind: 'truncated', read: 1, total: 240 }])
     expect(isComplete(page([late(1)], 240))).toBe(false)
   })
@@ -146,22 +153,40 @@ describe('summarizeOperations', () => {
     expect(IN_PROGRESS_OPERATION_STATUSES).toEqual(['REQUESTED', 'AWAITING_LOCAL_PROOF', 'AUTHORIZED', 'COMMAND_SENT', 'COMMAND_ACKNOWLEDGED', 'DOOR_OPENED', 'OBSERVATION_RECEIVED'])
   })
 
-  it('sums the totals the server counted per status and previews the newest operations', () => {
+  it('counts the distinct operations observed and previews the newest of them', () => {
     const summary = summarizeOperations(
       reads({
         1: ready(page([operation({ id: id(1), status: 'AWAITING_LOCAL_PROOF', createdAt: '2026-11-10T10:00:00Z' })], 1)),
-        4: ready(page([operation({ id: id(2), status: 'COMMAND_ACKNOWLEDGED', createdAt: '2026-11-10T12:00:00Z' })], 3)),
+        4: ready(page([operation({ id: id(2), status: 'COMMAND_ACKNOWLEDGED', createdAt: '2026-11-10T12:00:00Z' })], 1)),
       }),
     )
     if (summary.kind !== 'ready') throw new Error('not ready')
-    expect(summary.value.count).toEqual({ n: 4, exact: true })
+    expect(summary.value.count).toEqual({ n: 2, complete: true })
+    expect(summary.value.truncated).toBe(false)
     expect(summary.value.rows.map((row) => row.id)).toEqual([id(2), id(1)])
   })
 
-  it('is a minimum naming the statuses it could not read', () => {
-    const summary = summarizeOperations(reads({ 2: failed, 3: failed, 0: ready(page([operation({ id: id(1) })], 2)) }))
+  it('counts once an operation that changed status between two reads, where the sum of the totals would say 2', () => {
+    // The AUTHORIZED read sees it before the command, the COMMAND_SENT read after: each status total is 1.
+    const before = operation({ id: id(7), status: 'AUTHORIZED' })
+    const after = operation({ id: id(7), status: 'COMMAND_SENT' })
+    const summary = summarizeOperations(reads({ 2: ready(page([before], 1)), 3: ready(page([after], 1)) }))
     if (summary.kind !== 'ready') throw new Error('not ready')
-    expect(summary.value.count).toEqual({ n: 2, exact: false })
+    expect(summary.value.count).toEqual({ n: 1, complete: true })
+    expect(summary.value.rows.map((row) => row.id)).toEqual([id(7)])
+  })
+
+  it('covers only the operations read, never a total, when a status holds more than one page', () => {
+    const summary = summarizeOperations(reads({ 0: ready(page([operation({ id: id(1) })], 240)) }))
+    if (summary.kind !== 'ready') throw new Error('not ready')
+    expect(summary.value.count).toEqual({ n: 1, complete: false })
+    expect(summary.value.truncated).toBe(true)
+  })
+
+  it('covers only the operations read, naming the statuses it could not read', () => {
+    const summary = summarizeOperations(reads({ 2: failed, 3: failed, 0: ready(page([operation({ id: id(1) })], 1)) }))
+    if (summary.kind !== 'ready') throw new Error('not ready')
+    expect(summary.value.count).toEqual({ n: 1, complete: false })
     expect(summary.value.unread).toEqual(['AUTHORIZED', 'COMMAND_SENT'])
   })
 

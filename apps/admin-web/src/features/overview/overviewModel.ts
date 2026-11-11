@@ -7,14 +7,15 @@ import { LOCKER_OPERATION_STATUSES, TERMINAL_OPERATION_STATUSES, type LoanStatus
 
 /**
  * The Vue d'ensemble reads one route per question and keeps every block independent (#159). Nothing here counts a page
- * as a population: a count is the server's `totalItems`, or it is a minimum that says so. `overdue` is the server's
- * boolean, never derived from `dueAt`, and no readiness is computed.
+ * as a population: a count read in one request is the server's `totalItems`; a count gathered over several requests is
+ * the number of distinct rows observed, and says so. `overdue` is the server's boolean, never derived from `dueAt`, and
+ * no readiness is computed.
  */
 
 /** Rows previewed in a block; the page behind the « Voir … » link holds the whole list. */
 export const ROW_LIMIT = 5
 
-/** 09 §11.1 and PageQuery: `size` is 1 to 100. Anomalies and loans are read as wide as the contract allows. */
+/** 09 §11.1 and PageQuery: `size` is 1 to 100. Anomalies, loans and operations are read as wide as the contract allows. */
 export const WIDE_PAGE_SIZE = 100
 
 /** Statuses read for the overdue loans: §17 takes one `status` per request and has no `overdue` filter. */
@@ -64,10 +65,15 @@ function settle<T>(reads: readonly BlockRead<T>[]): { readonly state: 'pending' 
   return { state: 'ready', ready, unread: reads.flatMap((read, index) => (read.kind === 'failed' ? [index] : [])) }
 }
 
-/** A number the server counted (`exact`), or the least it can be (`minimum`): the screen says which. */
-export interface Count {
+/**
+ * Distinct rows observed over several requests (§17 takes one `status` per request). The requests are not one snapshot:
+ * a row that changes status between two of them is counted once, and it may be missed. So `n` is an observation, never
+ * a total and never a minimum of the population. `complete` says every status was read in full; otherwise `n` covers
+ * only the rows read.
+ */
+export interface ObservedCount {
   readonly n: number
-  readonly exact: boolean
+  readonly complete: boolean
 }
 
 // ---------------------------------------------------------------- anomalies
@@ -106,8 +112,7 @@ export type LoansGap =
 export interface LoanSummary {
   /** Overdue loans among the ones read, by the server's `overdue`, longest overdue first. */
   readonly overdue: readonly LoanView[]
-  /** `exact` only when every status was read in full. */
-  readonly count: Count
+  readonly count: ObservedCount
   readonly gaps: readonly LoansGap[]
 }
 
@@ -136,7 +141,7 @@ export function summarizeLoans(reads: readonly BlockRead<TransactionPage<LoanVie
   overdue.sort((a, b) => (a.dueAt < b.dueAt ? -1 : a.dueAt > b.dueAt ? 1 : 0))
   return {
     kind: 'ready',
-    value: { overdue, count: { n: overdue.length, exact: gaps.length === 0 }, gaps },
+    value: { overdue, count: { n: overdue.length, complete: gaps.length === 0 }, gaps },
     readAt: oldest(settled.ready.map((r) => r.readAt)),
     stale: settled.ready.some((r) => r.stale),
   }
@@ -145,12 +150,17 @@ export function summarizeLoans(reads: readonly BlockRead<TransactionPage<LoanVie
 // --------------------------------------------------------------- operations
 
 export interface OperationSummary {
-  /** Sum of the `totalItems` of the statuses read: exact when none is missing. */
-  readonly count: Count
+  /**
+   * Distinct operations observed in a non-final status. Never the sum of the `totalItems`: an operation that moves from
+   * one status to the next between two reads is in both totals.
+   */
+  readonly count: ObservedCount
   /** The most recent operations of the statuses read, as many as the preview holds. */
   readonly rows: readonly LockerOperationView[]
   /** Statuses that could not be read. */
   readonly unread: readonly LockerOperationStatus[]
+  /** A status holds more operations than one page: only the most recent of it were read. */
+  readonly truncated: boolean
 }
 
 export function summarizeOperations(reads: readonly BlockRead<TransactionPage<LockerOperationView>>[]): BlockRead<OperationSummary> {
@@ -158,9 +168,9 @@ export function summarizeOperations(reads: readonly BlockRead<TransactionPage<Lo
   if (settled.state !== 'ready') return settled.state === 'pending' ? { kind: 'pending' } : { kind: 'failed', failure: settled.failure }
   const seen = new Set<string>()
   const merged: LockerOperationView[] = []
-  let n = 0
+  let truncated = false
   for (const { value } of settled.ready) {
-    n += value.totalItems
+    if (!isComplete(value)) truncated = true
     for (const operation of value.items) {
       if (seen.has(operation.id)) continue
       seen.add(operation.id)
@@ -172,7 +182,7 @@ export function summarizeOperations(reads: readonly BlockRead<TransactionPage<Lo
   const unread = settled.unread.map((index) => IN_PROGRESS_OPERATION_STATUSES[index] as LockerOperationStatus)
   return {
     kind: 'ready',
-    value: { count: { n, exact: unread.length === 0 }, rows: merged.slice(0, ROW_LIMIT), unread },
+    value: { count: { n: merged.length, complete: unread.length === 0 && !truncated }, rows: merged.slice(0, ROW_LIMIT), unread, truncated },
     readAt: oldest(settled.ready.map((r) => r.readAt)),
     stale: settled.ready.some((r) => r.stale),
   }

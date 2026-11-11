@@ -150,9 +150,9 @@ export function LoansBlock({ read, retrying, onRetry }: BlockProps & { readonly 
 
   let count: { text: string; none?: boolean } | undefined
   if (summary !== null) {
-    const { n, exact } = summary.count
-    if (exact) count = n > 0 ? { text: t.loansCount({ count: n }) } : { text: t.noneLoans, none: true }
-    else count = n > 0 ? { text: t.loansMinimum({ count: n }) } : { text: t.loansNoneAmongRead, none: true }
+    const { n, complete } = summary.count
+    if (complete) count = n > 0 ? { text: t.loansObserved({ count: n }) } : { text: t.noneLoans, none: true }
+    else count = n > 0 ? { text: t.loansObservedAmongRead({ count: n }) } : { text: t.loansNoneAmongRead, none: true }
   }
 
   const list = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' })
@@ -194,6 +194,7 @@ export function LoansBlock({ read, retrying, onRetry }: BlockProps & { readonly 
         </PartialNotice>
       )}
       {truncated !== undefined && truncated.kind === 'truncated' && <PartialNotice title={t.partialTitle}>{t.loansTruncatedBody({ read: truncated.read, total: truncated.total })}</PartialNotice>}
+      <p className="ag-ov__note">{t.successiveReadsNote}</p>
     </OverviewModule>
   )
 }
@@ -229,9 +230,9 @@ export function OperationsBlock({ read, labels, retrying, onRetry }: BlockProps 
 
   let count: { text: string; none?: boolean } | undefined
   if (summary !== null) {
-    const { n, exact } = summary.count
-    if (exact) count = n > 0 ? { text: t.operationsCount({ count: n }) } : { text: t.noneOperations, none: true }
-    else count = n > 0 ? { text: t.operationsMinimum({ count: n }) } : { text: t.operationsNoneAmongRead, none: true }
+    const { n, complete } = summary.count
+    if (complete) count = n > 0 ? { text: t.operationsObserved({ count: n }) } : { text: t.noneOperations, none: true }
+    else count = n > 0 ? { text: t.operationsObservedAmongRead({ count: n }) } : { text: t.operationsNoneAmongRead, none: true }
   }
 
   return (
@@ -256,7 +257,9 @@ export function OperationsBlock({ read, labels, retrying, onRetry }: BlockProps 
           {t.operationsUnreadBody({ missing: summary.unread.length, total: IN_PROGRESS_OPERATION_STATUSES.length })}
         </PartialNotice>
       )}
+      {summary?.truncated === true && <PartialNotice title={t.partialTitle}>{t.operationsTruncatedBody}</PartialNotice>}
       <p className="ag-ov__note">{t.operationsNote}</p>
+      <p className="ag-ov__note">{t.successiveReadsNote}</p>
     </OverviewModule>
   )
 }

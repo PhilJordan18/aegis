@@ -610,15 +610,17 @@ possède (`/anomalies?anomalie=`, `/reservations-prets?vue=…&dossier=`), aucun
   indisponible (`404` d'une liste, réseau, 5xx, 403) est une erreur dans son bloc, jamais un zéro; elle ne cache
   pas les autres blocs. Si tous les blocs échouent de la même façon, une seule alerte le dit. « Actualiser » relit
   tout; « Réessayer » relit le seul bloc concerné. L'heure « Mis à jour » est la plus ancienne lecture réussie.
-- **Totaux** : le `totalItems` du serveur, jamais la taille d'une page. Ce que le contrat ne donne pas devient un
-  minimum dit comme tel (« Au moins N », « Lecture incomplète »).
+- **Totaux** : une lecture unique donne le `totalItems` du serveur, jamais la taille d'une page. Un compte qui
+  rassemble plusieurs lectures (une par statut, §17) n'est ni un total ni un minimum : les lectures ne sont pas
+  simultanées, donc c'est le nombre d'éléments distincts observés, dit comme tel (« N observés », « N parmi les … lus »,
+  « Lecture incomplète »). Un élément qui change de statut entre deux lectures n'est compté qu'une fois, et peut manquer.
 
 | Bloc | Lectures | Compteur |
 |---|---|---|
 | Anomalies | `GET /admin/anomalies?status=OPEN&size=100` | `totalItems`; tri par gravité seulement si la page est complète |
-| Prêts en retard | `GET /admin/loans?status=ACTIVE` et `RETURN_PENDING`, `size=100` | boolean `overdue` du serveur sur ce qui est lu; exact seulement si chaque statut est lu en entier, sinon « Au moins N » |
+| Prêts en retard | `GET /admin/loans?status=ACTIVE` et `RETURN_PENDING`, `size=100` | boolean `overdue` du serveur sur ce qui est lu; prêts distincts observés; « parmi les prêts lus » si un statut manque ou dépasse une page |
 | Casier | `GET /admin/lockers`, puis `GET /lockers/{id}/status` (même clé et même intervalle de 15 s que Casiers) | aucun; état et cellules tels que le serveur les évalue, bandeau si hors ligne ou inconnu |
-| Opération en cours | `GET /admin/locker-operations?status=<s>&size=5` pour chacun des 7 statuts non terminaux | somme des `totalItems`; « Au moins N » si un statut n'a pas pu être lu |
+| Opération en cours | `GET /admin/locker-operations?status=<s>&size=100` pour chacun des 7 statuts non terminaux | opérations distinctes observées, jamais la somme des `totalItems` (une opération qui change de statut entre deux lectures y serait comptée deux fois); « parmi les opérations lues » si un statut manque ou dépasse une page |
 | Réservations | `GET /admin/reservations?status=ACTIVE&size=5` | `totalItems` |
 
 - **Manques de contrat** (09 §17 : un seul `status` par requête, aucun filtre `overdue`, aucun filtre d'opérations
