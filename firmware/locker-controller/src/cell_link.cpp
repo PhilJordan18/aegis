@@ -22,6 +22,14 @@ const char* CellLink::connectionStatus() const {
   return "UNKNOWN";
 }
 
+const char* CellLink::lockState() const {
+  return cellframe::lockStateName(status_ == Status::Connected ? lock_ : cellframe::STATE_UNKNOWN);
+}
+
+const char* CellLink::readerStatus() const {
+  return cellframe::readerStatusName(status_ == Status::Connected ? readerHealth_ : cellframe::STATE_UNKNOWN);
+}
+
 void CellLink::set(Status status, const char* why) {
   if (status == status_) return;
   status_ = status;
@@ -54,6 +62,14 @@ void CellLink::onReply(const cellframe::Reply& reply) {
   }
   bootKnown_ = true;
   bootId_ = reply.bootId;
+  if (reply.lock != lock_ || reply.reader != readerHealth_) {
+    char line[96];
+    snprintf(line, sizeof(line), "cell %u: lock %s, reader %s", expected_, cellframe::lockStateName(reply.lock),
+             cellframe::readerStatusName(reply.reader));
+    platform_.log(line);
+  }
+  lock_ = reply.lock;
+  readerHealth_ = reply.reader;
   set(Status::Connected, "answered");
 }
 

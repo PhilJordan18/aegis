@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds and runs the host tests of the hub logic, then checks that every payload is strict JSON.
+# Builds and runs the host tests of the hub and cell logic, then checks that every payload is strict JSON.
 # Usage: firmware/locker-controller/tests/host/run.sh   (needs g++ or clang++ and python3)
 set -euo pipefail
 
@@ -14,6 +14,10 @@ cmp "$src/cell_frame.h" "$here/../../../cell-controller/src/cell_frame.h"
 "${CXX:-c++}" -std=c++17 -Wall -Wextra -Werror -O0 -fsanitize=address,undefined \
   "$here/test_hub.cpp" "$src/hub_messages.cpp" "$src/hub_link.cpp" "$src/command_inbox.cpp" "$src/cell_link.cpp" -o "$work/test_hub"
 "$work/test_hub" "$work/payloads.jsonl"
+
+cell="$here/../../../cell-controller/tests/host"
+"${CXX:-c++}" -std=c++17 -Wall -Wextra -Werror -O0 -fsanitize=address,undefined "$cell/test_cell.cpp" -o "$work/test_cell"
+"$work/test_cell"
 
 python3 -I - "$work/payloads.jsonl" <<'PY'
 import json, sys

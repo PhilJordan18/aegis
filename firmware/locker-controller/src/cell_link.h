@@ -25,6 +25,10 @@ class CellLink {
   void loop();
   // UNKNOWN until the first answer or the first absence, then CONNECTED or DISCONNECTED.
   const char* connectionStatus() const;
+  // What the cell reported in its last counted answer, as doc 10 §14 values. UNKNOWN whenever the
+  // link is not CONNECTED: a silent or foreign cell's latch and reader are never guessed.
+  const char* lockState() const;
+  const char* readerStatus() const;
   uint8_t expectedAddress() const { return expected_; }
 
  private:
@@ -49,6 +53,8 @@ class CellLink {
   uint32_t misses_ = 0;
   bool bootKnown_ = false;
   uint32_t bootId_ = 0;
+  char lock_ = cellframe::STATE_UNKNOWN;
+  char readerHealth_ = cellframe::STATE_UNKNOWN;
   int wrongAddressLogged_ = -1;  // the foreign address last logged, -1 when none
 };
 

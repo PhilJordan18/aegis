@@ -551,9 +551,10 @@ uint32_t lastPing(FakePort& port) {
   return seq;
 }
 
-std::string replyFrame(uint32_t seq, uint8_t address, uint32_t bootId = 0xB0071D01, uint8_t reset = 1) {
+std::string replyFrame(uint32_t seq, uint8_t address, uint32_t bootId = 0xB0071D01, uint8_t reset = 1,
+                       char lock = 'L', char reader = 'H') {
   char frame[cellframe::MAX_LINE];
-  size_t n = cellframe::encodeReply(cellframe::Reply{seq, address, bootId, reset}, frame, sizeof(frame));
+  size_t n = cellframe::encodeReply(cellframe::Reply{seq, address, bootId, reset, lock, reader}, frame, sizeof(frame));
   assert(n > 0);
   return std::string(frame, n);
 }
@@ -565,18 +566,18 @@ struct CellRig {
 
   // One full poll: the hub pings, the cell answers 6 ms later (or stays silent), the reply window
   // closes, and the clock reaches the next poll.
-  void poll(bool answers, uint8_t address = 1) {
+  void poll(bool answers, uint8_t address = 1, char lock = 'L', char reader = 'H') {
     link.loop();
     uint32_t seq = lastPing(port);
     platform.now += 6;
-    if (answers) port.receive(replyFrame(seq, address));
+    if (answers) port.receive(replyFrame(seq, address, 0xB0071D01, 1, lock, reader));
     link.loop();
     platform.now += CELL_REPLY_TIMEOUT_MS - 6;
     link.loop();
     assert(port.tx.empty());  // no second PING inside one poll period
     platform.now += CELL_POLL_INTERVAL_MS - CELL_REPLY_TIMEOUT_MS;
   }
-  void answer(uint8_t address = 1) { poll(true, address); }
+  void answer(uint8_t address = 1, char lock = 'L', char reader = 'H') { poll(true, address, lock, reader); }
   void silence() { poll(false); }
 };
 
@@ -586,19 +587,27 @@ void cellFrameFormat() {
   size_t n = cellframe::encodePing(0x1A, frame, sizeof(frame));
   assert(n == 16 && strncmp(frame, "P,0000001A,", 11) == 0 && frame[15] == '\n');
 
-  std::string reply = replyFrame(0xDEADBEEF, 2, 0x01020304, 0x0F);
-  assert(reply.size() == 31 && reply.compare(0, 26, "R,DEADBEEF,02,01020304,0F,") == 0);
+  std::string reply = replyFrame(0xDEADBEEF, 2, 0x01020304, 0x0F, 'U', 'F');
+  assert(reply.size() == 34 && reply.compare(0, 29, "R,DEADBEEF,02,01020304,0F,UF,") == 0);
   std::vector<char> buf(reply.begin(), reply.end() - 1);
   buf.push_back('\0');
   assert(cellframe::unseal(buf.data()));
   cellframe::Reply r;
   assert(cellframe::parseReply(buf.data(), &r));
   assert(r.seq == 0xDEADBEEF && r.cellAddress == 2 && r.bootId == 0x01020304 && r.resetCode == 0x0F);
+  assert(r.lock == 'U' && r.reader == 'F');
 
-  char corrupted[] = "R,DEADBEEF,02,01020304,0E,0000";
+  char corrupted[] = "R,DEADBEEF,02,01020304,0E,UF,0000";
   assert(!cellframe::unseal(corrupted));
-  char lower[] = "R,deadbeef,02,01020304,0F";
+  char lower[] = "R,deadbeef,02,01020304,0F,LH";
   assert(!cellframe::parseReply(lower, &r));
+  char version1[] = "R,DEADBEEF,02,01020304,0F";  // a cell still on frame version 1
+  assert(!cellframe::parseReply(version1, &r));
+  char badState[] = "R,DEADBEEF,02,01020304,0F,XH";
+  assert(!cellframe::parseReply(badState, &r));
+  char unknown[] = "R,DEADBEEF,02,01020304,0F,??";
+  assert(cellframe::parseReply(unknown, &r) && r.lock == '?' && r.reader == '?');
+  assert(cellframe::encodeReply(cellframe::Reply{1, 1, 1, 1, 'X', 'H'}, frame, sizeof(frame)) == 0);
   char shortPing[] = "P,1A";
   uint32_t seq;
   assert(!cellframe::parsePing(shortPing, &seq));
@@ -719,17 +728,53 @@ void portsAreIndependent() {
   assert(strcmp(a2.connectionStatus(), "DISCONNECTED") == 0);
 }
 
-const char* fakeCellStatus(int cellAddress) { return cellAddress == 1 ? "CONNECTED" : "DISCONNECTED"; }
+void cellReportsItsLatchAndReader() {
+  CellRig r;
+  assert(strcmp(r.link.lockState(), "UNKNOWN") == 0 && strcmp(r.link.readerStatus(), "UNKNOWN") == 0);
+  r.answer(1, 'L', 'H');
+  assert(strcmp(r.link.lockState(), "LOCKED") == 0 && strcmp(r.link.readerStatus(), "HEALTHY") == 0);
+  r.answer(1, 'U', 'F');
+  assert(strcmp(r.link.lockState(), "UNLOCKED") == 0 && strcmp(r.link.readerStatus(), "FAULTED") == 0);
+  r.answer(1, '?', 'H');
+  assert(strcmp(r.link.lockState(), "UNKNOWN") == 0);
+}
 
-void heartbeatReportsEachCellLink() {
+void silentOrForeignCellStateIsNeverReported() {
+  CellRig r;
+  r.answer(1, 'L', 'H');
+  r.silence();
+  r.silence();
+  assert(strcmp(r.link.lockState(), "LOCKED") == 0);  // still CONNECTED after two misses
+  r.silence();
+  assert(strcmp(r.link.lockState(), "UNKNOWN") == 0 && strcmp(r.link.readerStatus(), "UNKNOWN") == 0);
+
+  r.answer(1, 'L', 'H');
+  r.answer(2, 'U', 'H');  // A2 on port 1: its latch must not be reported as A1's
+  assert(strcmp(r.link.lockState(), "UNKNOWN") == 0 && strcmp(r.link.readerStatus(), "UNKNOWN") == 0);
+}
+
+CellObservation fakeCellStatus(int cellAddress) {
+  if (cellAddress == 1) return {"CONNECTED", "HEALTHY", "LOCKED"};
+  return {"DISCONNECTED", "UNKNOWN", "UNKNOWN"};
+}
+
+void heartbeatReportsEachCell() {
   Rig r;
   r.hub.cellStatus(fakeCellStatus);
   r.connectOnce();
   const Message& heartbeat = r.transport.published.back();
   assert(has(heartbeat, "\"type\":\"HEARTBEAT\""));
-  assert(has(heartbeat, "\"cellAddress\":1,\"connectionStatus\":\"CONNECTED\",\"readerStatus\":\"UNKNOWN\","
+  assert(has(heartbeat, "\"cellAddress\":1,\"connectionStatus\":\"CONNECTED\",\"readerStatus\":\"HEALTHY\","
+                        "\"doorState\":\"UNKNOWN\",\"lockState\":\"LOCKED\""));
+  assert(has(heartbeat, "\"cellAddress\":2,\"connectionStatus\":\"DISCONNECTED\",\"readerStatus\":\"UNKNOWN\","
                         "\"doorState\":\"UNKNOWN\",\"lockState\":\"UNKNOWN\""));
-  assert(has(heartbeat, "\"cellAddress\":2,\"connectionStatus\":\"DISCONNECTED\""));
+}
+
+void heartbeatWithoutSourceIsUnknown() {
+  Rig r;
+  r.connectOnce();
+  assert(has(r.transport.published.back(), "\"connectionStatus\":\"UNKNOWN\",\"readerStatus\":\"UNKNOWN\","
+                                           "\"doorState\":\"UNKNOWN\",\"lockState\":\"UNKNOWN\""));
 }
 
 // Prints every payload on its own line so run.sh can check that it is strict JSON.
@@ -775,7 +820,10 @@ int main(int argc, char** argv) {
   replyHeldByABusyLoopStillCounts();
   pingsArePacedAndNeverOverlap();
   portsAreIndependent();
-  heartbeatReportsEachCellLink();
+  cellReportsItsLatchAndReader();
+  silentOrForeignCellStateIsNeverReported();
+  heartbeatReportsEachCell();
+  heartbeatWithoutSourceIsUnknown();
   if (argc > 1) dumpPayloads(argv[1]);
   puts("all host tests passed");
   return 0;

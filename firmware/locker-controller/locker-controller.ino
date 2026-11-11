@@ -1,7 +1,8 @@
-// Aegis hub firmware (FW-00): the hub joins Wi-Fi, synchronizes its clock, keeps an MQTT
+// Aegis hub firmware (FW-00, FW-01): the hub joins Wi-Fi, synchronizes its clock, keeps an MQTT
 // connection to the broker with its device identity (doc 10 §4, §7, §14, §15, §18) and polls
-// cells A1 and A2 over two independent RS-485 segments (ADR-002). Copy secrets.h.example to
-// secrets.h first.
+// cells A1 and A2 over two independent RS-485 segments (ADR-002). Each heartbeat carries, per
+// cell, the link, the reader health and the latch state the cell reported. Copy
+// secrets.h.example to secrets.h first.
 
 #include <WiFi.h>
 #include <time.h>
@@ -11,7 +12,7 @@
 #include "src/esp_platform.h"
 #include "src/hub_link.h"
 
-constexpr const char* FIRMWARE_VERSION = "0.1.0";
+constexpr const char* FIRMWARE_VERSION = "0.2.0";
 
 // One UART per segment, never a shared bus. Segment 1 keeps the pins of the POC-02 bench; on the
 // Freenove WROVER camera board 16/17 belong to PSRAM and 4/5/18-27/34-39 to the camera, so
@@ -41,10 +42,14 @@ static aegis::EspCellPort port2(Serial1);
 static aegis::CellLink cellA1(1, port1, platform);
 static aegis::CellLink cellA2(2, port2, platform);
 
-static const char* cellStatus(int cellAddress) {
-  if (cellAddress == 1) return cellA1.connectionStatus();
-  if (cellAddress == 2) return cellA2.connectionStatus();
-  return "UNKNOWN";
+static aegis::CellObservation observe(const aegis::CellLink& cell) {
+  return {cell.connectionStatus(), cell.readerStatus(), cell.lockState()};
+}
+
+static aegis::CellObservation cellStatus(int cellAddress) {
+  if (cellAddress == 1) return observe(cellA1);
+  if (cellAddress == 2) return observe(cellA2);
+  return {"UNKNOWN", "UNKNOWN", "UNKNOWN"};
 }
 
 void setup() {
