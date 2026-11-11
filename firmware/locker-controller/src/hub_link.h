@@ -15,6 +15,8 @@ constexpr size_t MAX_COMPARTMENTS = 4;
 // Acts on an accepted command; true when the actuation was engaged. It runs only after the
 // command is persisted as EXECUTING (doc 10 §9.1, §16.1).
 using CommandHandler = bool (*)(const Command&);
+// connectionStatus of the cell at `cellAddress` for the heartbeat: CONNECTED, DISCONNECTED or UNKNOWN.
+using CellStatusSource = const char* (*)(int cellAddress);
 
 // Connection lifecycle of the hub toward the broker (doc 10 §7, §13.1, §14, §15, §18):
 // a fresh Last Will and connectionId before every attempt, ONLINE, then DEVICE_RESTARTED
@@ -35,6 +37,8 @@ class HubLink {
   State state() const { return state_; }
   // Without a handler no command is ever acted on: each one is rejected INTERNAL_DEVICE_ERROR.
   void onCommand(CommandHandler handler) { handler_ = handler; }
+  // Without a source every cell is reported with connectionStatus UNKNOWN.
+  void cellStatus(CellStatusSource source) { cellStatus_ = source; }
 
  private:
   struct EnvelopeBuf {
@@ -82,6 +86,7 @@ class HubLink {
     uint32_t unreported = 0;
   } limiter_[2];
   CommandHandler handler_ = nullptr;
+  CellStatusSource cellStatus_ = nullptr;
   char commandsTopic_[sizeof(Message::topic)] = {};
   Message inbound_;  // member, not a local: it is 1.6 KB and the loop task stack is small
 };
