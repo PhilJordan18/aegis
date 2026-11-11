@@ -14,6 +14,7 @@
 **Mise à jour ciblée :** 28 octobre 2026 — sous-objets `AssetModelSummary`, `CalibrationView` et `PlacementSummary` de `AssetView` (§8.2); sérialisation existante documentée; code `404 ASSET_NOT_FOUND` de §11.2 ajouté à §21 (#33, #34)  
 **Mise à jour ciblée :** 28 octobre 2026 — décisions de Philippe pour #33 et #34 : ordre stable des raisons et raison principale choisie par la convention de présentation, jamais par `reasons[0]` (§8.1); actif archivé exclu de la liste mais lisible par son identifiant (§11.1, §11.2)  
 **Mise à jour ciblée :** 28 octobre 2026 — réservation (RES-01, #37), décisions de Philippe du 28 octobre 2026 : ordre des contrôles implémenté, `reservedUntil` non postérieur à l’instant courant, locker sans horaire, horaire du placement courant et actif inconnu (§14.1); `availableActions` vide tant que ses actions ne sont pas implémentées (§8.10); codes de refus de l’archivage (§12.2); `ACTIVE_RESERVATION_NOT_FOUND` et `ASSET_OPERATION_IN_PROGRESS` ajoutés à §21  
+**Mise à jour ciblée :** 11 novembre 2026 — lectures administratives des transactions (#48), décisions de Philippe du 11 novembre 2026 (#67) : tri, filtres, vues sans action et résumé du titulaire `user`/`holder` (§17)  
 **Mise à jour ciblée :** 28 octobre 2026 — recherche `q` commune à l’API, au Web et à iOS : espaces Unicode de bordure, longueur en grappes de graphèmes, corpus partagé (§11.1, §22.3, §26.6), décision commune consignée par l’[ADR-014](../adr/ADR-014-recherche-q-graphemes.md), acceptée par Philippe le 6 novembre 2026 (#109)  
 **Mise à jour ciblée :** 6 novembre 2026 — lectures administratives approuvées par Philippe (#25, #26, #28) : `GET /admin/lockers` et `AdminLockerView` (§9.3, §16.2), historique des identifiants `GET /admin/assets/{assetId}/identifiers` (§9.3, §12.3); aucune migration  
 **Mise à jour ciblée :** 6 novembre 2026 — refus du catalogue liés à la garde de l’actif (#26) : placement refusé pendant une réservation active, un prêt ouvert ou une opération non terminale, attribution refusée pendant une opération non terminale et révocation de l’identifiant qu’elle attend, avec les codes de l’archivage (§12.3, §12.4, §21); ordre des refus approuvé par Philippe le 6 novembre 2026; aucun code ni champ nouveau  
@@ -1302,6 +1303,14 @@ Filtres communs :
 | from | Instant inclusif |
 | to | Instant exclusif |
 | page, size | Pagination |
+
+Règles approuvées par Philippe le 11 novembre 2026 (#67, D1 à D4 et G1) :
+
+- tri du plus récent au plus ancien, `id` décroissant départageant les égalités : réservations et opérations par `createdAt`, prêts par `checkedOutAt`; `from` et `to` bornent ce même instant;
+- `status` accepte une seule valeur. Une valeur hors de l’ensemble contrôlé, un UUID mal formé, un instant invalide ou un `from` non antérieur à `to` lorsque les deux sont fournis donnent `400 VALIDATION_ERROR`, avec une violation `INVALID_VALUE` sur chaque paramètre fautif, toutes rapportées ensemble; la page et la taille suivent §22.1;
+- un identifiant inconnu donne `404 RESOURCE_NOT_FOUND`;
+- `availableActions` est toujours vide dans ces vues : l’administrateur n’exécute aucune des mutations de §8.10. Le `requiredAction` d’une opération est informatif (§15.4) et n’ouvre aucune action;
+- `AdminReservationView` reprend `ReservationView` (§8.3) et ajoute `user` juste après `userId`; `AdminLoanView` reprend `LoanView` (§8.4) et ajoute `holder` juste après `holderUserId`. Ces deux champs sont un `UserSummary` (§8.8), jamais `null`. Les vues du technicien ne changent pas.
 
 Ces routes ne permettent jamais de modifier un état. Il n’existe aucune route administrative de type complete-loan, confirm-operation ou force-return.
 

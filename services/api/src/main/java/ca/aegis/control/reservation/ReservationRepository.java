@@ -15,6 +15,8 @@ import org.springframework.stereotype.Repository;
 import ca.aegis.control.identity.AccessLevel;
 import ca.aegis.control.identity.AccountStatus;
 import ca.aegis.control.identity.Role;
+import ca.aegis.control.shared.jdbc.Where;
+import ca.aegis.control.shared.web.PageQuery;
 
 /**
  * Reservations of document 08, section 4.6. The application never deletes one; the guards lock rows in the order of
@@ -37,9 +39,6 @@ class ReservationRepository {
                    fulfilled_at, expired_at
             FROM aegis.reservations
             """;
-    private static final String NON_TERMINAL_OPERATION =
-            "status NOT IN ('CONFIRMED', 'FAILED', 'EXPIRED', 'ANOMALY')";
-
     private final JdbcClient jdbc;
 
     ReservationRepository(JdbcClient jdbc) {
@@ -95,6 +94,33 @@ class ReservationRepository {
     Optional<ReservationRow> find(UUID id) {
         return jdbc.sql(SELECT_RESERVATION + "WHERE id = :id").param("id", id)
                 .query(ReservationRepository::map).optional();
+    }
+
+    /**
+     * Filters of {@code GET /admin/reservations} (document 09, section 17). Rule D2 approved on 11 November
+     * 2026 (#67): {@code from} and {@code to} bound {@code created_at}.
+     */
+    record AdminFilter(ReservationStatus status, UUID assetId, UUID userId, Instant from, Instant to) {
+
+        Where where() {
+            return new Where().equal("status", status).equal("asset_id", assetId).equal("user_id", userId)
+                    .interval("created_at", from, to);
+        }
+    }
+
+    /** Order D1 approved on 11 November 2026 (#67): most recent first, {@code id} breaking ties. */
+    List<ReservationRow> page(AdminFilter filter, PageQuery page) {
+        Where where = filter.where();
+        return where.bind(jdbc.sql(SELECT_RESERVATION + where.sql()
+                        + " ORDER BY created_at DESC, id DESC LIMIT :limit OFFSET :offset"))
+                .param("limit", page.size()).param("offset", page.offset())
+                .query(ReservationRepository::map).list();
+    }
+
+    long count(AdminFilter filter) {
+        Where where = filter.where();
+        return where.bind(jdbc.sql("SELECT count(*) FROM aegis.reservations" + where.sql())).query(Long.class)
+                .single();
     }
 
     Optional<ReservationRow> activeOfUser(UUID userId) {
@@ -161,11 +187,18 @@ class ReservationRepository {
         }
     }
 
-    /** The non-terminal checkout attempt of the reservation, if any; none exists before the checkout slice. */
+    /**
+     * The {@code currentOperationId} of an {@code ACTIVE} reservation (document 09, section 8.4): its non-terminal
+     * checkout attempt, or else its latest attempt even when terminal, so that a failure or an anomaly stays
+     * explained. The caller sends {@code null} once the reservation is closed.
+     */
     Optional<UUID> currentOperationOf(UUID reservationId) {
-        return jdbc.sql("SELECT id FROM aegis.locker_operations WHERE reservation_id = :id AND "
-                + NON_TERMINAL_OPERATION + " ORDER BY created_at DESC LIMIT 1")
-                .param("id", reservationId).query(UUID.class).optional();
+        return jdbc.sql("""
+                SELECT id FROM aegis.locker_operations
+                WHERE reservation_id = :id AND type = 'CHECKOUT'
+                ORDER BY (status IN ('CONFIRMED', 'FAILED', 'EXPIRED', 'ANOMALY')), created_at DESC, id DESC
+                LIMIT 1
+                """).param("id", reservationId).query(UUID.class).optional();
     }
 
     private static ReservationRow map(ResultSet row, int number) throws SQLException {
