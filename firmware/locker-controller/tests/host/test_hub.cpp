@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "../../src/backoff.h"
+#include "../../src/cell_link.h"
 #include "../../src/hub_link.h"
 
 using namespace aegis;
@@ -521,6 +522,216 @@ void instantFormat() {
   assert(strcmp(out, "2026-09-10T00:26:40Z") == 0);
 }
 
+// ---------------------------------------------------------------- cell links (ADR-002)
+
+struct FakePort : CellPort {
+  std::deque<char> rx;  // bytes the hub will read
+  std::string tx;       // bytes the hub wrote
+  int read() override {
+    if (rx.empty()) return -1;
+    char c = rx.front();
+    rx.pop_front();
+    return static_cast<unsigned char>(c);
+  }
+  void write(const char* data, size_t len) override { tx.append(data, len); }
+  void receive(const std::string& bytes) { rx.insert(rx.end(), bytes.begin(), bytes.end()); }
+};
+
+// Sequence of the last PING the hub wrote on `port`, consuming what it wrote.
+uint32_t lastPing(FakePort& port) {
+  size_t end = port.tx.rfind('\n');
+  assert(end != std::string::npos);
+  size_t start = port.tx.rfind('\n', end - 1);
+  std::string line = port.tx.substr(start == std::string::npos ? 0 : start + 1, end - (start == std::string::npos ? 0 : start + 1));
+  port.tx.clear();
+  std::vector<char> buf(line.begin(), line.end());
+  buf.push_back('\0');
+  uint32_t seq;
+  assert(cellframe::unseal(buf.data()) && cellframe::parsePing(buf.data(), &seq));
+  return seq;
+}
+
+std::string replyFrame(uint32_t seq, uint8_t address, uint32_t bootId = 0xB0071D01, uint8_t reset = 1) {
+  char frame[cellframe::MAX_LINE];
+  size_t n = cellframe::encodeReply(cellframe::Reply{seq, address, bootId, reset}, frame, sizeof(frame));
+  assert(n > 0);
+  return std::string(frame, n);
+}
+
+struct CellRig {
+  FakePlatform platform;
+  FakePort port;
+  CellLink link{1, port, platform};
+
+  // One full poll: the hub pings, the cell answers 6 ms later (or stays silent), the reply window
+  // closes, and the clock reaches the next poll.
+  void poll(bool answers, uint8_t address = 1) {
+    link.loop();
+    uint32_t seq = lastPing(port);
+    platform.now += 6;
+    if (answers) port.receive(replyFrame(seq, address));
+    link.loop();
+    platform.now += CELL_REPLY_TIMEOUT_MS - 6;
+    link.loop();
+    assert(port.tx.empty());  // no second PING inside one poll period
+    platform.now += CELL_POLL_INTERVAL_MS - CELL_REPLY_TIMEOUT_MS;
+  }
+  void answer(uint8_t address = 1) { poll(true, address); }
+  void silence() { poll(false); }
+};
+
+void cellFrameFormat() {
+  assert(cellframe::crc16("123456789", 9) == 0x29B1);  // CRC-16/CCITT-FALSE check value
+  char frame[cellframe::MAX_LINE];
+  size_t n = cellframe::encodePing(0x1A, frame, sizeof(frame));
+  assert(n == 16 && strncmp(frame, "P,0000001A,", 11) == 0 && frame[15] == '\n');
+
+  std::string reply = replyFrame(0xDEADBEEF, 2, 0x01020304, 0x0F);
+  assert(reply.size() == 31 && reply.compare(0, 26, "R,DEADBEEF,02,01020304,0F,") == 0);
+  std::vector<char> buf(reply.begin(), reply.end() - 1);
+  buf.push_back('\0');
+  assert(cellframe::unseal(buf.data()));
+  cellframe::Reply r;
+  assert(cellframe::parseReply(buf.data(), &r));
+  assert(r.seq == 0xDEADBEEF && r.cellAddress == 2 && r.bootId == 0x01020304 && r.resetCode == 0x0F);
+
+  char corrupted[] = "R,DEADBEEF,02,01020304,0E,0000";
+  assert(!cellframe::unseal(corrupted));
+  char lower[] = "R,deadbeef,02,01020304,0F";
+  assert(!cellframe::parseReply(lower, &r));
+  char shortPing[] = "P,1A";
+  uint32_t seq;
+  assert(!cellframe::parsePing(shortPing, &seq));
+  assert(cellframe::seal("P,0000001A", frame, 8) == 0);  // never truncates a frame
+}
+
+void lineReaderDropsOversizedLines() {
+  cellframe::LineReader reader;
+  for (size_t i = 0; i < cellframe::MAX_LINE + 10; i++) assert(!reader.push('X'));
+  assert(reader.push('\n') && reader.overflowed && reader.buf[0] == '\0');
+  reader.clearOverflow();
+  for (char c : std::string("P,1\r")) assert(!reader.push(c));
+  assert(reader.push('\n') && !reader.overflowed && strcmp(reader.buf, "P,1") == 0);
+}
+
+void cellIsUnknownThenConnected() {
+  CellRig r;
+  assert(strcmp(r.link.connectionStatus(), "UNKNOWN") == 0);
+  r.answer();
+  assert(strcmp(r.link.connectionStatus(), "CONNECTED") == 0);
+}
+
+void cellIsDisconnectedAfterThreeMissesAndRecovers() {
+  CellRig r;
+  r.silence();
+  r.silence();
+  assert(strcmp(r.link.connectionStatus(), "UNKNOWN") == 0);
+  r.silence();
+  assert(strcmp(r.link.connectionStatus(), "DISCONNECTED") == 0);
+
+  r.answer();
+  assert(strcmp(r.link.connectionStatus(), "CONNECTED") == 0);
+  r.silence();
+  r.silence();
+  assert(strcmp(r.link.connectionStatus(), "CONNECTED") == 0);  // two misses are tolerated
+  r.silence();
+  assert(strcmp(r.link.connectionStatus(), "DISCONNECTED") == 0);
+}
+
+void cellOnTheWrongPortIsDisconnected() {
+  CellRig r;
+  r.answer();
+  r.answer(2);  // A2's cable plugged into port 1
+  assert(strcmp(r.link.connectionStatus(), "DISCONNECTED") == 0);
+  r.answer(2);
+  assert(strcmp(r.link.connectionStatus(), "DISCONNECTED") == 0);
+  r.answer(1);
+  assert(strcmp(r.link.connectionStatus(), "CONNECTED") == 0);
+}
+
+void staleEchoedAndCorruptedFramesNeverCount() {
+  CellRig r;
+  r.link.loop();
+  uint32_t seq = lastPing(r.port);
+  r.platform.now += 6;
+  char echo[cellframe::MAX_LINE];
+  r.port.receive(std::string(echo, cellframe::encodePing(seq, echo, sizeof(echo))));  // our own PING read back
+  r.port.receive(replyFrame(seq - 1, 1));                                              // answer to an older PING
+  std::string corrupted = replyFrame(seq, 1);
+  corrupted[12] = '7';  // address byte flipped after the CRC was computed
+  r.port.receive(corrupted);
+  r.port.receive("garbage without crc\n");
+  r.link.loop();
+  assert(strcmp(r.link.connectionStatus(), "UNKNOWN") == 0);
+
+  // A late answer after the window closed never counts either.
+  r.platform.now += CELL_REPLY_TIMEOUT_MS;
+  r.link.loop();  // miss recorded, no new PING yet
+  r.port.receive(replyFrame(seq, 1));
+  r.link.loop();
+  assert(strcmp(r.link.connectionStatus(), "UNKNOWN") == 0);
+}
+
+void replyHeldByABusyLoopStillCounts() {
+  CellRig r;
+  r.link.loop();
+  uint32_t seq = lastPing(r.port);
+  r.port.receive(replyFrame(seq, 1));  // arrived on time, read only after the loop was held
+  r.platform.now += CELL_REPLY_TIMEOUT_MS + 40;
+  r.link.loop();
+  assert(strcmp(r.link.connectionStatus(), "CONNECTED") == 0);
+}
+
+void pingsArePacedAndNeverOverlap() {
+  CellRig r;
+  r.link.loop();
+  uint32_t first = lastPing(r.port);
+  r.platform.now += CELL_REPLY_TIMEOUT_MS - 1;
+  r.link.loop();
+  assert(r.port.tx.empty());  // still waiting for the first answer
+  r.platform.now = CELL_POLL_INTERVAL_MS - 1;
+  r.link.loop();
+  assert(r.port.tx.empty());
+  r.platform.now = CELL_POLL_INTERVAL_MS;
+  r.link.loop();
+  assert(lastPing(r.port) == first + 1);
+}
+
+void portsAreIndependent() {
+  FakePlatform platform;
+  FakePort port1, port2;
+  CellLink a1(1, port1, platform), a2(2, port2, platform);
+  for (int i = 0; i < 3; i++) {
+    a1.loop();
+    a2.loop();
+    uint32_t seq = lastPing(port1);
+    port2.tx.clear();
+    platform.now += 6;
+    port1.receive(replyFrame(seq, 1));
+    a1.loop();
+    a2.loop();
+    platform.now += CELL_REPLY_TIMEOUT_MS - 6;
+    a1.loop();
+    a2.loop();
+    platform.now += CELL_POLL_INTERVAL_MS - CELL_REPLY_TIMEOUT_MS;
+  }
+  assert(strcmp(a1.connectionStatus(), "CONNECTED") == 0);
+  assert(strcmp(a2.connectionStatus(), "DISCONNECTED") == 0);
+}
+
+const char* fakeCellStatus(int cellAddress) { return cellAddress == 1 ? "CONNECTED" : "DISCONNECTED"; }
+
+void heartbeatReportsEachCellLink() {
+  Rig r;
+  r.hub.cellStatus(fakeCellStatus);
+  r.connectOnce();
+  const Message& heartbeat = r.transport.published.back();
+  assert(has(heartbeat, "\"type\":\"HEARTBEAT\""));
+  assert(has(heartbeat, "\"cellAddress\":1,\"connectionStatus\":\"CONNECTED\",\"readerStatus\":\"UNKNOWN\","
+                        "\"doorState\":\"UNKNOWN\",\"lockState\":\"UNKNOWN\""));
+  assert(has(heartbeat, "\"cellAddress\":2,\"connectionStatus\":\"DISCONNECTED\""));
+}
+
 // Prints every payload on its own line so run.sh can check that it is strict JSON.
 void dumpPayloads(const char* path) {
   Rig r;
@@ -555,6 +766,16 @@ int main(int argc, char** argv) {
   commandInterruptedByRebootIsUncertainAndNeverRepeated();
   invalidInboundIsReportedWithinTheRateLimit();
   parseInstantRules();
+  cellFrameFormat();
+  lineReaderDropsOversizedLines();
+  cellIsUnknownThenConnected();
+  cellIsDisconnectedAfterThreeMissesAndRecovers();
+  cellOnTheWrongPortIsDisconnected();
+  staleEchoedAndCorruptedFramesNeverCount();
+  replyHeldByABusyLoopStillCounts();
+  pingsArePacedAndNeverOverlap();
+  portsAreIndependent();
+  heartbeatReportsEachCellLink();
   if (argc > 1) dumpPayloads(argv[1]);
   puts("all host tests passed");
   return 0;
