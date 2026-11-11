@@ -131,6 +131,23 @@ JOIN qa_ops o ON o.id = l.op_id;
 
 UPDATE aegis.loans SET status = 'RETURN_PENDING' WHERE id = '5eed0000-0000-4000-8000-000000000703';
 
+-- Tech B holds an ACTIVE reservation whose only checkout attempt failed: doc 09 §8.4 keeps that terminal attempt as
+-- currentOperationId. The attempt is terminal, so it never blocks the real flow on the locker.
+INSERT INTO aegis.reservations (id, asset_id, user_id, status, reserved_from, reserved_until, created_at)
+SELECT '5eed0000-0000-4000-8000-000000000509', '5eed0000-0000-4000-8000-000000000306', '5eed0000-0000-4000-8000-000000000101',
+       'ACTIVE', c.t0 - interval '10 minutes', c.t0 + interval '110 minutes', c.t0 - interval '10 minutes'
+FROM qa_ctx c;
+
+INSERT INTO aegis.locker_operations (
+    id, type, status, user_id, asset_id, locker_id, compartment_id, reservation_id, expected_asset_identifier_id,
+    created_at, authorized_at, local_proof_validated_at, expires_at, command_sent_at, terminal_at, failure_reason)
+SELECT '5eed0000-0000-4000-8000-000000000609', 'CHECKOUT', 'FAILED', '5eed0000-0000-4000-8000-000000000101',
+       '5eed0000-0000-4000-8000-000000000306', c.locker_id, c.a2, '5eed0000-0000-4000-8000-000000000509',
+       '5eed0000-0000-4000-8000-000000000406',
+       c.t0 - interval '5 minutes', c.t0 - interval '280 seconds', c.t0 - interval '280 seconds',
+       c.t0 - interval '160 seconds', c.t0 - interval '279 seconds', c.t0 - interval '270 seconds', 'COMMAND_REJECTED'
+FROM qa_ctx c;
+
 INSERT INTO aegis.locker_operations (
     id, type, status, user_id, asset_id, locker_id, compartment_id, reservation_id, loan_id,
     expected_asset_identifier_id, created_at, authorized_at, local_proof_validated_at, expires_at,

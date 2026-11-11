@@ -301,6 +301,15 @@ def reservations_loans_operations(admin, tech, state):
         check("M1 reservations: real CANCELLED reservation detail",
               status == 200 and body.get("status") == "CANCELLED" and body.get("cancelledAt"),
               f"HTTP {status} status={(body or {}).get('status')} cancelledAt={(body or {}).get('cancelledAt')}")
+        failed_attempt = syn("609")
+        status, body = call("GET", f"{route}/{syn('509')}", admin)
+        current = (body or {}).get("currentOperationId")
+        check("M1 reservations: an ACTIVE reservation keeps its failed attempt as currentOperationId (§8.4, a9142a7)",
+              status == 200 and body.get("status") == "ACTIVE" and current == failed_attempt,
+              f"HTTP {status} currentOperationId={current}")
+        _, page = call("GET", f"{route}?userId={TECH_B}&status=ACTIVE", admin)
+        listed = [item.get("currentOperationId") for item in (page or {}).get("items", [])]
+        check("M1 reservations: the list shows the same currentOperationId", listed == [failed_attempt], f"{listed}")
 
     route = "/admin/loans"
     if served(admin, route, "M2 loans (#48)"):
