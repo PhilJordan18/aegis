@@ -21,6 +21,7 @@
 **Mise à jour ciblée :** 6 novembre 2026 — lectures administratives approuvées par Philippe (#25, #26, #28) : `GET /admin/lockers` et `AdminLockerView` (§9.3, §16.2), historique des identifiants `GET /admin/assets/{assetId}/identifiers` (§9.3, §12.3); aucune migration  
 **Mise à jour ciblée :** 6 novembre 2026 — refus du catalogue liés à la garde de l’actif (#26) : placement refusé pendant une réservation active, un prêt ouvert ou une opération non terminale, attribution refusée pendant une opération non terminale et révocation de l’identifiant qu’elle attend, avec les codes de l’archivage (§12.3, §12.4, §21); ordre des refus approuvé par Philippe le 6 novembre 2026; aucun code ni champ nouveau  
 **Mise à jour ciblée :** 6 novembre 2026 — erreurs signalées par le hub (#29) : champ requis `deviceErrors` et `DeviceErrorView` de `LockerStatusView` (§8.6, §16.1), limités à la session courante du hub, approuvés par Philippe le 6 novembre 2026; ajout compatible, aucune migration
+**Mise à jour ciblée :** 11 novembre 2026 — validation locale du QR (#44), décisions approuvées par Philippe le 11 novembre 2026 ([#44](https://github.com/PhilJordan18/aegis/issues/44#issuecomment-6806492151)) : valeurs publiques de `failureReason` avant autorisation (§8.5), limite initiale des préparations (§15.5), émission de `CHECKOUT` (§8.10) et refus enregistrés de `authorize-local` (§15.5); transitions inchangées, aucune migration  
 
 ---
 
@@ -465,6 +466,27 @@ LockerOperationStatus :
 - EXPIRED;
 - ANOMALY.
 
+`failureReason` est public : il est lu par l’initiateur (§15.4) et par l’administration (§17). Une tentative de retrait terminée **avant son autorisation** porte l’une des valeurs suivantes, approuvées par Philippe le 11 novembre 2026 (#44); elles ne changent aucune transition de `05` §5.4.
+
+| `failureReason` | Statut terminal | Cause |
+|---|---|---|
+| `LOCAL_PROOF_EXPIRED` | `EXPIRED` | Échéance du défi atteinte sans consommation (`06` §6.5) |
+| `HUB_RESTARTED` | `FAILED` | Le hub a changé de `deviceSessionId` ou son appareil a été désactivé (`10` §27.4) |
+| `LOCKER_OFFLINE` | `FAILED` | Le hub n’est plus `ONLINE` avant la consommation (`06` §6.1) |
+| `LOCAL_PROOF_ATTEMPTS_EXHAUSTED` | `FAILED` | Cinquième secret erroné soumis par l’initiateur (§15.5) |
+| `RESERVATION_CANCELLED` | `FAILED` | Annulation de la réservation pendant la préparation (`06` §5.5) |
+
+Une tentative de retrait terminée **après son autorisation** porte l’une des valeurs suivantes (#47; conditions exactes en `06` §10.3.1). Une opération `CONFIRMED` n’a pas de `failureReason`.
+
+| `failureReason` | Statut terminal | Cause |
+|---|---|---|
+| `OPERATION_EXPIRED` | `EXPIRED` | `expiresAt` atteint sans ouverture, commande jamais envoyée ou porte certainement restée fermée |
+| `DOOR_NOT_CLOSED_BEFORE_EXPIRY` | `ANOMALY` | Porte ouverte et non refermée avant `expiresAt` |
+| `INCONSISTENT_PHYSICAL_STATE` | `ANOMALY` | Tag attendu encore vu après la fermeture, lecteur `FAULTED` ou `UNKNOWN` après la fermeture, ou localisation ambiguë |
+| `DEVICE_OFFLINE_DURING_OPERATION` | `ANOMALY` | Exécution impossible à déterminer avant `expiresAt`, dont une preuve manquante |
+
+Un refus de commande avant toute actuation garde la valeur `COMMAND_REJECTED_<résultat>` de #41. Un client traite une valeur inconnue comme un échec générique, sans en déduire d’état physique (§3).
+
 ### 8.6 LockerStatusView
 
 | Champ | Type | Requis |
@@ -550,7 +572,7 @@ Le serveur n’émet que les valeurs suivantes; leur ordre n’a pas de sens et 
 | `CANCEL` | `ReservationView` | `POST /reservations/{id}/cancel` (§14.4) | Réservation `ACTIVE` du demandeur; instant antérieur à `reservedUntil`; aucune tentative de retrait de cette réservation n’a été autorisée, quelle que soit son issue (§14.4, `06` §5.5; question ouverte Q1); aucune incertitude physique, c’est-à-dire aucune tentative `ANOMALY` dont l’anomalie n’est pas `RESOLVED`. Une tentative `AWAITING_LOCAL_PROOF` laisse `CANCEL` : l’annulation la termine (§14.4). L’horaire et la connexion du locker n’interviennent pas. |
 | `RETURN` | `LoanView` | `POST /loans/{id}/return` (§15.2) | Prêt `ACTIVE` du titulaire; plage d’exploitation ouverte; aucune opération physique non terminale sur le locker, y compris une tentative de ce prêt; gardes communes et de retour satisfaites (`06` §6.1, §6.3), donc hub `ONLINE`. `overdue` n’intervient pas. |
 
-Le serveur n’émet une valeur que lorsque sa mutation est implémentée. Tant que l’annulation (§14.4), le retrait (§15.1) et le retour (§15.2) ne le sont pas, `availableActions` est vide, même si les conditions ci-dessus sont réunies; un client n’affiche donc pas ces boutons (décision du 28 octobre 2026, RES-01).
+Le serveur n’émet une valeur que lorsque sa mutation est implémentée. Tant que l’annulation (§14.4), le retrait (§15.1) et le retour (§15.2) ne le sont pas, `availableActions` est vide, même si les conditions ci-dessus sont réunies; un client n’affiche donc pas ces boutons (décision du 28 octobre 2026, RES-01). Depuis #44 (11 novembre 2026), `CHECKOUT` est émis lorsque ses conditions sont réunies et que le flux du défi du hub est activé; il est évalué sans verrou, et la préparation revalide toutes ses gardes. Depuis #50 (11 novembre 2026), `RETURN` est émis au titulaire lorsque ses conditions sont réunies, avec la même évaluation sans verrou; une vue administrateur (§17) n’expose jamais d’action.
 
 À partir de `reservedUntil`, une réservation encore `ACTIVE` (expiration différée par un retrait autorisé, ou pas encore appliquée) n’expose aucune action : les règles temporelles sont réévaluées au début de chaque action (`06` §14). La limitation de fréquence des préparations (§15.5) n’est pas reflétée; elle se manifeste par `429` avec `Retry-After`.
 
@@ -644,7 +666,7 @@ Ces deux points ne sont pas approuvés. En attendant, la section applique le tex
   - Propriétaires : décision de Philippe; contrat tenu par la session API/Web; mise en œuvre RES-02 (#38).
 - **Q2 — Récupération d’un prêt `RETURN_PENDING`.** La procédure qui autorise une nouvelle tentative n’est pas définie.
   - Référence : `05` §4.3, `06` §6.3.
-  - Lecture appliquée : `RETURN` n’est pas émis.
+  - Lecture appliquée : `RETURN` n’est pas émis et §15.2 refuse la préparation par `409 LOAN_NOT_RETURNABLE` (#50).
   - Recommandation : émettre `RETURN` quand la dernière tentative de retour est `ANOMALY`, que son anomalie est `ACKNOWLEDGED` (`05` §6.2 : correction physique engagée) et que toutes les autres gardes sont satisfaites.
   - Propriétaires : décision de Philippe; contrat tenu par la session API/Web; mise en œuvre RET-01 (#50) et ANO-01 (#52).
 
@@ -1153,6 +1175,15 @@ Même préparation que le retrait, pour un prêt `ACTIVE`, ou une nouvelle tenta
 
 Réponse `202` avec `Location` et `LockerOperationView`. Le passage de `ACTIVE` à `RETURN_PENDING` intervient seulement lors de l’autorisation locale en §15.5.
 
+Mise en œuvre RET-01 (#50, 11 novembre 2026) :
+
+- Le prêt d’un autre titulaire n’est pas trouvé (`404 RESOURCE_NOT_FOUND`, §26.2). Un prêt autre que `ACTIVE` répond `409 LOAN_NOT_RETURNABLE`, y compris `RETURN_PENDING` tant que Q2 n’est pas tranchée (§8.10).
+- Les gardes du locker, de la cellule et de la plage d’exploitation, le refus d’une seconde opération ouverte sur le locker et la limitation de §15.5 sont ceux du retrait, avec les mêmes codes; la limite compte ensemble les préparations de retrait et de retour d’un même couple utilisateur–locker.
+- La readiness n’intervient pas : un actif emprunté n’est jamais `READY`, et `05` §7 exige qu’un retour ne le demande pas. `overdue` n’intervient pas non plus.
+- L’opération `RETURN` porte `loanId`, jamais `reservationId`, et l’identifiant actif de l’actif comme identifiant attendu. Le défi affiché porte l’action `RETURN`.
+- Un défi expiré ou invalidé termine l’opération sans toucher au prêt.
+- Après l’autorisation, la preuve physique qui termine le prêt (`COMPLETED`) relève de RET-02 (#51). D’ici là, une opération de retour autorisée n’est conclue qu’à son `expiresAt`, selon `06` §13.1 : sans effet physique possible, `EXPIRED` ou `FAILED` et le prêt redevient `ACTIVE`; sinon `ANOMALY` et le prêt reste `RETURN_PENDING`.
+
 ### 15.3 Lecture du prêt
 
 `GET /me/loan` retourne le prêt courant de l’utilisateur dans le parcours P0; aucun prêt ouvert donne `404 ACTIVE_LOAN_NOT_FOUND`. `GET /loans/{loanId}` exige que l’utilisateur soit le titulaire.
@@ -1228,11 +1259,11 @@ Réponse `202`, `Location` identique, `LockerOperationView` avec `requiredAction
 | 429 | `LOCAL_PROOF_RATE_LIMITED` | Limite atteinte, avec `Retry-After` |
 | 409 | Codes de gardes métier existants | État, droits métier, réservation, horaire ou matériel devenus incompatibles |
 
-La même clé et le même corps rejouent la réponse initiale; une réponse refusée rejouée ne recompte pas les essais. Un corps différent avec la même clé est rejeté. La nouvelle clé après consommation donne un refus, jamais un second déverrouillage. Le token n’est pas copié dans la table d’idempotence : seul le hash de la requête canonique y figure.
+La même clé et le même corps rejouent la réponse initiale; une réponse refusée rejouée ne recompte pas les essais. Les refus qui changent un état sont enregistrés avec la clé et rejoués tels quels : secret erroné compté (`403`), cinquième secret erroné, échéance constatée au scan (`410`, opération `EXPIRED`) et redémarrage du hub constaté au scan (`409 LOCAL_PROOF_INVALIDATED`, opération `FAILED`). Les autres refus ne sont pas enregistrés. Un corps différent avec la même clé est rejeté. La nouvelle clé après consommation donne un refus, jamais un second déverrouillage. Le token n’est pas copié dans la table d’idempotence : seul le hash de la requête canonique y figure.
 
 Le délai retenu est de 60 secondes maximum **depuis la création** du défi, borné par l’horaire et la réservation applicable. Le technicien prépare l’opération devant le casier : la latence d’affichage consomme une partie de ces 60 secondes, sans renouveler l’échéance. Les 120 secondes physiques commencent seulement à l’autorisation locale.
 
-Au cinquième secret erroné soumis par l’initiateur, le défi est invalidé et l’opération termine en `FAILED`. Une lecture caméra sans soumission ne compte pas. Un tiers ne peut épuiser les essais du titulaire. La fréquence des nouvelles préparations reste limitée par utilisateur et casier, avec un seuil configurable à qualifier avant intégration et `429 LOCAL_PROOF_RATE_LIMITED` accompagné de `Retry-After`. Les rejeux idempotents ne comptent pas comme nouvelles préparations. L’ancien plafond de trois préparations en quinze minutes est abandonné : il peut bloquer une série normale de retraits/retours. Cela ne supprime ni la limitation de débit ni les autres contrôles (ADR-009).
+Au cinquième secret erroné soumis par l’initiateur, le défi est invalidé et l’opération termine en `FAILED`. Une lecture caméra sans soumission ne compte pas. Un tiers ne peut épuiser les essais du titulaire. La fréquence des nouvelles préparations reste limitée par utilisateur et casier. Limite initiale du P0, approuvée par Philippe le 11 novembre 2026 (#44) : **6 nouvelles préparations par période glissante de 10 minutes pour chaque couple utilisateur–casier**, configurable (`AEGIS_PREPARATION_MAX_PER_WINDOW`, `AEGIS_PREPARATION_WINDOW`). Au-delà, `429 LOCAL_PROOF_RATE_LIMITED` avec `Retry-After`, en secondes arrondies vers le haut, jusqu’à la sortie de la plus ancienne préparation comptée. Les rejeux idempotents ne comptent pas comme nouvelles préparations. L’ancien plafond de trois préparations en quinze minutes est abandonné : il peut bloquer une série normale de retraits/retours. Cela ne supprime ni la limitation de débit ni les autres contrôles (ADR-009).
 
 ---
 

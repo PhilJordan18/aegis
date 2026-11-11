@@ -558,7 +558,7 @@ avant le marquage (ligne encore `CLAIMED`) reste à fixer avec IOT-02.
 
 ## Préparation du retrait et défi du hub (LOC-01, CHK-01)
 
-`POST /api/v1/checkouts` (document 09, §15.1) prépare un retrait sans rien
+`POST /api/v1/reservations/{reservationId}/checkout` (document 09, §15.1) prépare un retrait sans rien
 ouvrir. Une seule transaction verrouille, dans l'ordre, l'utilisateur, l'actif,
 la réservation, le casier, l'opération et le défi. Elle crée l'opération
 `AWAITING_LOCAL_PROOF` et le défi de 60 s, puis incrémente la révision
@@ -584,8 +584,24 @@ ciphertext échu.
 | `AEGIS_DISPLAY_KEYS` | vide | `keyId:base64`, séparées par des virgules, 32 octets chacune |
 | `AEGIS_DISPLAY_ACTIVE_KEY_ID` | vide | Clé qui scelle les nouvelles instructions |
 | `AEGIS_DISPLAY_DISPATCHER_ENABLED` | `false` | Publie les instructions; exige MQTT et le flux activé |
-| `AEGIS_PREPARATION_MAX_PER_WINDOW` | `6` | Préparations par utilisateur et par fenêtre, puis `429` |
-| `AEGIS_PREPARATION_WINDOW` | `PT10M` | Fenêtre de cette limite |
+| `AEGIS_PREPARATION_MAX_PER_WINDOW` | `6` | Nouvelles préparations par couple utilisateur–casier dans la fenêtre glissante, puis `429 LOCAL_PROOF_RATE_LIMITED` avec `Retry-After` |
+| `AEGIS_PREPARATION_WINDOW` | `PT10M` | Fenêtre glissante de cette limite |
+
+`POST /api/v1/locker-operations/{operationId}/authorize-local` (document 09,
+§15.5; #44) reçoit `{challengeId, token}` lus dans le QR. Après les verrous
+(utilisateur, actif, réservation, casier, compartiment, opération, défi), elle
+vérifie le propriétaire, le défi `PENDING`, l'échéance, l'affichage confirmé, la
+session courante du hub, le secret en temps constant, puis toutes les gardes de
+la préparation. Dans la même transaction, elle consomme le défi, passe
+l'opération à `AUTHORIZED` pour 120 s, crée l'unique `UNLOCK_COMPARTMENT` et
+purge le ciphertext du QR. Un secret erroné est compté dans une transaction
+validée (`403`, réponse rejouée sans recompter); le cinquième termine
+l'opération `FAILED` (`LOCAL_PROOF_ATTEMPTS_EXHAUSTED`). Un scan après
+l'échéance ou après un redémarrage du hub termine aussi l'opération (`410`,
+`409 LOCAL_PROOF_INVALIDATED`). Les autres refus ne changent rien : le défi
+reste `PENDING` jusqu'à son échéance (écart signalé sur #44 par rapport à la
+fermeture immédiate d'une garde devenue invalide, document 06, §6.5). Un autre
+compte reçoit `404` sans toucher au défi.
 
 Les clés, leur rotation et leur retrait suivent
 [ADR-015](../../docs/adr/ADR-015-cles-affichage-hub.md). Une clé se génère avec
