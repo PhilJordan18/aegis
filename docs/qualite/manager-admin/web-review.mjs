@@ -71,9 +71,14 @@ async function spaGo(page, path) {
 }
 const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png`, fullPage: true, animations: 'disabled' })
 const main = (page) => page.locator('main').innerText()
+// One API sign-in per run: the login endpoint is rate limited (about five per minute) and the UI signs in too.
+let cachedToken
 async function adminToken() {
+  if (cachedToken) return cachedToken
   const r = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password }) })
-  return (await r.json()).accessToken
+  cachedToken = (await r.json()).accessToken
+  if (!cachedToken) throw new Error(`API sign-in refused: HTTP ${r.status}`)
+  return cachedToken
 }
 
 const scenarios = {
@@ -106,6 +111,11 @@ const scenarios = {
     await dossier.waitFor()
     const d10 = await dossier.innerText()
     record('INFO', 'A4 b10 dossier (operation 607 FAILED)', d10.replace(/\s+/g, ' ').slice(0, 400))
+    // W2: times are shown in the laboratory zone, never in UTC.
+    const b10 = await (await fetch(`${API}/admin/anomalies/${syn('b10')}`, { headers: { authorization: `Bearer ${await adminToken()}` } })).json()
+    const hm = (zone) => new Intl.DateTimeFormat('fr-CA', { hour: '2-digit', minute: '2-digit', timeZone: zone }).format(new Date(b10.detectedAt ?? b10.createdAt))
+    check('A7 (W2) the dossier time is America/Toronto, not UTC',
+      d10.includes(hm('America/Toronto')) && !d10.includes(hm('UTC')), `Toronto ${hm('America/Toronto')}, UTC ${hm('UTC')}`)
     await page.getByRole('button', { name: /Reconnaître/ }).first().click()
     const dialog = page.getByRole('dialog')
     await dialog.waitFor()
@@ -157,10 +167,20 @@ const scenarios = {
     await signIn(page)
     await nav(page, 'Réservations et prêts')
     await axe(page, '/reservations-prets reservations (fr, 1440)')
+    // W1: select a reservation, then switch: nothing of the reservation view is counted, listed or fetched as a loan.
+    await spaGo(page, `/reservations-prets?dossier=${syn('509')}`)
+    await page.waitForTimeout(800)
     await page.getByRole('main').getByText('Prêts', { exact: true }).first().click()
     await page.waitForLoadState('networkidle')
     await page.waitForTimeout(1500)
     const loans = await main(page)
+    const token = await adminToken()
+    const loanTotal = (await (await fetch(`${API}/admin/loans?size=1`, { headers: { authorization: `Bearer ${token}` } })).json()).totalItems
+    const shownCount = loans.match(/(\d+) prêts?/)?.[1]
+    check('T6 (W1) after the switch the count is the loan total and no reservation is fetched as a loan',
+      String(loanTotal) === shownCount && !page.apiLog.some((l) => l.startsWith('404') && l.includes('/admin/loans/'))
+        && !/SYN-ANOM-TARGET/.test(loans) && !/19 h 00 HNE/.test(loans),
+      `shown ${shownCount}, API total ${loanTotal}, loan 404s ${page.apiLog.filter((l) => l.startsWith('404')).length}`)
     record('INFO', 'T1 loans tab text', loans.replace(/\s+/g, ' ').slice(0, 900))
     check('T1 URL carries the tab (?vue=prets)', /vue=prets/.test(page.url()), page.url().replace(BASE, ''))
     await shot(page, 'transactions-loans-fr-1440')
@@ -189,6 +209,16 @@ const scenarios = {
     await page.waitForTimeout(800)
     const r509 = (await main(page)).replace(/\s+/g, ' ')
     record('INFO', 'T4 reservation 509 dossier (ACTIVE, attempt 609 FAILED)', r509.slice(Math.max(0, r509.indexOf('SYN-ANOM-TARGET')), r509.indexOf('SYN-ANOM-TARGET') + 600))
+    // G1: the holder's name is shown beside the id, on a reservation and on a loan.
+    const person = async (path, field) => (await (await fetch(`${API}${path}`, { headers: { authorization: `Bearer ${token}` } })).json())[field]
+    const user509 = await person(`/admin/reservations/${syn('509')}`, 'user')
+    check('T7 (G1) reservation 509 names its holder', !!user509?.displayName && r509.includes(user509.displayName), JSON.stringify(user509))
+    await spaGo(page, `/reservations-prets?vue=prets&dossier=${syn('702')}`)
+    await page.waitForTimeout(800)
+    const holder702 = await person(`/admin/loans/${syn('702')}`, 'holder')
+    const l702 = (await main(page)).replace(/\s+/g, ' ')
+    check('T7 (G1) loan 702 names its holder', !!holder702?.displayName && l702.includes(holder702.displayName), JSON.stringify(holder702))
+    await shot(page, 'transactions-loan-702-holder-fr-1440')
     await shot(page, 'transactions-reservation-509-fr-1440')
     check('T5 no page error on /reservations-prets', page.errors.length === 0, page.errors.join(' | ') || 'none')
     await page.context().close()
@@ -219,8 +249,30 @@ const scenarios = {
     const restart = page.getByRole('button', { name: /Recommencer|première page|Reprendre/i })
     if (await restart.count()) {
       await restart.first().click(); await page.waitForTimeout(1000)
-      check('U2 restart from the first page reloads the list', /25 événements chargés/.test(await main(page)), page.apiLog.slice(-2).join(' | '))
+      const restarted = await main(page)
+      const last = page.apiLog.at(-1) ?? ''
+      check('U2 restart from the first page reloads the list',
+        last.startsWith('200') && !last.includes('cursor=') && /\d+ événements chargés/.test(restarted) && !/La liste a changé/.test(restarted),
+        `${last} :: ${restarted.match(/\d+ événements chargés/)?.[0]}`)
     } else record('INFO', 'U2 restart control', 'no restart button found by name')
+    // D9: the server row seeded by checks.py reads {commandMessageId: QA-D9-KEPT}; a structured value injected into
+    // the response must be counted, never printed.
+    await page.route('**/api/v1/admin/audit-events?**', async (route) => {
+      const response = await route.fetch()
+      const body = await response.json()
+      for (const item of body.items ?? []) if (item.details?.commandMessageId === 'QA-D9-KEPT') item.details.injected = { nested: 'QA-D9-STRUCTURED' }
+      await route.fulfill({ response, json: body })
+    })
+    await spaGo(page, `/audit?sujet=${syn('b06')}`)
+    await page.waitForTimeout(1200)
+    const kept = page.getByText('QA-D9-KEPT').first()
+    if (await kept.count()) { await kept.click(); await page.waitForTimeout(600) }
+    const d9 = (await main(page)).replace(/\s+/g, ' ')
+    check('U4 (D9) the scalar detail is shown, the structured one is counted and not printed',
+      d9.includes('QA-D9-KEPT') && !/QA-D9-(STRUCTURED|NESTED|UNKNOWN)|QA-RAW-SENTINEL/.test(d9) && /champs? structurés? (n’est|ne sont) pas affichés?/.test(d9),
+      d9.match(/.{0,160}QA-D9-KEPT.{0,200}/)?.[0] ?? d9.slice(0, 300))
+    await shot(page, 'audit-d9-details-fr-1440')
+    await page.unroute('**/api/v1/admin/audit-events?**')
     check('U3 no page error on /audit', page.errors.length === 0, page.errors.join(' | ') || 'none')
     await page.context().close()
   },
@@ -304,7 +356,11 @@ const scenarios = {
       }))
     }
     record('INFO', 'K1 Tab order on /anomalies?statut=toutes (40 stops)', stops.join(' > '))
-    check('K1 every focus stop has a visible ring', !stops.some((s) => s.includes('NO VISIBLE RING')), stops.filter((s) => s.includes('NO VISIBLE')).join(' | ') || 'all stops styled')
+    // Tabbing past the last control leaves the page (activeElement is body) before wrapping to the skip link.
+    const ringless = stops.filter((s) => s.includes('NO VISIBLE') && !s.startsWith('body:'))
+    check('K1 every focus stop has a visible ring', stops.length > 0 && !ringless.length, ringless.join(' | ') || 'all stops styled')
+    const wrap = stops.indexOf(stops.find((s) => s.startsWith('body:')))
+    if (wrap >= 0) check('K2 after the wrap, focus resumes at the skip link', /^a:Aller au contenu|^a:Skip to/.test(stops[wrap + 1] ?? ''), stops[wrap + 1])
     await page.context().close()
   },
 }

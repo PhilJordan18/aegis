@@ -62,6 +62,7 @@ Les attentes viennent du document 09 : §17 à §19, §21 (erreurs) et §22.1 (t
 | M1 filtres | Technicien B, `EXPIRED`, `assetId` de `SYN-LOAN-ACTIVE` ; `from` = instant commun et `to` = instant + 1 s ; `from` = instant − 1 s et `to` = instant ; `from` = `to` | Ensembles égaux à SQL ; les 6 réservations ex æquo sont incluses par `from` inclusif et exclues par `to` exclusif ; un intervalle vide donne 400 `VALIDATION_ERROR` (choix Backend, #67 6799329882) |
 | M1 détail | Réservation réelle `ACTIVE`, puis réelle `CANCELLED` | `status`, `userId`, `asset.assetCode` `REC-…-1` ; `cancelledAt` renseigné |
 | M1 tentative échouée | Réservation synthétique `ACTIVE` 509 du technicien B, dont la seule tentative de retrait 609 est `FAILED` | Détail et liste : `currentOperationId` = 609 (§8.4). Exige le correctif Backend `a9142a7` ; échoue sur `2813288`, qui renvoyait `null` |
+| M1, M2 personne (G1) | Détail et liste en `size=100` des réservations et des emprunts ; détail technicien de la réservation réelle `ACTIVE` | `user` (réservation) et `holder` (emprunt) valent exactement `{id, displayName}` : `id` égal à `userId` / `holderUserId`, `displayName` égal à `aegis.users.display_name`, jamais nul ; la vue technicien n'a pas de clé `user` |
 | M2 emprunts | Liste en `size=2` ; `status=ACTIVE` ; détails 701, 702, 703 | 701 `ACTIVE` avec `overdue=false` ; 702 `ACTIVE` avec `overdue=true` ; 703 `COMPLETED` avec `returnOperationId` = 613 ; `checkoutOperationId` correct |
 | M3 opérations | `lockerId` en `size=3` ; `status=ANOMALY` ; détails 604 et 607 | {604, 605, 608} ; 604 porte `anomalyId` = b04 ; 607 a `failureReason=COMMAND_REJECTED` et `anomalyId=null` |
 | M4 garde | `POST` vers `…/complete`, `…/force-return`, `…/confirm`, `/admin/reservations/{id}/cancel` | 404 ou 405, jamais 2xx |
@@ -76,6 +77,7 @@ Les attentes viennent du document 09 : §17 à §19, §21 (erreurs) et §22.1 (t
 | M7 audit | `limit=0`, `limit=101`, `eventType`/`subjectType` inconnus, `operationId=xyz`, `from=x`, `cursor=not-a-cursor` | 400 `VALIDATION_ERROR` ; le curseur altéré donne 400 `INVALID_CURSOR` |
 | M7 curseur | Parcours en `limit=7` avec `to` = instantané SQL | Ensemble égal à SQL, sans doublon ni omission |
 | M7 arrivées tardives (D10) | Page 1 en `limit=5`, puis deux événements synthétiques insérés pendant le parcours : l'un antidaté de 400 jours, l'autre plus récent que la page 1 | Le parcours est sans doublon et contient tout l'existant. L'antidaté est lu, car il se trie après le curseur ; le plus récent ne l'est pas. Un nouveau parcours contient les deux. Ce n'est pas un instantané (D10 approuvé) |
+| M7 détails filtrés (D9) | Événement synthétique `ANOMALY_CREATED` avec `{commandMessageId, outcome: {…}, qaUnknown}` ; événement `LOCKER_ONLINE` (type sans liste autorisée) avec une charge brute | Le premier se lit exactement `{commandMessageId}` : une valeur structurée et une clé inconnue sont retirées ; le second se lit `{}`, et la sentinelle brute n'apparaît dans aucune réponse |
 | M7 filtres | `operationId=604`, `subjectType=ANOMALY`, `eventType=ANOMALY_ACKNOWLEDGED`, `subjectId=703`, sujet inconnu | Ensembles égaux à SQL ; sujet inconnu : page vide finale |
 | M8 fuite | Toutes les réponses collectées | Aucun témoin, aucun hachage `$2a$`/`$2b$`, aucune valeur RFID brute hors des routes `/identifiers` |
 
@@ -118,6 +120,8 @@ WEB_DIR=<checkout Web>/apps/admin-web QA_CREDS=<fichier credentials> OUT_DIR=<do
 ```
 
 Le scénario `anomalies` reconnaît b10 et b12 ; il ne passe donc qu'une fois par jeu de données. `ONLY=transactions,audit,…` limite les scénarios.
+
+La passe vérifie aussi : W1 (après le passage aux prêts, le compte vaut le total des emprunts et aucune réservation n'est lue comme un emprunt), W2 (heures des anomalies en `America/Toronto`), G1 (nom de la personne dans le dossier d'une réservation et d'un emprunt) et D9 (un détail scalaire est affiché ; une valeur structurée injectée dans la réponse est comptée, jamais affichée). Le script ne se connecte qu'une fois à l'API ; la connexion est limitée à environ cinq essais par minute, donc espacez les relances d'au moins une minute.
 
 Deux contrôles reposent sur des pannes routées dans le navigateur, que le serveur réel ne produit pas :
 

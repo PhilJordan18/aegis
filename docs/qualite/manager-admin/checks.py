@@ -261,6 +261,17 @@ def setup_phase(admin, tech):
         json.dump({"assets": assets, "cancelled": cancelled.get("id"), "active": active.get("id")}, out)
 
 
+def holders(views, label, id_field, summary_field):
+    # G1 (#67 6800639533): an admin read names the person, never null, consistent with the id and the users table.
+    names = dict(line.split("|", 1) for line in sql(
+        "SELECT id || '|' || display_name FROM aegis.users;").splitlines() if "|" in line)
+    bad = [v.get("id") for v in views
+           if not isinstance(v.get(summary_field), dict) or set(v[summary_field]) != {"id", "displayName"}
+           or v[summary_field]["id"] != v.get(id_field) or v[summary_field]["displayName"] != names.get(v.get(id_field))]
+    check(f"{label} (G1): {summary_field} is {{id, displayName}} matching {id_field} on detail and list",
+          views and not bad, f"{len(views)} view(s), mismatched={bad[:3]}")
+
+
 def reservations_loans_operations(admin, tech, state):
     tech_id = sql("SELECT id FROM aegis.users WHERE lower(email) = 'technician@aegis.demo';")
     route = "/admin/reservations"
@@ -314,6 +325,12 @@ def reservations_loans_operations(admin, tech, state):
         _, page = call("GET", f"{route}?userId={TECH_B}&status=ACTIVE", admin)
         listed = [item.get("currentOperationId") for item in (page or {}).get("items", [])]
         check("M1 reservations: the list shows the same currentOperationId", listed == [failed_attempt], f"{listed}")
+        _, detail = call("GET", f"{route}/{state['active']}", admin)
+        _, page = call("GET", f"{route}?size=100", admin)
+        holders([detail or {}] + items(page), "M1 reservations", "userId", "user")
+        status, body = call("GET", f"/reservations/{state['active']}", tech)
+        check("M1 reservations (G1): the technician view has no user summary",
+              status == 200 and "user" not in (body or {}), f"HTTP {status} keys={sorted(body or {})}")
 
     route = "/admin/loans"
     if served(admin, route, "M2 loans (#48)"):
@@ -332,6 +349,9 @@ def reservations_loans_operations(admin, tech, state):
                   and body.get("checkoutOperationId") == checkout and body.get("returnOperationId") == ret,
                   f"HTTP {status} status={body.get('status')} overdue={body.get('overdue')} "
                   f"checkout={body.get('checkoutOperationId')} return={body.get('returnOperationId')}")
+        _, detail = call("GET", f"{route}/{LOAN_OVERDUE}", admin)
+        _, page = call("GET", f"{route}?size=100", admin)
+        holders([detail or {}] + items(page), "M2 loans", "holderUserId", "holder")
 
     route = "/admin/locker-operations"
     if served(admin, route, "M3 operations (#48)"):
@@ -507,6 +527,25 @@ def late_arrivals(admin, route):
           error or f"{len(fresh)} ids, both present={({backdated, newer} <= set(fresh))}")
 
 
+def filtered_details(admin, route):
+    # D9 as approved: only allowlisted scalar leaf paths survive, and a type without an allowlist (the schema accepts
+    # more types than the allowlist names, e.g. LOCKER_ONLINE) exposes {}.
+    def shown_details(event_type, subject_type, subject, details):
+        event = sql("WITH x AS (INSERT INTO aegis.audit_events (event_type, actor_user_id, subject_type, subject_id, "
+                    f"operation_id, details, occurred_at) VALUES ('{event_type}', NULL, '{subject_type}', '{subject}', "
+                    f"NULL, '{json.dumps(details)}'::jsonb, now() + interval '2 seconds') RETURNING id) SELECT id FROM x;")
+        status, body = call("GET", f"{route}?subjectId={subject}&limit=10", admin)
+        return status, next((item.get("details") for item in items(body) if item.get("id") == event), "absent")
+
+    status, shown = shown_details("ANOMALY_CREATED", "ANOMALY", AN_TARGET, {
+        "commandMessageId": "QA-D9-KEPT", "outcome": {"nested": "QA-D9-NESTED"}, "qaUnknown": "QA-D9-UNKNOWN"})
+    check("M7 audit (D9): details keep an allowlisted scalar and drop an unknown key and a non-scalar leaf",
+          status == 200 and shown == {"commandMessageId": "QA-D9-KEPT"}, f"HTTP {status} details={json.dumps(shown)}")
+    status, shown = shown_details("LOCKER_ONLINE", "LOCKER", LOCKER, {"payload": {"raw": "QA-RAW-SENTINEL"}})
+    check("M7 audit (D9): a type without an allowlist exposes empty details",
+          status == 200 and shown == {}, f"HTTP {status} details={json.dumps(shown)}")
+
+
 def audit(admin, tech):
     route = "/admin/audit-events"
     if not served(admin, route, "M7 audit (#53)"):
@@ -561,6 +600,7 @@ def audit(admin, tech):
           status == 200 and items(body) == [] and body.get("hasMore") is False and body.get("nextCursor") is None,
           f"HTTP {status} hasMore={(body or {}).get('hasMore')} nextCursor={(body or {}).get('nextCursor')}")
     late_arrivals(admin, route)
+    filtered_details(admin, route)
     status, body = call("GET", f"{route}?operationId={OP[4]}&limit=1", admin)
     sample = items(body)[0] if items(body) else {}
     report("INFO", "M7 audit: actor and details of an operation event (for the Web parsers)",
