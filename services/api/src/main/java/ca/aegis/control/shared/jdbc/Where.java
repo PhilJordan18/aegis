@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -39,6 +40,16 @@ public final class Where {
             conditions.add(column + " < :" + name);
             params.put(name, to.atOffset(ZoneOffset.UTC));
         }
+        return this;
+    }
+
+    /** Keyset continuation of an {@code (timeColumn DESC, idColumn DESC)} order: the rows strictly after a cursor. */
+    public Where before(String timeColumn, String idColumn, Instant time, UUID id) {
+        String at = "p" + params.size();
+        params.put(at, time.atOffset(ZoneOffset.UTC));
+        String key = "p" + params.size();
+        params.put(key, id);
+        conditions.add("(" + timeColumn + ", " + idColumn + ") < (:" + at + ", :" + key + ")");
         return this;
     }
 
