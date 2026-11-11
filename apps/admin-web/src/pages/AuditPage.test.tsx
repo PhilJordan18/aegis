@@ -12,7 +12,7 @@ import { installMatchMedia } from '../test/matchMedia'
 import { renderWithProviders } from '../test/renderApp'
 
 const authGateway: AuthGateway = { ...unconfiguredAuthGateway, currentProfile: async () => ({ kind: 'ok', value: adminProfile, requestId: null }) }
-const plain = (value: string | null | undefined) => (value ?? '').replace(/[  ]/g, ' ')
+const plain = (value: string | null | undefined) => (value ?? '').replace(/[\u00A0\u202F]/g, ' ')
 
 const COMMAND = eventView(1, {
   eventType: 'COMMAND_ACKNOWLEDGED',
