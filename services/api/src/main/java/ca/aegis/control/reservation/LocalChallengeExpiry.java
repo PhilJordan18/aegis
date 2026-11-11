@@ -47,6 +47,8 @@ public class LocalChallengeExpiry {
     static final String LOCAL_PROOF_EXPIRED = "LOCAL_PROOF_EXPIRED";
     static final String HUB_RESTARTED = "HUB_RESTARTED";
     static final String LOCKER_OFFLINE = "LOCKER_OFFLINE";
+    /** Document 06, section 6.5: the fifth wrong secret submitted by the initiator ends the attempt. */
+    static final String LOCAL_PROOF_ATTEMPTS_EXHAUSTED = "LOCAL_PROOF_ATTEMPTS_EXHAUSTED";
 
     private static final Logger log = LoggerFactory.getLogger(LocalChallengeExpiry.class);
 
@@ -148,21 +150,38 @@ public class LocalChallengeExpiry {
         } else {
             return false;
         }
-        attempts.end(attempt.get(), terminal, reason, now);
-        challenges.close(candidate.challengeId(), closed, now);
-        int stopped = challenges.stopDisplay(candidate.challengeId());
-        Optional<UUID> statusMessage = display.enqueueStatus(candidate.operationId(), terminal.name(), reason, now);
+        end(candidate.challengeId(), candidate.operationId(), candidate.reservationId(), candidate.lockerId(), null,
+                closed, terminal, reason, now);
+        return true;
+    }
+
+    /**
+     * Ends a locked {@code AWAITING_LOCAL_PROOF} attempt and its locked {@code PENDING} challenge without any opening:
+     * purges the challenge's ciphertext, queues the status that clears the screen and audits both transitions. The
+     * caller holds the locks of document 06, section 3.3 and read {@code now} after them. A challenge closed for
+     * {@link #LOCAL_PROOF_ATTEMPTS_EXHAUSTED} records its fifth failed attempt with its closing.
+     */
+    void end(UUID challengeId, UUID operationId, UUID reservationId, UUID lockerId, UUID actorUserId,
+            LocalChallengeStatus closed, LockerOperationStatus terminal, String reason, Instant now) {
+        attempts.end(new PendingAttempt(operationId, lockerId, LockerOperationStatus.AWAITING_LOCAL_PROOF), terminal,
+                reason, now);
+        if (LOCAL_PROOF_ATTEMPTS_EXHAUSTED.equals(reason)) {
+            challenges.exhaust(challengeId, now);
+        } else {
+            challenges.close(challengeId, closed, now);
+        }
+        int stopped = challenges.stopDisplay(challengeId);
+        Optional<UUID> statusMessage = display.enqueueStatus(operationId, terminal.name(), reason, now);
         audit.record(AuditEvent.transition(terminal == LockerOperationStatus.EXPIRED
-                ? AuditEventType.OPERATION_EXPIRED : AuditEventType.OPERATION_FAILED, null,
-                AuditSubjectType.LOCKER_OPERATION, candidate.operationId(), candidate.operationId(),
+                ? AuditEventType.OPERATION_EXPIRED : AuditEventType.OPERATION_FAILED, actorUserId,
+                AuditSubjectType.LOCKER_OPERATION, operationId, operationId,
                 LockerOperationStatus.AWAITING_LOCAL_PROOF, terminal, reason,
-                Map.of("reservationId", candidate.reservationId()), now));
+                Map.of("reservationId", reservationId), now));
         audit.record(AuditEvent.transition(closed == LocalChallengeStatus.EXPIRED
-                ? AuditEventType.LOCAL_CHALLENGE_EXPIRED : AuditEventType.LOCAL_CHALLENGE_INVALIDATED, null,
-                AuditSubjectType.LOCAL_ACCESS_CHALLENGE, candidate.challengeId(), candidate.operationId(),
+                ? AuditEventType.LOCAL_CHALLENGE_EXPIRED : AuditEventType.LOCAL_CHALLENGE_INVALIDATED, actorUserId,
+                AuditSubjectType.LOCAL_ACCESS_CHALLENGE, challengeId, operationId,
                 LocalChallengeStatus.PENDING, closed, reason, Map.of("displayInstructionsStopped", stopped,
                         "statusDisplayQueued", statusMessage.isPresent()), now));
-        return true;
     }
 
     private record ChallengeState(Instant expiresAt, UUID targetSession) {

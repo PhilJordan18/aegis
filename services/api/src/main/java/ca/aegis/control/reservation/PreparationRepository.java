@@ -46,14 +46,21 @@ class PreparationRepository {
      * state until this decision commits.
      */
     Optional<Cell> lockPlacedCell(UUID assetId, UUID lockerId) {
+        return placedCell(assetId, lockerId, " FOR SHARE OF c");
+    }
+
+    /** The same compartment read without a lock, for a display hint such as {@code availableActions}. */
+    Optional<Cell> placedCell(UUID assetId, UUID lockerId) {
+        return placedCell(assetId, lockerId, "");
+    }
+
+    private Optional<Cell> placedCell(UUID assetId, UUID lockerId, String lock) {
         return jdbc.sql("""
                 SELECT c.id, c.locker_id, c.code, c.enabled, c.connection_status, c.rfid_reader_status,
                        c.door_state, c.lock_state
                 FROM aegis.asset_placements p
                 JOIN aegis.compartments c ON c.id = p.compartment_id
-                WHERE p.asset_id = :asset AND p.removed_at IS NULL AND c.locker_id = :locker
-                FOR SHARE OF c
-                """)
+                WHERE p.asset_id = :asset AND p.removed_at IS NULL AND c.locker_id = :locker""" + lock)
                 .param("asset", assetId)
                 .param("locker", lockerId)
                 .query((row, number) -> new Cell(row.getObject("id", UUID.class),
