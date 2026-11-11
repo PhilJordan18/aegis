@@ -1,4 +1,4 @@
-# Cell firmware (FW-00 #23, FW-01 #30)
+# Cell firmware (FW-00 #23, FW-01 #30, FW-02 #32)
 
 Firmware of one Aegis cell (A1 or A2). The cell sits at the end of its own RS-485
 segment ([ADR-002](../../docs/adr/ADR-002-etoile-rs485.md)): it has no Wi-Fi, no MQTT
@@ -12,9 +12,9 @@ reader health**. The hub puts the last two in the heartbeat as `lockState` and
 |---|---|
 | `LOCKED` / `UNLOCKED` | Latch status switch on GPIO 27 with a pull-up, 30 ms debounce. `LATCH_CLOSED_LEVEL` in `cell-controller.ino` sets which pin level means contact closed (striker out = `UNLOCKED`). The POC-03 L0 bench unit ([#21](https://github.com/PhilJordan18/aegis/issues/21)) read closed as LOW; the lab unit wired on 2026-11-25 reads the other way round, so the default is HIGH. With HIGH, a cut or unwired switch reads `UNLOCKED`, never a false `LOCKED` |
 | `HEALTHY` / `FAULTED` | One single poll to the reader every second. Any valid reader frame (tag or "no tag") = `HEALTHY`; 3 polls in a row without one = `FAULTED`; `UNKNOWN` before either. Provisional until PHY-02 (#31) |
+| Scan window | On the hub's `SCAN`: 3 s, one single poll every 100 ms (30 polls), each distinct EPC counted. `HEALTHY` when the reader answered at least 27 polls, `FAULTED` when it answered none, `UNKNOWN` otherwise or when more than 8 distinct tags were seen (one left out would read as absent). The hub then fetches the tags one `TAG?` at a time |
 
-Not done yet: firing the lock (#42; the gate output is only held low), the door sensor (#30)
-and the RFID scans themselves (#32). The tags the reader sees are ignored for now.
+Not done yet: firing the lock (#42; the gate output is only held low) and the door sensor (#30).
 
 ## Wiring
 
@@ -53,5 +53,5 @@ monitor (115200) prints `cell <address> ready` with its boot id and reset code, 
 Arduino sketch builds only files inside its own folder. Edit the hub's copy, then copy it
 here; `firmware/locker-controller/tests/host/run.sh` fails while the two differ.
 
-`src/cell_state.h` holds the reader health, the latch debounce and the UHF frame check, with
+`src/cell_state.h` holds the reader health, the scan window, the latch debounce and the UHF frame check, with
 the time passed in; `tests/host/test_cell.cpp` tests it and `run.sh` builds it.

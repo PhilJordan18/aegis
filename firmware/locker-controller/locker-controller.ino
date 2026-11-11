@@ -1,7 +1,8 @@
 // Aegis hub firmware (FW-00, FW-01): the hub joins Wi-Fi, synchronizes its clock, keeps an MQTT
 // connection to the broker with its device identity (doc 10 §4, §7, §14, §15, §18) and polls
 // cells A1 and A2 over two independent RS-485 segments (ADR-002). Each heartbeat carries, per
-// cell, the link, the reader health and the latch state the cell reported. Copy
+// cell, the link, the reader health and the latch state the cell reported, and each finished
+// scan window of a cell is published as RFID_SCAN_COMPLETED. Copy
 // secrets.h.example to secrets.h first.
 
 #include <WiFi.h>
@@ -12,7 +13,7 @@
 #include "src/esp_platform.h"
 #include "src/hub_link.h"
 
-constexpr const char* FIRMWARE_VERSION = "0.2.0";
+constexpr const char* FIRMWARE_VERSION = "0.3.0";
 
 // One UART per segment, never a shared bus. Segment 1 keeps the pins of the POC-02 bench; on the
 // Freenove WROVER camera board 16/17 belong to PSRAM and 4/5/18-27/34-39 to the camera, so
@@ -64,9 +65,19 @@ void setup() {
   hub.begin();
 }
 
+static void publishScans(aegis::CellLink& cell) {
+  static aegis::ScanResult scan;  // static: about 300 bytes, kept off the loop task stack
+  if (!cell.takeScan(&scan)) return;
+  bool sent = hub.publishScan(cell.expectedAddress(), scan);
+  Serial.printf("cell %u: scan %s, reader %s, %u tag(s)\n", cell.expectedAddress(), sent ? "published" : "dropped",
+                aegis::cellframe::readerStatusName(scan.reader), scan.tagCount);
+}
+
 void loop() {
   cellA1.loop();
   cellA2.loop();
   hub.loop();
+  publishScans(cellA1);
+  publishScans(cellA2);
   delay(10);
 }

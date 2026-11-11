@@ -537,8 +537,14 @@ struct FakePort : CellPort {
   void receive(const std::string& bytes) { rx.insert(rx.end(), bytes.begin(), bytes.end()); }
 };
 
-// Sequence of the last PING the hub wrote on `port`, consuming what it wrote.
-uint32_t lastPing(FakePort& port) {
+// The last request the hub wrote on `port` (PING, SCAN or TAG?), consuming what it wrote.
+struct Request {
+  char kind;
+  uint32_t seq;
+  uint8_t index;
+};
+
+Request lastRequest(FakePort& port) {
   size_t end = port.tx.rfind('\n');
   assert(end != std::string::npos);
   size_t start = port.tx.rfind('\n', end - 1);
@@ -546,49 +552,108 @@ uint32_t lastPing(FakePort& port) {
   port.tx.clear();
   std::vector<char> buf(line.begin(), line.end());
   buf.push_back('\0');
-  uint32_t seq;
-  assert(cellframe::unseal(buf.data()) && cellframe::parsePing(buf.data(), &seq));
-  return seq;
+  assert(cellframe::unseal(buf.data()));
+  Request r{buf[0], 0, 0};
+  assert(cellframe::parsePing(buf.data(), &r.seq) || cellframe::parseScan(buf.data(), &r.seq) ||
+         cellframe::parseTagRequest(buf.data(), &r.seq, &r.index));
+  return r;
 }
 
+uint32_t lastPing(FakePort& port) { return lastRequest(port).seq; }
+
 std::string replyFrame(uint32_t seq, uint8_t address, uint32_t bootId = 0xB0071D01, uint8_t reset = 1,
-                       char lock = 'L', char reader = 'H') {
+                       char lock = 'L', char reader = 'H', char scan = 'I', uint8_t tags = 0, char scanReader = '-') {
   char frame[cellframe::MAX_LINE];
-  size_t n = cellframe::encodeReply(cellframe::Reply{seq, address, bootId, reset, lock, reader}, frame, sizeof(frame));
+  cellframe::Reply reply{seq, address, bootId, reset, lock, reader, scan, tags, scanReader};
+  size_t n = cellframe::encodeReply(reply, frame, sizeof(frame));
   assert(n > 0);
   return std::string(frame, n);
 }
+
+std::string tagFrame(uint32_t seq, uint8_t address, uint8_t index, const char* epc, uint16_t count) {
+  cellframe::Tag t;
+  t.readCount = count;
+  strcpy(t.epc, epc);
+  char frame[cellframe::MAX_LINE];
+  size_t n = cellframe::encodeTag(seq, address, index, t, frame, sizeof(frame));
+  assert(n > 0);
+  return std::string(frame, n);
+}
+
+// A cell on the other end of a FakePort: answers PING and SCAN with a REPLY, runs a 3 s window
+// after a SCAN, and answers TAG? from its tag list.
+struct FakeCell {
+  uint8_t address = 1;
+  char lock = 'L';
+  char reader = 'H';
+  bool silent = false;
+  char scan = 'I';
+  uint32_t windowEndsMs = 0;
+  char scanReader = 'H';
+  std::vector<std::pair<std::string, uint16_t>> tags;
+  uint32_t scansStarted = 0;
+
+  void answer(FakePort& port, uint32_t now) {
+    Request q = lastRequest(port);
+    if (silent) return;
+    if (scan == 'W' && static_cast<int32_t>(now - windowEndsMs) >= 0) scan = 'D';
+    if (q.kind == 'T') {
+      if (scan == 'D' && q.index < tags.size()) {
+        port.receive(tagFrame(q.seq, address, q.index, tags[q.index].first.c_str(), tags[q.index].second));
+      }
+      return;
+    }
+    if (q.kind == 'S' && scan != 'W') {
+      scan = 'W';
+      windowEndsMs = now + 3000;
+      scansStarted++;
+    }
+    bool done = scan == 'D';
+    port.receive(replyFrame(q.seq, address, 0xB0071D01, 1, lock, reader, scan,
+                            done ? static_cast<uint8_t>(tags.size()) : 0, done ? scanReader : '-'));
+  }
+};
 
 struct CellRig {
   FakePlatform platform;
   FakePort port;
   CellLink link{1, port, platform};
+  FakeCell cell;
 
-  // One full poll: the hub pings, the cell answers 6 ms later (or stays silent), the reply window
+  // One full poll: the hub asks, the cell answers 6 ms later (or stays silent), the reply window
   // closes, and the clock reaches the next poll.
-  void poll(bool answers, uint8_t address = 1, char lock = 'L', char reader = 'H') {
+  void poll() {
     link.loop();
-    uint32_t seq = lastPing(port);
     platform.now += 6;
-    if (answers) port.receive(replyFrame(seq, address, 0xB0071D01, 1, lock, reader));
+    cell.answer(port, platform.now);
     link.loop();
     platform.now += CELL_REPLY_TIMEOUT_MS - 6;
     link.loop();
-    assert(port.tx.empty());  // no second PING inside one poll period
+    assert(port.tx.empty());  // no second request inside one poll period
     platform.now += CELL_POLL_INTERVAL_MS - CELL_REPLY_TIMEOUT_MS;
   }
-  void answer(uint8_t address = 1, char lock = 'L', char reader = 'H') { poll(true, address, lock, reader); }
-  void silence() { poll(false); }
+  void answer(uint8_t address = 1, char lock = 'L', char reader = 'H') {
+    cell.silent = false;
+    cell.address = address;
+    cell.lock = lock;
+    cell.reader = reader;
+    poll();
+  }
+  void silence() {
+    cell.silent = true;
+    poll();
+  }
 };
 
 void cellFrameFormat() {
+  uint32_t seq;
   assert(cellframe::crc16("123456789", 9) == 0x29B1);  // CRC-16/CCITT-FALSE check value
   char frame[cellframe::MAX_LINE];
   size_t n = cellframe::encodePing(0x1A, frame, sizeof(frame));
   assert(n == 16 && strncmp(frame, "P,0000001A,", 11) == 0 && frame[15] == '\n');
 
   std::string reply = replyFrame(0xDEADBEEF, 2, 0x01020304, 0x0F, 'U', 'F');
-  assert(reply.size() == 34 && reply.compare(0, 29, "R,DEADBEEF,02,01020304,0F,UF,") == 0);
+  assert(reply.size() == 39 && reply.compare(0, 34, "R,DEADBEEF,02,01020304,0F,UF,I00-,") == 0);
   std::vector<char> buf(reply.begin(), reply.end() - 1);
   buf.push_back('\0');
   assert(cellframe::unseal(buf.data()));
@@ -597,19 +662,46 @@ void cellFrameFormat() {
   assert(r.seq == 0xDEADBEEF && r.cellAddress == 2 && r.bootId == 0x01020304 && r.resetCode == 0x0F);
   assert(r.lock == 'U' && r.reader == 'F');
 
-  char corrupted[] = "R,DEADBEEF,02,01020304,0E,UF,0000";
+  char corrupted[] = "R,DEADBEEF,02,01020304,0E,UF,I00-,0000";
   assert(!cellframe::unseal(corrupted));
-  char lower[] = "R,deadbeef,02,01020304,0F,LH";
+  char lower[] = "R,deadbeef,02,01020304,0F,LH,I00-";
   assert(!cellframe::parseReply(lower, &r));
-  char version1[] = "R,DEADBEEF,02,01020304,0F";  // a cell still on frame version 1
-  assert(!cellframe::parseReply(version1, &r));
-  char badState[] = "R,DEADBEEF,02,01020304,0F,XH";
+  char version2[] = "R,DEADBEEF,02,01020304,0F,LH";  // a cell still on frame version 2
+  assert(!cellframe::parseReply(version2, &r));
+  char badState[] = "R,DEADBEEF,02,01020304,0F,XH,I00-";
   assert(!cellframe::parseReply(badState, &r));
-  char unknown[] = "R,DEADBEEF,02,01020304,0F,??";
-  assert(cellframe::parseReply(unknown, &r) && r.lock == '?' && r.reader == '?');
+  char unknown[] = "R,DEADBEEF,02,01020304,0F,??,I00-";
+  assert(cellframe::parseReply(unknown, &r) && r.lock == '?' && r.reader == '?' && r.scan == 'I');
+  char done[] = "R,DEADBEEF,02,01020304,0F,LH,D02F";
+  assert(cellframe::parseReply(done, &r) && r.scan == 'D' && r.tagCount == 2 && r.scanReader == 'F');
+  char runningWithTags[] = "R,DEADBEEF,02,01020304,0F,LH,W01H";  // only a finished window has tags
+  assert(!cellframe::parseReply(runningWithTags, &r));
+  char tooManyTags[] = "R,DEADBEEF,02,01020304,0F,LH,D09H";
+  assert(!cellframe::parseReply(tooManyTags, &r));
   assert(cellframe::encodeReply(cellframe::Reply{1, 1, 1, 1, 'X', 'H'}, frame, sizeof(frame)) == 0);
+
+  // SCAN, TAG? and TAG
+  n = cellframe::encodeScan(0x1B, frame, sizeof(frame));
+  assert(n == 16 && strncmp(frame, "S,0000001B,", 11) == 0);
+  n = cellframe::encodeTagRequest(0x1C, 3, frame, sizeof(frame));
+  assert(n == 19 && strncmp(frame, "T,0000001C,03,", 14) == 0);
+  std::string tag = tagFrame(0x1D, 1, 0, "E2004717CCC06422C2B80112", 30);
+  assert(tag.compare(0, 46, "E,0000001D,01,00,001E,E2004717CCC06422C2B80112") == 0);
+  std::vector<char> tbuf(tag.begin(), tag.end() - 1);
+  tbuf.push_back('\0');
+  assert(cellframe::unseal(tbuf.data()));
+  uint8_t address, index;
+  cellframe::Tag parsed;
+  assert(cellframe::parseTag(tbuf.data(), &seq, &address, &index, &parsed));
+  assert(seq == 0x1D && address == 1 && index == 0 && parsed.readCount == 30);
+  assert(strcmp(parsed.epc, "E2004717CCC06422C2B80112") == 0);
+  char oddEpc[] = "E,0000001D,01,00,001E,E20";
+  assert(!cellframe::parseTag(oddEpc, &seq, &address, &index, &parsed));
+  char lowerEpc[] = "E,0000001D,01,00,001E,e200";
+  assert(!cellframe::parseTag(lowerEpc, &seq, &address, &index, &parsed));
+  std::string longest = tagFrame(1, 1, 7, "0123456789ABCDEF0123456789ABCDEF", 65535);
+  assert(longest.size() == 60 && longest.size() < cellframe::MAX_LINE);
   char shortPing[] = "P,1A";
-  uint32_t seq;
   assert(!cellframe::parsePing(shortPing, &seq));
   assert(cellframe::seal("P,0000001A", frame, 8) == 0);  // never truncates a frame
 }
@@ -777,10 +869,147 @@ void heartbeatWithoutSourceIsUnknown() {
                                            "\"doorState\":\"UNKNOWN\",\"lockState\":\"UNKNOWN\""));
 }
 
+// Polls until the link hands over a scan, at most `limit` polls.
+bool pollUntilScan(CellRig& r, ScanResult* out, int limit = 60) {
+  for (int i = 0; i < limit; i++) {
+    r.poll();
+    if (r.link.takeScan(out)) return true;
+  }
+  return false;
+}
+
+void firstScanStartsOnceConnectedAndFetchesEveryTag() {
+  CellRig r;
+  r.cell.tags = {{"E2004717CCC06422C2B80112", 30}, {"E28011700000020000000001", 2}};
+  ScanResult scan;
+  assert(pollUntilScan(r, &scan));
+  assert(r.cell.scansStarted == 1);
+  assert(scan.reader == 'H' && scan.tagCount == 2);
+  assert(strcmp(scan.tags[0].epc, "E2004717CCC06422C2B80112") == 0 && scan.tags[0].readCount == 30);
+  assert(strcmp(scan.tags[1].epc, "E28011700000020000000001") == 0 && scan.tags[1].readCount == 2);
+  assert(scan.endedMs - scan.startedMs >= 3000 && scan.endedMs - scan.startedMs < 3300);
+  assert(!r.link.takeScan(&scan));  // handed over once
+  assert(strcmp(r.link.connectionStatus(), "CONNECTED") == 0);
+}
+
+void emptyAndFaultedWindowsAreReportedToo() {
+  CellRig r;
+  r.cell.scanReader = 'F';
+  ScanResult scan;
+  assert(pollUntilScan(r, &scan));
+  assert(scan.reader == 'F' && scan.tagCount == 0);
+}
+
+void nextScanAfterThirtySecondsOrWhenTheLatchCloses() {
+  CellRig r;
+  ScanResult scan;
+  assert(pollUntilScan(r, &scan));
+  for (int i = 0; i < 100; i++) r.answer(1, 'L');  // 10 s, latch stays locked
+  assert(r.cell.scansStarted == 1);
+  r.answer(1, 'U');
+  r.answer(1, 'L');  // the striker is pushed in
+  r.poll();
+  assert(r.cell.scansStarted == 2);
+  assert(pollUntilScan(r, &scan));
+  for (int i = 0; i < 400 && r.cell.scansStarted == 2; i++) r.poll();
+  assert(r.cell.scansStarted == 3);  // the 30 s monitoring scan
+}
+
+void scanIsAbandonedWhenTheLinkDrops() {
+  CellRig r;
+  r.cell.tags = {{"E2004717CCC06422C2B80112", 30}};
+  for (int i = 0; i < 5; i++) r.poll();  // connected, window running
+  assert(r.cell.scan == 'W');
+  r.silence();
+  r.silence();
+  r.silence();
+  assert(strcmp(r.link.connectionStatus(), "DISCONNECTED") == 0);
+  ScanResult scan;
+  for (int i = 0; i < 40; i++) {
+    r.silence();
+    assert(!r.link.takeScan(&scan));
+  }
+}
+
+void tagFromAnotherCellOrIndexNeverCounts() {
+  CellRig r;
+  r.cell.tags = {{"E2004717CCC06422C2B80112", 30}};
+  ScanResult scan;
+  // Run until the hub asks for the first tag, then answer as A2 and with the wrong index.
+  for (int i = 0; i < 60; i++) {
+    r.link.loop();
+    std::string sent = r.port.tx;
+    if (!sent.empty() && sent[0] == 'T') {
+      Request q = lastRequest(r.port);
+      r.port.receive(tagFrame(q.seq, 2, 0, "E2004717CCC06422C2B80112", 30));
+      r.port.receive(tagFrame(q.seq, 1, 1, "E2004717CCC06422C2B80112", 30));
+      r.platform.now += CELL_POLL_INTERVAL_MS;
+      r.link.loop();
+      assert(!r.link.takeScan(&scan));
+      break;
+    }
+    r.platform.now += 6;
+    r.cell.answer(r.port, r.platform.now);
+    r.link.loop();
+    r.platform.now += CELL_POLL_INTERVAL_MS - 6;
+  }
+  assert(pollUntilScan(r, &scan));  // asked again, then answered properly
+  assert(scan.tagCount == 1 && scan.tags[0].readCount == 30);
+}
+
+ScanResult sampleScan(FakePlatform& platform) {
+  ScanResult scan;
+  scan.startedMs = platform.now - 4000;
+  scan.endedMs = platform.now - 1000;
+  scan.reader = 'H';
+  scan.tagCount = 1;
+  strcpy(scan.tags[0].epc, "E2004717CCC06422C2B80112");
+  scan.tags[0].readCount = 30;
+  return scan;
+}
+
+void scanIsPublishedAsRfidScanCompleted() {
+  Rig r;
+  r.platform.now = 100000;
+  assert(!r.hub.publishScan(1, sampleScan(r.platform)));  // not online yet: dropped, never queued
+  r.connectOnce();
+  size_t before = r.transport.published.size();
+  assert(r.hub.publishScan(1, sampleScan(r.platform)));
+  assert(r.transport.published.size() == before + 1);
+  const Message& m = r.transport.published.back();
+  assert(strcmp(m.topic, "aegis/v1/lockers/d46a74ae-39dc-460b-8af0-38fc791b376a/events") == 0);
+  assert(m.qos == 1 && !m.retain);
+  assert(has(m, "\"type\":\"RFID_SCAN_COMPLETED\""));
+  assert(has(m, "\"compartmentId\":\"1ae77ae3-8490-4f09-9412-a7816b77bff9\""));
+  assert(has(m, "\"windowStartedAt\":\"2026-09-10T00:26:36Z\",\"windowEndedAt\":\"2026-09-10T00:26:39Z\""));
+  assert(has(m, "\"readerStatus\":\"HEALTHY\",\"observedIdentifiers\":[{\"identifierType\":\"RFID_UHF\","
+                "\"identifierValue\":\"E2004717CCC06422C2B80112\",\"readCount\":30}]}"));
+  assert(!has(m, "operationId"));  // outside an operation (§20)
+  assert(!r.hub.publishScan(9, sampleScan(r.platform)));  // no such cell
+}
+
+void fullScanFitsTheMessage() {
+  Rig r;
+  r.connectOnce();
+  ScanResult scan = sampleScan(r.platform);
+  scan.tagCount = cellframe::MAX_SCAN_TAGS;
+  for (auto& t : scan.tags) {
+    strcpy(t.epc, "0123456789ABCDEF0123456789ABCDEF");
+    t.readCount = 65535;
+  }
+  assert(r.hub.publishScan(1, scan));
+}
+
 // Prints every payload on its own line so run.sh can check that it is strict JSON.
 void dumpPayloads(const char* path) {
   Rig r;
+  r.platform.now = 100000;
   r.connectOnce();
+  r.hub.publishScan(1, sampleScan(r.platform));
+  ScanResult empty = sampleScan(r.platform);
+  empty.tagCount = 0;
+  empty.reader = 'F';
+  r.hub.publishScan(1, empty);
   FILE* f = fopen(path, "w");
   assert(f != nullptr);
   fprintf(f, "%s\n", r.transport.wills[0].payload);
@@ -824,6 +1053,13 @@ int main(int argc, char** argv) {
   silentOrForeignCellStateIsNeverReported();
   heartbeatReportsEachCell();
   heartbeatWithoutSourceIsUnknown();
+  firstScanStartsOnceConnectedAndFetchesEveryTag();
+  emptyAndFaultedWindowsAreReportedToo();
+  nextScanAfterThirtySecondsOrWhenTheLatchCloses();
+  scanIsAbandonedWhenTheLinkDrops();
+  tagFromAnotherCellOrIndexNeverCounts();
+  scanIsPublishedAsRfidScanCompleted();
+  fullScanFitsTheMessage();
   if (argc > 1) dumpPayloads(argv[1]);
   puts("all host tests passed");
   return 0;

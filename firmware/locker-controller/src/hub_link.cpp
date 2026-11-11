@@ -126,6 +126,35 @@ void HubLink::publishHeartbeat(uint32_t now) {
   if (buildHeartbeat(&heartbeat, buf.env, facts)) transport_.publish(heartbeat);
 }
 
+bool HubLink::publishScan(int cellAddress, const ScanResult& scan) {
+  if (state_ != State::Online) return false;
+  const char* compartmentId = nullptr;
+  for (size_t i = 0; i < config_.compartmentCount; i++) {
+    if (config_.compartments[i].cellAddress == cellAddress) compartmentId = config_.compartments[i].compartmentId;
+  }
+  if (compartmentId == nullptr) return false;
+
+  // The window was timed on the monotonic clock; its instants are counted back from now.
+  const uint32_t now = platform_.nowMs();
+  const int64_t unixNow = platform_.unixSeconds();
+  char startedAt[INSTANT_LEN], endedAt[INSTANT_LEN];
+  formatInstant(unixNow - static_cast<int64_t>((now - scan.startedMs) / 1000), startedAt);
+  formatInstant(unixNow - static_cast<int64_t>((now - scan.endedMs) / 1000), endedAt);
+
+  ObservedTag tags[cellframe::MAX_SCAN_TAGS];
+  size_t count = scan.tagCount < cellframe::MAX_SCAN_TAGS ? scan.tagCount : cellframe::MAX_SCAN_TAGS;
+  for (size_t i = 0; i < count; i++) tags[i] = ObservedTag{scan.tags[i].epc, scan.tags[i].readCount};
+
+  EnvelopeBuf buf;
+  fill(&buf);
+  if (!buildRfidScanCompleted(&outbound_, buf.env, compartmentId, startedAt, endedAt,
+                              cellframe::readerStatusName(scan.reader), tags, count)) {
+    platform_.log("RFID scan does not fit, dropped");
+    return false;
+  }
+  return transport_.publish(outbound_);
+}
+
 void HubLink::publishAck(const char* commandMessageId, const char* operationId, const char* compartmentId,
                          const char* result) {
   EnvelopeBuf buf;
