@@ -31,6 +31,7 @@ et 19381.
 | Q6 | Accusé rejoué avec le même `messageId`, puis un second accusé : `displayedAt` inchangé, un seul audit d'affichage | P6 |
 | Q7 | Réservation annulée en attente de preuve : défi `INVALIDATED`, opération `FAILED`, purge, statut à l'écran | P11 |
 | Q8 | Nouvelle session du hub en attente de preuve : défi `INVALIDATED`, opération `FAILED`, aucune commande | P10 |
+| Q10 | Scan #44 (ignoré si la route est absente) : compte administrateur refusé (`403 FORBIDDEN`) sans être compté ; cinq secrets erronés `403` puis `FAILED LOCAL_PROOF_ATTEMPTS_EXHAUSTED`, le bon secret ensuite refusé ; mauvais `challengeId` refusé ; quatre scans corrects concurrents : un seul `202`, une seule commande, `expiresAt = authorizedAt + 120 s` ; rejeu avec une nouvelle clé `409 LOCAL_PROOF_ALREADY_USED` ; token absent des journaux, réponses et de la base | Q1 à Q4 (#44) |
 | Q9 | Plafond #44 : 6 préparations acceptées ; la 7e reçoit `429 LOCAL_PROOF_RATE_LIMITED` avec `Retry-After` ; le rejeu idempotent n'est pas compté ; un autre utilisateur n'est pas limité ; la libération se fait à la borne de la fenêtre | décision #44 |
 
 **Q9 et la fenêtre de 10 minutes.** Q9 raccourcit la fenêtre à 45 s par configuration
@@ -45,6 +46,12 @@ depuis la décision #44 du 11 novembre.
 démonstration : il n'y a qu'un technicien et qu'un casier, et l'administrateur ne peut pas
 réserver (403). Le comptage par couple ne repose que sur la lecture du code
 (`PreparationRepository.preparationsSince`).
+
+**Q10 et l'autre technicien.** Le refus `404 OPERATION_NOT_FOUND` d'un autre technicien n'est pas
+démontrable pour la même raison (Q10d en `OBS`). Le jeu ne permet de vérifier que le refus par rôle
+de l'administrateur, et le fait qu'il ne consomme aucune tentative. Avant Q9, le hub redémarre : les
+deux redémarrages de l'API rompent la continuité des heartbeats, et la présence reste inconnue
+jusqu'à un nouveau scan.
 
 **Arrêt du simulateur.** Après SIGTERM, le simulateur publie son `OFFLINE` propre, mais son
 processus reste vivant tant qu'une étape `wait` du scénario est en cours. Le script borne donc

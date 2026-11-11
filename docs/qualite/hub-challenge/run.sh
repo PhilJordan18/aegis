@@ -18,11 +18,15 @@
 #   Q8 hub restart (new session) during AWAITING_LOCAL_PROOF: challenge INVALIDATED, operation FAILED, no command
 #   Q9 preparation ceiling (decision of 11 November on #44): 6 accepted, 7th 429 LOCAL_PROOF_RATE_LIMITED with
 #      Retry-After, idempotent replay not counted, another user not limited, release at the window boundary
-# Every check also asserts: no command_outbox row and no loan. Exit code = number of FAIL lines. OBS lines are
-# observations for the contract owner, not failures. The hub is simulated: this proves nothing about a real screen.
+#   Q10 scan (#44, skipped where the route is absent): another account, five wrong secrets then the right one,
+#      wrong challengeId, four concurrent right scans (one 202, one command, 120 s), replay, no token leak
+# Every check also asserts no loan, and no command except the single one of a consumed challenge (Q10). Exit code =
+# number of FAIL lines. OBS lines are observations for the contract owner, not failures. The hub is simulated: this
+# proves nothing about a real screen.
 #
-# Needs: docker with compose, Java 21, Node 22.18+, python3, openssl, curl. Overrides: QA_HUB_DB_PORT (58533),
-# QA_HUB_MQTT_PORT (54984), QA_HUB_API_PORT (19381). The jar is always rebuilt from the checked-out commit.
+# Needs: docker with compose, Java 21, Node 22.18+, python3 with cryptography, openssl, curl.
+# Overrides: QA_HUB_DB_PORT (58533), QA_HUB_MQTT_PORT (54984), QA_HUB_API_PORT (19381).
+# The jar is always rebuilt from the checked-out commit.
 set -euo pipefail
 
 root=$(git rev-parse --show-toplevel)
@@ -461,6 +465,10 @@ stop_api
 start_api api-e.log AEGIS_DISPLAY_ENABLED=true AEGIS_DISPLAY_KEYS="k2:$K2" AEGIS_DISPLAY_ACTIVE_KEY_ID=k2 \
   AEGIS_DISPLAY_DISPATCHER_ENABLED=true AEGIS_PREPARATION_MAX_PER_WINDOW=6 AEGIS_PREPARATION_WINDOW=PT45S ||
   { tail -20 "$work/api-e.log"; exit 1; }
+# Two API restarts broke the heartbeat continuity, so presence is unknown until a new scan: boot the hub again.
+stop_hub
+start_hub boot5 true || true
+ready || exit 1
 sleep 46
 # cycle <name> [key]: reserve, prepare, cancel; prints "<prepare status> <operation>".
 cycle() {
@@ -528,16 +536,108 @@ default=$(grep -E '^aegis.display.preparation.(max-per-window|window)=' services
   tr '\n' ' ')
 obs "Q9e shipped defaults: $default"
 
+# Q10: scan and authorization (#44, matrix rows #44 Q1-Q4), only where the route exists. The token is decrypted here
+# from the sealed row, kept in a shell variable, sent on stdin and never written or printed.
+token_of() {
+  sql "SELECT id || ' ' || locker_id || ' ' || operation_id || ' ' || display_revision || ' ' || encryption_key_id
+              || ' ' || encode(encrypted_payload, 'base64') FROM aegis.hub_display_outbox
+       WHERE operation_id = '$1' AND message_type = 'DISPLAY_ACCESS_CHALLENGE' AND encrypted_payload IS NOT NULL" |
+    tr -d '\n' | K1=$K1 K2=$K2 python3 -I -c '
+import base64, json, os, sys
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+row, locker, operation, revision, key_id, payload = sys.stdin.read().split(" ", 5)
+envelope = base64.b64decode(payload)
+aad = f"aegis-display-aad/v1\n{row}\n{locker}\n{operation}\n{revision}".encode()
+plain = json.loads(AESGCM(base64.b64decode(os.environ[key_id.upper()])).decrypt(envelope[:12], envelope[12:], aad))
+print(plain["payload"]["token"])'
+}
+# authorize <name> <operation> <challengeId> <token> [bearer]: prints the HTTP status; the body goes to stdin.
+authorize() {
+  printf '{"challengeId":"%s","token":"%s"}' "$3" "$4" |
+    curl -s -o "$work/$1.body" -D "$work/$1.headers" -w '%{http_code}' -X POST --data-binary @- \
+      -H 'Content-Type: application/json' -H "Authorization: Bearer ${5:-$token}" -H "Idempotency-Key: $(uuid)" \
+      "$api/locker-operations/$2/authorize-local"
+}
+challenge_of() { sql "SELECT challenge_id FROM aegis.hub_display_outbox WHERE operation_id = '$1' AND challenge_id IS NOT NULL LIMIT 1"; }
+wrong_token=$(python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=").decode())')
+probe=$(authorize q10-probe "$(uuid)" "$(uuid)" "$wrong_token")
+# An unknown operation on the real route is OPERATION_NOT_FOUND; a missing route is RESOURCE_NOT_FOUND (or 405).
+probe_code=$(json 'd.get("code", "")' <"$work/q10-probe.body" 2>/dev/null || true)
+if [[ $probe == 405 || ($probe == 404 && $probe_code != OPERATION_NOT_FOUND) ]]; then
+  obs "Q10 skipped: no authorize-local route on this commit ($probe ${probe_code:-})"
+elif [[ $after != 202 ]]; then
+  fail "Q10 BLOCKED setup: no preparation accepted at the Q9 boundary ($after), the scan cases were not run"
+else
+  # Five wrong secrets on the preparation accepted at the Q9 boundary, then the right secret.
+  opb=$(operation_of q9-after)
+  for _ in $(seq 1 15); do [[ $(row "$opb") =~ true$ ]] && break; sleep 1; done
+  chb=$(challenge_of "$opb")
+  secret=$(token_of "$opb")
+  other=$(authorize q10-admin "$opb" "$chb" "$secret" "$admin")
+  attempts=""
+  for n in 1 2 3 4 5; do attempts+="$(authorize "q10-bad-$n" "$opb" "$chb" "$wrong_token") "; done
+  last=$(authorize q10-late "$opb" "$chb" "$secret")
+  endb=$(state "$opb")
+  chstate=$(sql "SELECT status || ' ' || failed_attempts FROM aegis.local_access_challenges WHERE operation_id = '$opb'")
+  if [[ $attempts == "403 403 403 403 403 " && $endb == FAILED\ LOCAL_PROOF_ATTEMPTS_EXHAUSTED* &&
+        $chstate == "INVALIDATED 5" && $last != 202 && $other =~ ^40[34]$ && $(commands "$opb") == 0 ]]; then
+    pass "Q10b administrator account: $other $(json 'd.get("code", "")' <"$work/q10-admin.body"), not counted;" \
+      "five wrong secrets: $attempts-> $endb, challenge '$chstate'; the right secret afterwards: $last" \
+      "$(json 'd.get("code", "")' <"$work/q10-late.body"), no command"
+    obs "Q10d another technician (404 OPERATION_NOT_FOUND) not demonstrated: the demo set has one technician"
+  else
+    fail "Q10b another account $other, wrong secrets '$attempts', '$endb', challenge '$chstate'," \
+      "right secret $last, commands $(commands "$opb")"
+  fi
+  # A fresh preparation once the 45 s window has room again, then concurrent scans with the right secret.
+  sleep 46
+  ra=$(cat "$work/q9-7.reservation")
+  code=$(prepare q10-a "$ra")
+  opa=$(operation_of q10-a)
+  if [[ $code != 202 ]]; then fail "Q10a BLOCKED setup: preparation refused ($code), the concurrent scans were not run"
+  else
+  for _ in $(seq 1 15); do [[ $(row "$opa") =~ true$ ]] && break; sleep 1; done
+  cha=$(challenge_of "$opa")
+  secret=$(token_of "$opa")
+  wrong_ch=$(authorize q10-wrong-challenge "$opa" "$(uuid)" "$secret")
+  pids=()
+  for n in 1 2 3 4; do (authorize "q10-race-$n" "$opa" "$cha" "$secret" >"$work/q10-race-$n.code") & pids+=($!); done
+  wait "${pids[@]}"
+  race=$(for f in "$work"/q10-race-*.code; do cat "$f"; echo; done | sort | tr '\n' ' ')
+  again=$(authorize q10-again "$opa" "$cha" "$secret")
+  sleep 3
+  auth=$(state "$opa")
+  window=$(sql "SELECT extract(epoch FROM expires_at - authorized_at)::int FROM aegis.locker_operations WHERE id = '$opa'")
+  used=$(grep -l LOCAL_PROOF_ALREADY_USED "$work"/q10-race-*.body "$work/q10-again.body" 2>/dev/null | wc -l)
+  if [[ $code == 202 && $race == "202 409 409 409 " && $(commands "$opa") == 1 && $auth == AUTHORIZED* &&
+        $window == 120 && $wrong_ch != 202 && $again == 409 && $used == 4 ]]; then
+    pass "Q10a 4 concurrent scans: $race, exactly 1 command, AUTHORIZED with expiresAt = authorizedAt + ${window} s;" \
+      "wrong challengeId $wrong_ch; replay after consumption $again LOCAL_PROOF_ALREADY_USED"
+  else
+    fail "Q10a prepare $code, scans '$race', commands $(commands "$opa"), '$auth', window $window," \
+      "wrong challenge $wrong_ch, replay $again, ALREADY_USED bodies $used"
+  fi
+  fi
+  leaks=0
+  docker exec "$project-postgres-1" pg_dump -U aegis -d aegis --data-only >"$work/dump.sql" 2>/dev/null
+  for file in "$work"/*.log "$work"/*.body "$work/dump.sql"; do grep -qF -- "$secret" "$file" && leaks=$((leaks + 1)); done
+  rm -f "$work/dump.sql"
+  [[ ${#secret} == 43 && $leaks == 0 ]] && pass "Q10c the scanned token is absent from the API and simulator logs, REST bodies and a data dump" ||
+    fail "Q10c token found in $leaks file(s) (token length ${#secret})"
+  unset secret
+fi
+
 # Global invariants and secrecy of the key material.
 key_leaks=0
 for log in "$work"/*.log; do
   for value in "$K1" "$K2"; do grep -qF -- "$value" "$log" && key_leaks=$((key_leaks + 1)); done
 done
 all_commands=$(sql "SELECT count(*) FROM aegis.command_outbox")
-if [[ $(loans) == 0 && $all_commands == 0 && $key_leaks == 0 ]]; then
-  pass "INV no loan, no command_outbox row, no key value in any log"
+authorized=$(sql "SELECT count(*) FROM aegis.locker_operations WHERE authorized_at IS NOT NULL")
+if [[ $(loans) == 0 && $all_commands == "$authorized" && $all_commands -le 1 && $key_leaks == 0 ]]; then
+  pass "INV no loan, $all_commands command(s) for $authorized authorized operation(s), no key value in any log"
 else
-  fail "INV loans $(loans), commands $all_commands, key leaks $key_leaks"
+  fail "INV loans $(loans), commands $all_commands for $authorized authorized, key leaks $key_leaks"
 fi
 
 echo
