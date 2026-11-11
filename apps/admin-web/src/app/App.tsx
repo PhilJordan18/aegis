@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, type ComponentType } from 'react'
 import { SignInPage } from '../features/auth/SignInPage'
+import { AnomaliesPage } from '../pages/AnomaliesPage'
 import { EquipmentPage } from '../pages/EquipmentPage'
 import { LandingPage } from '../pages/LandingPage'
 import { LockersPage } from '../pages/LockersPage'
@@ -55,6 +56,8 @@ function Page({ routeId }: { readonly routeId: RouteId }) {
       return <RequireAdminSession>{(profile) => <ReservationsLoansPage sessionProfile={profile} />}</RequireAdminSession>
     case 'lockers':
       return <RequireAdminSession>{(profile) => <LockersPage sessionProfile={profile} />}</RequireAdminSession>
+    case 'anomalies':
+      return <RequireAdminSession>{(profile) => <AnomaliesPage sessionProfile={profile} />}</RequireAdminSession>
     case 'equipmentPreview':
       return EquipmentPreviewPage ? (
         <Suspense fallback={null}>

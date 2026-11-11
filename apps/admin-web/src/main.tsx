@@ -12,6 +12,8 @@ import { createAppearanceController } from './features/appearance/appearance'
 import { AppearanceContext } from './features/appearance/useAppearance'
 import type { AuthGateway } from './features/auth/authGateway'
 import { AuthGatewayContext } from './features/auth/AuthGatewayContext'
+import { AnomalyGatewayContext } from './features/anomalies/AnomalyGatewayContext'
+import { createHttpAnomalyGateway } from './features/anomalies/httpAnomalyGateway'
 import { createHttpAuthGateway } from './features/auth/httpAuthGateway'
 import { createSessionStore, SessionContext } from './features/auth/session'
 import { CatalogGatewayContext } from './features/catalog/CatalogGatewayContext'
@@ -54,6 +56,7 @@ const scheduleGateway = createHttpScheduleGateway()
 const custodyGateway = createHttpCustodyGateway()
 // Reservations, loans and locker operations (09 §17): read only; design-review captures route /api/v1/admin/... themselves.
 const transactionGateway = createHttpTransactionGateway()
+const anomalyGateway = createHttpAnomalyGateway()
 
 const container = document.getElementById('root')
 if (!container) throw new Error('Missing #root element')
@@ -71,9 +74,11 @@ createRoot(container).render(
                     <ScheduleGatewayContext value={scheduleGateway}>
                       <CustodyGatewayContext value={custodyGateway}>
                         <TransactionGatewayContext value={transactionGateway}>
-                          <PreviewContext value={previewControls}>
-                            <App />
-                          </PreviewContext>
+                          <AnomalyGatewayContext value={anomalyGateway}>
+                            <PreviewContext value={previewControls}>
+                              <App />
+                            </PreviewContext>
+                          </AnomalyGatewayContext>
                         </TransactionGatewayContext>
                       </CustodyGatewayContext>
                     </ScheduleGatewayContext>

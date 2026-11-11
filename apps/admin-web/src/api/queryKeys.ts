@@ -5,6 +5,12 @@
  * - feature slices add their keys here and invalidate by prefix.
  */
 export const queryKeys = {
+  anomalies: {
+    all: ['anomalies'] as const,
+    list: (query: { readonly status?: string; readonly type?: string; readonly severity?: string; readonly page: number; readonly size: number }) =>
+      ['anomalies', 'list', query] as const,
+    detail: (anomalyId: string) => ['anomalies', 'detail', anomalyId] as const,
+  },
   auth: {
     all: ['auth'] as const,
     currentProfile: () => ['auth', 'currentProfile'] as const,
