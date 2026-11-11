@@ -27,11 +27,35 @@ describe('parseAuditEventView (09 §19.1)', () => {
     expect(parseAuditEventView(auditEvent({ eventType: 'FUTURE_EVENT' }))?.eventType).toBe('FUTURE_EVENT')
   })
 
-  it('reports that filtered details exist without reading their content', () => {
-    const parsed = parseAuditEventView(auditEvent({ details: { lockerId: 'L1' } }))
-    expect(parsed?.hasDetails).toBe(true)
-    expect(parsed).not.toHaveProperty('details')
-    expect(parseAuditEventView(auditEvent())?.hasDetails).toBe(false)
+  it('keeps the scalar details in the order sent and drops, then counts, every object and list', () => {
+    const parsed = parseAuditEventView(
+      auditEvent({ details: { lockerId: 'L1', attempt: 2, displayInstructionsStopped: true, revoked: null, changes: { name: 'x' }, endedOperationIds: ['a'], nested: [] } }),
+    )
+    expect(parsed?.details).toEqual({
+      entries: [
+        ['lockerId', 'L1'],
+        ['attempt', 2],
+        ['displayInstructionsStopped', true],
+        ['revoked', null],
+      ],
+      omitted: 3,
+    })
+  })
+
+  it('reads empty, missing and null details as none, and refuses details that are not an object', () => {
+    expect(parseAuditEventView(auditEvent())?.details).toEqual({ entries: [], omitted: 0 })
+    expect(parseAuditEventView(auditEvent({ details: undefined }))?.details).toEqual({ entries: [], omitted: 0 })
+    expect(parseAuditEventView(auditEvent({ details: null }))?.details).toEqual({ entries: [], omitted: 0 })
+    expect(parseAuditEventView(auditEvent({ details: ['a'] }))).toBeNull()
+    expect(parseAuditEventView(auditEvent({ details: 'text' }))).toBeNull()
+  })
+
+  it('treats a key named like an object property as an ordinary entry', () => {
+    const parsed = parseAuditEventView(auditEvent({ details: JSON.parse('{"__proto__":"x","constructor":"y"}') }))
+    expect(parsed?.details.entries).toEqual([
+      ['__proto__', 'x'],
+      ['constructor', 'y'],
+    ])
   })
 
   it.each([

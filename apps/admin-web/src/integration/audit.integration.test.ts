@@ -45,6 +45,32 @@ describe.skipIf(!origin || !email || !password)('§19 audit timeline against an 
     }
     expect(seen.size).toBeGreaterThan(1)
   })
+  it('sends details as an object of scalar values only (D9) and the list newest first (D1)', async () => {
+    const response = await fetch(`${origin}/api/v1/admin/audit-events?limit=100`, { headers: { Authorization: `Bearer ${token}` } })
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { items: { id: string; occurredAt: string; details: unknown }[] }
+    expect(body.items.length).toBeGreaterThan(0)
+    for (const item of body.items) {
+      expect(item.details !== null && typeof item.details === 'object' && !Array.isArray(item.details)).toBe(true)
+      for (const value of Object.values(item.details as Record<string, unknown>)) expect(value === null || ['string', 'number', 'boolean'].includes(typeof value)).toBe(true)
+    }
+    for (let index = 1; index < body.items.length; index += 1) {
+      const previous = body.items[index - 1]!
+      const current = body.items[index]!
+      // The direction of the id tie-breaker is not stated in D1, so only the time order is asserted.
+      expect(Date.parse(previous.occurredAt)).toBeGreaterThanOrEqual(Date.parse(current.occurredAt))
+      expect(previous.id).not.toBe(current.id)
+    }
+
+    const parsed = await createHttpAuditGateway(options).listAuditEvents(token, { limit: 100 })
+    expect(parsed.kind).toBe('ok')
+    if (parsed.kind !== 'ok') return
+    // The parsed view keeps every scalar and drops nothing that the server sent as a scalar.
+    parsed.value.items.forEach((event, index) => {
+      expect(event.details.omitted).toBe(0)
+      expect(Object.fromEntries(event.details.entries)).toEqual(body.items[index]?.details)
+    })
+  })
   it('reports a forged cursor as INVALID_CURSOR, not as an empty history', async () => {
     const result = await createHttpAuditGateway(options).listAuditEvents(token, { limit: 10, cursor: 'not-a-cursor' })
     expect(result.kind === 'httpProblem' && [result.status, result.problem?.code]).toEqual([400, 'INVALID_CURSOR'])

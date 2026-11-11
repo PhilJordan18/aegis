@@ -6,7 +6,7 @@ import { App } from '../app/App'
 import { unconfiguredAuthGateway, type AuthGateway } from '../features/auth/authGateway'
 import { createSessionStore } from '../features/auth/session'
 import { adminProfile } from '../features/auth/testFixtures'
-import { auditPage, eventView, fakeAuditGateway, pageOk, pageProblem, pageUnreachable, uuid } from '../features/audit/testFixtures'
+import { OPERATION_ID, SUBJECT_ID, auditPage, eventView, fakeAuditGateway, pageOk, pageProblem, pageUnreachable, uuid } from '../features/audit/testFixtures'
 import type { Locale } from '../i18n/locale'
 import { installMatchMedia } from '../test/matchMedia'
 import { renderWithProviders } from '../test/renderApp'
@@ -77,7 +77,7 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
     expect(within(dossier).getByText('lecture seule')).toBeTruthy()
 
     expect(auditGateway.listAuditEvents).toHaveBeenCalledTimes(1)
-    expect(queryOf(auditGateway, 0)).toEqual({ limit: 25, cursor: undefined })
+    expect(queryOf(auditGateway, 0)).toEqual({ limit: 50, cursor: undefined })
   })
 
   it('offers no write action: only reading controls exist', async () => {
@@ -98,14 +98,13 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
     expect(within(screen.getByRole('group', { name: 'Code du casier refusé' })).getByText('CHALLENGE_MISMATCH')).toBeTruthy()
   })
 
-  it('says what is missing instead of completing it: no result, no reason, no operation, details not read, no evidence', async () => {
-    renderAudit([pageOk(auditPage([eventView(4, { result: null, reason: null, operationId: null, details: { field: 'name' } })]))])
+  it('says what is missing instead of completing it: no result, no reason, no operation, no evidence', async () => {
+    renderAudit([pageOk(auditPage([eventView(4, { result: null, reason: null, operationId: null })]))])
     await timeline()
     const dossier = screen.getByRole('group', { name: /./ })
     expect(within(dossier).getAllByText('Résultat non renseigné').length).toBeGreaterThan(0)
     expect(within(dossier).getByText('Aucun motif')).toBeTruthy()
     expect(within(dossier).getByText('Aucune opération associée')).toBeTruthy()
-    expect(within(dossier).getByText('Le serveur a transmis des détails filtrés. Cette version ne les affiche pas.')).toBeTruthy()
     expect(within(dossier).getByText(/Cet écran n'affiche aucune preuve physique/)).toBeTruthy()
   })
 
@@ -113,6 +112,57 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
     renderAudit([pageOk(auditPage([eventView(4, { details: {} })]))])
     await timeline()
     expect(screen.getByText('Aucun détail')).toBeTruthy()
+    expect(screen.queryByText(/ne les affiche pas/)).toBeNull()
+  })
+
+  it('shows the scalar details read only, with a label for a known key and the key as sent for another', async () => {
+    const details = {
+      outcome: 'ACCEPTED',
+      operationStatus: 'COMMAND_ACKNOWLEDGED',
+      attempt: 2,
+      displayInstructionsStopped: true,
+      revoked: null,
+      reservedUntil: '2026-11-11T20:00:00Z',
+      lockerId: SUBJECT_ID,
+      futureKey: 'valeur',
+      changes: { name: 'secret-looking' },
+      endedOperationIds: [OPERATION_ID],
+    }
+    renderAudit([pageOk(auditPage([eventView(4, { details }), eventView(5)]))])
+    await timeline()
+    const dossier = screen.getByRole('group', { name: /./ })
+    const section = within(dossier).getByRole('heading', { level: 3, name: 'Détails filtrés' }).closest('section') as HTMLElement
+    const rows = Object.fromEntries(within(section).getAllByRole('term').map((term) => [plain(term.textContent), plain(term.nextElementSibling?.textContent)]))
+    expect(rows).toEqual({
+      Issue: 'Accepté ACCEPTED',
+      "État de l'opération": 'Commande acquittée COMMAND_ACKNOWLEDGED',
+      Tentative: '2',
+      "Affichage des consignes arrêté": 'Oui',
+      Révoqué: 'Non renseigné',
+      "Réservé jusqu'au": expect.stringContaining('2026'),
+      'Identifiant du casier': SUBJECT_ID,
+      futureKey: 'valeur',
+    })
+    expect(within(section).getByText('futureKey', { selector: 'code' })).toBeTruthy()
+    expect(within(section).getByText('2 champs structurés ne sont pas affichés.')).toBeTruthy()
+    expect(section.textContent).not.toContain('secret-looking')
+    expect(within(section).queryByRole('button')).toBeNull()
+    expect(within(section).queryByRole('textbox')).toBeNull()
+  })
+
+  it('says structured details are not shown when they are all that was sent', async () => {
+    renderAudit([pageOk(auditPage([eventView(4, { details: { created: { name: 'x' } } })]))])
+    await timeline()
+    expect(screen.getByText('1 champ structuré n’est pas affiché.')).toBeTruthy()
+    expect(screen.queryByText('Aucun détail')).toBeNull()
+  })
+
+  it('states the order and that new events appear after a refresh, without claiming a snapshot', async () => {
+    renderAudit([pageOk(auditPage([COMMAND, REFUSED]))])
+    const list = await timeline()
+    expect(list.getByText(/Les plus récents d’abord/)).toBeTruthy()
+    expect(list.getByText('Les événements enregistrés après cette lecture apparaissent après « Actualiser ».')).toBeTruthy()
+    expect(document.body.textContent).not.toMatch(/instantané|snapshot|sans omission|exhaustif/i)
   })
 
   it('shows an unknown event code as such and an unreadable actor explicitly, and never reads the summary', async () => {
@@ -148,7 +198,7 @@ describe('Audit — cursor pagination', () => {
     await userEvent.setup().click(list.getByRole('button', { name: 'Charger plus' }))
 
     await waitFor(() => expect(list.getAllByRole('link')).toHaveLength(4))
-    expect(queryOf(auditGateway, 1)).toEqual({ limit: 25, cursor: 'opaque+cursor/==' })
+    expect(queryOf(auditGateway, 1)).toEqual({ limit: 50, cursor: 'opaque+cursor/==' })
     expect(list.getByRole('heading', { level: 2, name: '4 événements chargés' })).toBeTruthy()
     expect(list.getByText("Fin de l'historique pour ces filtres.")).toBeTruthy()
     expect(list.queryByRole('button', { name: 'Charger plus' })).toBeNull()
@@ -174,7 +224,7 @@ describe('Audit — cursor pagination', () => {
 
     await userEvent.setup().click(within(alert).getByRole('button', { name: 'Réessayer' }))
     await waitFor(() => expect(list.getAllByRole('link')).toHaveLength(3))
-    expect(queryOf(auditGateway, 2)).toEqual({ limit: 25, cursor: 'c1' })
+    expect(queryOf(auditGateway, 2)).toEqual({ limit: 50, cursor: 'c1' })
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
@@ -198,7 +248,7 @@ describe('Audit — cursor pagination', () => {
 
     await user.click(within(status).getByRole('button', { name: 'Recommencer' }))
     await waitFor(() => expect(screen.queryByText('La liste a changé.')).toBeNull())
-    expect(queryOf(auditGateway, 2)).toEqual({ limit: 25, cursor: undefined })
+    expect(queryOf(auditGateway, 2)).toEqual({ limit: 50, cursor: undefined })
     expect(list.getAllByRole('link').map((link) => link.getAttribute('data-event-id'))).toEqual([UPDATED.id, COMMAND.id])
     expect(screen.getAllByRole('status').some((region) => plain(region.textContent) === 'Historique actualisé : 2 événements chargés.')).toBe(true)
     // Not left on the page body once the notice and its button are gone.
@@ -218,7 +268,7 @@ describe('Audit — cursor pagination', () => {
 
     await user.click(screen.getByRole('button', { name: 'Actualiser' }))
     await waitFor(() => expect(list.getAllByRole('link').map((link) => link.getAttribute('data-event-id'))).toEqual([UPDATED.id]))
-    expect(queryOf(auditGateway, 2)).toEqual({ limit: 25, cursor: undefined })
+    expect(queryOf(auditGateway, 2)).toEqual({ limit: 50, cursor: undefined })
     expect(auditGateway.listAuditEvents).toHaveBeenCalledTimes(3)
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Actualiser' }))
   })
@@ -233,7 +283,7 @@ describe('Audit — filters', () => {
       operationId: uuid(900),
       from: '2026-11-10T05:00:00Z',
       to: '2026-11-12T05:00:00Z',
-      limit: 25,
+      limit: 50,
       cursor: undefined,
     })
     expect(screen.getByText('(4 actifs)')).toBeTruthy()
@@ -250,7 +300,7 @@ describe('Audit — filters', () => {
     await user.click(screen.getByRole('button', { name: 'Filtrer' }))
     await waitFor(() => expect(window.location.search).toBe('?type=LOCAL_CHALLENGE_REJECTED'))
     await waitFor(() => expect(auditGateway.listAuditEvents).toHaveBeenCalledTimes(2))
-    expect(queryOf(auditGateway, 1)).toEqual({ eventType: 'LOCAL_CHALLENGE_REJECTED', limit: 25, cursor: undefined })
+    expect(queryOf(auditGateway, 1)).toEqual({ eventType: 'LOCAL_CHALLENGE_REJECTED', limit: 50, cursor: undefined })
   })
 
   it('removes a filter from its chip and keeps focus on the disclosure', async () => {
@@ -302,7 +352,7 @@ describe('Audit — filters', () => {
   it('ignores an address day that is not a day and says so, without sending it', async () => {
     const { auditGateway } = renderAudit([pageOk(auditPage([COMMAND]))], { search: '?du=hier' })
     await timeline()
-    expect(queryOf(auditGateway, 0)).toEqual({ limit: 25, cursor: undefined })
+    expect(queryOf(auditGateway, 0)).toEqual({ limit: 50, cursor: undefined })
     expect(screen.getByLabelText('Du').getAttribute('aria-invalid')).toBe('true')
     expect(screen.getByText("Ce n'est pas une date : le filtre est ignoré.")).toBeTruthy()
   })

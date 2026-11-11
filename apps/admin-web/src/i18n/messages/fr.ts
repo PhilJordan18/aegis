@@ -770,8 +770,9 @@ export const fr = {
   /**
    * Audit (#53, 09 §19.1), read only. Texts follow the approved Manager console design
    * (docs/design/manager-console/prototype/js/copy.js, `au`), except the ones marked [P], proposed: the event, subject,
-   * result and state labels (written for the codes the database admits, V002_2), the refused-filter texts and the
-   * wording that no longer claims an order or the absence of evidence the contract does not let this screen verify.
+   * result and state labels (written for the codes the database admits, V002_2), the detail key labels (the keys of the
+   * backend allowlist), the refused-filter texts and the wording about physical evidence, which this screen cannot
+   * verify. The order (newest first), the details and the refresh behavior are settled by D1, D8-D10 of #67.
    * Codes are never translated, only their presentation (docs/localisation/convention.md).
    */
   audit: {
@@ -782,8 +783,11 @@ export const fr = {
     listTitle: ({ count: value }: { count: number }) =>
       plural(value, { one: `${count.format(value)} événement chargé`, other: `${count.format(value)} événements chargés` }),
     listMeta: 'Heure, événement, acteur',
-    /** [P] The order of the list is not part of the contract (G5): only what was read, and when. */
+    /** D1: the contract orders the list newest first (ties broken by id). */
+    listOrder: 'Les plus récents d’abord',
     listFoot: ({ time }: { time: string }) => `Première page lue à ${time}`,
+    /** D10: a walk never repeats an event; what is recorded while it runs appears on the next walk. No snapshot is claimed. */
+    refreshNote: 'Les événements enregistrés après cette lecture apparaissent après « Actualiser ».',
     loading: "Chargement de l'historique…",
     loadMore: 'Charger plus',
     loadingMore: 'Chargement…',
@@ -852,8 +856,39 @@ export const fr = {
     filterOnSubject: 'Filtrer sur ce sujet',
     detailsTitle: 'Détails filtrés',
     detailsNone: 'Aucun détail',
-    /** [P] The client contract keeps only whether details exist (`hasDetails`): their content is not read until typed. */
-    detailsUnread: "Le serveur a transmis des détails filtrés. Cette version ne les affiche pas.",
+    /** D9: the server sends scalar fields only, an explicit allowlist per event type. */
+    detailsHelp: 'Champs transmis par le service pour ce type d’événement, en lecture seule.',
+    detailNull: 'Non renseigné',
+    detailTrue: 'Oui',
+    detailFalse: 'Non',
+    detailsOmitted: ({ count: value }: { count: number }) =>
+      plural(value, { one: `${count.format(value)} champ structuré n’est pas affiché.`, other: `${count.format(value)} champs structurés ne sont pas affichés.` }),
+    /** [P] Labels of the keys of the backend allowlist (AuditDetailsFilter); a key not listed shows as sent. */
+    detailKey: {
+      revoked: 'Révoqué',
+      revokedAt: 'Révoqué le',
+      archivedAt: 'Archivé le',
+      previousScheduleId: 'Plage horaire précédente',
+      from: 'Depuis',
+      to: 'Vers',
+      assetId: "Identifiant de l'équipement",
+      status: 'Statut',
+      reservedFrom: 'Réservé à partir du',
+      reservedUntil: "Réservé jusqu'au",
+      cancelledAt: 'Annulé le',
+      reservationId: 'Identifiant de la réservation',
+      displayInstructionsStopped: "Affichage des consignes arrêté",
+      messageId: 'Identifiant du message',
+      attempt: 'Tentative',
+      commandMessageId: 'Identifiant du message de commande',
+      outcome: 'Issue',
+      operationStatus: "État de l'opération",
+      commandStatus: 'État de la commande',
+      type: 'Type',
+      severity: 'Gravité',
+      lockerId: 'Identifiant du casier',
+      messageType: 'Type de message',
+    } as Readonly<Record<string, string>>,
     evidenceTitle: 'Preuves physiques',
     /** [P] The approved text says none is referenced; this screen cannot verify it, so it says what it does not show. */
     evidenceNote: "Cet écran n'affiche aucune preuve physique : le contrat ne définit pas la forme de ces références.",

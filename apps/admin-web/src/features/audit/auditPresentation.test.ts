@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { formattersFor } from '../../i18n/format'
 import { MESSAGES } from '../../i18n/messages'
 import type { I18n } from '../../i18n/useI18n'
-import { actorView, eventLabel, groupByDay, resultChip, shortId, stateLabel, subjectLabel } from './auditPresentation'
+import { parseAuditDetails } from './contractParsers'
+import { actorView, detailRows, eventLabel, groupByDay, resultChip, shortId, stateLabel, subjectLabel } from './auditPresentation'
 import { eventView, uuid } from './testFixtures'
 
 const i18n = (locale: 'fr' | 'en'): I18n => ({ locale, m: MESSAGES[locale], format: formattersFor(locale) })
@@ -77,5 +78,35 @@ describe('groupByDay', () => {
 
   it('shortens an identifier for a row', () => {
     expect(shortId(uuid(123))).toBe('00000000…')
+  })
+})
+
+describe('detail rows', () => {
+  const rows = (details: unknown, locale: 'fr' | 'en') => detailRows(parseAuditDetails(details), i18n(locale))
+
+  it('labels a key of the backend allowlist in each language and keeps another key as sent', () => {
+    expect(rows({ severity: 'LOW', other: 'x' }, 'fr').map((row) => [row.key, row.label])).toEqual([['severity', 'Gravité'], ['other', null]])
+    expect(rows({ severity: 'LOW' }, 'en')[0]?.label).toBe('Severity')
+    expect(rows(JSON.parse('{"toString":"x","__proto__":"y"}'), 'en').map((row) => row.label)).toEqual([null, null])
+  })
+
+  it('shows values as sent, with a label only for a state, a result or an instant of the allowlist', () => {
+    const [outcome, status, unknownStatus, type, reservedUntil, other] = rows(
+      { outcome: 'ACCEPTED', status: 'ACTIVE', operationStatus: 'WEIRD', type: 'UNEXPECTED_ASSET_OBSERVED', reservedUntil: '2026-11-11T20:00:00Z', note: '2026-11-11T20:00:00Z' },
+      'en',
+    )
+    expect(outcome).toMatchObject({ text: 'Accepted', code: 'ACCEPTED' })
+    expect(status).toMatchObject({ text: 'Active', code: 'ACTIVE' })
+    expect(unknownStatus).toMatchObject({ text: 'WEIRD', code: null, raw: true })
+    expect(type).toMatchObject({ text: 'UNEXPECTED_ASSET_OBSERVED', code: null, raw: true })
+    expect(reservedUntil?.instant).toBe('2026-11-11T20:00:00Z')
+    expect(reservedUntil?.text).toMatch(/2026/)
+    expect(other).toMatchObject({ text: '2026-11-11T20:00:00Z', instant: null })
+  })
+
+  it('writes booleans, null and numbers explicitly and never a structured value', () => {
+    const list = rows({ a: true, b: false, c: null, d: 3, e: { x: 1 }, f: [1] }, 'fr')
+    expect(list.map((row) => row.text)).toEqual(['Oui', 'Non', 'Non renseigné', '3'])
+    expect(rows({ a: true }, 'en')[0]?.text).toBe('Yes')
   })
 })

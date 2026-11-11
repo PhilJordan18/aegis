@@ -1,5 +1,5 @@
 import { isInstant, isUuid } from '../lockers/contractParsers'
-import type { AuditActor, AuditEventView, AuditPage } from './contract'
+import type { AuditActor, AuditDetails, AuditEventView, AuditPage } from './contract'
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 const isText = (value: unknown): value is string => typeof value === 'string' && value !== ''
@@ -11,7 +11,21 @@ function parseActor(value: unknown): AuditActor {
   return { kind: 'unreadable' }
 }
 
-/** §19.1. The fields §19.1 does type are strict; an undefined `actor` shape is kept visible as unreadable, not dropped. */
+const NO_DETAILS: AuditDetails = { entries: [], omitted: 0 }
+
+/** D9: scalar fields only. An object or a list is dropped and counted, never read or rendered. */
+export function parseAuditDetails(details: unknown): AuditDetails {
+  if (!isRecord(details)) return NO_DETAILS
+  const entries: [string, string | number | boolean | null][] = []
+  let omitted = 0
+  for (const [key, value] of Object.entries(details)) {
+    if (value === null || typeof value === 'string' || typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) entries.push([key, value])
+    else omitted += 1
+  }
+  return { entries, omitted }
+}
+
+/** §19.1. The fields §19.1 does type are strict; an `actor` shape the contract does not send is kept visible as unreadable, not dropped. */
 export function parseAuditEventView(body: unknown): AuditEventView | null {
   if (!isRecord(body)) return null
   const { id, eventType, subjectType, subjectId, operationId, fromState, toState, result, reason, occurredAt, details } = body
@@ -31,7 +45,7 @@ export function parseAuditEventView(body: unknown): AuditEventView | null {
     result,
     reason,
     occurredAt,
-    hasDetails: isRecord(details) && Object.keys(details).length > 0,
+    details: parseAuditDetails(details),
   }
 }
 

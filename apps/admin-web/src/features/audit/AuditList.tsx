@@ -42,7 +42,7 @@ interface AuditListProps {
 }
 
 /**
- * The timeline: events grouped by laboratory day, in the order the server sends them. The count is what was loaded,
+ * The timeline: events grouped by laboratory day, newest first as the server sends them (D1). The count is what was loaded,
  * never a total (the contract has none). Each failure has its own place: the whole read at the top of the panel, the
  * next page under the events, a failed refresh as a stale notice above them.
  */
@@ -61,7 +61,9 @@ export function AuditList(props: AuditListProps) {
         <h2 className="ag-list__title" id={titleId} tabIndex={-1}>
           {events === undefined ? m.shell.sections.audit : t.listTitle({ count: shown.length })}
         </h2>
-        <span className="ag-list__meta">{t.listMeta}</span>
+        <span className="ag-list__meta">
+          {t.listMeta} · {t.listOrder}
+        </span>
       </div>
 
       {failure !== null && events === undefined && (
@@ -153,6 +155,7 @@ export function AuditList(props: AuditListProps) {
       {shown.length > 0 && (
         <p className="ag-list__foot">
           {readTime !== null && <span>{t.listFoot({ time: readTime })}</span>}
+          <span className="ag-au-zone">{t.refreshNote}</span>
           <span className="ag-au-zone">{m.equipment.zoneNote({ zone: LAB_TIME_ZONE })}</span>
         </p>
       )}

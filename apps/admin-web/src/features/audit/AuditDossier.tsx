@@ -3,7 +3,7 @@ import { Link } from '../../app/Link'
 import { useI18n } from '../../i18n/useI18n'
 import { ReadOnlyMark } from '../../ui/ReadOnlyMark'
 import { StatusChip } from '../../ui/StatusChip'
-import { actorView, eventLabel, fullTimeOf, resultChip, stateLabel, subjectLabel } from './auditPresentation'
+import { actorView, detailRows, eventLabel, fullTimeOf, resultChip, stateLabel, subjectLabel } from './auditPresentation'
 import { auditHref, type AuditFilters } from './auditFilters'
 import type { AuditEventView } from './contract'
 
@@ -17,8 +17,8 @@ interface AuditDossierProps {
 }
 
 /**
- * Dossier of one event: everything the contract sends, as sent. Codes (event type, subject type, result, reason,
- * states) are shown here only, beside their label. Nothing is completed: a missing operation, reason, result, detail or
+ * Dossier of one event: everything the contract sends, as sent; `details` are its scalar fields only, read only. Codes
+ * (event type, subject type, result, reason, states) are shown here only, beside their label. Nothing is completed: a missing operation, reason, result, detail or
  * piece of evidence is said to be missing (handoff §6, states.md §5).
  */
 export function AuditDossier({ event, filters, focusRef }: AuditDossierProps) {
@@ -41,6 +41,7 @@ export function AuditDossier({ event, filters, focusRef }: AuditDossierProps) {
 
   const actor = actorView(event.actor, i18n)
   const chip = resultChip(event.result, i18n)
+  const rows = detailRows(event.details, i18n)
   const transition = event.fromState !== null && event.toState !== null ? { from: event.fromState, to: event.toState } : null
 
   return (
@@ -156,7 +157,30 @@ export function AuditDossier({ event, filters, focusRef }: AuditDossierProps) {
           <h3 className="ag-overline" id={`${titleId}-details`}>
             {t.detailsTitle}
           </h3>
-          <p>{event.hasDetails ? t.detailsUnread : t.detailsNone}</p>
+          {rows.length === 0 ? (
+            <p>{event.details.omitted === 0 ? t.detailsNone : t.detailsOmitted({ count: event.details.omitted })}</p>
+          ) : (
+            <>
+              <p className="ag-au-note">{t.detailsHelp}</p>
+              <dl className="ag-facts ag-au-facts">
+                {rows.map((row) => (
+                  <div key={row.key}>
+                    <dt>{row.label ?? <code className="ag-au-id">{row.key}</code>}</dt>
+                    <dd className={row.instant !== null ? 'ag-tnum' : undefined}>
+                      {row.instant !== null ? <time dateTime={row.instant}>{row.text}</time> : row.raw ? <code className="ag-au-id">{row.text}</code> : row.text}
+                      {row.code !== null && (
+                        <>
+                          {' '}
+                          <code className="ag-au-id">{row.code}</code>
+                        </>
+                      )}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              {event.details.omitted > 0 && <p className="ag-au-note">{t.detailsOmitted({ count: event.details.omitted })}</p>}
+            </>
+          )}
         </section>
 
         <section className="ag-au-sec" aria-labelledby={`${titleId}-evidence`}>

@@ -11,8 +11,8 @@ export type AuditFilters = Readonly<Record<FilterField, string>>
 
 export const NO_FILTERS: AuditFilters = { from: '', to: '', eventType: '', subjectType: '', subjectId: '', operationId: '', actorUserId: '' }
 
-/** Page size of a walk. The server caps `limit` at 100 (§19.1); the walk continues with « Charger plus ». */
-export const AUDIT_PAGE_SIZE = 25
+/** Page size of a walk: the approved default of D10. The server caps `limit` at 100; the walk continues with « Charger plus ». */
+export const AUDIT_PAGE_SIZE = 50
 
 /** Names in the address: French, like the paths; the selected event is `evenement`. */
 const PARAM: Readonly<Record<FilterField, string>> = {

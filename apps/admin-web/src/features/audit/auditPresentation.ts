@@ -2,7 +2,8 @@ import type { I18n } from '../../i18n/useI18n'
 import type { StatusRole } from '../../ui/StatusChip'
 import type { IconName } from '../../ui/Icon'
 import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
-import type { AuditActor, AuditEventView } from './contract'
+import { isInstant } from '../lockers/contractParsers'
+import type { AuditActor, AuditDetails, AuditEventView } from './contract'
 
 /** A label from the catalog; a code the catalog does not hold (including a prototype key such as `constructor`) has none. */
 function lookup(table: Readonly<Record<string, string>>, code: string): string | null {
@@ -80,7 +81,7 @@ export interface DayGroup {
   readonly events: readonly AuditEventView[]
 }
 
-/** Consecutive events of one laboratory day under one heading; the order is the server's and is never changed. */
+/** Consecutive events of one laboratory day under one heading; the order is the server's (newest first) and is never changed. */
 export function groupByDay(events: readonly AuditEventView[], { format }: I18n): readonly DayGroup[] {
   const groups: { day: string; heading: string; events: AuditEventView[] }[] = []
   for (const event of events) {
@@ -94,3 +95,37 @@ export function groupByDay(events: readonly AuditEventView[], { format }: I18n):
 
 export const clockOf = (instant: string, { format }: I18n) => format.clockSeconds(new Date(instant), LAB_TIME_ZONE)
 export const fullTimeOf = (instant: string, { format }: I18n) => format.dateTimeSeconds(new Date(instant), LAB_TIME_ZONE)
+
+/** Detail keys the backend allowlist fills with an instant (AuditDetailsFilter): shown in the laboratory zone. */
+const INSTANT_KEYS: ReadonlySet<string> = new Set(['revokedAt', 'archivedAt', 'cancelledAt', 'reservedFrom', 'reservedUntil'])
+
+export interface DetailRow {
+  /** The key as sent; always available, shown alone when the catalog has no label. */
+  readonly key: string
+  readonly label: string | null
+  /** The text a reader scans: a localized label, a formatted instant, a yes/no, a number or the string as sent. */
+  readonly text: string
+  /** The code as sent, shown beside a localized label; null when the text already is the value. */
+  readonly code: string | null
+  /** Set when `text` is a formatted instant, so the machine-readable value stays in the markup. */
+  readonly instant: string | null
+  /** True for a string shown as sent (an identifier, a code): it is set in the code style. */
+  readonly raw: boolean
+}
+
+/**
+ * The scalar details of an event as read-only rows (D9). A key the catalog does not know shows as sent, a value is
+ * shown as sent unless a label for the code is obvious (a state or a result) or it is an instant of the allowlist.
+ */
+export function detailRows(details: AuditDetails, i18n: I18n): readonly DetailRow[] {
+  const { m } = i18n
+  return details.entries.map(([key, value]): DetailRow => {
+    const label = lookup(m.audit.detailKey, key)
+    if (value === null) return { key, label, text: m.audit.detailNull, code: null, instant: null, raw: false }
+    if (typeof value === 'boolean') return { key, label, text: value ? m.audit.detailTrue : m.audit.detailFalse, code: null, instant: null, raw: false }
+    if (typeof value === 'number') return { key, label, text: String(value), code: null, instant: null, raw: false }
+    if (INSTANT_KEYS.has(key) && isInstant(value)) return { key, label, text: fullTimeOf(value, i18n), code: null, instant: value, raw: false }
+    const known = key === 'status' || key === 'operationStatus' ? lookup(m.audit.state, value) : key === 'outcome' ? lookup(m.audit.result, value) : null
+    return known === null ? { key, label, text: value, code: null, instant: null, raw: true } : { key, label, text: known, code: value, instant: null, raw: false }
+  })
+}

@@ -31,8 +31,9 @@ function isStackedLayout(): boolean {
 
 /**
  * Protected Audit page (#53), read only: the history of §19.1 as a timeline, with the filters of the contract and the
- * opaque cursor of §22.2. The server decides what exists and in what order; the page adds, completes and writes
- * nothing, and says so when something is not shown.
+ * opaque, filter-bound cursor (D10). The list is newest first. A walk never repeats an event and holds what was
+ * committed before it began; what is recorded during it appears on the next walk, started with « Actualiser » (no
+ * snapshot is claimed). The page adds, completes and writes nothing, and says so when something is not shown.
  */
 export function AuditPage({ sessionProfile }: { readonly sessionProfile: UserProfile }) {
   const i18n = useI18n()
