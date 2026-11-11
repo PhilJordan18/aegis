@@ -65,8 +65,10 @@ describe('classifyTransactionFailure', () => {
   const problem = (status: number, code: string) =>
     new ApiRequestError({ kind: 'httpProblem', status, problem: problemBody(status, code), retryAfter: null, requestId: REQUEST_ID })
 
-  it('reads a 404 on a list route as « not served yet », and on a detail route as a missing record', () => {
-    expect(classifyTransactionFailure(problem(404, 'RESOURCE_NOT_FOUND'), 'list')).toEqual({ kind: 'notServed' })
+  it('reads a 404 on a detail route as a missing record, and on a list route as a traced service error, never as empty', () => {
+    const listFailure = classifyTransactionFailure(problem(404, 'RESOURCE_NOT_FOUND'), 'list')
+    expect(listFailure.kind).toBe('serviceError')
+    expect(listFailure.kind === 'serviceError' && listFailure.traceId).toBeTruthy()
     expect(classifyTransactionFailure(problem(404, 'RESOURCE_NOT_FOUND'), 'detail')).toEqual({ kind: 'notFound' })
   })
 
