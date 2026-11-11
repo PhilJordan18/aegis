@@ -23,7 +23,7 @@ import ca.aegis.control.shared.web.PageQuery;
 @Repository
 class AnomalyRepository {
 
-    /** At most this many observations are returned as evidence (provisional shape D7, #67). */
+    /** At most this many observations are returned as evidence (shape D7 approved on 11 November 2026, #67). */
     static final int EVIDENCE_LIMIT = 50;
 
     private static final String SELECT = """
@@ -35,8 +35,8 @@ class AnomalyRepository {
             """;
 
     /**
-     * Filters of {@code GET /admin/anomalies} (document 09, section 18.1). Provisional rule D2 of the 11 November 2026
-     * matrix (#67): {@code from} and {@code to} bound {@code detected_at}.
+     * Filters of {@code GET /admin/anomalies} (document 09, section 18.1). Rule D2 approved on 11 November
+     * 2026 (#67): {@code from} and {@code to} bound {@code detected_at}.
      */
     record AdminFilter(AnomalyStatus status, AnomalyType type, AnomalySeverity severity, UUID assetId,
             UUID lockerOperationId, Instant from, Instant to) {
@@ -58,7 +58,7 @@ class AnomalyRepository {
         return jdbc.sql(SELECT + " WHERE a.id = :id").param("id", id).query(AnomalyRepository::map).optional();
     }
 
-    /** Provisional order D1 of the 11 November 2026 matrix (#67): latest detection first, {@code id} breaking ties. */
+    /** Order D1 approved on 11 November 2026 (#67): latest detection first, {@code id} breaking ties. */
     List<AnomalyView> page(AdminFilter filter, PageQuery page) {
         Where where = filter.where();
         return where.bind(jdbc.sql(SELECT + where.sql()

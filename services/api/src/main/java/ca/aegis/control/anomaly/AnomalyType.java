@@ -1,7 +1,7 @@
 package ca.aegis.control.anomaly;
 
 /**
- * Types of {@code ck_anomalies_type} (document 08, section 4.9). Provisional rule D5 of the 11 November 2026 matrix
+ * Types of {@code ck_anomalies_type} (document 08, section 4.9). Rule D5 approved on 11 November 2026
  * (#67): {@code AnomalyView.summary} is a fixed sentence chosen from the type, never built from stored details.
  */
 enum AnomalyType {

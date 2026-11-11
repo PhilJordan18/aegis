@@ -47,8 +47,8 @@ class LoanRepository {
     }
 
     /**
-     * Filters of {@code GET /admin/loans} (document 09, section 17): {@code userId} is the holder. Provisional rule D2
-     * of the 11 November 2026 matrix (#67): {@code from} and {@code to} bound {@code checked_out_at}.
+     * Filters of {@code GET /admin/loans} (document 09, section 17): {@code userId} is the holder. Rule D2 approved
+     * on 11 November 2026 (#67): {@code from} and {@code to} bound {@code checked_out_at}.
      */
     record AdminFilter(LoanStatus status, UUID assetId, UUID holderUserId, Instant from, Instant to) {
 
@@ -58,7 +58,7 @@ class LoanRepository {
         }
     }
 
-    /** Provisional order D1 of the 11 November 2026 matrix (#67): latest checkout first, {@code id} breaking ties. */
+    /** Order D1 approved on 11 November 2026 (#67): latest checkout first, {@code id} breaking ties. */
     List<LoanRow> page(AdminFilter filter, PageQuery page) {
         Where where = filter.where();
         return where.bind(jdbc.sql("SELECT " + COLUMNS + " FROM aegis.loans" + where.sql()

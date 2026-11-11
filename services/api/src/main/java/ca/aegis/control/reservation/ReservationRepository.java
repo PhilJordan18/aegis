@@ -97,8 +97,8 @@ class ReservationRepository {
     }
 
     /**
-     * Filters of {@code GET /admin/reservations} (document 09, section 17). Provisional rule D2 of the 11 November
-     * 2026 matrix (#67): {@code from} and {@code to} bound {@code created_at}.
+     * Filters of {@code GET /admin/reservations} (document 09, section 17). Rule D2 approved on 11 November
+     * 2026 (#67): {@code from} and {@code to} bound {@code created_at}.
      */
     record AdminFilter(ReservationStatus status, UUID assetId, UUID userId, Instant from, Instant to) {
 
@@ -108,7 +108,7 @@ class ReservationRepository {
         }
     }
 
-    /** Provisional order D1 of the 11 November 2026 matrix (#67): most recent first, {@code id} breaking ties. */
+    /** Order D1 approved on 11 November 2026 (#67): most recent first, {@code id} breaking ties. */
     List<ReservationRow> page(AdminFilter filter, PageQuery page) {
         Where where = filter.where();
         return where.bind(jdbc.sql(SELECT_RESERVATION + where.sql()

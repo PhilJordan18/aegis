@@ -82,7 +82,7 @@ class AdminCustodyReadApiTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.items[*].id").value(contains(ids(cancelled))));
         read(RESERVATIONS + "?assetId=" + activeAsset)
                 .andExpect(jsonPath("$.items[*].id").value(contains(ids(active))));
-        // from is inclusive and to exclusive, on createdAt (provisional rule D2).
+        // from is inclusive and to exclusive, on createdAt (rule D2 approved on 11 November 2026).
         read(RESERVATIONS + "?userId=" + technician.id() + "&from=" + START.minusSeconds(3000) + "&to="
                 + START.minusSeconds(60))
                 .andExpect(jsonPath("$.items[*].id").value(contains(ids(cancelled, expired))));
@@ -99,15 +99,20 @@ class AdminCustodyReadApiTests extends ApiIntegrationTest {
         UUID reservation = fixtures.reservation(asset, technician.id(), "ACTIVE", START.minusSeconds(60),
                 START.plusSeconds(3600));
 
-        // The holder may cancel; the administrator reads the same reservation with no action (provisional rule D4).
+        // The holder may cancel; the administrator reads the same reservation with no action (rule D4).
         mvc.perform(get("/api/v1/reservations/" + reservation).header(AUTHORIZATION, bearer(accessToken(technician))))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.availableActions").value(contains("CANCEL")));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.availableActions").value(contains("CANCEL")))
+                .andExpect(jsonPath("$.user").doesNotExist()).andExpect(jsonPath("$.length()").value(12));
+        // Rule G1: only the administrative view adds the holder's summary.
         read(RESERVATIONS + "/" + reservation).andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(reservation.toString()))
                 .andExpect(jsonPath("$.asset.id").value(asset.toString()))
                 .andExpect(jsonPath("$.asset.assetCode").isString())
                 .andExpect(jsonPath("$.asset.placement.lockerId").value(locker.toString()))
                 .andExpect(jsonPath("$.userId").value(technician.id().toString()))
+                .andExpect(jsonPath("$.user.id").value(technician.id().toString()))
+                .andExpect(jsonPath("$.user.displayName").isString())
+                .andExpect(jsonPath("$.user.length()").value(2))
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.reservedFrom").value("2026-09-28T12:59:00Z"))
                 .andExpect(jsonPath("$.reservedUntil").value("2026-09-28T14:00:00Z"))
@@ -117,8 +122,33 @@ class AdminCustodyReadApiTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.expiredAt").value(nullValue()))
                 .andExpect(jsonPath("$.currentOperationId").value(nullValue()))
                 .andExpect(jsonPath("$.availableActions").value(empty()))
-                .andExpect(jsonPath("$.length()").value(12));
-        read(RESERVATIONS + "?assetId=" + asset).andExpect(jsonPath("$.items[0].availableActions").value(empty()));
+                .andExpect(jsonPath("$.length()").value(13));
+        read(RESERVATIONS + "?assetId=" + asset).andExpect(jsonPath("$.items[0].availableActions").value(empty()))
+                .andExpect(jsonPath("$.items[0].user.id").value(technician.id().toString()));
+    }
+
+    /** Document 09, section 8.4: a terminal attempt stays referenced, and a non-terminal one takes priority. */
+    @Test
+    void anActiveReservationKeepsReferencingItsLatestAttemptEvenWhenTerminal() throws Exception {
+        UUID asset = fixtures.assetAt(locker, 1);
+        UUID reservation = fixtures.reservation(asset, technician.id(), "ACTIVE", START.minusSeconds(900),
+                START.plusSeconds(3600));
+        UUID failed = fixtures.attempt(asset, technician.id(), reservation, "FAILED", false, START.minusSeconds(600));
+        UUID expired = fixtures.attempt(asset, technician.id(), reservation, "EXPIRED", false,
+                START.minusSeconds(300));
+        String technicianToken = accessToken(technician);
+
+        read(RESERVATIONS + "/" + reservation).andExpect(jsonPath("$.currentOperationId").value(expired.toString()));
+        mvc.perform(get("/api/v1/reservations/" + reservation).header(AUTHORIZATION, bearer(technicianToken)))
+                .andExpect(jsonPath("$.currentOperationId").value(expired.toString()));
+
+        // An older non-terminal attempt still wins over a newer terminal one.
+        jdbc.sql("UPDATE aegis.locker_operations SET status = 'REQUESTED', terminal_at = NULL, failure_reason = NULL "
+                + "WHERE id = :id").param("id", failed).update();
+        read(RESERVATIONS + "?assetId=" + asset)
+                .andExpect(jsonPath("$.items[0].currentOperationId").value(failed.toString()));
+        mvc.perform(get("/api/v1/me/reservation").header(AUTHORIZATION, bearer(technicianToken)))
+                .andExpect(jsonPath("$.currentOperationId").value(failed.toString()));
     }
 
     /** Document 09, section 8.4: a terminal attempt stays referenced, and a non-terminal one takes priority. */
@@ -192,12 +222,14 @@ class AdminCustodyReadApiTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.items[1].status").value("ACTIVE"))
                 .andExpect(jsonPath("$.items[1].overdue").value(true))
                 .andExpect(jsonPath("$.items[1].holderUserId").value(technician.id().toString()))
+                .andExpect(jsonPath("$.items[1].holder.id").value(technician.id().toString()))
+                .andExpect(jsonPath("$.items[1].holder.displayName").isString())
                 .andExpect(jsonPath("$.items[1].asset.id").value(olderAsset.toString()))
                 .andExpect(jsonPath("$.items[1].availableActions").value(empty()));
         read(LOANS + "?userId=" + technician.id() + "&status=ACTIVE")
                 .andExpect(jsonPath("$.items[*].id").value(contains(ids(older))));
         read(LOANS + "?assetId=" + olderAsset).andExpect(jsonPath("$.items[*].id").value(contains(ids(older))));
-        // from/to bound checkedOutAt, a minute after the fixture's checkout instant (provisional rule D2).
+        // from/to bound checkedOutAt, a minute after the fixture's checkout instant (rule D2).
         read(LOANS + "?userId=" + otherHolder + "&from=" + START.minusSeconds(240) + "&to=" + START)
                 .andExpect(jsonPath("$.items[*].id").value(contains(ids(others))));
         read(LOANS + "?userId=" + otherHolder + "&from=" + START.minusSeconds(239))
@@ -221,6 +253,9 @@ class AdminCustodyReadApiTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.id").value(loan.toString()))
                 .andExpect(jsonPath("$.asset.id").value(asset.toString()))
                 .andExpect(jsonPath("$.holderUserId").value(technician.id().toString()))
+                .andExpect(jsonPath("$.holder.id").value(technician.id().toString()))
+                .andExpect(jsonPath("$.holder.displayName").isString())
+                .andExpect(jsonPath("$.holder.length()").value(2))
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.checkedOutAt").value("2026-09-28T12:51:00Z"))
                 .andExpect(jsonPath("$.dueAt").value("2026-09-28T13:50:00Z"))
@@ -231,6 +266,9 @@ class AdminCustodyReadApiTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.returnOperationId").value(nullValue()))
                 .andExpect(jsonPath("$.currentOperationId").value(nullValue()))
                 .andExpect(jsonPath("$.availableActions").value(empty()))
+                .andExpect(jsonPath("$.length()").value(14));
+        mvc.perform(get("/api/v1/loans/" + loan).header(AUTHORIZATION, bearer(accessToken(technician))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.holder").doesNotExist())
                 .andExpect(jsonPath("$.length()").value(13));
     }
 
