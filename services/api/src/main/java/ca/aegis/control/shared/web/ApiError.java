@@ -76,6 +76,15 @@ public enum ApiError {
             "Un compartiment désactivé ne peut pas recevoir d'actif."),
     COMPARTMENT_ALREADY_OCCUPIED(HttpStatus.CONFLICT, "Compartiment déjà attribué",
             "Un autre actif est déjà placé dans ce compartiment."),
+    /** Document 09, section 18.2: a resolved anomaly is never acknowledged again. */
+    ANOMALY_ALREADY_RESOLVED(HttpStatus.CONFLICT, "Anomalie déjà résolue",
+            "Cette anomalie est déjà résolue par une preuve physique."),
+    /**
+     * Document 09, section 18.2; provisional rule D6 of the 11 November 2026 matrix (#67): an anomaly already
+     * acknowledged keeps its first note.
+     */
+    ANOMALY_NOT_ACKNOWLEDGEABLE(HttpStatus.CONFLICT, "Anomalie non reconnaissable",
+            "Cette anomalie a déjà été reconnue; sa note n'est pas remplacée."),
     IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT, "Clé d'idempotence réutilisée",
             "Cette clé d'idempotence a déjà servi pour une autre requête."),
     IDEMPOTENCY_REQUEST_IN_PROGRESS(HttpStatus.CONFLICT, "Requête déjà en cours",
