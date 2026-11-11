@@ -107,12 +107,14 @@ void HubLink::tryPublishRestarted() {
 void HubLink::publishHeartbeat(uint32_t now) {
   nextHeartbeatMs_ = now + HEARTBEAT_INTERVAL_MS;
 
-  // No cell bus yet: every cell fact is reported as UNKNOWN rather than guessed (§12.2).
+  // Only the link is read so far: reader, door and lock stay UNKNOWN rather than guessed (§12.2).
   CompartmentFacts compartments[MAX_COMPARTMENTS];
   size_t count = config_.compartmentCount < MAX_COMPARTMENTS ? config_.compartmentCount : MAX_COMPARTMENTS;
   for (size_t i = 0; i < count; i++) {
-    compartments[i] = CompartmentFacts{config_.compartments[i].compartmentId, config_.compartments[i].cellAddress,
-                                       "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN"};
+    const int address = config_.compartments[i].cellAddress;
+    const char* link = cellStatus_ != nullptr ? cellStatus_(address) : "UNKNOWN";
+    compartments[i] = CompartmentFacts{config_.compartments[i].compartmentId, address, link, "UNKNOWN", "UNKNOWN",
+                                       "UNKNOWN"};
   }
 
   EnvelopeBuf buf;

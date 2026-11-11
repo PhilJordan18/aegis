@@ -1,5 +1,6 @@
 #pragma once
 
+#include <HardwareSerial.h>
 #include <mqtt_client.h>
 
 #include <freertos/FreeRTOS.h>
@@ -27,6 +28,20 @@ class EspPlatform : public Platform {
   bool journalRead(size_t slot, void* buf, size_t len) override;
   bool journalWrite(size_t slot, const void* buf, size_t len) override;
   void log(const char* line) override;
+};
+
+// One hub port on its own UART and auto-direction RS-485 transceiver. The UART is started by
+// the sketch, which owns the pin assignment.
+class EspCellPort : public CellPort {
+ public:
+  explicit EspCellPort(HardwareSerial& uart) : uart_(uart) {}
+  int read() override { return uart_.available() > 0 ? uart_.read() : -1; }
+  void write(const char* data, size_t len) override {
+    uart_.write(reinterpret_cast<const uint8_t*>(data), len);
+  }
+
+ private:
+  HardwareSerial& uart_;
 };
 
 struct MqttSettings {
