@@ -21,6 +21,7 @@ final class SignInUITests: XCTestCase {
             "rateLimited": "Trop de tentatives. Réessayez dans 55 secondes.",
             "rateLimitedLater": "Trop de tentatives. Réessayez plus tard.",
             "signedOut": "Vous êtes déconnecté.", "confirm": "Se déconnecter",
+            "cancel": "Annuler", "signOutMessage": "La déconnexion n’annule pas les réservations ou les prêts en cours.",
             "wrongRole": "Accès réservé aux techniciens", "another": "Se connecter avec un autre compte",
             "offline": "Connexion au service impossible",
             "expired": "Votre session a expiré. Vos réservations et prêts sont conservés.",
@@ -36,6 +37,7 @@ final class SignInUITests: XCTestCase {
             "rateLimited": "Too many attempts. Try again in 55 seconds.",
             "rateLimitedLater": "Too many attempts. Try again later.",
             "signedOut": "You're signed out.", "confirm": "Sign out",
+            "cancel": "Cancel", "signOutMessage": "Signing out does not cancel any current reservations or loans.",
             "wrongRole": "Technicians only", "another": "Sign in with another account",
             "offline": "Can't reach the service",
             "expired": "Your session has expired. Your reservations and loans are kept.",
@@ -56,6 +58,8 @@ final class SignInUITests: XCTestCase {
 
     @MainActor
     func testSignInAndSignOutInEnglish() throws {
+        XCUIDevice.shared.appearance = .dark
+        defer { XCUIDevice.shared.appearance = .light }
         try assertSignInAndSignOut(.english)
     }
 
@@ -264,7 +268,20 @@ final class SignInUITests: XCTestCase {
         attach(app, "\(language.code)-account")
 
         app.buttons["account.signOut"].tap()
-        let confirm = app.buttons.matching(identifier: "account.confirmSignOut").firstMatch
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.staticTexts[language["signOutMessage"]].exists)
+        let cancel = alert.buttons[language["cancel"]]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+        XCTAssertTrue(cancel.isHittable)
+        XCTAssertEqual(cancel.label, language["cancel"])
+        attach(app, "\(language.code)-signout-confirmation")
+        cancel.tap()
+        XCTAssertFalse(alert.exists)
+        XCTAssertTrue(app.buttons["account.signOut"].isHittable)
+        XCTAssertFalse(app.textFields["signin.email"].exists)
+        app.buttons["account.signOut"].tap()
+        let confirm = alert.buttons[language["confirm"]]
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         XCTAssertEqual(confirm.label, language["confirm"])
         confirm.tap()

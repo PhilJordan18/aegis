@@ -101,8 +101,7 @@ struct WrongRoleView: View {
     }
 }
 
-/// Signed-in landing until the business sections exist: the server profile
-/// from `GET /auth/me` or the sign-in response, the diagnostic and sign-out.
+/// Server profile, service diagnostic, and local session sign-out.
 struct AccountView: View {
     let session: SessionModel
     let profile: UserProfile
@@ -152,11 +151,11 @@ struct AccountView: View {
             .scrollContentBackground(.hidden)
             .background(Color.brandTop.ignoresSafeArea())
             .navigationTitle("Compte")
-            .confirmationDialog("Vous déconnecter ?", isPresented: $confirmsSignOut, titleVisibility: .visible) {
+            .alert("Vous déconnecter ?", isPresented: $confirmsSignOut) {
+                Button("Annuler", role: .cancel) {}
                 Button("Se déconnecter", role: .destructive) { session.signOut() }
-                    .accessibilityIdentifier("account.confirmSignOut")
             } message: {
-                Text("Votre réservation et votre prêt restent actifs.")
+                Text("La déconnexion n’annule pas les réservations ou les prêts en cours.")
             }
         }
     }
