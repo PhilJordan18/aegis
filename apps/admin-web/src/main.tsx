@@ -8,6 +8,8 @@ import './styles/base.css'
 import { clearCacheOnSessionChange, createQueryClient } from './api/serverState'
 import { App } from './app/App'
 import { createHistoryRouter, RouterContext } from './app/router'
+import { AuditGatewayContext } from './features/audit/AuditGatewayContext'
+import { createHttpAuditGateway } from './features/audit/httpAuditGateway'
 import { createAppearanceController } from './features/appearance/appearance'
 import { AppearanceContext } from './features/appearance/useAppearance'
 import type { AuthGateway } from './features/auth/authGateway'
@@ -50,6 +52,7 @@ const catalogGateway = createHttpCatalogGateway()
 const lockerGateway = createHttpLockerGateway()
 const scheduleGateway = createHttpScheduleGateway()
 const custodyGateway = createHttpCustodyGateway()
+const auditGateway = createHttpAuditGateway()
 
 const container = document.getElementById('root')
 if (!container) throw new Error('Missing #root element')
@@ -66,9 +69,11 @@ createRoot(container).render(
                   <LockerGatewayContext value={lockerGateway}>
                     <ScheduleGatewayContext value={scheduleGateway}>
                       <CustodyGatewayContext value={custodyGateway}>
-                        <PreviewContext value={previewControls}>
-                          <App />
-                        </PreviewContext>
+                        <AuditGatewayContext value={auditGateway}>
+                          <PreviewContext value={previewControls}>
+                            <App />
+                          </PreviewContext>
+                        </AuditGatewayContext>
                       </CustodyGatewayContext>
                     </ScheduleGatewayContext>
                   </LockerGatewayContext>

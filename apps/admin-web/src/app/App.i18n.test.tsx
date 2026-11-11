@@ -218,7 +218,7 @@ describe.each<Locale>(['fr', 'en'])('screens in %s', (locale) => {
       `${m.shell.sections.reservationsLoans}${m.shell.soonSuffix}`,
       m.shell.sections.lockers,
       `${m.shell.sections.anomalies}${m.shell.soonSuffix}`,
-      `${m.shell.sections.audit}${m.shell.soonSuffix}`,
+      m.shell.sections.audit,
     ])
     expect(sidebar.textContent).toContain(m.shell.soonLegend)
     expect(within(sidebar).getByText(m.shell.administratorRole)).toBeDefined()

@@ -20,6 +20,10 @@ export const queryKeys = {
     identifiers: (assetId: string) => ['custody', 'identifiers', assetId] as const,
     lockers: (query: { readonly page: number; readonly size: number }) => ['custody', 'lockers', query] as const,
   },
+  audit: {
+    all: ['audit'] as const,
+    timeline: (filters: object) => ['audit', 'timeline', filters] as const,
+  },
   lockers: {
     all: ['lockers'] as const,
     status: (lockerId: string) => ['lockers', 'status', lockerId] as const,
