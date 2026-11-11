@@ -29,7 +29,7 @@ describe.skipIf(!origin || !email || !password)('§18 anomalies against an isola
     token = await signIn()
   })
 
-  it('parses the §18 anomaly list and every detail, ignoring evidence', async () => {
+  it('parses the §18 anomaly list and every detail, with its provisional evidence section', async () => {
     const gateway = createHttpAnomalyGateway(options)
     const list = await gateway.listAnomalies(token, { page: 0, size: 100 })
     expect(list.kind).toBe('ok')
@@ -37,6 +37,7 @@ describe.skipIf(!origin || !email || !password)('§18 anomalies against an isola
     for (const anomaly of list.value.items) {
       const detail = await gateway.getAnomaly(token, anomaly.id)
       expect(detail.kind === 'ok' && detail.value.id).toBe(anomaly.id)
+      expect(detail.kind === 'ok' && detail.value.evidence !== null).toBe(true)
     }
   })
   it('reports an invalid filter as a 400 problem, not as data', async () => {
