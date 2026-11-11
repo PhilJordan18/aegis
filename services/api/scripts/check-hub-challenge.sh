@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Real-broker recipe for LOC-01 and the checkout preparation (#43, #46; document 09 section 15.1,
+# Real-broker recipe for LOC-01, the checkout preparation and its local authorization (#43, #44, #46; document 09 section 15.1,
 # document 10 section 27, decision of 11 November 2026 on display keys).
 #
 #   services/api/scripts/check-hub-challenge.sh     # from the repository root, about 4 minutes
@@ -16,6 +16,9 @@
 #   T5 unconsumed: the operation expires (LOCAL_PROOF_EXPIRED), the ciphertext is purged, the hub gets a status
 #   T6 key k1 is no longer referenced by any unpurged row: it may be retired
 #   T7 a new preparation is sealed under k2 and displayed
+#   T8 its QR scanned (#44): a wrong secret is counted (403), the right one authorizes once (202 AUTHORIZED), a
+#      replay with a new key is refused, the simulator receives and actuates the single UNLOCK_COMPARTMENT, and the
+#      token stays out of the REST bodies, the logs and the backend-account broker traffic
 # The exit code is the number of failed checks. The hub is simulated: this proves the server path and the broker
 # contract, not a physical screen.
 #
@@ -88,7 +91,8 @@ set +a
 api=$AEGIS_API_URL
 
 jar=$(ls services/api/target/aegis-control-*.jar 2>/dev/null | head -1 || true)
-if [[ -z "$jar" ]]; then
+# A jar older than any source would test another revision than the one printed below.
+if [[ -z "$jar" || -n $(find services/api/src services/api/pom.xml -newer "$jar" -type f -print -quit) ]]; then
   (cd services/api && ./mvnw -B -q -ntp -DskipTests package)
   jar=$(ls services/api/target/aegis-control-*.jar | head -1)
 fi
@@ -190,7 +194,8 @@ stop_api
 
 # Run 2: rotation, k2 active and k1 kept; the dispatcher publishes the k1 instruction.
 start_api api.log AEGIS_DISPLAY_ENABLED=true AEGIS_DISPLAY_KEYS="k2:$K2,k1:$K1" AEGIS_DISPLAY_ACTIVE_KEY_ID=k2 \
-  AEGIS_DISPLAY_DISPATCHER_ENABLED=true AEGIS_DISPLAY_EXPIRY_INTERVAL=PT15S || { tail -20 "$work/api.log"; exit 1; }
+  AEGIS_DISPLAY_DISPATCHER_ENABLED=true AEGIS_DISPLAY_EXPIRY_INTERVAL=PT15S AEGIS_COMMAND_DISPATCHER_ENABLED=true ||
+  { tail -20 "$work/api.log"; exit 1; }
 displayed=
 for _ in $(seq 1 20); do
   displayed=$(curl -fs -H "Authorization: Bearer $token" "$api/locker-operations/$operation" |
@@ -211,11 +216,12 @@ else
   fail "T3 no display acknowledgement reached the operation"
 fi
 
-# T4: the token, decrypted here from the stored row (still sealed until the challenge ends).
-secret=$("${psql[@]}" "SELECT id || ' ' || locker_id || ' ' || operation_id || ' ' || display_revision || ' ' ||
-                              encryption_key_id || ' ' || encode(encrypted_payload, 'base64')
-                       FROM aegis.hub_display_outbox
-                       WHERE operation_id = '$operation' AND message_type = 'DISPLAY_ACCESS_CHALLENGE'" | tr -d '\n' |
+# token_of <operation>: the token, decrypted here from the stored row (still sealed until the challenge ends).
+token_of() {
+  "${psql[@]}" "SELECT id || ' ' || locker_id || ' ' || operation_id || ' ' || display_revision || ' ' ||
+                       encryption_key_id || ' ' || encode(encrypted_payload, 'base64')
+                FROM aegis.hub_display_outbox
+                WHERE operation_id = '$1' AND message_type = 'DISPLAY_ACCESS_CHALLENGE'" | tr -d '\n' |
   K1=$K1 K2=$K2 python3 -I -c '
 import base64, json, os, sys
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -223,7 +229,11 @@ row, locker, operation, revision, key_id, payload = sys.stdin.read().split(" ", 
 key = base64.b64decode(os.environ[key_id.upper()])
 envelope = base64.b64decode(payload)
 aad = f"aegis-display-aad/v1\n{row}\n{locker}\n{operation}\n{revision}".encode()
-print(json.loads(AESGCM(key).decrypt(envelope[:12], envelope[12:], aad))["payload"]["token"])')
+print(json.loads(AESGCM(key).decrypt(envelope[:12], envelope[12:], aad))["payload"]["token"])'
+}
+
+# T4
+secret=$(token_of "$operation")
 docker exec "$project-postgres-1" pg_dump -U aegis -d aegis --data-only >"$work/dump.sql" 2>/dev/null
 leaks=0
 for file in "$winner.body" "$work/api.log" "$work/simulator.log" "$work/backend-account.mqtt" "$work/dump.sql"; do
@@ -269,6 +279,42 @@ t7=$("${psql[@]}" "SELECT d.encryption_key_id || ' ' || (c.displayed_at IS NOT N
                    WHERE d.operation_id = '$next'")
 if [[ "$code" == 202 && "$t7" == "k2 true" ]]; then pass "T7 new preparation sealed under k2 and displayed"; else
   fail "T7 new preparation: $code, '$t7'"; fi
+
+# T8: the local authorization of the T7 preparation (#44; document 09 section 15.5).
+secret=$(token_of "$next")
+challenge=$("${psql[@]}" "SELECT id FROM aegis.local_access_challenges WHERE operation_id = '$next'")
+wrong=$(python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip("="))')
+# authorize <name> <token>: POST authorize-local with a new key, keeping headers and body in the work directory.
+authorize() {
+  curl -s -o "$work/$1.body" -D "$work/$1.headers" -w '%{http_code}' -X POST \
+    -H "Authorization: Bearer $token" -H "Idempotency-Key: $(python3 -c 'import uuid; print(uuid.uuid4())')" \
+    -H 'Content-Type: application/json' -d "{\"challengeId\":\"$challenge\",\"token\":\"$2\"}" \
+    "$api/locker-operations/$next/authorize-local"
+}
+refused=$(authorize t8-wrong "$wrong")
+attempts=$("${psql[@]}" "SELECT failed_attempts FROM aegis.local_access_challenges WHERE operation_id = '$next'")
+accepted=$(authorize t8-right "$secret")
+again=$(authorize t8-again "$secret")
+actuated=
+for _ in $(seq 1 15); do
+  grep '"event":"actuated"' "$work/simulator.log" | grep -q "\"operationId\":\"$next\"" && { actuated=yes; break; }
+  sleep 1
+done
+commands=$("${psql[@]}" "SELECT count(*) FROM aegis.command_outbox WHERE operation_id = '$next'")
+status=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("status", ""))' "$work/t8-right.body")
+leaks=0
+for file in "$work"/t8-*.body "$work/api.log" "$work/simulator.log" "$work/backend-account.mqtt"; do
+  grep -qF -- "$secret" "$file" && { echo "  token found in ${file##*/}"; leaks=$((leaks + 1)); }
+done
+unset secret
+if [[ "$refused" == 403 && "$attempts" == 1 && "$accepted" == 202 && "$status" == AUTHORIZED &&
+      "$again" == 409 && "$commands" == 1 && "$actuated" == yes && $leaks -eq 0 ]] &&
+   grep -q LOCAL_PROOF_INVALID "$work/t8-wrong.body" && grep -q LOCAL_PROOF_ALREADY_USED "$work/t8-again.body"; then
+  pass "T8 wrong secret 403 counted once, right secret 202 AUTHORIZED, replay 409, one UNLOCK_COMPARTMENT actuated"
+else
+  fail "T8 authorization: wrong $refused ($attempts), right $accepted $status, again $again, commands $commands," \
+    "actuated '${actuated}', $leaks leak(s)"
+fi
 
 echo
 if [[ "$failures" -eq 0 ]]; then echo "HUB CHALLENGE: all checks passed"; else echo "HUB CHALLENGE: $failures check(s) failed"; fi
