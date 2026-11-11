@@ -213,14 +213,14 @@ describe.each<Locale>(['fr', 'en'])('screens in %s', (locale) => {
       .getAllByRole('listitem')
       .map((item) => item.textContent)
     expect(labels).toEqual([
-      `${m.shell.sections.overview}${m.shell.soonSuffix}`,
+      m.shell.sections.overview,
       m.shell.sections.equipment,
       m.shell.sections.reservationsLoans,
       m.shell.sections.lockers,
       m.shell.sections.anomalies,
       m.shell.sections.audit,
     ])
-    expect(sidebar.textContent).toContain(m.shell.soonLegend)
+    expect(sidebar.textContent).not.toContain(m.shell.soonLegend)
     expect(within(sidebar).getByText(m.shell.administratorRole)).toBeDefined()
     expect(screen.getByRole('button', { name: m.shell.openMenu })).toBeDefined()
     // The closed menu and the closed drawer are out of the accessibility tree: read their markup.

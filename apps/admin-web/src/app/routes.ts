@@ -2,9 +2,10 @@
  * Typed route map. Paths are French in both languages (stable, bookmarkable addresses); ids stay English.
  * Page titles are translated: catalog `pageTitle`, keyed by route id.
  * Preview-only routes resolve to `notFound` when the preview is disabled.
- * `equipment`, `reservationsLoans`, `lockers`, `anomalies` and `audit` require an administrator session (see RequireAdminSession).
+ * `overview`, `equipment`, `reservationsLoans`, `lockers`, `anomalies` and `audit` require an administrator session (see RequireAdminSession).
+ * `/` stays the public landing page: the Vue d'ensemble has its own address.
  */
-export type RouteId = 'landing' | 'signIn' | 'equipment' | 'reservationsLoans' | 'lockers' | 'anomalies' | 'audit' | 'equipmentPreview' | 'notFound'
+export type RouteId = 'landing' | 'signIn' | 'overview' | 'equipment' | 'reservationsLoans' | 'lockers' | 'anomalies' | 'audit' | 'equipmentPreview' | 'notFound'
 
 export interface RouteDefinition {
   readonly path: string | null
@@ -14,6 +15,7 @@ export interface RouteDefinition {
 export const ROUTES: Readonly<Record<RouteId, RouteDefinition>> = {
   landing: { path: '/', previewOnly: false },
   signIn: { path: '/connexion', previewOnly: false },
+  overview: { path: '/vue-d-ensemble', previewOnly: false },
   equipment: { path: '/equipements', previewOnly: false },
   reservationsLoans: { path: '/reservations-prets', previewOnly: false },
   lockers: { path: '/casiers', previewOnly: false },

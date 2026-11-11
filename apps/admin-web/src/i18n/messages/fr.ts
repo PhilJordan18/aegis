@@ -54,6 +54,7 @@ export const fr = {
   pageTitle: {
     landing: 'Aegis Manager',
     signIn: 'Connexion — Aegis Manager',
+    overview: "Vue d'ensemble — Aegis Manager",
     equipment: 'Équipements — Aegis Manager',
     equipmentPreview: 'Équipements — Aegis Manager',
     reservationsLoans: 'Réservations et prêts — Aegis Manager',
@@ -629,6 +630,82 @@ export const fr = {
       notApplicable: 'Sans objet',
     },
     sequenceNote: "Chaque étape n'affiche que l'instant transmis par le serveur. Une étape sans instant est dite non reçue : rien n'est déduit des étapes suivantes.",
+  },
+
+  /**
+   * Vue d'ensemble (#159): the five blocks of docs/design/manager-console/ (approved on 11 November 2026), each with its
+   * own states. A count is the server's `totalItems`; a count the contract cannot give is a minimum, said as such.
+   */
+  overview: {
+    heading: "Vue d'ensemble",
+    lead: "Ce qui demande une intervention, du plus urgent au moins urgent. Lecture seule : aucune action corrective n'est possible ici.",
+    zoneNote: ({ zone }: { zone: string }) => `Heures du laboratoire${NBSP}: ${zone}`,
+    updatedAt: ({ time }: { time: string }) => `Mis à jour à ${time}`,
+    refresh: 'Actualiser',
+    loadingModule: ({ title }: { title: string }) => `Chargement${NBSP}: ${title}`,
+    forbiddenTitle: "Votre compte n'a pas accès à ces données.",
+    forbiddenPageTitle: "Votre compte n'a pas accès à la vue d'ensemble.",
+    refreshed: ({ time }: { time: string }) => `Données actualisées à ${time}.`,
+    staleBody: ({ time }: { time: string }) => `Les données affichées ont été lues à ${time}. La dernière actualisation a échoué.`,
+    shownOf: ({ shown, total }: { shown: number; total: number }) => `Affichage de ${count.format(shown)} sur ${count.format(total)}.`,
+
+    anomalies: 'Anomalies ouvertes',
+    loans: 'Prêts en retard',
+    locker: 'Casier',
+    operations: 'Opération en cours',
+    reservations: 'Réservations actives',
+
+    anomaliesCount: ({ count: value }: { count: number }) => plural(value, { one: `${count.format(value)} ouverte`, other: `${count.format(value)} ouvertes` }),
+    loansObserved: ({ count: value }: { count: number }) => plural(value, { one: `${count.format(value)} observé en retard`, other: `${count.format(value)} observés en retard` }),
+    loansObservedAmongRead: ({ count: value }: { count: number }) => `${count.format(value)} en retard parmi les prêts lus`,
+    loansNoneAmongRead: 'Aucun retard dans les prêts lus.',
+    operationsObserved: ({ count: value }: { count: number }) => plural(value, { one: `${count.format(value)} observée en cours`, other: `${count.format(value)} observées en cours` }),
+    operationsObservedAmongRead: ({ count: value }: { count: number }) => `${count.format(value)} en cours parmi les opérations lues`,
+    operationsNoneAmongRead: 'Aucune dans les opérations lues.',
+    reservationsCount: ({ count: value }: { count: number }) => plural(value, { one: `${count.format(value)} active`, other: `${count.format(value)} actives` }),
+    noneAnomalies: 'Aucune anomalie ouverte.',
+    noneLoans: 'Aucun prêt en retard observé.',
+    noneOperations: 'Aucune opération physique observée en cours.',
+    noneReservations: 'Aucune réservation active.',
+    viewAnomalies: 'Voir les anomalies',
+    viewLoans: 'Voir les prêts',
+    viewOperations: 'Voir les opérations',
+    viewReservations: 'Voir les réservations',
+    viewLocker: 'Voir les casiers',
+
+    untilTime: ({ time }: { time: string }) => `Jusqu’à ${time}`,
+    expiresAt: ({ time }: { time: string }) => `Expire à ${time}`,
+    cellCode: ({ code }: { code: string }) => `Cellule ${code}`,
+
+    partialTitle: 'Lecture incomplète.',
+    loansUnreadBody: ({ statuses }: { statuses: string }) => `Les prêts au statut ${statuses} n'ont pas pu être lus. Le nombre affiché ne porte que sur les prêts lus.`,
+    loansTruncatedBody: ({ read, total }: { read: number; total: number }) =>
+      `Seuls ${count.format(read)} prêts sur ${count.format(total)} ont été lus, les plus récents. Le nombre affiché ne porte que sur les prêts lus.`,
+    operationsUnreadBody: ({ missing, total }: { missing: number; total: number }) =>
+      plural(missing, {
+        one: `${count.format(missing)} des ${count.format(total)} états d'opération n'a pas pu être lu. Le nombre affiché ne porte que sur les opérations lues.`,
+        other: `${count.format(missing)} des ${count.format(total)} états d'opération n'ont pas pu être lus. Le nombre affiché ne porte que sur les opérations lues.`,
+      }),
+    operationsTruncatedBody: "Un état compte plus de 100 opérations : seules les plus récentes ont été lues. Le nombre affiché ne porte que sur les opérations lues.",
+    successiveReadsNote: "Chaque statut est lu par une requête distincte, pas au même instant : un élément qui change de statut entre deux lectures n'est compté qu'une fois, et peut manquer.",
+    operationsNote: "Opérations physiques non terminées. Un accusé de commande ne prouve ni le déverrouillage ni l'ouverture.",
+
+    lockerOfflineTitle: ({ code }: { code: string }) => `Casier ${code} hors ligne.`,
+    lockerOfflineBody: ({ time }: { time: string }) => `Dernier signal${NBSP}: ${time}. Les valeurs des cellules sont les dernières connues, pas l'état actuel.`,
+    lockerUnknownTitle: ({ code }: { code: string }) => `Casier ${code}${NBSP}: état inconnu.`,
+    lockerUnknownBody: "Aucun signal valide n'a encore été reçu : aucune présence ni aucune absence n'est supposée.",
+    lockerStatusTitle: ({ code }: { code: string }) => `Statut du casier ${code} non chargé.`,
+    windowOpen: ({ time }: { time: string }) => `Ouvert · fermeture ${time}`,
+    windowClosed: ({ time }: { time: string }) => `Fermé · prochaine ouverture ${time}`,
+    windowClosedNoNext: 'Fermé · aucune prochaine ouverture',
+    cell: 'Cellule',
+    door: 'Porte',
+    lock: 'Serrure',
+    expectedAsset: 'Équipement attendu',
+    noAsset: 'Aucun équipement placé',
+    placementUnknown: 'Placement non lu',
+    noLockers: 'Aucun casier enregistré.',
+    lastKnown: "Dernier état connu : le casier n'est pas en ligne, ces valeurs ne sont pas l'état actuel.",
   },
 
   lockers: {
