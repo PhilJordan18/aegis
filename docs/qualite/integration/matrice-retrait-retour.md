@@ -7,9 +7,14 @@ couvre #43/#46, puis #47 (et ensuite #50/#51), sur le SHA immuable livré par Ba
 - **Nature des preuves : simulée ou injectée, jamais réelle.** Elle ne remplace ni la
   partie C de [`../recette-staging/README.md`](../recette-staging/README.md), ni
   l'acceptation physique de Jimmy.
-- **Statut : planifiée.** Aucune ligne n'est exécutée tant que la branche Backend
-  correspondante n'est pas livrée. Chaque exécution consigne le SHA, la commande et le
-  résultat.
+- **Statut.**
+  - #43/#46 : P1 à P11 sont exécutées sur `dev` `c6845e6` par
+    [`../hub-challenge/run.sh`](../hub-challenge/README.md), en complément de la recette Backend
+    T0 à T7.
+  - #44, #47 et #50/#51 : planifiées. Aucune ligne n'est exécutée tant que la branche Backend
+    correspondante n'est pas livrée.
+
+  Chaque exécution consigne le SHA, la commande et le résultat.
 - **Références normatives :**
   - doc 05 : §4.4, §5.3 à §5.7 et §11 ;
   - doc 06 : §10.2, §10.3 et §14.2 ;
