@@ -1,6 +1,6 @@
 import { cleanup, configure, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClient } from '../api/serverState'
 import { App } from '../app/App'
 import type { AnomalyGateway } from '../features/anomalies/anomalyGateway'
@@ -23,6 +23,7 @@ configure({ asyncUtilTimeout: 4000 })
 beforeAll(installDialogPolyfill)
 beforeEach(() => installMatchMedia(window, false))
 afterEach(() => {
+  vi.useRealTimers()
   cleanup()
   window.history.replaceState(null, '', '/')
 })
@@ -178,6 +179,18 @@ describe('Anomalies — list and dossier', () => {
     const detail = { ...parsedDetail(), evidence: null }
     renderAnomalies(fakeAnomalyGateway({ listAnomalies: async () => listOf(HIGH_OPEN), getAnomaly: async () => ok(detail) }))
     expect(await screen.findByText('Preuves non disponibles dans cette version.')).toBeDefined()
+  })
+
+  it.each([
+    ['fr', /Mis à jour à 10 h 30 HNE/, /lu à 10 h 30 HNE/],
+    ['en', /Updated at 10:30 a\.m\. EST/, /read at 10:30 a\.m\. EST/],
+  ] as const)('shows the updated and read times in the laboratory zone, not UTC or the device zone (%s)', async (locale, updated, read) => {
+    // 15:30 UTC is 10:30 in America/Toronto in November, whatever the zone of the machine running the test.
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-11T15:30:00Z') })
+    renderAnomalies(fakeAnomalyGateway({ listAnomalies: async () => listOf(HIGH_OPEN), getAnomaly: detailsOf(HIGH_OPEN) }), { locale })
+    expect(await screen.findByText(updated)).toBeDefined()
+    expect(screen.getByText(read)).toBeDefined()
+    expect(document.body.textContent).not.toMatch(/UTC/)
   })
 
   it('renders in English', async () => {

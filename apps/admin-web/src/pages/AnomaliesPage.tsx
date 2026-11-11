@@ -12,6 +12,7 @@ import { AnomalyList } from '../features/anomalies/AnomalyList'
 import { classifyAnomalyReadFailure } from '../features/anomalies/anomalyFailure'
 import { anomaliesHref, ANOMALY_PAGE_SIZE, hasActiveFilter, NO_FILTERS, readAnomalyLocation, type AnomalyFilters } from '../features/anomalies/anomalyLocation'
 import { anomalyName } from '../features/anomalies/anomalyPresentation'
+import { LAB_TIME_ZONE } from '../features/catalog/assetPresentation'
 import type { AnomalyListQuery, AnomalyView } from '../features/anomalies/contract'
 import { useAnomaly, useAnomalyList } from '../features/anomalies/useAnomalyQueries'
 import type { UserProfile } from '../features/auth/contract'
@@ -167,7 +168,8 @@ export function AnomaliesPage({ sessionProfile }: { readonly sessionProfile: Use
   const applyFilters = (next: AnomalyFilters) => router.navigate(anomaliesHref({ filters: next, page: 0, anomalyId: null }))
   const clearFilters = () => router.navigate(anomaliesHref({ filters: NO_FILTERS, page: 0, anomalyId: null }))
   const refresh = () => void client.invalidateQueries({ queryKey: queryKeys.anomalies.all })
-  const time = (updatedAt: number) => (updatedAt > 0 ? format.time(new Date(updatedAt)) : null)
+  // Read and updated times are shown in the laboratory zone, like every other instant of this screen.
+  const time = (updatedAt: number) => (updatedAt > 0 ? format.time(new Date(updatedAt), LAB_TIME_ZONE) : null)
   const listReadAt = shownPage === undefined ? null : time(list.dataUpdatedAt)
 
   const listAnnouncement = list.isPending
