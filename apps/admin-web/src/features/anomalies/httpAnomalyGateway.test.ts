@@ -98,7 +98,8 @@ describe('anomaly failures', () => {
   it('maps the §18.2 refusals by code, and keeps the session and service kinds', () => {
     expect(classifyAcknowledgeFailure(problem(409, 'ANOMALY_ALREADY_RESOLVED'))).toEqual({ kind: 'alreadyResolved' })
     expect(classifyAcknowledgeFailure(problem(409, 'ANOMALY_NOT_ACKNOWLEDGEABLE'))).toEqual({ kind: 'notAcknowledgeable' })
-    expect(classifyAcknowledgeFailure(problem(400, 'VALIDATION_ERROR'))).toEqual({ kind: 'invalidNote' })
+    expect(classifyAcknowledgeFailure(problem(400, 'VALIDATION_ERROR'))).toEqual({ kind: 'invalidNote', violations: [] })
+    expect(classifyAcknowledgeFailure(problem(409, 'IDEMPOTENCY_REQUEST_IN_PROGRESS'))).toEqual({ kind: 'inProgress' })
     expect(classifyAcknowledgeFailure(problem(401, 'AUTH_TOKEN_EXPIRED'))).toEqual({ kind: 'ended' })
     expect(classifyAcknowledgeFailure(problem(409, 'IDEMPOTENCY_KEY_REUSED')).kind).toBe('serviceError')
   })

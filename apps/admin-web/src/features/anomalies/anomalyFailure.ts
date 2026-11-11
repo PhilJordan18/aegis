@@ -22,14 +22,20 @@ export type AcknowledgeFailure =
   | AnomalyReadFailure
   | { readonly kind: 'alreadyResolved' }
   | { readonly kind: 'notAcknowledgeable' }
-  | { readonly kind: 'invalidNote' }
+  | { readonly kind: 'invalidNote'; readonly violations: readonly string[] }
+  /** 409 `IDEMPOTENCY_REQUEST_IN_PROGRESS`: the first attempt is still running; repeating the same intent applies nothing twice. */
+  | { readonly kind: 'inProgress' }
 
 export function classifyAcknowledgeFailure(error: unknown): AcknowledgeFailure {
   if (error instanceof ApiRequestError && error.failure.kind === 'httpProblem') {
     const code = error.failure.problem?.code
     if (code === 'ANOMALY_ALREADY_RESOLVED') return { kind: 'alreadyResolved' }
     if (code === 'ANOMALY_NOT_ACKNOWLEDGEABLE') return { kind: 'notAcknowledgeable' }
-    if (code === 'VALIDATION_ERROR') return { kind: 'invalidNote' }
+    if (code === 'IDEMPOTENCY_REQUEST_IN_PROGRESS') return { kind: 'inProgress' }
+    if (code === 'VALIDATION_ERROR') {
+      const violations = error.failure.problem?.violations ?? []
+      return { kind: 'invalidNote', violations: violations.filter((violation) => violation.field === 'note').map((violation) => violation.code) }
+    }
   }
   return classifyAnomalyReadFailure(error, 'detail')
 }

@@ -1,6 +1,16 @@
 import { lenientEnum } from '../catalog/contractParsers'
 import { isInstant, isUuid } from '../lockers/contractParsers'
-import { ANOMALY_SEVERITIES, ANOMALY_STATUSES, ANOMALY_TYPES, type AnomalyPage, type AnomalyView, type UserSummary } from './contract'
+import {
+  ANOMALY_SEVERITIES,
+  ANOMALY_STATUSES,
+  ANOMALY_TYPES,
+  type AnomalyDetail,
+  type AnomalyEvidence,
+  type AnomalyEvidenceItem,
+  type AnomalyPage,
+  type AnomalyView,
+  type UserSummary,
+} from './contract'
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 const isText = (value: unknown): value is string => typeof value === 'string' && value !== ''
@@ -33,6 +43,7 @@ export function parseAnomalyView(body: unknown): AnomalyView | null {
   return {
     id,
     type,
+    typeCode: body.type as string,
     severity,
     status,
     lockerOperationId,
@@ -61,4 +72,39 @@ export function parseAnomalyPage(body: unknown): AnomalyPage | null {
     parsed.push(anomaly)
   }
   return { items: parsed, page, size, totalItems, totalPages }
+}
+
+function parseEvidenceItem(value: unknown): AnomalyEvidenceItem | null {
+  if (!isRecord(value)) return null
+  const { observationId, type, compartmentId, operationId, observedAt, receivedAt } = value
+  if (!isUuid(observationId) || !isText(type) || !isInstant(observedAt)) return null
+  // Optional members of the provisional shape: an absent or malformed one is shown as not provided, never repaired.
+  return {
+    observationId,
+    type,
+    compartmentId: isUuid(compartmentId) ? compartmentId : null,
+    operationId: isUuid(operationId) ? operationId : null,
+    observedAt,
+    receivedAt: isInstant(receivedAt) ? receivedAt : null,
+  }
+}
+
+/** Lenient on purpose: the section's shape is not in the contract. Anything but an array is "no readable section". */
+function parseEvidence(value: unknown): AnomalyEvidence | null {
+  if (!Array.isArray(value)) return null
+  const items: AnomalyEvidenceItem[] = []
+  let unreadable = 0
+  for (const entry of value) {
+    const item = parseEvidenceItem(entry)
+    if (item === null) unreadable += 1
+    else items.push(item)
+  }
+  return { items, unreadable }
+}
+
+/** §18.1 detail: the §8.7 view, strictly, plus the evidence section, leniently (a broken section never hides the anomaly). */
+export function parseAnomalyDetail(body: unknown): AnomalyDetail | null {
+  const view = parseAnomalyView(body)
+  if (view === null || !isRecord(body)) return null
+  return { ...view, evidence: parseEvidence(body.evidence) }
 }

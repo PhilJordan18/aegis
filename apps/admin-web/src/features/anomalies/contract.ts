@@ -29,13 +29,12 @@ export interface UserSummary {
   readonly displayName: string
 }
 
-/**
- * §8.7. The detail route adds an `evidence` section whose shape §18.1 does not define yet; it is not read, so the
- * client neither guesses observations nor shows raw payloads.
- */
+/** §8.7. The list route returns this view; the detail route adds `evidence` (see `AnomalyDetail`). */
 export interface AnomalyView {
   readonly id: string
   readonly type: AnomalyType | Unrecognized
+  /** The type exactly as sent: the label of a type this version does not know (09 §3). */
+  readonly typeCode: string
   readonly severity: AnomalySeverity | Unrecognized
   readonly status: AnomalyStatus | Unrecognized
   readonly lockerOperationId: string | null
@@ -48,8 +47,33 @@ export interface AnomalyView {
   readonly resolvedAt: string | null
   readonly resolutionEvidenceObservationId: string | null
   readonly resolutionNote: string | null
-  /** Server text, shown as written. */
+  /** One fixed French sentence per type (09 §8.7). Parsed, not rendered: showing it is an open decision. */
   readonly summary: string
+}
+
+/**
+ * One entry of the detail's `evidence`. §18.1 announces the section without defining it: this shape is the backend's
+ * provisional one (D7 of the 11 November 2026 matrix, not approved), read leniently and shown read-only, as sent.
+ */
+export interface AnomalyEvidenceItem {
+  readonly observationId: string
+  /** Observation type code as sent (03 §5.10); not translated, not interpreted. */
+  readonly type: string
+  readonly compartmentId: string | null
+  readonly operationId: string | null
+  readonly observedAt: string
+  readonly receivedAt: string | null
+}
+
+/** `unreadable` counts entries that did not match the provisional shape: they are said to be skipped, never guessed. */
+export interface AnomalyEvidence {
+  readonly items: readonly AnomalyEvidenceItem[]
+  readonly unreadable: number
+}
+
+/** `GET /admin/anomalies/{id}`. `evidence` is null when the server sent no readable section. */
+export interface AnomalyDetail extends AnomalyView {
+  readonly evidence: AnomalyEvidence | null
 }
 
 export interface AnomalyPage {
