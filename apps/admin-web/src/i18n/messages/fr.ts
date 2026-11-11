@@ -787,7 +787,7 @@ export const fr = {
     listOrder: 'Les plus récents d’abord',
     listFoot: ({ time }: { time: string }) => `Première page lue à ${time}`,
     /** D10: a walk never repeats an event; what is recorded while it runs appears on the next walk. No snapshot is claimed. */
-    refreshNote: 'Les événements enregistrés après cette lecture apparaissent après « Actualiser ».',
+    refreshNote: `Les événements enregistrés après cette lecture apparaissent après «${NBSP}Actualiser${NBSP}».`,
     loading: "Chargement de l'historique…",
     loadMore: 'Charger plus',
     loadingMore: 'Chargement…',

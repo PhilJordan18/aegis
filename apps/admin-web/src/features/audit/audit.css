@@ -64,6 +64,7 @@
 .ag-au-codes code { font-family: inherit; color: var(--ag-text); }
 .ag-au-links { margin-top: 14px; display: grid; gap: 6px; font-size: 0.9375rem; }
 .ag-au-links .ag-link { min-height: 24px; display: inline-flex; align-items: center; }
+.ag-au-facts + .ag-au-note { margin-top: 12px; }
 .ag-au-note { font-size: var(--ag-type-caption-size); line-height: 1.45; color: var(--ag-text-2); }
 .ag-dossier .ag-overline + .ag-dossier__title { margin-top: 8px; }
 .ag-dossier__scroll .ag-diag { margin-top: 16px; }

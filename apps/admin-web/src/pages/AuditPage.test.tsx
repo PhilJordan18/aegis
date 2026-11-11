@@ -161,7 +161,7 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
     renderAudit([pageOk(auditPage([COMMAND, REFUSED]))])
     const list = await timeline()
     expect(list.getByText(/Les plus récents d’abord/)).toBeTruthy()
-    expect(list.getByText('Les événements enregistrés après cette lecture apparaissent après « Actualiser ».')).toBeTruthy()
+    expect(plain(list.getByText(/Les événements enregistrés après cette lecture apparaissent après/).textContent)).toBe('Les événements enregistrés après cette lecture apparaissent après « Actualiser ».')
     expect(document.body.textContent).not.toMatch(/instantané|snapshot|sans omission|exhaustif/i)
   })
 
