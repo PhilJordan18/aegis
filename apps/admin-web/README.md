@@ -563,3 +563,30 @@ Content-Security-Policy devra l'autoriser par empreinte.
 Le [guide Railway](deploy/README.md) décrit le build Docker de production,
 le relais HTTPS `/api`, les vérifications isolées et le retour arrière du
 service Web. Il ne nécessite aucune modification du broker ni du firmware.
+
+## Réservations et prêts : lecture seule (#48)
+
+Page protégée `/reservations-prets`, la troisième section de la barre latérale, d'après la console Manager
+approuvée par Philippe le 11 novembre 2026 (`docs/design/manager-console/` de la branche
+`158-docs-manager-console-design`). Trois vues d'une même liste maîtresse et d'un dossier : Réservations, Prêts,
+Opérations physiques.
+
+- **Sources** : `GET /admin/reservations`, `/admin/loans`, `/admin/locker-operations` et leurs détails par
+  identifiant (09 §8.3, §8.4, §8.5, §17; `src/features/transactions/`). Aucune écriture : ni fin de prêt, ni
+  confirmation, ni retour forcé, ni ouverture à distance; `availableActions` n'est jamais lu ni affiché.
+- **Adresse** : `?vue=prets|operations` (réservations par défaut), `statut`, `equipement` (UUID), `du` et `au`
+  (jours du laboratoire, fuseau `America/Toronto`), `page` (à partir de 1) et `dossier` (identifiant). Une valeur
+  inutilisable est ignorée et n'est jamais envoyée. `du` est inclusif; `au` désigne un jour inclus, la borne
+  exclusive envoyée (`to`) est le début du jour suivant.
+- **Aucun tri envoyé**, aucune taille de page proposée (20). La liste porte seulement « Dans l'ordre fourni par le
+  serveur ». Le titulaire est un identifiant seul (le contrat ne donne pas de nom).
+- **Retard** : le booléen `overdue` du serveur, jamais recalculé avec l'horloge du navigateur; un prêt en retard
+  reste emprunté, un prêt terminé n'est jamais dit en retard.
+- **Erreurs** : un `404` sur une liste est une erreur du service avec identifiant de suivi (jamais une liste vide);
+  sur un dossier, « Dossier introuvable ». Injoignable, 403, périmé et chargement ont leur état; un `401` renvoie à
+  la connexion.
+- **Opérations** : chaque étape n'affiche que l'instant transmis; une étape sans instant est « Non reçue » (opération
+  terminale) ou « Pas encore reçue ». L'équipement et la cellule du dossier viennent de `GET /admin/assets/{id}`
+  (identifiant seul si la lecture échoue); les listes n'affichent que des identifiants abrégés.
+- **Tests** : `src/features/transactions/*.test.ts`, `src/pages/ReservationsLoansPage.test.tsx`. Lecture réelle
+  contre une API isolée : `src/integration/custodyReads.integration.test.ts` (voir son en-tête).

@@ -343,7 +343,8 @@ function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { rea
         titleId={titleId}
         title={
           <>
-            {typeLabel} · {unit !== undefined ? assetTitle({ ...unit }) : t.assetIdOnly}
+            {typeLabel}
+            {unit !== undefined && <> · {assetTitle({ ...unit })}</>}
           </>
         }
         sub={times.full(o.createdAt)}
