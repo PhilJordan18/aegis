@@ -215,7 +215,7 @@ describe.each<Locale>(['fr', 'en'])('screens in %s', (locale) => {
     expect(labels).toEqual([
       `${m.shell.sections.overview}${m.shell.soonSuffix}`,
       m.shell.sections.equipment,
-      `${m.shell.sections.reservationsLoans}${m.shell.soonSuffix}`,
+      m.shell.sections.reservationsLoans,
       m.shell.sections.lockers,
       m.shell.sections.anomalies,
       `${m.shell.sections.audit}${m.shell.soonSuffix}`,

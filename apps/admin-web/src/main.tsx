@@ -23,6 +23,8 @@ import { CustodyGatewayContext } from './features/custody/CustodyGatewayContext'
 import { createHttpCustodyGateway } from './features/custody/httpCustodyGateway'
 import { LockerGatewayContext } from './features/lockers/LockerGatewayContext'
 import { createHttpScheduleGateway } from './features/schedule/httpScheduleGateway'
+import { createHttpTransactionGateway } from './features/transactions/httpTransactionGateway'
+import { TransactionGatewayContext } from './features/transactions/TransactionGatewayContext'
 import { ScheduleGatewayContext } from './features/schedule/ScheduleGatewayContext'
 import { createLocaleController } from './i18n/locale'
 import { LocaleContext } from './i18n/useI18n'
@@ -52,6 +54,8 @@ const catalogGateway = createHttpCatalogGateway()
 const lockerGateway = createHttpLockerGateway()
 const scheduleGateway = createHttpScheduleGateway()
 const custodyGateway = createHttpCustodyGateway()
+// Reservations, loans and locker operations (09 §17): read only; design-review captures route /api/v1/admin/... themselves.
+const transactionGateway = createHttpTransactionGateway()
 const anomalyGateway = createHttpAnomalyGateway()
 
 const container = document.getElementById('root')
@@ -69,11 +73,13 @@ createRoot(container).render(
                   <LockerGatewayContext value={lockerGateway}>
                     <ScheduleGatewayContext value={scheduleGateway}>
                       <CustodyGatewayContext value={custodyGateway}>
-                        <AnomalyGatewayContext value={anomalyGateway}>
-                          <PreviewContext value={previewControls}>
-                            <App />
-                          </PreviewContext>
-                        </AnomalyGatewayContext>
+                        <TransactionGatewayContext value={transactionGateway}>
+                          <AnomalyGatewayContext value={anomalyGateway}>
+                            <PreviewContext value={previewControls}>
+                              <App />
+                            </PreviewContext>
+                          </AnomalyGatewayContext>
+                        </TransactionGatewayContext>
                       </CustodyGatewayContext>
                     </ScheduleGatewayContext>
                   </LockerGatewayContext>

@@ -14,6 +14,12 @@ public enum ApiError {
             "La requête ne respecte pas le format attendu."),
     IDEMPOTENCY_KEY_REQUIRED(HttpStatus.BAD_REQUEST, "Clé d'idempotence requise",
             "Cette action exige l'en-tête Idempotency-Key."),
+    /**
+     * Document 09, section 22.2; rule D10 approved on 11 November 2026 (#67): a cursor that is
+     * malformed or was issued for other filters.
+     */
+    INVALID_CURSOR(HttpStatus.BAD_REQUEST, "Curseur invalide",
+            "Le curseur ne correspond pas à cette recherche. Reprenez la consultation depuis la première page."),
     AUTH_INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "Connexion refusée",
             "L'adresse courriel ou le mot de passe est invalide."),
     AUTH_TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "Jeton invalide",
@@ -76,6 +82,15 @@ public enum ApiError {
             "Un compartiment désactivé ne peut pas recevoir d'actif."),
     COMPARTMENT_ALREADY_OCCUPIED(HttpStatus.CONFLICT, "Compartiment déjà attribué",
             "Un autre actif est déjà placé dans ce compartiment."),
+    /** Document 09, section 18.2: a resolved anomaly is never acknowledged again. */
+    ANOMALY_ALREADY_RESOLVED(HttpStatus.CONFLICT, "Anomalie déjà résolue",
+            "Cette anomalie est déjà résolue par une preuve physique."),
+    /**
+     * Document 09, section 18.2; rule D6 approved on 11 November 2026 (#67): an anomaly already
+     * acknowledged keeps its first note.
+     */
+    ANOMALY_NOT_ACKNOWLEDGEABLE(HttpStatus.CONFLICT, "Anomalie non reconnaissable",
+            "Cette anomalie a déjà été reconnue; sa note n'est pas remplacée."),
     IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT, "Clé d'idempotence réutilisée",
             "Cette clé d'idempotence a déjà servi pour une autre requête."),
     IDEMPOTENCY_REQUEST_IN_PROGRESS(HttpStatus.CONFLICT, "Requête déjà en cours",

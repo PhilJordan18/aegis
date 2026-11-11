@@ -16,6 +16,8 @@ import { unconfiguredLockerGateway, type LockerGateway } from '../features/locke
 import { LockerGatewayContext } from '../features/lockers/LockerGatewayContext'
 import { unconfiguredScheduleGateway, type ScheduleGateway } from '../features/schedule/scheduleGateway'
 import { ScheduleGatewayContext } from '../features/schedule/ScheduleGatewayContext'
+import { unconfiguredTransactionGateway, type TransactionGateway } from '../features/transactions/transactionGateway'
+import { TransactionGatewayContext } from '../features/transactions/TransactionGatewayContext'
 import { unconfiguredCustodyGateway, type CustodyGateway } from '../features/custody/custodyGateway'
 import { CustodyGatewayContext } from '../features/custody/CustodyGatewayContext'
 import { createLocaleController, type Locale, type LocaleController } from '../i18n/locale'
@@ -29,6 +31,7 @@ export function renderWithProviders(
     lockerGateway = unconfiguredLockerGateway,
     scheduleGateway = unconfiguredScheduleGateway,
     custodyGateway = unconfiguredCustodyGateway,
+    transactionGateway = unconfiguredTransactionGateway,
     anomalyGateway = unconfiguredAnomalyGateway,
     session = createSessionStore(),
     router = createHistoryRouter(window),
@@ -41,6 +44,7 @@ export function renderWithProviders(
     lockerGateway?: LockerGateway
     scheduleGateway?: ScheduleGateway
     custodyGateway?: CustodyGateway
+    transactionGateway?: TransactionGateway
     anomalyGateway?: AnomalyGateway
     session?: SessionStore
     router?: Router
@@ -61,7 +65,13 @@ export function renderWithProviders(
               <AuthGatewayContext value={gateway}>
                 <CatalogGatewayContext value={catalogGateway}>
                   <LockerGatewayContext value={lockerGateway}>
-                    <ScheduleGatewayContext value={scheduleGateway}><CustodyGatewayContext value={custodyGateway}><AnomalyGatewayContext value={anomalyGateway}>{ui}</AnomalyGatewayContext></CustodyGatewayContext></ScheduleGatewayContext>
+                    <ScheduleGatewayContext value={scheduleGateway}>
+                      <CustodyGatewayContext value={custodyGateway}>
+                        <TransactionGatewayContext value={transactionGateway}>
+                          <AnomalyGatewayContext value={anomalyGateway}>{ui}</AnomalyGatewayContext>
+                        </TransactionGatewayContext>
+                      </CustodyGatewayContext>
+                    </ScheduleGatewayContext>
                   </LockerGatewayContext>
                 </CatalogGatewayContext>
               </AuthGatewayContext>
