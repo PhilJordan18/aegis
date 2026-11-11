@@ -148,8 +148,13 @@ class CheckoutPreparation {
         if (readiness.result() != ReadinessResult.READY) {
             throw notReady(readiness.reasons());
         }
-        if (preparation.preparationsSince(user.id(), lockerId, now.minus(preparationWindow)) >= maxPreparations) {
-            throw new ReservationRefusedException(ApiError.RATE_LIMITED);
+        Instant windowStart = now.minus(preparationWindow);
+        if (preparation.preparationsSince(user.id(), lockerId, windowStart) >= maxPreparations) {
+            // Document 09, section 15.5: the client may retry once the oldest counted preparation leaves the window.
+            Instant retryAt = preparation.oldestPreparationSince(user.id(), lockerId, windowStart)
+                    .plus(preparationWindow);
+            long seconds = (Duration.between(now, retryAt).toMillis() + 999) / 1000;
+            throw new LocalProofRateLimitedException(seconds);
         }
 
         Instant expiresAt = earliest(now.plus(CHALLENGE_WINDOW), window.closesAt(), reservation.reservedUntil())

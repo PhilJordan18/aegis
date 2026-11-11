@@ -233,7 +233,9 @@ class CheckoutPreparationApiTests extends ApiIntegrationTest {
             heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
             challengeExpiry.run(100);
         }
-        expectProblem(checkout(key()), 429, "RATE_LIMITED");
+        // The first of the six, prepared at START, leaves the 10-minute window 234 s from now (START + 366 s).
+        expectProblem(checkout(key()), 429, "LOCAL_PROOF_RATE_LIMITED")
+                .andExpect(header().string("Retry-After", "234"));
         assertEquals(6L, operations());
     }
 

@@ -115,6 +115,15 @@ class PreparationRepository {
                 .query(Integer.class).single();
     }
 
+    /** The oldest preparation counted by {@link #preparationsSince}: the first to leave the window. */
+    Instant oldestPreparationSince(UUID userId, UUID lockerId, Instant since) {
+        return jdbc.sql("""
+                SELECT min(created_at) FROM aegis.locker_operations
+                WHERE user_id = :user AND locker_id = :locker AND created_at > :since
+                """).param("user", userId).param("locker", lockerId).param("since", utc(since))
+                .query(java.time.OffsetDateTime.class).single().toInstant();
+    }
+
     /** A checkout already waiting for its local proof: no lock command exists, nor may one exist yet. */
     UUID insertCheckout(UUID userId, UUID assetId, Cell cell, UUID reservationId, UUID identifierId, Instant now) {
         return jdbc.sql("""
