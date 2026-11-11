@@ -86,6 +86,7 @@ Dialogue de reconnaissance (`?dialog=1`) : note obligatoire de **1 à 500 caract
 trop longue : « La note compte au plus 500 caractères. ». Le texte du dialogue répète que l'anomalie **n'est pas résolue**.
 Succès nominal : `200` avec `AnomalyView` au statut `ACKNOWLEDGED`; l'anomalie reste visible, le statut passe à « Reconnue », le nom de l'administrateur et la note s'affichent, annonce « Anomalie reconnue. Elle n'est pas résolue. ».
 Une anomalie `ACKNOWLEDGED` n'offre plus « Reconnaître »; le serveur reste l'arbitre (`409`).
+Sur un `409`, le dialogue reste ouvert avec la note saisie, en lecture seule, pendant que le dossier est relu; il affiche ensuite l'état du serveur et la raison (déjà résolue ou non reconnaissable). La note n'est perdue qu'à la fermeture explicite (revue QA, 11 nov.).
 
 ## 5. Audit (`audit.html`)
 
@@ -97,7 +98,7 @@ Lecture : `GET /admin/audit-events` avec curseur opaque (§19.1, §22.2). Aucune
 | `loading`, `stale`, `unreachable`, `service-error`, `forbidden`, `unauthorized` | Comme § 1 | | §21 |
 | `empty` | Filtre `eventType` préréglé sans résultat + puce de filtre active | `items: []` | §19.1 |
 | `partial` | Page 1 lisible; sous la liste « La suite n'a pas pu être chargée » + `traceId` + « Réessayer » | page suivante `5xx` | §19.1 |
-| `invalid-cursor` | Page 1 lisible; sous la liste « La liste a changé. Recommencez depuis le début. » + « Recommencer » | `400 INVALID_CURSOR` | §22.2, §21 |
+| `invalid-cursor` | Page 1 lisible; sous la liste « La liste a changé. Recommencez depuis le début. » + « Recommencer »; l'avis reste visible et est annoncé (`role="status"`) : la reprise n'est jamais silencieuse, pour qu'aucun événement ne semble omis | `400 INVALID_CURSOR` | §22.2, §21 |
 
 Particularités : le nombre affiché est « N événements chargés », jamais un total; « D'autres événements existent. » tant que `hasMore`.
 Les codes (`eventType`, états, `result`, `reason`, clés de `details`) ne sont visibles que dans le détail. L'absence de preuve est dite : « Aucune preuve physique n'est référencée par cet événement. »
