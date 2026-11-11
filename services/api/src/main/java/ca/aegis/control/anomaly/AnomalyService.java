@@ -56,8 +56,8 @@ class AnomalyService {
     }
 
     /**
-     * {@code OPEN} to {@code ACKNOWLEDGED}, under the row lock, in the transaction of the idempotency key. Provisional
-     * rule D6 of the 11 November 2026 matrix (#67): an anomaly already acknowledged keeps its first note and refuses
+     * {@code OPEN} to {@code ACKNOWLEDGED}, under the row lock, in the transaction of the idempotency key. Rule D6
+     * approved on 11 November 2026 (#67): an anomaly already acknowledged keeps its first note and refuses
      * a new acknowledgement; a replay of the same key and body is answered by the idempotency service.
      */
     @Transactional(propagation = Propagation.MANDATORY)

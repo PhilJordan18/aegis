@@ -80,7 +80,7 @@ public enum ApiError {
     ANOMALY_ALREADY_RESOLVED(HttpStatus.CONFLICT, "Anomalie déjà résolue",
             "Cette anomalie est déjà résolue par une preuve physique."),
     /**
-     * Document 09, section 18.2; provisional rule D6 of the 11 November 2026 matrix (#67): an anomaly already
+     * Document 09, section 18.2; rule D6 approved on 11 November 2026 (#67): an anomaly already
      * acknowledged keeps its first note.
      */
     ANOMALY_NOT_ACKNOWLEDGEABLE(HttpStatus.CONFLICT, "Anomalie non reconnaissable",
