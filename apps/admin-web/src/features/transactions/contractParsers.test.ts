@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { UNRECOGNIZED } from '../catalog/contract'
-import { parseLoanPage, parseLoanView, parseReservationPage, parseReservationView } from './contractParsers'
-import { assetSummary, loanView, pageOf, reservationView } from './testFixtures'
+import { parseLoanPage, parseLoanView, parseLockerOperationPage, parseLockerOperationView, parseReservationPage, parseReservationView } from './contractParsers'
+import { assetSummary, loanView, lockerOperationView, pageOf, reservationView } from './testFixtures'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -72,5 +72,44 @@ describe('§17 pages', () => {
   it('rejects the whole page when one item breaks the contract', () => {
     expect(parseLoanPage(pageOf([loanView(), loanView({ dueAt: null })]))).toBeNull()
     expect(parseReservationPage({ items: [], page: -1, size: 20, totalItems: 0, totalPages: 0 })).toBeNull()
+  })
+})
+
+describe('parseLockerOperationView (09 §8.5)', () => {
+  it('reads a complete operation as ids and the instants sent, with no display name', () => {
+    const parsed = parseLockerOperationView(lockerOperationView())
+    expect(parsed?.status).toBe('CONFIRMED')
+    expect(parsed?.acknowledgedAt).toBe('2026-11-10T14:01:32Z')
+    expect(parsed?.assetId).toBe(lockerOperationView().assetId)
+    expect(parsed).not.toHaveProperty('displayName')
+    expect(parsed).not.toHaveProperty('asset')
+  })
+
+  it('keeps an absent step as null and does not infer it from a later one', () => {
+    const parsed = parseLockerOperationView(lockerOperationView({ status: 'COMMAND_ACKNOWLEDGED', acknowledgedAt: '2026-11-10T14:01:32Z', doorOpenedAt: null, confirmedAt: null, terminalAt: null, requiredAction: 'WAIT' }))
+    expect(parsed?.doorOpenedAt).toBeNull()
+    expect(parsed?.confirmedAt).toBeNull()
+  })
+
+  it('tolerates unknown type, status and required action per value', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const parsed = parseLockerOperationView(lockerOperationView({ type: 'AUDIT', status: 'PAUSED', requiredAction: 'CALL' }))
+    expect([parsed?.type, parsed?.status, parsed?.requiredAction]).toEqual([UNRECOGNIZED, UNRECOGNIZED, UNRECOGNIZED])
+  })
+
+  it.each([
+    ['a non-UUID compartment', { compartmentId: 'A1' }],
+    ['a missing creation instant', { createdAt: undefined }],
+    ['an impossible instant', { doorOpenedAt: '2026-02-30T10:00:00Z' }],
+    ['a failure reason that is not text', { failureReason: 3 }],
+    ['an empty status', { status: '' }],
+    ['a non-UUID anomaly', { anomalyId: 'x' }],
+  ])('rejects %s', (_label, overrides) => {
+    expect(parseLockerOperationView(lockerOperationView(overrides))).toBeNull()
+  })
+
+  it('reads the §11.1 envelope and rejects one broken item', () => {
+    expect(parseLockerOperationPage(pageOf([lockerOperationView()]))?.totalItems).toBe(1)
+    expect(parseLockerOperationPage(pageOf([lockerOperationView(), { id: 'x' }]))).toBeNull()
   })
 })

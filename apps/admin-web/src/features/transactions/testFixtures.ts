@@ -45,4 +45,37 @@ export const loanView = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 })
 
+export const LOCKER_ID = '3d4e5f60-7182-4a93-8ba4-c5d6e7f80912'
+export const COMPARTMENT_ID = '4e5f6071-8293-4aa4-9bb5-d6e7f8091a2b'
+export const ANOMALY_ID = '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d'
+
+export const lockerOperationView = (overrides: Record<string, unknown> = {}) => ({
+  id: OPERATION_ID,
+  type: 'CHECKOUT',
+  status: 'CONFIRMED',
+  userId: USER_ID,
+  assetId: ASSET_ID,
+  lockerId: LOCKER_ID,
+  compartmentId: COMPARTMENT_ID,
+  reservationId: RESERVATION_ID,
+  loanId: LOAN_ID,
+  createdAt: '2026-11-10T14:01:00Z',
+  authorizedAt: '2026-11-10T14:01:30Z',
+  localAccessChallengeId: null,
+  localProofExpiresAt: null,
+  localProofDisplayedAt: null,
+  localProofValidatedAt: null,
+  requiredAction: 'NONE',
+  expiresAt: null,
+  commandSentAt: '2026-11-10T14:01:31Z',
+  acknowledgedAt: '2026-11-10T14:01:32Z',
+  doorOpenedAt: '2026-11-10T14:02:10Z',
+  observationReceivedAt: '2026-11-10T14:04:50Z',
+  confirmedAt: '2026-11-10T14:05:00Z',
+  terminalAt: '2026-11-10T14:05:00Z',
+  failureReason: null,
+  anomalyId: null,
+  ...overrides,
+})
+
 export const pageOf = (items: unknown[], overrides: Record<string, unknown> = {}) => ({ items, page: 0, size: 20, totalItems: items.length, totalPages: items.length === 0 ? 0 : 1, ...overrides })

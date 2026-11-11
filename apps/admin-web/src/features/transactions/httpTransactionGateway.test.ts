@@ -3,7 +3,7 @@ import { ApiRequestError } from '../../api/serverState'
 import { problemBody } from '../auth/testFixtures'
 import { createHttpTransactionGateway, transactionSearch } from './httpTransactionGateway'
 import { classifyTransactionFailure } from './transactionFailure'
-import { ASSET_ID, LOAN_ID, RESERVATION_ID, USER_ID, loanView, pageOf, reservationView } from './testFixtures'
+import { ASSET_ID, LOAN_ID, LOCKER_ID, OPERATION_ID, RESERVATION_ID, USER_ID, loanView, lockerOperationView, pageOf, reservationView } from './testFixtures'
 
 const TOKEN = 'opaque.jwt.value'
 const REQUEST_ID = '11111111-2222-4333-8444-555555555555'
@@ -58,6 +58,25 @@ describe('httpTransactionGateway', () => {
   it('reports a 2xx body outside the contract as invalid instead of guessing', async () => {
     const { gateway } = gatewayWith(() => json(200, pageOf([loanView({ overdue: null })])))
     expect((await gateway.listLoans(TOKEN, { page: 0, size: 20 })).kind).toBe('invalidResponse')
+  })
+})
+
+describe('locker operations (09 §17)', () => {
+  it('lists with the lockerId filter and reads one operation by encoded id, as plain GETs', async () => {
+    const list = gatewayWith(() => json(200, pageOf([lockerOperationView()])))
+    const result = await list.gateway.listLockerOperations(TOKEN, { status: 'ANOMALY', lockerId: LOCKER_ID, page: 0, size: 20 })
+    expect(urlOf(list.fetchMock)).toBe(`/api/v1/admin/locker-operations?status=ANOMALY&lockerId=${LOCKER_ID}&page=0&size=20`)
+    expect(initOf(list.fetchMock)?.method).toBe('GET')
+    expect(result.kind === 'ok' && result.value.items[0]?.id).toBe(OPERATION_ID)
+
+    const one = gatewayWith(() => json(200, lockerOperationView()))
+    expect((await one.gateway.getLockerOperation(TOKEN, `${OPERATION_ID}/../x`)).kind).toBe('ok')
+    expect(urlOf(one.fetchMock)).toBe(`/api/v1/admin/locker-operations/${encodeURIComponent(`${OPERATION_ID}/../x`)}`)
+  })
+
+  it('reports a body outside the contract as invalid', async () => {
+    const { gateway } = gatewayWith(() => json(200, pageOf([lockerOperationView({ userId: null })])))
+    expect((await gateway.listLockerOperations(TOKEN, { page: 0, size: 20 })).kind).toBe('invalidResponse')
   })
 })
 

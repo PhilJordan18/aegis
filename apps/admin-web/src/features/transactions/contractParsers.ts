@@ -1,6 +1,17 @@
 import { lenientEnum, parsePlacement } from '../catalog/contractParsers'
 import { isInstant, isUuid } from '../lockers/contractParsers'
-import { LOAN_STATUSES, RESERVATION_STATUSES, type AssetSummary, type LoanView, type ReservationView, type TransactionPage } from './contract'
+import {
+  LOAN_STATUSES,
+  LOCKER_OPERATION_STATUSES,
+  LOCKER_OPERATION_TYPES,
+  REQUIRED_ACTIONS,
+  RESERVATION_STATUSES,
+  type AssetSummary,
+  type LoanView,
+  type LockerOperationView,
+  type ReservationView,
+  type TransactionPage,
+} from './contract'
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 const isText = (value: unknown): value is string => typeof value === 'string' && value !== ''
@@ -70,6 +81,62 @@ export function parseLoanView(body: unknown): LoanView | null {
   }
 }
 
+/**
+ * §8.5. Same strictness as the other views: a structural break rejects the response. `failureReason` stays free
+ * text; it is never parsed or used to choose a state.
+ */
+export function parseLockerOperationView(body: unknown): LockerOperationView | null {
+  if (!isRecord(body)) return null
+  const { id, userId, assetId, lockerId, compartmentId, reservationId, loanId, createdAt, localAccessChallengeId, failureReason, anomalyId } = body
+  if (!isUuid(id) || !isUuid(userId) || !isUuid(assetId) || !isUuid(lockerId) || !isUuid(compartmentId) || !isInstant(createdAt)) return null
+  if (!isUuidOrNull(reservationId) || !isUuidOrNull(loanId) || !isUuidOrNull(localAccessChallengeId) || !isUuidOrNull(anomalyId) || !isTextOrNull(failureReason)) return null
+  const instants = [
+    body.authorizedAt,
+    body.localProofExpiresAt,
+    body.localProofDisplayedAt,
+    body.localProofValidatedAt,
+    body.expiresAt,
+    body.commandSentAt,
+    body.acknowledgedAt,
+    body.doorOpenedAt,
+    body.observationReceivedAt,
+    body.confirmedAt,
+    body.terminalAt,
+  ]
+  if (!instants.every(isInstantOrNull)) return null
+  const type = lenientEnum(body.type, LOCKER_OPERATION_TYPES, 'lockerOperation.type')
+  const status = lenientEnum(body.status, LOCKER_OPERATION_STATUSES, 'lockerOperation.status')
+  const requiredAction = lenientEnum(body.requiredAction, REQUIRED_ACTIONS, 'lockerOperation.requiredAction')
+  if (type === undefined || status === undefined || requiredAction === undefined) return null
+  return {
+    id,
+    type,
+    status,
+    userId,
+    assetId,
+    lockerId,
+    compartmentId,
+    reservationId,
+    loanId,
+    createdAt,
+    authorizedAt: body.authorizedAt as string | null,
+    localAccessChallengeId,
+    localProofExpiresAt: body.localProofExpiresAt as string | null,
+    localProofDisplayedAt: body.localProofDisplayedAt as string | null,
+    localProofValidatedAt: body.localProofValidatedAt as string | null,
+    requiredAction,
+    expiresAt: body.expiresAt as string | null,
+    commandSentAt: body.commandSentAt as string | null,
+    acknowledgedAt: body.acknowledgedAt as string | null,
+    doorOpenedAt: body.doorOpenedAt as string | null,
+    observationReceivedAt: body.observationReceivedAt as string | null,
+    confirmedAt: body.confirmedAt as string | null,
+    terminalAt: body.terminalAt as string | null,
+    failureReason,
+    anomalyId,
+  }
+}
+
 function pageOf<T>(parseItem: (item: unknown) => T | null) {
   return (body: unknown): TransactionPage<T> | null => {
     if (!isRecord(body)) return null
@@ -88,3 +155,4 @@ function pageOf<T>(parseItem: (item: unknown) => T | null) {
 /** §17 list, in the §11.1 envelope. */
 export const parseReservationPage = pageOf(parseReservationView)
 export const parseLoanPage = pageOf(parseLoanView)
+export const parseLockerOperationPage = pageOf(parseLockerOperationView)

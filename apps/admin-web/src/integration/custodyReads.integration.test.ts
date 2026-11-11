@@ -34,4 +34,9 @@ describe.skipIf(!origin || !email || !password)('§17 custody reads against an i
     expect(reservations.kind).toBe('ok')
     expect(loans.kind).toBe('ok')
   })
+
+  it('parses the §17 locker-operation list the server returns', async () => {
+    const operations = await createHttpTransactionGateway(options).listLockerOperations(token, { page: 0, size: 20 })
+    expect(operations.kind).toBe('ok')
+  })
 })
