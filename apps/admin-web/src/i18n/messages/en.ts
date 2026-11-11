@@ -451,6 +451,7 @@ export const en: Messages = {
     userLine: 'User: identifier only',
     holderField: 'Holder',
     userField: 'User',
+    holderLabel: 'Holder:',
     idOnly: 'Identifier only',
     idOnlyHelp: "The contract does not provide the user's name on this view.",
     assetIdOnly: 'Equipment: identifier only',

@@ -9,7 +9,7 @@ import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
 import { UNRECOGNIZED } from '../catalog/contract'
 import { StaleNotice } from '../catalog/StaleNotice'
 import { useAsset } from '../catalog/useCatalogQueries'
-import type { AssetSummary, LoanView, LockerOperationView, ReservationView } from './contract'
+import type { AssetSummary, LoanView, LockerOperationView, ReservationView, UserSummary } from './contract'
 import { Timeline, type TimelineEntry } from './Timeline'
 import { TransactionAlert } from './TransactionAlert'
 import type { TransactionFailure } from './transactionFailure'
@@ -185,8 +185,16 @@ function OperationLink({ label, id, empty, i18n }: { readonly label: string; rea
   )
 }
 
-function HolderFact({ label, id, i18n }: { readonly label: string; readonly id: string; readonly i18n: I18n }) {
+function HolderFact({ label, id, person, i18n }: { readonly label: string; readonly id: string; readonly person: UserSummary | null; readonly i18n: I18n }) {
   const t = i18n.m.reservations
+  if (person !== null)
+    return (
+      <Fact label={label}>
+        {person.displayName}
+        <br />
+        <IdText id={id} />
+      </Fact>
+    )
   return (
     <Fact label={label} help={t.idOnlyHelp}>
       {t.idOnly}
@@ -226,7 +234,7 @@ function ReservationBody({ reservation: r, titleId, i18n, times }: BodyProps & {
         <dl className="ag-facts ag-facts--grid">
           <Fact label={t.factAsset}>{assetTitle(r.asset)}</Fact>
           <Fact label={t.factPlacement}>{placementText(r.asset, i18n)}</Fact>
-          <HolderFact label={t.holderField} id={r.userId} i18n={i18n} />
+          <HolderFact label={t.holderField} id={r.userId} person={r.user} i18n={i18n} />
           <Fact label={t.factReservationId}>
             <IdText id={r.id} />
           </Fact>
@@ -281,7 +289,7 @@ function LoanBody({ loan: l, titleId, i18n, times }: BodyProps & { readonly loan
         <dl className="ag-facts ag-facts--grid">
           <Fact label={t.factAsset}>{assetTitle(l.asset)}</Fact>
           <Fact label={t.factPlacement}>{placementText(l.asset, i18n)}</Fact>
-          <HolderFact label={t.holderField} id={l.holderUserId} i18n={i18n} />
+          <HolderFact label={t.holderField} id={l.holderUserId} person={l.holder} i18n={i18n} />
           <Fact label={t.factLate}>{l.overdue ? t.yes : t.no}</Fact>
           <Fact label={t.factLoanId}>
             <IdText id={l.id} />
@@ -390,7 +398,7 @@ function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { rea
             )}
           </Fact>
           <Fact label={t.locker}>{lockerCode ?? <IdText id={o.lockerId} />}</Fact>
-          <HolderFact label={t.userField} id={o.userId} i18n={i18n} />
+          <HolderFact label={t.userField} id={o.userId} person={null} i18n={i18n} />
           <Fact label={t.requiredActionField}>{requiredAction}</Fact>
           {o.expiresAt !== null && <Fact label={t.expiresAt}>{times.zoned(o.expiresAt)}</Fact>}
         </dl>

@@ -63,6 +63,30 @@ describe('parseLoanView (09 §8.4)', () => {
   })
 })
 
+describe('G1 user and holder summaries', () => {
+  it('reads the summary beside the id, and an older server without it as null', () => {
+    expect(parseReservationView(reservationView())?.user).toEqual({ id: reservationView().userId, displayName: 'Technicien Démo' })
+    expect(parseLoanView(loanView())?.holder).toEqual({ id: loanView().holderUserId, displayName: 'Technicien Démo' })
+    const withoutUser: Record<string, unknown> = reservationView()
+    const withoutHolder: Record<string, unknown> = loanView()
+    delete withoutUser.user
+    delete withoutHolder.holder
+    expect(parseReservationView(withoutUser)?.user).toBeNull()
+    expect(parseLoanView(withoutHolder)?.holder).toBeNull()
+  })
+
+  it.each([
+    ['null', null],
+    ['another user', { id: '11111111-2222-4333-8444-555555555555', displayName: 'Autre' }],
+    ['a blank name', { id: '0b1c2d3e-4f50-4a61-8b72-93a4b5c6d7e8', displayName: '  ' }],
+    ['a missing name', { id: '0b1c2d3e-4f50-4a61-8b72-93a4b5c6d7e8' }],
+    ['a string', 'Technicien Démo'],
+  ])('rejects a summary that is %s', (_label, summary) => {
+    expect(parseReservationView(reservationView({ user: summary }))).toBeNull()
+    expect(parseLoanView(loanView({ holder: summary }))).toBeNull()
+  })
+})
+
 describe('§17 pages', () => {
   it('reads the §11.1 envelope, an empty page included', () => {
     expect(parseReservationPage(pageOf([reservationView()]))?.items).toHaveLength(1)

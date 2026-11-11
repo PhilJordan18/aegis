@@ -516,6 +516,7 @@ export const fr = {
     userLine: 'Utilisateur : identifiant seulement',
     holderField: 'Titulaire',
     userField: 'Utilisateur',
+    holderLabel: 'Titulaire :',
     idOnly: 'Identifiant seulement',
     idOnlyHelp: "Le contrat ne fournit pas le nom de l'utilisateur sur cette vue.",
     assetIdOnly: 'Équipement : identifiant seulement',

@@ -21,13 +21,20 @@ export interface AssetSummary {
 }
 
 /**
- * §8.3. The holder is only `userId`: the contract adds no display name to this view (remainder of C4,
- * `docs/design/asset-lifecycle/sections.md` §5.3). The client shows the id as such and never looks a name up.
+ * G1 (#67 decision): admin reservation and loan reads add the requester or holder as `{id, displayName}`. A server
+ * without it yields `null`, and the client then shows the id alone; it never looks a name up.
  */
+export interface UserSummary {
+  readonly id: string
+  readonly displayName: string
+}
+
+/** §8.3 read through the admin route: `user` is the G1 summary of `userId`. */
 export interface ReservationView {
   readonly id: string
   readonly asset: AssetSummary
   readonly userId: string
+  readonly user: UserSummary | null
   readonly status: ReservationStatus | Unrecognized
   readonly reservedFrom: string
   readonly reservedUntil: string
@@ -48,6 +55,8 @@ export interface LoanView {
   readonly id: string
   readonly asset: AssetSummary
   readonly holderUserId: string
+  /** G1 summary of `holderUserId`. */
+  readonly holder: UserSummary | null
   readonly status: LoanStatus | Unrecognized
   readonly checkedOutAt: string
   readonly dueAt: string

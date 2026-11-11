@@ -108,7 +108,7 @@ afterEach(() => {
 })
 
 describe('Réservations et prêts: reservations', () => {
-  it('lists the reservations, reads the first one by its id and shows the holder as an identifier only', async () => {
+  it('lists the reservations, reads the first one by its id and names the holder beside the id (G1)', async () => {
     const gateway = fakeGateway()
     renderPage(gateway)
     expect(await screen.findByRole('heading', { level: 2, name: '2 réservations' })).toBeDefined()
@@ -119,9 +119,10 @@ describe('Réservations et prêts: reservations', () => {
     expect(gateway.getReservation.mock.calls[0]?.[1]).toBe(RESERVATION_ID)
     expect(gateway.getReservation.mock.calls[0]?.[0]).toBe('token-value')
     const text = plain(dossier().textContent)
-    expect(text).toContain('Titulaire')
-    expect(text).toContain('Identifiant seulement')
+    expect(text).toContain('TitulaireTechnicien Démo')
+    expect(text).not.toContain('Identifiant seulement')
     expect(text).toContain(USER_ID)
+    expect(plain(rows()[0]?.textContent)).toContain('Titulaire : Technicien Démo')
     expect(text).toContain("Une réservation n'ouvre aucune porte et ne crée aucun prêt.")
     // The server's order is not promised, and no sort is ever sent.
     expect(plain(document.querySelector('.ag-list__foot')?.textContent)).toContain("Les plus récents d'abord")
@@ -278,6 +279,14 @@ describe('Réservations et prêts: filters', () => {
 })
 
 describe('Réservations et prêts: loans', () => {
+  it('falls back to the id alone when the server sends no holder summary', async () => {
+    const plainLoan = { ...L1, holder: null }
+    renderPage(fakeGateway({ loans: ok(pageOf([plainLoan])) }), { url: '/reservations-prets?vue=prets' })
+    expect(await screen.findByRole('heading', { level: 2, name: '1 prêt' })).toBeDefined()
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Identifiant seulement'))
+    expect(plain(rows()[0]?.textContent)).toContain('Titulaire : identifiant seulement')
+  })
+
   it('keeps an overdue loan borrowed: status, overdue mention, never available', async () => {
     renderPage(fakeGateway(), { url: '/reservations-prets?vue=prets' })
     await screen.findByRole('heading', { level: 2, name: '2 prêts' })

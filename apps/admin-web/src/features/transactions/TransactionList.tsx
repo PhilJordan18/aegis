@@ -148,6 +148,7 @@ function Row({ record, selected, page, filters, times, i18n, onSelect }: RowProp
     }
   }
   const holderId = record.kind === 'loans' ? record.item.holderUserId : record.item.userId
+  const person = record.kind === 'loans' ? record.item.holder : record.kind === 'reservations' ? record.item.user : null
   const late = record.kind === 'loans' && isShownOverdue(record.item)
   return (
     <Link
@@ -175,7 +176,7 @@ function Row({ record, selected, page, filters, times, i18n, onSelect }: RowProp
         <span className={late ? 'ag-item__facts ag-item__facts--late' : 'ag-item__facts'}>{facts}</span>
       )}
       <span className="ag-item__facts">
-        {holder} <code className="ag-id">{shortId(holderId)}</code>
+        {person === null ? holder : `${t.holderLabel} ${person.displayName}`} <code className="ag-id">{shortId(holderId)}</code>
       </span>
     </Link>
   )

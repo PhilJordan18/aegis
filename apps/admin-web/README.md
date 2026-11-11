@@ -580,8 +580,11 @@ Opérations physiques.
   exclusive envoyée (`to`) est le début du jour suivant.
 - **Ordre** : les plus récents d'abord, départagés par identifiant (décision D1 du 11 novembre, #67) :
   réservations et opérations par `createdAt`, prêts par `checkedOutAt`. Aucun tri n'est envoyé et aucune taille de
-  page n'est proposée (20). Le titulaire reste un identifiant seul tant que le résumé administrateur (G1) n'est pas
-  publié par le Backend.
+  page n'est proposée (20).
+- **Titulaire (G1)** : les lectures administrateur ajoutent `user: {id, displayName}` aux réservations et
+  `holder: {id, displayName}` aux prêts. Le nom s'affiche à côté de l'identifiant. Un serveur sans ce résumé donne
+  l'identifiant seul; un résumé dont l'`id` diffère, nul ou sans nom rejette la vue (erreur du service). Les
+  opérations n'ont pas de résumé.
 - **Retard** : le booléen `overdue` du serveur, jamais recalculé avec l'horloge du navigateur; un prêt en retard
   reste emprunté, un prêt terminé n'est jamais dit en retard.
 - **Erreurs** : un `404` sur une liste est une erreur du service avec identifiant de suivi (jamais une liste vide);

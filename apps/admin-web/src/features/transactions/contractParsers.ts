@@ -11,6 +11,7 @@ import {
   type LockerOperationView,
   type ReservationView,
   type TransactionPage,
+  type UserSummary,
 } from './contract'
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -38,6 +39,16 @@ export function parseAssetSummary(body: unknown): AssetSummary | null {
 }
 
 /**
+ * G1 summary. Absent means a server without G1 (`null`); present, it must name the same user as the id beside it,
+ * otherwise the whole view is rejected rather than showing a name for the wrong person.
+ */
+function parseUserSummary(value: unknown, expectedId: string): UserSummary | null | undefined {
+  if (value === undefined) return null
+  if (!isRecord(value) || value.id !== expectedId || !isText(value.displayName) || value.displayName.trim() === '') return undefined
+  return { id: expectedId, displayName: value.displayName }
+}
+
+/**
  * §8.3. A structural break rejects the whole response, so the screen reports a service error instead of guessing;
  * an unknown status is tolerated per value (09 §3) and becomes UNRECOGNIZED.
  */
@@ -49,8 +60,9 @@ export function parseReservationView(body: unknown): ReservationView | null {
   const asset = parseAssetSummary(body.asset)
   const status = lenientEnum(body.status, RESERVATION_STATUSES, 'reservation.status')
   const availableActions = parseActions(body.availableActions)
-  if (asset === null || status === undefined || availableActions === null) return null
-  return { id, asset, userId, status, reservedFrom, reservedUntil, createdAt, cancelledAt, fulfilledAt, expiredAt, currentOperationId, availableActions }
+  const user = parseUserSummary(body.user, userId)
+  if (asset === null || status === undefined || availableActions === null || user === undefined) return null
+  return { id, asset, userId, user, status, reservedFrom, reservedUntil, createdAt, cancelledAt, fulfilledAt, expiredAt, currentOperationId, availableActions }
 }
 
 /** §8.4. `overdue` is read as sent: it is never recomputed from `dueAt`. */
@@ -63,11 +75,13 @@ export function parseLoanView(body: unknown): LoanView | null {
   const asset = parseAssetSummary(body.asset)
   const status = lenientEnum(body.status, LOAN_STATUSES, 'loan.status')
   const availableActions = parseActions(body.availableActions)
-  if (asset === null || status === undefined || availableActions === null) return null
+  const holder = parseUserSummary(body.holder, holderUserId)
+  if (asset === null || status === undefined || availableActions === null || holder === undefined) return null
   return {
     id,
     asset,
     holderUserId,
+    holder,
     status,
     checkedOutAt,
     dueAt,
