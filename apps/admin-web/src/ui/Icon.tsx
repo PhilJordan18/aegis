@@ -44,6 +44,13 @@ const PATHS = {
       <path d="M12 7.6v4.6l2.8 1.8" {...glyph} />
     </>
   ),
+  'status-warn': (
+    <>
+      <path d={DIAMOND} fill="currentColor" />
+      <path d="M12 7.2v5" {...glyph} />
+      <circle cx="12" cy="16" r="1.3" fill="var(--ag-glyph)" />
+    </>
+  ),
   'status-offline': (
     <>
       <path d={DIAMOND} fill="currentColor" />
@@ -124,6 +131,7 @@ const PATHS = {
   ),
   logout: <path d="M10 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H10M14.5 8l4 4-4 4M18.5 12H9" {...line} />,
   plus: <path d="M12 5v14M5 12h14" {...line} />,
+  refresh: <path d="M20 11a8 8 0 0 0-14.3-4.2L4 9M4 4v5h5M4 13a8 8 0 0 0 14.3 4.2L20 15M20 20v-5h-5" {...line} />,
   menu: <path d="M4 7h16M4 12h16M4 17h16" {...line} />,
   close: <path d="M6 6l12 12M18 6L6 18" {...line} />,
 } satisfies Record<string, ReactNode>
