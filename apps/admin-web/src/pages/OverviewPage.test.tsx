@@ -257,7 +257,7 @@ describe("Vue d'ensemble: authoritative counts", () => {
 
   it('shows a minimum when a status holds more loans than the page read, and never « none » for an unread remainder', async () => {
     renderWith(gateways({ loans: { ACTIVE: ok(pageOf([loan({ id: id(6), overdue: false })], 240)), RETURN_PENDING: ok(pageOf([])) } }))
-    await waitFor(() => expect(blockText('Prêts en retard')).toContain('Aucun retard parmi le prêt lu.'))
+    await waitFor(() => expect(blockText('Prêts en retard')).toContain('Aucun retard dans les prêts lus.'))
     const loans = blockText('Prêts en retard')
     expect(loans).not.toContain('Aucun prêt en retard.')
     expect(loans).toContain('Seuls 1 prêts sur 240 ont été lus, les plus récents. Le nombre affiché est un minimum.')

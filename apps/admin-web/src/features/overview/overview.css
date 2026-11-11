@@ -41,6 +41,7 @@ a.ag-ov__row:hover { background: var(--ag-field); }
 .ag-ov__lkstatus, .ag-ov__lkcells { display: grid; gap: 8px; align-content: start; min-width: 0; }
 .ag-ov__lkline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 0.9375rem; }
 .ag-ov__lkcode { font-weight: 600; }
+.ag-ov__alert .ag-ov__lkcode { display: block; padding: 0 6px; }
 .ag-ov__lkstale { grid-column: 1 / -1; }
 .ag-ov__sub { font-size: 0.8125rem; color: var(--ag-text-2); line-height: 1.4; }
 .ag-ov__cells { width: 100%; border-collapse: collapse; font-size: 0.875rem; }

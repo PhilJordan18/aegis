@@ -108,8 +108,6 @@ export interface LoanSummary {
   readonly overdue: readonly LoanView[]
   /** `exact` only when every status was read in full. */
   readonly count: Count
-  /** Loans read, to say « parmi les N prêts lus » when none is overdue and the read is not complete. */
-  readonly seen: number
   readonly gaps: readonly LoansGap[]
 }
 
@@ -138,7 +136,7 @@ export function summarizeLoans(reads: readonly BlockRead<TransactionPage<LoanVie
   overdue.sort((a, b) => (a.dueAt < b.dueAt ? -1 : a.dueAt > b.dueAt ? 1 : 0))
   return {
     kind: 'ready',
-    value: { overdue, count: { n: overdue.length, exact: gaps.length === 0 }, seen: read, gaps },
+    value: { overdue, count: { n: overdue.length, exact: gaps.length === 0 }, gaps },
     readAt: oldest(settled.ready.map((r) => r.readAt)),
     stale: settled.ready.some((r) => r.stale),
   }

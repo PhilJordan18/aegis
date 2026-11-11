@@ -3,7 +3,7 @@ import { Link } from '../../app/Link'
 import { useI18n, type I18n } from '../../i18n/useI18n'
 import { StatusChip } from '../../ui/StatusChip'
 import { anomaliesHref, NO_FILTERS as NO_ANOMALY_FILTERS } from '../anomalies/anomalyLocation'
-import { anomalyTypeLabel, instantLabel, severityChip, shortId, statusChip } from '../anomalies/anomalyPresentation'
+import { anomalyTypeLabel, severityChip, shortId, statusChip } from '../anomalies/anomalyPresentation'
 import type { AnomalyView } from '../anomalies/contract'
 import type { LoanView, LockerOperationView, ReservationView, TransactionPage } from '../transactions/contract'
 import { NO_FILTERS, transactionHref } from '../transactions/transactionHref'
@@ -131,7 +131,8 @@ function AnomalyRow({ anomaly, labels }: { readonly anomaly: AnomalyView; readon
         </>
       }
       main={anomalyTypeLabel(anomaly, i18n)}
-      meta={`${where} · ${i18n.m.anomalies.detected({ time: instantLabel(anomaly.detectedAt, i18n) })}`}
+      // The time never breaks across two lines, and stays in the laboratory zone like every other row of this page.
+      meta={`${where} · ${i18n.m.anomalies.detected({ time: transactionTimes(i18n).short(anomaly.detectedAt) })}`}
     />
   )
 }
@@ -151,7 +152,7 @@ export function LoansBlock({ read, retrying, onRetry }: BlockProps & { readonly 
   if (summary !== null) {
     const { n, exact } = summary.count
     if (exact) count = n > 0 ? { text: t.loansCount({ count: n }) } : { text: t.noneLoans, none: true }
-    else count = n > 0 ? { text: t.loansMinimum({ count: n }) } : { text: t.loansNoneAmongRead({ count: summary.seen }), none: true }
+    else count = n > 0 ? { text: t.loansMinimum({ count: n }) } : { text: t.loansNoneAmongRead, none: true }
   }
 
   const list = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' })

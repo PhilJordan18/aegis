@@ -588,7 +588,7 @@ export const en: Messages = {
     anomaliesCount: ({ count: value }: { count: number }) => `${count.format(value)} open`,
     loansCount: ({ count: value }: { count: number }) => `${count.format(value)} overdue`,
     loansMinimum: ({ count: value }: { count: number }) => `At least ${count.format(value)} overdue`,
-    loansNoneAmongRead: ({ count: value }: { count: number }) => plural(value, { one: `None overdue among the loan read.`, other: `None overdue among the ${count.format(value)} loans read.` }),
+    loansNoneAmongRead: 'None overdue in the loans read.',
     operationsCount: ({ count: value }: { count: number }) => `${count.format(value)} in progress`,
     operationsMinimum: ({ count: value }: { count: number }) => `At least ${count.format(value)} in progress`,
     operationsNoneAmongRead: 'None in the statuses read.',

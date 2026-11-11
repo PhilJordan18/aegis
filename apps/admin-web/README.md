@@ -378,6 +378,7 @@ sera remplacée par le routeur choisi à l'intégration.
 |---|---|
 | `/` | Accueil (textes [P] du handoff §7) |
 | `/connexion` | Connexion |
+| `/vue-d-ensemble` | Vue d'ensemble (lecture seule, cinq blocs), protégée comme `/equipements`. `/` reste l'accueil public et l'arrivée après la connexion reste `/equipements` |
 | `/equipements` | Équipements, protégé : session administrateur exigée, sinon `/connexion`. Arrivée après la connexion hors aperçu |
 | `/casiers` | Casiers (statut en lecture seule), protégé comme `/equipements`. `?casier=<uuid>` désigne un casier |
 | `/apercu/equipements` | Aperçu seulement; « Page introuvable » ailleurs |
@@ -595,3 +596,34 @@ Opérations physiques.
   (identifiant seul si la lecture échoue); les listes n'affichent que des identifiants abrégés.
 - **Tests** : `src/features/transactions/*.test.ts`, `src/pages/ReservationsLoansPage.test.tsx`. Lecture réelle
   contre une API isolée : `src/integration/custodyReads.integration.test.ts` (voir son en-tête).
+
+## Vue d'ensemble : cinq blocs indépendants (#159)
+
+Page protégée `/vue-d-ensemble`, première section de la barre latérale (plus aucune section « à venir »), d'après la
+console Manager approuvée le 11 novembre 2026 (`docs/design/manager-console/`, branche
+`158-docs-manager-console-design`). Ordre de `sections.md` §5.1 : anomalies ouvertes, prêts en retard, casier,
+opération en cours, réservations actives. Lecture seule : chaque rangée ouvre le dossier dans la page qui le
+possède (`/anomalies?anomalie=`, `/reservations-prets?vue=…&dossier=`), aucune action corrective.
+
+- **Blocs indépendants** (`src/features/overview/`) : chaque bloc lit ses propres routes et a ses états de
+  chargement, d'erreur, de données périmées (avis + heure de lecture + « Réessayer ») et de vide. Une route
+  indisponible (`404` d'une liste, réseau, 5xx, 403) est une erreur dans son bloc, jamais un zéro; elle ne cache
+  pas les autres blocs. Si tous les blocs échouent de la même façon, une seule alerte le dit. « Actualiser » relit
+  tout; « Réessayer » relit le seul bloc concerné. L'heure « Mis à jour » est la plus ancienne lecture réussie.
+- **Totaux** : le `totalItems` du serveur, jamais la taille d'une page. Ce que le contrat ne donne pas devient un
+  minimum dit comme tel (« Au moins N », « Lecture incomplète »).
+
+| Bloc | Lectures | Compteur |
+|---|---|---|
+| Anomalies | `GET /admin/anomalies?status=OPEN&size=100` | `totalItems`; tri par gravité seulement si la page est complète |
+| Prêts en retard | `GET /admin/loans?status=ACTIVE` et `RETURN_PENDING`, `size=100` | boolean `overdue` du serveur sur ce qui est lu; exact seulement si chaque statut est lu en entier, sinon « Au moins N » |
+| Casier | `GET /admin/lockers`, puis `GET /lockers/{id}/status` (même clé et même intervalle de 15 s que Casiers) | aucun; état et cellules tels que le serveur les évalue, bandeau si hors ligne ou inconnu |
+| Opération en cours | `GET /admin/locker-operations?status=<s>&size=5` pour chacun des 7 statuts non terminaux | somme des `totalItems`; « Au moins N » si un statut n'a pas pu être lu |
+| Réservations | `GET /admin/reservations?status=ACTIVE&size=5` | `totalItems` |
+
+- **Manques de contrat** (09 §17 : un seul `status` par requête, aucun filtre `overdue`, aucun filtre d'opérations
+  non terminales) : voir le rapport de livraison de #159. Aucune route ni aucun paramètre n'est ajouté.
+- **Libellés** : le code de cellule et celui de l'équipement d'une anomalie ou d'une opération viennent de la liste
+  des casiers (`GET /admin/lockers`, G3); sinon l'identifiant abrégé.
+- **Tests** : `src/features/overview/overviewModel.test.ts`, `src/pages/OverviewPage.test.tsx`; lecture réelle contre
+  une API isolée : `src/integration/overview.integration.test.ts` (voir son en-tête).

@@ -658,7 +658,7 @@ export const fr = {
     anomaliesCount: ({ count: value }: { count: number }) => plural(value, { one: `${count.format(value)} ouverte`, other: `${count.format(value)} ouvertes` }),
     loansCount: ({ count: value }: { count: number }) => `${count.format(value)} en retard`,
     loansMinimum: ({ count: value }: { count: number }) => `Au moins ${count.format(value)} en retard`,
-    loansNoneAmongRead: ({ count: value }: { count: number }) => plural(value, { one: `Aucun retard parmi le prêt lu.`, other: `Aucun retard parmi les ${count.format(value)} prêts lus.` }),
+    loansNoneAmongRead: 'Aucun retard dans les prêts lus.',
     operationsCount: ({ count: value }: { count: number }) => `${count.format(value)} en cours`,
     operationsMinimum: ({ count: value }: { count: number }) => `Au moins ${count.format(value)} en cours`,
     operationsNoneAmongRead: 'Aucune dans les états lus.',
