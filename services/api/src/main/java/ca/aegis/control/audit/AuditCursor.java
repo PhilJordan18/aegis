@@ -12,8 +12,8 @@ import ca.aegis.control.shared.web.ApiError;
 import ca.aegis.control.shared.web.ApiException;
 
 /**
- * The opaque cursor of document 09, sections 19.1 and 22.2, under provisional rule D10 of the 11 November 2026
- * matrix (#67): base64url of the last item's {@code occurredAt} in microseconds, its id, and a hash of the filters it
+ * The opaque cursor of document 09, sections 19.1 and 22.2, under rule D10 approved on 11 November
+ * 2026 (#67): base64url of the last item's {@code occurredAt} in microseconds, its id, and a hash of the filters it
  * was issued for. A cursor replayed with other filters would skip or repeat rows silently, so it is refused instead.
  * The cursor carries no secret and grants nothing: the route stays ADMIN only and the filters are re-applied.
  */

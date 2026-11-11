@@ -15,7 +15,7 @@ public enum ApiError {
     IDEMPOTENCY_KEY_REQUIRED(HttpStatus.BAD_REQUEST, "Clé d'idempotence requise",
             "Cette action exige l'en-tête Idempotency-Key."),
     /**
-     * Document 09, section 22.2; provisional rule D10 of the 11 November 2026 matrix (#67): a cursor that is
+     * Document 09, section 22.2; rule D10 approved on 11 November 2026 (#67): a cursor that is
      * malformed or was issued for other filters.
      */
     INVALID_CURSOR(HttpStatus.BAD_REQUEST, "Curseur invalide",

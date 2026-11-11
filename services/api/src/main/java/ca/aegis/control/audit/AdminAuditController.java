@@ -17,7 +17,7 @@ import ca.aegis.control.shared.web.QueryFilters;
 @RequestMapping("/api/v1/admin/audit-events")
 class AdminAuditController {
 
-    /** Provisional rule D10 of the 11 November 2026 matrix (#67); the contract bounds the limit to 1-100. */
+    /** Rule D10 approved on 11 November 2026 (#67); the contract bounds the limit to 1-100. */
     static final int DEFAULT_LIMIT = 50;
 
     private final AuditEventReads events;
