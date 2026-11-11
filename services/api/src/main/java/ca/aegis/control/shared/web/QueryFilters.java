@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -42,6 +43,32 @@ public final class QueryFilters {
         } catch (DateTimeParseException invalid) {
             return invalid(field, "Ce paramètre doit être un instant ISO 8601 avec son décalage.");
         }
+    }
+
+    /** A decimal integer from {@code min} to {@code max}; {@code fallback} when absent. */
+    public int integer(String field, String raw, int min, int max, int fallback) {
+        if (raw == null) {
+            return fallback;
+        }
+        try {
+            int value = Integer.parseInt(raw.strip());
+            if (value >= min && value <= max) {
+                return value;
+            }
+        } catch (NumberFormatException invalid) {
+            // Reported below.
+        }
+        invalid(field, "Ce paramètre doit être un entier de " + min + " à " + max + ".");
+        return fallback;
+    }
+
+    /** A value of {@code allowed}, compared exactly. */
+    public String oneOf(String field, String raw, Set<String> allowed) {
+        if (raw == null) {
+            return null;
+        }
+        String value = raw.strip();
+        return allowed.contains(value) ? value : invalid(field, "Cette valeur n'est pas reconnue.");
     }
 
     public <E extends Enum<E>> E enumeration(String field, String raw, Class<E> type) {

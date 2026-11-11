@@ -14,6 +14,12 @@ public enum ApiError {
             "La requête ne respecte pas le format attendu."),
     IDEMPOTENCY_KEY_REQUIRED(HttpStatus.BAD_REQUEST, "Clé d'idempotence requise",
             "Cette action exige l'en-tête Idempotency-Key."),
+    /**
+     * Document 09, section 22.2; rule D10 approved on 11 November 2026 (#67): a cursor that is
+     * malformed or was issued for other filters.
+     */
+    INVALID_CURSOR(HttpStatus.BAD_REQUEST, "Curseur invalide",
+            "Le curseur ne correspond pas à cette recherche. Reprenez la consultation depuis la première page."),
     AUTH_INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "Connexion refusée",
             "L'adresse courriel ou le mot de passe est invalide."),
     AUTH_TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "Jeton invalide",
