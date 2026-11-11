@@ -463,6 +463,25 @@ describe('Réservations et prêts: navigation, keyboard and language', () => {
     expect(within(tabs).getByRole('link', { name: 'Opérations physiques' }).getAttribute('aria-current')).toBe('page')
   })
 
+  it('never shows, counts or selects the previous view rows while another view loads', async () => {
+    const user = userEvent.setup()
+    let releaseLoans: (value: GatewayResult<TransactionPage<LoanView>>) => void = () => undefined
+    const gateway = fakeGateway({ loans: () => new Promise((resolveLoans) => (releaseLoans = resolveLoans)) })
+    renderPage(gateway)
+    await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+    const tabs = screen.getByRole('navigation', { name: 'Vues' })
+    await user.click(within(tabs).getByRole('link', { name: 'Prêts' }))
+    expect(window.location.search).toBe('?vue=prets')
+    await waitFor(() => expect(screen.queryByRole('heading', { level: 2, name: '2 réservations' })).toBeNull())
+    expect(screen.queryByRole('heading', { level: 2, name: /prêts?$/ })).toBeNull()
+    expect(document.body.textContent).not.toContain(R1.asset.assetCode)
+    expect(gateway.getLoan).not.toHaveBeenCalled()
+    releaseLoans(ok(pageOf([L1, L2])))
+    await screen.findByRole('heading', { level: 2, name: '2 prêts' })
+    await waitFor(() => expect(gateway.getLoan).toHaveBeenCalled())
+    for (const call of gateway.getLoan.mock.calls) expect(call[1]).not.toBe(R1.id)
+  })
+
   it('is reachable from the sidebar and starts keyboard order with the skip link, then the page', async () => {
     const user = userEvent.setup()
     renderPage(fakeGateway(), { url: '/equipements' })

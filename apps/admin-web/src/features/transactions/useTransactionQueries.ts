@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { queryKeys } from '../../api/queryKeys'
 import { authorizedRequest } from '../auth/authorizedRequest'
 import { useSessionStore } from '../auth/session'
@@ -34,8 +34,10 @@ function recordsOf<T>(page: TransactionPage<T>, wrap: (item: T) => TransactionRe
 }
 
 /**
- * One page of the active list. The previous page stays on screen while the next one loads. A status in the address
- * was checked against its view when the address was read, so the casts below only name a value already validated.
+ * One page of the active list. The previous page stays on screen while the next one of the same view loads; another
+ * view starts from its loading state, so a reservation row is never shown, counted or selected as a loan. A status in
+ * the address was checked against its view when the address was read, so the casts below only name a value already
+ * validated.
  */
 export function useTransactionList(view: TransactionView, filters: TransactionFilterValues, page: number) {
   const gateway = useTransactionGateway()
@@ -63,7 +65,7 @@ export function useTransactionList(view: TransactionView, filters: TransactionFi
         const result = await gateway.listLockerOperations(accessToken, { ...common, status: (filters.status ?? undefined) as LockerOperationStatus | undefined }, signal)
         return tag(result, (value) => recordsOf(value, (item) => ({ kind: 'operations', item })))
       }),
-    placeholderData: keepPreviousData,
+    placeholderData: (previous, previousQuery) => (previousQuery?.queryKey[1] === key[1] ? previous : undefined),
   })
 }
 
