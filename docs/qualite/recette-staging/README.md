@@ -22,8 +22,12 @@ aujourd'hui** : sans ces livraisons, chaque ligne est `BLOCKED`.
   staging.** Cela vise `docs/qualite/manager-admin/*.sql`, `run.sh` et
   `docs/qualite/recette-cloud/`. PostgreSQL reste privé. L'inventaire de test se prépare
   uniquement par l'interface ou l'API approuvées.
-- Aucun mot de passe, jeton, clé `AEGIS_DISPLAY_KEYS`, secret QR actif ou identifiant MQTT
-  dans une capture, une issue, une PR ou un message.
+- Aucun mot de passe (y compris le mot de passe MQTT), jeton d'authentification, clé
+  `AEGIS_DISPLAY_KEYS`, secret QR actif, tag RFID brut ou payload MQTT brut
+  dans une capture, une issue, une PR ou un message. Les **identifiants** ne sont pas des
+  secrets : un `traceId`, un `operationId`, un identifiant d'acteur ou d'entité, un nom
+  d'utilisateur MQTT ou un `clientId` peuvent figurer dans la preuve. Masquez-les seulement
+  quand ils donnent accès à quelque chose ou désignent une personne réelle hors du test.
 - **Ne jamais capturer un QR actif.** Masquez-le avant de conserver la preuve. Une photo de
   l'écran du hub n'est gardée qu'après expiration ou consommation du défi.
 - N'utilisez jamais l'identifiant client MQTT actif d'un ESP32 pour un client de test : la
@@ -67,7 +71,7 @@ responsable Railway ou du dépôt.
 | DNS du broker, port TCP public, CA | `<à obtenir>` | Railway |
 | Rotation du mot de passe MQTT exposé (#24) confirmée | oui / non | Responsable Railway |
 | Clés d'affichage provisionnées (partie C seulement) | oui / non, **jamais la valeur** | Responsable Railway |
-| Casier, compartiments et actifs de test | identifiants désinfectés | Philippe |
+| Casier, compartiments et actifs de test | identifiants du casier et des actifs de test | Philippe |
 
 **Contrôle de cohérence.** Le SHA API et le SHA Web doivent appartenir au même `dev`, ou
 leur combinaison doit être explicitement validée. Les contrats REST et MQTT doivent
@@ -117,7 +121,7 @@ Cartes : #24, #37, #38, #48, #52, #53 et #159 pour S8.
 | S4 | Actualiser, naviguer et rouvrir « Mon activité ». Annuler par l'écran de confirmation. | Même réservation avant l'annulation. Annulation affichée, plus de réservation ni de prêt actif. L'actif ne redevient prêt que si toutes les conditions de readiness le permettent. | #37, #38 | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | **Jimmy consigne son propre résultat**, distinct de la validation de Philippe du 5 novembre |
 | S5 | Manager : listes Réservations, Prêts et Opérations ; filtres, pagination et détails. Changer d'onglet rapidement, puis actualiser. | Données réelles persistées. Filtrage et pagination stables. Personne (utilisateur ou détenteur) correcte. Aucune ligne de l'onglet précédent. Heures dans le fuseau du laboratoire. États vide et indisponible honnêtes. | #48 | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | **Ne pas créer de faux prêts** pour couvrir le physique |
 | S6 | Anomalies : ouvrir l'anomalie de test désignée, si elle existe, puis l'acquitter (elle seule). Répéter l'acquittement. | Type localisé, preuves bornées, aucun payload brut, tag ou secret. L'acquittement n'est pas une résolution. La répétition et le conflit donnent les erreurs approuvées. | #52 | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | **Aucune anomalie de test désignée ⇒ `BLOCKED`**, jamais PASS |
-| S7 | Audit : filtrer autour de S3, S4 et S6 ; ouvrir les détails. | Événements attribuables et ordonnés. Seuls les détails scalaires autorisés sont visibles ; un champ structuré est signalé comme non affiché. Aucun identifiant, aucun payload MQTT brut. | #53 | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | |
+| S7 | Audit : filtrer autour de S3, S4 et S6 ; ouvrir les détails. | Événements attribuables et ordonnés. Seuls les détails scalaires autorisés sont visibles ; un champ structuré est signalé comme non affiché. Les identifiants approuvés (acteur, entité, trace) restent visibles. Aucun mot de passe, jeton d'authentification, tag RFID brut ou payload MQTT brut. | #53 | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | |
 | S8 | Après fusion **et déploiement** de #159 : ouvrir Vue d'ensemble et suivre le lien de chaque bloc prioritaire. | Données réelles, comptes cohérents ou explicitement partiels. Un bloc en échec n'affecte pas les autres et n'affiche jamais « 0 » à la place de « indisponible ». Fraîcheur visible. Clavier et affichage étroit utilisables. | #159 | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | Non déployé ⇒ `BLOCKED` ; une revue cloud ne vaut pas PASS |
 
 ## B — Broker et ESP32 réel
@@ -146,7 +150,7 @@ caméra et leur ordre viennent des contrats approuvés et du POC (docs 05, 06 et
   déployé ; clés provisionnées par le responsable Railway.
 - [ ] #44 (autorisation par QR) fusionné et déployé pour C2 et au-delà.
 - [ ] #47 (retrait confirmé physiquement) pour C3 ; #50 et #51 (retour) pour C4 et C5.
-- [ ] Client iOS intégré à ces routes et installé sur un appareil réel.
+- [ ] Client iOS intégré aux **futures** routes de préparation et de scan, installé sur un appareil réel (en plus du client de réservation de la partie A).
 - [ ] Firmware du hub avec affichage du défi, lecture QR, porte et RFID qualifiés par Jimmy.
 - [ ] Procédure de récupération approuvée connue des deux testeurs avant C6.
 
@@ -177,8 +181,22 @@ réessayer.
 | C6.6 | Hub redémarré ou reconnecté pendant `AWAITING_LOCAL_PROOF` | Nouvelle session ⇒ ancien défi invalidé, aucune commande | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
 | C6.7 | Hub déconnecté après l'envoi de la commande | `ANOMALY` (`DEVICE_OFFLINE_DURING_OPERATION`), pas de prêt fabriqué | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
 | C6.8 | Porte non refermée avant l'échéance | `ANOMALY` (`DOOR_NOT_CLOSED_BEFORE_EXPIRY`) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
-| C6.9 | RFID incertain : actif attendu absent ou mauvais tag | `ANOMALY` (`EXPECTED_ASSET_NOT_OBSERVED` ou `UNEXPECTED_ASSET_OBSERVED`) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
-| C6.10 | Deux scans quasi simultanés du même QR | Exactement une commande | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
+| C6.9 | **Retour** : préparer et autoriser le retour, ouvrir puis refermer **sans déposer** l'actif attendu (lecteur sain) | `ANOMALY` (`EXPECTED_ASSET_NOT_OBSERVED`, doc 05 §5.4). Le prêt reste `RETURN_PENDING` jusqu'à la correction ; la preuve que rien n'a été déposé le ramène à `ACTIVE` (doc 05 §4.4) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
+| C6.10 | Retrait ou retour : un **autre** tag que l'actif attendu est lu dans la cellule ciblée | `ANOMALY` (`UNEXPECTED_ASSET_OBSERVED`, doc 05 §5.4) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
+| C6.11 | Retrait ou retour : lectures contradictoires ou localisation ambiguë (tag lu dans deux cellules, lecteur non sain pendant la fenêtre) | `ANOMALY` (`INCONSISTENT_PHYSICAL_STATE`, doc 05 §5.4) ; un scan `FAULTED` ou `UNKNOWN` ne prouve ni présence ni absence (doc 10 §12.1) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
+| C6.12 | Deux scans quasi simultanés du même QR | Exactement une commande | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
+
+**Absence normale au retrait.** Au retrait, l'absence stable du tag attendu après la
+fermeture, avec un lecteur sain, est la **preuve nominale** (doc 06 §10.2) : c'est C3, pas
+une anomalie. Elle ne doit jamais être consignée comme `EXPECTED_ASSET_NOT_OBSERVED`.
+
+**Ambiguïté normative signalée.** Un retrait où l'actif n'est pas retiré (tag encore
+présent après la fermeture) reste `INCOMPLETE` jusqu'à l'échéance (doc 06 §10.3). La porte
+ayant été ouverte, l'opération devient ensuite `ANOMALY` (doc 05 §5.5 ; doc 06 §14.2). Mais
+aucun document ne nomme le type d'anomalie pour ce cas : ni `EXPECTED_ASSET_NOT_OBSERVED`,
+ni `INCONSISTENT_PHYSICAL_STATE`, ni `ASSET_PRESENT_WITH_ACTIVE_LOAN` n'y correspond
+explicitement. Ce guide n'invente pas la correspondance : consigner l'état `ANOMALY` et le
+type observé, sans juger le type, jusqu'à une décision du propriétaire des contrats.
 
 Les cas de chiffrement (falsification du texte chiffré ou de l'AAD, rotation de clé,
 configuration de clé manquante) et les doublons ou réordonnancements MQTT se vérifient
@@ -205,4 +223,5 @@ dans la pile cloud isolée, pas en staging. Leur résultat y est **simulé ou in
 | QR et caméra #22 | Jimmy | C2, C4, C6 |
 | Porte et serrure #42/#21 | Jimmy | C2 à C6 |
 | RFID #19, bus #20 | Jimmy | C3 à C6 |
-| Client iOS intégré aux routes de préparation et de scan, sur appareil réel | Propriétaire iOS | S2 à S4, C |
+| Build iOS de staging du parcours de réservation existant (#37/#38), installée sur appareil réel | Propriétaire iOS | S2 à S4 |
+| Futur client iOS intégré à la préparation et au scan QR (#43/#44/#46 et suivants), sur appareil réel | Propriétaire iOS | C |
