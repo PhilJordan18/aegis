@@ -13,8 +13,11 @@ Unit over UART and print what an `RFID_SCAN_COMPLETED` message would carry
 | Unit TX | **GPIO 13** (ESP32 RX) |
 | Unit RX | **GPIO 14** (ESP32 TX) |
 
-- The Grove data wires are yellow and white. Which one is the unit's TX is **not
-  verified**: check M5Stack's schematic, or swap the two if you read nothing.
+Verified on 2026-11-11: with the two data wires one way the unit sent nothing;
+swapped, every frame was valid. Label the wire that ends on GPIO 13 as the unit's TX.
+
+- The Grove data wires are yellow and white. If the monitor shows only
+  `readerStatus=UNKNOWN` and no `[rx]` line, swap them: that was the fix on the bench.
 - Measure the unit's TX at idle. If it sits near 5 V, put a 1 kΩ series resistor
   (or a divider) between it and GPIO 13, as for the RS-485 modules.
 - GPIO 13/14 are free on the WROOM and on the WROVER camera board. Avoid 32/33
@@ -42,11 +45,24 @@ Unit over UART and print what an `RFID_SCAN_COMPLETED` message would carry
 `readerStatus=UNKNOWN` means no valid frame arrived from the unit: check power,
 wiring and baud. Set `DUMP_FRAMES` to `false` once the link works.
 
+## Bench results
+
+2026-11-11, cell board (ESP32-WROOM), unit on USB power through the board, no metal near:
+
+| Test | Result |
+|---|---|
+| T2 Empty | `readerStatus=HEALTHY tags=0` in every window |
+| T3 One tag at about 10 cm | `HEALTHY tags=1`, EPC `E2004717CCC06422C2B80112` (12 bytes, PC `3400`), `readCount=30` per 3 s window, RSSI byte `CB`-`CD` (about -53 to -51 dBm) |
+| T1, T4, T5 | Not measured |
+
+The single-poll command, the `no tag` reply and the tag notification layout match the
+sketch. `readCount` is capped at 30 per window (one poll every 100 ms for 3 s): at 10 cm
+every poll found the tag.
+
 ## Not verified
 
-The frame layout comes from M5Stack's published command list (single poll
-`BB 00 22 00 00 22 7E`) and the usual notification format; it has not been run
-against this unit. If a tag is present but `tags=0`, read the `[rx]` lines and
+The version (`03`) and set-power (`B6`) replies at boot were not captured; whether the
+20 dBm setting is applied is not verified. If a tag is present but `tags=0`, read the `[rx]` lines and
 compare them with the layout at the top of the sketch. The sketch sets transmit
 power to 20 dBm (`TX_POWER_CENTI_DBM`, command `B6`) at boot, as M5Stack advises
 for range; the command bytes are unverified, so expect a `[rx]` reply to it after
