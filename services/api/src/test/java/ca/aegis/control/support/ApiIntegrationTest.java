@@ -79,6 +79,7 @@ public abstract class ApiIntegrationTest {
         registry.add("aegis.display.keys", () -> DISPLAY_KEY_ID + ":" + DISPLAY_KEY);
         registry.add("aegis.display.active-key-id", () -> DISPLAY_KEY_ID);
         registry.add("aegis.display.expiry.scheduled", () -> "false");
+        registry.add("aegis.operations.evaluation.scheduled", () -> "false");
     }
 
     @BeforeEach
