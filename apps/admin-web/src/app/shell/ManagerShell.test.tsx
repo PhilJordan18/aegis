@@ -58,6 +58,13 @@ describe('ManagerShell', () => {
     expect(sidebar.textContent).not.toContain('Section à venir')
   })
 
+  it('puts the compact top bar in the page banner, so the brand sits inside a landmark', () => {
+    renderShell()
+    const banner = screen.getByRole('banner')
+    expect(within(banner).getByRole('link', { name: 'Aegis Manager, accueil' })).toBeDefined()
+    expect(within(banner).getByRole('button', { name: 'Ouvrir le menu' })).toBeDefined()
+  })
+
   it('opens the account disclosure, applies the appearance at once, and closes with Escape', async () => {
     renderShell()
     const user = userEvent.setup()

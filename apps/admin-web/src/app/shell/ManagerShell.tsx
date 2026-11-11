@@ -201,7 +201,7 @@ function CompactNav({ currentPath, profile, onSignOut }: Omit<ShellProps, 'child
 
   return (
     <>
-      <div className="ag-topbar">
+      <header className="ag-topbar">
         <Brand />
         <button
           ref={triggerRef}
@@ -213,7 +213,7 @@ function CompactNav({ currentPath, profile, onSignOut }: Omit<ShellProps, 'child
         >
           <Icon name="menu" />
         </button>
-      </div>
+      </header>
       <dialog
         ref={dialogRef}
         className="ag-drawer"
