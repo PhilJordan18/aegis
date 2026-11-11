@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import ca.aegis.control.asset.AssetSummary;
 import ca.aegis.control.asset.ReservableAssets;
+import ca.aegis.control.identity.UserSummaries;
+import ca.aegis.control.identity.UserSummary;
 import ca.aegis.control.loan.LoanRepository.AdminFilter;
 import ca.aegis.control.loan.LoanRepository.LoanRow;
 import ca.aegis.control.shared.web.ApiError;
@@ -33,11 +35,13 @@ class LoanService {
 
     private final LoanRepository loans;
     private final ReservableAssets assets;
+    private final UserSummaries users;
     private final Clock clock;
 
-    LoanService(LoanRepository loans, ReservableAssets assets, Clock clock) {
+    LoanService(LoanRepository loans, ReservableAssets assets, UserSummaries users, Clock clock) {
         this.loans = loans;
         this.assets = assets;
+        this.users = users;
         this.clock = clock;
     }
 
@@ -69,19 +73,22 @@ class LoanService {
      * derived as for the holder and never frees the asset (document 06, section 14.3).
      */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    PageResponse<LoanView> adminList(AdminFilter filter, PageQuery page) {
+    PageResponse<AdminLoanView> adminList(AdminFilter filter, PageQuery page) {
         Instant now = clock.instant();
         long total = loans.count(filter);
         List<LoanRow> rows = total == 0 ? List.of() : loans.page(filter, page);
         Map<UUID, AssetSummary> summaries = assets.summaries(rows.stream().map(LoanRow::assetId).toList());
-        return PageResponse.of(rows.stream().map(row -> view(row, summaries.get(row.assetId()), now)).toList(), page,
-                total);
+        Map<UUID, UserSummary> holders = users.of(rows.stream().map(LoanRow::holderUserId).toList());
+        return PageResponse.of(rows.stream().map(row -> AdminLoanView.of(view(row, summaries.get(row.assetId()), now),
+                holders.get(row.holderUserId()))).toList(), page, total);
     }
 
     /** Document 09, section 17: any loan, whoever holds it. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    LoanView adminGet(UUID loanId) {
-        return loans.find(loanId).map(row -> view(row, clock.instant())).orElseThrow(ResourceNotFoundException::new);
+    AdminLoanView adminGet(UUID loanId) {
+        return loans.find(loanId).map(row -> AdminLoanView.of(view(row, clock.instant()),
+                users.of(List.of(row.holderUserId())).get(row.holderUserId())))
+                .orElseThrow(ResourceNotFoundException::new);
     }
 
     private LoanView view(LoanRow row, Instant now) {

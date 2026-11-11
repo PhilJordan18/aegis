@@ -28,7 +28,7 @@ class AdminReservationController {
     }
 
     @GetMapping
-    PageResponse<ReservationView> list(@RequestParam(required = false) String status,
+    PageResponse<AdminReservationView> list(@RequestParam(required = false) String status,
             @RequestParam(required = false) String assetId, @RequestParam(required = false) String userId,
             @RequestParam(required = false) String from, @RequestParam(required = false) String to,
             @RequestParam(required = false) String page, @RequestParam(required = false) String size) {
@@ -42,7 +42,7 @@ class AdminReservationController {
     }
 
     @GetMapping("/{reservationId}")
-    ReservationView get(@PathVariable UUID reservationId) {
+    AdminReservationView get(@PathVariable UUID reservationId) {
         return reservations.adminGet(reservationId);
     }
 }

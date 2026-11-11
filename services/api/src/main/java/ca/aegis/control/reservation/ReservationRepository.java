@@ -39,9 +39,6 @@ class ReservationRepository {
                    fulfilled_at, expired_at
             FROM aegis.reservations
             """;
-    private static final String NON_TERMINAL_OPERATION =
-            "status NOT IN ('CONFIRMED', 'FAILED', 'EXPIRED', 'ANOMALY')";
-
     private final JdbcClient jdbc;
 
     ReservationRepository(JdbcClient jdbc) {
@@ -100,8 +97,8 @@ class ReservationRepository {
     }
 
     /**
-     * Filters of {@code GET /admin/reservations} (document 09, section 17). Provisional rule D2 of the 11 November
-     * 2026 matrix (#67): {@code from} and {@code to} bound {@code created_at}.
+     * Filters of {@code GET /admin/reservations} (document 09, section 17). Rule D2 approved on 11 November
+     * 2026 (#67): {@code from} and {@code to} bound {@code created_at}.
      */
     record AdminFilter(ReservationStatus status, UUID assetId, UUID userId, Instant from, Instant to) {
 
@@ -111,7 +108,7 @@ class ReservationRepository {
         }
     }
 
-    /** Provisional order D1 of the 11 November 2026 matrix (#67): most recent first, {@code id} breaking ties. */
+    /** Order D1 approved on 11 November 2026 (#67): most recent first, {@code id} breaking ties. */
     List<ReservationRow> page(AdminFilter filter, PageQuery page) {
         Where where = filter.where();
         return where.bind(jdbc.sql(SELECT_RESERVATION + where.sql()
@@ -190,11 +187,18 @@ class ReservationRepository {
         }
     }
 
-    /** The non-terminal checkout attempt of the reservation, if any; none exists before the checkout slice. */
+    /**
+     * The {@code currentOperationId} of an {@code ACTIVE} reservation (document 09, section 8.4): its non-terminal
+     * checkout attempt, or else its latest attempt even when terminal, so that a failure or an anomaly stays
+     * explained. The caller sends {@code null} once the reservation is closed.
+     */
     Optional<UUID> currentOperationOf(UUID reservationId) {
-        return jdbc.sql("SELECT id FROM aegis.locker_operations WHERE reservation_id = :id AND "
-                + NON_TERMINAL_OPERATION + " ORDER BY created_at DESC LIMIT 1")
-                .param("id", reservationId).query(UUID.class).optional();
+        return jdbc.sql("""
+                SELECT id FROM aegis.locker_operations
+                WHERE reservation_id = :id AND type = 'CHECKOUT'
+                ORDER BY (status IN ('CONFIRMED', 'FAILED', 'EXPIRED', 'ANOMALY')), created_at DESC, id DESC
+                LIMIT 1
+                """).param("id", reservationId).query(UUID.class).optional();
     }
 
     private static ReservationRow map(ResultSet row, int number) throws SQLException {

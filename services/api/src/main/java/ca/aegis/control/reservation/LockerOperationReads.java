@@ -34,8 +34,8 @@ class LockerOperationReads {
             """;
 
     /**
-     * Filters of {@code GET /admin/locker-operations} (document 09, section 17). Provisional rule D2 of the 11
-     * November 2026 matrix (#67): {@code from} and {@code to} bound {@code created_at}.
+     * Filters of {@code GET /admin/locker-operations} (document 09, section 17). Rule D2 approved on 11
+     * November 2026 (#67): {@code from} and {@code to} bound {@code created_at}.
      */
     record AdminFilter(LockerOperationStatus status, UUID assetId, UUID userId, UUID lockerId, Instant from,
             Instant to) {
@@ -56,7 +56,7 @@ class LockerOperationReads {
         return jdbc.sql(SELECT + " WHERE o.id = :id").param("id", id).query(LockerOperationReads::map).optional();
     }
 
-    /** Provisional order D1 of the 11 November 2026 matrix (#67): most recent first, {@code id} breaking ties. */
+    /** Order D1 approved on 11 November 2026 (#67): most recent first, {@code id} breaking ties. */
     List<LockerOperationView> page(AdminFilter filter, PageQuery page) {
         Where where = filter.where();
         return where.bind(jdbc.sql(SELECT + where.sql()

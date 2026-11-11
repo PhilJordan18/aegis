@@ -28,7 +28,7 @@ class AdminLoanController {
     }
 
     @GetMapping
-    PageResponse<LoanView> list(@RequestParam(required = false) String status,
+    PageResponse<AdminLoanView> list(@RequestParam(required = false) String status,
             @RequestParam(required = false) String assetId, @RequestParam(required = false) String userId,
             @RequestParam(required = false) String from, @RequestParam(required = false) String to,
             @RequestParam(required = false) String page, @RequestParam(required = false) String size) {
@@ -42,7 +42,7 @@ class AdminLoanController {
     }
 
     @GetMapping("/{loanId}")
-    LoanView get(@PathVariable UUID loanId) {
+    AdminLoanView get(@PathVariable UUID loanId) {
         return loans.adminGet(loanId);
     }
 }
