@@ -183,12 +183,17 @@ réessayer.
 | C6.8 | Porte non refermée avant l'échéance | `ANOMALY` (`DOOR_NOT_CLOSED_BEFORE_EXPIRY`) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
 | C6.9 | **Retour** : préparer et autoriser le retour, ouvrir puis refermer **sans déposer** l'actif attendu (lecteur sain) | `ANOMALY` (`EXPECTED_ASSET_NOT_OBSERVED`, doc 05 §5.4). Le prêt reste `RETURN_PENDING` jusqu'à la correction ; la preuve que rien n'a été déposé le ramène à `ACTIVE` (doc 05 §4.4) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
 | C6.10 | Retrait ou retour : un **autre** tag que l'actif attendu est lu dans la cellule ciblée | `ANOMALY` (`UNEXPECTED_ASSET_OBSERVED`, doc 05 §5.4) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
-| C6.11 | Retrait ou retour : lectures contradictoires ou localisation ambiguë (tag lu dans deux cellules, lecteur non sain pendant la fenêtre) | `ANOMALY` (`INCONSISTENT_PHYSICAL_STATE`, doc 05 §5.4) ; un scan `FAULTED` ou `UNKNOWN` ne prouve ni présence ni absence (doc 10 §12.1) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
+| C6.11 | Retrait ou retour : lectures contradictoires ou localisation ambiguë (par exemple, tag lu dans deux cellules) | `ANOMALY` (`INCONSISTENT_PHYSICAL_STATE`, doc 05 §5.4) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
 | C6.12 | Deux scans quasi simultanés du même QR | Exactement une commande | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
 
 **Absence normale au retrait.** Au retrait, l'absence stable du tag attendu après la
 fermeture, avec un lecteur sain, est la **preuve nominale** (doc 06 §10.2) : c'est C3, pas
 une anomalie. Elle ne doit jamais être consignée comme `EXPECTED_ASSET_NOT_OBSERVED`.
+
+**Lecteur non sain : aucune preuve, type à confirmer.** Un scan `FAULTED` ou `UNKNOWN` ne
+prouve ni présence ni absence (doc 10 §12.1). Ce n'est pas un cas de C6.11. Le type
+terminal et le moment de la classification restent **à confirmer par le propriétaire des
+contrats**. Consigner l'état observé et le type éventuel, sans juger la correspondance.
 
 **Ambiguïté normative signalée.** Un retrait où l'actif n'est pas retiré (tag encore
 présent après la fermeture) reste `INCOMPLETE` jusqu'à l'échéance (doc 06 §10.3). La porte
@@ -196,7 +201,8 @@ ayant été ouverte, l'opération devient ensuite `ANOMALY` (doc 05 §5.5 ; doc 
 aucun document ne nomme le type d'anomalie pour ce cas : ni `EXPECTED_ASSET_NOT_OBSERVED`,
 ni `INCONSISTENT_PHYSICAL_STATE`, ni `ASSET_PRESENT_WITH_ACTIVE_LOAN` n'y correspond
 explicitement. Ce guide n'invente pas la correspondance : consigner l'état `ANOMALY` et le
-type observé, sans juger le type, jusqu'à une décision du propriétaire des contrats.
+type observé, sans juger le type. **Décision à confirmer** par le propriétaire des contrats
+(question posée sur #43) ; elle ne bloque pas cette recette.
 
 Les cas de chiffrement (falsification du texte chiffré ou de l'AAD, rotation de clé,
 configuration de clé manquante) et les doublons ou réordonnancements MQTT se vérifient
