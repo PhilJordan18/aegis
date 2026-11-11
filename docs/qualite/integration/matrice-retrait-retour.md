@@ -14,7 +14,11 @@ couvre #43/#46, puis #47 (et ensuite #50/#51), sur le SHA immuable livré par Ba
   - #44 : Q1 à Q4 sont couvertes par Q10 du même script, exécutable sur la branche Backend
     `44-feat-qr-authorization` (PR #173). Sur un commit sans la route `authorize-local`, Q10 est
     ignorée.
-  - #47 et #50/#51 : planifiées. Aucune ligne n'est exécutée tant que la branche Backend
+  - #47 : K1 à K9, K11 et K14 sont exécutées par
+    [`../checkout-confirmation/run.sh`](../checkout-confirmation/README.md) sur la branche Backend
+    `47-feat-checkout-confirmation` (PR #175). K10, K12 et K13 n'y sont pas démontrables (voir
+    son README).
+  - #50/#51 : planifiées. Aucune ligne n'est exécutée tant que la branche Backend
     correspondante n'est pas livrée.
 
   Chaque exécution consigne le SHA, la commande et le résultat.
