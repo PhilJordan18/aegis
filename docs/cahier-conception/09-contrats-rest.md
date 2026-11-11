@@ -21,6 +21,7 @@
 **Mise à jour ciblée :** 6 novembre 2026 — lectures administratives approuvées par Philippe (#25, #26, #28) : `GET /admin/lockers` et `AdminLockerView` (§9.3, §16.2), historique des identifiants `GET /admin/assets/{assetId}/identifiers` (§9.3, §12.3); aucune migration  
 **Mise à jour ciblée :** 6 novembre 2026 — refus du catalogue liés à la garde de l’actif (#26) : placement refusé pendant une réservation active, un prêt ouvert ou une opération non terminale, attribution refusée pendant une opération non terminale et révocation de l’identifiant qu’elle attend, avec les codes de l’archivage (§12.3, §12.4, §21); ordre des refus approuvé par Philippe le 6 novembre 2026; aucun code ni champ nouveau  
 **Mise à jour ciblée :** 6 novembre 2026 — erreurs signalées par le hub (#29) : champ requis `deviceErrors` et `DeviceErrorView` de `LockerStatusView` (§8.6, §16.1), limités à la session courante du hub, approuvés par Philippe le 6 novembre 2026; ajout compatible, aucune migration
+**Mise à jour ciblée :** 11 novembre 2026 — validation locale du QR (#44), décisions approuvées par Philippe le 11 novembre 2026 ([#44](https://github.com/PhilJordan18/aegis/issues/44#issuecomment-6806492151)) : valeurs publiques de `failureReason` avant autorisation (§8.5), limite initiale des préparations (§15.5), émission de `CHECKOUT` (§8.10) et refus enregistrés de `authorize-local` (§15.5); transitions inchangées, aucune migration  
 
 ---
 
@@ -465,6 +466,18 @@ LockerOperationStatus :
 - EXPIRED;
 - ANOMALY.
 
+`failureReason` est public : il est lu par l’initiateur (§15.4) et par l’administration (§17). Une tentative de retrait terminée **avant son autorisation** porte l’une des valeurs suivantes, approuvées par Philippe le 11 novembre 2026 (#44); elles ne changent aucune transition de `05` §5.4.
+
+| `failureReason` | Statut terminal | Cause |
+|---|---|---|
+| `LOCAL_PROOF_EXPIRED` | `EXPIRED` | Échéance du défi atteinte sans consommation (`06` §6.5) |
+| `HUB_RESTARTED` | `FAILED` | Le hub a changé de `deviceSessionId` ou son appareil a été désactivé (`10` §27.4) |
+| `LOCKER_OFFLINE` | `FAILED` | Le hub n’est plus `ONLINE` avant la consommation (`06` §6.1) |
+| `LOCAL_PROOF_ATTEMPTS_EXHAUSTED` | `FAILED` | Cinquième secret erroné soumis par l’initiateur (§15.5) |
+| `RESERVATION_CANCELLED` | `FAILED` | Annulation de la réservation pendant la préparation (`06` §5.5) |
+
+Les issues après autorisation seront ajoutées avec leur tranche (#47). Un client traite une valeur inconnue comme un échec générique, sans en déduire d’état physique (§3).
+
 ### 8.6 LockerStatusView
 
 | Champ | Type | Requis |
@@ -550,7 +563,7 @@ Le serveur n’émet que les valeurs suivantes; leur ordre n’a pas de sens et 
 | `CANCEL` | `ReservationView` | `POST /reservations/{id}/cancel` (§14.4) | Réservation `ACTIVE` du demandeur; instant antérieur à `reservedUntil`; aucune tentative de retrait de cette réservation n’a été autorisée, quelle que soit son issue (§14.4, `06` §5.5; question ouverte Q1); aucune incertitude physique, c’est-à-dire aucune tentative `ANOMALY` dont l’anomalie n’est pas `RESOLVED`. Une tentative `AWAITING_LOCAL_PROOF` laisse `CANCEL` : l’annulation la termine (§14.4). L’horaire et la connexion du locker n’interviennent pas. |
 | `RETURN` | `LoanView` | `POST /loans/{id}/return` (§15.2) | Prêt `ACTIVE` du titulaire; plage d’exploitation ouverte; aucune opération physique non terminale sur le locker, y compris une tentative de ce prêt; gardes communes et de retour satisfaites (`06` §6.1, §6.3), donc hub `ONLINE`. `overdue` n’intervient pas. |
 
-Le serveur n’émet une valeur que lorsque sa mutation est implémentée. Tant que l’annulation (§14.4), le retrait (§15.1) et le retour (§15.2) ne le sont pas, `availableActions` est vide, même si les conditions ci-dessus sont réunies; un client n’affiche donc pas ces boutons (décision du 28 octobre 2026, RES-01).
+Le serveur n’émet une valeur que lorsque sa mutation est implémentée. Tant que l’annulation (§14.4), le retrait (§15.1) et le retour (§15.2) ne le sont pas, `availableActions` est vide, même si les conditions ci-dessus sont réunies; un client n’affiche donc pas ces boutons (décision du 28 octobre 2026, RES-01). Depuis #44 (11 novembre 2026), `CHECKOUT` est émis lorsque ses conditions sont réunies et que le flux du défi du hub est activé; il est évalué sans verrou, et la préparation revalide toutes ses gardes. `RETURN` reste absent tant que §15.2 n’est pas implémenté.
 
 À partir de `reservedUntil`, une réservation encore `ACTIVE` (expiration différée par un retrait autorisé, ou pas encore appliquée) n’expose aucune action : les règles temporelles sont réévaluées au début de chaque action (`06` §14). La limitation de fréquence des préparations (§15.5) n’est pas reflétée; elle se manifeste par `429` avec `Retry-After`.
 
@@ -1228,11 +1241,11 @@ Réponse `202`, `Location` identique, `LockerOperationView` avec `requiredAction
 | 429 | `LOCAL_PROOF_RATE_LIMITED` | Limite atteinte, avec `Retry-After` |
 | 409 | Codes de gardes métier existants | État, droits métier, réservation, horaire ou matériel devenus incompatibles |
 
-La même clé et le même corps rejouent la réponse initiale; une réponse refusée rejouée ne recompte pas les essais. Un corps différent avec la même clé est rejeté. La nouvelle clé après consommation donne un refus, jamais un second déverrouillage. Le token n’est pas copié dans la table d’idempotence : seul le hash de la requête canonique y figure.
+La même clé et le même corps rejouent la réponse initiale; une réponse refusée rejouée ne recompte pas les essais. Les refus qui changent un état sont enregistrés avec la clé et rejoués tels quels : secret erroné compté (`403`), cinquième secret erroné, échéance constatée au scan (`410`, opération `EXPIRED`) et redémarrage du hub constaté au scan (`409 LOCAL_PROOF_INVALIDATED`, opération `FAILED`). Les autres refus ne sont pas enregistrés. Un corps différent avec la même clé est rejeté. La nouvelle clé après consommation donne un refus, jamais un second déverrouillage. Le token n’est pas copié dans la table d’idempotence : seul le hash de la requête canonique y figure.
 
 Le délai retenu est de 60 secondes maximum **depuis la création** du défi, borné par l’horaire et la réservation applicable. Le technicien prépare l’opération devant le casier : la latence d’affichage consomme une partie de ces 60 secondes, sans renouveler l’échéance. Les 120 secondes physiques commencent seulement à l’autorisation locale.
 
-Au cinquième secret erroné soumis par l’initiateur, le défi est invalidé et l’opération termine en `FAILED`. Une lecture caméra sans soumission ne compte pas. Un tiers ne peut épuiser les essais du titulaire. La fréquence des nouvelles préparations reste limitée par utilisateur et casier, avec un seuil configurable à qualifier avant intégration et `429 LOCAL_PROOF_RATE_LIMITED` accompagné de `Retry-After`. Les rejeux idempotents ne comptent pas comme nouvelles préparations. L’ancien plafond de trois préparations en quinze minutes est abandonné : il peut bloquer une série normale de retraits/retours. Cela ne supprime ni la limitation de débit ni les autres contrôles (ADR-009).
+Au cinquième secret erroné soumis par l’initiateur, le défi est invalidé et l’opération termine en `FAILED`. Une lecture caméra sans soumission ne compte pas. Un tiers ne peut épuiser les essais du titulaire. La fréquence des nouvelles préparations reste limitée par utilisateur et casier. Limite initiale du P0, approuvée par Philippe le 11 novembre 2026 (#44) : **6 nouvelles préparations par période glissante de 10 minutes pour chaque couple utilisateur–casier**, configurable (`AEGIS_PREPARATION_MAX_PER_WINDOW`, `AEGIS_PREPARATION_WINDOW`). Au-delà, `429 LOCAL_PROOF_RATE_LIMITED` avec `Retry-After`, en secondes arrondies vers le haut, jusqu’à la sortie de la plus ancienne préparation comptée. Les rejeux idempotents ne comptent pas comme nouvelles préparations. L’ancien plafond de trois préparations en quinze minutes est abandonné : il peut bloquer une série normale de retraits/retours. Cela ne supprime ni la limitation de débit ni les autres contrôles (ADR-009).
 
 ---
 
