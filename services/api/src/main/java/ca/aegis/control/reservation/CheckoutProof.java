@@ -7,7 +7,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Document 06, section 10.3, for a {@code CHECKOUT}: what the stored facts of one operation prove, read from scratch at
+ * Document 06, section 10.3, for a {@code CHECKOUT} or a {@code RETURN}: what the stored facts of one operation prove, read from scratch at
  * each evaluation so that network order never matters (document 10, section 17.3). Pure: no lock, clock or database.
  *
  * <p>The proof chain lives in one device session: the hub's accepted acknowledgement, then an opening of the target
@@ -18,11 +18,15 @@ import java.util.UUID;
  * door event follows, makes it {@link Verdict#INCONSISTENT} at once. Only a scan of the chain speaks for the reader: the
  * cell's projection, which a scan taken while the door was open may have set, never does. Before the chain exists, or
  * when a fact is merely missing, the proof is only incomplete.
+ *
+ * <p>The chain, the reader rule and the location rule are the same for a return (#51); only the reading of the expected
+ * tag differs (document 06, section 10.2): three coherent reads prove the return, another asset's stable reads without
+ * them contradict it, and an absent tag keeps it incomplete until the deadline.
  */
 final class CheckoutProof {
 
     enum Verdict {
-        /** Ack, opening, closing and a stable healthy scan without the expected tag: the checkout is proven. */
+        /** Ack, opening, closing and a stable healthy scan without (checkout) or with (return) the expected tag. */
         COHERENT,
         /** Not proven yet; the deadline decides whether waiting ends as EXPIRED or ANOMALY. */
         INCOMPLETE,
@@ -39,6 +43,8 @@ final class CheckoutProof {
         SCAN_MISSING,
         SCAN_NOT_CONCLUSIVE,
         EXPECTED_ASSET_STILL_PRESENT,
+        EXPECTED_ASSET_NOT_OBSERVED,
+        UNEXPECTED_ASSET_OBSERVED,
         READER_NOT_HEALTHY,
         AMBIGUOUS_LOCATION
     }
@@ -61,16 +67,28 @@ final class CheckoutProof {
     /** What the backend normalized from one scan for the expected tag (document 10, section 12.2). */
     enum TagReading {
         ABSENT,
+        /** At least three coherent reads in a stable healthy window ({@code ASSET_PRESENT}). */
+        PRESENT,
+        /** Detected, but not proven present. */
         SEEN,
         NO_VERDICT
     }
 
     /**
      * One accepted message of the operation. {@code compartmentId} is null for an acknowledgement; {@code reader},
-     * {@code windowStartedAt} and {@code tag} are set for a scan only.
+     * {@code windowStartedAt}, {@code tag} and {@code foreign} are set for a scan only.
+     *
+     * @param foreign whether the scan read another identifier at least as often as a stable presence requires
      */
     record Fact(UUID messageId, Kind kind, UUID compartmentId, UUID session, long bootCount, long sequence,
-            Instant occurredAt, Instant receivedAt, String reader, Instant windowStartedAt, TagReading tag) {
+            Instant occurredAt, Instant receivedAt, String reader, Instant windowStartedAt, TagReading tag,
+            boolean foreign) {
+
+        Fact(UUID messageId, Kind kind, UUID compartmentId, UUID session, long bootCount, long sequence,
+                Instant occurredAt, Instant receivedAt, String reader, Instant windowStartedAt, TagReading tag) {
+            this(messageId, kind, compartmentId, session, bootCount, sequence, occurredAt, receivedAt, reader,
+                    windowStartedAt, tag, false);
+        }
 
         boolean sameBoot(Fact other) {
             return session.equals(other.session) && bootCount == other.bootCount;
@@ -96,6 +114,10 @@ final class CheckoutProof {
      *     leaves its location ambiguous (document 06, section 10.1, condition 6)
      */
     static Result evaluate(UUID compartmentId, List<Fact> facts, boolean tagElsewhere) {
+        return evaluate(LockerOperationType.CHECKOUT, compartmentId, facts, tagElsewhere);
+    }
+
+    static Result evaluate(LockerOperationType type, UUID compartmentId, List<Fact> facts, boolean tagElsewhere) {
         Optional<Fact> ack = facts.stream().filter(fact -> fact.kind() == Kind.ACKNOWLEDGEMENT)
                 .min(Comparator.comparing(Fact::receivedAt));
         if (ack.isEmpty()) {
@@ -148,12 +170,33 @@ final class CheckoutProof {
             return new Result(Verdict.INCONSISTENT, Finding.AMBIGUOUS_LOCATION, Stage.OBSERVED, ack, opened, closed,
                     scan);
         }
+        if (type == LockerOperationType.RETURN) {
+            return returned(read, ack, opened, closed, scan);
+        }
         return switch (read.tag()) {
             case ABSENT -> new Result(Verdict.COHERENT, Finding.NONE, Stage.OBSERVED, ack, opened, closed, scan);
-            case SEEN -> new Result(Verdict.INCOMPLETE, Finding.EXPECTED_ASSET_STILL_PRESENT, Stage.OBSERVED, ack,
-                    opened, closed, scan);
+            case PRESENT, SEEN -> new Result(Verdict.INCOMPLETE, Finding.EXPECTED_ASSET_STILL_PRESENT,
+                    Stage.OBSERVED, ack, opened, closed, scan);
             case NO_VERDICT -> new Result(Verdict.INCOMPLETE, Finding.SCAN_NOT_CONCLUSIVE, Stage.OBSERVED, ack,
                     opened, closed, scan);
         };
+    }
+
+    /**
+     * Document 06, sections 10.2 and 10.3, for a settled healthy scan of a return: the expected tag's stable presence
+     * proves it; otherwise another asset stably read in the cell contradicts it. An absent expected tag is not a
+     * contradiction yet: the deadline turns it into {@code EXPECTED_ASSET_NOT_OBSERVED}.
+     */
+    private static Result returned(Fact read, Optional<Fact> ack, Optional<Fact> opened, Optional<Fact> closed,
+            Optional<Fact> scan) {
+        if (read.tag() == TagReading.PRESENT) {
+            return new Result(Verdict.COHERENT, Finding.NONE, Stage.OBSERVED, ack, opened, closed, scan);
+        }
+        if (read.foreign()) {
+            return new Result(Verdict.INCONSISTENT, Finding.UNEXPECTED_ASSET_OBSERVED, Stage.OBSERVED, ack, opened,
+                    closed, scan);
+        }
+        return new Result(Verdict.INCOMPLETE, read.tag() == TagReading.ABSENT ? Finding.EXPECTED_ASSET_NOT_OBSERVED
+                : Finding.SCAN_NOT_CONCLUSIVE, Stage.OBSERVED, ack, opened, closed, scan);
     }
 }

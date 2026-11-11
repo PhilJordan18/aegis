@@ -42,6 +42,45 @@ class CheckoutProofTests {
     }
 
     @Test
+    void aReturnIsProvenOnlyByAStablePresenceOfTheExpectedTag() {
+        ack();
+        door(Kind.DOOR_OPENED);
+        Fact closed = door(Kind.DOOR_CLOSED);
+        Fact scan = scan("HEALTHY", TagReading.PRESENT, closed.occurredAt());
+        assertEquals(Verdict.COHERENT, returned(false).verdict());
+        // For a checkout, the same scan keeps the expected tag present (rule 1).
+        assertEquals(Finding.EXPECTED_ASSET_STILL_PRESENT, CheckoutProof.evaluate(CELL, facts, false).finding());
+        // An ambiguous location still wins over the presence.
+        assertEquals(Finding.AMBIGUOUS_LOCATION, returned(true).finding());
+
+        facts.remove(scan);
+        scan("HEALTHY", TagReading.SEEN, closed.occurredAt());
+        assertEquals(Finding.SCAN_NOT_CONCLUSIVE, returned(false).finding());
+        assertEquals(Verdict.INCOMPLETE, returned(false).verdict());
+    }
+
+    @Test
+    void aReturnWithoutTheExpectedTagWaitsUnlessAnotherAssetIsThere() {
+        ack();
+        door(Kind.DOOR_OPENED);
+        Fact closed = door(Kind.DOOR_CLOSED);
+        Fact absent = scan("HEALTHY", TagReading.ABSENT, closed.occurredAt());
+        assertEquals(Verdict.INCOMPLETE, returned(false).verdict());
+        assertEquals(Finding.EXPECTED_ASSET_NOT_OBSERVED, returned(false).finding());
+
+        facts.remove(absent);
+        long next = ++sequence;
+        facts.add(new Fact(UUID.randomUUID(), Kind.RFID_SCAN, CELL, SESSION, 1, next, T0.plusSeconds(next),
+                T0.plusSeconds(next), "HEALTHY", closed.occurredAt(), TagReading.ABSENT, true));
+        assertEquals(Verdict.INCONSISTENT, returned(false).verdict());
+        assertEquals(Finding.UNEXPECTED_ASSET_OBSERVED, returned(false).finding());
+    }
+
+    private Result returned(boolean tagElsewhere) {
+        return CheckoutProof.evaluate(LockerOperationType.RETURN, CELL, facts, tagElsewhere);
+    }
+
+    @Test
     void eachMissingLinkIsOnlyIncomplete() {
         assertResult(Verdict.INCOMPLETE, Finding.NOT_ACKNOWLEDGED, Stage.NONE);
         ack();
