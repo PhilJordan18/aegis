@@ -169,8 +169,11 @@ public class CheckoutConfirmation {
             return Optional.of(operation.status());
         }
         Instant now = clock.instant().truncatedTo(ChronoUnit.MILLIS);
-        Result proof = CheckoutProof.evaluate(t.compartmentId(), facts(t.id(), operation.expectedTag()),
-                tagElsewhere(t.compartmentId(), operation), "HEALTHY".equals(cell.readerStatus()));
+        // A fact received at or after expiresAt proves nothing (document 05, section 5.5): the deadline already decides,
+        // however late the evaluation that reads it runs.
+        List<Fact> inTime = facts(t.id(), operation.expectedTag()).stream()
+                .filter(fact -> fact.receivedAt().isBefore(operation.expiresAt())).toList();
+        Result proof = CheckoutProof.evaluate(t.compartmentId(), inTime, tagElsewhere(t.compartmentId(), operation));
         LockerOperationStatus status = advance(operation, proof, now);
 
         if (proof.verdict() == Verdict.COHERENT) {

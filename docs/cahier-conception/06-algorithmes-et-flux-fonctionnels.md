@@ -774,7 +774,7 @@ Une preuve `INCOMPLETE` avant `expiresAt` maintient l’opération en cours. Une
 
 #### 10.3.1 Retrait : conditions exactes (#47)
 
-Décision de Philippe du 11 novembre 2026. L’évaluation relit à chaque fois tous les faits acceptés de l’opération, de sorte que l’ordre de réception ne compte pas (`10` §17.3). Elle s’exécute après la validation de chaque accusé, porte ou scan de l’opération, puis à intervalle régulier pour l’échéance, dans une transaction distincte de l’ingestion.
+Décision de Philippe du 11 novembre 2026. L’évaluation relit à chaque fois tous les faits acceptés de l’opération, de sorte que l’ordre de réception ne compte pas (`10` §17.3). Elle s’exécute après la validation de chaque accusé, porte ou scan de l’opération, puis à intervalle régulier pour l’échéance, dans une transaction distincte de l’ingestion. Un fait reçu à `expiresAt` ou après ne prouve rien : quelle que soit l’heure de l’évaluation qui le lit, c’est l’échéance qui décide.
 
 | Étape | Condition | Résultat |
 |---|---|---|
@@ -782,20 +782,22 @@ Décision de Philippe du 11 novembre 2026. L’évaluation relit à chaque fois 
 | Chaîne | Faits de la cellule ciblée, même `deviceSessionId` et `bootCount` que l’accusé, `sequence` supérieure, triés par `sequence` | Un autre boot, une autre cellule ou un fait antérieur à l’accusé ne prouve rien |
 | Ouverture | Premier `DOOR_OPENED` de la chaîne | Absente : `INCOMPLETE` |
 | Fermeture | Premier `DOOR_CLOSED` après l’ouverture | Absente : `INCOMPLETE` |
-| Scan | Dernier `RFID_SCAN_COMPLETED` après la fermeture | Absent : `INCOMPLETE` si le lecteur projeté est `HEALTHY`, sinon `INCONSISTENT` (règle 2) |
-| Stabilité | Le dernier événement de porte avant le scan est une fermeture, `windowStartedAt` n’est pas antérieur à son `timestamp`, aucun événement de porte ne suit le scan | Sinon : `INCOMPLETE`, ou `INCONSISTENT` si le lecteur projeté n’est pas `HEALTHY` |
+| Scan | Dernier `RFID_SCAN_COMPLETED` de la chaîne après la fermeture | Absent : `INCOMPLETE` |
+| Lecteur | `readerStatus` de ce scan différent de `HEALTHY`, aucun événement de porte ne le suit | `INCONSISTENT` (règle 2) |
+| Stabilité | Le dernier événement de porte avant le scan est une fermeture, `windowStartedAt` n’est pas antérieur à son `timestamp`, aucun événement de porte ne suit le scan | Sinon : `INCOMPLETE` |
 | Localisation | Le tag attendu détecté dans une autre cellule depuis `authorizedAt` | `INCONSISTENT` |
-| Lecteur | `readerStatus` du scan différent de `HEALTHY` | `INCONSISTENT` (règle 2) |
 | Tag | `ASSET_ABSENT` normalisé pour l’identifiant attendu | `COHERENT_CHECKOUT` |
 | Tag | Identifiant attendu détecté par le scan | `INCOMPLETE` (règle 1) |
 | Tag | Aucun verdict normalisé | `INCOMPLETE` |
+
+Seul un scan de la chaîne renseigne sur le lecteur : la projection de la cellule, qu’un scan fait porte ouverte peut avoir modifiée, ne déclenche jamais la règle 2.
 
 Les jalons `DOOR_OPENED` et `OBSERVATION_RECEIVED` sont enregistrés une fois, dans l’ordre, à l’instant de réception du fait, jamais avant le jalon précédent. `INCONSISTENT` termine aussitôt en `ANOMALY` avec `INCONSISTENT_PHYSICAL_STATE` (gravité `HIGH`). À `expiresAt`, une preuve encore incomplète se termine ainsi :
 
 | Situation | Résultat | `failureReason` |
 |---|---|---|
 | Porte refermée, tag attendu encore vu par un scan sain (règle 1) | `ANOMALY` | `INCONSISTENT_PHYSICAL_STATE` |
-| Porte refermée, aucun scan concluant, lecteur sain | `ANOMALY` | `DEVICE_OFFLINE_DURING_OPERATION` |
+| Porte refermée, aucun scan concluant | `ANOMALY` | `DEVICE_OFFLINE_DURING_OPERATION` |
 | Porte ouverte, jamais refermée | `ANOMALY` | `DOOR_NOT_CLOSED_BEFORE_EXPIRY` |
 | Aucune ouverture prouvée, mais une ouverture acceptée de la cellule ou un événement de porte rejeté du casier depuis `authorizedAt` | `ANOMALY` | `DEVICE_OFFLINE_DURING_OPERATION` |
 | Commande jamais réclamée ni publiée | `EXPIRED` | `OPERATION_EXPIRED` |

@@ -180,14 +180,51 @@ class CheckoutConfirmationApiTests extends HubChallengeApiTest {
     }
 
     @Test
-    void anUnknownReaderBeforeAnyScanAfterTheClosingIsInconsistentAtOnce() throws Exception {
+    void anUnhealthyReaderProjectionAloneDoesNotApplyRule2() throws Exception {
         authorized();
         acknowledge();
         door("DOOR_OPENED");
         heartbeat("CONNECTED", "UNKNOWN", "OPEN", "UNLOCKED");
         door("DOOR_CLOSED");
+        pass();
+        assertEquals("DOOR_OPENED", fixtures.operationStatus(operation));
+        assertEquals(0L, anomalies());
 
-        assertAnomaly("INCONSISTENT_PHYSICAL_STATE", "READER_NOT_HEALTHY");
+        clock.set(DEADLINE);
+        pass();
+        assertAnomaly("DEVICE_OFFLINE_DURING_OPERATION", "SCAN_MISSING");
+    }
+
+    @Test
+    void aFaultedScanWhileTheDoorIsOpenDoesNotPreventAHealthyClosingScan() throws Exception {
+        authorized();
+        acknowledge();
+        door("DOOR_OPENED");
+        closedAt = clock.instant();
+        scan("FAULTED", Map.of());
+        door("DOOR_CLOSED");
+        pass();
+        assertEquals(0L, anomalies());
+
+        scan("HEALTHY", Map.of());
+        assertConfirmed();
+    }
+
+    @Test
+    void aCoherentScanReceivedAfterTheDeadlineProvesNothing() throws Exception {
+        authorized();
+        acknowledge();
+        door("DOOR_OPENED");
+        door("DOOR_CLOSED");
+        // A valid window after the closing whose report reaches the server only after expiresAt.
+        clock.set(DEADLINE.minusSeconds(2));
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        closedAt = clock.instant();
+        assertEquals(Outcome.ACCEPTED, scan("HEALTHY", Map.of(), DEADLINE.plusSeconds(1)));
+        pass();
+
+        assertAnomaly("DEVICE_OFFLINE_DURING_OPERATION", "SCAN_MISSING");
+        assertEquals(0L, audits("OPERATION_CONFIRMED"));
     }
 
     @Test
@@ -328,8 +365,13 @@ class CheckoutConfirmationApiTests extends HubChallengeApiTest {
 
     /** A 3-second window that starts at the last closing, reported at its end. */
     private Outcome scan(String reader, Map<String, Integer> reads) {
+        return scan(reader, reads, closedAt.plusSeconds(3));
+    }
+
+    /** A window that starts at the last closing and is reported when it ends. */
+    private Outcome scan(String reader, Map<String, Integer> reads, Instant endedAt) {
         Instant started = closedAt;
-        clock.set(started.plusSeconds(3));
+        clock.set(endedAt);
         Map<String, Object> message = envelope("RFID_SCAN_COMPLETED");
         message.put("operationId", operation.toString());
         message.put("compartmentId", compartment.toString());

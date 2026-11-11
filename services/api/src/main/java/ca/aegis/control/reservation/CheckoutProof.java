@@ -14,8 +14,10 @@ import java.util.UUID;
  * cell, then its closing, then a later RFID scan of that cell whose window starts after the closing and that no door
  * event of the cell follows. Two rules approved by Philippe on 11 November 2026 (#47) apply once that chain exists:
  * an expected tag the healthy scan still sees keeps the proof {@link Verdict#INCOMPLETE} (the deadline then turns it
- * into an anomaly), and a {@code FAULTED} or {@code UNKNOWN} reader at that scan, or in the cell while the proof still
- * waits for a conclusive scan after the closing, makes it {@link Verdict#INCONSISTENT} at once. Before the chain exists, a missing or unhealthy fact is only incomplete.
+ * into an anomaly), and a {@code FAULTED} or {@code UNKNOWN} reader in a scan of the cell after that closing, which no
+ * door event follows, makes it {@link Verdict#INCONSISTENT} at once. Only a scan of the chain speaks for the reader: the
+ * cell's projection, which a scan taken while the door was open may have set, never does. Before the chain exists, or
+ * when a fact is merely missing, the proof is only incomplete.
  */
 final class CheckoutProof {
 
@@ -92,10 +94,8 @@ final class CheckoutProof {
      * @param facts every accepted acknowledgement, door event and scan stored for the operation
      * @param tagElsewhere whether a scan of another cell detected the expected tag since the authorization, which
      *     leaves its location ambiguous (document 06, section 10.1, condition 6)
-     * @param readerHealthyNow whether the cell's projected reader is {@code HEALTHY} at this evaluation; once the door
-     *     closed, a reader that is not can no longer produce the scan the proof waits for
      */
-    static Result evaluate(UUID compartmentId, List<Fact> facts, boolean tagElsewhere, boolean readerHealthyNow) {
+    static Result evaluate(UUID compartmentId, List<Fact> facts, boolean tagElsewhere) {
         Optional<Fact> ack = facts.stream().filter(fact -> fact.kind() == Kind.ACKNOWLEDGEMENT)
                 .min(Comparator.comparing(Fact::receivedAt));
         if (ack.isEmpty()) {
@@ -123,10 +123,7 @@ final class CheckoutProof {
                 .filter(fact -> fact.kind() == Kind.RFID_SCAN && fact.sequence() > closed.get().sequence())
                 .max(Comparator.comparingLong(Fact::sequence));
         if (scan.isEmpty()) {
-            return readerHealthyNow
-                    ? new Result(Verdict.INCOMPLETE, Finding.SCAN_MISSING, Stage.DOOR_OPENED, ack, opened, closed, scan)
-                    : new Result(Verdict.INCONSISTENT, Finding.READER_NOT_HEALTHY, Stage.DOOR_OPENED, ack, opened,
-                            closed, scan);
+            return new Result(Verdict.INCOMPLETE, Finding.SCAN_MISSING, Stage.DOOR_OPENED, ack, opened, closed, scan);
         }
         Fact read = scan.get();
         // The scan speaks for the cell only if the last door event before it is a closing that precedes its window,
@@ -136,20 +133,19 @@ final class CheckoutProof {
                 .max(Comparator.comparingLong(Fact::sequence));
         boolean doorAfter = chain.stream()
                 .anyMatch(fact -> fact.kind() != Kind.RFID_SCAN && fact.sequence() > read.sequence());
+        if (!doorAfter && !"HEALTHY".equals(read.reader())) {
+            return new Result(Verdict.INCONSISTENT, Finding.READER_NOT_HEALTHY, Stage.OBSERVED, ack, opened, closed,
+                    scan);
+        }
         boolean settled = lastDoor.filter(door -> door.kind() == Kind.DOOR_CLOSED).isPresent()
                 && read.windowStartedAt() != null && !read.windowStartedAt().isBefore(lastDoor.get().occurredAt())
                 && !doorAfter;
         if (!settled) {
-            return new Result(readerHealthyNow ? Verdict.INCOMPLETE : Verdict.INCONSISTENT,
-                    readerHealthyNow ? Finding.SCAN_NOT_CONCLUSIVE : Finding.READER_NOT_HEALTHY, Stage.OBSERVED, ack,
-                    opened, closed, scan);
+            return new Result(Verdict.INCOMPLETE, Finding.SCAN_NOT_CONCLUSIVE, Stage.OBSERVED, ack, opened, closed,
+                    scan);
         }
         if (tagElsewhere) {
             return new Result(Verdict.INCONSISTENT, Finding.AMBIGUOUS_LOCATION, Stage.OBSERVED, ack, opened, closed,
-                    scan);
-        }
-        if (!"HEALTHY".equals(read.reader())) {
-            return new Result(Verdict.INCONSISTENT, Finding.READER_NOT_HEALTHY, Stage.OBSERVED, ack, opened, closed,
                     scan);
         }
         return switch (read.tag()) {

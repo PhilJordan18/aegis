@@ -282,9 +282,9 @@ Les sorties anormales sont volontairement décrites dans une table séparée afi
 Pour un `CHECKOUT`, deux règles approuvées par Philippe le 11 novembre 2026 (#47) précisent la dernière ligne sans ajouter de transition. Elles s’appliquent seulement après une séquence de porte valide : accusé `ACCEPTED`, puis ouverture, puis fermeture de la cellule ciblée, dans la même session du hub.
 
 1. Un scan sain et stable après la fermeture qui voit encore le tag attendu laisse la preuve incomplète : l’opération reste `OBSERVATION_RECEIVED` jusqu’à `expiresAt`, puis devient `ANOMALY` avec `INCONSISTENT_PHYSICAL_STATE`, sans prêt.
-2. Un lecteur `FAULTED` ou `UNKNOWN` au moment de l’évaluation, soit dans le scan après la fermeture, soit dans la projection de la cellule tant que ce scan manque, produit immédiatement `ANOMALY` avec `INCONSISTENT_PHYSICAL_STATE`, sans conclure à une présence ni à une absence.
+2. Un lecteur `FAULTED` ou `UNKNOWN` dans un scan de la cellule fait après la fermeture et qu’aucun événement de porte ne suit produit immédiatement `ANOMALY` avec `INCONSISTENT_PHYSICAL_STATE`, sans conclure à une présence ni à une absence.
 
-Ces règles ne s’étendent ni à un message simplement manquant ni aux états antérieurs à l’interaction. Une porte refermée dont aucun scan concluant n’arrive avant `expiresAt`, lecteur sain, reste une exécution impossible à déterminer : `ANOMALY` avec `DEVICE_OFFLINE_DURING_OPERATION`. Le détail des conditions est en `06` §10.3.
+Ces règles ne s’étendent ni à un message simplement manquant ni aux états antérieurs à l’interaction. Une porte refermée dont aucun scan concluant n’arrive avant `expiresAt` reste une exécution impossible à déterminer : `ANOMALY` avec `DEVICE_OFFLINE_DURING_OPERATION`. Le détail des conditions est en `06` §10.3.
 
 ### 5.5 Expiration
 

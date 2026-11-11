@@ -35,7 +35,7 @@ class CheckoutProofTests {
         Fact closed = door(Kind.DOOR_CLOSED);
         Fact scan = scan("HEALTHY", TagReading.ABSENT, closed.occurredAt());
         List<Fact> shuffled = new ArrayList<>(List.of(scan, closed, facts.get(0), opened));
-        Result result = CheckoutProof.evaluate(CELL, shuffled, false, true);
+        Result result = CheckoutProof.evaluate(CELL, shuffled, false);
         assertEquals(Verdict.COHERENT, result.verdict());
         assertEquals(Stage.OBSERVED, result.stage());
         assertEquals(scan, result.scan().orElseThrow());
@@ -62,23 +62,25 @@ class CheckoutProofTests {
     }
 
     @Test
-    void rule2AnUnhealthyReaderAfterTheDoorSequenceIsInconsistent() {
+    void rule2AnUnhealthyReaderInAScanAfterTheClosingIsInconsistent() {
         ack();
         door(Kind.DOOR_OPENED);
         Fact closed = door(Kind.DOOR_CLOSED);
-        assertEquals(Verdict.INCONSISTENT, CheckoutProof.evaluate(CELL, facts, false, false).verdict());
         scan("UNKNOWN", TagReading.NO_VERDICT, closed.occurredAt());
         assertResult(Verdict.INCONSISTENT, Finding.READER_NOT_HEALTHY, Stage.OBSERVED);
     }
 
     @Test
-    void rule2DoesNotApplyBeforeTheInteraction() {
+    void rule2DoesNotApplyBeforeTheInteractionNorToAScanTakenWhileTheDoorWasOpen() {
         ack();
-        assertEquals(Finding.DOOR_NOT_OPENED, CheckoutProof.evaluate(CELL, facts, false, false).finding());
         door(Kind.DOOR_OPENED);
-        Result open = CheckoutProof.evaluate(CELL, facts, false, false);
-        assertEquals(Verdict.INCOMPLETE, open.verdict());
-        assertEquals(Finding.DOOR_NOT_CLOSED, open.finding());
+        assertResult(Verdict.INCOMPLETE, Finding.DOOR_NOT_CLOSED, Stage.DOOR_OPENED);
+        Fact early = scan("FAULTED", TagReading.NO_VERDICT, T0);
+        Fact closed = door(Kind.DOOR_CLOSED);
+        assertResult(Verdict.INCOMPLETE, Finding.SCAN_MISSING, Stage.DOOR_OPENED);
+        scan("HEALTHY", TagReading.ABSENT, closed.occurredAt());
+        assertResult(Verdict.COHERENT, Finding.NONE, Stage.OBSERVED);
+        assertEquals(Kind.RFID_SCAN, early.kind());
     }
 
     @Test
@@ -104,7 +106,7 @@ class CheckoutProofTests {
         door(Kind.DOOR_OPENED);
         Fact closed = door(Kind.DOOR_CLOSED);
         scan("HEALTHY", TagReading.ABSENT, closed.occurredAt());
-        Result result = CheckoutProof.evaluate(CELL, facts, true, true);
+        Result result = CheckoutProof.evaluate(CELL, facts, true);
         assertEquals(Verdict.INCONSISTENT, result.verdict());
         assertEquals(Finding.AMBIGUOUS_LOCATION, result.finding());
     }
@@ -117,13 +119,13 @@ class CheckoutProofTests {
                 T0.plusSeconds(sequence), T0.plusSeconds(sequence), null, null, TagReading.NO_VERDICT));
         facts.add(new Fact(UUID.randomUUID(), Kind.DOOR_OPENED, CELL, UUID.randomUUID(), 2, ++sequence,
                 T0.plusSeconds(sequence), T0.plusSeconds(sequence), null, null, TagReading.NO_VERDICT));
-        Result result = CheckoutProof.evaluate(CELL, facts, false, true);
+        Result result = CheckoutProof.evaluate(CELL, facts, false);
         assertEquals(Finding.DOOR_NOT_OPENED, result.finding());
         assertEquals(1, early.sequence());
     }
 
     private void assertResult(Verdict verdict, Finding finding, Stage stage) {
-        Result result = CheckoutProof.evaluate(CELL, facts, false, true);
+        Result result = CheckoutProof.evaluate(CELL, facts, false);
         assertEquals(verdict, result.verdict());
         assertEquals(finding, result.finding());
         assertEquals(stage, result.stage());
