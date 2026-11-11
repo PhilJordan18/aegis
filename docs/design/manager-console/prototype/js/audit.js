@@ -3,7 +3,7 @@
    Aucun événement physique n'est synthétisé : l'absence de preuve est dite (G4). */
 (function () {
   var AG = window.AG, T = AG.t, U = AG.ui, FX = AG.fx, esc = U.esc, fmt = U.fmt, S = AG.state, A = T.au, Q = AG.q;
-  var STATES = ['nominal', 'loading', 'empty', 'partial', 'invalid-cursor', 'stale', 'unavailable', 'unreachable', 'service-error', 'forbidden', 'unauthorized'];
+  var STATES = ['nominal', 'loading', 'empty', 'partial', 'invalid-cursor', 'stale', 'unreachable', 'service-error', 'forbidden', 'unauthorized'];
   var main = AG.mountShell({ current: 'audit', states: STATES });
   var LIMIT = Math.min(100, Math.max(1, parseInt(Q.get('limit') || '12', 10) || 12));
   var KEYS = ['from', 'to', 'eventType', 'subjectType', 'subjectId', 'operationId', 'actorUserId'];
@@ -12,7 +12,7 @@
   if (S === 'empty' && !KEYS.some(function (k) { return Q.has(k); })) F.eventType = 'ANOMALY_RESOLVED_BY_EVIDENCE';
   var selectedId = Q.get('sel');
   var pagesLoaded = 1;
-  var listFail = { unavailable: 1, unreachable: 1, 'service-error': 1, forbidden: 1 }[S];
+  var listFail = { unreachable: 1, 'service-error': 1, forbidden: 1 }[S];
   var loading = S === 'loading';
   var SUBJECT = { fr: { RESERVATION: 'Réservation', LOAN: 'Prêt', LOCKER_OPERATION: 'Opération', ANOMALY: 'Anomalie' }, en: { RESERVATION: 'Reservation', LOAN: 'Loan', LOCKER_OPERATION: 'Operation', ANOMALY: 'Anomaly' } }[AG.lang];
   var SUBJECT_PAGE = { RESERVATION: ['reservations', 'reservations'], LOAN: ['reservations', 'loans'], LOCKER_OPERATION: ['reservations', 'operations'], ANOMALY: ['anomalies', null] };

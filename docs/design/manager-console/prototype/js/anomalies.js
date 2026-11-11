@@ -3,7 +3,7 @@
    Fixtures : voir fixtures.js. Le détail `evidence` n'a pas de forme définie (G2) : il n'est pas inventé. */
 (function () {
   var AG = window.AG, T = AG.t, U = AG.ui, FX = AG.fx, esc = U.esc, fmt = U.fmt, S = AG.state, A = T.an, Q = AG.q;
-  var STATES = ['nominal', 'loading', 'empty', 'partial', 'stale', 'unavailable', 'unreachable', 'service-error', 'forbidden', 'unauthorized', 'detail-404', 'join-failed', 'ack-resolved', 'ack-not-acknowledgeable', 'ack-validation', 'ack-unreachable'];
+  var STATES = ['nominal', 'loading', 'empty', 'partial', 'stale', 'unreachable', 'service-error', 'forbidden', 'unauthorized', 'detail-404', 'join-failed', 'ack-resolved', 'ack-not-acknowledgeable', 'ack-validation', 'ack-unreachable'];
   var main = AG.mountShell({ current: 'anomalies', states: STATES });
   var SEV = { HIGH: 3, MEDIUM: 2, LOW: 1 };
   var TYPES = Object.keys(A.types);
@@ -14,7 +14,7 @@
   var F = { status: hasStatusParam ? (Q.get('status') === 'ALL' ? '' : Q.get('status')) : (selectedId ? '' : 'OPEN'), severity: Q.get('severity') || '', type: Q.get('type') || '' };
   if (S === 'empty' && !Q.has('severity') && !hasStatusParam) { F.severity = 'LOW'; F.status = 'OPEN'; }
   if (S === 'detail-404' && !selectedId) selectedId = FX.uid('inconnu');
-  var listFail = { unavailable: 1, unreachable: 1, 'service-error': 1, forbidden: 1 }[S];
+  var listFail = { unreachable: 1, 'service-error': 1, forbidden: 1 }[S];
   var loading = S === 'loading';
   var banner = ''; // « résolue pendant la lecture » / « reconnue »
 

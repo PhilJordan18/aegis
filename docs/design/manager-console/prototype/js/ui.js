@@ -54,14 +54,14 @@
   };
   U.retryBtn = function (mode) { return U.btn(T.retry, { variant: 'secondary', size: 'sm', attrs: 'data-retry="' + (mode || 'nominal') + '"' }); };
 
-  /* Alertes de défaillance, une par nature (mêmes textes que le catalogue des Équipements). kind : unreachable, service-error, forbidden, unavailable, not-found */
+  /* Alertes de défaillance, une par nature (mêmes textes que le catalogue des Équipements). kind : unreachable, service-error, forbidden, not-found.
+     Un 404 sur une liste n'a pas de sens établi (route non servie ou autre) : il se traite comme « service-error » (identifiant de suivi, Réessayer), jamais comme une liste vide. */
   var TRACE = '5f4bc22e-66a4-48ef-8bf3-6e7184d71c30';
   U.failure = function (kind, section, o) {
     o = o || {};
     if (kind === 'unreachable') return U.alert('warning', 'status-offline', T.unreachableTitle, '<p>' + esc(T.unreachableBody) + '</p>', { action: U.retryBtn() });
     if (kind === 'service-error') return U.alert('error', 'status-error', T.serviceErrorTitle, '<p>' + esc(T.serviceErrorBody) + '</p>', { code: TRACE, codeLabel: T.traceIdLabel, action: U.retryBtn() });
     if (kind === 'forbidden') return U.alert('error', 'status-error', T.forbidden[section], '<p>' + esc(T.forbiddenBody) + '</p>');
-    if (kind === 'unavailable') return U.alert('warning', 'status-clock', T.unavailableTitle, '<p>' + esc(T.unavailableBody) + '</p>', { code: T.unavailableCode, action: U.retryBtn('stay') });
     if (kind === 'not-found') return U.alert('warning', 'status-info', T.notFoundTitle, '<p>' + esc(T.notFoundBody) + '</p>', { action: o.back ? U.btn(T.backToList, { size: 'sm', attrs: 'data-back' }) : '' });
     return '';
   };
@@ -97,7 +97,7 @@
     window.setTimeout(function () { live.textContent = text; }, 30);
   };
 
-  /* Relance simulée : « Réessayer » et « Actualiser » (aucune requête). mode « stay » : le service répond encore 404. */
+  /* Relance simulée : « Réessayer » et « Actualiser » (aucune requête). */
   U.wireRetry = function (root) {
     root.querySelectorAll('[data-retry]').forEach(function (b) {
       if (b.__wired) return;
@@ -114,7 +114,6 @@
           var sp = b.querySelector('.ag-spinner');
           if (sp) sp.remove();
           if (mode === 'ok') { U.announce(T.refreshed({ time: U.now() })); return; }
-          if (mode === 'stay') { U.announce(T.stillUnavailable); return; }
           if (mode === 'fail') { U.announce(T.refreshFailed); return; }
           window.location.replace(U.here({ state: null, dialog: null }));
         }, 700);

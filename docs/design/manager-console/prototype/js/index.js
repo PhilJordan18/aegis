@@ -5,13 +5,13 @@
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   var SCREENS = [
     { page: 'overview', name: fr ? "Vue d'ensemble" : 'Overview', issue: 'DES-02', tabs: [],
-      states: ['nominal', 'loading', 'all-clear', 'locker-offline', 'locker-unknown', 'partial', 'stale', 'unavailable', 'unreachable', 'service-error', 'forbidden', 'unauthorized'] },
+      states: ['nominal', 'loading', 'all-clear', 'locker-offline', 'locker-unknown', 'partial', 'stale', 'unreachable', 'service-error', 'forbidden', 'unauthorized'] },
     { page: 'reservations', name: fr ? 'Réservations et prêts' : 'Reservations and loans', issue: '#48', tabs: ['reservations', 'loans', 'operations'],
-      states: ['nominal', 'loading', 'empty', 'partial', 'stale', 'unavailable', 'unreachable', 'service-error', 'forbidden', 'unauthorized', 'detail-404', 'join-failed'] },
+      states: ['nominal', 'loading', 'empty', 'partial', 'stale', 'unreachable', 'service-error', 'forbidden', 'unauthorized', 'detail-404', 'join-failed'] },
     { page: 'anomalies', name: fr ? 'Anomalies' : 'Anomalies', issue: '#52', tabs: [],
-      states: ['nominal', 'loading', 'empty', 'partial', 'stale', 'unavailable', 'unreachable', 'service-error', 'forbidden', 'unauthorized', 'detail-404', 'join-failed', 'ack-resolved', 'ack-not-acknowledgeable', 'ack-validation', 'ack-unreachable'] },
+      states: ['nominal', 'loading', 'empty', 'partial', 'stale', 'unreachable', 'service-error', 'forbidden', 'unauthorized', 'detail-404', 'join-failed', 'ack-resolved', 'ack-not-acknowledgeable', 'ack-validation', 'ack-unreachable'] },
     { page: 'audit', name: fr ? 'Audit' : 'Audit', issue: '#53', tabs: [],
-      states: ['nominal', 'loading', 'empty', 'partial', 'invalid-cursor', 'stale', 'unavailable', 'unreachable', 'service-error', 'forbidden', 'unauthorized'] }
+      states: ['nominal', 'loading', 'empty', 'partial', 'invalid-cursor', 'stale', 'unreachable', 'service-error', 'forbidden', 'unauthorized'] }
   ];
   function q(extra) {
     var p = new URLSearchParams();

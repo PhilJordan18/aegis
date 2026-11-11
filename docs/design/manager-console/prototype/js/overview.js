@@ -3,12 +3,12 @@
    réservations ACTIVE (§17), statut du casier (§16.1, §16.2), opérations non terminales dérivées de currentOperationId (G7). */
 (function () {
   var AG = window.AG, T = AG.t, U = AG.ui, FX = AG.fx, esc = U.esc, fmt = U.fmt, S = AG.state, O = T.ov;
-  var STATES = ['nominal', 'loading', 'all-clear', 'locker-offline', 'locker-unknown', 'partial', 'stale', 'unavailable', 'unreachable', 'service-error', 'forbidden', 'unauthorized'];
+  var STATES = ['nominal', 'loading', 'all-clear', 'locker-offline', 'locker-unknown', 'partial', 'stale', 'unreachable', 'service-error', 'forbidden', 'unauthorized'];
   var main = AG.mountShell({ current: 'overview', flow: true, states: STATES });
   var SEV = { HIGH: 3, MEDIUM: 2, LOW: 1 };
   var TERMINAL = { CONFIRMED: 1, FAILED: 1, EXPIRED: 1, ANOMALY: 1 };
 
-  var allFail = { unavailable: 1, unreachable: 1, 'service-error': 1, forbidden: 1 }[S];
+  var allFail = { unreachable: 1, 'service-error': 1, forbidden: 1 }[S];
   var loading = S === 'loading';
   var clear = S === 'all-clear';
 

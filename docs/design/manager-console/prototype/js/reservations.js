@@ -3,7 +3,7 @@
    Un prêt n'est jamais déduit d'une réservation : le lien passe par une opération qui porte les deux identifiants (G8). */
 (function () {
   var AG = window.AG, T = AG.t, U = AG.ui, FX = AG.fx, esc = U.esc, fmt = U.fmt, S = AG.state, R = T.rl, Q = AG.q;
-  var STATES = ['nominal', 'loading', 'empty', 'partial', 'stale', 'unavailable', 'unreachable', 'service-error', 'forbidden', 'unauthorized', 'detail-404', 'join-failed'];
+  var STATES = ['nominal', 'loading', 'empty', 'partial', 'stale', 'unreachable', 'service-error', 'forbidden', 'unauthorized', 'detail-404', 'join-failed'];
   var main = AG.mountShell({ current: 'reservations', states: STATES });
 
   var TAB = Q.get('tab'); if (['reservations', 'loans', 'operations'].indexOf(TAB) < 0) TAB = S === 'join-failed' ? 'operations' : 'reservations';
@@ -28,7 +28,7 @@
   var selectedId = Q.get('sel');
   if (S === 'detail-404' && !selectedId) selectedId = FX.uid('inconnu');
 
-  var listFail = { unavailable: 1, unreachable: 1, 'service-error': 1, forbidden: 1 }[S];
+  var listFail = { unreachable: 1, 'service-error': 1, forbidden: 1 }[S];
   var loading = S === 'loading';
 
   function rows() {

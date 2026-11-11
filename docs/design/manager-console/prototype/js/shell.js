@@ -51,7 +51,7 @@
       '<a class="ag-skip" href="#contenu">' + esc(T.skip) + '</a>' +
       '<nav class="ag-side" aria-label="' + esc(T.sectionsLabel) + '"><div class="ag-side__brand">' + brand() + '</div>' + sectionList(opts.current) + '<div class="ag-account">' + account() + '</div></nav>' +
       '<div class="ag-shell__main">' +
-      '<div class="ag-topbar">' + brand() + '<button type="button" class="ag-icon-button" id="menu-btn" aria-label="' + esc(T.openMenu) + '" aria-haspopup="dialog">' + U.icon('menu') + '</button></div>' +
+      '<header class="ag-topbar" role="banner">' + brand() + '<button type="button" class="ag-icon-button" id="menu-btn" aria-label="' + esc(T.openMenu) + '" aria-haspopup="dialog">' + U.icon('menu') + '</button></header>' +
       '<div class="ag-shell__content">' +
       '<aside class="cs-band" aria-label="' + esc(T.band) + '"><strong>' + esc(T.band) + '</strong><span>' + esc(T.bandBody) + '</span><a href="' + U.url('index') + '">' + esc(T.bandIndex) + '</a>' + bandState + '<div class="ag-sr-only" id="live" role="status"></div></aside>' +
       '<main id="contenu" class="ag-page" tabindex="-1"></main>' + review +
