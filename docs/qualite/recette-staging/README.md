@@ -185,28 +185,39 @@ réessayer.
 | C6.10 | Retrait ou retour : un **autre** tag que l'actif attendu est lu dans la cellule ciblée | `ANOMALY` (`UNEXPECTED_ASSET_OBSERVED`, doc 05 §5.4) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
 | C6.11 | Retrait ou retour : lectures contradictoires ou localisation ambiguë (par exemple, tag lu dans deux cellules) | `ANOMALY` (`INCONSISTENT_PHYSICAL_STATE`, doc 05 §5.4) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
 | C6.12 | Deux scans quasi simultanés du même QR | Exactement une commande | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
+| C6.13 | **Retrait** : ouvrir puis refermer correctement **sans retirer** l'actif (lecteur sain, tag toujours présent) | Opération non terminale jusqu'à `expiresAt` (preuve incomplète), puis `ANOMALY` (`INCONSISTENT_PHYSICAL_STATE`). **Aucun prêt** créé | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
+| C6.14 | Retrait ou retour : après un accusé et une porte ouverte puis fermée valides, le scan d'évaluation est `FAULTED` ou `UNKNOWN` | `ANOMALY` (`INCONSISTENT_PHYSICAL_STATE`) **dès ce constat**, sans attendre l'échéance et sans conclure présence ni absence. Aucun prêt créé au retrait ; aucun prêt clôturé au retour | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
 
 **Absence normale au retrait.** Au retrait, l'absence stable du tag attendu après la
 fermeture, avec un lecteur sain, est la **preuve nominale** (doc 06 §10.2) : c'est C3, pas
 une anomalie. Elle ne doit jamais être consignée comme `EXPECTED_ASSET_NOT_OBSERVED`.
 
-**Lecteur non sain : aucune preuve, type à confirmer.** Un scan `FAULTED` ou `UNKNOWN` ne
-prouve ni présence ni absence (doc 10 §12.1). Ce n'est pas un cas de C6.11. Le type
-terminal et le moment de la classification restent **à confirmer par le propriétaire des
-contrats**. Consigner l'état observé et le type éventuel, sans juger la correspondance.
+**Règles #47 validées par Philippe le 11 novembre (C6.13 et C6.14).**
 
-**Ambiguïté normative signalée.** Un retrait où l'actif n'est pas retiré (tag encore
-présent après la fermeture) reste `INCOMPLETE` jusqu'à l'échéance (doc 06 §10.3). La porte
-ayant été ouverte, l'opération devient ensuite `ANOMALY` (doc 05 §5.5 ; doc 06 §14.2). Mais
-aucun document ne nomme le type d'anomalie pour ce cas : ni `EXPECTED_ASSET_NOT_OBSERVED`,
-ni `INCONSISTENT_PHYSICAL_STATE`, ni `ASSET_PRESENT_WITH_ACTIVE_LOAN` n'y correspond
-explicitement. Ce guide n'invente pas la correspondance : consigner l'état `ANOMALY` et le
-type observé, sans juger le type. **Décision à confirmer** par le propriétaire des contrats
-(question posée sur #43) ; elle ne bloque pas cette recette.
+- **Actif non retiré au retrait.** Le tag attendu est toujours présent après une ouverture
+  et une fermeture valides, et le lecteur est sain. La preuve reste incomplète jusqu'à
+  `expiresAt`. L'opération passe ensuite en `ANOMALY` avec `INCONSISTENT_PHYSICAL_STATE`, sans
+  prêt.
+- **Lecteur non sain après une séquence valide.** Doc 06 §10.3 traite déjà ce cas (lecteur
+  non sain ⇒ `INCONSISTENT`). Un scan `FAULTED` ou `UNKNOWN` ne prouve ni présence ni absence
+  (doc 10 §12.1). Constaté **à l'évaluation**, après un accusé valide, une ouverture puis une
+  fermeture de la bonne cellule, il donne `ANOMALY` avec `INCONSISTENT_PHYSICAL_STATE` dès ce
+  constat.
+- **À ne pas confondre :**
+  - l'**absence d'un message** RFID n'est jamais une preuve et ne déclenche pas cette règle :
+    l'opération attend, puis l'échéance s'applique (doc 06 §14.2) ;
+  - un lecteur non sain **avant** l'accusé ou avant la séquence de porte ne crée pas cette
+    anomalie.
+- **Effets.** Aucun prêt créé au retrait, aucun prêt clôturé au retour. La récupération
+  suit les contrats existants (doc 05 §4.4 et §4.6).
+- **Précision des documents normatifs.** La précision de doc 05 §5.4 et doc 06 §10.3 revient
+  au propriétaire des contrats (Backend). Les ADR acceptés restent inchangés.
 
 Les cas de chiffrement (falsification du texte chiffré ou de l'AAD, rotation de clé,
 configuration de clé manquante) et les doublons ou réordonnancements MQTT se vérifient
 dans la pile cloud isolée, pas en staging. Leur résultat y est **simulé ou injecté**.
+Ils sont décrits dans
+[`../integration/matrice-retrait-retour.md`](../integration/matrice-retrait-retour.md).
 
 ## Sortie de séance
 
