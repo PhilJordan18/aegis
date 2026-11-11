@@ -81,13 +81,28 @@ public class ReservableAssets {
     @Transactional(propagation = Propagation.MANDATORY)
     public ReadinessAssessment readinessForNewReservation(UUID assetId, UUID userId, AccessLevel maximumAccessLevel,
             Instant now) {
+        return readiness(assetId, userId, maximumAccessLevel, ReadinessContext.NEW_RESERVATION, now);
+    }
+
+    /**
+     * Readiness recomputed for the checkout of the reservation that {@code userId} holds (document 06, section 6.2):
+     * that reservation counts as compatible, any other custody does not.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ReadinessAssessment readinessForCheckout(UUID assetId, UUID userId, AccessLevel maximumAccessLevel,
+            Instant now) {
+        return readiness(assetId, userId, maximumAccessLevel, ReadinessContext.CHECKOUT, now);
+    }
+
+    private ReadinessAssessment readiness(UUID assetId, UUID userId, AccessLevel maximumAccessLevel,
+            ReadinessContext context, Instant now) {
         AssetRecord asset = assets.find(assetId).orElseThrow();
         AssetFacts facts = new AssetFacts(asset.id(), asset.operationalStatus(), asset.calibrationRequired(),
                 asset.calibrationDueAt(), asset.requiredAccessLevel());
         // The caller has locked the user row and checked that it is an active technician.
         User user = new User(userId, AccountStatus.ACTIVE, Role.TECHNICIAN, maximumAccessLevel);
         return ReadinessEvaluator.evaluate(user, facts, custody.of(asset),
-                presence.of(List.of(asset.id()), now).get(asset.id()), ReadinessContext.NEW_RESERVATION, now);
+                presence.of(List.of(asset.id()), now).get(asset.id()), context, now);
     }
 
     /** Summaries of the given assets, for reservation views; an unknown identifier is left out. */

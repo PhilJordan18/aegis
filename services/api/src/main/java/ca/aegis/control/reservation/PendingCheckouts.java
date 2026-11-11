@@ -15,14 +15,14 @@ import ca.aegis.control.audit.AuditEvent;
 import ca.aegis.control.audit.AuditEventType;
 import ca.aegis.control.audit.AuditSubjectType;
 import ca.aegis.control.audit.AuditTrail;
+import ca.aegis.control.display.HubDisplayOutbox;
 import ca.aegis.control.reservation.CheckoutAttemptRepository.PendingAttempt;
 
 /**
  * Ends the checkout attempts of a reservation that never reached their authorization, in the transaction that ends the
  * reservation (document 06, sections 5.5 and 14.1; document 05, section 5.4). No lock command was ever issued for
- * them, so ending them is physically safe. Their pending challenge closes with them and its QR stops being
- * distributed; the terminal screen message of the hub is not enqueued here, as no producer of hub display
- * instructions exists yet.
+ * them, so ending them is physically safe. Their pending challenge closes with them, its ciphertext is purged, and a
+ * {@code DISPLAY_OPERATION_STATUS} clears the hub screen (document 10, section 27.3).
  */
 @Component
 class PendingCheckouts {
@@ -37,11 +37,14 @@ class PendingCheckouts {
 
     private final CheckoutAttemptRepository attempts;
     private final LocalChallengeRepository challenges;
+    private final HubDisplayOutbox display;
     private final AuditTrail audit;
 
-    PendingCheckouts(CheckoutAttemptRepository attempts, LocalChallengeRepository challenges, AuditTrail audit) {
+    PendingCheckouts(CheckoutAttemptRepository attempts, LocalChallengeRepository challenges, HubDisplayOutbox display,
+            AuditTrail audit) {
         this.attempts = attempts;
         this.challenges = challenges;
+        this.display = display;
         this.audit = audit;
     }
 
@@ -81,9 +84,12 @@ class PendingCheckouts {
             if (challenge.isPresent()) {
                 challenges.close(challenge.get(), closed, now);
                 int stopped = challenges.stopDisplay(challenge.get());
+                // The caller's lockBeforeAuthorization holds the locker whose display revision this increments.
+                boolean queued = display.enqueueStatus(attempt.id(), terminal.name(), reason, now).isPresent();
                 audit.record(AuditEvent.transition(challengeType, actor, AuditSubjectType.LOCAL_ACCESS_CHALLENGE,
                         challenge.get(), attempt.id(), LocalChallengeStatus.PENDING, closed, reason,
-                        Map.of("reservationId", reservationId, "displayInstructionsStopped", stopped), now));
+                        Map.of("reservationId", reservationId, "displayInstructionsStopped", stopped,
+                                "statusDisplayQueued", queued), now));
             }
         }
         return pending.stream().map(PendingAttempt::id).toList();

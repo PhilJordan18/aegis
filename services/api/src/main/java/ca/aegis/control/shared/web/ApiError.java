@@ -91,12 +91,25 @@ public enum ApiError {
      */
     ANOMALY_NOT_ACKNOWLEDGEABLE(HttpStatus.CONFLICT, "Anomalie non reconnaissable",
             "Cette anomalie a déjà été reconnue; sa note n'est pas remplacée."),
+    /** Document 06, section 6.1: another physical operation of the locker is not terminal. */
+    LOCKER_OPERATION_IN_PROGRESS(HttpStatus.CONFLICT, "Locker déjà engagé",
+            "Une autre opération physique est en cours sur ce locker. Réessayez lorsqu'elle sera terminée."),
+    /** Document 06, section 6.1: a door, a lock or a cell incompatible with an opening. */
+    COMPARTMENT_STATE_UNSAFE(HttpStatus.CONFLICT, "Compartiment dans un état incompatible",
+            "La porte, la serrure ou la cellule du compartiment ne permet pas cette opération."),
     IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT, "Clé d'idempotence réutilisée",
             "Cette clé d'idempotence a déjà servi pour une autre requête."),
     IDEMPOTENCY_REQUEST_IN_PROGRESS(HttpStatus.CONFLICT, "Requête déjà en cours",
             "Une requête portant la même clé d'idempotence est encore en cours. Réessayez plus tard."),
+    /** Document 06, section 6.1: the current physical proof is not enough to open. */
+    PHYSICAL_STATE_UNKNOWN(HttpStatus.UNPROCESSABLE_CONTENT, "État physique inconnu",
+            "La preuve physique courante est insuffisante pour cette opération."),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "Trop de tentatives",
             "Trop de tentatives ont été reçues. Réessayez plus tard."),
+    LOCKER_OFFLINE(HttpStatus.SERVICE_UNAVAILABLE, "Locker indisponible",
+            "Le locker est temporairement indisponible. Réessayez plus tard."),
+    DEVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Cellule indisponible",
+            "La cellule ou son lecteur est temporairement indisponible. Réessayez plus tard."),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur interne",
             "Une erreur inattendue est survenue. Communiquez l'identifiant de trace au support.");
 

@@ -11,7 +11,8 @@ public enum IdempotentResource {
 
     ASSET_MODEL("/api/v1/admin/asset-models/"),
     ASSET("/api/v1/admin/assets/"),
-    RESERVATION("/api/v1/reservations/");
+    RESERVATION("/api/v1/reservations/"),
+    LOCKER_OPERATION("/api/v1/locker-operations/");
 
     private final String readRoutePrefix;
 

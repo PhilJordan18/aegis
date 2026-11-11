@@ -39,6 +39,8 @@ public abstract class ApiIntegrationTest {
 
     public static final Instant START = Instant.parse("2026-09-28T13:00:00Z");
     public static final String JWT_SECRET = randomBase64(48);
+    public static final String DISPLAY_KEY_ID = "test-run";
+    public static final String DISPLAY_KEY = randomBase64(32);
     public static final String LOGIN = "/api/v1/auth/login";
     public static final String ME = "/api/v1/auth/me";
 
@@ -72,6 +74,11 @@ public abstract class ApiIntegrationTest {
         registry.add("aegis.security.jwt.secret", () -> JWT_SECRET);
         // Tests move the clock and insert due reservations: a background expiry pass would race their assertions.
         registry.add("aegis.reservations.expiry.scheduled", () -> "false");
+        // A display key drawn for this run only: no key value is ever committed.
+        registry.add("aegis.display.enabled", () -> "true");
+        registry.add("aegis.display.keys", () -> DISPLAY_KEY_ID + ":" + DISPLAY_KEY);
+        registry.add("aegis.display.active-key-id", () -> DISPLAY_KEY_ID);
+        registry.add("aegis.display.expiry.scheduled", () -> "false");
     }
 
     @BeforeEach

@@ -30,6 +30,14 @@ public record IdempotentResult(HttpStatus status, Object body, IdempotentResourc
         return new IdempotentResult(HttpStatus.CREATED, body, resource, id);
     }
 
+    /**
+     * 202 for a physical workflow (document 09, section 15.1): {@code Location} names the operation to poll, with
+     * {@code Retry-After: 1} and {@code Cache-Control: no-store}, on the first response and on replays.
+     */
+    public static IdempotentResult accepted(IdempotentResource resource, UUID id, Object body) {
+        return new IdempotentResult(HttpStatus.ACCEPTED, body, resource, id);
+    }
+
     /** 200 for a mutation of an existing resource. */
     public static IdempotentResult ok(Object body) {
         return new IdempotentResult(HttpStatus.OK, body, null, null);
