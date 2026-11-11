@@ -772,6 +772,38 @@ function evaluatePhysicalProof(operation, observations):
 
 Une preuve `INCOMPLETE` avant `expiresAt` maintient l’opération en cours. Une preuve `INCONSISTENT` après une interaction physique produit une anomalie. À l’expiration, l’algorithme de la section 14 décide entre `EXPIRED` et `ANOMALY`.
 
+#### 10.3.1 Retrait : conditions exactes (#47)
+
+Décision de Philippe du 11 novembre 2026. L’évaluation relit à chaque fois tous les faits acceptés de l’opération, de sorte que l’ordre de réception ne compte pas (`10` §17.3). Elle s’exécute après la validation de chaque accusé, porte ou scan de l’opération, puis à intervalle régulier pour l’échéance, dans une transaction distincte de l’ingestion.
+
+| Étape | Condition | Résultat |
+|---|---|---|
+| Accusé | Premier `COMMAND_ACKNOWLEDGED` accepté de l’opération | Absent : `INCOMPLETE` |
+| Chaîne | Faits de la cellule ciblée, même `deviceSessionId` et `bootCount` que l’accusé, `sequence` supérieure, triés par `sequence` | Un autre boot, une autre cellule ou un fait antérieur à l’accusé ne prouve rien |
+| Ouverture | Premier `DOOR_OPENED` de la chaîne | Absente : `INCOMPLETE` |
+| Fermeture | Premier `DOOR_CLOSED` après l’ouverture | Absente : `INCOMPLETE` |
+| Scan | Dernier `RFID_SCAN_COMPLETED` après la fermeture | Absent : `INCOMPLETE` si le lecteur projeté est `HEALTHY`, sinon `INCONSISTENT` (règle 2) |
+| Stabilité | Le dernier événement de porte avant le scan est une fermeture, `windowStartedAt` n’est pas antérieur à son `timestamp`, aucun événement de porte ne suit le scan | Sinon : `INCOMPLETE`, ou `INCONSISTENT` si le lecteur projeté n’est pas `HEALTHY` |
+| Localisation | Le tag attendu détecté dans une autre cellule depuis `authorizedAt` | `INCONSISTENT` |
+| Lecteur | `readerStatus` du scan différent de `HEALTHY` | `INCONSISTENT` (règle 2) |
+| Tag | `ASSET_ABSENT` normalisé pour l’identifiant attendu | `COHERENT_CHECKOUT` |
+| Tag | Identifiant attendu détecté par le scan | `INCOMPLETE` (règle 1) |
+| Tag | Aucun verdict normalisé | `INCOMPLETE` |
+
+Les jalons `DOOR_OPENED` et `OBSERVATION_RECEIVED` sont enregistrés une fois, dans l’ordre, à l’instant de réception du fait, jamais avant le jalon précédent. `INCONSISTENT` termine aussitôt en `ANOMALY` avec `INCONSISTENT_PHYSICAL_STATE` (gravité `HIGH`). À `expiresAt`, une preuve encore incomplète se termine ainsi :
+
+| Situation | Résultat | `failureReason` |
+|---|---|---|
+| Porte refermée, tag attendu encore vu par un scan sain (règle 1) | `ANOMALY` | `INCONSISTENT_PHYSICAL_STATE` |
+| Porte refermée, aucun scan concluant, lecteur sain | `ANOMALY` | `DEVICE_OFFLINE_DURING_OPERATION` |
+| Porte ouverte, jamais refermée | `ANOMALY` | `DOOR_NOT_CLOSED_BEFORE_EXPIRY` |
+| Aucune ouverture prouvée, mais une ouverture acceptée de la cellule ou un événement de porte rejeté du casier depuis `authorizedAt` | `ANOMALY` | `DEVICE_OFFLINE_DURING_OPERATION` |
+| Commande jamais réclamée ni publiée | `EXPIRED` | `OPERATION_EXPIRED` |
+| Casier `ONLINE` dans le boot ciblé par la commande, cellule `CONNECTED` et porte projetée `CLOSED` | `EXPIRED` | `OPERATION_EXPIRED` |
+| Tout autre cas | `ANOMALY` | `DEVICE_OFFLINE_DURING_OPERATION` |
+
+Une anomalie déjà ouverte pour l’opération, par exemple par un accusé incertain (#41), est conservée plutôt que dupliquée. Toute issue terminale annule une commande encore `PENDING`, marque les faits de l’opération `PROCESSED`, ajoute une instruction d’écran sans secret et n’est plus jamais modifiée; la réservation reste `ACTIVE` après `EXPIRED` ou `ANOMALY`.
+
 ---
 
 ## 11. Confirmation d’un retrait

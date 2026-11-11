@@ -476,7 +476,16 @@ LockerOperationStatus :
 | `LOCAL_PROOF_ATTEMPTS_EXHAUSTED` | `FAILED` | Cinquième secret erroné soumis par l’initiateur (§15.5) |
 | `RESERVATION_CANCELLED` | `FAILED` | Annulation de la réservation pendant la préparation (`06` §5.5) |
 
-Les issues après autorisation seront ajoutées avec leur tranche (#47). Un client traite une valeur inconnue comme un échec générique, sans en déduire d’état physique (§3).
+Une tentative de retrait terminée **après son autorisation** porte l’une des valeurs suivantes (#47; conditions exactes en `06` §10.3.1). Une opération `CONFIRMED` n’a pas de `failureReason`.
+
+| `failureReason` | Statut terminal | Cause |
+|---|---|---|
+| `OPERATION_EXPIRED` | `EXPIRED` | `expiresAt` atteint sans ouverture, commande jamais envoyée ou porte certainement restée fermée |
+| `DOOR_NOT_CLOSED_BEFORE_EXPIRY` | `ANOMALY` | Porte ouverte et non refermée avant `expiresAt` |
+| `INCONSISTENT_PHYSICAL_STATE` | `ANOMALY` | Tag attendu encore vu après la fermeture, lecteur `FAULTED` ou `UNKNOWN` après la fermeture, ou localisation ambiguë |
+| `DEVICE_OFFLINE_DURING_OPERATION` | `ANOMALY` | Exécution impossible à déterminer avant `expiresAt`, dont une preuve manquante |
+
+Un refus de commande avant toute actuation garde la valeur `COMMAND_REJECTED_<résultat>` de #41. Un client traite une valeur inconnue comme un échec générique, sans en déduire d’état physique (§3).
 
 ### 8.6 LockerStatusView
 
