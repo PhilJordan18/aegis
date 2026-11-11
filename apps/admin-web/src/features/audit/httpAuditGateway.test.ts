@@ -74,9 +74,10 @@ describe('classifyAuditFailure', () => {
   const problem = (status: number, code: string) =>
     new ApiRequestError({ kind: 'httpProblem', status, problem: problemBody(status, code), retryAfter: null, requestId: REQUEST_ID })
 
-  it('distinguishes a stale cursor, an unserved route and the session kinds', () => {
+  it('distinguishes a stale cursor, a traced 404 and the session kinds', () => {
     expect(classifyAuditFailure(problem(400, 'INVALID_CURSOR'))).toEqual({ kind: 'invalidCursor' })
-    expect(classifyAuditFailure(problem(404, 'RESOURCE_NOT_FOUND'))).toEqual({ kind: 'notServed' })
+    const notFound = classifyAuditFailure(problem(404, 'RESOURCE_NOT_FOUND'))
+    expect(notFound.kind === 'serviceError' && notFound.traceId).toBeTruthy()
     expect(classifyAuditFailure(problem(403, 'FORBIDDEN')).kind).toBe('forbidden')
     expect(classifyAuditFailure(problem(401, 'AUTH_TOKEN_EXPIRED'))).toEqual({ kind: 'ended' })
   })
