@@ -38,11 +38,11 @@ describe('ManagerShell', () => {
     expect(skip.getAttribute('href')).toBe('#contenu')
   })
 
-  it('lists the six sections in order, with only the built ones focusable', () => {
+  it('lists the six sections in order, every one a link now that each has its page', () => {
     const { sidebar } = renderShell()
     const items = within(sidebar).getAllByRole('listitem')
     expect(items.map((item) => item.textContent)).toEqual([
-      "Vue d'ensemble, à venir",
+      "Vue d'ensemble",
       'Équipements',
       'Réservations et prêts',
       'Casiers',
@@ -50,13 +50,12 @@ describe('ManagerShell', () => {
       'Audit',
     ])
     const links = within(sidebar).getAllByRole('link')
-    expect(links.map((link) => link.getAttribute('href')).filter((href) => href !== '/')).toEqual(['/apercu/equipements', '/reservations-prets', '/casiers', '/anomalies', '/audit'])
+    expect(links.map((link) => link.getAttribute('href')).filter((href) => href !== '/')).toEqual(['/vue-d-ensemble', '/apercu/equipements', '/reservations-prets', '/casiers', '/anomalies', '/audit'])
     const current = links.find((link) => link.getAttribute('aria-current') === 'page')
     expect(current?.textContent).toBe('Équipements')
-    const soon = sidebar.querySelectorAll('[aria-disabled="true"]')
-    expect(soon).toHaveLength(1)
-    soon.forEach((element) => expect(element.matches('a, button, [tabindex]')).toBe(false))
-    expect(sidebar.textContent).toContain('Section à venir')
+    // No section is « à venir » any more: neither a dimmed item nor its legend remains.
+    expect(sidebar.querySelectorAll('[aria-disabled="true"]')).toHaveLength(0)
+    expect(sidebar.textContent).not.toContain('Section à venir')
   })
 
   it('opens the account disclosure, applies the appearance at once, and closes with Escape', async () => {

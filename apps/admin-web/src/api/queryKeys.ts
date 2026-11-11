@@ -35,6 +35,13 @@ export const queryKeys = {
     operationList: (query: object) => ['transactions', 'operations', 'list', query] as const,
     operation: (id: string) => ['transactions', 'operations', 'detail', id] as const,
   },
+  /** The Vue d'ensemble reads: one key per block, so a failing route never invalidates another block. */
+  overview: {
+    all: ['overview'] as const,
+    reservations: (query: object) => ['overview', 'reservations', query] as const,
+    loans: (query: object) => ['overview', 'loans', query] as const,
+    operations: (query: object) => ['overview', 'operations', query] as const,
+  },
   audit: {
     all: ['audit'] as const,
     timeline: (filters: object) => ['audit', 'timeline', filters] as const,

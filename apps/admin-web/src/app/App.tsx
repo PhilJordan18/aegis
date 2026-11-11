@@ -6,6 +6,7 @@ import { EquipmentPage } from '../pages/EquipmentPage'
 import { LandingPage } from '../pages/LandingPage'
 import { LockersPage } from '../pages/LockersPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
+import { OverviewPage } from '../pages/OverviewPage'
 import { ReservationsLoansPage } from '../pages/ReservationsLoansPage'
 import { useI18n } from '../i18n/useI18n'
 import { useSignInPreviewScenario } from '../preview/PreviewContext'
@@ -51,6 +52,8 @@ function Page({ routeId }: { readonly routeId: RouteId }) {
       return <LandingPage />
     case 'signIn':
       return <SignInPage key={scenario ?? 'default'} afterSignInPath={AFTER_SIGN_IN_PATH} />
+    case 'overview':
+      return <RequireAdminSession>{(profile) => <OverviewPage sessionProfile={profile} />}</RequireAdminSession>
     case 'equipment':
       return <RequireAdminSession>{(profile) => <EquipmentPage sessionProfile={profile} />}</RequireAdminSession>
     case 'reservationsLoans':

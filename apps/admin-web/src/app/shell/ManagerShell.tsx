@@ -11,12 +11,13 @@ import { pathOf } from '../routes'
 import './shell.css'
 
 /**
- * Order imposed by sections.md §5 and handoff §6 SidebarNav. Équipements (the static preview in design-review
- * builds, the protected page otherwise), Réservations et prêts, Casiers (the read-only locker status), Anomalies
- * and Audit (the read-only history) exist so far.
+ * Order imposed by sections.md §5 and handoff §6 SidebarNav. Every section has its page: the Vue d'ensemble, Équipements
+ * (the static preview in design-review builds, the protected page otherwise), Réservations et prêts, Casiers (the
+ * read-only locker status), Anomalies and Audit (the read-only history). A section without a `path` would be drawn
+ * as « à venir », with its legend.
  */
 const SECTIONS: readonly { id: keyof Messages['shell']['sections']; icon: IconName; path: string | null }[] = [
-  { id: 'overview', icon: 'grid', path: null },
+  { id: 'overview', icon: 'grid', path: pathOf('overview') },
   { id: 'equipment', icon: 'box', path: pathOf(__AEGIS_PREVIEW__ ? 'equipmentPreview' : 'equipment') },
   { id: 'reservationsLoans', icon: 'calendar', path: pathOf('reservationsLoans') },
   { id: 'lockers', icon: 'locker', path: pathOf('lockers') },
@@ -87,10 +88,12 @@ function SectionList({ currentPath }: { readonly currentPath: string }) {
           </li>
         ))}
       </ul>
-      <p className="ag-nav__legend" aria-hidden="true">
-        <span className="ag-soon" />
-        {m.shell.soonLegend}
-      </p>
+      {SECTIONS.some((section) => section.path === null) && (
+        <p className="ag-nav__legend" aria-hidden="true">
+          <span className="ag-soon" />
+          {m.shell.soonLegend}
+        </p>
+      )}
     </>
   )
 }
