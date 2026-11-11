@@ -160,8 +160,12 @@ def access_matrix(admin, tech, label, route, detail_route):
 def invalid_filters(admin, label, route, filters):
     for query in filters:
         status, body = call("GET", f"{route}?{query}", admin)
-        check(f"{label}: invalid filter {query} is 400 VALIDATION_ERROR",
-              status == 400 and code_of(body) == "VALIDATION_ERROR", f"HTTP {status} {code_of(body)}")
+        # D3 as approved (#67 6800639533): violations[].code INVALID_VALUE on the field, not a top-level code.
+        field = query.split("=", 1)[0]
+        found = [(v.get("field"), v.get("code")) for v in ((body or {}).get("violations") or [])]
+        check(f"{label}: invalid filter {query} is 400 VALIDATION_ERROR with {field} INVALID_VALUE (D3)",
+              status == 400 and code_of(body) == "VALIDATION_ERROR" and (field, "INVALID_VALUE") in found,
+              f"HTTP {status} {code_of(body)} violations={found}")
 
 
 def paging(admin, label, route, query, size, expected):
@@ -463,6 +467,46 @@ def acknowledgement(admin, tech):
           sorted(results) == [200, 409, 409, 409] and events == "1", f"statuses={sorted(results)} audit events={events}")
 
 
+def walk_audit(admin, route, cursor=None, limit=100):
+    seen = []
+    for _ in range(200):
+        query = f"limit={limit}" + (f"&cursor={urllib.parse.quote(cursor)}" if cursor else "")
+        status, body = call("GET", f"{route}?{query}", admin)
+        if status != 200:
+            return seen, f"HTTP {status} {code_of(body)}"
+        seen += ids(body)
+        cursor = body.get("nextCursor") if body.get("hasMore") else None
+        if not cursor:
+            return seen, None
+    return seen, "more than 200 pages"
+
+
+def late_arrivals(admin, route):
+    # D10 as approved (#67 6800639533): no snapshot. During a walk, an event backdated behind the cursor is still
+    # read; one newer than page 1 waits for the next walk. Never a repeat, never a loss of what existed before.
+    before = sql_set("SELECT id FROM aegis.audit_events;")
+    status, body = call("GET", f"{route}?limit=5", admin)
+    first, cursor = ids(body), (body or {}).get("nextCursor")
+    insert = ("WITH x AS (INSERT INTO aegis.audit_events (event_type, actor_user_id, subject_type, subject_id, "
+              "operation_id, details, occurred_at) VALUES ('ANOMALY_CREATED', NULL, 'ANOMALY', "
+              f"'{AN_TARGET}', NULL, '{{\"synthetic\": true}}'::jsonb, {{at}}) RETURNING id) SELECT id FROM x;")
+    backdated = sql(insert.replace("{at}", "now() - interval '400 days'"))
+    newer = sql(insert.replace("{at}", "now() + interval '1 second'"))
+    rest, error = walk_audit(admin, route, cursor)
+    walk = first + rest
+    check("M7 audit (D10): a walk with arrivals never repeats an event and keeps every earlier one",
+          status == 200 and cursor and not error and len(walk) == len(set(walk)) and before <= set(walk),
+          error or f"{len(walk)} ids, {len(set(walk))} distinct, missing earlier={len(before - set(walk))}")
+    check("M7 audit (D10): an event backdated behind the cursor appears in the same walk",
+          backdated in walk, f"backdated {backdated} {'read' if backdated in walk else 'not read'}")
+    check("M7 audit (D10): an event newer than page 1 waits for the next walk",
+          newer not in walk, f"newer {newer} {'read (unexpected)' if newer in walk else 'not read'}")
+    fresh, error = walk_audit(admin, route)
+    check("M7 audit (D10): a fresh walk from page 1 contains both arrivals",
+          not error and {backdated, newer} <= set(fresh) and len(fresh) == len(set(fresh)),
+          error or f"{len(fresh)} ids, both present={({backdated, newer} <= set(fresh))}")
+
+
 def audit(admin, tech):
     route = "/admin/audit-events"
     if not served(admin, route, "M7 audit (#53)"):
@@ -516,6 +560,7 @@ def audit(admin, tech):
     check("M7 audit: an unknown subject gives an empty, final page",
           status == 200 and items(body) == [] and body.get("hasMore") is False and body.get("nextCursor") is None,
           f"HTTP {status} hasMore={(body or {}).get('hasMore')} nextCursor={(body or {}).get('nextCursor')}")
+    late_arrivals(admin, route)
     status, body = call("GET", f"{route}?operationId={OP[4]}&limit=1", admin)
     sample = items(body)[0] if items(body) else {}
     report("INFO", "M7 audit: actor and details of an operation event (for the Web parsers)",

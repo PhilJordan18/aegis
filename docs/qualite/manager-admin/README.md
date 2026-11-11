@@ -57,7 +57,7 @@ Les attentes viennent du document 09 : §17 à §19, §21 (erreurs) et §22.1 (t
 |---|---|---|
 | M0 | Les quatre listes et l'audit (`subjectType=ANOMALY`), base vide | 200 ; `items: []`, `totalItems: 0` ; page hors limite vide ; audit `hasMore: false`, `nextCursor: null` |
 | M1–M3, M5, M7 accès | Toute route, sans jeton / technicien / détail absent / id `not-a-uuid` | 401 / 403 `FORBIDDEN` / 404 `RESOURCE_NOT_FOUND` / 400 |
-| M1 filtres invalides | `status=BOGUS`, `assetId=xyz`, `userId=xyz`, `from=yesterday`, `to=2026-13-40…`, `page=-1`, `size=0`, `size=101` | 400 `VALIDATION_ERROR` |
+| M1 filtres invalides | `status=BOGUS`, `assetId=xyz`, `userId=xyz`, `from=yesterday`, `to=2026-13-40…`, `page=-1`, `size=0`, `size=101` | 400 `VALIDATION_ERROR`, avec `violations[]` contenant le champ fautif et le code `INVALID_VALUE` (D3, #67 6800639533). Vaut pour tous les filtres invalides M1 à M7 |
 | M1 pagination | Toutes les réservations en `size=4`, puis le technicien en `size=3` ; deux parcours | Ensemble égal à SQL, sans doublon ; `totalItems` exact ; même ordre aux deux parcours, malgré les 6 `created_at` égaux |
 | M1 filtres | Technicien B, `EXPIRED`, `assetId` de `SYN-LOAN-ACTIVE` ; `from` = instant commun et `to` = instant + 1 s ; `from` = instant − 1 s et `to` = instant ; `from` = `to` | Ensembles égaux à SQL ; les 6 réservations ex æquo sont incluses par `from` inclusif et exclues par `to` exclusif ; un intervalle vide donne 400 `VALIDATION_ERROR` (choix Backend, #67 6799329882) |
 | M1 détail | Réservation réelle `ACTIVE`, puis réelle `CANCELLED` | `status`, `userId`, `asset.assetCode` `REC-…-1` ; `cancelledAt` renseigné |
@@ -75,6 +75,7 @@ Les attentes viennent du document 09 : §17 à §19, §21 (erreurs) et §22.1 (t
 | M6 concurrence | 4 reconnaissances simultanées de b04, clés distinctes | Un 200, trois 409, un seul événement d'audit |
 | M7 audit | `limit=0`, `limit=101`, `eventType`/`subjectType` inconnus, `operationId=xyz`, `from=x`, `cursor=not-a-cursor` | 400 `VALIDATION_ERROR` ; le curseur altéré donne 400 `INVALID_CURSOR` |
 | M7 curseur | Parcours en `limit=7` avec `to` = instantané SQL | Ensemble égal à SQL, sans doublon ni omission |
+| M7 arrivées tardives (D10) | Page 1 en `limit=5`, puis deux événements synthétiques insérés pendant le parcours : l'un antidaté de 400 jours, l'autre plus récent que la page 1 | Le parcours est sans doublon et contient tout l'existant. L'antidaté est lu, car il se trie après le curseur ; le plus récent ne l'est pas. Un nouveau parcours contient les deux. Ce n'est pas un instantané (D10 approuvé) |
 | M7 filtres | `operationId=604`, `subjectType=ANOMALY`, `eventType=ANOMALY_ACKNOWLEDGED`, `subjectId=703`, sujet inconnu | Ensembles égaux à SQL ; sujet inconnu : page vide finale |
 | M8 fuite | Toutes les réponses collectées | Aucun témoin, aucun hachage `$2a$`/`$2b$`, aucune valeur RFID brute hors des routes `/identifiers` |
 
@@ -103,6 +104,29 @@ Lancez la pile avec `QA_KEEP=1`, puis pointez le Manager sur `http://127.0.0.1:1
 | Corrélation manquante (b06) | « Aucune opération liée », jamais un lien vide ou fabriqué |
 | Emprunt 702 | Marqué en retard, toujours emprunté ; aucune action de libération |
 | Reconnaissance | Note obligatoire (1–500) ; aucune action « Résoudre » ; l'audit montre l'événement |
+
+**Passe automatisée.** Une fois la matrice passée (elle reconnaît toutes les anomalies semées), appliquez `seed-web-review.sql`, qui ajoute trois anomalies synthétiques `OPEN` :
+
+- b10, liée à l'opération 607 ;
+- b11, sans opération ;
+- b12, pour le conflit 409.
+
+Lancez ensuite le Manager construit avec `npx vite preview` (`AEGIS_API_ORIGIN=http://127.0.0.1:18081`, port 4173), puis :
+
+```
+WEB_DIR=<checkout Web>/apps/admin-web QA_CREDS=<fichier credentials> OUT_DIR=<dossier de captures> node docs/qualite/manager-admin/web-review.mjs
+```
+
+Le scénario `anomalies` reconnaît b10 et b12 ; il ne passe donc qu'une fois par jeu de données. `ONLY=transactions,audit,…` limite les scénarios.
+
+Deux contrôles reposent sur des pannes routées dans le navigateur, que le serveur réel ne produit pas :
+
+- un 404 de liste ;
+- une API injoignable.
+
+Le curseur invalide est en revanche refusé par le vrai serveur.
+
+Les erreurs de ressource 400, 404 et 409 que Chromium écrit dans la console sont attendues ; ce ne sont pas des erreurs de page.
 
 ## 5. Recette manuelle pour Philippe et Jimmy
 
