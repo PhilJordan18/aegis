@@ -41,7 +41,7 @@ import ca.aegis.control.reservation.CheckoutAttemptRepository.PendingAttempt;
  * referenced by a message that can no longer be shown.
  */
 @Component
-class LocalChallengeExpiry {
+public class LocalChallengeExpiry {
 
     /** Reasons stored in {@code failure_reason}; document 05, section 5.4 names the cases, not the codes. */
     static final String LOCAL_PROOF_EXPIRED = "LOCAL_PROOF_EXPIRED";
@@ -84,7 +84,7 @@ class LocalChallengeExpiry {
     }
 
     /** One pass: every pending challenge is checked once; returns the number ended. */
-    int run(int max) {
+    public int run(int max) {
         int ended = 0;
         for (Candidate candidate : pending(max)) {
             try {

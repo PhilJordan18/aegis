@@ -69,6 +69,27 @@ final class TestBroker {
         }
     }
 
+    record Delivery(String topic, byte[] payload, int qos, boolean retained) {
+    }
+
+    /** A backend-account connection, clean session, for checks of what that account may read. */
+    Device api() {
+        try {
+            MqttClient client = new MqttClient(url, "aegis-test-api-observer-" + UUID.randomUUID(),
+                    new MemoryPersistence());
+            MqttConnectOptions options = new MqttConnectOptions();
+            options.setMqttVersion(MqttConnectOptions.MQTT_VERSION_3_1_1);
+            options.setCleanSession(true);
+            options.setUserName(API_USER);
+            options.setPassword(apiPassword.toCharArray());
+            options.setConnectionTimeout(5);
+            client.connect(options);
+            return new Device(client);
+        } catch (MqttException unreachable) {
+            throw new IllegalStateException("The development MQTT broker at " + url + " is required", unreachable);
+        }
+    }
+
     /** Ends the persistent session a test subscriber left on the broker, with its queued messages. */
     void discardSession(String clientId) {
         try {
@@ -103,6 +124,16 @@ final class TestBroker {
                 client.publish(topic, message);
             } catch (MqttException failure) {
                 throw new IllegalStateException("Publication failed", failure);
+            }
+        }
+
+        /** QoS 1 subscription; every delivery, its retained flag included, goes to {@code sink}. */
+        void subscribe(String topicFilter, java.util.concurrent.BlockingQueue<Delivery> sink) {
+            try {
+                client.subscribe(topicFilter, 1, (topic, message) -> sink.add(new Delivery(topic, message.getPayload(),
+                        message.getQos(), message.isRetained())));
+            } catch (MqttException failure) {
+                throw new IllegalStateException("Subscription failed", failure);
             }
         }
 
