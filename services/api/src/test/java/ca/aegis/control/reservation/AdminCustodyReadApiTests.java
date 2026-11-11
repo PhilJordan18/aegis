@@ -121,6 +121,30 @@ class AdminCustodyReadApiTests extends ApiIntegrationTest {
         read(RESERVATIONS + "?assetId=" + asset).andExpect(jsonPath("$.items[0].availableActions").value(empty()));
     }
 
+    /** Document 09, section 8.4: a terminal attempt stays referenced, and a non-terminal one takes priority. */
+    @Test
+    void anActiveReservationKeepsReferencingItsLatestAttemptEvenWhenTerminal() throws Exception {
+        UUID asset = fixtures.assetAt(locker, 1);
+        UUID reservation = fixtures.reservation(asset, technician.id(), "ACTIVE", START.minusSeconds(900),
+                START.plusSeconds(3600));
+        UUID failed = fixtures.attempt(asset, technician.id(), reservation, "FAILED", false, START.minusSeconds(600));
+        UUID expired = fixtures.attempt(asset, technician.id(), reservation, "EXPIRED", false,
+                START.minusSeconds(300));
+        String technicianToken = accessToken(technician);
+
+        read(RESERVATIONS + "/" + reservation).andExpect(jsonPath("$.currentOperationId").value(expired.toString()));
+        mvc.perform(get("/api/v1/reservations/" + reservation).header(AUTHORIZATION, bearer(technicianToken)))
+                .andExpect(jsonPath("$.currentOperationId").value(expired.toString()));
+
+        // An older non-terminal attempt still wins over a newer terminal one.
+        jdbc.sql("UPDATE aegis.locker_operations SET status = 'REQUESTED', terminal_at = NULL, failure_reason = NULL "
+                + "WHERE id = :id").param("id", failed).update();
+        read(RESERVATIONS + "?assetId=" + asset)
+                .andExpect(jsonPath("$.items[0].currentOperationId").value(failed.toString()));
+        mvc.perform(get("/api/v1/me/reservation").header(AUTHORIZATION, bearer(technicianToken)))
+                .andExpect(jsonPath("$.currentOperationId").value(failed.toString()));
+    }
+
     @Test
     void pagesNeitherRepeatNorOmitAReservation() throws Exception {
         // A window no other test of the shared database uses.

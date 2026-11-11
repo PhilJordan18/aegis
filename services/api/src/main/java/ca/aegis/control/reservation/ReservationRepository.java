@@ -39,9 +39,6 @@ class ReservationRepository {
                    fulfilled_at, expired_at
             FROM aegis.reservations
             """;
-    private static final String NON_TERMINAL_OPERATION =
-            "status NOT IN ('CONFIRMED', 'FAILED', 'EXPIRED', 'ANOMALY')";
-
     private final JdbcClient jdbc;
 
     ReservationRepository(JdbcClient jdbc) {
@@ -190,11 +187,18 @@ class ReservationRepository {
         }
     }
 
-    /** The non-terminal checkout attempt of the reservation, if any; none exists before the checkout slice. */
+    /**
+     * The {@code currentOperationId} of an {@code ACTIVE} reservation (document 09, section 8.4): its non-terminal
+     * checkout attempt, or else its latest attempt even when terminal, so that a failure or an anomaly stays
+     * explained. The caller sends {@code null} once the reservation is closed.
+     */
     Optional<UUID> currentOperationOf(UUID reservationId) {
-        return jdbc.sql("SELECT id FROM aegis.locker_operations WHERE reservation_id = :id AND "
-                + NON_TERMINAL_OPERATION + " ORDER BY created_at DESC LIMIT 1")
-                .param("id", reservationId).query(UUID.class).optional();
+        return jdbc.sql("""
+                SELECT id FROM aegis.locker_operations
+                WHERE reservation_id = :id AND type = 'CHECKOUT'
+                ORDER BY (status IN ('CONFIRMED', 'FAILED', 'EXPIRED', 'ANOMALY')), created_at DESC, id DESC
+                LIMIT 1
+                """).param("id", reservationId).query(UUID.class).optional();
     }
 
     private static ReservationRow map(ResultSet row, int number) throws SQLException {
