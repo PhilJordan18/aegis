@@ -483,9 +483,15 @@ def audit(admin, tech):
           not error and len(seen) == len(set(seen)) and set(seen) == expected,
           error or f"{pages} pages, {len(seen)} ids, {len(set(seen))} distinct, {len(expected)} expected from SQL, "
                    f"missing={len(expected - set(seen))}, extra={len(set(seen) - expected)}")
-    report("INFO", "M7 audit: order direction (cursor stability unspecified beyond occurredAt and id)",
-           "descending" if order == sorted(order, reverse=True) else
-           "ascending" if order == sorted(order) else "neither: FIX NEEDED")
+    check("M7 audit: latest first, occurredAt desc then id desc (Backend D10, #67 6799329882)",
+          not error and order == sorted(order, reverse=True),
+          "descending" if order == sorted(order, reverse=True) else
+          "ascending" if order == sorted(order) else "neither")
+    status, body = call("GET", f"{route}?limit=2", admin)
+    other = (body or {}).get("nextCursor")
+    status, body = call("GET", f"{route}?subjectType=ANOMALY&limit=2&cursor={urllib.parse.quote(other or 'x')}", admin)
+    check("M7 audit: a cursor reused with another filter is 400 INVALID_CURSOR",
+          other is not None and status == 400 and code_of(body) == "INVALID_CURSOR", f"HTTP {status} {code_of(body)}")
     filtered_audit = [
         (f"operationId={OP[4]}", f"operation_id = '{OP[4]}'"),
         ("subjectType=ANOMALY", "subject_type = 'ANOMALY'"),
@@ -503,8 +509,16 @@ def audit(admin, tech):
           f"HTTP {status} hasMore={(body or {}).get('hasMore')} nextCursor={(body or {}).get('nextCursor')}")
     status, body = call("GET", f"{route}?operationId={OP[4]}&limit=1", admin)
     sample = items(body)[0] if items(body) else {}
-    report("INFO", "M7 audit: actor and details shape (unspecified by document 09, section 19.1)",
+    report("INFO", "M7 audit: actor and details of an operation event (for the Web parsers)",
            f"actor={json.dumps(sample.get('actor'))} details={json.dumps(sample.get('details'))[:200]}")
+    status, body = call("GET", f"{route}?eventType=ANOMALY_ACKNOWLEDGED&limit=100", admin)
+    actors = [item.get("actor") for item in items(body)]
+    check("M7 audit: actor is {id, displayName} for an administrator action (Backend D8)",
+          status == 200 and actors and all(isinstance(a, dict) and set(a) == {"id", "displayName"} for a in actors),
+          f"HTTP {status} {json.dumps(actors)[:200]}")
+    status, body = call("GET", f"{route}?eventType=COMMAND_SENT&limit=100", admin)
+    check("M7 audit: a system event has actor null", status == 200 and items(body)
+          and all(item.get("actor") is None for item in items(body)), f"HTTP {status} {len(items(body))} item(s)")
 
 
 def leakage():
