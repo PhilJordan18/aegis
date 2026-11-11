@@ -14,6 +14,8 @@ import { createAppearanceController } from './features/appearance/appearance'
 import { AppearanceContext } from './features/appearance/useAppearance'
 import type { AuthGateway } from './features/auth/authGateway'
 import { AuthGatewayContext } from './features/auth/AuthGatewayContext'
+import { AnomalyGatewayContext } from './features/anomalies/AnomalyGatewayContext'
+import { createHttpAnomalyGateway } from './features/anomalies/httpAnomalyGateway'
 import { createHttpAuthGateway } from './features/auth/httpAuthGateway'
 import { createSessionStore, SessionContext } from './features/auth/session'
 import { CatalogGatewayContext } from './features/catalog/CatalogGatewayContext'
@@ -23,6 +25,8 @@ import { CustodyGatewayContext } from './features/custody/CustodyGatewayContext'
 import { createHttpCustodyGateway } from './features/custody/httpCustodyGateway'
 import { LockerGatewayContext } from './features/lockers/LockerGatewayContext'
 import { createHttpScheduleGateway } from './features/schedule/httpScheduleGateway'
+import { createHttpTransactionGateway } from './features/transactions/httpTransactionGateway'
+import { TransactionGatewayContext } from './features/transactions/TransactionGatewayContext'
 import { ScheduleGatewayContext } from './features/schedule/ScheduleGatewayContext'
 import { createLocaleController } from './i18n/locale'
 import { LocaleContext } from './i18n/useI18n'
@@ -52,6 +56,9 @@ const catalogGateway = createHttpCatalogGateway()
 const lockerGateway = createHttpLockerGateway()
 const scheduleGateway = createHttpScheduleGateway()
 const custodyGateway = createHttpCustodyGateway()
+// Reservations, loans and locker operations (09 §17): read only; design-review captures route /api/v1/admin/... themselves.
+const transactionGateway = createHttpTransactionGateway()
+const anomalyGateway = createHttpAnomalyGateway()
 const auditGateway = createHttpAuditGateway()
 
 const container = document.getElementById('root')
@@ -69,11 +76,15 @@ createRoot(container).render(
                   <LockerGatewayContext value={lockerGateway}>
                     <ScheduleGatewayContext value={scheduleGateway}>
                       <CustodyGatewayContext value={custodyGateway}>
-                        <AuditGatewayContext value={auditGateway}>
-                          <PreviewContext value={previewControls}>
-                            <App />
-                          </PreviewContext>
-                        </AuditGatewayContext>
+                        <TransactionGatewayContext value={transactionGateway}>
+                          <AnomalyGatewayContext value={anomalyGateway}>
+                            <AuditGatewayContext value={auditGateway}>
+                              <PreviewContext value={previewControls}>
+                                <App />
+                              </PreviewContext>
+                            </AuditGatewayContext>
+                          </AnomalyGatewayContext>
+                        </TransactionGatewayContext>
                       </CustodyGatewayContext>
                     </ScheduleGatewayContext>
                   </LockerGatewayContext>

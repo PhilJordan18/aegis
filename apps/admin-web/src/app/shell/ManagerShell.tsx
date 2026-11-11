@@ -12,15 +12,15 @@ import './shell.css'
 
 /**
  * Order imposed by sections.md §5 and handoff §6 SidebarNav. Équipements (the static preview in design-review
- * builds, the protected page otherwise), Casiers (the read-only locker status) and Audit (the read-only history)
- * exist so far.
+ * builds, the protected page otherwise), Réservations et prêts, Casiers (the read-only locker status), Anomalies
+ * and Audit (the read-only history) exist so far.
  */
 const SECTIONS: readonly { id: keyof Messages['shell']['sections']; icon: IconName; path: string | null }[] = [
   { id: 'overview', icon: 'grid', path: null },
   { id: 'equipment', icon: 'box', path: pathOf(__AEGIS_PREVIEW__ ? 'equipmentPreview' : 'equipment') },
-  { id: 'reservationsLoans', icon: 'calendar', path: null },
+  { id: 'reservationsLoans', icon: 'calendar', path: pathOf('reservationsLoans') },
   { id: 'lockers', icon: 'locker', path: pathOf('lockers') },
-  { id: 'anomalies', icon: 'alert', path: null },
+  { id: 'anomalies', icon: 'alert', path: pathOf('anomalies') },
   { id: 'audit', icon: 'list', path: pathOf('audit') },
 ]
 

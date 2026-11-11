@@ -14,6 +14,9 @@
 **Mise à jour ciblée :** 28 octobre 2026 — sous-objets `AssetModelSummary`, `CalibrationView` et `PlacementSummary` de `AssetView` (§8.2); sérialisation existante documentée; code `404 ASSET_NOT_FOUND` de §11.2 ajouté à §21 (#33, #34)  
 **Mise à jour ciblée :** 28 octobre 2026 — décisions de Philippe pour #33 et #34 : ordre stable des raisons et raison principale choisie par la convention de présentation, jamais par `reasons[0]` (§8.1); actif archivé exclu de la liste mais lisible par son identifiant (§11.1, §11.2)  
 **Mise à jour ciblée :** 28 octobre 2026 — réservation (RES-01, #37), décisions de Philippe du 28 octobre 2026 : ordre des contrôles implémenté, `reservedUntil` non postérieur à l’instant courant, locker sans horaire, horaire du placement courant et actif inconnu (§14.1); `availableActions` vide tant que ses actions ne sont pas implémentées (§8.10); codes de refus de l’archivage (§12.2); `ACTIVE_RESERVATION_NOT_FOUND` et `ASSET_OPERATION_IN_PROGRESS` ajoutés à §21  
+**Mise à jour ciblée :** 11 novembre 2026 — lectures administratives des transactions (#48), décisions de Philippe du 11 novembre 2026 (#67) : tri, filtres, vues sans action et résumé du titulaire `user`/`holder` (§17)  
+**Mise à jour ciblée :** 11 novembre 2026 — anomalies administratives (#52), décisions de Philippe du 11 novembre 2026 (#67) : tri et filtres, `summary` de repli, `evidence` bornée à 50 observations (§18.1), reconnaissance et codes `ANOMALY_NOT_ACKNOWLEDGEABLE` et `ANOMALY_ALREADY_RESOLVED` ajoutés à §21 (§18.2)  
+**Mise à jour ciblée :** 11 novembre 2026 — chronologie d’audit (#53), décisions de Philippe du 11 novembre 2026 (#67) : `actor`, liste de champs scalaires de `details`, curseur lié aux filtres et garanties réelles d’un parcours, sans instantané (§19.1, §22.2); code `INVALID_CURSOR` ajouté à §21  
 **Mise à jour ciblée :** 28 octobre 2026 — recherche `q` commune à l’API, au Web et à iOS : espaces Unicode de bordure, longueur en grappes de graphèmes, corpus partagé (§11.1, §22.3, §26.6), décision commune consignée par l’[ADR-014](../adr/ADR-014-recherche-q-graphemes.md), acceptée par Philippe le 6 novembre 2026 (#109)  
 **Mise à jour ciblée :** 6 novembre 2026 — lectures administratives approuvées par Philippe (#25, #26, #28) : `GET /admin/lockers` et `AdminLockerView` (§9.3, §16.2), historique des identifiants `GET /admin/assets/{assetId}/identifiers` (§9.3, §12.3); aucune migration  
 **Mise à jour ciblée :** 6 novembre 2026 — refus du catalogue liés à la garde de l’actif (#26) : placement refusé pendant une réservation active, un prêt ouvert ou une opération non terminale, attribution refusée pendant une opération non terminale et révocation de l’identifiant qu’elle attend, avec les codes de l’archivage (§12.3, §12.4, §21); ordre des refus approuvé par Philippe le 6 novembre 2026; aucun code ni champ nouveau  
@@ -1303,6 +1306,14 @@ Filtres communs :
 | to | Instant exclusif |
 | page, size | Pagination |
 
+Règles approuvées par Philippe le 11 novembre 2026 (#67, D1 à D4 et G1) :
+
+- tri du plus récent au plus ancien, `id` décroissant départageant les égalités : réservations et opérations par `createdAt`, prêts par `checkedOutAt`; `from` et `to` bornent ce même instant;
+- `status` accepte une seule valeur. Une valeur hors de l’ensemble contrôlé, un UUID mal formé, un instant invalide ou un `from` non antérieur à `to` lorsque les deux sont fournis donnent `400 VALIDATION_ERROR`, avec une violation `INVALID_VALUE` sur chaque paramètre fautif, toutes rapportées ensemble; la page et la taille suivent §22.1;
+- un identifiant inconnu donne `404 RESOURCE_NOT_FOUND`;
+- `availableActions` est toujours vide dans ces vues : l’administrateur n’exécute aucune des mutations de §8.10. Le `requiredAction` d’une opération est informatif (§15.4) et n’ouvre aucune action;
+- `AdminReservationView` reprend `ReservationView` (§8.3) et ajoute `user` juste après `userId`; `AdminLoanView` reprend `LoanView` (§8.4) et ajoute `holder` juste après `holderUserId`. Ces deux champs sont un `UserSummary` (§8.8), jamais `null`. Les vues du technicien ne changent pas.
+
 Ces routes ne permettent jamais de modifier un état. Il n’existe aucune route administrative de type complete-loan, confirm-operation ou force-return.
 
 ---
@@ -1314,6 +1325,12 @@ Ces routes ne permettent jamais de modifier un état. Il n’existe aucune route
 GET /admin/anomalies accepte status, type, severity, assetId, lockerOperationId, from, to, page et size.
 
 GET /admin/anomalies/{anomalyId} retourne AnomalyView et, dans une section evidence, les observations normalisées utiles. Les payloads bruts restent exclus.
+
+Règles approuvées par Philippe le 11 novembre 2026 (#67, D1 à D3, D5 et D7) :
+
+- la liste suit le tri et la validation des filtres de §17 sur `detectedAt` : `status`, `type` et `severity` acceptent chacun une seule valeur;
+- `summary` est une phrase fixe choisie d’après `type`, jamais construite à partir des détails ou d’un payload. Elle reste un repli compatible : les clients traduisent `type` en français et en anglais et n’imposent jamais ce texte français à une interface anglaise;
+- `evidence` contient au plus 50 observations normalisées de l’opération de l’anomalie et son observation de résolution, de la plus récente à la plus ancienne (`observedAt`, puis `observationId` décroissants). Chacune porte `observationId`, `type`, `compartmentId`, `operationId`, `observedAt` et `receivedAt`, sans valeur d’identifiant brute, valeur mesurée ni payload. Cette sélection n’est pas un historique exhaustif, et l’interface indique cette limite.
 
 ### 18.2 Reconnaissance
 
@@ -1336,6 +1353,8 @@ Erreurs :
 - 409 ANOMALY_ALREADY_RESOLVED;
 - 409 ANOMALY_NOT_ACKNOWLEDGEABLE;
 - 400 VALIDATION_ERROR.
+
+Règle D6 approuvée par Philippe le 11 novembre 2026 (#67) : la même clé avec le même corps rejoue le résultat enregistré (§20.2). Une nouvelle clé sur une anomalie `ACKNOWLEDGED` donne `409 ANOMALY_NOT_ACKNOWLEDGEABLE` et conserve la note d’origine; une anomalie `RESOLVED` donne `409 ANOMALY_ALREADY_RESOLVED`. La reconnaissance écrit un événement d’audit `ANOMALY_ACKNOWLEDGED` sans la note et ne résout jamais l’anomalie.
 
 Il n’existe pas de route resolve. Seule l’ingestion d’une preuve physique cohérente peut faire passer l’anomalie à RESOLVED.
 
@@ -1372,6 +1391,15 @@ Réponse :
 Un AuditEventView contient id, eventType, actor, subjectType, subjectId, operationId, fromState, toState, result, reason, occurredAt et details filtrés.
 
 Le curseur encode au minimum occurredAt et id. Le client le traite comme opaque.
+
+Règles approuvées par Philippe le 11 novembre 2026 (#67, D8 à D10) :
+
+- tri du plus récent au plus ancien par `occurredAt`, puis `id` décroissant; `from` et `to` bornent `occurredAt`; `limit` vaut 50 par défaut; `eventType` et `subjectType` acceptent chacun une seule valeur de l’ensemble contrôlé, et les erreurs de filtre suivent §17;
+- `actor` est un `UserSummary` (§8.8) pour un acteur humain, sinon `null`, sans attribution inventée;
+- `details` suit une liste explicite de champs scalaires par type d’événement. Un champ n’est exposé que si son chemin complet figure dans la liste et que sa valeur est une chaîne, un nombre, un booléen ou `null`. Les secrets, hashes, notes, textes libres, valeurs d’identifiant brutes et payloads sont exclus. Un type d’événement absent de la liste expose `{}`;
+- le curseur est lié aux filtres qui l’ont produit, mais pas à `limit`; réutilisé avec d’autres filtres ou mal formé, il donne `400 INVALID_CURSOR`.
+
+Garanties d’un parcours, c’est-à-dire de la première page jusqu’à `hasMore = false` : aucun événement n’apparaît deux fois, et tout événement validé avant la lecture de la première page apparaît. Le parcours n’est pas un instantané : chaque page est une lecture distincte, et `occurredAt` est l’horloge de la mutation, pas l’instant de sa validation. Un événement validé pendant le parcours n’apparaît que s’il se classe après la position du curseur. Un événement plus récent que la première page, ou qui se classe avant le curseur (arrivée tardive ou antidatée), apparaît au parcours suivant. Pour le voir, le client relance la lecture depuis la première page.
 
 ---
 
@@ -1433,6 +1461,7 @@ Les PUT sont idempotents par définition. Une répétition identique ne crée pa
 | 202 | OPERATION_ACCEPTED | Workflow physique créé |
 | 400 | VALIDATION_ERROR | Format ou champ invalide |
 | 400 | IDEMPOTENCY_KEY_REQUIRED | Clé obligatoire absente |
+| 400 | INVALID_CURSOR | Curseur mal formé ou émis pour d’autres filtres (§19.1, §22.2) |
 | 401 | AUTH_INVALID_CREDENTIALS | Connexion refusée |
 | 401 | AUTH_TOKEN_INVALID | Jeton invalide |
 | 401 | AUTH_TOKEN_EXPIRED | Jeton expiré |
@@ -1462,6 +1491,8 @@ Les PUT sont idempotents par définition. Une répétition identique ne crée pa
 | 409 | IDENTIFIER_ALREADY_ASSIGNED | Paire type + valeur déjà active (§12.3) |
 | 409 | COMPARTMENT_DISABLED | Placement dans un compartiment désactivé (§12.4) |
 | 409 | COMPARTMENT_ALREADY_OCCUPIED | Compartiment déjà attribué à un autre actif (§12.4) |
+| 409 | ANOMALY_NOT_ACKNOWLEDGEABLE | Anomalie déjà reconnue, reconnaissance avec une nouvelle clé (§18.2) |
+| 409 | ANOMALY_ALREADY_RESOLVED | Anomalie déjà résolue (§18.2) |
 | 422 | ASSET_NOT_READY | Readiness autre que READY |
 | 422 | OUTSIDE_OPERATING_HOURS | Action hors plage |
 | 422 | RESERVATION_END_AFTER_CLOSING | Échéance trop tardive |
@@ -1485,6 +1516,8 @@ Le catalogue et les listes administratives simples utilisent page et size. Le tr
 ### 22.2 Pagination par curseur
 
 L’audit et les chronologies potentiellement volumineuses utilisent un curseur opaque. Un curseur invalide retourne 400 INVALID_CURSOR.
+
+Le curseur ne promet aucun instantané; les garanties d’un parcours de l’audit sont celles de §19.1.
 
 ### 22.3 Recherche
 

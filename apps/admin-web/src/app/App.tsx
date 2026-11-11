@@ -1,10 +1,12 @@
 import { lazy, Suspense, useEffect, type ComponentType } from 'react'
 import { SignInPage } from '../features/auth/SignInPage'
+import { AnomaliesPage } from '../pages/AnomaliesPage'
 import { AuditPage } from '../pages/AuditPage'
 import { EquipmentPage } from '../pages/EquipmentPage'
 import { LandingPage } from '../pages/LandingPage'
 import { LockersPage } from '../pages/LockersPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
+import { ReservationsLoansPage } from '../pages/ReservationsLoansPage'
 import { useI18n } from '../i18n/useI18n'
 import { useSignInPreviewScenario } from '../preview/PreviewContext'
 import { RequireAdminSession } from './RequireAdminSession'
@@ -51,8 +53,12 @@ function Page({ routeId }: { readonly routeId: RouteId }) {
       return <SignInPage key={scenario ?? 'default'} afterSignInPath={AFTER_SIGN_IN_PATH} />
     case 'equipment':
       return <RequireAdminSession>{(profile) => <EquipmentPage sessionProfile={profile} />}</RequireAdminSession>
+    case 'reservationsLoans':
+      return <RequireAdminSession>{(profile) => <ReservationsLoansPage sessionProfile={profile} />}</RequireAdminSession>
     case 'lockers':
       return <RequireAdminSession>{(profile) => <LockersPage sessionProfile={profile} />}</RequireAdminSession>
+    case 'anomalies':
+      return <RequireAdminSession>{(profile) => <AnomaliesPage sessionProfile={profile} />}</RequireAdminSession>
     case 'audit':
       return <RequireAdminSession>{(profile) => <AuditPage sessionProfile={profile} />}</RequireAdminSession>
     case 'equipmentPreview':
