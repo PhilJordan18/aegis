@@ -63,7 +63,6 @@ export function TransactionFilters({ view, values, onApply }: TransactionFilters
         <TextField
           name="equipement"
           label={t.filterAsset}
-          help={t.filterAssetHelp}
           error={errors.assetId}
           value={assetId}
           onChange={(event) => setAssetId(event.target.value)}
@@ -82,7 +81,9 @@ export function TransactionFilters({ view, values, onApply }: TransactionFilters
           {t.filterClear}
         </Button>
       </div>
-      <p className="ag-filters__help">{t.filterPeriodHelp({ zone: LAB_TIME_ZONE })}</p>
+      <p className="ag-filters__help">
+        {t.filterAssetHelp} {t.filterPeriodHelp({ zone: LAB_TIME_ZONE })}
+      </p>
     </form>
   )
 }

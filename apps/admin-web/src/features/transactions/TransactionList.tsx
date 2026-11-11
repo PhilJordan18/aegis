@@ -169,7 +169,7 @@ function Row({ record, selected, page, filters, times, i18n, onSelect }: RowProp
       </span>
       {record.kind === 'operations' ? (
         <span className="ag-item__facts">
-          {t.assetIdOnly} <code className="ag-id">{shortId(record.item.assetId)}</code> · {times.short(record.item.createdAt)}
+          {times.short(record.item.createdAt)} · {t.assetIdOnly} <code className="ag-id">{shortId(record.item.assetId)}</code>
         </span>
       ) : (
         <span className={late ? 'ag-item__facts ag-item__facts--late' : 'ag-item__facts'}>{facts}</span>

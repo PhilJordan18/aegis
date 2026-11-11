@@ -39,13 +39,18 @@ export interface TransactionTimes {
 }
 
 export function transactionTimes({ locale }: Pick<I18n, 'locale'>): TransactionTimes {
-  const at = (key: string, options: Intl.DateTimeFormatOptions) => (instant: string) => formatter(locale, key, options).format(new Date(instant))
+  const format = (key: string, options: Intl.DateTimeFormatOptions) => (instant: string) => formatter(locale, key, options).format(new Date(instant))
+  // A time never breaks across two lines: the row wraps between facts, not inside « 13 h 41 ».
+  const unbroken = (key: string, options: Intl.DateTimeFormatOptions) => {
+    const read = format(key, options)
+    return (instant: string) => read(instant).replace(/ /g, '\u00A0')
+  }
   return {
-    short: at('short', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
-    clock: at('clock', { hour: 'numeric', minute: '2-digit' }),
-    clockSeconds: at('clockSeconds', { hour: 'numeric', minute: '2-digit', second: '2-digit' }),
-    full: at('full', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', timeZoneName: 'short' }),
-    zoned: at('zoned', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }),
+    short: unbroken('short', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
+    clock: unbroken('clock', { hour: 'numeric', minute: '2-digit' }),
+    clockSeconds: unbroken('clockSeconds', { hour: 'numeric', minute: '2-digit', second: '2-digit' }),
+    full: format('full', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', timeZoneName: 'short' }),
+    zoned: unbroken('zoned', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }),
     readAt: (epochMs) => formatter(locale, 'zoned', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }).format(new Date(epochMs)),
   }
 }
