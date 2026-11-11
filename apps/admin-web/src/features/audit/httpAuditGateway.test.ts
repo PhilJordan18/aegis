@@ -1,0 +1,83 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ApiRequestError } from '../../api/serverState'
+import { problemBody } from '../auth/testFixtures'
+import { classifyAuditFailure } from './auditFailure'
+import { parseAuditEventView, parseAuditPage } from './contractParsers'
+import { auditSearch, createHttpAuditGateway } from './httpAuditGateway'
+import { OPERATION_ID, SUBJECT_ID, auditEvent } from './testFixtures'
+
+const TOKEN = 'opaque.jwt.value'
+const REQUEST_ID = '11111111-2222-4333-8444-555555555555'
+
+afterEach(() => vi.restoreAllMocks())
+
+describe('parseAuditEventView (09 §19.1)', () => {
+  it('reads an event with its actor, correlation and transition', () => {
+    const parsed = parseAuditEventView(auditEvent({ operationId: OPERATION_ID, fromState: 'OPEN', toState: 'ACKNOWLEDGED' }))
+    expect(parsed?.actor).toEqual({ id: expect.any(String), displayName: 'Administrateur de démonstration' })
+    expect([parsed?.operationId, parsed?.fromState, parsed?.toState]).toEqual([OPERATION_ID, 'OPEN', 'ACKNOWLEDGED'])
+  })
+
+  it('keeps a system event without actor, and an untyped actor shape visible as unreadable', () => {
+    expect(parseAuditEventView(auditEvent({ actor: null }))?.actor).toBeNull()
+    expect(parseAuditEventView(auditEvent({ actor: 'SYSTEM' }))?.actor).toEqual({ kind: 'unreadable' })
+  })
+
+  it('keeps unknown event codes as sent instead of mapping them to a known fact', () => {
+    expect(parseAuditEventView(auditEvent({ eventType: 'FUTURE_EVENT' }))?.eventType).toBe('FUTURE_EVENT')
+  })
+
+  it('reports that filtered details exist without reading their content', () => {
+    const parsed = parseAuditEventView(auditEvent({ details: { lockerId: 'L1' } }))
+    expect(parsed?.hasDetails).toBe(true)
+    expect(parsed).not.toHaveProperty('details')
+    expect(parseAuditEventView(auditEvent())?.hasDetails).toBe(false)
+  })
+
+  it.each([
+    ['a lone fromState', { fromState: 'OPEN' }],
+    ['a non-UUID subject', { subjectId: 'asset-7' }],
+    ['an instant without zone', { occurredAt: '2026-11-10T18:30:00' }],
+    ['an empty event type', { eventType: '' }],
+    ['array details', { details: [] }],
+  ])('rejects %s', (_label, overrides) => {
+    expect(parseAuditEventView(auditEvent(overrides))).toBeNull()
+  })
+})
+
+describe('parseAuditPage (09 §22.2)', () => {
+  it('reads a last page and a page with an opaque cursor', () => {
+    expect(parseAuditPage({ items: [], nextCursor: null, hasMore: false })).toEqual({ items: [], nextCursor: null, hasMore: false })
+    expect(parseAuditPage({ items: [auditEvent()], nextCursor: 'b3BhcXVl', hasMore: true })?.nextCursor).toBe('b3BhcXVl')
+  })
+
+  it('rejects a further page announced without a cursor, and a page with one broken event', () => {
+    expect(parseAuditPage({ items: [], nextCursor: null, hasMore: true })).toBeNull()
+    expect(parseAuditPage({ items: [auditEvent(), auditEvent({ id: 7 })], nextCursor: null, hasMore: false })).toBeNull()
+  })
+})
+
+describe('httpAuditGateway', () => {
+  it('sends the set filters, a clamped limit and the cursor unchanged', async () => {
+    expect(auditSearch({ limit: 0 })).toBe('limit=1')
+    expect(auditSearch({ limit: 500 })).toBe('limit=100')
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ items: [], nextCursor: null, hasMore: false }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    const gateway = createHttpAuditGateway({ fetch: fetchMock, createRequestId: () => REQUEST_ID })
+    const result = await gateway.listAuditEvents(TOKEN, { subjectType: 'ASSET', subjectId: SUBJECT_ID, limit: 50, cursor: 'a+b/c=' })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(`/api/v1/admin/audit-events?subjectType=ASSET&subjectId=${SUBJECT_ID}&limit=50&cursor=a%2Bb%2Fc%3D`)
+    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('GET')
+    expect(result.kind).toBe('ok')
+  })
+})
+
+describe('classifyAuditFailure', () => {
+  const problem = (status: number, code: string) =>
+    new ApiRequestError({ kind: 'httpProblem', status, problem: problemBody(status, code), retryAfter: null, requestId: REQUEST_ID })
+
+  it('distinguishes a stale cursor, an unserved route and the session kinds', () => {
+    expect(classifyAuditFailure(problem(400, 'INVALID_CURSOR'))).toEqual({ kind: 'invalidCursor' })
+    expect(classifyAuditFailure(problem(404, 'RESOURCE_NOT_FOUND'))).toEqual({ kind: 'notServed' })
+    expect(classifyAuditFailure(problem(403, 'FORBIDDEN')).kind).toBe('forbidden')
+    expect(classifyAuditFailure(problem(401, 'AUTH_TOKEN_EXPIRED'))).toEqual({ kind: 'ended' })
+  })
+})
