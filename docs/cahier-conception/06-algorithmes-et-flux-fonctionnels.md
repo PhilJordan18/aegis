@@ -806,6 +806,21 @@ Les jalons `DOOR_OPENED` et `OBSERVATION_RECEIVED` sont enregistrés une fois, d
 
 Une anomalie déjà ouverte pour l’opération, par exemple par un accusé incertain (#41), est conservée plutôt que dupliquée. Toute issue terminale annule une commande encore `PENDING`, marque les faits de l’opération `PROCESSED`, ajoute une instruction d’écran sans secret et n’est plus jamais modifiée; la réservation reste `ACTIVE` après `EXPIRED` ou `ANOMALY`.
 
+#### 10.3.2 Retour : conditions exactes (#51)
+
+Mise en œuvre RET-02 du 11 novembre 2026. L’évaluation, ses déclencheurs, la règle de l’instant de réception et les étapes Accusé, Chaîne, Ouverture, Fermeture, Scan, Lecteur (règle 2), Stabilité et Localisation sont ceux du retrait (§10.3.1). Seule la lecture du tag attendu change, selon §10.2 :
+
+| Étape | Condition | Résultat |
+|---|---|---|
+| Tag | `ASSET_PRESENT` normalisé pour l’identifiant attendu, soit au moins trois lectures dans une fenêtre stable d’un lecteur sain (`10` §12.2) | `COHERENT_RETURN` |
+| Tag | Sinon, un autre identifiant lu au moins trois fois par ce scan | `INCONSISTENT` : `ANOMALY` avec `UNEXPECTED_ASSET_OBSERVED` |
+| Tag | `ASSET_ABSENT` normalisé pour l’identifiant attendu | `INCOMPLETE`, puis à `expiresAt` : `ANOMALY` avec `EXPECTED_ASSET_NOT_OBSERVED` |
+| Tag | Une ou deux lectures, ou aucun verdict normalisé | `INCOMPLETE`, puis à `expiresAt` : `ANOMALY` avec `DEVICE_OFFLINE_DURING_OPERATION` |
+
+Une autre cellule qui détecte le tag attendu depuis `authorizedAt` rend la preuve `INCONSISTENT` avec `INCONSISTENT_PHYSICAL_STATE`, comme un lecteur `FAULTED` ou `UNKNOWN` après la fermeture. Les autres issues à l’échéance suivent §13.1.
+
+La présence du tag n’est lue que dans la chaîne d’une opération `RETURN` autorisée : un scan d’inventaire, un scan antérieur à la fermeture ou un scan reçu à `expiresAt` ou après ne termine jamais le prêt (§12.4).
+
 ---
 
 ## 11. Confirmation d’un retrait
@@ -929,6 +944,8 @@ Une preuve `COHERENT_RETURN` provoque dans une seule transaction :
 6. l’ajout des événements d’audit;
 7. le recalcul de la disponibilité et de la readiness.
 
+Mise en œuvre RET-02 (#51) : la transaction ajoute les audits `OPERATION_CONFIRMED`, avec les références de l’accusé, des événements de porte et du scan, et `LOAN_COMPLETED`; `returnedAt` est l’instant de la décision, égal à `confirmedAt`. La disponibilité et la readiness étant dérivées à la lecture, la première lecture après validation voit l’actif de nouveau sous garde. Aucune anomalie n’est résolue automatiquement : le P0 ne crée encore aucune anomalie que cette preuve corrige, et l’anomalie d’une tentative précédente reste traitée par l’administrateur.
+
 ### 12.2 Pseudocode
 
 ```text
@@ -1028,7 +1045,7 @@ Mise en œuvre RET-01 (#50, 11 novembre 2026). La conclusion d’un retour autor
 4. commande jamais publiée, ou hub `ONLINE` dans la session ciblée avec la porte projetée fermée : `EXPIRED` avec `OPERATION_EXPIRED`, prêt `ACTIVE`;
 5. tout autre cas : `ANOMALY` (`DEVICE_OFFLINE_DURING_OPERATION`), prêt `RETURN_PENDING`.
 
-Un rejet sûr reçu avant l’échéance est donc conclu à l’échéance, pas à sa réception. Le retour du prêt à `ACTIVE` est audité par `LOAN_RETURN_REVERTED_SAFE`. La preuve positive, qui termine le prêt, et la détection anticipée d’une incohérence relèvent de RET-02 (#51).
+Un rejet sûr reçu avant l’échéance est donc conclu à l’échéance, pas à sa réception. Le retour du prêt à `ACTIVE` est audité par `LOAN_RETURN_REVERTED_SAFE`. Depuis RET-02 (#51), une preuve cohérente ou incohérente est conclue dès sa réception (§10.3.2) et cet ordre ne s’applique qu’à une preuve encore incomplète; au point 1, une fermeture suivie d’un scan sain sans le tag attendu donne `EXPECTED_ASSET_NOT_OBSERVED`.
 
 ### 13.2 Algorithme
 

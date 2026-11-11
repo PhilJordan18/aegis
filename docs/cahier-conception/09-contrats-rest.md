@@ -485,6 +485,16 @@ Une tentative de retrait terminée **après son autorisation** porte l’une des
 | `INCONSISTENT_PHYSICAL_STATE` | `ANOMALY` | Tag attendu encore vu après la fermeture, lecteur `FAULTED` ou `UNKNOWN` après la fermeture, ou localisation ambiguë |
 | `DEVICE_OFFLINE_DURING_OPERATION` | `ANOMALY` | Exécution impossible à déterminer avant `expiresAt`, dont une preuve manquante |
 
+Une tentative de retour terminée après son autorisation (#50, #51; `06` §10.3.2 et §13.1) peut porter les mêmes valeurs, ainsi que :
+
+| `failureReason` | Statut terminal | Cause |
+|---|---|---|
+| `EXPECTED_ASSET_NOT_OBSERVED` | `ANOMALY` | Porte refermée, scan sain et stable sans le tag attendu à `expiresAt` |
+| `UNEXPECTED_ASSET_OBSERVED` | `ANOMALY` | Un autre actif lu de façon stable dans la cellule à la place de l’actif attendu |
+| `COMMAND_REJECTED_<raison>` | `FAILED` | Rejet sûr du hub, conclu à `expiresAt`; le prêt redevient `ACTIVE` |
+
+Après `OPERATION_EXPIRED` ou `COMMAND_REJECTED_<raison>`, le prêt d’un retour redevient `ACTIVE`; après `ANOMALY`, il reste `RETURN_PENDING`.
+
 Un refus de commande avant toute actuation garde la valeur `COMMAND_REJECTED_<résultat>` de #41. Un client traite une valeur inconnue comme un échec générique, sans en déduire d’état physique (§3).
 
 ### 8.6 LockerStatusView
@@ -1182,7 +1192,7 @@ Mise en œuvre RET-01 (#50, 11 novembre 2026) :
 - La readiness n’intervient pas : un actif emprunté n’est jamais `READY`, et `05` §7 exige qu’un retour ne le demande pas. `overdue` n’intervient pas non plus.
 - L’opération `RETURN` porte `loanId`, jamais `reservationId`, et l’identifiant actif de l’actif comme identifiant attendu. Le défi affiché porte l’action `RETURN`.
 - Un défi expiré ou invalidé termine l’opération sans toucher au prêt.
-- Après l’autorisation, la preuve physique qui termine le prêt (`COMPLETED`) relève de RET-02 (#51). D’ici là, une opération de retour autorisée n’est conclue qu’à son `expiresAt`, selon `06` §13.1 : sans effet physique possible, `EXPIRED` ou `FAILED` et le prêt redevient `ACTIVE`; sinon `ANOMALY` et le prêt reste `RETURN_PENDING`.
+- Après l’autorisation, une présence stable du tag attendu après la fermeture confirme l’opération et termine le prêt (`COMPLETED`, RET-02 #51, `06` §10.3.2). Une preuve encore incomplète est conclue à `expiresAt` selon `06` §13.1 : sans effet physique possible, `EXPIRED` ou `FAILED` et le prêt redevient `ACTIVE`; sinon `ANOMALY` et le prêt reste `RETURN_PENDING`.
 
 ### 15.3 Lecture du prêt
 
