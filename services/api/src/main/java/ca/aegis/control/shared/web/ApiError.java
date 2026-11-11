@@ -56,6 +56,9 @@ public enum ApiError {
     /** The reservation is not in a state that admits a cancellation (document 09, section 14.4). */
     RESERVATION_NOT_CANCELLABLE(HttpStatus.CONFLICT, "Réservation non annulable",
             "La réservation ne peut plus être annulée dans son état actuel."),
+    /** The loan is not ACTIVE, so no return attempt can be prepared (document 09, sections 15.2 and 21). */
+    LOAN_NOT_RETURNABLE(HttpStatus.CONFLICT, "Prêt non retournable",
+            "Ce prêt ne peut pas faire l'objet d'un retour dans son état actuel."),
     ASSET_NOT_READY(HttpStatus.UNPROCESSABLE_CONTENT, "Actif non prêt",
             "L'actif ne peut pas être réservé dans son état actuel."),
     OUTSIDE_OPERATING_HOURS(HttpStatus.UNPROCESSABLE_CONTENT, "Hors des heures d'exploitation",
@@ -110,6 +113,25 @@ public enum ApiError {
             "Le locker est temporairement indisponible. Réessayez plus tard."),
     DEVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Cellule indisponible",
             "La cellule ou son lecteur est temporairement indisponible. Réessayez plus tard."),
+    /** Document 09, section 15.5: the local proof codes of {@code authorize-local} and of preparations. */
+    LOCAL_PROOF_MALFORMED(HttpStatus.BAD_REQUEST, "Preuve locale invalide",
+            "Le code lu ne correspond pas au format attendu. Scannez de nouveau le QR du casier."),
+    OPERATION_NOT_FOUND(HttpStatus.NOT_FOUND, "Opération introuvable",
+            "Cette opération n'existe pas ou ne vous appartient pas."),
+    LOCAL_PROOF_INVALID(HttpStatus.FORBIDDEN, "Code refusé",
+            "Le code scanné ne correspond pas à celui du casier."),
+    LOCAL_PROOF_NOT_DISPLAYED(HttpStatus.CONFLICT, "Code pas encore affiché",
+            "Le casier n'a pas encore confirmé l'affichage du code. Réessayez dans un instant."),
+    LOCAL_PROOF_CONTEXT_MISMATCH(HttpStatus.CONFLICT, "Code d'une autre opération",
+            "Ce code appartient à une autre opération ou à un autre casier."),
+    LOCAL_PROOF_ALREADY_USED(HttpStatus.CONFLICT, "Code déjà utilisé",
+            "Ce code a déjà servi; aucune nouvelle ouverture n'est possible avec lui."),
+    LOCAL_PROOF_INVALIDATED(HttpStatus.CONFLICT, "Code invalidé",
+            "Ce code n'est plus valide. Préparez une nouvelle opération."),
+    LOCAL_PROOF_EXPIRED(HttpStatus.GONE, "Code expiré",
+            "Le délai de ce code est dépassé. Préparez une nouvelle opération."),
+    LOCAL_PROOF_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "Trop de préparations",
+            "Trop d'opérations ont été préparées récemment sur ce casier. Réessayez plus tard."),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Erreur interne",
             "Une erreur inattendue est survenue. Communiquez l'identifiant de trace au support.");
 

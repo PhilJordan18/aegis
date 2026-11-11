@@ -3,6 +3,7 @@ package ca.aegis.control.reservation;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,11 +64,12 @@ class ReservationService {
     private final LockerSchedules schedules;
     private final AuditTrail audit;
     private final UserSummaries users;
+    private final CheckoutGuards guards;
     private final Clock clock;
 
     ReservationService(ReservationRepository reservations, CheckoutAttemptRepository attempts,
             PendingCheckouts pendingCheckouts, ReservableAssets assets, LockerSchedules schedules, AuditTrail audit,
-            UserSummaries users, Clock clock) {
+            UserSummaries users, CheckoutGuards guards, Clock clock) {
         this.reservations = reservations;
         this.attempts = attempts;
         this.pendingCheckouts = pendingCheckouts;
@@ -75,6 +77,7 @@ class ReservationService {
         this.schedules = schedules;
         this.audit = audit;
         this.users = users;
+        this.guards = guards;
         this.clock = clock;
     }
 
@@ -299,11 +302,18 @@ class ReservationService {
 
     /**
      * Document 09, section 8.10, for the holder, who is the only reader of these views. {@code CANCEL} is emitted
-     * exactly when {@link #cancel} would accept it at {@code now}; {@code CHECKOUT} is not emitted while its route
-     * does not exist (decision of 28 October 2026).
+     * exactly when {@link #cancel} would accept it at {@code now}; {@code CHECKOUT} when the preparation of section
+     * 15.1 would pass its guards at {@code now}, read without locks (#44).
      */
     private List<String> availableActions(ReservationRow row, Instant now) {
-        return cancellable(row, now) ? List.of(ReservationAction.CANCEL.name()) : List.of();
+        List<String> actions = new ArrayList<>(2);
+        if (guards.checkoutAdmissible(row, now)) {
+            actions.add(ReservationAction.CHECKOUT.name());
+        }
+        if (cancellable(row, now)) {
+            actions.add(ReservationAction.CANCEL.name());
+        }
+        return List.copyOf(actions);
     }
 
     /**

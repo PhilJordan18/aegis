@@ -175,7 +175,12 @@ public class IdempotencyService {
 
         /** The same status, JSON content and stable headers for the first response and every replay. */
         ResponseEntity<JsonNode> entity() {
-            ResponseEntity.BodyBuilder builder = ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON);
+            ResponseEntity.BodyBuilder builder = ResponseEntity.status(status).contentType(status.isError()
+                    ? MediaType.APPLICATION_PROBLEM_JSON : MediaType.APPLICATION_JSON);
+            if (status.isError()) {
+                // A recorded refusal concerns a physical workflow whose state the client must read again.
+                builder.cacheControl(CacheControl.noStore());
+            }
             if (status == HttpStatus.CREATED || (status == HttpStatus.ACCEPTED && resource != null)) {
                 builder.location(resource.location(resourceId));
             }

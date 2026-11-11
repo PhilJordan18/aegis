@@ -18,6 +18,7 @@ import ca.aegis.control.identity.UserSummaries;
 import ca.aegis.control.identity.UserSummary;
 import ca.aegis.control.loan.LoanRepository.AdminFilter;
 import ca.aegis.control.loan.LoanRepository.LoanRow;
+import ca.aegis.control.reservation.ReturnGuards;
 import ca.aegis.control.shared.web.ApiError;
 import ca.aegis.control.shared.web.ApiException;
 import ca.aegis.control.shared.web.PageQuery;
@@ -36,12 +37,15 @@ class LoanService {
     private final LoanRepository loans;
     private final ReservableAssets assets;
     private final UserSummaries users;
+    private final ReturnGuards returns;
     private final Clock clock;
 
-    LoanService(LoanRepository loans, ReservableAssets assets, UserSummaries users, Clock clock) {
+    LoanService(LoanRepository loans, ReservableAssets assets, UserSummaries users, ReturnGuards returns,
+            Clock clock) {
         this.loans = loans;
         this.assets = assets;
         this.users = users;
+        this.returns = returns;
         this.clock = clock;
     }
 
@@ -57,14 +61,14 @@ class LoanService {
             log.warn("Technician holds several open loans; the oldest is returned: holderUserId={}, loanIds={}",
                     technicianId, open.stream().map(LoanRow::id).toList());
         }
-        return view(open.getFirst(), clock.instant());
+        return holderView(open.getFirst(), clock.instant());
     }
 
     /** Document 09, sections 15.3 and 26.2: another holder's loan is not visible, so it is not found. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     LoanView ownedBy(UUID technicianId, UUID loanId) {
         return loans.find(loanId).filter(row -> row.holderUserId().equals(technicianId))
-                .map(row -> view(row, clock.instant()))
+                .map(row -> holderView(row, clock.instant()))
                 .orElseThrow(ResourceNotFoundException::new);
     }
 
@@ -92,16 +96,29 @@ class LoanService {
     }
 
     private LoanView view(LoanRow row, Instant now) {
-        return view(row, assets.summaries(List.of(row.assetId())).get(row.assetId()), now);
+        return view(row, assets.summaries(List.of(row.assetId())).get(row.assetId()), now, List.of());
     }
 
-    /** {@code availableActions} is empty for every reader while the return route does not exist (section 8.10). */
     private LoanView view(LoanRow row, AssetSummary asset, Instant now) {
+        return view(row, asset, now, List.of());
+    }
+
+    /**
+     * Section 8.10: the holder sees {@code RETURN} only when the return preparation would accept the request now. It is
+     * a hint read without locks; the preparation checks everything again. An administrator view never offers it.
+     */
+    private LoanView holderView(LoanRow row, Instant now) {
+        List<String> actions = returns.returnAdmissible(row.holderUserId(), row.assetId(), row.status(), now)
+                ? List.of("RETURN") : List.of();
+        return view(row, assets.summaries(List.of(row.assetId())).get(row.assetId()), now, actions);
+    }
+
+    private LoanView view(LoanRow row, AssetSummary asset, Instant now, List<String> actions) {
         boolean open = row.status() != LoanStatus.COMPLETED;
         UUID currentOperation = open ? loans.latestReturnAttemptOf(row.id()).orElse(null) : null;
         return new LoanView(row.id(), asset, row.holderUserId(), row.status(), row.checkedOutAt(), row.dueAt(),
                 open && now.isAfter(row.dueAt()), row.returnRequestedAt(), row.returnedAt(),
-                row.checkoutOperationId(), row.returnOperationId(), currentOperation, List.of());
+                row.checkoutOperationId(), row.returnOperationId(), currentOperation, actions);
     }
 
     static final class LoanNotFoundException extends ApiException {
