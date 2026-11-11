@@ -3,6 +3,10 @@
 Ce document est le seul point de départ de la recette humaine de Philippe et Jimmy. Il
 renvoie aux recettes détaillées et ne les recopie pas.
 
+> **Staging (depuis le 11 novembre) :** la recette sur l'environnement déployé suit
+> [`recette-staging/README.md`](recette-staging/README.md) — parties A (logiciel livré),
+> B (broker et ESP32) et C (futur retrait et retour physiques, bloqué à ce jour).
+
 État au **6 novembre 2026, 16 h 45 (Toronto)**. Avant de commencer, relevez le SHA réel :
 
 ```bash
