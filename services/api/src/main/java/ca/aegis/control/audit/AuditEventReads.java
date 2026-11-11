@@ -19,8 +19,10 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Reads of the audit timeline (document 09, section 19.1) in {@code occurred_at DESC, id DESC} order, the order of
- * {@code ix_audit_events_time}, continued by keyset rather than by offset so that a page never repeats or skips an
- * event appended meanwhile.
+ * {@code ix_audit_events_time}, continued by keyset rather than by offset. A walk never repeats an event and reads
+ * every event committed before it started. It is not a snapshot: each page is its own read, and {@code occurred_at}
+ * is the mutation's clock rather than its commit time, so an event committed during the walk is read only when it
+ * sorts after the cursor; one newer than the first page or behind the cursor appears in the next walk.
  */
 @Repository
 public class AuditEventReads {

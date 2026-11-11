@@ -59,7 +59,7 @@ class AdminAuditApiTests extends ApiIntegrationTest {
     }
 
     @Test
-    void theTimelineIsWalkedLatestFirstWithoutRepeatOrGapWhileEventsAreAppended() throws Exception {
+    void aWalkNeverRepeatsAndMissesOnlyEventsCommittedBehindItsCursor() throws Exception {
         UUID subject = UUID.randomUUID();
         List<Row> rows = new ArrayList<>();
         // Three events share one instant: the id breaks the tie.
@@ -75,8 +75,14 @@ class AdminAuditApiTests extends ApiIntegrationTest {
         JsonNode first = json(read(AUDIT + "?subjectId=" + subject + "&limit=2").andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(3))
                 .andExpect(jsonPath("$.hasMore").value(true)));
-        // An event appended after the first page is newer than the cursor: it never shifts the following pages.
+        // No snapshot: each page is its own read. occurred_at is the mutation's clock, not its commit time, so an
+        // event committed during the walk may sort anywhere. One newer than the walk's start and one behind the
+        // cursor are both absent from this walk; one still ahead of the cursor is read in place.
         event("RESERVATION_CREATED", "RESERVATION", subject, null, null, START, "{}");
+        UUID behind = event("RESERVATION_CREATED", "RESERVATION", subject, null, null, START.minusSeconds(55), "{}");
+        UUID ahead = event("RESERVATION_CREATED", "RESERVATION", subject, null, null, START.minusSeconds(65), "{}");
+        expected = new ArrayList<>(expected);
+        expected.add(4, ahead.toString());
         List<String> walked = new ArrayList<>(ids(first));
         String cursor = first.get("nextCursor").asString();
         while (cursor != null) {
@@ -88,7 +94,11 @@ class AdminAuditApiTests extends ApiIntegrationTest {
         }
 
         assertEquals(expected, walked);
-        assertEquals(auditBefore + 1, auditEvents());
+        assertFalse(walked.contains(behind.toString()));
+        read(AUDIT + "?subjectId=" + subject + "&limit=100").andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(8))
+                .andExpect(jsonPath("$.items[2].id").value(behind.toString()));
+        assertEquals(auditBefore + 3, auditEvents());
     }
 
     @Test
