@@ -2,14 +2,16 @@ import { ApiRequestError } from '../../api/serverState'
 import { classifyCatalogFailure, type CatalogFailure } from '../catalog/catalogFailure'
 
 /**
- * What a failed anomaly read means for the screen. A list route answering `404 RESOURCE_NOT_FOUND` is « not served
- * yet » (`ApiRoutes` declares it before its controller exists); on a detail route the same answer is a missing record.
+ * What a failed anomaly read means for the screen. `404 RESOURCE_NOT_FOUND` names a missing anomaly only on a detail
+ * route; on the list it proves neither an empty list nor an unimplemented route, so it is a traced service error.
  */
-export type AnomalyReadFailure = CatalogFailure | { readonly kind: 'notServed' }
+export type AnomalyReadFailure = CatalogFailure
 
 export function classifyAnomalyReadFailure(error: unknown, route: 'list' | 'detail'): AnomalyReadFailure {
   const failure = classifyCatalogFailure(error)
-  return failure.kind === 'notFound' && route === 'list' ? { kind: 'notServed' } : failure
+  if (failure.kind !== 'notFound' || route === 'detail') return failure
+  const traceId = error instanceof ApiRequestError && error.failure.kind === 'httpProblem' ? (error.failure.problem?.traceId ?? error.failure.requestId) : null
+  return { kind: 'serviceError', traceId }
 }
 
 /**

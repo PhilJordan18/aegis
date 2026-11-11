@@ -89,8 +89,9 @@ describe('anomaly failures', () => {
   const problem = (status: number, code: string) =>
     new ApiRequestError({ kind: 'httpProblem', status, problem: problemBody(status, code), retryAfter: null, requestId: REQUEST_ID })
 
-  it('reads a 404 on the list as « not served yet », and on the detail as a missing record', () => {
-    expect(classifyAnomalyReadFailure(problem(404, 'RESOURCE_NOT_FOUND'), 'list')).toEqual({ kind: 'notServed' })
+  it('reads a 404 on the detail as a missing record, and on the list as a traced service error, never as empty', () => {
+    const listFailure = classifyAnomalyReadFailure(problem(404, 'RESOURCE_NOT_FOUND'), 'list')
+    expect(listFailure.kind === 'serviceError' && listFailure.traceId).toBeTruthy()
     expect(classifyAnomalyReadFailure(problem(404, 'RESOURCE_NOT_FOUND'), 'detail')).toEqual({ kind: 'notFound' })
   })
 
