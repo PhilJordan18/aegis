@@ -18,8 +18,13 @@ couvre #43/#46, puis #47 (et ensuite #50/#51), sur le SHA immuable livré par Ba
     [`../checkout-confirmation/run.sh`](../checkout-confirmation/README.md) sur la branche Backend
     `47-feat-checkout-confirmation` (PR #175). K10, K12 et K13 n'y sont pas démontrables (voir
     son README).
-  - #50/#51 : planifiées. Aucune ligne n'est exécutée tant que la branche Backend
-    correspondante n'est pas livrée.
+  - #50 : T1, T3, T4 et T5 sont exécutées par
+    [`../return-preparation/run.sh`](../return-preparation/README.md) sur la branche Backend
+    `50-feat-return-preparation` (PR #176). La conclusion à l'échéance y est vérifiée selon doc 06
+    §13.1.
+  - #51 : T2, la preuve positive de T3, T4 et T5 sont exécutées par les cas E du même script sur la
+    branche Backend `51-feat-return-confirmation` (PR #177). T6 n'y est couverte que pour les
+    doublons (E1) ; l'ordre inversé reste couvert par les tests Backend.
 
   Chaque exécution consigne le SHA, la commande et le résultat.
 - **Références normatives :**
