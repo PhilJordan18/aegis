@@ -281,7 +281,13 @@ def reservations_loans_operations(admin, tech, state):
         later = time.strftime("%Y-%m-%dT%H:%M:%SZ",
                               time.gmtime(calendar.timegm(time.strptime(tie, "%Y-%m-%dT%H:%M:%SZ")) + 1))
         filtered(admin, "M1 reservations (from inclusive)", route, f"from={tie}&to={later}", tied)
-        filtered(admin, "M1 reservations (to exclusive)", route, f"from={tie}&to={tie}", set())
+        earlier = time.strftime("%Y-%m-%dT%H:%M:%SZ",
+                                time.gmtime(calendar.timegm(time.strptime(tie, "%Y-%m-%dT%H:%M:%SZ")) - 1))
+        filtered(admin, "M1 reservations (to exclusive)", route, f"from={earlier}&to={tie}",
+                 sql_set(f"SELECT id FROM aegis.reservations WHERE created_at >= '{earlier}' AND created_at < '{tie}';"))
+        status, body = call("GET", f"{route}?from={tie}&to={tie}", admin)
+        check("M1 reservations: an empty interval (from = to) is 400 VALIDATION_ERROR (Backend matrix, #67 6799329882)",
+              status == 400 and code_of(body) == "VALIDATION_ERROR", f"HTTP {status} {code_of(body)}")
 
         status, body = call("GET", f"{route}/{state['active']}", admin)
         asset = (body or {}).get("asset") or {}
