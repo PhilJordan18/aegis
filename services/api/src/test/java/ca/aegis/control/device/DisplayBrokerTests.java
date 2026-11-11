@@ -104,6 +104,12 @@ class DisplayBrokerTests extends ApiIntegrationTest {
         clock.set(START.plus(Duration.ofHours(1)));
         db = new DeviceTestSupport(jdbc);
         db.provisionTestHub(clock.instant());
+        // The command broker tests share this locker and may leave an operation open; it admits only one.
+        jdbc.sql("""
+                UPDATE aegis.locker_operations
+                SET status = 'FAILED', terminal_at = created_at + interval '10 minutes', failure_reason = 'TEST_RETIRED'
+                WHERE locker_id = :locker AND terminal_at IS NULL
+                """).param("locker", LOCKER).update();
         ReservationFixtures fixtures = new ReservationFixtures(jdbc);
         if (jdbc.sql("SELECT count(*) FROM aegis.operating_schedules WHERE locker_id = :id").param("id", LOCKER)
                 .query(Long.class).single() == 0) {
