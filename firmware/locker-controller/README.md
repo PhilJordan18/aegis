@@ -120,8 +120,11 @@ arduino-cli upload --fqbn esp32:esp32:esp32 --port <serial port> firmware/locker
 If the upload fails at the default 921600 baud, add `--board-options UploadSpeed=115200`
 to the `upload` command (the option name was checked with `arduino-cli board details`).
 Compilation was verified with core 3.3.12. The broker connection over TLS was run on
-staging with this hub (issue #24). The two cell ports were **not** run on hardware by
-the author of the cell slice.
+staging with this hub (issue #24). On 2026-11-11, port 1 was run with one cell (the
+bench boards, Cat6, 115200 baud): `CONNECTED`, unplug detected and replug with the
+cell's restart logged, and a cell flashed with address 2 refused on port 1. Port 2 and a
+real A2 were **not** run: no second cell exists yet. These boards needed
+`--board-options UploadSpeed=115200` to flash.
 
 ## Host tests
 
