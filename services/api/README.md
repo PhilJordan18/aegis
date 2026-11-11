@@ -556,6 +556,59 @@ de l'application, et un broker qui n'accuse plus réception peut retarder les
 autres jobs d'au plus `publish-timeout` par commande. La règle d'un accusé reçu
 avant le marquage (ligne encore `CLAIMED`) reste à fixer avec IOT-02.
 
+## Préparation du retrait et défi du hub (LOC-01, CHK-01)
+
+`POST /api/v1/checkouts` (document 09, §15.1) prépare un retrait sans rien
+ouvrir. Une seule transaction verrouille, dans l'ordre, l'utilisateur, l'actif,
+la réservation, le casier, l'opération et le défi. Elle crée l'opération
+`AWAITING_LOCAL_PROOF` et le défi de 60 s, puis incrémente la révision
+d'affichage du casier. Elle insère enfin l'instruction chiffrée dans
+`hub_display_outbox`. Aucune commande `UNLOCK_COMPARTMENT` n'est créée. La
+réponse `202` porte `Location` et `Cache-Control: no-store`, sans jeton : seul
+le hub reçoit le jeton, dans `DISPLAY_ACCESS_CHALLENGE` (document 10, §27.1).
+La base, l'audit et l'idempotence n'en gardent que le hash.
+
+Le dispatcher d'affichage suit les mêmes étapes que celui des commandes :
+réclamation, publication hors transaction en QoS 1 non retenue, marquage et
+reprise avec délai. L'accusé `ACCESS_CHALLENGE_DISPLAYED` fixe
+`localProofDisplayedAt` une seule fois. Un rejet du hub annule l'instruction et
+purge son ciphertext. Toutes les 5 s, un job expire les défis échus
+(`LOCAL_PROOF_EXPIRED`) et invalide ceux dont le hub a redémarré
+(`HUB_RESTARTED`) ou dont le casier n'est plus `ONLINE` (`LOCKER_OFFLINE`). Il
+envoie alors un `DISPLAY_OPERATION_STATUS` qui efface l'écran et purge le
+ciphertext échu.
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `AEGIS_DISPLAY_ENABLED` | `false` | Active la préparation; sinon `503 LOCKER_OFFLINE` |
+| `AEGIS_DISPLAY_KEYS` | vide | `keyId:base64`, séparées par des virgules, 32 octets chacune |
+| `AEGIS_DISPLAY_ACTIVE_KEY_ID` | vide | Clé qui scelle les nouvelles instructions |
+| `AEGIS_DISPLAY_DISPATCHER_ENABLED` | `false` | Publie les instructions; exige MQTT et le flux activé |
+| `AEGIS_PREPARATION_MAX_PER_WINDOW` | `6` | Préparations par utilisateur et par fenêtre, puis `429` |
+| `AEGIS_PREPARATION_WINDOW` | `PT10M` | Fenêtre de cette limite |
+
+Les clés, leur rotation et leur retrait suivent
+[ADR-015](../../docs/adr/ADR-015-cles-affichage-hub.md). Une clé se génère avec
+`openssl rand -base64 32` et ne s'écrit que dans le gestionnaire de secrets de
+la plateforme ou dans un fichier local hors Git. Le flux activé sans clé valide
+arrête l'API au démarrage. Avant de retirer une clé, cette requête ne doit plus
+la lister :
+
+```sql
+SELECT encryption_key_id, count(*)
+FROM aegis.hub_display_outbox
+WHERE encrypted_payload IS NOT NULL
+GROUP BY encryption_key_id;
+```
+
+`CheckoutPreparationApiTests` et `DisplayDispatcherTests` s'exécutent sur
+PostgreSQL. `DisplayBrokerTests` utilise le broker de développement et le hub
+de test. La recette `scripts/check-hub-challenge.sh`, lancée depuis la racine,
+démarre un projet Compose jetable avec le simulateur Node. Elle prouve le refus
+de démarrage sans clé, la concurrence, la rotation, l'affichage, l'absence du
+jeton et l'expiration. Elle tire ses propres clés et ne les affiche jamais. Le
+hub y est simulé : elle ne prouve pas l'écran physique.
+
 ## Catalogue technicien et readiness (RDY-01, RDY-02)
 
 `GET /api/v1/assets` et `GET /api/v1/assets/{assetId}` sont réservés au rôle

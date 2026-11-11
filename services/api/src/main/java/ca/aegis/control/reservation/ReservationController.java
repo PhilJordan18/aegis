@@ -31,11 +31,14 @@ import ca.aegis.control.shared.idempotency.IdempotentResult;
 class ReservationController {
 
     private final ReservationService reservations;
+    private final CheckoutPreparation checkouts;
     private final ReservationExpiry expiry;
     private final IdempotencyService idempotency;
 
-    ReservationController(ReservationService reservations, ReservationExpiry expiry, IdempotencyService idempotency) {
+    ReservationController(ReservationService reservations, CheckoutPreparation checkouts, ReservationExpiry expiry,
+            IdempotencyService idempotency) {
         this.reservations = reservations;
+        this.checkouts = checkouts;
         this.expiry = expiry;
         this.idempotency = idempotency;
     }
@@ -60,6 +63,20 @@ class ReservationController {
         expiry.expireDueBefore(idempotentRequest.actorUserId(), null);
         return idempotency.execute(idempotentRequest, () -> IdempotentResult.ok(
                 reservations.cancel(idempotentRequest.actorUserId(), reservationId)));
+    }
+
+    /**
+     * Document 09, section 15.1: the body is empty; the 202 names the operation to poll and carries no secret. A
+     * reservation already due is expired first, as for a cancellation, so its holder gets a stable refusal.
+     */
+    @PostMapping("/api/v1/reservations/{reservationId}/checkout")
+    ResponseEntity<JsonNode> checkout(IdempotentRequest idempotentRequest, @PathVariable UUID reservationId,
+            @RequestBody(required = false) CheckoutRequest request) {
+        expiry.expireDueBefore(idempotentRequest.actorUserId(), null);
+        return idempotency.execute(idempotentRequest, () -> {
+            LockerOperationView prepared = checkouts.prepare(idempotentRequest.actorUserId(), reservationId);
+            return IdempotentResult.accepted(IdempotentResource.LOCKER_OPERATION, prepared.id(), prepared);
+        });
     }
 
     @GetMapping("/api/v1/me/reservation")

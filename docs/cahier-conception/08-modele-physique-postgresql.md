@@ -758,7 +758,7 @@ Les bornes de 60 secondes après création et 5 secrets erronés correspondent a
 
 #### `hub_display_outbox`
 
-Cette outbox est distincte de `command_outbox`, dont l’unicité `operation_id` reste réservée au déverrouillage. Les payloads d’affichage sont chiffrés par l’application (chiffrement authentifié, clé externe à PostgreSQL). Le ciphertext, son nonce et son tag d’authentification forment une enveloppe dans `encrypted_payload`. Les identifiants de ligne/cible sont liés comme données authentifiées.
+Cette outbox est distincte de `command_outbox`, dont l’unicité `operation_id` reste réservée au déverrouillage. Les payloads d’affichage sont chiffrés par l’application (chiffrement authentifié, clé externe à PostgreSQL). Le ciphertext, son nonce et son tag d’authentification forment une enveloppe dans `encrypted_payload`. Les identifiants de ligne/cible sont liés comme données authentifiées. Algorithme, format de l’enveloppe, provenance des clés, rotation et retrait : [ADR-015](../adr/ADR-015-cles-affichage-hub.md).
 
 ```sql
 CREATE TABLE hub_display_outbox (
