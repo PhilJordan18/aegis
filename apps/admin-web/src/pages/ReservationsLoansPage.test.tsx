@@ -124,7 +124,7 @@ describe('Réservations et prêts: reservations', () => {
     expect(text).toContain(USER_ID)
     expect(text).toContain("Une réservation n'ouvre aucune porte et ne crée aucun prêt.")
     // The server's order is not promised, and no sort is ever sent.
-    expect(plain(document.querySelector('.ag-list__foot')?.textContent)).toContain("Dans l'ordre fourni par le serveur")
+    expect(plain(document.querySelector('.ag-list__foot')?.textContent)).toContain("Les plus récents d'abord")
     const query = gateway.listReservations.mock.calls[0] as unknown as [string, Record<string, unknown>]
     expect(query[1]).toEqual({ page: 0, size: 20 })
     expect(query[1]).not.toHaveProperty('sort')

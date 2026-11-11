@@ -409,7 +409,7 @@ export const en: Messages = {
     titleLoans: ({ count: value }) => plural(value, { one: `${count.format(value)} loan`, other: `${count.format(value)} loans` }),
     titleOperations: ({ count: value }) => plural(value, { one: `${count.format(value)} operation`, other: `${count.format(value)} operations` }),
     listMeta: 'Status, equipment, dates',
-    listFoot: ({ time }) => `In the order provided by the server · read at ${time}`,
+    listFoot: ({ time }) => `Newest first · read at ${time}`,
     zoneNote: ({ zone }) => `Laboratory time: ${zone}`,
     updatedAt: ({ time }) => `Updated at ${time}`,
     refresh: 'Refresh',

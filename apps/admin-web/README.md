@@ -578,8 +578,10 @@ Opérations physiques.
   (jours du laboratoire, fuseau `America/Toronto`), `page` (à partir de 1) et `dossier` (identifiant). Une valeur
   inutilisable est ignorée et n'est jamais envoyée. `du` est inclusif; `au` désigne un jour inclus, la borne
   exclusive envoyée (`to`) est le début du jour suivant.
-- **Aucun tri envoyé**, aucune taille de page proposée (20). La liste porte seulement « Dans l'ordre fourni par le
-  serveur ». Le titulaire est un identifiant seul (le contrat ne donne pas de nom).
+- **Ordre** : les plus récents d'abord, départagés par identifiant (décision D1 du 11 novembre, #67) :
+  réservations et opérations par `createdAt`, prêts par `checkedOutAt`. Aucun tri n'est envoyé et aucune taille de
+  page n'est proposée (20). Le titulaire reste un identifiant seul tant que le résumé administrateur (G1) n'est pas
+  publié par le Backend.
 - **Retard** : le booléen `overdue` du serveur, jamais recalculé avec l'horloge du navigateur; un prêt en retard
   reste emprunté, un prêt terminé n'est jamais dit en retard.
 - **Erreurs** : un `404` sur une liste est une erreur du service avec identifiant de suivi (jamais une liste vide);

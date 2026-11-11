@@ -472,8 +472,8 @@ export const fr = {
     titleLoans: ({ count: value }: { count: number }) => plural(value, { one: `${count.format(value)} prêt`, other: `${count.format(value)} prêts` }),
     titleOperations: ({ count: value }: { count: number }) => plural(value, { one: `${count.format(value)} opération`, other: `${count.format(value)} opérations` }),
     listMeta: 'Statut, équipement, dates',
-    /** The order is the server's (not guaranteed by the contract): the label promises nothing more. */
-    listFoot: ({ time }: { time: string }) => `Dans l'ordre fourni par le serveur · lu à ${time}`,
+    /** D1 (#67, approved): newest first — reservations and operations by createdAt, loans by checkedOutAt. */
+    listFoot: ({ time }: { time: string }) => `Les plus récents d'abord · lu à ${time}`,
     zoneNote: ({ zone }: { zone: string }) => `Heures du laboratoire${NBSP}: ${zone}`,
     updatedAt: ({ time }: { time: string }) => `Mis à jour à ${time}`,
     refresh: 'Actualiser',
