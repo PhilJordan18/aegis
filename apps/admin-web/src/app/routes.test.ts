@@ -13,6 +13,12 @@ describe('matchRoute', () => {
     expect(matchRoute('/equipements', true)).toBe('equipment')
   })
 
+  it('serves the protected anomalies route in every build', () => {
+    expect(matchRoute('/anomalies', false)).toBe('anomalies')
+    expect(matchRoute('/anomalies/', true)).toBe('anomalies')
+    expect(pathOf('anomalies')).toBe('/anomalies')
+  })
+
   it('serves preview routes only when the preview is enabled', () => {
     expect(matchRoute('/apercu/equipements', true)).toBe('equipmentPreview')
     expect(matchRoute('/apercu/equipements', false)).toBe('notFound')

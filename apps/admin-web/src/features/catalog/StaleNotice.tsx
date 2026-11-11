@@ -9,6 +9,8 @@ interface StaleNoticeProps {
   /** A refresh is running: the button is busy and keeps focus. */
   readonly retrying: boolean
   readonly onRetry: () => void
+  /** Replaces the catalog's wording (« évaluées à… ») for another feature's data; its title and button stay. */
+  readonly body?: string
   /** Called when a successful refresh removes the notice while its button has focus. */
   readonly returnFocus: () => void
 }
@@ -17,7 +19,7 @@ interface StaleNoticeProps {
  * A refresh failed but the previous data is still shown: say it is not up to date and offer to try
  * again. Shared by the list and the dossier so both say the same thing.
  */
-export function StaleNotice({ evaluatedAt, retrying, onRetry, returnFocus }: StaleNoticeProps) {
+export function StaleNotice({ evaluatedAt, retrying, onRetry, returnFocus, body }: StaleNoticeProps) {
   const { m } = useI18n()
   const buttonRef = useRef<HTMLButtonElement>(null)
   const returnFocusRef = useRef(returnFocus)
@@ -45,7 +47,7 @@ export function StaleNotice({ evaluatedAt, retrying, onRetry, returnFocus }: Sta
   return (
     <>
       <Alert kind="warning" icon="status-offline" title={m.equipment.staleTitle}>
-        {evaluatedAt !== null && <p>{m.equipment.staleBody({ time: evaluatedAt })}</p>}
+        {body !== undefined ? <p>{body}</p> : evaluatedAt !== null && <p>{m.equipment.staleBody({ time: evaluatedAt })}</p>}
         <div className="ag-alert__action">
           <Button ref={buttonRef} variant="secondary" size="sm" busy={retrying} onClick={() => !retrying && onRetry()}>
             {m.equipment.retry}

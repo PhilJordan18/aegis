@@ -12,6 +12,8 @@ import { createAppearanceController } from './features/appearance/appearance'
 import { AppearanceContext } from './features/appearance/useAppearance'
 import type { AuthGateway } from './features/auth/authGateway'
 import { AuthGatewayContext } from './features/auth/AuthGatewayContext'
+import { AnomalyGatewayContext } from './features/anomalies/AnomalyGatewayContext'
+import { createHttpAnomalyGateway } from './features/anomalies/httpAnomalyGateway'
 import { createHttpAuthGateway } from './features/auth/httpAuthGateway'
 import { createSessionStore, SessionContext } from './features/auth/session'
 import { CatalogGatewayContext } from './features/catalog/CatalogGatewayContext'
@@ -50,6 +52,7 @@ const catalogGateway = createHttpCatalogGateway()
 const lockerGateway = createHttpLockerGateway()
 const scheduleGateway = createHttpScheduleGateway()
 const custodyGateway = createHttpCustodyGateway()
+const anomalyGateway = createHttpAnomalyGateway()
 
 const container = document.getElementById('root')
 if (!container) throw new Error('Missing #root element')
@@ -66,9 +69,11 @@ createRoot(container).render(
                   <LockerGatewayContext value={lockerGateway}>
                     <ScheduleGatewayContext value={scheduleGateway}>
                       <CustodyGatewayContext value={custodyGateway}>
-                        <PreviewContext value={previewControls}>
-                          <App />
-                        </PreviewContext>
+                        <AnomalyGatewayContext value={anomalyGateway}>
+                          <PreviewContext value={previewControls}>
+                            <App />
+                          </PreviewContext>
+                        </AnomalyGatewayContext>
                       </CustodyGatewayContext>
                     </ScheduleGatewayContext>
                   </LockerGatewayContext>

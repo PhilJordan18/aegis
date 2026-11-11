@@ -1,0 +1,68 @@
+/*
+ * Anomalies (#52): list and dossier of docs/design/manager-console/ (approved on #158). Built on the catalog's
+ * list and dossier sheets (equipment.css); only the rules this screen adds are here. Identity v3: opaque surfaces
+ * and hairlines, no glass, no gradient, no chart. Prefix ag-an-.
+ */
+.ag-an-lead { margin-top: 4px; max-width: 80ch; font-size: 0.9375rem; line-height: 1.5; color: var(--ag-text-2); }
+.ag-an-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: var(--ag-type-small-size); color: var(--ag-text-2); }
+.ag-an-meta__time { font-variant-numeric: tabular-nums; }
+
+/* Permanent reminder: acknowledging is not resolving. */
+.ag-an-reminder {
+  display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: start; margin-bottom: 14px;
+  padding: 12px 14px; border-radius: var(--ag-r-control); background: var(--ag-info-bg); color: var(--ag-text);
+  font-size: 0.875rem; line-height: 1.45;
+}
+.ag-an-reminder > .ag-icon { margin-top: 1px; color: var(--ag-info-icon); }
+.ag-an-reminder strong { font-weight: 600; }
+
+/* Filters: a frameless toolbar like the catalog search, one line from 1100 px. */
+.ag-an-filters { margin-bottom: 12px; display: grid; grid-template-columns: minmax(0, 1fr); }
+.ag-an-filters__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 16px; }
+.ag-an-filters .ag-ff { gap: 4px; }
+.ag-an-filters .ag-ff__control { min-height: var(--ag-control-h); font-size: 0.9375rem; }
+.ag-an-filters .ag-ff__slot { display: none; }
+.ag-an-filters__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+@media (min-width: 1100px) {
+  .ag-an-filters { grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; align-items: end; }
+  .ag-an-filters__actions { margin-top: 0; }
+}
+
+.ag-an-where { overflow-wrap: anywhere; }
+.ag-an-zone { display: block; }
+.ag-an-empty-action { margin-top: 10px; }
+.ag-list { min-height: 0; }
+.ag-item__name { margin-top: 8px; }
+
+/* Dossier */
+.ag-an-diag--anomaly { background: var(--ag-anomaly-bg); }
+.ag-an-diag--info { background: var(--ag-info-bg); }
+.ag-an-diag--none { background: var(--ag-surface-sunken); border-color: var(--ag-border); }
+.ag-an-diag__lead { margin-top: 10px; font-size: var(--ag-eq-diag-reason-size); font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.ag-an-outcome { margin-bottom: 16px; }
+.ag-an-actions .ag-help { align-self: center; }
+.ag-an-sec { margin-top: 24px; }
+.ag-an-sec__note { margin-top: 8px; font-size: var(--ag-type-caption-size); line-height: 1.45; color: var(--ag-text-2); }
+.ag-an-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 28px; }
+.ag-an-id { font-family: var(--ag-font-mono); font-size: var(--ag-type-code-size); font-weight: 450; overflow-wrap: anywhere; user-select: all; }
+.ag-an-quote {
+  margin: 8px 0 0; padding: 10px 14px; border-left: 3px solid var(--ag-control-border); background: var(--ag-surface-sunken);
+  border-radius: 0 var(--ag-r-small) var(--ag-r-small) 0; font-size: 0.9375rem; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap;
+}
+.ag-an-quote__src { display: block; margin-top: 6px; font-size: var(--ag-type-small-size); color: var(--ag-text-2); white-space: normal; }
+
+/* Evidence: provisional shape, read-only. */
+.ag-an-evidence { margin-top: 10px; display: grid; gap: 8px; }
+.ag-an-evidence__item { display: grid; gap: 4px; padding: 10px 14px; border: 1px solid var(--ag-border); border-radius: var(--ag-r-control); }
+.ag-an-evidence__type { font-family: var(--ag-font-mono); font-size: var(--ag-type-code-size); font-weight: 600; overflow-wrap: anywhere; }
+.ag-an-evidence__when { font-size: var(--ag-type-caption-size); color: var(--ag-text-2); font-variant-numeric: tabular-nums; }
+.ag-an-evidence__ids { display: grid; gap: 4px; margin-top: 2px; }
+.ag-an-evidence__ids div { display: grid; grid-template-columns: minmax(6rem, 8rem) minmax(0, 1fr); gap: 2px 12px; align-items: baseline; }
+.ag-an-evidence__ids dt { font-size: var(--ag-type-caption-size); color: var(--ag-text-2); }
+@media (max-width: 559px) {
+  .ag-an-evidence__ids div { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (forced-colors: active) {
+  .ag-an-reminder, .ag-an-quote, .ag-an-evidence__item { border: 1px solid CanvasText; }
+}

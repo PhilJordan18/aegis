@@ -44,6 +44,13 @@ const PATHS = {
       <path d="M12 7.6v4.6l2.8 1.8" {...glyph} />
     </>
   ),
+  'status-warn': (
+    <>
+      <path d={DIAMOND} fill="currentColor" />
+      <path d="M12 7.2v5" {...glyph} />
+      <circle cx="12" cy="16" r="1.3" fill="var(--ag-glyph)" />
+    </>
+  ),
   'status-offline': (
     <>
       <path d={DIAMOND} fill="currentColor" />

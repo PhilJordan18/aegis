@@ -5,6 +5,8 @@ import { clearCacheOnSessionChange, createQueryClient } from '../api/serverState
 import { createHistoryRouter, RouterContext, type Router } from '../app/router'
 import { createAppearanceController } from '../features/appearance/appearance'
 import { AppearanceContext } from '../features/appearance/useAppearance'
+import { unconfiguredAnomalyGateway, type AnomalyGateway } from '../features/anomalies/anomalyGateway'
+import { AnomalyGatewayContext } from '../features/anomalies/AnomalyGatewayContext'
 import { unconfiguredAuthGateway, type AuthGateway } from '../features/auth/authGateway'
 import { AuthGatewayContext } from '../features/auth/AuthGatewayContext'
 import { createSessionStore, SessionContext, type SessionStore } from '../features/auth/session'
@@ -27,6 +29,7 @@ export function renderWithProviders(
     lockerGateway = unconfiguredLockerGateway,
     scheduleGateway = unconfiguredScheduleGateway,
     custodyGateway = unconfiguredCustodyGateway,
+    anomalyGateway = unconfiguredAnomalyGateway,
     session = createSessionStore(),
     router = createHistoryRouter(window),
     queryClient = createQueryClient(),
@@ -38,6 +41,7 @@ export function renderWithProviders(
     lockerGateway?: LockerGateway
     scheduleGateway?: ScheduleGateway
     custodyGateway?: CustodyGateway
+    anomalyGateway?: AnomalyGateway
     session?: SessionStore
     router?: Router
     queryClient?: QueryClient
@@ -57,7 +61,7 @@ export function renderWithProviders(
               <AuthGatewayContext value={gateway}>
                 <CatalogGatewayContext value={catalogGateway}>
                   <LockerGatewayContext value={lockerGateway}>
-                    <ScheduleGatewayContext value={scheduleGateway}><CustodyGatewayContext value={custodyGateway}>{ui}</CustodyGatewayContext></ScheduleGatewayContext>
+                    <ScheduleGatewayContext value={scheduleGateway}><CustodyGatewayContext value={custodyGateway}><AnomalyGatewayContext value={anomalyGateway}>{ui}</AnomalyGatewayContext></CustodyGatewayContext></ScheduleGatewayContext>
                   </LockerGatewayContext>
                 </CatalogGatewayContext>
               </AuthGatewayContext>
