@@ -102,6 +102,42 @@ class AdminAuditApiTests extends ApiIntegrationTest {
     }
 
     @Test
+    void nestedDetailsKeepOnlyTheAllowedScalarFields() throws Exception {
+        UUID subject = UUID.randomUUID();
+        UUID update = event("ASSET_UPDATED", "ASSET_MODEL", subject, null, null, START.minusSeconds(30), """
+                {"changes": {"name": {"from": "Old", "to": "New"},
+                             "description": {"from": "free text", "to": "other free text"},
+                             "manufacturer": {"from": {"nested": "object"}, "to": "Acme"},
+                             "secretHash": {"from": "h1", "to": "h2"}}}""");
+        UUID placement = event("ASSET_PLACEMENT_CHANGED", "ASSET", subject, null, null, START.minusSeconds(20), """
+                {"from": null,
+                 "to": {"placementId": "p", "lockerCode": "L-01", "reason": "free text", "extra": "x"}}""");
+        UUID schedule = event("SCHEDULE_UPDATED", "OPERATING_SCHEDULE", subject, null, null, START.minusSeconds(10), """
+                {"previousScheduleId": null,
+                 "after": {"timeZone": "America/Toronto", "note": "free text",
+                           "windows": [{"dayOfWeek": "MONDAY", "enabled": true, "opensAt": "08:00",
+                                        "closesAt": "17:00", "payload": "x"}]}}""");
+
+        read(AUDIT + "?subjectId=" + subject).andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[*].id").value(contains(ids(schedule, placement, update))))
+                .andExpect(jsonPath("$.items[0].details.previousScheduleId").value(nullValue()))
+                .andExpect(jsonPath("$.items[0].details.after.length()").value(2))
+                .andExpect(jsonPath("$.items[0].details.after.timeZone").value("America/Toronto"))
+                .andExpect(jsonPath("$.items[0].details.after.windows[0].length()").value(4))
+                .andExpect(jsonPath("$.items[0].details.after.windows[0].enabled").value(true))
+                .andExpect(jsonPath("$.items[1].details.from").value(nullValue()))
+                .andExpect(jsonPath("$.items[1].details.to.length()").value(2))
+                .andExpect(jsonPath("$.items[1].details.to.lockerCode").value("L-01"))
+                .andExpect(jsonPath("$.items[2].details.changes.length()").value(2))
+                .andExpect(jsonPath("$.items[2].details.changes.name.to").value("New"))
+                .andExpect(jsonPath("$.items[2].details.changes.manufacturer.length()").value(1))
+                .andExpect(jsonPath("$.items[2].details.changes.manufacturer.to").value("Acme"))
+                .andExpect(content().string(not(containsString("free text"))))
+                .andExpect(content().string(not(containsString("nested"))))
+                .andExpect(content().string(not(containsString("h1"))));
+    }
+
+    @Test
     void anEventIsReadWithItsActorSummaryAndFilteredDetailsOnly() throws Exception {
         UUID identifier = UUID.randomUUID();
         UUID asset = UUID.randomUUID();
