@@ -22,6 +22,15 @@ export interface Formatters {
    * it is the device's zone, which is right for a technical instant such as an evaluation time.
    */
   readonly time: (instant: Date, timeZone?: string) => string
+  /**
+   * A business instant to the second with its zone abbreviation (« 11 nov. 2026, 14 h 11 min 53 s HNE »):
+   * the audit trail tells events apart by the second.
+   */
+  readonly dateTimeSeconds: (instant: Date, timeZone: string) => string
+  /** The time of day to the second, without the zone (« 14 h 11 min 53 s »): the zone is stated once beside the list. */
+  readonly clockSeconds: (instant: Date, timeZone: string) => string
+  /** A day heading (« mercredi 11 novembre 2026 »), in the zone it is given. */
+  readonly dayHeading: (instant: Date, timeZone: string) => string
   /** Capitalization that follows the language's rules. */
   readonly upperCase: (value: string) => string
 }
@@ -46,6 +55,10 @@ function createFormatters(locale: Locale): Formatters {
     dateTime: (instant, timeZone) =>
       new Intl.DateTimeFormat(tag, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short', timeZone }).format(instant),
     time: (instant, timeZone) => new Intl.DateTimeFormat(tag, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short', timeZone }).format(instant),
+    dateTimeSeconds: (instant, timeZone) =>
+      new Intl.DateTimeFormat(tag, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', timeZoneName: 'short', timeZone }).format(instant),
+    clockSeconds: (instant, timeZone) => new Intl.DateTimeFormat(tag, { hour: 'numeric', minute: '2-digit', second: '2-digit', timeZone }).format(instant),
+    dayHeading: (instant, timeZone) => new Intl.DateTimeFormat(tag, { dateStyle: 'full', timeZone }).format(instant),
     upperCase: (value) => value.toLocaleUpperCase(tag),
   }
 }

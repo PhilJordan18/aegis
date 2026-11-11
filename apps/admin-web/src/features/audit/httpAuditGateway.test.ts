@@ -81,4 +81,16 @@ describe('classifyAuditFailure', () => {
     expect(classifyAuditFailure(problem(403, 'FORBIDDEN')).kind).toBe('forbidden')
     expect(classifyAuditFailure(problem(401, 'AUTH_TOKEN_EXPIRED'))).toEqual({ kind: 'ended' })
   })
+
+  it('reads a refused filter as a validation failure naming its fields, not as a service error', () => {
+    const refused = new ApiRequestError({
+      kind: 'httpProblem',
+      status: 400,
+      problem: problemBody(400, 'VALIDATION_ERROR', { violations: [{ field: 'to', code: 'INVALID_VALUE', message: 'x' }] }),
+      retryAfter: null,
+      requestId: REQUEST_ID,
+    })
+    expect(classifyAuditFailure(refused)).toEqual({ kind: 'invalidFilter', fields: ['to'] })
+    expect(classifyAuditFailure(problem(400, 'VALIDATION_ERROR'))).toEqual({ kind: 'invalidFilter', fields: [] })
+  })
 })

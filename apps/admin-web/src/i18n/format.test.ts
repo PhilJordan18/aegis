@@ -138,6 +138,23 @@ describe('times', () => {
   })
 })
 
+describe('audit instants (to the second)', () => {
+  const ZONE = 'America/Toronto'
+  const instant = new Date('2026-11-11T19:11:53Z')
+
+  it('shows the second and, in the dossier form, the zone abbreviation', () => {
+    expect(plain(formattersFor('fr').clockSeconds(instant, ZONE))).toBe('14 h 11 min 53 s')
+    expect(plain(formattersFor('en').clockSeconds(instant, ZONE))).toBe('2:11:53 p.m.')
+    expect(plain(formattersFor('fr').dateTimeSeconds(instant, ZONE))).toBe('11 nov. 2026, 14 h 11 min 53 s HNE')
+    expect(plain(formattersFor('en').dateTimeSeconds(instant, ZONE))).toBe('Nov 11, 2026, 2:11:53 p.m. EST')
+  })
+
+  it('writes the day heading in the zone it is given', () => {
+    expect(plain(formattersFor('fr').dayHeading(new Date('2026-11-12T03:30:00Z'), ZONE))).toBe('mercredi 11 novembre 2026')
+    expect(plain(formattersFor('en').dayHeading(new Date('2026-11-12T03:30:00Z'), ZONE))).toBe('Wednesday, November 11, 2026')
+  })
+})
+
 describe('capitalisation', () => {
   it('upper-cases an initial with the language rules', () => {
     expect(formattersFor('fr').upperCase('é')).toBe('É')
