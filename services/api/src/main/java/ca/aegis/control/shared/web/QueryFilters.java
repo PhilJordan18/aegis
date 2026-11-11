@@ -56,7 +56,7 @@ public final class QueryFilters {
     }
 
     /**
-     * Provisional rule D2 of the 11 November 2026 matrix (#67), pending Philippe's decision: {@code from} is inclusive
+     * Rule D2 approved on 11 November 2026 (#67): {@code from} is inclusive
      * and {@code to} exclusive, so an empty or inverted interval is refused rather than answered with an empty page.
      */
     public void requireOrdered(Instant from, Instant to) {
