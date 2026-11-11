@@ -19,13 +19,13 @@ Réutiliser tel quel (`apps/admin-web/src/…`) :
 
 | Besoin | Existant |
 |---|---|
-| Coque, navigation, tiroir | `app/shell/ManagerShell.tsx` : passer `path` des quatre sections (aujourd'hui `null`, « à venir ») |
+| Coque, navigation, tiroir | `app/shell/ManagerShell.tsx` : passer `path` des quatre sections (aujourd'hui `null`, « à venir »). Barre supérieure compacte : le prototype la rend en `<header role="banner">`; le `<div>` actuel laisse la marque hors de tout repère (axe `region`, sous 1024 px) |
 | Titre de page et focus | `app/PageHeading.tsx`, `app/page.css` |
 | Liste maîtresse, rangée, pager, vide, squelettes | `features/catalog/AssetList.tsx` (`.ag-panel`, `.ag-list__*`, `.ag-item`, `.ag-pager`, `.ag-skel`), `equipment.css` |
 | Dossier à défilement focalisable | `features/catalog/AssetDossier.tsx` (`.ag-dossier__scroll`, `tabIndex=0`, `role="group"`) |
 | Onglets | `.ag-tabs` de `EquipmentPage.tsx` |
 | Puce de statut | `ui/StatusChip.tsx` : **ajouter le rôle `anomaly`** (`--ag-anomaly-*`, déjà dans `tokens.css`) et l'icône `status-warn` (losange et point d'exclamation, même grammaire que `status-clock`) |
-| Alertes et périmé | `ui/Alert.tsx`, `features/catalog/CatalogAlert.tsx`, `StaleNotice.tsx`, `catalogFailure.ts` (ajouter le cas « liste 404 = pas encore disponible », §3) |
+| Alertes et périmé | `ui/Alert.tsx`, `features/catalog/CatalogAlert.tsx`, `StaleNotice.tsx`, `catalogFailure.ts` (un `404` de liste se classe comme `serviceError`, §3) |
 | Dialogue | `ui/Dialog.tsx` (`DialogBody`, `DialogActions`), motif de `forms/ArchiveDialog.tsx` pour l'idempotence et le focus |
 | Champs | `ui/FormField.tsx` (`SelectField`, `TextField`, `TextAreaField`) |
 | Boutons | `ui/Button.tsx` (`busy`, `inert`) |
@@ -45,12 +45,12 @@ Composants nouveaux (présentation seulement; classes `cs-…` du prototype comm
 | `CellTable` | Cellules du casier (porte, serrure, équipement attendu), empilé sous 560 px | `.cs-cells` |
 | `IdText` | UUID abrégé (8 caractères + …) dans la liste, complet et sélectionnable dans le dossier | `.cs-id` |
 
-Les repères **G1 à G12** et les encadrés pointillés magenta du prototype sont des **annotations de revue**, hors produit (masqués par `?notes=off`). Ne pas les porter dans l'application.
+Les repères **G1 à G13** et les encadrés pointillés magenta du prototype sont des **annotations de revue**, hors produit (masqués par `?notes=off`). Ne pas les porter dans l'application.
 
 ## 3. Comportements communs
 
 - **Lecture par identifiant** : le dossier est lu par `GET …/{id}`, même hors du filtre de la liste (après « Reconnaître », l'anomalie sort du filtre « Ouvertes » mais reste affichée).
-- **Liste 404** : sur une route de **liste**, `404 RESOURCE_NOT_FOUND` signifie « service pas encore disponible » et jamais « vide » (une liste vide répond `200`). Sur une route par identifiant, c'est « Dossier introuvable ».
+- **404** : sur une route de **liste**, `404 RESOURCE_NOT_FOUND` n'a pas de sens établi (route non servie, ressource absente ou autre) et ne prouve pas une liste vide : il se traite comme l'erreur générique du service (identifiant de suivi, « Réessayer », aucun zéro, aucun « vide », aucun état « pas encore disponible »). Sur une route par identifiant, c'est « Dossier introuvable ».
 - **Compteurs** : seulement `totalItems` du serveur quand l'enveloppe le fournit (G6); sinon « Au moins N » avec l'erreur partielle. Jamais la taille d'une page présentée comme un total. Audit : « N événements chargés ».
 - **Retard** : lire `overdue` (serveur); ne jamais comparer `dueAt` à l'horloge du client. « En retard depuis » affiche l'heure de `dueAt`.
 - **Sélection** : lien `<a href>` par rangée (clic modifié = nouvel onglet); côte à côte, le focus reste sur la rangée et une région `role="status"` annonce le dossier; empilé (< 1024 px), le focus passe au dossier et la vue défile vers lui, comme `EquipmentPage`.
@@ -121,7 +121,6 @@ Les chaînes complètes (FR et EN, mêmes clés, parité vérifiée) sont dans `
 | Titulaire | Titulaire : identifiant seulement | Holder: identifier only |
 | Étape absente | Non reçue / Pas encore reçue | Not received / Not received yet |
 | Compteur partiel | Au moins 1 en retard · Lecture incomplète. | At least 1 overdue · Incomplete read. |
-| 404 liste | Cette section n'est pas encore disponible. | This section is not available yet. |
 | Audit, curseur | La liste a changé. Recommencez depuis le début. | The list has changed. Start again from the beginning. |
 | Audit, immuable | Historique non modifiable : aucun événement ne peut être modifié ni supprimé. | Read-only history: no event can be modified or deleted. |
 | Audit, preuve | Aucune preuve physique n'est référencée par cet événement. | No physical evidence is referenced by this event. |
@@ -186,6 +185,7 @@ Rien n'est inventé dans le prototype; les fixtures supposent seulement les deux
 | **G10** | Fuseau d'affichage des instants des listes et de l'audit : aucun `timeZone` hors de `LockerStatusView.currentWindow` | `09` §3, §8.6 (`currentWindow.timeZone`), §14.1 | Afficher au fuseau du laboratoire (celui du casier unique du P0), abréviation visible dans le dossier, mention « Heures du laboratoire : America/Toronto » sous les listes. À documenter pour l'audit. |
 | **G11** | `availableActions` sur les vues administrateur : la sémantique est « pour le demandeur » | `09` §8.10 (règles 1 à 6), §8.3, §8.4, §25 | Ne jamais lire ni afficher cette liste dans Manager; préciser dans §8.10 qu'une lecture administrateur n'est pas actionnable. |
 | **G12** | Langue et stabilité de `AnomalyView.summary` et de `LockerOperationView.failureReason` | `09` §8.7, §8.5; `docs/localisation/convention.md` (un texte du serveur n'est pas affiché tel quel) | Libellé principal = catalogue du client selon `type`; `summary` affiché **entre guillemets avec sa source** (« transmis par le serveur, affiché tel quel »); `failureReason` en détail technique. Définir ses valeurs ou le rendre optionnel. |
+| **G13** | Signification d'un `404 RESOURCE_NOT_FOUND` sur une route de **liste** : le contrat n'en fixe aucune (« Ressource absente ou non visible »); il ne prouve ni que la route n'est pas servie, ni que la liste est vide | `09` §21 (`RESOURCE_NOT_FOUND`), §17, §18.1, §19.1, §22 | Préciser qu'une liste répond toujours `200` (`items` vide au besoin) et qu'un `404` de liste est une anomalie du service. D'ici là, le prototype le traite comme l'erreur générique du service (identifiant de suivi, « Réessayer », jamais zéro ni « vide »); aucun état « pas encore disponible » n'existe. Le `404` d'un dossier par identifiant reste « Dossier introuvable ». |
 
 ## 8. Accessibilité (WCAG 2.2 AA)
 
@@ -206,8 +206,8 @@ Rien n'est inventé dans le prototype; les fixtures supposent seulement les deux
 3. Aucun bouton « Résoudre », ni fin de prêt, confirmation, retour forcé, ouverture à distance.
 4. Un prêt en retard reste « Retour en cours » ou « Actif » + « En retard »; jamais « Disponible » ni « Prêt ».
 5. Aucun compteur calculé sur une page; « Au moins N » quand la lecture est incomplète.
-6. États du § `states.md` : chargement, vide par filtre, erreur partielle, périmé, 401, 403, 404 de liste, 409 ×2, 400 `INVALID_CURSOR`, réseau, 5xx avec `traceId`.
+6. États du § `states.md` : chargement, vide par filtre, erreur partielle, périmé, 401, 403, 404 de dossier, `404` de liste traité comme erreur du service, 409 ×2, 400 `INVALID_CURSOR`, réseau, 5xx avec `traceId`.
 7. Note de reconnaissance de 1 à 500 caractères; `Idempotency-Key` stable pour un même dialogue.
 8. FR et EN complets; thèmes clair et sombre; 1440, 1024, 390 et 320 px sans défilement horizontal.
-9. Annotations de revue (G1 à G12, bandeau, encadrés pointillés) absentes de l'application.
+9. Annotations de revue (G1 à G13, bandeau, encadrés pointillés) absentes de l'application.
 10. Rendu réel comparé aux `captures/` (revue visuelle par `qa-reliability-engineer`).

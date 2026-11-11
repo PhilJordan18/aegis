@@ -4,7 +4,7 @@ Mode : Prototype. Issue #158 (DES-02). Statut : **proposition à valider par Phi
 Chaque état est un paramètre `state` de la page du prototype (`prototype/<écran>.html?state=…`). Aucune approbation n'est acquise.
 
 Sources : `09-contrats-rest.md` §7, §8.3 à §8.8, §16, §17, §18, §19, §21, §22; `03-dictionnaire-de-donnees.md` §4.19, §5.11;
-`docs/design/asset-lifecycle/sections.md` §5.1, §5.3, §5.5, §5.6, §7.1. Les repères **G1 à G12** renvoient aux décisions de `handoff.md` §7.
+`docs/design/asset-lifecycle/sections.md` §5.1, §5.3, §5.5, §5.6, §7.1. Les repères **G1 à G13** renvoient aux décisions de `handoff.md` §7.
 
 ## 1. Règles communes à tous les écrans
 
@@ -16,13 +16,12 @@ Sources : `09-contrats-rest.md` §7, §8.3 à §8.8, §16, §17, §18, §19, §2
 | Périmé | Actualisation en échec, données déjà affichées | Alerte « Données non actualisées. » avec l'heure de lecture; les données restent affichées, datées de leur lecture. |
 | Session terminée | `401` (`AUTH_TOKEN_INVALID`, `AUTH_TOKEN_EXPIRED`) §21 | L'application revient à la connexion « Session expirée » (`manager-v3/prototype/sign-in.html?state=session-expired`). L'écran ne montre aucune donnée. |
 | Accès refusé | `403 FORBIDDEN` §21 | Alerte d'erreur « Votre compte n'a pas accès à … ». Aucune donnée chargée, aucune relance. |
-| Service pas encore disponible | `404 RESOURCE_NOT_FOUND` sur une **route de liste** (§21) | Alerte d'avertissement « Cette section n'est pas encore disponible. » + code affiché + « Réessayer ». Ne s'affiche **jamais** comme une liste vide : une liste ne répond pas 404, elle répond `items: []`. |
 | Dossier introuvable | `404 RESOURCE_NOT_FOUND` sur une **ressource par identifiant** (§17, §18.1) | Alerte « Dossier introuvable. » dans le dossier + « Retour à la liste ». La liste reste utilisable. |
 | Injoignable | Réseau coupé, délai dépassé, `5xx` sans corps | Alerte d'avertissement, sans identifiant de suivi, « Réessayer ». |
-| Erreur du service | `5xx` avec `problem+json` | Alerte d'erreur, `traceId` affiché tel quel et sélectionnable, « Réessayer ». |
+| Erreur du service | `5xx` avec `problem+json`; **et `404 RESOURCE_NOT_FOUND` sur une route de liste** (§21) | Alerte d'erreur, `traceId` affiché tel quel et sélectionnable, « Réessayer ». Un `404` de liste ne prouve ni que la route n'est pas servie, ni que la liste est vide : aucun état « pas encore disponible » n'en est déduit, et l'écran n'affiche jamais zéro ni « vide ». |
 | Valeur inconnue d'une énumération | Valeur hors du catalogue de cette version (§3) | « Type non reconnu par cette version » ou « Événement non reconnu · CODE »; jamais traité comme un état connu. |
 
-« Réessayer » et « Actualiser » sont simulés dans le prototype (700 ms, puis retour à l'état nominal, sauf le `404` qui reste).
+« Réessayer » et « Actualiser » sont simulés dans le prototype (700 ms, puis retour à l'état nominal).
 
 ## 2. Vue d'ensemble (`overview.html`)
 
@@ -39,8 +38,7 @@ Aucun graphique, aucun total calculé sur une page, aucune readiness côté clie
 | `locker-unknown` | Bandeau « état inconnu : aucune présence ni absence supposée »; valeurs des cellules « Inconnue » | `connectionStatus = UNKNOWN` | §16.1, 10 §15.3 |
 | `partial` | Prêts : « Au moins 1 en retard » + « Lecture incomplète » (la lecture `RETURN_PENDING` a échoué); casier : injoignable; réservations : erreur du service avec `traceId`; anomalies et opération lisibles | `RETURN_PENDING` en erreur, `/lockers/{id}/status` réseau, `/admin/reservations` `5xx` | §17, §7.1 |
 | `stale` | Données du dernier chargement + alerte « Données non actualisées. » avec l'heure | actualisation en échec | |
-| `unavailable` | Une seule alerte « Cette section n'est pas encore disponible. » à la place des modules | `404` sur toutes les listes | §21 |
-| `unreachable`, `service-error` | Une seule alerte (quand **toutes** les lectures échouent de la même façon; sinon alerte par module, voir `partial`) | réseau; `5xx` | §21 |
+| `unreachable`, `service-error` | Une seule alerte (quand **toutes** les lectures échouent de la même façon; sinon alerte par module, voir `partial`). `service-error` : identifiant de suivi + « Réessayer », jamais de zéro | réseau; `5xx` ou `404` de liste | §21 |
 | `forbidden` | Alerte « Votre compte n'a pas accès à la vue d'ensemble. » | `403` | §21 |
 | `unauthorized` | Rien (renvoi à la connexion) | `401` | §21 |
 
@@ -56,7 +54,7 @@ Aucune fin de prêt, confirmation, retour forcé ni ouverture à distance (§17,
 | `empty` | Filtres préréglés sans résultat (par onglet) : « Aucun résultat pour ces filtres. » | `items: []` avec filtre | §17 |
 | `partial` | Liste et dossier lisibles; la section « Opérations liées » porte une alerte d'erreur (lecture de l'opération liée, §17) | `GET /admin/locker-operations/{id}` `5xx` | §17 |
 | `stale` | Alerte « Données non actualisées. » en tête de liste | | |
-| `unavailable`, `unreachable`, `service-error`, `forbidden`, `unauthorized` | Alerte dans la liste (pas de dossier), `401` : renvoi | `404`, réseau, `5xx`, `403`, `401` | §21 |
+| `unreachable`, `service-error`, `forbidden`, `unauthorized` | Alerte dans la liste (pas de dossier), `401` : renvoi | réseau, `5xx` ou `404` de liste, `403`, `401` | §21 |
 | `detail-404` | Liste lisible, dossier « Dossier introuvable. » | `404` sur `/{id}` | §21 |
 | `join-failed` (onglet Opérations) | Équipement et cellule en « identifiant seulement » + alerte « Libellés non résolus » | échec de la jointure Équipements / Casiers (G3) | §8.5, §12.2, §16.2 |
 
@@ -76,7 +74,7 @@ Rappel permanent en tête d'écran : « Une anomalie se résout seulement lorsqu
 | `state` | Ce que l'écran montre | Déclencheur | Réf. |
 |---|---|---|---|
 | `nominal` | Filtre par défaut « Ouvertes »; liste (gravité, statut, type, cellule, détection) et dossier avec « Reconnaître » | `200` | §8.7 |
-| `loading`, `empty`, `stale`, `unavailable`, `unreachable`, `service-error`, `forbidden`, `unauthorized`, `detail-404` | Comme § 1; `empty` : filtre « Ouvertes » + gravité « Faible » sans résultat | | §21 |
+| `loading`, `empty`, `stale`, `unreachable`, `service-error`, `forbidden`, `unauthorized`, `detail-404` | Comme § 1; `empty` : filtre « Ouvertes » + gravité « Faible » sans résultat | | §21 |
 | `partial` | Liste et champs du dossier lisibles; la section « Preuves » porte une alerte « Le détail (preuves) n'a pas pu être chargé » | `GET /admin/anomalies/{id}` `5xx` | §18.1 |
 | `join-failed` | « Équipement : identifiant seulement », « Cellule : identifiant seulement » + alerte | jointure en échec (G3) | §8.7 |
 | `ack-resolved` | Dialogue : « Cette anomalie est déjà résolue. Aucune reconnaissance n'a été enregistrée. » + « Actualiser et fermer »; le dossier passe en « Résolue » avec bandeau d'information | `409 ANOMALY_ALREADY_RESOLVED` | §18.2, §21 |
@@ -96,7 +94,7 @@ Lecture : `GET /admin/audit-events` avec curseur opaque (§19.1, §22.2). Aucune
 | `state` | Ce que l'écran montre | Déclencheur | Réf. |
 |---|---|---|---|
 | `nominal` | Chronologie par jour (heure à la seconde, événement, acteur, sujet, de → vers) + détail à codes; « Charger la suite » charge la page suivante, « Fin de l'historique pour ces filtres. » à la fin | `200`, `hasMore` | §19.1 |
-| `loading`, `stale`, `unavailable`, `unreachable`, `service-error`, `forbidden`, `unauthorized` | Comme § 1 | | §21 |
+| `loading`, `stale`, `unreachable`, `service-error`, `forbidden`, `unauthorized` | Comme § 1 | | §21 |
 | `empty` | Filtre `eventType` préréglé sans résultat + puce de filtre active | `items: []` | §19.1 |
 | `partial` | Page 1 lisible; sous la liste « La suite n'a pas pu être chargée » + `traceId` + « Réessayer » | page suivante `5xx` | §19.1 |
 | `invalid-cursor` | Page 1 lisible; sous la liste « La liste a changé. Recommencez depuis le début. » + « Recommencer » | `400 INVALID_CURSOR` | §22.2, §21 |
