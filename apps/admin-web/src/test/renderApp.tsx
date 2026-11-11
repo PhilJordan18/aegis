@@ -18,6 +18,8 @@ import { unconfiguredScheduleGateway, type ScheduleGateway } from '../features/s
 import { ScheduleGatewayContext } from '../features/schedule/ScheduleGatewayContext'
 import { unconfiguredTransactionGateway, type TransactionGateway } from '../features/transactions/transactionGateway'
 import { TransactionGatewayContext } from '../features/transactions/TransactionGatewayContext'
+import { unconfiguredAuditGateway, type AuditGateway } from '../features/audit/auditGateway'
+import { AuditGatewayContext } from '../features/audit/AuditGatewayContext'
 import { unconfiguredCustodyGateway, type CustodyGateway } from '../features/custody/custodyGateway'
 import { CustodyGatewayContext } from '../features/custody/CustodyGatewayContext'
 import { createLocaleController, type Locale, type LocaleController } from '../i18n/locale'
@@ -33,6 +35,7 @@ export function renderWithProviders(
     custodyGateway = unconfiguredCustodyGateway,
     transactionGateway = unconfiguredTransactionGateway,
     anomalyGateway = unconfiguredAnomalyGateway,
+    auditGateway = unconfiguredAuditGateway,
     session = createSessionStore(),
     router = createHistoryRouter(window),
     queryClient = createQueryClient(),
@@ -46,6 +49,7 @@ export function renderWithProviders(
     custodyGateway?: CustodyGateway
     transactionGateway?: TransactionGateway
     anomalyGateway?: AnomalyGateway
+    auditGateway?: AuditGateway
     session?: SessionStore
     router?: Router
     queryClient?: QueryClient
@@ -68,7 +72,9 @@ export function renderWithProviders(
                     <ScheduleGatewayContext value={scheduleGateway}>
                       <CustodyGatewayContext value={custodyGateway}>
                         <TransactionGatewayContext value={transactionGateway}>
-                          <AnomalyGatewayContext value={anomalyGateway}>{ui}</AnomalyGatewayContext>
+                          <AnomalyGatewayContext value={anomalyGateway}>
+                            <AuditGatewayContext value={auditGateway}>{ui}</AuditGatewayContext>
+                          </AnomalyGatewayContext>
                         </TransactionGatewayContext>
                       </CustodyGatewayContext>
                     </ScheduleGatewayContext>

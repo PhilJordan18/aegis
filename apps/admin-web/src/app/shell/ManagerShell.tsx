@@ -12,7 +12,8 @@ import './shell.css'
 
 /**
  * Order imposed by sections.md §5 and handoff §6 SidebarNav. Équipements (the static preview in design-review
- * builds, the protected page otherwise), Réservations et prêts, Casiers (the read-only locker status) and Anomalies exist so far.
+ * builds, the protected page otherwise), Réservations et prêts, Casiers (the read-only locker status), Anomalies
+ * and Audit (the read-only history) exist so far.
  */
 const SECTIONS: readonly { id: keyof Messages['shell']['sections']; icon: IconName; path: string | null }[] = [
   { id: 'overview', icon: 'grid', path: null },
@@ -20,7 +21,7 @@ const SECTIONS: readonly { id: keyof Messages['shell']['sections']; icon: IconNa
   { id: 'reservationsLoans', icon: 'calendar', path: pathOf('reservationsLoans') },
   { id: 'lockers', icon: 'locker', path: pathOf('lockers') },
   { id: 'anomalies', icon: 'alert', path: pathOf('anomalies') },
-  { id: 'audit', icon: 'list', path: null },
+  { id: 'audit', icon: 'list', path: pathOf('audit') },
 ]
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'

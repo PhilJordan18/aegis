@@ -57,7 +57,7 @@ export function AnomalyList({ page, selectedId, loading, refreshing, failure, st
         <div className="ag-list__alerts">
           <StaleNotice
             evaluatedAt={readAt}
-            body={readAt === null ? undefined : t.staleBody({ time: readAt })}
+            body={(time) => t.staleBody({ time })}
             retrying={retrying}
             onRetry={onRetry}
             returnFocus={() => document.getElementById(titleId)?.focus()}

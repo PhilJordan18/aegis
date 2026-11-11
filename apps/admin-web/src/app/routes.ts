@@ -2,9 +2,9 @@
  * Typed route map. Paths are French in both languages (stable, bookmarkable addresses); ids stay English.
  * Page titles are translated: catalog `pageTitle`, keyed by route id.
  * Preview-only routes resolve to `notFound` when the preview is disabled.
- * `equipment`, `reservationsLoans`, `lockers` and `anomalies` require an administrator session (see RequireAdminSession).
+ * `equipment`, `reservationsLoans`, `lockers`, `anomalies` and `audit` require an administrator session (see RequireAdminSession).
  */
-export type RouteId = 'landing' | 'signIn' | 'equipment' | 'reservationsLoans' | 'lockers' | 'anomalies' | 'equipmentPreview' | 'notFound'
+export type RouteId = 'landing' | 'signIn' | 'equipment' | 'reservationsLoans' | 'lockers' | 'anomalies' | 'audit' | 'equipmentPreview' | 'notFound'
 
 export interface RouteDefinition {
   readonly path: string | null
@@ -18,6 +18,7 @@ export const ROUTES: Readonly<Record<RouteId, RouteDefinition>> = {
   reservationsLoans: { path: '/reservations-prets', previewOnly: false },
   lockers: { path: '/casiers', previewOnly: false },
   anomalies: { path: '/anomalies', previewOnly: false },
+  audit: { path: '/audit', previewOnly: false },
   equipmentPreview: { path: '/apercu/equipements', previewOnly: true },
   notFound: { path: null, previewOnly: false },
 }

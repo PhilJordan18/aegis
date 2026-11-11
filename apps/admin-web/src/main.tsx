@@ -8,6 +8,8 @@ import './styles/base.css'
 import { clearCacheOnSessionChange, createQueryClient } from './api/serverState'
 import { App } from './app/App'
 import { createHistoryRouter, RouterContext } from './app/router'
+import { AuditGatewayContext } from './features/audit/AuditGatewayContext'
+import { createHttpAuditGateway } from './features/audit/httpAuditGateway'
 import { createAppearanceController } from './features/appearance/appearance'
 import { AppearanceContext } from './features/appearance/useAppearance'
 import type { AuthGateway } from './features/auth/authGateway'
@@ -57,6 +59,7 @@ const custodyGateway = createHttpCustodyGateway()
 // Reservations, loans and locker operations (09 §17): read only; design-review captures route /api/v1/admin/... themselves.
 const transactionGateway = createHttpTransactionGateway()
 const anomalyGateway = createHttpAnomalyGateway()
+const auditGateway = createHttpAuditGateway()
 
 const container = document.getElementById('root')
 if (!container) throw new Error('Missing #root element')
@@ -75,9 +78,11 @@ createRoot(container).render(
                       <CustodyGatewayContext value={custodyGateway}>
                         <TransactionGatewayContext value={transactionGateway}>
                           <AnomalyGatewayContext value={anomalyGateway}>
-                            <PreviewContext value={previewControls}>
-                              <App />
-                            </PreviewContext>
+                            <AuditGatewayContext value={auditGateway}>
+                              <PreviewContext value={previewControls}>
+                                <App />
+                              </PreviewContext>
+                            </AuditGatewayContext>
                           </AnomalyGatewayContext>
                         </TransactionGatewayContext>
                       </CustodyGatewayContext>

@@ -9,10 +9,10 @@ interface StaleNoticeProps {
   /** A refresh is running: the button is busy and keeps focus. */
   readonly retrying: boolean
   readonly onRetry: () => void
-  /** Replaces the catalog's wording (« évaluées à… ») for another feature's data; its title and button stay. */
-  readonly body?: string
   /** Called when a successful refresh removes the notice while its button has focus. */
   readonly returnFocus: () => void
+  /** The sentence under the title, from the time of the data; the default says the data were evaluated at that time. */
+  readonly body?: (time: string) => string
 }
 
 /**
@@ -47,7 +47,7 @@ export function StaleNotice({ evaluatedAt, retrying, onRetry, returnFocus, body 
   return (
     <>
       <Alert kind="warning" icon="status-offline" title={m.equipment.staleTitle}>
-        {body !== undefined ? <p>{body}</p> : evaluatedAt !== null && <p>{m.equipment.staleBody({ time: evaluatedAt })}</p>}
+        {evaluatedAt !== null && <p>{body ? body(evaluatedAt) : m.equipment.staleBody({ time: evaluatedAt })}</p>}
         <div className="ag-alert__action">
           <Button ref={buttonRef} variant="secondary" size="sm" busy={retrying} onClick={() => !retrying && onRetry()}>
             {m.equipment.retry}

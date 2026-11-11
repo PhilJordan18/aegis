@@ -79,7 +79,7 @@ export function AnomalyDossier({ anomaly, detail, loading, failure, stale, retry
           <div className="ag-dossier__stale">
             <StaleNotice
               evaluatedAt={readAt}
-              body={readAt === null ? undefined : t.staleBody({ time: readAt })}
+              body={(time) => t.staleBody({ time })}
               retrying={retrying}
               onRetry={onRetry}
               returnFocus={() => (focusLost.current = true)}

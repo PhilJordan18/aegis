@@ -35,6 +35,10 @@ export const queryKeys = {
     operationList: (query: object) => ['transactions', 'operations', 'list', query] as const,
     operation: (id: string) => ['transactions', 'operations', 'detail', id] as const,
   },
+  audit: {
+    all: ['audit'] as const,
+    timeline: (filters: object) => ['audit', 'timeline', filters] as const,
+  },
   lockers: {
     all: ['lockers'] as const,
     status: (lockerId: string) => ['lockers', 'status', lockerId] as const,

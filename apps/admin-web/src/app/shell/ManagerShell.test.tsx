@@ -47,14 +47,14 @@ describe('ManagerShell', () => {
       'Réservations et prêts',
       'Casiers',
       'Anomalies',
-      'Audit, à venir',
+      'Audit',
     ])
     const links = within(sidebar).getAllByRole('link')
-    expect(links.map((link) => link.getAttribute('href')).filter((href) => href !== '/')).toEqual(['/apercu/equipements', '/reservations-prets', '/casiers', '/anomalies'])
+    expect(links.map((link) => link.getAttribute('href')).filter((href) => href !== '/')).toEqual(['/apercu/equipements', '/reservations-prets', '/casiers', '/anomalies', '/audit'])
     const current = links.find((link) => link.getAttribute('aria-current') === 'page')
     expect(current?.textContent).toBe('Équipements')
     const soon = sidebar.querySelectorAll('[aria-disabled="true"]')
-    expect(soon).toHaveLength(2)
+    expect(soon).toHaveLength(1)
     soon.forEach((element) => expect(element.matches('a, button, [tabindex]')).toBe(false))
     expect(sidebar.textContent).toContain('Section à venir')
   })

@@ -14,12 +14,14 @@ interface AlertProps {
   readonly code?: string
   /** Visible label read before the code, e.g. « Identifiant de suivi : ». */
   readonly codeLabel?: string
+  /** Overrides the announcement: a persistent notice that is not an error is a `status` whatever its colour. */
+  readonly role?: 'status' | 'alert'
 }
 
 /** Errors and warnings use role="alert"; information uses role="status" (states.md §2). */
-export function Alert({ id, kind, icon, title, children, code, codeLabel }: AlertProps) {
+export function Alert({ id, kind, icon, title, children, code, codeLabel, role }: AlertProps) {
   return (
-    <div id={id} className={`ag-alert ag-alert--${kind}`} role={kind === 'info' ? 'status' : 'alert'}>
+    <div id={id} className={`ag-alert ag-alert--${kind}`} role={role ?? (kind === 'info' ? 'status' : 'alert')}>
       <Icon name={icon} />
       <div className="ag-alert__content">
         <p className="ag-alert__title">{title}</p>
