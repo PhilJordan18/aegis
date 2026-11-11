@@ -47,13 +47,19 @@ export interface AnomalyView {
   readonly resolvedAt: string | null
   readonly resolutionEvidenceObservationId: string | null
   readonly resolutionNote: string | null
-  /** One fixed French sentence per type (09 §8.7). Parsed, not rendered: showing it is an open decision. */
+  /**
+   * One fixed French sentence per type (09 §8.7). D5: the web localizes from `type`; this is only the French UI's compatible
+   * fallback label for a type it does not know. Never shown in English, never built from details.
+   */
   readonly summary: string
 }
 
+/** D7: the server sends at most this many normalized, deterministically ordered observations: a selection, not the history. */
+export const EVIDENCE_LIMIT = 50
+
 /**
- * One entry of the detail's `evidence`. §18.1 announces the section without defining it: this shape is the backend's
- * provisional one (D7 of the 11 November 2026 matrix, not approved), read leniently and shown read-only, as sent.
+ * One entry of the detail's `evidence` (D7, approved): at most {@link EVIDENCE_LIMIT} normalized observations, no raw RFID
+ * or payload. Still read leniently and shown read-only, as sent.
  */
 export interface AnomalyEvidenceItem {
   readonly observationId: string
@@ -65,7 +71,7 @@ export interface AnomalyEvidenceItem {
   readonly receivedAt: string | null
 }
 
-/** `unreadable` counts entries that did not match the provisional shape: they are said to be skipped, never guessed. */
+/** `unreadable` counts entries that did not match the expected shape: they are said to be skipped, never guessed. */
 export interface AnomalyEvidence {
   readonly items: readonly AnomalyEvidenceItem[]
   readonly unreadable: number

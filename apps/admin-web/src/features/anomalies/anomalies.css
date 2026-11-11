@@ -51,7 +51,7 @@
 }
 .ag-an-quote__src { display: block; margin-top: 6px; font-size: var(--ag-type-small-size); color: var(--ag-text-2); white-space: normal; }
 
-/* Evidence: provisional shape, read-only. */
+/* Evidence: a server-selected subset, read-only. */
 .ag-an-evidence { margin-top: 10px; display: grid; gap: 8px; }
 .ag-an-evidence__item { display: grid; gap: 4px; padding: 10px 14px; border: 1px solid var(--ag-border); border-radius: var(--ag-r-control); }
 .ag-an-evidence__type { font-family: var(--ag-font-mono); font-size: var(--ag-type-code-size); font-weight: 600; overflow-wrap: anywhere; }

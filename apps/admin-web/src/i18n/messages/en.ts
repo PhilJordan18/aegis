@@ -604,7 +604,7 @@ export const en: Messages = {
     listTitle: ({ count: value }: { count: number }) => plural(value, { one: `${count.format(value)} anomaly`, other: `${count.format(value)} anomalies` }),
     listTitleBare: 'Anomalies',
     listMeta: 'Severity, status, cell',
-    listFoot: ({ time }: { time: string }) => `Newest first · read at ${time}`,
+    listFoot: ({ time }: { time: string }) => `Newest first, by detection time · read at ${time}`,
     zoneNote: ({ zone }: { zone: string }) => `Laboratory time: ${zone}`,
     loading: 'Loading anomalies…',
     loaded: ({ count: value, page, pages }: { count: number; page: number; pages: number }) =>
@@ -671,7 +671,10 @@ export const en: Messages = {
 
     secEvidence: 'Evidence',
     evidenceLoading: 'Loading the detail…',
-    evidenceProvisional: 'Provisional shape, not approved by the contract: observations are shown as sent, read-only, without interpretation.',
+    evidenceLimit: ({ limit }: { limit: number }) =>
+      `At most ${count.format(limit)} observations, selected by the server: this is not the complete history. They are shown read-only, without interpretation.`,
+    evidenceLimitReached: ({ limit }: { limit: number }) =>
+      `${count.format(limit)} observations shown: the limit is reached. They are selected by the server and are not the complete history. Read-only, without interpretation.`,
     evidenceNone: 'No observation is referenced by this anomaly.',
     evidenceUnavailable: 'Evidence not available in this version.',
     evidenceUnreadable: ({ count: value }: { count: number }) =>

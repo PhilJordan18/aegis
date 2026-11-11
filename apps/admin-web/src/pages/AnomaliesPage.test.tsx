@@ -66,6 +66,7 @@ describe('Anomalies — list and dossier', () => {
     renderAnomalies(gateway)
     expect(await screen.findByRole('heading', { level: 1, name: 'Anomalies' })).toBeDefined()
     await screen.findByText('2 anomalies')
+    expect(screen.getByText(/Les plus récentes d’abord, selon l’heure de détection · lu à/)).toBeDefined()
     expect(gateway.listAnomalies.mock.calls[0]?.[1]).toEqual({ status: 'OPEN', page: 0, size: 20 })
     expect((screen.getByRole('combobox', { name: 'Statut' }) as HTMLSelectElement).value).toBe('OPEN')
     const rows = within(listEl()).getAllByRole('link')
@@ -87,14 +88,38 @@ describe('Anomalies — list and dossier', () => {
     expect(within(dossier).getByText('Ne résout pas l’anomalie.')).toBeDefined()
   })
 
-  it('never renders the server summary, and labels an unknown type by its raw code', async () => {
-    const odd = parsedAnomaly({ id: SECOND_ID, type: 'NEW_FAULT_KIND', summary: 'Texte du serveur à ne pas afficher.' })
+  it('shows the French server summary as the label of an unknown type, with the raw code in the dossier', async () => {
+    const odd = parsedAnomaly({ id: SECOND_ID, type: 'NEW_FAULT_KIND', summary: 'Texte du serveur pour un type inconnu.' })
     const gateway = fakeAnomalyGateway({ listAnomalies: async () => listOf(HIGH_OPEN, odd), getAnomaly: detailsOf(HIGH_OPEN, odd) })
     renderAnomalies(gateway)
     await screen.findByText('2 anomalies')
-    expect(screen.queryByText(/Équipement attendu non lu après la fermeture/)).toBeNull()
+    // A known type stays localized from `type`: its summary is never shown.
+    expect(document.body.textContent).not.toContain('Équipement attendu non lu après la fermeture')
+    expect(within(listEl()).getByText('Texte du serveur pour un type inconnu.')).toBeDefined()
+    await userEvent.click(within(listEl()).getByText('Texte du serveur pour un type inconnu.'))
+    const dossier = await screen.findByRole('group', { name: 'Texte du serveur pour un type inconnu.' })
+    expect(within(dossier).getByText('NEW_FAULT_KIND')).toBeDefined()
+    expect(within(dossier).getByText('Type non reconnu par cette version')).toBeDefined()
+  })
+
+  it('shows the raw code of an unknown type in French when the summary is empty or blank', async () => {
+    const odd = parsedAnomaly({ id: SECOND_ID, type: 'NEW_FAULT_KIND', summary: '   ' })
+    renderAnomalies(fakeAnomalyGateway({ listAnomalies: async () => listOf(HIGH_OPEN, odd), getAnomaly: detailsOf(HIGH_OPEN, odd) }))
+    await screen.findByText('2 anomalies')
     expect(within(listEl()).getByText('NEW_FAULT_KIND')).toBeDefined()
+  })
+
+  it('never shows the server summary in English: an unknown type is its raw code, marked as unrecognized', async () => {
+    const odd = parsedAnomaly({ id: SECOND_ID, type: 'NEW_FAULT_KIND', summary: 'Texte du serveur pour un type inconnu.' })
+    renderAnomalies(fakeAnomalyGateway({ listAnomalies: async () => listOf(HIGH_OPEN, odd), getAnomaly: detailsOf(HIGH_OPEN, odd) }), { locale: 'en' })
+    await screen.findByText('2 anomalies')
+    expect(within(listEl()).getByText('NEW_FAULT_KIND')).toBeDefined()
+    await userEvent.click(within(listEl()).getByText('NEW_FAULT_KIND'))
+    const dossier = await screen.findByRole('group', { name: 'NEW_FAULT_KIND' })
+    expect(within(dossier).getByText('Type not recognized by this version')).toBeDefined()
+    expect(within(dossier).getByText(/not recognized by this version of the application/)).toBeDefined()
     expect(document.body.textContent).not.toContain('Texte du serveur')
+    expect(document.body.textContent).not.toContain('Équipement attendu non lu')
   })
 
   it('shows the acknowledged anomaly as « Reconnue » with its author and note, without an acknowledge button', async () => {
@@ -109,7 +134,7 @@ describe('Anomalies — list and dossier', () => {
     expect(within(dossier).getByText(/Non résolue/)).toBeDefined()
   })
 
-  it('lists the evidence as provisional and read-only, parsed leniently', async () => {
+  it('states the 50-observation limit and that the evidence is not the complete history, read-only and parsed leniently', async () => {
     const detail = parsedDetail({
       evidence: [
         { observationId: OBSERVATION_ID, type: 'DOOR_CLOSED', compartmentId: null, operationId: OPERATION_ID, observedAt: '2026-11-10T19:01:00Z', receivedAt: '2026-11-10T19:01:02Z' },
@@ -120,9 +145,33 @@ describe('Anomalies — list and dossier', () => {
     renderAnomalies(gateway)
     const dossier = await screen.findByRole('group', { name: 'Équipement attendu non observé' })
     await within(dossier).findByText('DOOR_CLOSED')
-    expect(within(dossier).getByText(/Forme provisoire, non approuvée par le contrat/)).toBeDefined()
+    expect(within(dossier).getByText(/Au plus 50 observations, sélectionnées par le serveur : ce n’est pas l’historique complet/)).toBeDefined()
+    expect(within(dossier).queryByText(/la limite est atteinte/)).toBeNull()
+    expect(document.body.textContent).not.toMatch(/provisoire|non approuvée/i)
     expect(within(dossier).getByText(OBSERVATION_ID)).toBeDefined()
     expect(within(dossier).getByText('1 entrée illisible a été ignorée.')).toBeDefined()
+  })
+
+  it('says the limit is reached when exactly 50 observations are shown, in French and English', async () => {
+    const evidence = Array.from({ length: 50 }, (_, index) => ({
+      observationId: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+      type: 'DOOR_CLOSED',
+      compartmentId: null,
+      operationId: null,
+      observedAt: '2026-11-10T19:01:00Z',
+      receivedAt: null,
+    }))
+    const detail = parsedDetail({ evidence })
+    const gateway = fakeAnomalyGateway({ listAnomalies: async () => listOf(HIGH_OPEN), getAnomaly: async () => ok(detail) })
+    const view = renderAnomalies(gateway)
+    const dossier = await screen.findByRole('group', { name: 'Équipement attendu non observé' })
+    expect(await within(dossier).findByText(/50 observations affichées : la limite est atteinte/)).toBeDefined()
+    expect(within(dossier).getByText(/ce n’est pas l’historique complet/)).toBeDefined()
+    view.unmount()
+    renderAnomalies(gateway, { locale: 'en' })
+    const dossierEn = await screen.findByRole('group', { name: 'Expected equipment not observed' })
+    expect(await within(dossierEn).findByText(/50 observations shown: the limit is reached/)).toBeDefined()
+    expect(within(dossierEn).getByText(/not the complete history/)).toBeDefined()
   })
 
   it('says evidence is not available when the server sent no section', async () => {
@@ -135,6 +184,7 @@ describe('Anomalies — list and dossier', () => {
     renderAnomalies(fakeAnomalyGateway({ listAnomalies: async () => listOf(HIGH_OPEN), getAnomaly: detailsOf(HIGH_OPEN) }), { locale: 'en' })
     expect(await screen.findByRole('heading', { level: 1, name: 'Anomalies' })).toBeDefined()
     await screen.findByText('1 anomaly')
+    expect(screen.getByText(/Newest first, by detection time · read at/)).toBeDefined()
     expect(screen.getByText(/An anomaly is resolved only when a new observation from the locker confirms it/)).toBeDefined()
     expect(await screen.findByRole('button', { name: 'Acknowledge' })).toBeDefined()
     expect(screen.getByText('Does not resolve the anomaly.')).toBeDefined()

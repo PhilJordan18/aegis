@@ -41,13 +41,19 @@ export function statusText(status: AnomalyView['status'], { m }: I18n): string {
   return status === UNRECOGNIZED ? m.anomalies.unrecognizedStatus : m.anomalies.status[status]
 }
 
-/** Localized here from `type`; a type this version does not know falls back to its raw code, never to the server's summary. */
-export function typeLabel(type: AnomalyType | Unrecognized, { m }: I18n, rawCode?: string): string {
-  return type === UNRECOGNIZED ? (rawCode ?? m.anomalies.unrecognizedType) : m.anomalies.type[type]
+/**
+ * D5: localized here from `type`. A type this version does not know falls back, in French only, to the server's
+ * `summary` when it is a non-empty string (the compatible fallback), otherwise to the raw code. The English UI never
+ * shows the summary, which is French prose. Nothing is ever built from `details` or evidence.
+ */
+export function typeLabel(type: AnomalyType | Unrecognized, { m, locale }: I18n, rawCode?: string, summary?: string): string {
+  if (type !== UNRECOGNIZED) return m.anomalies.type[type]
+  if (locale === 'fr' && typeof summary === 'string' && summary.trim() !== '') return summary
+  return rawCode ?? m.anomalies.unrecognizedType
 }
 
-export function anomalyTypeLabel(anomaly: Pick<AnomalyView, 'type' | 'typeCode'>, i18n: I18n): string {
-  return typeLabel(anomaly.type, i18n, anomaly.typeCode)
+export function anomalyTypeLabel(anomaly: Pick<AnomalyView, 'type' | 'typeCode' | 'summary'>, i18n: I18n): string {
+  return typeLabel(anomaly.type, i18n, anomaly.typeCode, anomaly.summary)
 }
 
 /** The server gives identifiers only (G3): shown as such, shortened in a row and in full in the dossier. */

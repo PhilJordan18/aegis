@@ -8,7 +8,7 @@ import { UNRECOGNIZED } from '../catalog/contract'
 import { AnomalyAlert } from './AnomalyAlert'
 import type { AnomalyReadFailure } from './anomalyFailure'
 import { anomalyTypeLabel, hasUnrecognizedValue, instantLabel, severityChip, statusChip, whereLine } from './anomalyPresentation'
-import type { AnomalyDetail, AnomalyEvidence, AnomalyView } from './contract'
+import { EVIDENCE_LIMIT, type AnomalyDetail, type AnomalyEvidence, type AnomalyView } from './contract'
 
 /** What the page tells the dossier happened to this anomaly in this session; never inferred from the data. */
 export type DossierOutcome = 'acknowledged' | 'resolvedMeanwhile'
@@ -114,7 +114,7 @@ function Section({ title, children, note }: { readonly title: string; readonly c
   )
 }
 
-/** Free text sent by the server (summary, notes): in a quotation, as written, never interpreted. */
+/** Free text sent by the server (notes): in a quotation, as written, never interpreted. */
 function Quote({ children, source }: { readonly children: string; readonly source?: string }) {
   return (
     <blockquote className="ag-an-quote">
@@ -204,7 +204,16 @@ function DossierBody({ anomaly, detail, loading, failure, retrying, titleId, onR
           </div>
           <div>
             <dt>{t.fType}</dt>
-            <dd>{anomalyTypeLabel(anomaly, i18n)}</dd>
+            {anomaly.type === UNRECOGNIZED ? (
+              <>
+                <dd>
+                  <Id id={anomaly.typeCode} />
+                </dd>
+                <dd className="ag-help">{t.unrecognizedType}</dd>
+              </>
+            ) : (
+              <dd>{anomalyTypeLabel(anomaly, i18n)}</dd>
+            )}
           </div>
         </dl>
       </Section>
@@ -310,7 +319,11 @@ function EvidenceList({ evidence }: { readonly evidence: AnomalyEvidence }) {
   const t = i18n.m.anomalies
   return (
     <>
-      {evidence.items.length === 0 ? <p>{t.evidenceNone}</p> : <p className="ag-an-sec__note">{t.evidenceProvisional}</p>}
+      {evidence.items.length === 0 ? (
+        <p>{t.evidenceNone}</p>
+      ) : (
+        <p className="ag-an-sec__note">{evidence.items.length + evidence.unreadable >= EVIDENCE_LIMIT ? t.evidenceLimitReached({ limit: EVIDENCE_LIMIT }) : t.evidenceLimit({ limit: EVIDENCE_LIMIT })}</p>
+      )}
       {evidence.items.length > 0 && (
         <ul className="ag-an-evidence">
           {evidence.items.map((item) => (

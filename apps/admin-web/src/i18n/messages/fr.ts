@@ -674,7 +674,7 @@ export const fr = {
     listTitle: ({ count: value }: { count: number }) => plural(value, { one: `${count.format(value)} anomalie`, other: `${count.format(value)} anomalies` }),
     listTitleBare: 'Anomalies',
     listMeta: 'Gravité, statut, cellule',
-    listFoot: ({ time }: { time: string }) => `Les plus récentes d’abord · lu à ${time}`,
+    listFoot: ({ time }: { time: string }) => `Les plus récentes d’abord, selon l’heure de détection · lu à ${time}`,
     zoneNote: ({ zone }: { zone: string }) => `Heures du laboratoire${NBSP}: ${zone}`,
     loading: 'Chargement des anomalies…',
     loaded: ({ count: value, page, pages }: { count: number; page: number; pages: number }) =>
@@ -742,7 +742,10 @@ export const fr = {
 
     secEvidence: 'Preuves',
     evidenceLoading: 'Chargement du détail…',
-    evidenceProvisional: 'Forme provisoire, non approuvée par le contrat : les observations sont affichées telles que transmises, en lecture seule, sans interprétation.',
+    evidenceLimit: ({ limit }: { limit: number }) =>
+      `Au plus ${count.format(limit)} observations, sélectionnées par le serveur : ce n’est pas l’historique complet. Elles sont affichées en lecture seule, sans interprétation.`,
+    evidenceLimitReached: ({ limit }: { limit: number }) =>
+      `${count.format(limit)} observations affichées : la limite est atteinte. Elles sont sélectionnées par le serveur, ce n’est pas l’historique complet. Lecture seule, sans interprétation.`,
     evidenceNone: 'Aucune observation n’est référencée par cette anomalie.',
     evidenceUnavailable: 'Preuves non disponibles dans cette version.',
     evidenceUnreadable: ({ count: value }: { count: number }) =>

@@ -78,7 +78,7 @@ function parseEvidenceItem(value: unknown): AnomalyEvidenceItem | null {
   if (!isRecord(value)) return null
   const { observationId, type, compartmentId, operationId, observedAt, receivedAt } = value
   if (!isUuid(observationId) || !isText(type) || !isInstant(observedAt)) return null
-  // Optional members of the provisional shape: an absent or malformed one is shown as not provided, never repaired.
+  // Optional members of the evidence entry: an absent or malformed one is shown as not provided, never repaired.
   return {
     observationId,
     type,

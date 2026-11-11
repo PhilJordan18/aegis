@@ -29,7 +29,7 @@ describe.skipIf(!origin || !email || !password)('§18 anomalies against an isola
     token = await signIn()
   })
 
-  it('parses the §18 anomaly list and every detail, with its provisional evidence section', async () => {
+  it('parses the §18 anomaly list and every detail, with its evidence section', async () => {
     const gateway = createHttpAnomalyGateway(options)
     const list = await gateway.listAnomalies(token, { page: 0, size: 100 })
     expect(list.kind).toBe('ok')

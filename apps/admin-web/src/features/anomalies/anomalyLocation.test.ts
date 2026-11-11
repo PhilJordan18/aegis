@@ -49,7 +49,7 @@ describe('note length (indicative only)', () => {
   })
 })
 
-describe('parseAnomalyDetail evidence (provisional shape, read leniently)', () => {
+describe('parseAnomalyDetail evidence (read leniently)', () => {
   const item = { observationId: OBSERVATION_ID, type: 'DOOR_CLOSED', compartmentId: null, operationId: OPERATION_ID, observedAt: '2026-11-10T19:01:00Z', receivedAt: '2026-11-10T19:01:02Z' }
 
   it('keeps readable entries, counts unreadable ones, and ignores extra members', () => {
