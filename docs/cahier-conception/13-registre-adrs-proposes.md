@@ -9,6 +9,7 @@
 **Mise à jour :** 21 octobre 2026 — ADR-013 accepté : backlog suivi dans GitHub Issues  
 **Mise à jour :** 28 octobre 2026 — ADR-014 proposé : recherche `q` comptée en graphèmes, commune à l’API, au Web et à iOS  
 **Mise à jour :** 6 novembre 2026 — ADR-014 accepté par Philippe : recherche `q` comptée en graphèmes
+**Mise à jour :** 18 novembre 2026 — ADR-016 accepté par Philippe : session navigateur révocable du Manager; remplace pour le Web seulement la reconnexion après rechargement de l’ADR-007
 **Références :** [scope](02-scope.md), documents 03–10 et [architecture physique](12-architecture-physique.md).
 
 ## 1. Portée et statuts
@@ -42,7 +43,7 @@ les POC matériels et le seuil numérique de fréquence des préparations QR res
 | 004 | Mosquitto, livraison MQTT, identités et disponibilité | `ACCEPTED` — Philippe, 23 septembre | Philippe, essais hub avec Jimmy | Walking skeleton et tests TLS/ACL |
 | 005 | Outbox et idempotence | `ACCEPTED` — Philippe, 23 septembre | Philippe | Première commande persistée |
 | 006 | Suivi client par polling REST | `ACCEPTED` — Philippe, 23 septembre | Philippe | Première interface d’opération |
-| 007 | JWT expirant pour les comptes préparés | `ACCEPTED` — Philippe, 23 septembre | Philippe | IAM-01 |
+| 007 | JWT expirant pour les comptes préparés | `ACCEPTED` — Philippe, 23 septembre; pour le Web seulement, l’absence de session navigateur et la reconnexion après rechargement sont remplacées par l’[ADR-016](../adr/ADR-016-session-navigateur-revocable.md) | Philippe | IAM-01 |
 | 008 | Réservation, horaires et échéance du prêt | `ACCEPTED` | Philippe | RES-01 et transitions de prêt |
 | 009 | Contrôle QR local, 60 s maximum et 5 secrets erronés | `ACCEPTED` — Philippe, 23 septembre; seuil de fréquence à qualifier | Philippe, essais avec Jimmy | LOC-01/02 et essai écran/caméra |
 | 010 | [Monorepo commun pour les composants du P0](../adr/ADR-010-architecture-monorepo.md) | `ACCEPTED`; disposition sur les Macs de l’école remplacée par l’[ADR-012](../adr/ADR-012-developpement-ios-mac-local.md) le 21 octobre 2026; paragraphe Linear de « Suivi du travail » remplacé par l’[ADR-013](../adr/ADR-013-backlog-github-issues.md) le 21 octobre 2026 | Équipe | Structure initiale et première évolution transversale |
@@ -51,6 +52,7 @@ les POC matériels et le seuil numérique de fréquence des préparations QR res
 | 013 | [Backlog suivi dans GitHub Issues](../adr/ADR-013-backlog-github-issues.md) | `ACCEPTED` — Philippe, 21 octobre 2026; consigne sa décision du 5 octobre 2026; remplace le paragraphe Linear de l’ADR-010 | Philippe | Issues #6 à #75 et tableau `Aegis P0` en usage |
 | 014 | [Recherche `q` comptée en graphèmes, commune à l’API, au Web et à iOS](../adr/ADR-014-recherche-q-graphemes.md) | `ACCEPTED` — Philippe, 6 novembre 2026 (PR #131), tel que proposé; consigne la décision commune du 28 octobre 2026, liste des espaces et corpus partagé compris | Philippe, avec les sessions Web et iOS | PR coordonnées de #109 : API, Web et iOS sur le même corpus |
 | 015 | [Chiffrement des instructions d’affichage du hub par des clés hors PostgreSQL](../adr/ADR-015-cles-affichage-hub.md) | `ACCEPTED` — Philippe, 11 novembre 2026 (mandat Backend sur #67); AES-256-GCM, `AEGIS_DISPLAY_KEYS` et `AEGIS_DISPLAY_ACTIVE_KEY_ID`, anciennes clés conservées tant que des messages en dépendent | Philippe | LOC-01 (#43) et préparation CHK-01 (#46) |
+| 016 | [Session navigateur révocable pour le Manager](../adr/ADR-016-session-navigateur-revocable.md) | `ACCEPTED` — Philippe, 18 novembre 2026 (#178); cookie `HttpOnly` de durée absolue, origine autorisée, révocation serveur; remplace en partie l’ADR-007 | Philippe | IAM-03 (#178) |
 
 Les pilotes préparent les preuves et recommandations; ils n’approuvent pas seuls un changement de scope. Les cibles pédagogiques sont précisées dans le document 14.
 

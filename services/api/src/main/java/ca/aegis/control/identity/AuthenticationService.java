@@ -24,7 +24,11 @@ class AuthenticationService {
         this.unknownAccountHash = passwordEncoder.encode(UUID.randomUUID().toString());
     }
 
-    LoginResponse login(LoginRequest request, String clientAddress) {
+    /** A successful sign-in: the response body and the account it was issued for. */
+    record SignedIn(LoginResponse response, CurrentAccount account) {
+    }
+
+    SignedIn login(LoginRequest request, String clientAddress) {
         attempts.acquire(clientAddress, request.email());
         Optional<Account> candidate = accounts.findByEmail(request.email());
         // A hash is always checked so that response time does not reveal which addresses have an account.
@@ -34,6 +38,6 @@ class AuthenticationService {
                 .filter(existing -> passwordMatches && existing.canAuthenticate())
                 .orElseThrow(InvalidCredentialsException::new);
         CurrentAccount current = CurrentAccount.of(account);
-        return LoginResponse.of(accessTokens.issue(current), current);
+        return new SignedIn(LoginResponse.of(accessTokens.issue(current), current), current);
     }
 }
