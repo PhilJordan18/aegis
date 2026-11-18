@@ -85,7 +85,15 @@ async function axe(page, name) {
 }
 const has = (s, re) => re.test(s)
 // A count rendered as a number followed by its unit; zero must never appear for an unread block.
-const shows = (s, n, unit) => new RegExp(`(^|\\D)${n}\\s*(observée?s?\\s*)?${unit}`).test(s)
+// Parsed without a dynamic RegExp: the unit is data, not a pattern.
+const shows = (s, n, unit) => {
+  for (const m of s.matchAll(/\d+/g)) {
+    if (m[0] !== String(n)) continue
+    const rest = s.slice(m.index + m[0].length).trimStart().replace(/^observée?s?\s*/, '')
+    if (rest.startsWith(unit)) return true
+  }
+  return false
+}
 
 // O1 — nominal counts equal the API's authoritative totals
 {
@@ -152,8 +160,8 @@ const shows = (s, n, unit) => new RegExp(`(^|\\D)${n}\\s*(observée?s?\\s*)?${un
     ['**/api/v1/admin/locker-operations?status=DOOR_OPENED**', (route) => route.fulfill({ status: 503, contentType: 'application/problem+json', body: '{"status":503}' })],
   ] })
   const l = await text(page, FR.loans), o = await text(page, FR.operations)
-  check('O4.1 truncated loans read is qualified as among the loans read', has(l, /\d+ en retard parmi les prêts lus/) && has(l, /Lecture incomplète/) && !has(l, /Au moins/), l.slice(0, 260))
-  check('O4.2 one unread operation status is qualified as among the operations read', has(o, /\d+ en cours parmi les opérations lues/) && has(o, /ne porte que sur les opérations lues/) && !has(o, /Au moins/), o.slice(0, 260))
+  check('O4.1 truncated loans read is qualified as among the loans read', has(l, /\d en retard parmi les prêts lus/) && has(l, /Lecture incomplète/) && !has(l, /Au moins/), l.slice(0, 260))
+  check('O4.2 one unread operation status is qualified as among the operations read', has(o, /\d en cours parmi les opérations lues/) && has(o, /ne porte que sur les opérations lues/) && !has(o, /Au moins/), o.slice(0, 260))
   await shot(page, 'O4-partial')
   await page.close()
 }
@@ -221,7 +229,7 @@ for (const [theme, width] of [['dark', 1440], ['light', 390], ['dark', 390]]) {
   let outlineOk = true
   for (let i = 0; i < 80 && reached.size < 4; i++) {
     await page.keyboard.press('Tab')
-    const f = await page.evaluate(() => { const e = document.activeElement; const cs = getComputedStyle(e); return { t: (e.innerText || '').trim(), o: cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0 || cs.boxShadow !== 'none' } })
+    const f = await page.evaluate(() => { const e = document.activeElement; const cs = getComputedStyle(e); return { t: (e.innerText || '').trim(), o: cs.outlineStyle !== 'none' && Number.parseFloat(cs.outlineWidth) > 0 || cs.boxShadow !== 'none' } })
     if (/^Voir les (anomalies|prêts|opérations|réservations)/.test(f.t)) { reached.add(f.t); if (!f.o) outlineOk = false }
   }
   check('O8 Tab reaches the four block links with visible focus', reached.size === 4 && outlineOk, [...reached].join(' | ') + ` outline=${outlineOk}`)
