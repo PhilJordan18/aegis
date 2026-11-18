@@ -20,6 +20,7 @@
 **Mise à jour ciblée :** 28 octobre 2026 — recherche `q` commune à l’API, au Web et à iOS : espaces Unicode de bordure, longueur en grappes de graphèmes, corpus partagé (§11.1, §22.3, §26.6), décision commune consignée par l’[ADR-014](../adr/ADR-014-recherche-q-graphemes.md), acceptée par Philippe le 6 novembre 2026 (#109)  
 **Mise à jour ciblée :** 6 novembre 2026 — lectures administratives approuvées par Philippe (#25, #26, #28) : `GET /admin/lockers` et `AdminLockerView` (§9.3, §16.2), historique des identifiants `GET /admin/assets/{assetId}/identifiers` (§9.3, §12.3); aucune migration  
 **Mise à jour ciblée :** 6 novembre 2026 — refus du catalogue liés à la garde de l’actif (#26) : placement refusé pendant une réservation active, un prêt ouvert ou une opération non terminale, attribution refusée pendant une opération non terminale et révocation de l’identifiant qu’elle attend, avec les codes de l’archivage (§12.3, §12.4, §21); ordre des refus approuvé par Philippe le 6 novembre 2026; aucun code ni champ nouveau  
+**Mise à jour ciblée :** 18 novembre 2026 — session navigateur révocable du Manager (ADR-016, #178) : champ optionnel `browserSession` de la connexion, routes `POST /auth/session/refresh` et `POST /auth/session/revoke` (§9.1, §10.2, §10.4, §10.5), code `401 AUTH_SESSION_INVALID` (§21); §4.1 et §4.2 remplacés pour le Web; migration `V010`  
 **Mise à jour ciblée :** 6 novembre 2026 — erreurs signalées par le hub (#29) : champ requis `deviceErrors` et `DeviceErrorView` de `LockerStatusView` (§8.6, §16.1), limités à la session courante du hub, approuvés par Philippe le 6 novembre 2026; ajout compatible, aucune migration
 
 ---
@@ -94,7 +95,7 @@ Après une connexion réussie, le backend émet un JWT signé et expirable, conf
 - le client le traite comme une chaîne opaque;
 - sa durée P0 est de 60 minutes;
 - il transporte au minimum userId, role, maximumAccessLevel, issuedAt, expiresAt et un identifiant de jeton;
-- aucun refresh token n’est émis dans le P0;
+- aucun refresh token n’est émis dans le P0; le Web dispose seulement de la session navigateur révocable de l’ADR-016 (§10.4), qui émet un nouveau jeton d’au plus 60 minutes sans jamais dépasser sa propre fin absolue;
 - l’expiration du jeton n’altère jamais une réservation ou un prêt existant;
 - l’utilisateur se reconnecte après expiration.
 
@@ -105,10 +106,10 @@ Spring Security vérifie la signature, l’algorithme explicitement autorisé, l
 | Client | Règle |
 |---|---|
 | iOS | Jeton stocké dans le Keychain; jamais dans UserDefaults. |
-| Web | Jeton conservé en mémoire; jamais dans localStorage ou sessionStorage. |
+| Web | Jeton conservé en mémoire; jamais dans localStorage ou sessionStorage. Seul le cookie `HttpOnly` de la session navigateur (ADR-016) survit au rechargement; il n’est pas lisible par le script et n’est pas un jeton d’accès. |
 | Tous | Jeton supprimé localement lors de la déconnexion. |
 
-La déconnexion locale ne révoque pas immédiatement une copie du JWT. Ce compromis P0 est explicite : un jeton copié reste utilisable jusqu’à son expiration, sous réserve des contrôles courants du compte. Le rechargement du Web impose une reconnexion. L’expiration ne suspend ni les délais ni le traitement d’une opération physique déjà autorisée.
+La déconnexion locale ne révoque pas immédiatement une copie du JWT. Ce compromis P0 est explicite : un jeton copié reste utilisable jusqu’à son expiration, sous réserve des contrôles courants du compte. Depuis l’ADR-016, le rechargement du Web restaure la session tant que sa session navigateur est valide (§10.4); la déconnexion explicite du Web révoque cette session côté serveur (§10.5). L’expiration ne suspend ni les délais ni le traitement d’une opération physique déjà autorisée.
 
 ### 4.3 En-tête
 
@@ -658,6 +659,8 @@ Ces deux points ne sont pas approuvés. En attendant, la section applique le tex
 |---|---|---|---|
 | GET | /system/health | Public | Santé minimale |
 | POST | /auth/login | Public | Jeton et profil |
+| POST | /auth/session/refresh | Cookie de session navigateur et origine autorisée (ADR-016) | Nouveau jeton et profil |
+| POST | /auth/session/revoke | Cookie de session navigateur et origine autorisée (ADR-016) | Session navigateur révoquée |
 | GET | /auth/me | Authentifié | Profil courant |
 
 ### 9.2 Technicien
@@ -747,7 +750,14 @@ Validations :
 
 - email requis, normalisé et limité à 320 caractères;
 - password requis et limité en taille avant hachage;
-- message identique pour compte absent, désactivé ou mot de passe invalide.
+- message identique pour compte absent, désactivé ou mot de passe invalide;
+- `browserSession`, booléen optionnel (ADR-016) : `true` demande une session navigateur. Seul le Manager l’envoie; iOS l’omet. Un champ inconnu reste refusé.
+
+Avec `browserSession: true`, l’en-tête `Origin` doit appartenir à `AEGIS_WEB_ALLOWED_ORIGINS`; sinon la réponse est `403 FORBIDDEN`, avant toute vérification des identifiants. En cas de succès, la réponse 200 ci-dessous pose aussi :
+
+```http
+Set-Cookie: __Secure-aegis_session=<opaque>; Path=/api/v1/auth/session; Max-Age=28800; HttpOnly; Secure; SameSite=Strict
+```
 
 Réponse 200 :
 
@@ -779,6 +789,23 @@ sans valeur valide, il indique seulement qu’il y a eu trop de tentatives.
 ### 10.3 GET /auth/me
 
 Retourne 200 avec le profil minimal. Cette route permet au client de réhydrater son contexte sans décoder le jeton.
+
+### 10.4 POST /auth/session/refresh
+
+Restaure l’accès d’une page Web rechargée (ADR-016). Sans corps; le navigateur joint le cookie `__Secure-aegis_session`. Un en-tête `Authorization` est ignoré.
+
+Réponse 200 : même forme que §10.2 (`accessToken`, `tokenType`, `expiresIn`, `expiresAt`, `user`). Le jeton expire 60 minutes après son émission, ou à la fin absolue de la session si elle survient avant. Le cookie n’est ni renouvelé ni prolongé.
+
+Erreurs :
+
+- `401 AUTH_SESSION_INVALID`, qui efface aussi le cookie (`Max-Age=0`) : cookie absent, mal formé ou inconnu, session révoquée ou échue, compte désactivé ou archivé, rôle changé depuis la connexion. Les deux derniers cas révoquent la session définitivement.
+- `403 FORBIDDEN` : `Origin` absent ou non autorisé.
+
+Le client n’essaie qu’une restauration par démarrage ou par jeton échu, et ne boucle jamais sur un 401.
+
+### 10.5 POST /auth/session/revoke
+
+Déconnexion explicite du Web (ADR-016). Révoque côté serveur la session du cookie, s’il en reste une, puis efface le cookie. Réponse `204`, idempotente, avec ou sans cookie. Erreur : `403 FORBIDDEN` si `Origin` est absent ou non autorisé. Un jeton d’accès déjà émis reste valable jusqu’à son expiration (§4.2).
 
 ---
 
@@ -1465,6 +1492,7 @@ Les PUT sont idempotents par définition. Une répétition identique ne crée pa
 | 401 | AUTH_INVALID_CREDENTIALS | Connexion refusée |
 | 401 | AUTH_TOKEN_INVALID | Jeton invalide |
 | 401 | AUTH_TOKEN_EXPIRED | Jeton expiré |
+| 401 | AUTH_SESSION_INVALID | Session navigateur absente, échue ou révoquée (§10.4) |
 | 403 | FORBIDDEN | Rôle insuffisant |
 | 403 | ASSET_ACCESS_DENIED | Niveau d’accès insuffisant |
 | 404 | RESOURCE_NOT_FOUND | Ressource absente ou non visible |
