@@ -50,6 +50,11 @@ if (__AEGIS_PREVIEW__) {
   previewControls = preview.controls
 }
 
+// The session store restores and revokes through the same gateway. Design-review builds never ask the API
+// to restore: their arrival scenarios drive the store themselves, and their fictitious gateway has no cookie.
+session.connect(gateway)
+if (!__AEGIS_PREVIEW__) void session.restore()
+
 // The catalog has no preview scenario: design-review captures route /api/v1/admin/assets themselves.
 const catalogGateway = createHttpCatalogGateway()
 // Same for the locker status: design-review captures route /api/v1/lockers/{id}/status themselves.

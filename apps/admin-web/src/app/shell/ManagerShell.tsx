@@ -1,4 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { Alert } from '../../ui/Alert'
+import { Button } from '../../ui/Button'
+import { useSession } from '../../features/auth/session'
 import { AppearanceSwitch } from '../../features/appearance/AppearanceSwitch'
 import type { UserProfile } from '../../features/auth/contract'
 import { LanguageSwitch } from '../../features/language/LanguageSwitch'
@@ -45,6 +48,8 @@ interface ShellProps {
 
 export function ManagerShell({ currentPath, profile, onSignOut, children }: ShellProps) {
   const { m } = useI18n()
+  const session = useSession()
+  const signOutState = session.status === 'authenticated' ? session.signOut : 'idle'
   return (
     <div className="ag-shell">
       <a className="ag-skip" href="#contenu">
@@ -59,7 +64,25 @@ export function ManagerShell({ currentPath, profile, onSignOut, children }: Shel
       </nav>
       <div className="ag-shell__main">
         <CompactNav currentPath={currentPath} profile={profile} onSignOut={onSignOut} />
-        <div className="ag-shell__content">{children}</div>
+        <div className="ag-shell__content">
+          {/* Sign-out is a server revocation (ADR-016): until it is confirmed the session stays open, and says so. */}
+          {signOutState === 'pending' && (
+            <p className="ag-sr-only" role="status">
+              {m.session.signingOut}
+            </p>
+          )}
+          {signOutState === 'failed' && (
+            <div className="ag-shell__notice">
+              <Alert kind="error" icon="status-error" title={m.session.signOutFailedTitle}>
+                <p>{m.session.signOutFailedBody}</p>
+                <Button variant="secondary" size="sm" onClick={onSignOut}>
+                  {m.session.signOutRetry}
+                </Button>
+              </Alert>
+            </div>
+          )}
+          {children}
+        </div>
       </div>
     </div>
   )
@@ -100,6 +123,8 @@ function SectionList({ currentPath }: { readonly currentPath: string }) {
 
 function AccountDetails({ profile, onSignOut }: { readonly profile: UserProfile; readonly onSignOut: () => void }) {
   const { m } = useI18n()
+  const session = useSession()
+  const pending = session.status === 'authenticated' && session.signOut === 'pending'
   return (
     <>
       <div className="ag-menu__id">
@@ -111,7 +136,7 @@ function AccountDetails({ profile, onSignOut }: { readonly profile: UserProfile;
       <div className="ag-menu__sep" />
       <LanguageSwitch />
       <div className="ag-menu__sep" />
-      <button type="button" className="ag-menu__item" onClick={onSignOut}>
+      <button type="button" className="ag-menu__item" aria-disabled={pending || undefined} onClick={pending ? undefined : onSignOut}>
         <Icon name="logout" />
         {m.shell.signOut}
       </button>
@@ -166,7 +191,15 @@ function AccountMenu({ profile, onSignOut }: { readonly profile: UserProfile; re
         <Icon name="updown" className="ag-account__chevron" />
       </button>
       <div id={panelId} className="ag-menu" role="group" aria-label={m.shell.accountLabel} hidden={!open}>
-        <AccountDetails profile={profile} onSignOut={onSignOut} />
+        <AccountDetails
+          profile={profile}
+          onSignOut={() => {
+            // The result, or its error, appears in the page: leave the disclosure and keep focus on its button.
+            setOpen(false)
+            buttonRef.current?.focus()
+            onSignOut()
+          }}
+        />
       </div>
     </div>
   )
@@ -238,7 +271,13 @@ function CompactNav({ currentPath, profile, onSignOut }: Omit<ShellProps, 'child
             <SectionList currentPath={currentPath} />
           </nav>
           <div className="ag-drawer__account" role="group" aria-label={m.shell.accountLabel}>
-            <AccountDetails profile={profile} onSignOut={onSignOut} />
+            <AccountDetails
+              profile={profile}
+              onSignOut={() => {
+                close()
+                onSignOut()
+              }}
+            />
           </div>
         </div>
       </dialog>

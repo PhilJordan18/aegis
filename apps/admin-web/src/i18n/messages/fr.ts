@@ -64,6 +64,27 @@ export const fr = {
     notFound: 'Page introuvable — Aegis Manager',
   } satisfies Record<RouteId, string>,
 
+  /**
+   * Session du navigateur (ADR-016, #178). La page protégée attend la réponse du serveur avant toute
+   * redirection; un échec de restauration n'est ni une déconnexion ni une session valide.
+   */
+  session: {
+    restoringHeading: 'Restauration de votre session',
+    restoringStatus: 'Vérification de votre session en cours.',
+    unreachableTitle: "Le service est injoignable. Votre session n'a pas pu être rétablie.",
+    unreachableBody: 'Votre session n’est pas fermée. Vérifiez le réseau, puis réessayez.',
+    serviceErrorTitle: "Le service n'a pas pu rétablir votre session.",
+    serviceErrorBody: "Votre session n'est pas fermée. Réessayez dans un instant. Si le problème persiste, transmettez l'identifiant de suivi au support.",
+    serviceErrorBodyWithoutCode: "Votre session n'est pas fermée. Réessayez dans un instant.",
+    traceIdLabel: `Identifiant de suivi${NBSP}:`,
+    retry: 'Réessayer',
+    signInInstead: 'Se connecter',
+    signOutFailedTitle: 'Déconnexion non confirmée.',
+    signOutFailedBody: `Le serveur n’a pas confirmé la fermeture de votre session. Vous restez connecté${NBSP}: réessayez la déconnexion.`,
+    signOutRetry: 'Réessayer la déconnexion',
+    signingOut: 'Déconnexion en cours',
+  },
+
   shell: {
     skipLink: 'Aller au contenu principal',
     sectionsLabel: 'Sections',

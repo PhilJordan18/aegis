@@ -47,13 +47,21 @@ export function createQueryClient(): QueryClient {
   })
 }
 
-/** Clears every cached query whenever the access token changes. Returns the unsubscribe function. */
+/**
+ * Clears every cached query whenever the signed-in account changes or the session ends. A token renewal
+ * for the same account (ADR-016) keeps the cache: it would only blank pages that are being read.
+ * Returns the unsubscribe function.
+ */
 export function clearCacheOnSessionChange(client: QueryClient, session: SessionStore): () => void {
-  let token = session.getAccessToken()
+  const accountOf = () => {
+    const snapshot = session.getSnapshot()
+    return snapshot.status === 'authenticated' ? snapshot.profile.id : null
+  }
+  let account = accountOf()
   return session.subscribe(() => {
-    const next = session.getAccessToken()
-    if (next === token) return
-    token = next
+    const next = accountOf()
+    if (next === account) return
+    account = next
     client.clear()
   })
 }

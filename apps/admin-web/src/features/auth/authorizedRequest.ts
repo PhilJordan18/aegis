@@ -5,19 +5,35 @@ import type { SessionStore } from './session'
 import { arrivalReasonFromUnauthorized } from './signInOutcome'
 
 /**
- * Runs one protected call with the in-memory token. A 401 ends the session with
- * the server's reason (09 §4.3, §21; states.md §1), which sends the user back
- * to sign-in. A response for a token that is no longer current never ends the
- * newer session.
+ * Runs one protected call with the in-memory token. A 401 (09 §4.3, §21; states.md §1) first asks the
+ * session store for one renewal (ADR-016, 09 §10.4): concurrent 401s share a single refresh, and the call is
+ * retried exactly once with the new token. A second 401, or a refused renewal, ends the session with the
+ * server's reason and sends the user back to sign-in; it never loops. A 401 means the request was not
+ * processed, so the retry cannot repeat a transition (and its idempotency key is reused anyway). A response
+ * for a token that is no longer current never ends the newer session.
  */
 export async function authorizedRequest<T>(session: SessionStore, call: (accessToken: string) => Promise<GatewayResult<T>>): Promise<T> {
   const token = session.getAccessToken()
   if (token === null) throw new SessionEndedError()
   const result = await call(token)
   if (result.kind === 'ok') return result.value
-  if (result.kind === 'httpProblem' && session.getAccessToken() === token) {
-    const reason = arrivalReasonFromUnauthorized(result.status, result.problem?.code ?? null)
-    if (reason === 'sessionExpired' || reason === 'sessionInvalid') session.end(reason)
+  if (result.kind !== 'httpProblem') throw new ApiRequestError(result)
+
+  const reason = arrivalReasonFromUnauthorized(result.status, result.problem?.code ?? null)
+  if (reason === 'sessionExpired' || reason === 'sessionInvalid') {
+    const renewal = await session.renew(token, reason)
+    if (renewal.kind === 'failed') throw new ApiRequestError(renewal.failure)
+    if (renewal.kind === 'renewed') {
+      const renewedToken = session.getAccessToken()
+      if (renewedToken === null) throw new SessionEndedError()
+      const retry = await call(renewedToken)
+      if (retry.kind === 'ok') return retry.value
+      if (retry.kind === 'httpProblem' && session.getAccessToken() === renewedToken) {
+        const retryReason = arrivalReasonFromUnauthorized(retry.status, retry.problem?.code ?? null)
+        if (retryReason === 'sessionExpired' || retryReason === 'sessionInvalid') session.end(retryReason)
+      }
+      throw new ApiRequestError(retry)
+    }
   }
   throw new ApiRequestError(result)
 }

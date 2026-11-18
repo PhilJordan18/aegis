@@ -5,7 +5,7 @@ import { createQueryClient } from '../api/serverState'
 import { App } from '../app/App'
 import { unconfiguredAuthGateway, type AuthGateway } from '../features/auth/authGateway'
 import { createSessionStore } from '../features/auth/session'
-import { adminProfile, problemBody } from '../features/auth/testFixtures'
+import { adminProfile, problemBody, sessionStubs } from '../features/auth/testFixtures'
 import type { CatalogGateway } from '../features/catalog/catalogGateway'
 import type { AdminAssetView } from '../features/catalog/contract'
 import { parseAdminAssetView } from '../features/catalog/contractParsers'
@@ -15,7 +15,7 @@ import { MESSAGES } from '../i18n/messages'
 import { installMatchMedia } from '../test/matchMedia'
 import { renderWithProviders } from '../test/renderApp'
 
-const authGateway: AuthGateway = { ...unconfiguredAuthGateway, currentProfile: async () => ({ kind: 'ok', value: adminProfile, requestId: null }) }
+const authGateway: AuthGateway = { ...unconfiguredAuthGateway, ...sessionStubs, currentProfile: async () => ({ kind: 'ok', value: adminProfile, requestId: null }) }
 const plain = (value: string | null | undefined) => (value ?? '').replace(/[\u00A0\u202F]/g, ' ')
 
 function renderEquipment(catalogGateway: CatalogGateway, { locale = 'fr', url = '/equipements' }: { locale?: Locale; url?: string } = {}) {

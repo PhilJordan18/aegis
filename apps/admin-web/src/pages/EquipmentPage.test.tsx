@@ -6,13 +6,13 @@ import { App } from '../app/App'
 import { unconfiguredAuthGateway, type AuthGateway, type GatewayResult } from '../features/auth/authGateway'
 import type { UserProfile } from '../features/auth/contract'
 import { createSessionStore } from '../features/auth/session'
-import { adminProfile, problemBody, technicianProfile } from '../features/auth/testFixtures'
+import { adminProfile, problemBody, sessionStubs, technicianProfile } from '../features/auth/testFixtures'
 import { installMatchMedia } from '../test/matchMedia'
 import { renderWithProviders } from '../test/renderApp'
 
 function gatewayAnswering(...results: GatewayResult<UserProfile>[]): AuthGateway & { currentProfile: ReturnType<typeof vi.fn> } {
   const currentProfile = vi.fn(async () => results.shift() ?? { kind: 'network' as const, reason: 'offline' as const })
-  return { ...unconfiguredAuthGateway, currentProfile }
+  return { ...unconfiguredAuthGateway, ...sessionStubs, currentProfile }
 }
 
 /** The sign-in page's information alert (role="status"), distinct from its visually hidden live region. */

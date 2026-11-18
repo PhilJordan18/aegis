@@ -48,6 +48,27 @@ export const en: Messages = {
     notFound: 'Page not found — Aegis Manager',
   },
 
+  /**
+   * Browser session (ADR-016, #178). A protected page waits for the server before any redirect; a failed
+   * restoration is neither a sign-out nor a valid session.
+   */
+  session: {
+    restoringHeading: 'Restoring your session',
+    restoringStatus: 'Checking your session.',
+    unreachableTitle: 'Unable to reach the service. Your session could not be restored.',
+    unreachableBody: 'Your session is not closed. Check your network, then try again.',
+    serviceErrorTitle: 'The service could not restore your session.',
+    serviceErrorBody: 'Your session is not closed. Try again in a moment. If the problem persists, give the trace ID to support.',
+    serviceErrorBodyWithoutCode: 'Your session is not closed. Try again in a moment.',
+    traceIdLabel: 'Trace ID:',
+    retry: 'Try again',
+    signInInstead: 'Sign in',
+    signOutFailedTitle: 'Sign-out not confirmed.',
+    signOutFailedBody: 'The server did not confirm that your session was closed. You are still signed in: try signing out again.',
+    signOutRetry: 'Try signing out again',
+    signingOut: 'Signing out',
+  },
+
   shell: {
     skipLink: 'Skip to main content',
     sectionsLabel: 'Sections',
