@@ -142,6 +142,25 @@ priment sur les claims émis à la connexion. Changer `AEGIS_JWT_SECRET`
 invalide tous les jetons émis. Le mot de passe, le jeton et la clé ne sont
 jamais journalisés.
 
+## Session navigateur du Manager (ADR-016)
+
+Une connexion Web avec `browserSession: true` pose le cookie
+`__Secure-aegis_session` (`HttpOnly`, `Secure`, `SameSite=Strict`, chemin
+`/api/v1/auth/session`). Ce cookie permet à une page rechargée de demander un
+nouveau jeton par `POST /api/v1/auth/session/refresh`, et la déconnexion le
+révoque par `POST /api/v1/auth/session/revoke`. La base ne garde que son
+empreinte SHA-256 (`aegis.browser_sessions`). Ni sa valeur ni le jeton restauré
+ne sont journalisés.
+
+| Variable | Défaut | Règle |
+|---|---|---|
+| `AEGIS_WEB_ALLOWED_ORIGINS` | vide | Origines exactes du Manager, séparées par des virgules, par exemple `https://manager.example`; `http` seulement pour `localhost`. Vide, aucune session navigateur ne démarre et un rechargement impose une nouvelle connexion |
+| `AEGIS_WEB_SESSION_LIFETIME` | `PT8H` | Durée absolue d'une session, au plus `PT12H`; un rafraîchissement ne la prolonge jamais |
+
+En déploiement, `AEGIS_WEB_ALLOWED_ORIGINS` reçoit l'origine publique du
+service Web, celle que le navigateur affiche. Le cookie traverse le proxy Caddy
+du Manager sans attribut `Domain` : il reste attaché à cette origine.
+
 ## Autorisation des routes
 
 `identity/ApiRoutes.java` liste chaque route du document 09, section 9, avec
