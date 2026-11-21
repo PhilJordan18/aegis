@@ -6,6 +6,7 @@ import { App } from '../app/App'
 import { unconfiguredAuthGateway, type AuthGateway } from '../features/auth/authGateway'
 import { createSessionStore } from '../features/auth/session'
 import { adminProfile, sessionStubs } from '../features/auth/testFixtures'
+import { ASSET_UPDATED_STATUS, SCHEDULE_UPDATED_CHANGED } from '../features/audit/auditDetailSamples'
 import { OPERATION_ID, SUBJECT_ID, auditPage, eventView, fakeAuditGateway, pageOk, pageProblem, pageUnreachable, uuid } from '../features/audit/testFixtures'
 import type { Locale } from '../i18n/locale'
 import { installMatchMedia } from '../test/matchMedia'
@@ -127,6 +128,7 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
       futureKey: 'valeur',
       changes: { name: 'secret-looking' },
       endedOperationIds: [OPERATION_ID],
+      payload: { token: 'secret-looking' },
     }
     renderAudit([pageOk(auditPage([eventView(4, { details }), eventView(5)]))])
     await timeline()
@@ -138,23 +140,48 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
       "État de l'opération": 'Commande acquittée COMMAND_ACKNOWLEDGED',
       Tentative: '2',
       "Affichage des consignes arrêté": 'Oui',
-      Révoqué: 'Non renseigné',
       "Réservé jusqu'au": expect.stringContaining('2026'),
       'Identifiant du casier': SUBJECT_ID,
       futureKey: 'valeur',
+      'Opérations terminées': OPERATION_ID,
     })
     expect(within(section).getByText('futureKey', { selector: 'code' })).toBeTruthy()
     expect(within(section).getByText('2 champs structurés ne sont pas affichés.')).toBeTruthy()
     expect(section.textContent).not.toContain('secret-looking')
+    expect(section.textContent).not.toContain('{')
     expect(within(section).queryByRole('button')).toBeNull()
     expect(within(section).queryByRole('textbox')).toBeNull()
   })
 
   it('says structured details are not shown when they are all that was sent', async () => {
-    renderAudit([pageOk(auditPage([eventView(4, { details: { created: { name: 'x' } } })]))])
+    renderAudit([pageOk(auditPage([eventView(4, { details: { payload: { name: 'x' } } })]))])
     await timeline()
     expect(screen.getByText('1 champ structuré n’est pas affiché.')).toBeTruthy()
     expect(screen.queryByText('Aucun détail')).toBeNull()
+  })
+
+  it('shows what a catalog update changed, as « champ : avant → après », from the nested allowlisted paths', async () => {
+    renderAudit([pageOk(auditPage([eventView(4, { details: ASSET_UPDATED_STATUS }), eventView(5)]))])
+    await timeline()
+    const dossier = screen.getByRole('group', { name: /./ })
+    const section = within(dossier).getByRole('heading', { level: 3, name: 'Détails filtrés' }).closest('section') as HTMLElement
+    const terms = within(section).getAllByRole('term')
+    expect(terms.map((term) => plain(term.textContent))).toEqual(['État de service'])
+    expect(plain(terms[0]?.nextElementSibling?.textContent)).toBe('Avant En service SERVICEABLE → Après En maintenance MAINTENANCE')
+    expect(within(section).queryByText(/champ structuré|champs structurés/)).toBeNull()
+    expect(within(section).queryByText('Aucun détail')).toBeNull()
+  })
+
+  it('shows a schedule update day by day and counts an unknown key next to it', async () => {
+    renderAudit([pageOk(auditPage([eventView(4, { eventType: 'SCHEDULE_UPDATED', subjectType: 'OPERATING_SCHEDULE', details: { ...SCHEDULE_UPDATED_CHANGED, extra: { a: 1 } } }), eventView(5)]))], { locale: 'en' })
+    await timeline()
+    const dossier = screen.getByRole('group', { name: /./ })
+    const section = within(dossier).getByRole('heading', { level: 3, name: 'Filtered details' }).closest('section') as HTMLElement
+    const rows = Object.fromEntries(within(section).getAllByRole('term').map((term) => [plain(term.textContent), plain(term.nextElementSibling?.textContent)]))
+    expect(rows.Monday).toBe('Before 07:00 – 18:00 → After 07:00 – 19:30')
+    expect(rows.Saturday).toBe('Before Closed all day → After Closed all day')
+    expect(Object.keys(rows).filter((key) => /day$/.test(key))).toHaveLength(7)
+    expect(within(section).getByText('1 structured field is not displayed.')).toBeTruthy()
   })
 
   it('states the order and that new events appear after a refresh, without claiming a snapshot', async () => {
