@@ -22,6 +22,7 @@
     "capture:evidence": "playwright test --project=evidence",
     "capture:integration": "playwright test --project=integration",
     "test:forms": "playwright test --project=forms",
+    "test:follow": "playwright test --project=follow",
     "capture:forms": "AEGIS_FORMS_CAPTURE=1 playwright test --project=forms",
     "test:e2e:api": "playwright test -c playwright.api.config.ts"
   },
