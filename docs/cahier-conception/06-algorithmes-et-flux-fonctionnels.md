@@ -1271,7 +1271,7 @@ function evaluateAnomalyResolution(anomalyId, newEvidence):
         anomaly.status = RESOLVED
         anomaly.resolvedAt = now
         anomaly.resolutionEvidenceObservationId = newEvidence.id
-        append AuditEvent(ANOMALY_RESOLVED_BY_EVIDENCE)
+        append AuditEvent(ANOMALY_RESOLVED)
     commit
 ```
 
