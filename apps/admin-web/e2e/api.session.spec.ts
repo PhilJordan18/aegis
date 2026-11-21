@@ -91,6 +91,27 @@ test('an explicit sign-out revokes the session on the server: the same cookie no
   await expect(page).toHaveURL(/\/connexion\?retour=%2Fequipements$/)
 })
 
+test('a confirmed sign-out in one tab sends the other tab to sign-in, and its restored session is gone for good', async ({ context }) => {
+  test.setTimeout(150_000)
+  const a = await context.newPage()
+  const b = await context.newPage()
+  await a.goto('/connexion')
+  await signIn(a, ADMIN_EMAIL, ADMIN_PASSWORD)
+  await expect(a).toHaveURL(/\/equipements$/)
+  await b.goto('/equipements')
+  await expect(b.getByRole('heading', { level: 1, name: 'Équipements' })).toBeVisible()
+
+  await a.getByRole('navigation', { name: 'Sections' }).getByRole('button', { name: /Administrateur/ }).click()
+  const revoked = a.waitForResponse((response) => response.url().endsWith('/api/v1/auth/session/revoke'))
+  await a.getByRole('button', { name: 'Se déconnecter' }).first().click()
+  expect((await revoked).status()).toBe(204)
+
+  await expect(b).toHaveURL(/\/connexion$/)
+  await expect(b.getByRole('status').filter({ hasText: 'Vous êtes déconnecté.' })).toBeVisible()
+  expect(await cookieOf(context)).toBeUndefined()
+  expect(await b.evaluate(() => ({ local: { ...localStorage }, session: { ...sessionStorage }, cookie: document.cookie }))).toEqual({ local: {}, session: {}, cookie: '' })
+})
+
 test('a technician is refused by the Manager and no session survives a reload', async ({ page, context }) => {
   test.setTimeout(150_000)
   await page.goto('/connexion')
