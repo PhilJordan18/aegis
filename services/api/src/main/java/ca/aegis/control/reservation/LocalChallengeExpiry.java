@@ -49,6 +49,8 @@ public class LocalChallengeExpiry {
     static final String LOCKER_OFFLINE = "LOCKER_OFFLINE";
     /** Document 06, section 6.5: the fifth wrong secret submitted by the initiator ends the attempt. */
     static final String LOCAL_PROOF_ATTEMPTS_EXHAUSTED = "LOCAL_PROOF_ATTEMPTS_EXHAUSTED";
+    /** Document 06, section 6.5: a guard became invalid at the scan; the attempt can no longer succeed. */
+    static final String LOCAL_PROOF_GUARD_FAILED = "LOCAL_PROOF_GUARD_FAILED";
 
     private static final Logger log = LoggerFactory.getLogger(LocalChallengeExpiry.class);
 
