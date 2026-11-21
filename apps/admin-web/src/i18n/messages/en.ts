@@ -442,6 +442,7 @@ export const en: Messages = {
     loading: 'Loading…',
     loaded: ({ count: value, page, pages }) => `List loaded: ${count.format(value)} ${value === 1 ? 'result' : 'results'}, page ${count.format(page)} of ${count.format(pages)}.`,
     selectedStatus: ({ name }) => `File selected: ${name}.`,
+    operationUpdated: ({ status }) => `Operation updated: ${status}.`,
     detailLoading: 'Loading the file…',
     paginationLabel: 'Page navigation',
     previousPage: 'Previous',

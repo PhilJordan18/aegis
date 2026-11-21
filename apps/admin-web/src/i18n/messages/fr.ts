@@ -509,6 +509,7 @@ export const fr = {
     loaded: ({ count: value, page, pages }: { count: number; page: number; pages: number }) =>
       `Liste chargée${NBSP}: ${count.format(value)} ${value === 1 ? 'résultat' : 'résultats'}, page ${count.format(page)} sur ${count.format(pages)}.`,
     selectedStatus: ({ name }: { name: string }) => `Dossier sélectionné${NBSP}: ${name}.`,
+    operationUpdated: ({ status }: { status: string }) => `Opération mise à jour${NBSP}: ${status}.`,
     detailLoading: 'Chargement du dossier…',
     paginationLabel: 'Pagination',
     previousPage: 'Précédent',
