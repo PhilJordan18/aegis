@@ -457,6 +457,18 @@ describe('Audit — requested event (#191)', () => {
     await waitFor(() => expect(document.activeElement).toBe(notice))
   })
 
+  it('keeps « Charger plus » after a failed page, and never claims the whole history is loaded', async () => {
+    renderAudit([pageOk(auditPage([COMMAND], { hasMore: true, nextCursor: 'c1' })), pageUnreachable, pageOk(auditPage([OLDER]))], { search: `?evenement=${OLDER.id}` })
+    await timeline()
+    const notice = (await screen.findByText("L'événement demandé ne fait pas partie des résultats chargés.")).closest('.ag-dossier__alert') as HTMLElement
+    const user = userEvent.setup()
+    await user.click(within(notice).getByRole('button', { name: 'Charger plus' }))
+    await waitFor(() => expect(within(notice).getByRole('button', { name: 'Charger plus' })).toBeTruthy())
+    expect(within(notice).queryByText(/Tout l'historique correspondant aux filtres est chargé/)).toBeNull()
+    await user.click(within(notice).getByRole('button', { name: 'Charger plus' }))
+    await waitFor(() => expect(screen.queryByText("L'événement demandé ne fait pas partie des résultats chargés.")).toBeNull())
+  })
+
   it('shows the first event and returns focus to its dossier from « Afficher le premier événement »', async () => {
     renderAudit([pageOk(auditPage([COMMAND, REFUSED]))], { search: `?evenement=${OLDER.id}` })
     await timeline()

@@ -233,7 +233,7 @@ export function AuditPage({ sessionProfile }: { readonly sessionProfile: UserPro
               <AuditEventNotLoaded
                 requestedId={selectedId}
                 filters={filters}
-                canLoadMore={query.hasNextPage && nextFailure === null}
+                canLoadMore={query.hasNextPage}
                 loadingMore={query.isFetchingNextPage}
                 onLoadMore={() => void loadMore(true)}
                 onShowFirst={showFirst}
