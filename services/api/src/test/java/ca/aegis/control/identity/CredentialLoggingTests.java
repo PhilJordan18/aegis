@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import jakarta.servlet.http.Cookie;
 
@@ -17,11 +18,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.logging.LogLevel;
 import org.springframework.boot.logging.LoggingSystem;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.jayway.jsonpath.JsonPath;
@@ -35,6 +38,15 @@ class CredentialLoggingTests extends ApiIntegrationTest {
 
     private static final List<String> VERBOSE_LOGGERS =
             List.of("org.springframework.web", "org.springframework.security", "ca.aegis.control");
+
+    @Autowired
+    PasswordChanges passwordChanges;
+
+    @Autowired
+    BrowserSessions browserSessions;
+
+    @Autowired
+    JdbcClient jdbc;
 
     private final LoggingSystem loggingSystem = LoggingSystem.get(getClass().getClassLoader());
 
@@ -74,10 +86,26 @@ class CredentialLoggingTests extends ApiIntegrationTest {
         mvc.perform(post("/api/v1/auth/session/refresh").cookie(session).header(ORIGIN, MANAGER_ORIGIN))
                 .andExpect(status().isUnauthorized());
 
+        // ADR-017: a password change, its revocation and the purge log neither password nor hash.
+        String oldHash = passwordHash(admin.id());
+        String rotated = "rotated-" + admin.password();
+        mvc.perform(post(LOGIN).contentType(MediaType.APPLICATION_JSON).header(ORIGIN, MANAGER_ORIGIN)
+                .content(jsonMapper.writeValueAsString(Map.of("email", admin.email(), "password",
+                        admin.password(), "browserSession", true))))
+                .andExpect(status().isOk());
+        passwordChanges.change(admin.id(), rotated, null);
+        String newHash = passwordHash(admin.id());
+        new BrowserSessionPurgeJob(browserSessions, clock, 10).run();
+
         String logs = output.getAll();
         assertThat(logs).as("verbose logging was active").contains("LoginRequest[email=" + technician.email() + "]");
         assertThat(logs).doesNotContain(technician.password(), wrongPassword, tooLongPassword, token,
                 token.substring(token.lastIndexOf('.') + 1), admin.password(), session.getValue(), restored,
-                restored.substring(restored.lastIndexOf('.') + 1));
+                restored.substring(restored.lastIndexOf('.') + 1), rotated, oldHash, newHash);
+    }
+
+    private String passwordHash(UUID account) {
+        return jdbc.sql("SELECT password_hash FROM aegis.users WHERE id = :id").param("id", account)
+                .query(String.class).single();
     }
 }

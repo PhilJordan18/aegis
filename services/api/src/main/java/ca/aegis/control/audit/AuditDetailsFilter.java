@@ -31,6 +31,7 @@ final class AuditDetailsFilter {
             Map.entry("ASSET_CREATED", paths(under("created", MODEL_FIELDS), under("created", ASSET_FIELDS))),
             Map.entry("ASSET_UPDATED", paths(changes(MODEL_FIELDS), changes(ASSET_FIELDS),
                     under("revoked", IDENTIFIER_FIELDS), List.of("revokedAt"))),
+            Map.entry("PASSWORD_CHANGED", Set.of("revokedBrowserSessions")),
             Map.entry("ASSET_ARCHIVED", Set.of("archivedAt")),
             Map.entry("ASSET_IDENTIFIER_ASSIGNED", paths(under("assigned", IDENTIFIER_FIELDS))),
             Map.entry("ASSET_PLACEMENT_CHANGED", paths(under("from", PLACEMENT_FIELDS),
