@@ -44,8 +44,8 @@ describe('failureReasonLabel', () => {
   })
 
   it('reads the anomaly catalog for a reason that is an anomaly type, including the offline decision of 21 November 2026', () => {
-    expect(failureReasonLabel('DEVICE_OFFLINE_DURING_OPERATION', i18n('fr'))).toBe('Casier hors ligne ou issue indéterminée')
-    expect(failureReasonLabel('DEVICE_OFFLINE_DURING_OPERATION', i18n('en'))).toBe('Locker offline or outcome undetermined')
+    expect(failureReasonLabel('DEVICE_OFFLINE_DURING_OPERATION', i18n('fr'))).toBe("Casier hors ligne ou issue physique indéterminée pendant l'opération")
+    expect(failureReasonLabel('DEVICE_OFFLINE_DURING_OPERATION', i18n('en'))).toBe('Locker offline or physical outcome undetermined during the operation')
     expect(failureReasonLabel('EXPECTED_ASSET_NOT_OBSERVED', i18n('fr'))).toBe(MESSAGES.fr.anomalies.type.EXPECTED_ASSET_NOT_OBSERVED)
   })
 

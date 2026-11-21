@@ -923,7 +923,7 @@ export const en: Messages = {
       ASSET_PRESENT_WITH_ACTIVE_LOAN: 'Equipment present despite an active loan',
       DOOR_NOT_CLOSED_BEFORE_EXPIRY: 'Door not closed before expiry',
       COMMAND_REJECTED: 'Command rejected',
-      DEVICE_OFFLINE_DURING_OPERATION: 'Locker offline or outcome undetermined',
+      DEVICE_OFFLINE_DURING_OPERATION: 'Locker offline or physical outcome undetermined during the operation',
       INCONSISTENT_PHYSICAL_STATE: 'Inconsistent physical state',
     },
     unrecognizedType: 'Type not recognized by this version',
