@@ -26,6 +26,9 @@ public enum ApiError {
             "Le jeton d'accès est absent, invalide ou n'est plus accepté. Reconnectez-vous."),
     AUTH_TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "Jeton expiré",
             "Le jeton d'accès a expiré. Reconnectez-vous."),
+    /** ADR-016: the browser session cookie is missing, unknown, ended or revoked (document 09, section 10.4). */
+    AUTH_SESSION_INVALID(HttpStatus.UNAUTHORIZED, "Session terminée",
+            "La session n'est plus valide. Reconnectez-vous."),
     FORBIDDEN(HttpStatus.FORBIDDEN, "Accès refusé",
             "Votre rôle ne permet pas cette action."),
     ASSET_ACCESS_DENIED(HttpStatus.FORBIDDEN, "Niveau d'accès insuffisant",

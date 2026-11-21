@@ -8,13 +8,13 @@ import { ANOMALY_ID, anomalyPageOf, fakeAnomalyGateway, ok, parsedAnomaly } from
 import { unconfiguredAuthGateway, type AuthGateway } from '../features/auth/authGateway'
 import type { ProblemResponse } from '../features/auth/contract'
 import { createSessionStore } from '../features/auth/session'
-import { adminProfile, problemBody } from '../features/auth/testFixtures'
+import { adminProfile, problemBody, sessionStubs } from '../features/auth/testFixtures'
 import type { Locale } from '../i18n/locale'
 import { installDialogPolyfill } from '../test/dialog'
 import { installMatchMedia } from '../test/matchMedia'
 import { renderWithProviders } from '../test/renderApp'
 
-const authGateway: AuthGateway = { ...unconfiguredAuthGateway, currentProfile: async () => ({ kind: 'ok', value: adminProfile, requestId: null }) }
+const authGateway: AuthGateway = { ...unconfiguredAuthGateway, ...sessionStubs, currentProfile: async () => ({ kind: 'ok', value: adminProfile, requestId: null }) }
 const problem = (status: number, code: string, extra: Partial<ProblemResponse> = {}) =>
   ({ kind: 'httpProblem', status, problem: problemBody(status, code, { traceId: 'trace-0001', ...extra }), retryAfter: null, requestId: 'req-x' }) as const
 const offline = { kind: 'network', reason: 'offline' } as const

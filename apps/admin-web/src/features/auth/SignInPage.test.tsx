@@ -5,7 +5,7 @@ import { formattersFor } from '../../i18n/format'
 import { fr } from '../../i18n/messages/fr'
 import { installMatchMedia } from '../../test/matchMedia'
 import { renderWithProviders } from '../../test/renderApp'
-import type { AuthGateway, GatewayResult } from './authGateway'
+import { unconfiguredAuthGateway, type AuthGateway, type GatewayResult } from './authGateway'
 import type { LoginResponse, UserProfile } from './contract'
 import { createHttpAuthGateway } from './httpAuthGateway'
 import { createSessionStore } from './session'
@@ -20,7 +20,8 @@ const SERVER_TEXT = 'SERVER-SUPPLIED TEXT THAT MUST NEVER BE SHOWN'
 function gatewayReturning(result: GatewayResult<LoginResponse> | Promise<GatewayResult<LoginResponse>>) {
   const signIn = vi.fn<AuthGateway['signIn']>(async () => result)
   const currentProfile = vi.fn<AuthGateway['currentProfile']>()
-  return { gateway: { signIn, currentProfile } satisfies AuthGateway, signIn, currentProfile }
+  const revokeSession = vi.fn<AuthGateway['revokeSession']>(async () => ({ kind: 'ok', value: true, requestId: null }))
+  return { gateway: { ...unconfiguredAuthGateway, signIn, currentProfile, revokeSession } satisfies AuthGateway, signIn, currentProfile, revokeSession }
 }
 
 const emailField = () => screen.getByLabelText(t.emailLabel) as HTMLInputElement
@@ -242,7 +243,7 @@ describe('SignInPage — submission', () => {
     const signIn = vi.fn<AuthGateway['signIn']>(
       (_request, signal) => new Promise((resolve) => signal?.addEventListener('abort', () => resolve({ kind: 'aborted' }))),
     )
-    renderWithProviders(<SignInPage afterSignInPath="/" />, { gateway: { signIn, currentProfile: vi.fn() } })
+    renderWithProviders(<SignInPage afterSignInPath="/" />, { gateway: { ...unconfiguredAuthGateway, signIn, currentProfile: vi.fn() } })
     fireEvent.change(emailField(), { target: { value: 'admin@aegis.test' } })
     fireEvent.change(passwordField(), { target: { value: 'x' } })
     await act(async () => fireEvent.click(submitButton()))
@@ -312,8 +313,8 @@ describe('SignInPage — rate limit', () => {
 })
 
 describe('SignInPage — role and session', () => {
-  it('replaces the form for a technician, keeps no token, calls no route, and focuses the heading', async () => {
-    const { gateway, currentProfile } = gatewayReturning(loginOk(technicianProfile, 'technician-token'))
+  it('replaces the form for a technician, keeps no token, loads no data, closes the browser session, and focuses the heading', async () => {
+    const { gateway, currentProfile, revokeSession } = gatewayReturning(loginOk(technicianProfile, 'technician-token'))
     const { session } = renderWithProviders(<SignInPage afterSignInPath="/apercu" />, { gateway })
     const user = await fillAndSubmit()
 
@@ -326,6 +327,8 @@ describe('SignInPage — role and session', () => {
     expect(session.getAccessToken()).toBeNull()
     expect(session.getSnapshot().status).toBe('anonymous')
     expect(currentProfile).not.toHaveBeenCalled()
+    // The login also set the cookie: it is revoked so that a reload cannot restore a session the Web refuses.
+    expect(revokeSession).toHaveBeenCalledTimes(1)
     expect(document.body.innerHTML).not.toContain('technician-token')
     expect(window.location.pathname).toBe('/connexion')
 

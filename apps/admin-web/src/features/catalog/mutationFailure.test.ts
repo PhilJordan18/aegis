@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ApiRequestError, SessionEndedError } from '../../api/serverState'
+import { ApiRequestError, SessionEndedError, SessionRestoredError } from '../../api/serverState'
 import { problemBody } from '../auth/testFixtures'
 import { classifyMutationFailure } from './mutationFailure'
 
@@ -24,6 +24,7 @@ describe('classifyMutationFailure', () => {
 
   it('maps access and session outcomes', () => {
     expect(classifyMutationFailure(new SessionEndedError())).toEqual({ kind: 'ended' })
+    expect(classifyMutationFailure(new SessionRestoredError())).toEqual({ kind: 'resubmit' })
     expect(classifyMutationFailure(problem(401, 'AUTHENTICATION_REQUIRED'))).toEqual({ kind: 'ended' })
     expect(classifyMutationFailure(problem(403, 'ACCESS_DENIED'))).toEqual({ kind: 'forbidden' })
     expect(classifyMutationFailure(problem(404, 'RESOURCE_NOT_FOUND'))).toEqual({ kind: 'notFound' })

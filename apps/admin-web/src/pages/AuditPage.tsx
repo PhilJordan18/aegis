@@ -4,7 +4,7 @@ import { useLocation, useRouter } from '../app/router'
 import { pathOf } from '../app/routes'
 import { ManagerShell } from '../app/shell/ManagerShell'
 import type { UserProfile } from '../features/auth/contract'
-import { useSessionStore } from '../features/auth/session'
+import { useSignOut } from '../features/auth/useSignOut'
 import { useCurrentAdminProfile } from '../features/auth/useCurrentAdminProfile'
 import { AuditDossier } from '../features/audit/AuditDossier'
 import { AuditFilters } from '../features/audit/AuditFilters'
@@ -39,7 +39,6 @@ export function AuditPage({ sessionProfile }: { readonly sessionProfile: UserPro
   const i18n = useI18n()
   const { m, format } = i18n
   const t = m.audit
-  const sessionStore = useSessionStore()
   const router = useRouter()
   const { search } = useLocation()
   const currentProfile = useCurrentAdminProfile()
@@ -139,10 +138,7 @@ export function AuditPage({ sessionProfile }: { readonly sessionProfile: UserPro
     router.navigate(auditHref(next))
   }
 
-  function signOut() {
-    sessionStore.signOut()
-    router.navigate(pathOf('signIn'))
-  }
+  const signOut = useSignOut()
 
   const readAt = firstPage?.readAt ?? null
   const clock = readAt === null ? null : format.time(new Date(readAt), LAB_TIME_ZONE)

@@ -29,7 +29,12 @@ export interface JsonRequest<T> {
   /** Sent as `Idempotency-Key` (09 §6.2): the caller keeps one key per intent and reuses it to repeat that intent. */
   readonly idempotencyKey?: string
   readonly signal?: AbortSignal
-  /** Validates a 2xx body against the contract; null when it does not match. */
+  /**
+   * `same-origin` only for the browser-session routes (ADR-016: login, refresh, revoke), where the
+   * HttpOnly cookie must travel. Every other route keeps `omit`: the bearer token is its only credential.
+   */
+  readonly credentials?: 'omit' | 'same-origin'
+  /** Validates a 2xx body against the contract; null when it does not match. A 204 is parsed as `undefined`. */
   readonly parse: (body: unknown) => T | null
 }
 
@@ -67,7 +72,7 @@ export function createHttpClient({
   createRequestId = randomRequestId,
 }: HttpClientOptions = {}): HttpClient {
   return {
-    async send<T>({ method, path, body, accessToken, idempotencyKey, signal, parse }: JsonRequest<T>): Promise<GatewayResult<T>> {
+    async send<T>({ method, path, body, accessToken, idempotencyKey, signal, credentials = 'omit', parse }: JsonRequest<T>): Promise<GatewayResult<T>> {
       if (signal?.aborted) return { kind: 'aborted' }
       const controller = new AbortController()
       let timedOut = false
@@ -91,15 +96,14 @@ export function createHttpClient({
           method,
           headers,
           body: body === undefined ? undefined : JSON.stringify(body),
-          // The bearer token is the only credential: no cookie is sent or stored.
-          credentials: 'omit',
+          credentials,
           cache: 'no-store',
           signal: controller.signal,
         })
         const requestId = response.headers.get('X-Request-Id')
         const payload = await readJson(response)
         if (response.ok) {
-          const value = payload === NO_BODY ? null : parse(payload)
+          const value = payload === NO_BODY ? (response.status === 204 ? parse(undefined) : null) : parse(payload)
           return value === null ? { kind: 'invalidResponse', status: response.status, requestId } : { kind: 'ok', value, requestId }
         }
         return {

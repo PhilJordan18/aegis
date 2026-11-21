@@ -1,4 +1,4 @@
-import { ApiRequestError } from '../../api/serverState'
+import { ApiRequestError, SessionRestoredError } from '../../api/serverState'
 import { classifyCatalogFailure, type CatalogFailure } from '../catalog/catalogFailure'
 
 /**
@@ -25,8 +25,11 @@ export type AcknowledgeFailure =
   | { readonly kind: 'invalidNote'; readonly violations: readonly string[] }
   /** 409 `IDEMPOTENCY_REQUEST_IN_PROGRESS`: the first attempt is still running; repeating the same intent applies nothing twice. */
   | { readonly kind: 'inProgress' }
+  /** 401, session restored, command not sent again (#178): the user acknowledges again, with the same key. */
+  | { readonly kind: 'resubmit' }
 
 export function classifyAcknowledgeFailure(error: unknown): AcknowledgeFailure {
+  if (error instanceof SessionRestoredError) return { kind: 'resubmit' }
   if (error instanceof ApiRequestError && error.failure.kind === 'httpProblem') {
     const code = error.failure.problem?.code
     if (code === 'ANOMALY_ALREADY_RESOLVED') return { kind: 'alreadyResolved' }

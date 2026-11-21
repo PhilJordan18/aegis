@@ -18,6 +18,7 @@ import { AnomalyGatewayContext } from './features/anomalies/AnomalyGatewayContex
 import { createHttpAnomalyGateway } from './features/anomalies/httpAnomalyGateway'
 import { createHttpAuthGateway } from './features/auth/httpAuthGateway'
 import { createSessionStore, SessionContext } from './features/auth/session'
+import { connectSessionSignals, createSessionSignals } from './features/auth/sessionSync'
 import { CatalogGatewayContext } from './features/catalog/CatalogGatewayContext'
 import { createHttpCatalogGateway } from './features/catalog/httpCatalogGateway'
 import { createHttpLockerGateway } from './features/lockers/httpLockerGateway'
@@ -48,6 +49,15 @@ if (__AEGIS_PREVIEW__) {
   const preview = installPreview({ router, session })
   gateway = preview.gateway
   previewControls = preview.controls
+}
+
+// The session store restores and revokes through the same gateway. Design-review builds never ask the API
+// to restore: their arrival scenarios drive the store themselves, and their fictitious gateway has no cookie.
+session.connect(gateway)
+if (!__AEGIS_PREVIEW__) {
+  // One browser session, several tabs: a confirmed sign-out or a new sign-in reaches the others (sessionSync.ts).
+  connectSessionSignals(session, createSessionSignals(window))
+  void session.restore()
 }
 
 // The catalog has no preview scenario: design-review captures route /api/v1/admin/assets themselves.

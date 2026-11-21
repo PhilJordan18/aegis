@@ -1,11 +1,11 @@
 import { useRef } from 'react'
 import { Link } from '../app/Link'
 import { PageHeading } from '../app/PageHeading'
-import { useLocation, useRouter } from '../app/router'
+import { useLocation } from '../app/router'
 import { pathOf } from '../app/routes'
 import { ManagerShell } from '../app/shell/ManagerShell'
 import type { UserProfile } from '../features/auth/contract'
-import { useSessionStore } from '../features/auth/session'
+import { useSignOut } from '../features/auth/useSignOut'
 import { useCurrentAdminProfile } from '../features/auth/useCurrentAdminProfile'
 import { CatalogAlert } from '../features/catalog/CatalogAlert'
 import { classifyCatalogFailure } from '../features/catalog/catalogFailure'
@@ -29,8 +29,6 @@ const KNOWN_LOCKERS_QUERY = { ...LIST_QUERY_BASE, page: 0 } as const
  */
 export function LockersPage({ sessionProfile }: { readonly sessionProfile: UserProfile }) {
   const { m } = useI18n()
-  const sessionStore = useSessionStore()
-  const router = useRouter()
   const { search } = useLocation()
   const currentProfile = useCurrentAdminProfile()
   const profile = currentProfile.data ?? sessionProfile
@@ -49,10 +47,7 @@ export function LockersPage({ sessionProfile }: { readonly sessionProfile: UserP
     void catalog.refetch()
   }
 
-  function signOut() {
-    sessionStore.signOut()
-    router.navigate(pathOf('signIn'))
-  }
+  const signOut = useSignOut()
 
   return (
     <ManagerShell currentPath={pathOf('lockers')} profile={profile} onSignOut={signOut}>
