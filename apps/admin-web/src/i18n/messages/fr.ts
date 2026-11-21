@@ -1004,7 +1004,7 @@ export const fr = {
       ASSET_PRESENT_WITH_ACTIVE_LOAN: 'Équipement présent malgré un prêt actif',
       DOOR_NOT_CLOSED_BEFORE_EXPIRY: 'Porte non refermée avant l’échéance',
       COMMAND_REJECTED: 'Commande rejetée',
-      DEVICE_OFFLINE_DURING_OPERATION: 'Casier hors ligne ou issue indéterminée',
+      DEVICE_OFFLINE_DURING_OPERATION: "Casier hors ligne ou issue physique indéterminée pendant l'opération",
       INCONSISTENT_PHYSICAL_STATE: 'État physique incohérent',
     } satisfies Record<AnomalyType, string>,
     /** 09 §3: a value this version does not know is never drawn as a known one. */
