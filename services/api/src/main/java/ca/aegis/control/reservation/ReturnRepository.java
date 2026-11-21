@@ -73,6 +73,18 @@ class ReturnRepository {
      * Document 06, section 13.1: a return that certainly had no physical effect gives the loan back to its holder.
      * {@code return_requested_at} keeps the latest attempt.
      */
+    /** RETURN_PENDING to COMPLETED, with the proven return operation (document 08, section 7.5). */
+    void complete(UUID loanId, UUID operationId, Instant now) {
+        int completed = jdbc.sql("""
+                UPDATE aegis.loans SET status = 'COMPLETED', returned_at = :now, return_operation_id = :operation
+                WHERE id = :id AND status = 'RETURN_PENDING'
+                """).param("now", now.atOffset(ZoneOffset.UTC)).param("operation", operationId).param("id", loanId)
+                .update();
+        if (completed != 1) {
+            throw new IllegalStateException("A locked loan changed state: " + loanId);
+        }
+    }
+
     void revert(UUID loanId, Instant now) {
         move(loanId, "RETURN_PENDING", "ACTIVE", "", now);
     }
