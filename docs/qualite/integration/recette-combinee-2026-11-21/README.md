@@ -98,6 +98,27 @@ Q5b et G1 sont **en échec** sur `c71f5a5`. Ces échecs restent dans le bilan : 
 - **Jeu de démonstration :** Q9c et Q10d ne sont pas démontrables, faute d'un second technicien et d'un second casier.
 - **iOS :** non exécutable dans ce cloud. Le croisement mobile se fait au niveau des routes REST du technicien, pas de l'application.
 
+## PR Web vérifiées contre l'API finale
+
+**Niveau de preuve : logiciel vérifié avec simulateur.** Les PR Web ont été vérifiées sur deux arbres d'intégration locaux, construits sur `c9473c4`, l'API des têtes finales. Ces arbres ne sont pas poussés.
+
+- **Arbre 1** : #185 `a3e3e54`, #186 `b4ad4ef`, #188 `d69dc62`, #194 `3c0c977`, #195 `d70a527`.
+- **Arbre 2** : #189 `c4d9d4b`, #190 `2eac430` (brouillon), #195 `d70a527`.
+
+Deux arbres sont nécessaires : #189 et #190 sont en conflit avec #185 sur `AuditDossier.tsx`.
+
+| Contrôle | Arbre 1 | Arbre 2 |
+|---|---|---|
+| typecheck, lint, build | OK | OK |
+| vitest | 1 361/1 361 | 1 296/1 296 |
+| Recette Web contre l'API réelle (`playwright.api.config.ts`), base neuve | 17/17 | 17/17 |
+| W1-W14 et W10c-e dans Chromium (`w-web-flows.sh`) | 26 PASS, 0 FAIL | 26 PASS, 0 FAIL |
+| R6 `realapi` (#195) après 2 cycles simulés et une réservation active créée par l'API ; données exigées : réservations, prêts, opérations, audit | 40/40 | 40/40 |
+
+**Ce qui n'est pas encore vérifié : la résolution du conflit.** Web résoudra le conflit `AuditDossier.tsx` après le premier merge. La tête qui en sortira devra être revérifiée par QA avant son propre merge.
+
+**Erreur de harnais, corrigée :** au premier passage, le peuplement précédait la recette `api.config`, qui attend une base neuve. Il en résultait un `429` du limiteur et l'absence de compartiment libre ; de plus, aucune réservation active n'existait pour `realapi`. La recette tourne maintenant sur sa propre pile.
+
 ## Ordre de merge (Philippe fusionne)
 
 1. **#173** `df73917`, puis **#175** `0f23f34`.
@@ -111,7 +132,7 @@ Q5b et G1 sont **en échec** sur `c71f5a5`. Ces échecs restent dans le bilan : 
    - #190, après #193 et #189 ;
    - #195 (R6).
 
-   Les têtes Web sont revérifiées à l'exécution par QA avant le merge.
+   Les têtes Web listées ci-dessus sont vérifiées à l'exécution contre l'API finale. Toute nouvelle tête, y compris la résolution de conflit, sera revérifiée.
 6. **PR QA :** #174 (sondes de la pile, ce rapport) et #187 (sondes de session).
 
 **Après chaque merge :** relire la CI sur la tête de `dev`. **Le vert de la CI ne vaut pas « Done ».**
