@@ -1081,6 +1081,9 @@ export const fr = {
       title: 'Reconnaître cette anomalie',
       description:
         'Reconnaître indique qu’un administrateur a pris connaissance de l’anomalie et que la vérification est engagée. L’anomalie n’est pas résolue : elle ne le sera que lorsqu’une nouvelle observation du casier le confirmera, et elle reste visible.',
+      /** 06 §13.4: once every anomaly linked to its returns is acknowledged, the loan offers RETURN again. Not a resolution. */
+      returnEffect:
+        'Pour une anomalie de retour, la reconnaître permet au technicien de tenter un nouveau retour lorsque les autres conditions sont réunies. L’anomalie reste non résolue tant que ce retour n’est pas prouvé par le casier.',
       noteLabel: 'Note de reconnaissance',
       noteHelp: 'Obligatoire, de 1 à 500 caractères. Elle est conservée avec votre nom et l’heure.',
       counter: ({ count: value }: { count: number }) => `${count.format(value)} / 500`,
@@ -1354,6 +1357,9 @@ export const fr = {
       type: 'Type',
       severity: 'Gravité',
       lockerId: 'Identifiant du casier',
+      loanId: 'Identifiant du prêt',
+      resolvedByOperationId: 'Opération qui a résolu l’anomalie',
+      scanMessageId: 'Identifiant du message de scan',
       messageType: 'Type de message',
       revokedBrowserSessions: 'Sessions navigateur révoquées',
     } as Readonly<Record<string, string>>,

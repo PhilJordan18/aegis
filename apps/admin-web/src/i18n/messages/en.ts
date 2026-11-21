@@ -999,6 +999,9 @@ export const en: Messages = {
       title: 'Acknowledge this anomaly',
       description:
         'Acknowledging records that an administrator has taken note of the anomaly and that the check is under way. The anomaly is not resolved: it will be only when a new observation from the locker confirms it, and it stays visible.',
+      /** 06 §13.4: once every anomaly linked to its returns is acknowledged, the loan offers RETURN again. Not a resolution. */
+      returnEffect:
+        'For a return anomaly, acknowledging it lets the technician try a new return when the other conditions are met. The anomaly stays unresolved until the locker proves that return.',
       noteLabel: 'Acknowledgement note',
       noteHelp: 'Required, 1 to 500 characters. It is kept with your name and the time.',
       counter: ({ count: value }: { count: number }) => `${count.format(value)} / 500`,
@@ -1257,6 +1260,9 @@ export const en: Messages = {
       type: 'Type',
       severity: 'Severity',
       lockerId: 'Locker ID',
+      loanId: 'Loan ID',
+      resolvedByOperationId: 'Operation that resolved the anomaly',
+      scanMessageId: 'Scan message ID',
       messageType: 'Message type',
       revokedBrowserSessions: 'Browser sessions revoked',
     },

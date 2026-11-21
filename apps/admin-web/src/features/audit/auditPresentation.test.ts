@@ -108,6 +108,16 @@ describe('detail rows', () => {
     expect(rows(JSON.parse('{"toString":"x","__proto__":"y"}'), 'en').map((row) => row.label)).toEqual([null, null])
   })
 
+  it('reads and labels the five details of ANOMALY_RESOLVED, all top-level scalars (ACKNOWLEDGED to RESOLVED, from a recovery return)', () => {
+    const details = { type: 'EXPECTED_ASSET_NOT_OBSERVED', severity: 'HIGH', loanId: uuid(1), resolvedByOperationId: uuid(2), scanMessageId: uuid(3) }
+    const fr = rows(details, 'fr')
+    expect(fr.map((row) => row.key)).toEqual(['type', 'severity', 'loanId', 'resolvedByOperationId', 'scanMessageId'])
+    expect(fr.every((row) => row.label !== null)).toBe(true)
+    expect(rows(details, 'en').every((row) => row.label !== null)).toBe(true)
+    expect(stateLabel('RESOLVED', i18n('fr'))).toBe('Résolue')
+    expect(stateLabel('ACKNOWLEDGED', i18n('fr'))).toBe('Reconnue')
+  })
+
   it('shows values as sent, with a label only for a state, a result or an instant of the allowlist', () => {
     const [outcome, status, unknownStatus, type, reservedUntil, other] = rows(
       { outcome: 'ACCEPTED', status: 'ACTIVE', operationStatus: 'WEIRD', type: 'UNEXPECTED_ASSET_OBSERVED', reservedUntil: '2026-11-11T20:00:00Z', note: '2026-11-11T20:00:00Z' },
