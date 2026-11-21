@@ -51,6 +51,21 @@ class LocalChallengeRepository {
         }
     }
 
+    /** The fifth wrong secret: the challenge closes as {@code INVALIDATED} with its fifth failed attempt. */
+    void exhaust(UUID challengeId, Instant now) {
+        int updated = jdbc.sql("""
+                UPDATE aegis.local_access_challenges
+                SET status = 'INVALIDATED', closed_at = :now, failed_attempts = failed_attempts + 1
+                WHERE id = :id AND status = 'PENDING' AND failed_attempts = 4
+                """)
+                .param("now", now.atOffset(ZoneOffset.UTC))
+                .param("id", challengeId)
+                .update();
+        if (updated != 1) {
+            throw new IllegalStateException("A locked local challenge changed state: " + challengeId);
+        }
+    }
+
     /**
      * Stops the distribution of the challenge's display instruction, releases its claim and purges its ciphertext,
      * keeping only the metadata (document 08, section 4.6). An instruction still sendable becomes {@code CANCELLED},
