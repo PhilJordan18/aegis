@@ -1330,6 +1330,7 @@ export const fr = {
       severity: 'Gravité',
       lockerId: 'Identifiant du casier',
       messageType: 'Type de message',
+      revokedBrowserSessions: 'Sessions navigateur révoquées',
     } as Readonly<Record<string, string>>,
     evidenceTitle: 'Preuves physiques',
     /** [P] The approved text says none is referenced; this screen cannot verify it, so it says what it does not show. */
@@ -1406,6 +1407,7 @@ export const fr = {
       MQTT_MESSAGE_DUPLICATE_IGNORED: 'Message en double ignoré',
       LOCKER_ONLINE: 'Casier en ligne',
       LOCKER_OFFLINE: 'Casier hors ligne',
+      PASSWORD_CHANGED: 'Mot de passe changé',
     } as Readonly<Record<string, string>>,
     state: {
       REQUESTED: 'Demande envoyée',

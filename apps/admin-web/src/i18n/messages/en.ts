@@ -1233,6 +1233,7 @@ export const en: Messages = {
       severity: 'Severity',
       lockerId: 'Locker ID',
       messageType: 'Message type',
+      revokedBrowserSessions: 'Browser sessions revoked',
     },
     evidenceTitle: 'Physical evidence',
     evidenceNote: 'This screen shows no physical evidence: the contract does not define the shape of such references.',
@@ -1308,6 +1309,7 @@ export const en: Messages = {
       MQTT_MESSAGE_DUPLICATE_IGNORED: 'Duplicate message ignored',
       LOCKER_ONLINE: 'Locker online',
       LOCKER_OFFLINE: 'Locker offline',
+      PASSWORD_CHANGED: 'Password changed',
     },
     state: {
       REQUESTED: 'Request sent',
