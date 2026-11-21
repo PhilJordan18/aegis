@@ -11,6 +11,8 @@ c=$(login $A "$AP" "$ORIGIN" true); ck=$(cookie_from "$work/h"); tk0=$(json 'd["
 expect "R0 browser login before the rotation" "$c" 200
 stop_api; NEWP=qa-ses-admin2-$(openssl rand -hex 8)
 start_api api-r.log AEGIS_DEMO_ADMIN_PASSWORD="$NEWP" || { echo "FAIL BLOCKED restart"; exit 1; }
+# The provisioner applies the rotation ~300 ms after Tomcat accepts requests (runbook line): wait for it, up to 10 s.
+for _ in $(seq 1 20); do grep -q 'Updated the password of demo account' "$work/api-r.log" && break; sleep 0.5; done
 grep -q 'Updated the password of demo account' "$work/api-r.log" && pass "R1 API log: demo admin password updated at startup" || fail "R1 no rotation logged"
 expect "R2a old password login" "$(login $A "$AP" - -)" 401
 expect "R2b new password login" "$(login $A "$NEWP" - -)" 200
