@@ -7,6 +7,8 @@
 # Each cycle: reserve AEG-DEMO-001, prepare the checkout (the same Idempotency-Key replayed returns the same operation),
 # scan the displayed QR (a second scan is refused, no second command), take the asset, close: CONFIRMED and one ACTIVE
 # loan. Then prepare the return (replayed likewise), scan, put the asset back, close: CONFIRMED and the loan COMPLETED.
+# After each checkout and each return, the technician routes the mobile app reads (/me/loan, /loans/{id}) and the admin
+# routes the Manager reads (/admin/loans, /admin/locker-operations, /admin/reservations) must agree.
 # At the end: 10 loans COMPLETED, 10 reservations FULFILLED, 20 operations CONFIRMED, exactly one command per
 # operation, no anomaly, one OPERATION_CONFIRMED per operation and one LOAN_COMPLETED per loan, asset READY again.
 #
@@ -210,7 +212,7 @@ post_prepare() {
       -H "Idempotency-Key: $2" "$1")
     [[ $code == 429 ]] || { echo "$code"; return; }
     wait=$(grep -i '^retry-after:' "$3.headers" | tr -dc '0-9')
-    rate_limited=$((rate_limited + 1))
+    echo 429 >>"$work/ceiling-waits"  # post_prepare runs in a command substitution: count through a file
     echo "  ceiling reached, Retry-After ${wait:-60} s" >&2
     sleep $(( ${wait:-60} + 2 ))
   done
@@ -234,6 +236,20 @@ scan() {
   [[ $code == 202 ]] || { fail "$2 scan $code $(cat "$work/scan.body")"; return 1; }
   [[ $again == 409 && $(json 'd["code"]' <"$work/scan-again.body") == LOCAL_PROOF_ALREADY_USED &&
      $(commands "$1") == 1 ]] || { fail "$2 second scan $again, commands $(commands "$1")"; return 1; }
+}
+
+# crosscheck <label> <expected mobile /me/loan> <loan status>: what the mobile app (technician routes) and the Manager
+# (admin routes) read for the same loan, operations and reservation must agree with the database.
+crosscheck() {
+  local me mobile manager ops res
+  me=$(curl -s -o "$work/me.body" -w '%{http_code}' -H "Authorization: Bearer $token" "$api/me/loan")
+  [[ $me == 200 ]] && me="200 $(json 'd["id"] == "'"$loan"'" and d["status"]' <"$work/me.body")" ||
+    me="$me $(json 'd.get("code", "-")' <"$work/me.body")"
+  mobile=$(curl -fs -H "Authorization: Bearer $token" "$api/loans/$loan" | json 'd["status"]')
+  manager=$(curl -fs -H "Authorization: Bearer $admin" "$api/admin/loans/$loan" | json 'd["status"]')
+  ops=$(for o in "$@"; do curl -fs -H "Authorization: Bearer $admin" "$api/admin/locker-operations/$o" | json 'd["status"]'; done | tr '\n' ' ')
+  res=$(curl -fs -H "Authorization: Bearer $admin" "$api/admin/reservations/$reservation" | json 'd["status"]')
+  echo "$me|$mobile|$manager|${ops% }|$res"
 }
 
 # The hub: one boot, presence scan, then for each cycle a checkout (take the asset) and a return (put it back).
@@ -279,6 +295,7 @@ rate_limited=0 done_cycles=0 started=$(date +%s)
 for n in $(seq 1 "$cycles"); do
   c="C$n"
   token=$(login technician@aegis.demo "$AEGIS_DEMO_TECHNICIAN_PASSWORD")
+  admin=$(login admin@aegis.demo "$AEGIS_DEMO_ADMIN_PASSWORD")
   asset=$(curl -fs -H "Authorization: Bearer $token" "$api/assets?q=AEG-DEMO-001&page=0&size=10" |
     json '[a for a in d["items"] if a["assetCode"] == "AEG-DEMO-001"][0]["id"]')
   settled || { fail "$c cell projection '$(cell)' before the checkout"; break; }
@@ -305,6 +322,9 @@ for n in $(seq 1 "$cycles"); do
   loan=$(sql "SELECT id FROM aegis.loans WHERE checkout_operation_id = '$op'")
   [[ $end == "CONFIRMED -" && -n $loan && $(loan_status) == ACTIVE ]] ||
     { fail "$c checkout ended '$end', loan '${loan:-none}'"; break; }
+  seen=$(crosscheck "$op")
+  [[ $seen == "200 ACTIVE|ACTIVE|ACTIVE|CONFIRMED|FULFILLED" ]] ||
+    { fail "$c after the checkout, mobile/Manager read '$seen'"; break; }
   settled || { fail "$c cell projection '$(cell)' before the return"; break; }
   key=$(uuid)
   code=$(post_prepare "$api/loans/$loan/return" "$key" "$work/return.body")
@@ -318,6 +338,9 @@ for n in $(seq 1 "$cycles"); do
   [[ $end == "CONFIRMED -" && $(loan_status) == COMPLETED && $(anomalies "$op") == "0 -" &&
      $(anomalies "$rop") == "0 -" ]] ||
     { fail "$c return ended '$end', loan $(loan_status), anomalies '$(anomalies "$rop")'"; break; }
+  seen=$(crosscheck "$op" "$rop")
+  [[ $seen == "404 ACTIVE_LOAN_NOT_FOUND|COMPLETED|COMPLETED|CONFIRMED CONFIRMED|FULFILLED" ]] ||
+    { fail "$c after the return, mobile/Manager read '$seen'"; break; }
   done_cycles=$n
   echo "  $c done at +$(( $(date +%s) - started )) s"
 done
@@ -339,7 +362,7 @@ readiness=$(curl -fs -H "Authorization: Bearer $token" "$api/assets/$asset" | js
 if [[ $done_cycles == "$cycles" && $totals == "$expected" ]]; then
   pass "CYCLES $cycles checkouts and $cycles returns in $(( $(date +%s) - started )) s: loans/completed/fulfilled" \
     "reservations/confirmed operations/operations/commands/max commands per operation/anomalies/OPERATION_CONFIRMED/" \
-    "LOAN_COMPLETED = '$totals'; ceiling waits $rate_limited"
+    "LOAN_COMPLETED = '$totals'; ceiling waits $(cat "$work/ceiling-waits" 2>/dev/null | wc -l)"
 else
   fail "CYCLES $done_cycles of $cycles cycles; totals '$totals', expected '$expected'"
 fi

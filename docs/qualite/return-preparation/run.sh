@@ -29,6 +29,10 @@
 #   E4 T4       rule 2: FAULTED reader at the closing scan, asset put back: ANOMALY at once, loan not completed
 #   E5          the expected tag read once only: no proof, ANOMALY at the deadline
 #   E6 T5       the scan that sees the asset is received after expiresAt: no completion
+#   E7          rule 1 (Q2): retry refused while the anomaly is OPEN; after acknowledgement, a coherent retry completes
+#               the loan and resolves the anomaly (approved 21 November, #67 comment 7064405022)
+#   E8          rule 1, no dead end: the first recovery fails too (new OPEN anomaly, retry refused), its acknowledgement
+#               makes the return eligible again, and a coherent retry completes the loan
 # Every case also asserts at most one command per operation, one loan, and COMPLETED only through a CONFIRMED return.
 # Exit
 # code = number of FAIL lines. OBS lines are observations for the contract owner. The hub is simulated: this proves
@@ -663,6 +667,107 @@ if wanted E6 && setup E6 '{ "do": "waitUnlocked", "code": "A1", "timeoutMs": 600
     obs "T5 not conclusive: scan at expiresAt + ${scan:-none} s, '$end'"
   fi
   invariant E6
+fi
+hub_env=()
+
+# E7: rule 1 (Q2), approved by Philippe on 21 November (#67 comment 7064405022). A return ends in ANOMALY (door closed
+# without the asset); a retry is refused while the anomaly is OPEN; the administrator acknowledges it (the real route);
+# the retry is then accepted, the asset is put back, and one transaction completes the loan and resolves the anomaly
+# with the decisive scan as evidence. No SQL.
+hub_env=(AEGIS_SIM_RFID_WINDOW_MS=3000)
+if wanted E7 && setup E7 '{ "do": "waitUnlocked", "code": "A1", "timeoutMs": 600000 }, { "wait": 1000 },
+  { "do": "openDoor", "code": "A1" }, { "wait": 1500 }, { "do": "closeDoor", "code": "A1" },
+  '"$deposit" && start_return E7; then
+  first=$rop
+  end=$(wait_terminal "$first" 150)
+  anomaly=$(sql "SELECT id FROM aegis.anomalies WHERE locker_operation_id = '$first'")
+  open_code=$(prepare_return "$work/E7-open.body")
+  open_err=$(json 'd.get("code", "-")' <"$work/E7-open.body" 2>/dev/null || echo -)
+  if [[ $end == "ANOMALY EXPECTED_ASSET_NOT_OBSERVED" && -n $anomaly && $open_code == 409 ]]; then
+    pass "E7 first return '$end'; a retry while the anomaly is OPEN is refused ($open_code $open_err)"
+  else
+    fail "E7 first return '$end', anomaly '${anomaly:-none}', retry while OPEN $open_code $open_err"
+  fi
+  ack=$(curl -s -o "$work/E7-ack.body" -w '%{http_code}' -X POST -H "Authorization: Bearer $admin" \
+    -H 'Content-Type: application/json' -H "Idempotency-Key: $(uuid)" \
+    -d '{"note":"QA E7: cell inspected, asset to be put back"}' "$api/admin/anomalies/$anomaly/acknowledge")
+  offered=$(loan_view)
+  code=$(prepare_return "$work/E7-retry.body")
+  if [[ $ack == 200 && $code == 202 ]]; then
+    rop=$(json 'd["id"]' <"$work/E7-retry.body")
+    if displayed "$rop" && [[ $(authorize "$rop" "$work/E7-retry-authorize.body") == 202 ]]; then
+      end=$(wait_terminal "$rop" 60)
+      resolution=$(sql "SELECT status || ' ' || (resolution_evidence_observation_id IS NOT NULL) FROM aegis.anomalies
+                        WHERE id = '$anomaly'")
+      resolved=$(sql "SELECT count(*) FROM aegis.audit_events WHERE event_type = 'ANOMALY_RESOLVED'")
+      if [[ $end == "CONFIRMED -" && $(loan_status) == COMPLETED && $resolution == "RESOLVED true" && $resolved == 1 ]]
+      then
+        pass "E7 rule 1: acknowledged ($ack), retry offered ('$offered'), '$end', loan COMPLETED, anomaly" \
+          "'$resolution' with evidence, one ANOMALY_RESOLVED audit"
+      else
+        fail "E7 recovery: '$end', loan $(loan_status), anomaly '$resolution', ANOMALY_RESOLVED $resolved"
+      fi
+    else
+      fail "E7 recovery return was not displayed or authorized ($(cat "$work/E7-retry-authorize.body" 2>/dev/null))"
+    fi
+  else
+    fail "E7 rule 1 not in effect: acknowledge $ack, loan view '$offered', retry after acknowledgement $code" \
+      "$(json 'd.get("code", "-")' <"$work/E7-retry.body" 2>/dev/null); expected 202 (#67 comment 7064405022)"
+  fi
+fi
+hub_env=()
+
+# E8: rule 1, no dead end. The first return and the first recovery both close the door without the asset: each ends in
+# ANOMALY; after each acknowledgement the return is offered again; the third attempt puts the asset back and completes
+# the loan. The earlier anomaly's final status is reported, not assumed.
+hub_env=(AEGIS_SIM_RFID_WINDOW_MS=3000)
+empty='{ "do": "waitUnlocked", "code": "A1", "timeoutMs": 600000 }, { "wait": 1000 },
+  { "do": "openDoor", "code": "A1" }, { "wait": 1500 }, { "do": "closeDoor", "code": "A1" },'
+acknowledge() {
+  curl -s -o "$work/E8-ack.body" -w '%{http_code}' -X POST -H "Authorization: Bearer $admin" \
+    -H 'Content-Type: application/json' -H "Idempotency-Key: $(uuid)" \
+    -d '{"note":"QA E8: cell inspected"}' "$api/admin/anomalies/$1/acknowledge"
+}
+if wanted E8 && setup E8 "$empty
+  $empty
+  $deposit" && start_return E8; then
+  e8_first=$(wait_terminal "$rop" 150)
+  a1=$(sql "SELECT id FROM aegis.anomalies WHERE locker_operation_id = '$rop'")
+  ack1=$(acknowledge "$a1")
+  code=$(prepare_return "$work/E8-r1.body")
+  if [[ $e8_first == "ANOMALY EXPECTED_ASSET_NOT_OBSERVED" && $ack1 == 200 && $code == 202 ]]; then
+    rop=$(json 'd["id"]' <"$work/E8-r1.body")
+    if displayed "$rop" && [[ $(authorize "$rop" "$work/E8-r1-authorize.body") == 202 ]]; then
+      e8_second=$(wait_terminal "$rop" 150)
+      a2=$(sql "SELECT id || ' ' || status FROM aegis.anomalies WHERE locker_operation_id = '$rop'")
+      open_code=$(prepare_return "$work/E8-open.body")
+      ack2=$(acknowledge "${a2%% *}")
+      code=$(prepare_return "$work/E8-r2.body")
+      if [[ $e8_second == ANOMALY* && $a2 == *" OPEN" && $open_code == 409 && $ack2 == 200 && $code == 202 ]]; then
+        pass "E8 failed recovery '$e8_second' opens a new anomaly; retry while OPEN $open_code; after its acknowledgement" \
+          "the return is offered again ($code)"
+        rop=$(json 'd["id"]' <"$work/E8-r2.body")
+        if displayed "$rop" && [[ $(authorize "$rop" "$work/E8-r2-authorize.body") == 202 ]]; then
+          end=$(wait_terminal "$rop" 60)
+          st=$(sql "SELECT string_agg(status, ' ' ORDER BY detected_at) FROM aegis.anomalies
+                    WHERE id IN ('$a1', '${a2%% *}')")
+          [[ $end == "CONFIRMED -" && $(loan_status) == COMPLETED && $st == *RESOLVED ]] &&
+            pass "E8 third attempt '$end', loan COMPLETED, anomalies (first, second) '$st'" ||
+            fail "E8 third attempt '$end', loan $(loan_status), anomalies '$st'"
+          [[ $st == "RESOLVED RESOLVED" ]] ||
+            obs "E8 the first acknowledged anomaly ends '${st%% *}' after the completing proof (only the latest is resolved)"
+        else
+          fail "E8 third attempt not displayed or authorized ($(cat "$work/E8-r2-authorize.body" 2>/dev/null))"
+        fi
+      else
+        fail "E8 failed recovery '$e8_second', anomaly '$a2', retry while OPEN $open_code, acknowledge $ack2, retry $code"
+      fi
+    else
+      fail "E8 first recovery not displayed or authorized ($(cat "$work/E8-r1-authorize.body" 2>/dev/null))"
+    fi
+  else
+    fail "E8 first return '$e8_first', acknowledge $ack1, retry $code; expected 202 (rule 1)"
+  fi
 fi
 hub_env=()
 
