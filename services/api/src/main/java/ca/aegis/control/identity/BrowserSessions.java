@@ -164,18 +164,25 @@ class BrowserSessions {
     }
 
     /**
-     * Deletes up to {@code limit} sessions that ended, by revocation or expiry, before {@code cutoff}. A row is a
-     * credential, not custody history (ADR-016); the durable trace of a password change is its audit event.
+     * Deletes up to {@code limit} sessions whose end is more than {@code retention} before {@code now}. A session
+     * ends at the earlier of its revocation and its absolute end (ADR-017). An open session is never selected, even
+     * with a zero retention, and the database refuses to delete one. A row is a credential, not custody history
+     * (ADR-016); the durable trace of a password change is its audit event, which this never touches.
      */
-    int purgeEndedBefore(Instant cutoff, int limit) {
+    int purgeEnded(Instant now, Duration retention, int limit) {
+        if (retention.isNegative()) {
+            throw new IllegalArgumentException("A retention cannot be negative");
+        }
         return jdbc.sql("""
                 DELETE FROM aegis.browser_sessions WHERE id IN (
                     SELECT id FROM aegis.browser_sessions
-                    WHERE coalesce(revoked_at, expires_at) < :cutoff
-                    ORDER BY coalesce(revoked_at, expires_at)
+                    WHERE LEAST(revoked_at, expires_at) < :cutoff
+                        AND (revoked_at IS NOT NULL OR expires_at <= :now)
+                    ORDER BY LEAST(revoked_at, expires_at)
                     LIMIT :limit)
                 """)
-                .param("cutoff", cutoff.atOffset(ZoneOffset.UTC))
+                .param("cutoff", now.minus(retention).atOffset(ZoneOffset.UTC))
+                .param("now", now.atOffset(ZoneOffset.UTC))
                 .param("limit", limit)
                 .update();
     }

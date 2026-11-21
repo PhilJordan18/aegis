@@ -1,10 +1,10 @@
 # ADR-017 — Révocation des sessions navigateur au changement de mot de passe et rétention bornée
 
-**Statut :** PROPOSED — à valider explicitement par Philippe. Seule la règle de fond est déjà approuvée (clarification de Philippe sur #178, 21 novembre 2026) : toutes les sessions navigateur sont révoquées quand le mot de passe change réellement, et un redémarrage avec le même mot de passe ne révoque rien. Les mécanismes ci-dessous attendent une décision. L’implémentation est sur la branche de #178 et ne sera pas livrée sans cette décision.
+**Statut :** ACCEPTED — Philippe, 21 novembre 2026 (#178), avec deux précisions : l’événement d’audit survit à la suppression des sessions terminées, et la rétention de 30 jours a un point de départ défini et testé. Une session ouverte ne peut jamais être supprimée, ni une session révoquée réactivée.
 
 **Date de la décision :** 21 novembre 2026
 
-**Liens :** ADR-016; ADR-018 (proposé); document 08, §4.2; document 09, §10.4 et §10.6; issue #178
+**Liens :** ADR-016; ADR-018; document 08, §4.2; document 09, §10.4 et §10.6; issue #178
 
 ## Décision antérieure
 
@@ -39,10 +39,13 @@ La revue QA de #178 a montré qu’une rotation du mot de passe laissait ouverte
      - elle n’insère rien et répond `401 AUTH_INVALID_CREDENTIALS`.
    - **Restauration.** Elle verrouille la ligne de session ouverte (`FOR UPDATE … WHERE revoked_at IS NULL`). Après l’attente, elle relit la ligne et voit la révocation.
 5. **Révocation définitive.** Un déclencheur de `V011` refuse toute modification d’une ligne déjà révoquée. Aucun chemin ne peut rouvrir une session ni changer son motif.
-6. **Rétention bornée.** Une tâche planifiée (`BrowserSessionPurgeJob`, toutes les heures par défaut) supprime par lots les sessions terminées depuis plus de 30 jours, révoquées ou échues :
-   - les sessions ouvertes ne sont jamais supprimées;
-   - l’audit n’est jamais touché;
-   - la trace durable d’un changement de mot de passe est l’événement `PASSWORD_CHANGED`, pas la ligne de session.
+6. **Rétention bornée.** Une tâche planifiée (`BrowserSessionPurgeJob`, toutes les heures par défaut) supprime par lots les sessions terminées.
+   - **Fin d’une session :** le plus tôt de deux instants, sa révocation (`revoked_at`) ou sa fin absolue (`expires_at`). En SQL : `LEAST(revoked_at, expires_at)`, qui ignore un `revoked_at` nul. Une déconnexion tardive, après la fin absolue, ne repousse donc pas le délai.
+   - **Point de départ :** les 30 jours partent de cette fin. Une ligne est supprimée quand sa fin est **strictement** antérieure à `maintenant − 30 jours`; une ligne terminée depuis exactement 30 jours est conservée.
+   - **Session ouverte :** une session ni révoquée ni échue n’est jamais supprimée.
+     - La purge ne la sélectionne pas, même avec une rétention nulle.
+     - Un second déclencheur de `V011` (`tr_browser_sessions_open_kept`) refuse en base la suppression d’une ligne ouverte selon l’horloge de PostgreSQL, quel que soit l’appelant.
+   - **Audit :** la purge ne touche jamais l’audit. L’événement `PASSWORD_CHANGED` reste après la suppression des sessions qu’il a révoquées; c’est la trace durable du changement.
 
 ## Ce que cette décision ne fait pas
 
@@ -51,13 +54,13 @@ La révocation porte sur les sessions navigateur, pas sur les jetons d’accès 
 - **JWT déjà émis.** Un JWT reste valable jusqu’à son expiration, au plus 60 minutes, sur le Web comme sur iOS. C’est le compromis de l’ADR-007.
 - **Comptes désactivés ou archivés.** Ils restent refusés immédiatement, puisque le compte est relu à chaque requête.
 
-La révocation des jetons émis fait l’objet de l’ADR-018, proposé et non accepté.
+La révocation des jetons émis fait l’objet de l’ADR-018, accepté pour la tranche suivante (A + B). Jusqu’à son déploiement, le compromis ci-dessus s’applique.
 
 ## Conséquences
 
 - **Migration `V011`** :
   - le motif `PASSWORD_CHANGED`;
-  - le déclencheur `tr_browser_sessions_revoked_final`;
+  - les déclencheurs `tr_browser_sessions_revoked_final` et `tr_browser_sessions_open_kept`;
   - l’index `ix_browser_sessions_ended`;
   - le type d’audit `PASSWORD_CHANGED`.
 
@@ -74,21 +77,6 @@ La révocation des jetons émis fait l’objet de l’ADR-018, proposé et non a
     - `aegis.security.browser-session.purge.batch-size` (500).
 - **Contrat.** Aucun changement de forme REST. La restauration répond déjà `401 AUTH_SESSION_INVALID` pour une session révoquée.
 
-## Alternative minimale, si la proposition est refusée
-
-La règle approuvée peut être livrée sans `V011`, sans nouveau type d’audit et sans purge :
-
-- `PasswordChanges` révoque les sessions avec le motif existant `ACCOUNT_CHANGED`;
-- il n’écrit aucun événement d’audit;
-- le point unique, la connexion gardée et les tests de courses restent identiques;
-- une révocation reste définitive par le code (aucune instruction ne remet `revoked_at` à `null`), mais aucun déclencheur ne le garantit en base;
-- les lignes terminées s’accumulent jusqu’à une décision de rétention.
-
-Coût de cette alternative :
-
-- un changement de mot de passe ne laisse aucune trace durable;
-- le motif `ACCOUNT_CHANGED` ne distingue plus un changement de mot de passe d’un compte désactivé ou d’un rôle changé.
-
 ## Sections remplacées
 
 Aucune section de l’ADR-016 n’est contredite; la présente décision la complète :
@@ -103,9 +91,13 @@ Aucune section de l’ADR-016 n’est contredite; la présente décision la comp
   - révocation de toutes les sessions du compte et d’aucune autre;
   - un seul événement d’audit;
   - aucun effet pour un mot de passe identique;
-  - ligne révoquée immuable;
+  - ligne révoquée immuable, sans réactivation possible;
   - course connexion/changement et course restauration/changement, sur PostgreSQL réel avec verrous observés;
-  - purge à 30 jours.
+  - rétention :
+    - suppression à 30 jours et 1 seconde, conservation à exactement 30 jours;
+    - départ à la fin absolue pour une déconnexion tardive;
+    - audit `PASSWORD_CHANGED` intact après la suppression des sessions révoquées;
+  - session ouverte jamais supprimée, par la purge (rétention nulle) comme en base (déclencheur).
 - **`DemoAccountProvisioningTests`** : la rotation révoque, le redémarrage à l’identique ne révoque pas.
 - **`PasswordWritersTests`** : `PasswordChanges` est le seul code qui écrit l’empreinte.
 - **Preuve sur staging après déploiement :** elle est faite par une personne qui détient un compte non exposé.

@@ -10,7 +10,8 @@ ALTER TABLE aegis.browser_sessions
         CHECK (revocation_reason IS NULL
             OR revocation_reason IN ('SIGNED_OUT', 'ACCOUNT_CHANGED', 'PASSWORD_CHANGED'));
 
--- Defense in depth, like the audit triggers of V002_2: the table owner or a superuser can still bypass it.
+-- Defense in depth, like the audit triggers of V002_2: triggers fire for the table owner too; only DISABLE TRIGGER or
+-- session_replication_role = replica bypasses them.
 CREATE FUNCTION aegis.refuse_revoked_browser_session_change() RETURNS trigger
     LANGUAGE plpgsql AS
 $$
@@ -26,9 +27,26 @@ CREATE TRIGGER tr_browser_sessions_revoked_final
     WHEN (OLD.revoked_at IS NOT NULL)
     EXECUTE FUNCTION aegis.refuse_revoked_browser_session_change();
 
--- Retention: ended rows are deleted 30 days after their end (ADR-017); this index serves that purge.
+-- An open session (neither revoked nor past its end) is never deleted, whatever the caller: only an ended row may go.
+CREATE FUNCTION aegis.refuse_open_browser_session_delete() RETURNS trigger
+    LANGUAGE plpgsql AS
+$$
+BEGIN
+    RAISE EXCEPTION 'browser session % is still open and cannot be deleted', OLD.id
+        USING ERRCODE = 'integrity_constraint_violation';
+END;
+$$;
+
+CREATE TRIGGER tr_browser_sessions_open_kept
+    BEFORE DELETE ON aegis.browser_sessions
+    FOR EACH ROW
+    WHEN (OLD.revoked_at IS NULL AND OLD.expires_at > now())
+    EXECUTE FUNCTION aegis.refuse_open_browser_session_delete();
+
+-- Retention (ADR-017): a session ends at the earlier of its revocation and its absolute end; LEAST ignores a null
+-- revoked_at. The row is deleted 30 days after that instant. This index serves the purge.
 CREATE INDEX ix_browser_sessions_ended
-    ON aegis.browser_sessions ((coalesce(revoked_at, expires_at)));
+    ON aegis.browser_sessions ((LEAST(revoked_at, expires_at)));
 
 ALTER TABLE aegis.audit_events
     DROP CONSTRAINT ck_audit_events_type;
