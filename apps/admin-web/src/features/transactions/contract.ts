@@ -106,7 +106,8 @@ export type RequiredAction = (typeof REQUIRED_ACTIONS)[number]
 
 /**
  * §8.5. Every step is the instant the server sent, or null: the console never infers a missing step from a later
- * one. It carries ids only (user, asset, locker, compartment): no display name and no code. The local access
+ * one. The administrative read (§17, R7) adds the summaries of the user and the asset; the locker and the compartment
+ * stay ids. The local access
  * challenge is an id and instants, never its token or payload. `failureReason` is free server text, shown as a
  * technical detail and never as the primary label (G12).
  */
@@ -115,7 +116,14 @@ export interface LockerOperationView {
   readonly type: LockerOperationType | Unrecognized
   readonly status: LockerOperationStatus | Unrecognized
   readonly userId: string
+  /** R7 (#48): required by the administrative operation, never null; it names `userId`. */
+  readonly user: UserSummary
   readonly assetId: string
+  /**
+   * R7 (#48): required, names `assetId`. Its `placement` is where the asset is NOW (it may be null), not the cell of
+   * this operation: that one is `lockerId` and `compartmentId`.
+   */
+  readonly asset: AssetSummary
   readonly lockerId: string
   readonly compartmentId: string
   readonly reservationId: string | null
