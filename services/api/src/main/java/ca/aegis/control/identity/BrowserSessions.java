@@ -166,8 +166,9 @@ class BrowserSessions {
     /**
      * Deletes up to {@code limit} sessions whose end is more than {@code retention} before {@code now}. A session
      * ends at the earlier of its revocation and its absolute end (ADR-017). An open session is never selected, even
-     * with a zero retention, and the database refuses to delete one. A row is a credential, not custody history
-     * (ADR-016); the durable trace of a password change is its audit event, which this never touches.
+     * with a zero retention, and the database refuses to delete one. The selection also checks the database clock, as
+     * that trigger does, so a skew between the two clocks skips a row instead of failing the batch. A row is a
+     * credential, not custody history (ADR-016); the durable trace of a password change is its audit event, which this never touches.
      */
     int purgeEnded(Instant now, Duration retention, int limit) {
         if (retention.isNegative()) {
@@ -177,7 +178,7 @@ class BrowserSessions {
                 DELETE FROM aegis.browser_sessions WHERE id IN (
                     SELECT id FROM aegis.browser_sessions
                     WHERE LEAST(revoked_at, expires_at) < :cutoff
-                        AND (revoked_at IS NOT NULL OR expires_at <= :now)
+                        AND (revoked_at IS NOT NULL OR (expires_at <= :now AND expires_at <= now()))
                     ORDER BY LEAST(revoked_at, expires_at)
                     LIMIT :limit)
                 """)
