@@ -69,6 +69,8 @@ export function feedbackFor(failure: MutationFailure, fields: Readonly<Record<st
   switch (failure.kind) {
     case 'ended':
       return none
+    case 'resubmit':
+      return { fieldErrors: {}, alert: { title: t.resubmitTitle, body: t.resubmitBody, traceId: null, retryable: true } }
     case 'unreachable':
       return { fieldErrors: {}, alert: { title: t.unreachableTitle, body: t.unreachableBody, traceId: null, retryable: true } }
     case 'inProgress':

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ApiRequestError, isTransientFailure, SessionEndedError } from '../../api/serverState'
+import { ApiRequestError, isTransientFailure, SessionEndedError, SessionRestoredError } from '../../api/serverState'
 import type { AuthGateway, GatewayFailure, GatewayResult } from './authGateway'
 import { unconfiguredAuthGateway } from './authGateway'
-import { authorizedRequest, fetchCurrentAdminProfile } from './authorizedRequest'
+import { authorizedCommand, authorizedRequest, fetchCurrentAdminProfile } from './authorizedRequest'
 import type { UserProfile } from './contract'
 import { createSessionStore, type SessionStore } from './session'
 import { adminProfile, loginOk, problemBody, sessionStubs, technicianProfile } from './testFixtures'
@@ -108,6 +108,66 @@ describe('authorizedRequest', () => {
     const call = vi.fn()
     await expect(authorizedRequest(createSessionStore(), call)).rejects.toBeInstanceOf(SessionEndedError)
     expect(call).not.toHaveBeenCalled()
+  })
+})
+
+describe('authorizedCommand: a command is never replayed', () => {
+  it('sends the in-memory token and returns the value', async () => {
+    const session = signedIn('token-a')
+    const call = vi.fn(async (token: string) => ({ kind: 'ok', value: token, requestId: null }) as const)
+    expect(await authorizedCommand(session, call)).toBe('token-a')
+  })
+
+  it('restores the session on a 401 but does not send the command again: the user re-submits', async () => {
+    const refreshSession = vi.fn(async () => loginOk(adminProfile, 'token-b'))
+    const session = signedIn('token-a', { ...sessionStubs, refreshSession })
+    const call = vi.fn(async () => problem(401, 'AUTH_TOKEN_EXPIRED'))
+
+    await expect(authorizedCommand(session, call)).rejects.toBeInstanceOf(SessionRestoredError)
+    expect(call).toHaveBeenCalledTimes(1)
+    expect(refreshSession).toHaveBeenCalledTimes(1)
+    expect(session.getAccessToken()).toBe('token-b')
+    expect(session.getSnapshot().status).toBe('authenticated')
+  })
+
+  it('ends the session when the renewal is refused, without sending the command again', async () => {
+    const session = signedIn()
+    const call = vi.fn(async () => problem(401, 'AUTH_TOKEN_INVALID'))
+    await expect(authorizedCommand(session, call)).rejects.toBeInstanceOf(ApiRequestError)
+    expect(call).toHaveBeenCalledTimes(1)
+    expect(session.getSnapshot()).toMatchObject({ status: 'anonymous', arrivalReason: 'sessionInvalid' })
+  })
+
+  it('keeps the session when the server cannot be asked, and reports a transient failure', async () => {
+    const session = signedIn('token-a', { ...sessionStubs, refreshSession: async () => ({ kind: 'network', reason: 'timeout' }) })
+    const error = await authorizedCommand(session, async () => problem(401, 'AUTH_TOKEN_EXPIRED')).catch((caught: unknown) => caught)
+    expect(isTransientFailure(error)).toBe(true)
+    expect(session.getSnapshot().status).toBe('authenticated')
+  })
+
+  it('does not renew for a 403, a 409 or a 5xx: those answers are final for the command', async () => {
+    const refreshSession = vi.fn(sessionStubs.refreshSession)
+    const session = signedIn('token-a', { ...sessionStubs, refreshSession })
+    for (const [status, code] of [[403, 'FORBIDDEN'], [409, 'ASSET_HAS_OPEN_LOAN'], [503, 'INTERNAL_ERROR']] as const) {
+      const call = vi.fn(async () => problem(status, code))
+      await expect(authorizedCommand(session, call)).rejects.toBeInstanceOf(ApiRequestError)
+      expect(call).toHaveBeenCalledTimes(1)
+    }
+    expect(refreshSession).not.toHaveBeenCalled()
+  })
+
+  it('a read and a command that fail together share one refresh, and only the read is retried', async () => {
+    const refreshSession = vi.fn(async () => loginOk(adminProfile, 'token-b'))
+    const session = signedIn('token-a', { ...sessionStubs, refreshSession })
+    const read = vi.fn(async (token: string) => (token === 'token-a' ? problem(401, 'AUTH_TOKEN_EXPIRED') : ({ kind: 'ok', value: 'list', requestId: null } as const)))
+    const command = vi.fn(async () => problem(401, 'AUTH_TOKEN_EXPIRED'))
+
+    const [readResult, commandResult] = await Promise.allSettled([authorizedRequest(session, read), authorizedCommand(session, command)])
+    expect(readResult).toEqual({ status: 'fulfilled', value: 'list' })
+    expect(commandResult.status === 'rejected' && commandResult.reason).toBeInstanceOf(SessionRestoredError)
+    expect(refreshSession).toHaveBeenCalledTimes(1)
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(command).toHaveBeenCalledTimes(1)
   })
 })
 

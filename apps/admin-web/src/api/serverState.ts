@@ -25,6 +25,18 @@ export class SessionEndedError extends Error {
   }
 }
 
+/**
+ * A command got a 401, the session was restored, and the command was deliberately not sent again (#178): only the
+ * user re-submits it. The 401 proves the server did not run it, but a custody-relevant command is never replayed
+ * silently, and the form keeps its own `Idempotency-Key` for the user's next attempt.
+ */
+export class SessionRestoredError extends Error {
+  constructor() {
+    super('The session was restored; the command was not sent again')
+    this.name = 'SessionRestoredError'
+  }
+}
+
 const MAX_RETRIES = 2
 
 /** Only transport failures and 5xx are retried; 4xx answers are authoritative (09 §21). */

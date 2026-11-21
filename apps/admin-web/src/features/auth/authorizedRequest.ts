@@ -1,18 +1,32 @@
-import { ApiRequestError, SessionEndedError } from '../../api/serverState'
+import { ApiRequestError, SessionEndedError, SessionRestoredError } from '../../api/serverState'
 import type { AuthGateway, GatewayResult } from './authGateway'
 import type { UserProfile } from './contract'
 import type { SessionStore } from './session'
 import { arrivalReasonFromUnauthorized } from './signInOutcome'
 
 /**
- * Runs one protected call with the in-memory token. A 401 (09 §4.3, §21; states.md §1) first asks the
- * session store for one renewal (ADR-016, 09 §10.4): concurrent 401s share a single refresh, and the call is
- * retried exactly once with the new token. A second 401, or a refused renewal, ends the session with the
- * server's reason and sends the user back to sign-in; it never loops. A 401 means the request was not
- * processed, so the retry cannot repeat a transition (and its idempotency key is reused anyway). A response
- * for a token that is no longer current never ends the newer session.
+ * Runs one protected READ with the in-memory token. A 401 (09 §4.3, §21; states.md §1) first asks the session store
+ * for one renewal (ADR-016, 09 §10.4): concurrent 401s share a single refresh, and the idempotent read is retried
+ * exactly once with the new token. A second 401, or a refused renewal, ends the session with the server's reason and
+ * sends the user back to sign-in; it never loops. A renewal that could not reach the server throws that failure and
+ * keeps the session, so the page shows its recoverable state with a retry. A response for a token that is no longer
+ * current never ends the newer session. Commands use `authorizedCommand`, which never replays.
  */
 export async function authorizedRequest<T>(session: SessionStore, call: (accessToken: string) => Promise<GatewayResult<T>>): Promise<T> {
+  return run(session, call, true)
+}
+
+/**
+ * Runs one protected COMMAND (a POST or PUT that changes state). Same renewal as a read, but a command that got a
+ * 401 is never replayed by the Manager: once the session is restored it throws `SessionRestoredError`, and the user
+ * submits again with the same `Idempotency-Key` of the intent (09 §6.2, §20.2). A refused renewal ends the session;
+ * an unreachable server throws that failure.
+ */
+export async function authorizedCommand<T>(session: SessionStore, call: (accessToken: string) => Promise<GatewayResult<T>>): Promise<T> {
+  return run(session, call, false)
+}
+
+async function run<T>(session: SessionStore, call: (accessToken: string) => Promise<GatewayResult<T>>, replay: boolean): Promise<T> {
   const token = session.getAccessToken()
   if (token === null) throw new SessionEndedError()
   const result = await call(token)
@@ -24,6 +38,7 @@ export async function authorizedRequest<T>(session: SessionStore, call: (accessT
     const renewal = await session.renew(token, reason)
     if (renewal.kind === 'failed') throw new ApiRequestError(renewal.failure)
     if (renewal.kind === 'renewed') {
+      if (!replay) throw new SessionRestoredError()
       const renewedToken = session.getAccessToken()
       if (renewedToken === null) throw new SessionEndedError()
       const retry = await call(renewedToken)
