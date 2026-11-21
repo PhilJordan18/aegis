@@ -36,6 +36,15 @@ class Transport {
   virtual Event pollEvent() = 0;
 };
 
+// One RS-485 segment toward one cell (ADR-002): raw bytes, no framing. Each port is its own
+// UART and transceiver; two ports never share A/B lines.
+class CellPort {
+ public:
+  virtual ~CellPort() = default;
+  virtual int read() = 0;  // next received byte, -1 when none is waiting; never blocks
+  virtual void write(const char* data, size_t len) = 0;
+};
+
 class Platform {
  public:
   virtual ~Platform() = default;

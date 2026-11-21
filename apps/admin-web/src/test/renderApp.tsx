@@ -5,6 +5,8 @@ import { clearCacheOnSessionChange, createQueryClient } from '../api/serverState
 import { createHistoryRouter, RouterContext, type Router } from '../app/router'
 import { createAppearanceController } from '../features/appearance/appearance'
 import { AppearanceContext } from '../features/appearance/useAppearance'
+import { unconfiguredAnomalyGateway, type AnomalyGateway } from '../features/anomalies/anomalyGateway'
+import { AnomalyGatewayContext } from '../features/anomalies/AnomalyGatewayContext'
 import { unconfiguredAuthGateway, type AuthGateway } from '../features/auth/authGateway'
 import { AuthGatewayContext } from '../features/auth/AuthGatewayContext'
 import { createSessionStore, SessionContext, type SessionStore } from '../features/auth/session'
@@ -14,6 +16,10 @@ import { unconfiguredLockerGateway, type LockerGateway } from '../features/locke
 import { LockerGatewayContext } from '../features/lockers/LockerGatewayContext'
 import { unconfiguredScheduleGateway, type ScheduleGateway } from '../features/schedule/scheduleGateway'
 import { ScheduleGatewayContext } from '../features/schedule/ScheduleGatewayContext'
+import { unconfiguredTransactionGateway, type TransactionGateway } from '../features/transactions/transactionGateway'
+import { TransactionGatewayContext } from '../features/transactions/TransactionGatewayContext'
+import { unconfiguredAuditGateway, type AuditGateway } from '../features/audit/auditGateway'
+import { AuditGatewayContext } from '../features/audit/AuditGatewayContext'
 import { unconfiguredCustodyGateway, type CustodyGateway } from '../features/custody/custodyGateway'
 import { CustodyGatewayContext } from '../features/custody/CustodyGatewayContext'
 import { createLocaleController, type Locale, type LocaleController } from '../i18n/locale'
@@ -27,6 +33,9 @@ export function renderWithProviders(
     lockerGateway = unconfiguredLockerGateway,
     scheduleGateway = unconfiguredScheduleGateway,
     custodyGateway = unconfiguredCustodyGateway,
+    transactionGateway = unconfiguredTransactionGateway,
+    anomalyGateway = unconfiguredAnomalyGateway,
+    auditGateway = unconfiguredAuditGateway,
     session = createSessionStore(),
     router = createHistoryRouter(window),
     queryClient = createQueryClient(),
@@ -38,6 +47,9 @@ export function renderWithProviders(
     lockerGateway?: LockerGateway
     scheduleGateway?: ScheduleGateway
     custodyGateway?: CustodyGateway
+    transactionGateway?: TransactionGateway
+    anomalyGateway?: AnomalyGateway
+    auditGateway?: AuditGateway
     session?: SessionStore
     router?: Router
     queryClient?: QueryClient
@@ -46,6 +58,7 @@ export function renderWithProviders(
     localeController?: LocaleController
   } = {},
 ) {
+  session.connect(gateway)
   const appearance = createAppearanceController(window)
   const stopClearing = clearCacheOnSessionChange(queryClient, session)
   const result = render(
@@ -57,7 +70,15 @@ export function renderWithProviders(
               <AuthGatewayContext value={gateway}>
                 <CatalogGatewayContext value={catalogGateway}>
                   <LockerGatewayContext value={lockerGateway}>
-                    <ScheduleGatewayContext value={scheduleGateway}><CustodyGatewayContext value={custodyGateway}>{ui}</CustodyGatewayContext></ScheduleGatewayContext>
+                    <ScheduleGatewayContext value={scheduleGateway}>
+                      <CustodyGatewayContext value={custodyGateway}>
+                        <TransactionGatewayContext value={transactionGateway}>
+                          <AnomalyGatewayContext value={anomalyGateway}>
+                            <AuditGatewayContext value={auditGateway}>{ui}</AuditGatewayContext>
+                          </AnomalyGatewayContext>
+                        </TransactionGatewayContext>
+                      </CustodyGatewayContext>
+                    </ScheduleGatewayContext>
                   </LockerGatewayContext>
                 </CatalogGatewayContext>
               </AuthGatewayContext>

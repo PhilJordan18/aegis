@@ -30,15 +30,25 @@ public class MqttCommandPublisher implements CommandPublisher, SmartLifecycle {
 
     private final MqttProperties properties;
     private final Duration publishTimeout;
+    private final String clientIdSuffix;
     private final MqttAsyncClient client;
     private final ScheduledExecutorService connector;
     private volatile boolean running;
 
     MqttCommandPublisher(MqttProperties properties, Duration publishTimeout) {
+        this(properties, publishTimeout, CLIENT_ID_SUFFIX);
+    }
+
+    /**
+     * A publisher on a connection of its own, named {@code clientId + clientIdSuffix}: the broker closes an older
+     * connection that reuses a client id, so each publisher of the backend needs a distinct suffix.
+     */
+    public MqttCommandPublisher(MqttProperties properties, Duration publishTimeout, String clientIdSuffix) {
         this.properties = properties;
         this.publishTimeout = publishTimeout;
+        this.clientIdSuffix = clientIdSuffix;
         try {
-            this.client = new MqttAsyncClient(properties.url(), properties.clientId() + CLIENT_ID_SUFFIX,
+            this.client = new MqttAsyncClient(properties.url(), properties.clientId() + clientIdSuffix,
                     new MemoryPersistence());
         } catch (MqttException invalid) {
             throw new IllegalStateException("Invalid MQTT client configuration " + properties, invalid);
@@ -98,7 +108,7 @@ public class MqttCommandPublisher implements CommandPublisher, SmartLifecycle {
         try {
             client.connect(options).waitForCompletion(10_000);
             log.info("MQTT command publisher connected: url={}, clientId={}{}", properties.url(),
-                    properties.clientId(), CLIENT_ID_SUFFIX);
+                    properties.clientId(), clientIdSuffix);
         } catch (MqttException failure) {
             long delay = Math.min(MAX_CONNECT_DELAY_SECONDS, 1L << Math.min(attempt, 5));
             log.warn("MQTT command publisher connection failed (reasonCode={}); next attempt in {} s",

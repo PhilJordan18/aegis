@@ -2,6 +2,7 @@ package ca.aegis.control.audit;
 
 /** The subject types written so far; the complete list is {@code ck_audit_events_subject_type}. */
 public enum AuditSubjectType {
+    USER,
     ASSET_MODEL,
     ASSET,
     ASSET_IDENTIFIER,
@@ -11,5 +12,6 @@ public enum AuditSubjectType {
     COMMAND_OUTBOX,
     ANOMALY,
     LOCAL_ACCESS_CHALLENGE,
+    HUB_DISPLAY_OUTBOX,
     INBOUND_DEVICE_MESSAGE
 }

@@ -35,14 +35,14 @@ class CommandDispatchConfiguration {
     /** Section 9.2: the 15-second lease is an operating choice, distinct from the 120-second operation window. */
     @Bean
     CommandDispatcher commandDispatcher(JdbcClient jdbc, TransactionTemplate transactions, AuditTrail auditTrail,
-            Clock clock, MqttCommandPublisher publisher,
+            Clock clock, MqttCommandPublisher mqttCommandPublisher,
             @Value("${aegis.commands.dispatcher.lease:PT15S}") Duration lease,
             @Value("${aegis.commands.dispatcher.publish-timeout:PT5S}") Duration publishTimeout) {
         // A publication that may outlast its lease would let a second claim publish while the first still waits.
         if (publishTimeout.compareTo(lease) >= 0) {
             throw new IllegalStateException("aegis.commands.dispatcher.publish-timeout must be shorter than its lease");
         }
-        return new CommandDispatcher(jdbc, transactions, auditTrail, clock, publisher, lease);
+        return new CommandDispatcher(jdbc, transactions, auditTrail, clock, mqttCommandPublisher, lease);
     }
 
     @Bean

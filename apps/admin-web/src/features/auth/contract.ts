@@ -1,7 +1,7 @@
 /**
  * Authentication contract mirrored from docs/cahier-conception/09-contrats-rest.md:
  * §3 conventions, §4.1–4.4 token and minimal profile, §7 problem+json error
- * body, §10.2 POST /auth/login, §10.3 GET /auth/me, §21 stable error codes.
+ * body, §10.2 POST /auth/login, §10.3 GET /auth/me, §10.4 and §10.5 (ADR-016 browser session), §21 stable error codes.
  * The access token is opaque to the client (§4.1, ADR-007).
  */
 
@@ -12,6 +12,14 @@ export type AccessLevel = 'STANDARD' | 'RESTRICTED'
 export interface LoginRequest {
   readonly email: string
   readonly password: string
+}
+
+/**
+ * §10.2 body actually sent by the Manager: `browserSession` (ADR-016) asks the server for the
+ * revocable browser session cookie. iOS omits it. The server rejects any other unknown field.
+ */
+export interface BrowserLoginRequest extends LoginRequest {
+  readonly browserSession: true
 }
 
 /** §4.4 minimal profile, returned by login (§10.2) and GET /auth/me (§10.3). */
@@ -60,6 +68,8 @@ export const AuthErrorCode = {
   InvalidCredentials: 'AUTH_INVALID_CREDENTIALS',
   TokenInvalid: 'AUTH_TOKEN_INVALID',
   TokenExpired: 'AUTH_TOKEN_EXPIRED',
+  /** §10.4: cookie absent, unknown, expired or revoked, account disabled or role changed. */
+  SessionInvalid: 'AUTH_SESSION_INVALID',
   Forbidden: 'FORBIDDEN',
   RateLimited: 'RATE_LIMITED',
   InternalError: 'INTERNAL_ERROR',

@@ -115,3 +115,7 @@ a.ag-nav__item:hover { background: var(--ag-surface-selected); }
   .ag-account__button, .ag-menu, .ag-drawer__panel { border-color: CanvasText; }
   .ag-avatar { border: 1px solid CanvasText; }
 }
+
+/* Sign-out not confirmed by the server (ADR-016): a persistent error above the page, with its retry inside. */
+.ag-shell__notice { padding: 0 4px 16px; }
+.ag-shell__notice .ag-alert__body .ag-btn { margin-top: 10px; }

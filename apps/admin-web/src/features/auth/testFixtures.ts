@@ -41,3 +41,12 @@ export function httpProblem(
 ): GatewayResult<LoginResponse> {
   return { kind: 'httpProblem', status, problem, retryAfter, requestId }
 }
+
+/**
+ * Server answers for the browser-session routes (09 §10.4, §10.5): the cookie is gone, so a refresh is
+ * refused, and a revocation is confirmed. Spread into a gateway whose test does not exercise them.
+ */
+export const sessionStubs = {
+  refreshSession: async (): Promise<GatewayResult<LoginResponse>> => httpProblem(401, problemBody(401, 'AUTH_SESSION_INVALID')),
+  revokeSession: async (): Promise<GatewayResult<true>> => ({ kind: 'ok', value: true, requestId: null }),
+}

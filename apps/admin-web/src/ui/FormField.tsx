@@ -11,14 +11,17 @@ interface FieldFrameProps {
   readonly help?: string
   readonly error?: string | null
   readonly optional?: string
+  /** Live detail under the control (a character count): read with the help, before the error. */
+  readonly counter?: string
   readonly children: (ids: { id: string; describedBy: string | undefined; invalid: boolean }) => ReactNode
 }
 
-function FieldFrame({ label, help, error, optional, children }: FieldFrameProps) {
+function FieldFrame({ label, help, error, optional, counter, children }: FieldFrameProps) {
   const id = useId()
   const helpId = `${id}-help`
+  const counterId = `${id}-counter`
   const errorId = `${id}-error`
-  const describedBy = [help ? helpId : null, error ? errorId : null].filter(Boolean).join(' ') || undefined
+  const describedBy = [help ? helpId : null, counter ? counterId : null, error ? errorId : null].filter(Boolean).join(' ') || undefined
   return (
     <div className="ag-ff">
       <label className="ag-ff__label" htmlFor={id}>
@@ -31,6 +34,11 @@ function FieldFrame({ label, help, error, optional, children }: FieldFrameProps)
         </p>
       )}
       {children({ id, describedBy, invalid: Boolean(error) })}
+      {counter && (
+        <p className="ag-ff__counter" id={counterId}>
+          {counter}
+        </p>
+      )}
       <div className="ag-ff__slot">
         {error && (
           <p className="ag-ff__error" id={errorId}>
@@ -55,9 +63,9 @@ export function TextField({ label, help, error, optional, ...input }: Common & O
   )
 }
 
-export function TextAreaField({ label, help, error, optional, ...textarea }: Common & Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'id'>) {
+export function TextAreaField({ label, help, error, optional, counter, ...textarea }: Common & { readonly counter?: string } & Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'id'>) {
   return (
-    <FieldFrame label={label} help={help} error={error} optional={optional}>
+    <FieldFrame label={label} help={help} error={error} optional={optional} counter={counter}>
       {({ id, describedBy, invalid }) => (
         <textarea {...textarea} id={id} className="ag-ff__control ag-ff__control--area" aria-describedby={describedBy} aria-invalid={invalid || undefined} />
       )}

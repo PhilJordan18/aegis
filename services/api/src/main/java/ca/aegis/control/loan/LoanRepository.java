@@ -11,6 +11,9 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+import ca.aegis.control.shared.jdbc.Where;
+import ca.aegis.control.shared.web.PageQuery;
+
 /** Read access to {@code aegis.loans} (document 08, section 4.9); this slice never writes a loan. */
 @Repository
 class LoanRepository {
@@ -41,6 +44,32 @@ class LoanRepository {
     Optional<LoanRow> find(UUID id) {
         return jdbc.sql("SELECT " + COLUMNS + " FROM aegis.loans WHERE id = :id").param("id", id)
                 .query(LoanRepository::map).optional();
+    }
+
+    /**
+     * Filters of {@code GET /admin/loans} (document 09, section 17): {@code userId} is the holder. Rule D2 approved
+     * on 11 November 2026 (#67): {@code from} and {@code to} bound {@code checked_out_at}.
+     */
+    record AdminFilter(LoanStatus status, UUID assetId, UUID holderUserId, Instant from, Instant to) {
+
+        Where where() {
+            return new Where().equal("status", status).equal("asset_id", assetId)
+                    .equal("holder_user_id", holderUserId).interval("checked_out_at", from, to);
+        }
+    }
+
+    /** Order D1 approved on 11 November 2026 (#67): latest checkout first, {@code id} breaking ties. */
+    List<LoanRow> page(AdminFilter filter, PageQuery page) {
+        Where where = filter.where();
+        return where.bind(jdbc.sql("SELECT " + COLUMNS + " FROM aegis.loans" + where.sql()
+                        + " ORDER BY checked_out_at DESC, id DESC LIMIT :limit OFFSET :offset"))
+                .param("limit", page.size()).param("offset", page.offset())
+                .query(LoanRepository::map).list();
+    }
+
+    long count(AdminFilter filter) {
+        Where where = filter.where();
+        return where.bind(jdbc.sql("SELECT count(*) FROM aegis.loans" + where.sql())).query(Long.class).single();
     }
 
     /**

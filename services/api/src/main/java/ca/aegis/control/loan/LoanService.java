@@ -3,6 +3,7 @@ package ca.aegis.control.loan;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -13,9 +14,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import ca.aegis.control.asset.AssetSummary;
 import ca.aegis.control.asset.ReservableAssets;
+import ca.aegis.control.identity.UserSummaries;
+import ca.aegis.control.identity.UserSummary;
+import ca.aegis.control.loan.LoanRepository.AdminFilter;
 import ca.aegis.control.loan.LoanRepository.LoanRow;
 import ca.aegis.control.shared.web.ApiError;
 import ca.aegis.control.shared.web.ApiException;
+import ca.aegis.control.shared.web.PageQuery;
+import ca.aegis.control.shared.web.PageResponse;
 import ca.aegis.control.shared.web.ResourceNotFoundException;
 
 /**
@@ -29,11 +35,13 @@ class LoanService {
 
     private final LoanRepository loans;
     private final ReservableAssets assets;
+    private final UserSummaries users;
     private final Clock clock;
 
-    LoanService(LoanRepository loans, ReservableAssets assets, Clock clock) {
+    LoanService(LoanRepository loans, ReservableAssets assets, UserSummaries users, Clock clock) {
         this.loans = loans;
         this.assets = assets;
+        this.users = users;
         this.clock = clock;
     }
 
@@ -60,8 +68,35 @@ class LoanService {
                 .orElseThrow(ResourceNotFoundException::new);
     }
 
+    /**
+     * Document 09, section 17: every loan, read only; the count and the page see one snapshot. {@code overdue} is
+     * derived as for the holder and never frees the asset (document 06, section 14.3).
+     */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    PageResponse<AdminLoanView> adminList(AdminFilter filter, PageQuery page) {
+        Instant now = clock.instant();
+        long total = loans.count(filter);
+        List<LoanRow> rows = total == 0 ? List.of() : loans.page(filter, page);
+        Map<UUID, AssetSummary> summaries = assets.summaries(rows.stream().map(LoanRow::assetId).toList());
+        Map<UUID, UserSummary> holders = users.of(rows.stream().map(LoanRow::holderUserId).toList());
+        return PageResponse.of(rows.stream().map(row -> AdminLoanView.of(view(row, summaries.get(row.assetId()), now),
+                holders.get(row.holderUserId()))).toList(), page, total);
+    }
+
+    /** Document 09, section 17: any loan, whoever holds it. */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    AdminLoanView adminGet(UUID loanId) {
+        return loans.find(loanId).map(row -> AdminLoanView.of(view(row, clock.instant()),
+                users.of(List.of(row.holderUserId())).get(row.holderUserId())))
+                .orElseThrow(ResourceNotFoundException::new);
+    }
+
     private LoanView view(LoanRow row, Instant now) {
-        AssetSummary asset = assets.summaries(List.of(row.assetId())).get(row.assetId());
+        return view(row, assets.summaries(List.of(row.assetId())).get(row.assetId()), now);
+    }
+
+    /** {@code availableActions} is empty for every reader while the return route does not exist (section 8.10). */
+    private LoanView view(LoanRow row, AssetSummary asset, Instant now) {
         boolean open = row.status() != LoanStatus.COMPLETED;
         UUID currentOperation = open ? loans.latestReturnAttemptOf(row.id()).orElse(null) : null;
         return new LoanView(row.id(), asset, row.holderUserId(), row.status(), row.checkedOutAt(), row.dueAt(),

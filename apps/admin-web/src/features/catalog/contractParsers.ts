@@ -32,7 +32,7 @@ function isTextOrNull(value: unknown): value is string | null {
  * only, never with server text, and becomes UNRECOGNIZED so the rest of the page still renders.
  * Anything that is not a non-empty string is a structural break: undefined.
  */
-function lenientEnum<T extends string>(value: unknown, allowed: readonly T[], field: string): T | Unrecognized | undefined {
+export function lenientEnum<T extends string>(value: unknown, allowed: readonly T[], field: string): T | Unrecognized | undefined {
   if (typeof value !== 'string' || value === '') return undefined
   if ((allowed as readonly string[]).includes(value)) return value as T
   console.warn(`Unrecognized value for ${field}: shown as an unavailable state until the client is updated`)
@@ -45,7 +45,7 @@ const CALIBRATION_STATUSES: readonly CalibrationStatus[] = ['NOT_REQUIRED', 'VAL
 const AVAILABILITIES: readonly Availability[] = ['AVAILABLE', 'RESERVED', 'BORROWED', 'UNAVAILABLE']
 const PRESENCES: readonly Presence[] = ['PRESENT', 'ABSENT', 'UNKNOWN']
 
-function parsePlacement(value: unknown): PlacementSummary | null | undefined {
+export function parsePlacement(value: unknown): PlacementSummary | null | undefined {
   if (value === null) return null
   if (!isRecord(value)) return undefined
   const { lockerId, lockerCode, compartmentId, compartmentCode } = value

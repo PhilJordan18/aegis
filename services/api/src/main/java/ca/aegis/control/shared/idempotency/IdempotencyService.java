@@ -14,6 +14,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.dao.DataAccessException;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -174,8 +176,12 @@ public class IdempotencyService {
         /** The same status, JSON content and stable headers for the first response and every replay. */
         ResponseEntity<JsonNode> entity() {
             ResponseEntity.BodyBuilder builder = ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON);
-            if (status == HttpStatus.CREATED) {
+            if (status == HttpStatus.CREATED || (status == HttpStatus.ACCEPTED && resource != null)) {
                 builder.location(resource.location(resourceId));
+            }
+            if (status == HttpStatus.ACCEPTED) {
+                // Document 09, section 15.1: a physical workflow is followed by polling its operation each second.
+                builder.header(HttpHeaders.RETRY_AFTER, "1").cacheControl(CacheControl.noStore());
             }
             if (replayed) {
                 builder.header(REPLAYED_HEADER, "true");

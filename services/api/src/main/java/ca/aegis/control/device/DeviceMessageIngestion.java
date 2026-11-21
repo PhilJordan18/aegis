@@ -23,6 +23,8 @@ import ca.aegis.control.audit.AuditResult;
 import ca.aegis.control.audit.AuditSubjectType;
 import ca.aegis.control.audit.AuditTrail;
 import ca.aegis.control.command.CommandAcknowledgements;
+import ca.aegis.control.display.DisplayAcknowledgements;
+import ca.aegis.control.display.DisplayAcknowledgements.DisplayReport;
 import ca.aegis.control.command.CommandAcknowledgements.CommandReport;
 import ca.aegis.control.device.Inspection.Fact;
 import ca.aegis.control.device.Inspection.Storable;
@@ -61,10 +63,12 @@ public class DeviceMessageIngestion {
     private final TransactionTemplate transactions;
     private final Clock clock;
     private final CommandAcknowledgements acknowledgements;
+    private final DisplayAcknowledgements displays;
 
     DeviceMessageIngestion(LockerDeviceRepository devices, InboundMessageRepository messages,
             PhysicalObservationRepository observations, RfidScanNormalization scans, AuditTrail audit,
-            TransactionTemplate transactions, Clock clock, CommandAcknowledgements acknowledgements) {
+            TransactionTemplate transactions, Clock clock, CommandAcknowledgements acknowledgements,
+            DisplayAcknowledgements displays) {
         this.devices = devices;
         this.messages = messages;
         this.observations = observations;
@@ -73,6 +77,7 @@ public class DeviceMessageIngestion {
         this.transactions = transactions;
         this.clock = clock;
         this.acknowledgements = acknowledgements;
+        this.displays = displays;
     }
 
     public Outcome ingest(String topic, byte[] payload) {
@@ -202,6 +207,9 @@ public class DeviceMessageIngestion {
         if (message.type().commandCorrelated()) {
             return applyCommandReport(device, message, fact, inserted.get(), receivedAt);
         }
+        if (message.type().displayCorrelated()) {
+            return applyDisplayReport(device, message, fact, inserted.get(), receivedAt);
+        }
         if (rfidScan) {
             scans.normalize(device.lockerId(), device.id(), inserted.get(), operationId, fact, message.occurredAt(),
                     receivedAt, projection);
@@ -228,6 +236,28 @@ public class DeviceMessageIngestion {
         }
         messages.markRejected(inboundId, rejection);
         log.warn("Command report not applied: lockerId={}, messageId={}, type={}, processingError={}",
+                device.lockerId(), message.messageId(), message.type(), rejection);
+        return Outcome.REJECTED;
+    }
+
+    /** #43: the stored display report decides its challenge and its instruction in this same transaction. */
+    private Outcome applyDisplayReport(ActiveDevice device, Storable message, Fact fact, UUID inboundId,
+            Instant receivedAt) {
+        ProcessingError rejection = switch (displays.apply(new DisplayReport(inboundId,
+                message.type() == InboundMessageType.ACCESS_CHALLENGE_DISPLAYED, fact.displayMessageId(),
+                fact.operationId(), device.lockerId(), fact.deviceSessionId(), fact.parsedJson(), receivedAt))) {
+            case APPLIED, ALREADY_APPLIED -> null;
+            case NOT_CORRELATED -> ProcessingError.COMMAND_CORRELATION_INVALID;
+            case MALFORMED -> ProcessingError.REQUIRED_FIELD_MISSING;
+            case OUTSIDE_VALIDITY_WINDOW -> ProcessingError.TIMESTAMP_OUT_OF_RANGE;
+            case TERMINAL_IGNORED -> ProcessingError.TERMINAL_OPERATION_EVENT_IGNORED;
+        };
+        if (rejection == null) {
+            messages.markProcessed(inboundId);
+            return Outcome.ACCEPTED;
+        }
+        messages.markRejected(inboundId, rejection);
+        log.warn("Display report not applied: lockerId={}, messageId={}, type={}, processingError={}",
                 device.lockerId(), message.messageId(), message.type(), rejection);
         return Outcome.REJECTED;
     }

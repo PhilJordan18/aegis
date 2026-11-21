@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../../api/queryKeys'
-import { authorizedRequest } from '../auth/authorizedRequest'
+import { authorizedCommand, authorizedRequest } from '../auth/authorizedRequest'
 import { useSessionStore } from '../auth/session'
 import type { AssignIdentifierRequest, PlacementRequest } from './contract'
 import { useCustodyGateway } from './CustodyGatewayContext'
@@ -46,16 +46,16 @@ export function useCustodyMutations(assetId: string) {
 
   const assign = useMutation({
     mutationFn: ({ request, idempotencyKey }: { request: AssignIdentifierRequest; idempotencyKey: string }) =>
-      authorizedRequest(session, (token) => gateway.assignIdentifier(token, assetId, request, idempotencyKey)),
+      authorizedCommand(session, (token) => gateway.assignIdentifier(token, assetId, request, idempotencyKey)),
     onSettled: settledIdentifiers,
   })
   const revoke = useMutation({
     mutationFn: ({ identifierId, idempotencyKey }: { identifierId: string; idempotencyKey: string }) =>
-      authorizedRequest(session, (token) => gateway.revokeIdentifier(token, assetId, identifierId, idempotencyKey)),
+      authorizedCommand(session, (token) => gateway.revokeIdentifier(token, assetId, identifierId, idempotencyKey)),
     onSettled: settledIdentifiers,
   })
   const place = useMutation({
-    mutationFn: (request: PlacementRequest) => authorizedRequest(session, (token) => gateway.setPlacement(token, assetId, request)),
+    mutationFn: (request: PlacementRequest) => authorizedCommand(session, (token) => gateway.setPlacement(token, assetId, request)),
     onSuccess: settledPlacement,
   })
   return { assign, revoke, place }

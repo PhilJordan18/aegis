@@ -11,13 +11,15 @@ interface StaleNoticeProps {
   readonly onRetry: () => void
   /** Called when a successful refresh removes the notice while its button has focus. */
   readonly returnFocus: () => void
+  /** The sentence under the title, from the time of the data; the default says the data were evaluated at that time. */
+  readonly body?: (time: string) => string
 }
 
 /**
  * A refresh failed but the previous data is still shown: say it is not up to date and offer to try
  * again. Shared by the list and the dossier so both say the same thing.
  */
-export function StaleNotice({ evaluatedAt, retrying, onRetry, returnFocus }: StaleNoticeProps) {
+export function StaleNotice({ evaluatedAt, retrying, onRetry, returnFocus, body }: StaleNoticeProps) {
   const { m } = useI18n()
   const buttonRef = useRef<HTMLButtonElement>(null)
   const returnFocusRef = useRef(returnFocus)
@@ -45,7 +47,7 @@ export function StaleNotice({ evaluatedAt, retrying, onRetry, returnFocus }: Sta
   return (
     <>
       <Alert kind="warning" icon="status-offline" title={m.equipment.staleTitle}>
-        {evaluatedAt !== null && <p>{m.equipment.staleBody({ time: evaluatedAt })}</p>}
+        {evaluatedAt !== null && <p>{body ? body(evaluatedAt) : m.equipment.staleBody({ time: evaluatedAt })}</p>}
         <div className="ag-alert__action">
           <Button ref={buttonRef} variant="secondary" size="sm" busy={retrying} onClick={() => !retrying && onRetry()}>
             {m.equipment.retry}

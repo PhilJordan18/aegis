@@ -14,9 +14,14 @@
 **Mise à jour ciblée :** 28 octobre 2026 — sous-objets `AssetModelSummary`, `CalibrationView` et `PlacementSummary` de `AssetView` (§8.2); sérialisation existante documentée; code `404 ASSET_NOT_FOUND` de §11.2 ajouté à §21 (#33, #34)  
 **Mise à jour ciblée :** 28 octobre 2026 — décisions de Philippe pour #33 et #34 : ordre stable des raisons et raison principale choisie par la convention de présentation, jamais par `reasons[0]` (§8.1); actif archivé exclu de la liste mais lisible par son identifiant (§11.1, §11.2)  
 **Mise à jour ciblée :** 28 octobre 2026 — réservation (RES-01, #37), décisions de Philippe du 28 octobre 2026 : ordre des contrôles implémenté, `reservedUntil` non postérieur à l’instant courant, locker sans horaire, horaire du placement courant et actif inconnu (§14.1); `availableActions` vide tant que ses actions ne sont pas implémentées (§8.10); codes de refus de l’archivage (§12.2); `ACTIVE_RESERVATION_NOT_FOUND` et `ASSET_OPERATION_IN_PROGRESS` ajoutés à §21  
+**Mise à jour ciblée :** 11 novembre 2026 — lectures administratives des transactions (#48), décisions de Philippe du 11 novembre 2026 (#67) : tri, filtres, vues sans action et résumé du titulaire `user`/`holder` (§17)  
+**Mise à jour ciblée :** 11 novembre 2026 — anomalies administratives (#52), décisions de Philippe du 11 novembre 2026 (#67) : tri et filtres, `summary` de repli, `evidence` bornée à 50 observations (§18.1), reconnaissance et codes `ANOMALY_NOT_ACKNOWLEDGEABLE` et `ANOMALY_ALREADY_RESOLVED` ajoutés à §21 (§18.2)  
+**Mise à jour ciblée :** 11 novembre 2026 — chronologie d’audit (#53), décisions de Philippe du 11 novembre 2026 (#67) : `actor`, liste de champs scalaires de `details`, curseur lié aux filtres et garanties réelles d’un parcours, sans instantané (§19.1, §22.2); code `INVALID_CURSOR` ajouté à §21  
 **Mise à jour ciblée :** 28 octobre 2026 — recherche `q` commune à l’API, au Web et à iOS : espaces Unicode de bordure, longueur en grappes de graphèmes, corpus partagé (§11.1, §22.3, §26.6), décision commune consignée par l’[ADR-014](../adr/ADR-014-recherche-q-graphemes.md), acceptée par Philippe le 6 novembre 2026 (#109)  
 **Mise à jour ciblée :** 6 novembre 2026 — lectures administratives approuvées par Philippe (#25, #26, #28) : `GET /admin/lockers` et `AdminLockerView` (§9.3, §16.2), historique des identifiants `GET /admin/assets/{assetId}/identifiers` (§9.3, §12.3); aucune migration  
 **Mise à jour ciblée :** 6 novembre 2026 — refus du catalogue liés à la garde de l’actif (#26) : placement refusé pendant une réservation active, un prêt ouvert ou une opération non terminale, attribution refusée pendant une opération non terminale et révocation de l’identifiant qu’elle attend, avec les codes de l’archivage (§12.3, §12.4, §21); ordre des refus approuvé par Philippe le 6 novembre 2026; aucun code ni champ nouveau  
+**Mise à jour ciblée :** 21 novembre 2026 — cycle de vie d’une session (§10.6); révocation des sessions navigateur au changement réel du mot de passe, type d’audit `PASSWORD_CHANGED` et rétention bornée (ADR-017, §10.4, §19.1), migration `V011`; révocation des JWT émis acceptée pour la tranche suivante (ADR-018)  
+**Mise à jour ciblée :** 18 novembre 2026 — session navigateur révocable du Manager (ADR-016, #178) : champ optionnel `browserSession` de la connexion, routes `POST /auth/session/refresh` et `POST /auth/session/revoke` (§9.1, §10.2, §10.4, §10.5), code `401 AUTH_SESSION_INVALID` (§21); §4.1 et §4.2 remplacés pour le Web; migration `V010`  
 **Mise à jour ciblée :** 6 novembre 2026 — erreurs signalées par le hub (#29) : champ requis `deviceErrors` et `DeviceErrorView` de `LockerStatusView` (§8.6, §16.1), limités à la session courante du hub, approuvés par Philippe le 6 novembre 2026; ajout compatible, aucune migration
 
 ---
@@ -91,7 +96,7 @@ Après une connexion réussie, le backend émet un JWT signé et expirable, conf
 - le client le traite comme une chaîne opaque;
 - sa durée P0 est de 60 minutes;
 - il transporte au minimum userId, role, maximumAccessLevel, issuedAt, expiresAt et un identifiant de jeton;
-- aucun refresh token n’est émis dans le P0;
+- aucun refresh token n’est émis dans le P0; le Web dispose seulement de la session navigateur révocable de l’ADR-016 (§10.4), qui émet un nouveau jeton d’au plus 60 minutes sans jamais dépasser sa propre fin absolue;
 - l’expiration du jeton n’altère jamais une réservation ou un prêt existant;
 - l’utilisateur se reconnecte après expiration.
 
@@ -102,10 +107,10 @@ Spring Security vérifie la signature, l’algorithme explicitement autorisé, l
 | Client | Règle |
 |---|---|
 | iOS | Jeton stocké dans le Keychain; jamais dans UserDefaults. |
-| Web | Jeton conservé en mémoire; jamais dans localStorage ou sessionStorage. |
+| Web | Jeton conservé en mémoire; jamais dans localStorage ou sessionStorage. Seul le cookie `HttpOnly` de la session navigateur (ADR-016) survit au rechargement; il n’est pas lisible par le script et n’est pas un jeton d’accès. |
 | Tous | Jeton supprimé localement lors de la déconnexion. |
 
-La déconnexion locale ne révoque pas immédiatement une copie du JWT. Ce compromis P0 est explicite : un jeton copié reste utilisable jusqu’à son expiration, sous réserve des contrôles courants du compte. Le rechargement du Web impose une reconnexion. L’expiration ne suspend ni les délais ni le traitement d’une opération physique déjà autorisée.
+La déconnexion locale ne révoque pas immédiatement une copie du JWT. Ce compromis P0 est explicite : un jeton copié reste utilisable jusqu’à son expiration, sous réserve des contrôles courants du compte. Depuis l’ADR-016, le rechargement du Web restaure la session tant que sa session navigateur est valide (§10.4); la déconnexion explicite du Web révoque cette session côté serveur (§10.5). L’expiration ne suspend ni les délais ni le traitement d’une opération physique déjà autorisée.
 
 ### 4.3 En-tête
 
@@ -655,6 +660,8 @@ Ces deux points ne sont pas approuvés. En attendant, la section applique le tex
 |---|---|---|---|
 | GET | /system/health | Public | Santé minimale |
 | POST | /auth/login | Public | Jeton et profil |
+| POST | /auth/session/refresh | Cookie de session navigateur et origine autorisée (ADR-016) | Nouveau jeton et profil |
+| POST | /auth/session/revoke | Cookie de session navigateur et origine autorisée (ADR-016) | Session navigateur révoquée |
 | GET | /auth/me | Authentifié | Profil courant |
 
 ### 9.2 Technicien
@@ -744,7 +751,14 @@ Validations :
 
 - email requis, normalisé et limité à 320 caractères;
 - password requis et limité en taille avant hachage;
-- message identique pour compte absent, désactivé ou mot de passe invalide.
+- message identique pour compte absent, désactivé ou mot de passe invalide;
+- `browserSession`, booléen optionnel (ADR-016) : `true` demande une session navigateur. Seul le Manager l’envoie; iOS l’omet. Un champ inconnu reste refusé.
+
+Avec `browserSession: true`, l’en-tête `Origin` doit appartenir à `AEGIS_WEB_ALLOWED_ORIGINS`; sinon la réponse est `403 FORBIDDEN`, avant toute vérification des identifiants. En cas de succès, la réponse 200 ci-dessous pose aussi :
+
+```http
+Set-Cookie: __Secure-aegis_session=<opaque>; Path=/api/v1/auth/session; Max-Age=28800; HttpOnly; Secure; SameSite=Strict
+```
 
 Réponse 200 :
 
@@ -776,6 +790,45 @@ sans valeur valide, il indique seulement qu’il y a eu trop de tentatives.
 ### 10.3 GET /auth/me
 
 Retourne 200 avec le profil minimal. Cette route permet au client de réhydrater son contexte sans décoder le jeton.
+
+### 10.4 POST /auth/session/refresh
+
+Restaure l’accès d’une page Web rechargée (ADR-016). Sans corps; le navigateur joint le cookie `__Secure-aegis_session`. Un en-tête `Authorization` est ignoré.
+
+Réponse 200 : même forme que §10.2 (`accessToken`, `tokenType`, `expiresIn`, `expiresAt`, `user`). Le jeton expire 60 minutes après son émission, ou à la fin absolue de la session si elle survient avant. Le cookie n’est ni renouvelé ni prolongé.
+
+Erreurs :
+
+- `401 AUTH_SESSION_INVALID`, qui efface aussi le cookie (`Max-Age=0`) : cookie absent, mal formé ou inconnu, session révoquée (déconnexion, compte changé ou mot de passe changé, ADR-017) ou échue, compte désactivé ou archivé, rôle changé depuis la connexion. Les deux derniers cas révoquent la session définitivement.
+- `403 FORBIDDEN` : `Origin` absent ou non autorisé.
+
+Le client n’essaie qu’une restauration par démarrage ou par jeton échu, et ne boucle jamais sur un 401.
+
+### 10.5 POST /auth/session/revoke
+
+Déconnexion explicite du Web (ADR-016). Révoque côté serveur la session du cookie, s’il en reste une, puis efface le cookie. Réponse `204`, idempotente, avec ou sans cookie. Erreur : `403 FORBIDDEN` si `Origin` est absent ou non autorisé. Un jeton d’accès déjà émis reste valable jusqu’à son expiration (§4.2).
+
+### 10.6 Cycle de vie d’une session (ADR-016, ADR-017)
+
+« JWT émis » désigne un jeton d’accès déjà remis à un client. Le serveur relit le compte à chaque requête protégée (§4.1). La colonne JWT décrit le comportement en vigueur; la révocation des JWT de l’ADR-018 (acceptée, options A + B) arrive avec #179 et n’est pas encore en vigueur.
+
+| Événement | Cookie | Ligne `browser_sessions` | JWT émis | Autres onglets du navigateur | iOS |
+|---|---|---|---|---|---|
+| Actualisation, lien direct, nouvel onglet | conservé, ni renouvelé ni prolongé | `last_refreshed_at` mis à jour | inchangés; un nouveau JWT est émis, borné par la fin de la session | indépendants; chacun restaure son propre JWT | non concerné |
+| JWT échu pendant l’usage (session vivante) | conservé | `last_refreshed_at` mis à jour | le JWT échu reçoit `401`; le Web restaure une seule fois, puis renvoie à la connexion seulement si la restauration répond `401`; une panne réseau, un délai ou un `5xx` suit la ligne « Panne réseau » et garde la session | chacun restaure de son côté, sans boucle | reconnexion (aucun refresh iOS) |
+| Fin absolue (8 h par défaut) | effacé par le `401 AUTH_SESSION_INVALID` de la restauration | inchangée, échue | jetons restaurés bornés à la fin de la session; jeton de connexion : voir la note ci-dessous | renvoyés à la connexion à leur prochaine restauration | non concerné |
+| Déconnexion explicite du Web, confirmée (`204`) | effacé | révoquée `SIGNED_OUT` | **restent valides jusqu’à leur expiration (≤ 60 min)**; le Web efface le sien et ses caches | le Web propage la déconnexion aux onglets ouverts; leur restauration échoue | non concerné; ses sessions restent ouvertes |
+| Déconnexion non confirmée (réseau, `5xx`) | conservé | inchangée, ouverte | inchangés | le Web n’annonce pas de déconnexion : « Impossible de confirmer la déconnexion. Réessayez. », avec nouvel essai; la session reste en place | non concerné |
+| Changement réel du mot de passe | effacé à la prochaine restauration | **toutes** les sessions ouvertes du compte révoquées `PASSWORD_CHANGED`, dans la transaction du changement | **restent valides jusqu’à leur expiration (≤ 60 min)** | renvoyés à la connexion à leur prochaine restauration | ses JWT restent valides jusqu’à expiration; nouvelle connexion avec le nouveau mot de passe |
+| Redémarrage avec le même mot de passe de démonstration | conservé | inchangée : aucun changement effectif, donc aucune révocation | inchangés (même clé de signature) | inchangés | inchangé |
+| Compte désactivé ou archivé | effacé à la prochaine restauration | révoquée `ACCOUNT_CHANGED` à la prochaine restauration | **refusés immédiatement** (`401`), car le compte est relu à chaque requête | renvoyés à la connexion | refusé immédiatement |
+| Rôle changé | effacé à la prochaine restauration | révoquée `ACCOUNT_CHANGED` à la prochaine restauration | authentifiés avec le **rôle courant**; l’ancien rôle ne donne aucun droit (`403`) | renvoyés à la connexion à leur prochaine restauration | droits du rôle courant |
+| Panne réseau ou API indisponible (`5xx`, délai) | conservé | inchangée | inchangés | le Web affiche un état récupérable avec une nouvelle tentative; ce n’est pas une session invalide | message d’indisponibilité |
+| Redémarrage de l’API ou nouvelle instance | conservé | conservée en base, révocations comprises | valides si la clé `AEGIS_JWT_SECRET` est inchangée | inchangés | inchangé |
+
+Une ligne révoquée ne redevient jamais ouverte : un déclencheur de `V011` refuse toute modification d’une session déjà révoquée. Une session ouverte n’est jamais supprimée. Une ligne terminée est supprimée 30 jours après sa fin, le plus tôt de sa révocation et de sa fin absolue. La trace durable d’un changement de mot de passe est l’événement d’audit `PASSWORD_CHANGED`, conservé après cette suppression (ADR-017).
+
+Le jeton remis par la connexion elle-même dure 60 minutes et n’est pas borné par la fin de la session; seul le jeton restauré l’est. Avec la durée par défaut de 8 heures, cela ne change rien. Une durée de session inférieure à 60 minutes laisserait ce premier jeton dépasser la fin de la session.
 
 ---
 
@@ -1303,6 +1356,14 @@ Filtres communs :
 | to | Instant exclusif |
 | page, size | Pagination |
 
+Règles approuvées par Philippe le 11 novembre 2026 (#67, D1 à D4 et G1) :
+
+- tri du plus récent au plus ancien, `id` décroissant départageant les égalités : réservations et opérations par `createdAt`, prêts par `checkedOutAt`; `from` et `to` bornent ce même instant;
+- `status` accepte une seule valeur. Une valeur hors de l’ensemble contrôlé, un UUID mal formé, un instant invalide ou un `from` non antérieur à `to` lorsque les deux sont fournis donnent `400 VALIDATION_ERROR`, avec une violation `INVALID_VALUE` sur chaque paramètre fautif, toutes rapportées ensemble; la page et la taille suivent §22.1;
+- un identifiant inconnu donne `404 RESOURCE_NOT_FOUND`;
+- `availableActions` est toujours vide dans ces vues : l’administrateur n’exécute aucune des mutations de §8.10. Le `requiredAction` d’une opération est informatif (§15.4) et n’ouvre aucune action;
+- `AdminReservationView` reprend `ReservationView` (§8.3) et ajoute `user` juste après `userId`; `AdminLoanView` reprend `LoanView` (§8.4) et ajoute `holder` juste après `holderUserId`. Ces deux champs sont un `UserSummary` (§8.8), jamais `null`. Les vues du technicien ne changent pas.
+
 Ces routes ne permettent jamais de modifier un état. Il n’existe aucune route administrative de type complete-loan, confirm-operation ou force-return.
 
 ---
@@ -1314,6 +1375,12 @@ Ces routes ne permettent jamais de modifier un état. Il n’existe aucune route
 GET /admin/anomalies accepte status, type, severity, assetId, lockerOperationId, from, to, page et size.
 
 GET /admin/anomalies/{anomalyId} retourne AnomalyView et, dans une section evidence, les observations normalisées utiles. Les payloads bruts restent exclus.
+
+Règles approuvées par Philippe le 11 novembre 2026 (#67, D1 à D3, D5 et D7) :
+
+- la liste suit le tri et la validation des filtres de §17 sur `detectedAt` : `status`, `type` et `severity` acceptent chacun une seule valeur;
+- `summary` est une phrase fixe choisie d’après `type`, jamais construite à partir des détails ou d’un payload. Elle reste un repli compatible : les clients traduisent `type` en français et en anglais et n’imposent jamais ce texte français à une interface anglaise;
+- `evidence` contient au plus 50 observations normalisées de l’opération de l’anomalie et son observation de résolution, de la plus récente à la plus ancienne (`observedAt`, puis `observationId` décroissants). Chacune porte `observationId`, `type`, `compartmentId`, `operationId`, `observedAt` et `receivedAt`, sans valeur d’identifiant brute, valeur mesurée ni payload. Cette sélection n’est pas un historique exhaustif, et l’interface indique cette limite.
 
 ### 18.2 Reconnaissance
 
@@ -1336,6 +1403,8 @@ Erreurs :
 - 409 ANOMALY_ALREADY_RESOLVED;
 - 409 ANOMALY_NOT_ACKNOWLEDGEABLE;
 - 400 VALIDATION_ERROR.
+
+Règle D6 approuvée par Philippe le 11 novembre 2026 (#67) : la même clé avec le même corps rejoue le résultat enregistré (§20.2). Une nouvelle clé sur une anomalie `ACKNOWLEDGED` donne `409 ANOMALY_NOT_ACKNOWLEDGEABLE` et conserve la note d’origine; une anomalie `RESOLVED` donne `409 ANOMALY_ALREADY_RESOLVED`. La reconnaissance écrit un événement d’audit `ANOMALY_ACKNOWLEDGED` sans la note et ne résout jamais l’anomalie.
 
 Il n’existe pas de route resolve. Seule l’ingestion d’une preuve physique cohérente peut faire passer l’anomalie à RESOLVED.
 
@@ -1372,6 +1441,16 @@ Réponse :
 Un AuditEventView contient id, eventType, actor, subjectType, subjectId, operationId, fromState, toState, result, reason, occurredAt et details filtrés.
 
 Le curseur encode au minimum occurredAt et id. Le client le traite comme opaque.
+
+Règles approuvées par Philippe le 11 novembre 2026 (#67, D8 à D10) :
+
+- tri du plus récent au plus ancien par `occurredAt`, puis `id` décroissant; `from` et `to` bornent `occurredAt`; `limit` vaut 50 par défaut; `eventType` et `subjectType` acceptent chacun une seule valeur de l’ensemble contrôlé, et les erreurs de filtre suivent §17;
+- `actor` est un `UserSummary` (§8.8) pour un acteur humain, sinon `null`, sans attribution inventée;
+- `details` suit une liste explicite de champs scalaires par type d’événement. Un champ n’est exposé que si son chemin complet figure dans la liste et que sa valeur est une chaîne, un nombre, un booléen ou `null`. Les secrets, hashes, notes, textes libres, valeurs d’identifiant brutes et payloads sont exclus. Un type d’événement absent de la liste expose `{}`;
+- `PASSWORD_CHANGED` (ADR-017, sujet `USER`) n’expose que `revokedBrowserSessions`, le nombre de sessions navigateur révoquées par le changement;
+- le curseur est lié aux filtres qui l’ont produit, mais pas à `limit`; réutilisé avec d’autres filtres ou mal formé, il donne `400 INVALID_CURSOR`.
+
+Garanties d’un parcours, c’est-à-dire de la première page jusqu’à `hasMore = false` : aucun événement n’apparaît deux fois, et tout événement validé avant la lecture de la première page apparaît. Le parcours n’est pas un instantané : chaque page est une lecture distincte, et `occurredAt` est l’horloge de la mutation, pas l’instant de sa validation. Un événement validé pendant le parcours n’apparaît que s’il se classe après la position du curseur. Un événement plus récent que la première page, ou qui se classe avant le curseur (arrivée tardive ou antidatée), apparaît au parcours suivant. Pour le voir, le client relance la lecture depuis la première page.
 
 ---
 
@@ -1433,9 +1512,11 @@ Les PUT sont idempotents par définition. Une répétition identique ne crée pa
 | 202 | OPERATION_ACCEPTED | Workflow physique créé |
 | 400 | VALIDATION_ERROR | Format ou champ invalide |
 | 400 | IDEMPOTENCY_KEY_REQUIRED | Clé obligatoire absente |
+| 400 | INVALID_CURSOR | Curseur mal formé ou émis pour d’autres filtres (§19.1, §22.2) |
 | 401 | AUTH_INVALID_CREDENTIALS | Connexion refusée |
 | 401 | AUTH_TOKEN_INVALID | Jeton invalide |
 | 401 | AUTH_TOKEN_EXPIRED | Jeton expiré |
+| 401 | AUTH_SESSION_INVALID | Session navigateur absente, échue ou révoquée (§10.4) |
 | 403 | FORBIDDEN | Rôle insuffisant |
 | 403 | ASSET_ACCESS_DENIED | Niveau d’accès insuffisant |
 | 404 | RESOURCE_NOT_FOUND | Ressource absente ou non visible |
@@ -1462,6 +1543,8 @@ Les PUT sont idempotents par définition. Une répétition identique ne crée pa
 | 409 | IDENTIFIER_ALREADY_ASSIGNED | Paire type + valeur déjà active (§12.3) |
 | 409 | COMPARTMENT_DISABLED | Placement dans un compartiment désactivé (§12.4) |
 | 409 | COMPARTMENT_ALREADY_OCCUPIED | Compartiment déjà attribué à un autre actif (§12.4) |
+| 409 | ANOMALY_NOT_ACKNOWLEDGEABLE | Anomalie déjà reconnue, reconnaissance avec une nouvelle clé (§18.2) |
+| 409 | ANOMALY_ALREADY_RESOLVED | Anomalie déjà résolue (§18.2) |
 | 422 | ASSET_NOT_READY | Readiness autre que READY |
 | 422 | OUTSIDE_OPERATING_HOURS | Action hors plage |
 | 422 | RESERVATION_END_AFTER_CLOSING | Échéance trop tardive |
@@ -1485,6 +1568,8 @@ Le catalogue et les listes administratives simples utilisent page et size. Le tr
 ### 22.2 Pagination par curseur
 
 L’audit et les chronologies potentiellement volumineuses utilisent un curseur opaque. Un curseur invalide retourne 400 INVALID_CURSOR.
+
+Le curseur ne promet aucun instantané; les garanties d’un parcours de l’audit sont celles de §19.1.
 
 ### 22.3 Recherche
 
@@ -1687,7 +1772,7 @@ Le P0 ne comprend pas :
 
 - inscription publique;
 - récupération autonome de mot de passe;
-- refresh token;
+- refresh token; la session navigateur révocable du Manager (ADR-016, §10.4 et §10.5) n’en est pas un : elle ne prolonge jamais sa fin absolue et ne sert qu’au Web;
 - authentification sociale;
 - gestion avancée des utilisateurs;
 - WebSocket ou Server-Sent Events;

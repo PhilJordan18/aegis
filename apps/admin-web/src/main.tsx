@@ -8,12 +8,17 @@ import './styles/base.css'
 import { clearCacheOnSessionChange, createQueryClient } from './api/serverState'
 import { App } from './app/App'
 import { createHistoryRouter, RouterContext } from './app/router'
+import { AuditGatewayContext } from './features/audit/AuditGatewayContext'
+import { createHttpAuditGateway } from './features/audit/httpAuditGateway'
 import { createAppearanceController } from './features/appearance/appearance'
 import { AppearanceContext } from './features/appearance/useAppearance'
 import type { AuthGateway } from './features/auth/authGateway'
 import { AuthGatewayContext } from './features/auth/AuthGatewayContext'
+import { AnomalyGatewayContext } from './features/anomalies/AnomalyGatewayContext'
+import { createHttpAnomalyGateway } from './features/anomalies/httpAnomalyGateway'
 import { createHttpAuthGateway } from './features/auth/httpAuthGateway'
 import { createSessionStore, SessionContext } from './features/auth/session'
+import { connectSessionSignals, createSessionSignals } from './features/auth/sessionSync'
 import { CatalogGatewayContext } from './features/catalog/CatalogGatewayContext'
 import { createHttpCatalogGateway } from './features/catalog/httpCatalogGateway'
 import { createHttpLockerGateway } from './features/lockers/httpLockerGateway'
@@ -21,6 +26,8 @@ import { CustodyGatewayContext } from './features/custody/CustodyGatewayContext'
 import { createHttpCustodyGateway } from './features/custody/httpCustodyGateway'
 import { LockerGatewayContext } from './features/lockers/LockerGatewayContext'
 import { createHttpScheduleGateway } from './features/schedule/httpScheduleGateway'
+import { createHttpTransactionGateway } from './features/transactions/httpTransactionGateway'
+import { TransactionGatewayContext } from './features/transactions/TransactionGatewayContext'
 import { ScheduleGatewayContext } from './features/schedule/ScheduleGatewayContext'
 import { createLocaleController } from './i18n/locale'
 import { LocaleContext } from './i18n/useI18n'
@@ -44,12 +51,25 @@ if (__AEGIS_PREVIEW__) {
   previewControls = preview.controls
 }
 
+// The session store restores and revokes through the same gateway. Design-review builds never ask the API
+// to restore: their arrival scenarios drive the store themselves, and their fictitious gateway has no cookie.
+session.connect(gateway)
+if (!__AEGIS_PREVIEW__) {
+  // One browser session, several tabs: a confirmed sign-out or a new sign-in reaches the others (sessionSync.ts).
+  connectSessionSignals(session, createSessionSignals(window))
+  void session.restore()
+}
+
 // The catalog has no preview scenario: design-review captures route /api/v1/admin/assets themselves.
 const catalogGateway = createHttpCatalogGateway()
 // Same for the locker status: design-review captures route /api/v1/lockers/{id}/status themselves.
 const lockerGateway = createHttpLockerGateway()
 const scheduleGateway = createHttpScheduleGateway()
 const custodyGateway = createHttpCustodyGateway()
+// Reservations, loans and locker operations (09 §17): read only; design-review captures route /api/v1/admin/... themselves.
+const transactionGateway = createHttpTransactionGateway()
+const anomalyGateway = createHttpAnomalyGateway()
+const auditGateway = createHttpAuditGateway()
 
 const container = document.getElementById('root')
 if (!container) throw new Error('Missing #root element')
@@ -66,9 +86,15 @@ createRoot(container).render(
                   <LockerGatewayContext value={lockerGateway}>
                     <ScheduleGatewayContext value={scheduleGateway}>
                       <CustodyGatewayContext value={custodyGateway}>
-                        <PreviewContext value={previewControls}>
-                          <App />
-                        </PreviewContext>
+                        <TransactionGatewayContext value={transactionGateway}>
+                          <AnomalyGatewayContext value={anomalyGateway}>
+                            <AuditGatewayContext value={auditGateway}>
+                              <PreviewContext value={previewControls}>
+                                <App />
+                              </PreviewContext>
+                            </AuditGatewayContext>
+                          </AnomalyGatewayContext>
+                        </TransactionGatewayContext>
                       </CustodyGatewayContext>
                     </ScheduleGatewayContext>
                   </LockerGatewayContext>

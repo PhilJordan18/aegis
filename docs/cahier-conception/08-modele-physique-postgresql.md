@@ -3,7 +3,8 @@
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de révision :** 16 septembre 2026
-**Mise à jour ciblée :** 23 septembre 2026 — statut des paramètres QR et de RS-485; SQL inchangé.
+**Mise à jour ciblée :** 23 septembre 2026 — statut des paramètres QR et de RS-485; SQL inchangé.  
+**Mise à jour ciblée :** 21 novembre 2026 — ADR-017 (#178), migration `V011` : motif `PASSWORD_CHANGED`, révocation définitive et purge à 30 jours de `browser_sessions` (§4.2); type d’audit `PASSWORD_CHANGED` (§4.9).
 **Version :** 1.2 — contrôle local QR et étoile
 
 ---
@@ -172,6 +173,64 @@ CREATE TABLE users (
     CONSTRAINT ck_users_archived_disabled
         CHECK (archived_at IS NULL OR status = 'DISABLED')
 );
+```
+
+#### `browser_sessions`
+
+Session navigateur révocable du Manager (ADR-016, migration `V010`; ADR-017, migration `V011`).
+
+- Seule l’empreinte SHA-256 du cookie est stockée.
+- La fin absolue, d’au plus 12 heures, ne bouge jamais.
+- Un changement effectif du mot de passe révoque toutes les sessions ouvertes du compte (`PASSWORD_CHANGED`), dans sa transaction.
+- Une révocation est définitive : un déclencheur refuse toute modification d’une ligne révoquée.
+- Une session ouverte (ni révoquée ni échue) n’est jamais supprimée : un second déclencheur refuse sa suppression.
+- Les lignes sont des créances, non un historique de possession. Une purge planifiée supprime une ligne quand sa fin, `LEAST(revoked_at, expires_at)`, est strictement antérieure à `maintenant − 30 jours`. La trace durable d’un changement de mot de passe est l’événement d’audit `PASSWORD_CHANGED`.
+
+```sql
+CREATE TABLE browser_sessions (
+    id                 uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
+    user_id            uuid NOT NULL,
+    token_hash         bytea NOT NULL,
+    role               text NOT NULL,
+    created_at         timestamptz NOT NULL,
+    expires_at         timestamptz NOT NULL,
+    last_refreshed_at  timestamptz NULL,
+    revoked_at         timestamptz NULL,
+    revocation_reason  text NULL,
+
+    CONSTRAINT fk_browser_sessions_user
+        FOREIGN KEY (user_id) REFERENCES users (id),
+    CONSTRAINT uq_browser_sessions_token_hash
+        UNIQUE (token_hash),
+    CONSTRAINT ck_browser_sessions_token_hash_length
+        CHECK (octet_length(token_hash) = 32),
+    CONSTRAINT ck_browser_sessions_role
+        CHECK (role IN ('ADMIN', 'TECHNICIAN')),
+    CONSTRAINT ck_browser_sessions_lifetime
+        CHECK (expires_at > created_at AND expires_at <= created_at + interval '12 hours'),
+    CONSTRAINT ck_browser_sessions_revocation
+        CHECK ((revoked_at IS NULL) = (revocation_reason IS NULL)),
+    CONSTRAINT ck_browser_sessions_revocation_reason
+        CHECK (revocation_reason IS NULL
+            OR revocation_reason IN ('SIGNED_OUT', 'ACCOUNT_CHANGED', 'PASSWORD_CHANGED'))
+);
+
+CREATE INDEX ix_browser_sessions_user ON browser_sessions (user_id);
+CREATE INDEX ix_browser_sessions_ended ON browser_sessions ((LEAST(revoked_at, expires_at)));
+
+-- V011 : une session révoquée est définitive.
+CREATE TRIGGER tr_browser_sessions_revoked_final
+    BEFORE UPDATE ON browser_sessions
+    FOR EACH ROW
+    WHEN (OLD.revoked_at IS NOT NULL)
+    EXECUTE FUNCTION refuse_revoked_browser_session_change();
+
+-- V011 : une session ouverte n’est jamais supprimée.
+CREATE TRIGGER tr_browser_sessions_open_kept
+    BEFORE DELETE ON browser_sessions
+    FOR EACH ROW
+    WHEN (OLD.revoked_at IS NULL AND OLD.expires_at > now())
+    EXECUTE FUNCTION refuse_open_browser_session_delete();
 ```
 
 ### 4.3 Catalogue
@@ -758,7 +817,7 @@ Les bornes de 60 secondes après création et 5 secrets erronés correspondent a
 
 #### `hub_display_outbox`
 
-Cette outbox est distincte de `command_outbox`, dont l’unicité `operation_id` reste réservée au déverrouillage. Les payloads d’affichage sont chiffrés par l’application (chiffrement authentifié, clé externe à PostgreSQL). Le ciphertext, son nonce et son tag d’authentification forment une enveloppe dans `encrypted_payload`. Les identifiants de ligne/cible sont liés comme données authentifiées.
+Cette outbox est distincte de `command_outbox`, dont l’unicité `operation_id` reste réservée au déverrouillage. Les payloads d’affichage sont chiffrés par l’application (chiffrement authentifié, clé externe à PostgreSQL). Le ciphertext, son nonce et son tag d’authentification forment une enveloppe dans `encrypted_payload`. Les identifiants de ligne/cible sont liés comme données authentifiées. Algorithme, format de l’enveloppe, provenance des clés, rotation et retrait : [ADR-015](../adr/ADR-015-cles-affichage-hub.md).
 
 ```sql
 CREATE TABLE hub_display_outbox (
@@ -1158,7 +1217,7 @@ CREATE TABLE audit_events (
         FOREIGN KEY (physical_observation_id) REFERENCES physical_observations (id),
     CONSTRAINT ck_audit_events_type
         CHECK (event_type IN (
-            'AUTHENTICATION_SUCCEEDED', 'AUTHENTICATION_REJECTED',
+            'AUTHENTICATION_SUCCEEDED', 'AUTHENTICATION_REJECTED', 'PASSWORD_CHANGED',
             'ASSET_CREATED', 'ASSET_UPDATED', 'ASSET_ARCHIVED',
             'ASSET_IDENTIFIER_ASSIGNED', 'ASSET_PLACEMENT_CHANGED',
             'SCHEDULE_UPDATED', 'READINESS_EVALUATED',

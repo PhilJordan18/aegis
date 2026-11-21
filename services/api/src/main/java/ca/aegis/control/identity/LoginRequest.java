@@ -14,10 +14,17 @@ record LoginRequest(
 
         @NotEmpty(message = "Le mot de passe est requis.")
         @MaxUtf8Bytes(value = 72, message = "Le mot de passe dépasse 72 octets.")
-        String password) {
+        String password,
+
+        /** ADR-016: true asks for a browser session cookie; only an allowed Origin may ask. Absent means false. */
+        Boolean browserSession) {
 
     LoginRequest {
         email = EmailAddresses.normalize(email);
+    }
+
+    boolean wantsBrowserSession() {
+        return Boolean.TRUE.equals(browserSession);
     }
 
     @Override

@@ -5,6 +5,12 @@
  * - feature slices add their keys here and invalidate by prefix.
  */
 export const queryKeys = {
+  anomalies: {
+    all: ['anomalies'] as const,
+    list: (query: { readonly status?: string; readonly type?: string; readonly severity?: string; readonly page: number; readonly size: number }) =>
+      ['anomalies', 'list', query] as const,
+    detail: (anomalyId: string) => ['anomalies', 'detail', anomalyId] as const,
+  },
   auth: {
     all: ['auth'] as const,
     currentProfile: () => ['auth', 'currentProfile'] as const,
@@ -19,6 +25,26 @@ export const queryKeys = {
     all: ['custody'] as const,
     identifiers: (assetId: string) => ['custody', 'identifiers', assetId] as const,
     lockers: (query: { readonly page: number; readonly size: number }) => ['custody', 'lockers', query] as const,
+  },
+  transactions: {
+    all: ['transactions'] as const,
+    reservationList: (query: object) => ['transactions', 'reservations', 'list', query] as const,
+    reservation: (id: string) => ['transactions', 'reservations', 'detail', id] as const,
+    loanList: (query: object) => ['transactions', 'loans', 'list', query] as const,
+    loan: (id: string) => ['transactions', 'loans', 'detail', id] as const,
+    operationList: (query: object) => ['transactions', 'operations', 'list', query] as const,
+    operation: (id: string) => ['transactions', 'operations', 'detail', id] as const,
+  },
+  /** The Vue d'ensemble reads: one key per block, so a failing route never invalidates another block. */
+  overview: {
+    all: ['overview'] as const,
+    reservations: (query: object) => ['overview', 'reservations', query] as const,
+    loans: (query: object) => ['overview', 'loans', query] as const,
+    operations: (query: object) => ['overview', 'operations', query] as const,
+  },
+  audit: {
+    all: ['audit'] as const,
+    timeline: (filters: object) => ['audit', 'timeline', filters] as const,
   },
   lockers: {
     all: ['lockers'] as const,

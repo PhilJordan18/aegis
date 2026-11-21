@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { SIGN_IN_PREVIEW_SCENARIOS, type SignInPreviewScenario } from '../../preview/previewScenarios'
 import { createPreviewAuthGateway, PREVIEW_FAKE_ACCESS_TOKEN } from './previewAuthGateway'
 import { signInStateFromResult, type SignInStateKind } from './signInOutcome'
@@ -60,5 +60,18 @@ describe('createPreviewAuthGateway', () => {
     const first = await gateway.signIn({ email: 'a@b.test', password: '1' })
     const second = await gateway.signIn({ email: 'admin@aegis.demo', password: 'correct horse battery staple' })
     expect(first).toEqual(second)
+  })
+
+  it('has nothing to restore after a reload: a refused refresh, never a token, whatever the scenario', async () => {
+    for (const scenario of [null, 'connecte', 'inactif'] as const) {
+      const result = await createPreviewAuthGateway(() => scenario).refreshSession()
+      expect(result).toMatchObject({ kind: 'httpProblem', status: 401, problem: { code: 'AUTH_SESSION_INVALID' } })
+    }
+  })
+
+  it('confirms a revocation without any network call', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    expect(await createPreviewAuthGateway(() => null).revokeSession()).toMatchObject({ kind: 'ok', value: true })
+    expect(fetchSpy).not.toHaveBeenCalled()
   })
 })

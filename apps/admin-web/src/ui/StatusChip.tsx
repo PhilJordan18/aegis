@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Icon, type IconName } from './Icon'
 import './status-chip.css'
 
-export type StatusRole = 'ready' | 'blocked' | 'unknown' | 'progress' | 'info' | 'neutral'
+export type StatusRole = 'ready' | 'blocked' | 'unknown' | 'progress' | 'info' | 'neutral' | 'anomaly'
 
 /** Symbol + shape + text; colour never carries the status alone (handoff §2.2). */
 export function StatusChip({ role, icon, children, size }: { readonly role: StatusRole; readonly icon: IconName; readonly children: ReactNode; readonly size?: 'lg' }) {

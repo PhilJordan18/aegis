@@ -38,6 +38,7 @@ npm run test:identity  # mesures sur le rendu : saut de mise en page, contrastes
 npm run test:forms     # formulaires CAT-01 proposés : axe, clavier, 320 px, clair et sombre, sur des faux routés
 npm run capture:forms  # mêmes contrôles, et écrit le lot de revue dans docs/design/manager-forms/captures/
 npm run test:e2e:api   # recette Playwright contre l'API réelle (build de production); échoue sans API ou sans identifiants
+npm run test:e2e:session   # session navigateur (ADR-016) sur des faux d'API : rechargement, lien direct, révocation, déconnexion
 ```
 
 ### Développer contre l'API
@@ -51,13 +52,30 @@ est jointe, jamais PostgreSQL ni MQTT.
    (`services/api/README.md`, « Pour lancer l'API »).
 2. `npm run dev:api`, puis ouvrir `/connexion`. `npm run dev` garde l'aperçu
    de conception et n'appelle jamais l'API.
+3. Pour que la session survive à un rechargement (ADR-016), lancer l'API avec
+   `AEGIS_WEB_ALLOWED_ORIGINS=http://localhost:5173` et ouvrir le Manager par
+   `http://localhost:5173`, pas par `127.0.0.1` : l'API n'accepte une origine
+   `http` que pour `localhost`, et refuse sinon la connexion du Manager par un
+   `403 FORBIDDEN`. Le proxy Vite transmet `Origin`, `Cookie` et `Set-Cookie`
+   sans les modifier (pas de `changeOrigin` ni de réécriture de cookie).
 
 `npm run test:e2e:api` construit le build de production, le sert avec
-`vite preview` sur `127.0.0.1:5181` et vérifie, contre l'API :
+`vite preview` sur `localhost:5181` et vérifie, contre l'API (démarrée avec
+`AEGIS_WEB_ALLOWED_ORIGINS=http://localhost:5181`) :
 
 - la connexion de l'administrateur jusqu'au shell, avec `GET /auth/me`;
-- l'absence de tout jeton dans le stockage, puis la déconnexion;
-- le refus du compte technicien, sans requête après la connexion;
+- l'absence de tout jeton dans le stockage, puis la déconnexion, qui révoque la
+  session côté serveur : un chargement complet suivant demande une restauration,
+  refusée, et ramène à la connexion;
+- le refus du compte technicien, sans autre requête que la révocation de sa
+  session navigateur (l'API pose le cookie même à un compte technicien qui
+  demande `browserSession`; le Web le révoque aussitôt);
+- la session navigateur de l'ADR-016 (`api.session.spec.ts`), contre l'API et
+  non contre des faux : cookie `HttpOnly` posé par l'API, rechargement et lien
+  direct restaurés, cookie envoyé aux seules routes de session, révocation
+  effective côté serveur (le cookie rejoué est refusé en 401
+  `AUTH_SESSION_INVALID`), et `403 FORBIDDEN` pour une origine absente ou
+  étrangère;
 - un compte inconnu (401), une violation serveur (400) et la limite de débit
   (429 avec `Retry-After`).
 
@@ -71,6 +89,15 @@ scénarios ont réellement passé contre l'API. Les contrôles hors ligne resten
 `npm test` et les autres projets Playwright, qui ne chargent pas cette
 configuration. Les mots de passe ne sont jamais écrits dans un fichier ni
 affichés.
+
+`npm run test:e2e:session` démarre `npm run dev:api` sur `127.0.0.1:5182`
+(sans aperçu, avec la vraie passerelle HTTP) et répond à tout `/api/v1` par des
+routes : le faux dépose et efface le vrai cookie `__Secure-aegis_session`, donc
+le navigateur décide seul de ce qu'il stocke et envoie. Il couvre le
+rechargement, le lien direct (avec sa requête), l'état de restauration, une
+session révoquée sans boucle, l'échéance du jeton, un serveur injoignable au
+démarrage, la déconnexion et sa révocation non confirmée, ainsi qu'axe (clair
+et sombre, 1280 et 390 px) sur les deux nouveaux états.
 
 Ces trois commandes Playwright démarrent leur propre serveur Vite sur
 `127.0.0.1:5180`. Ils utilisent le Chromium de Playwright 1.63 déjà installé
@@ -378,6 +405,7 @@ sera remplacée par le routeur choisi à l'intégration.
 |---|---|
 | `/` | Accueil (textes [P] du handoff §7) |
 | `/connexion` | Connexion |
+| `/vue-d-ensemble` | Vue d'ensemble (lecture seule, cinq blocs), protégée comme `/equipements`. `/` reste l'accueil public et l'arrivée après la connexion reste `/equipements` |
 | `/equipements` | Équipements, protégé : session administrateur exigée, sinon `/connexion`. Arrivée après la connexion hors aperçu |
 | `/casiers` | Casiers (statut en lecture seule), protégé comme `/equipements`. `?casier=<uuid>` désigne un casier |
 | `/apercu/equipements` | Aperçu seulement; « Page introuvable » ailleurs |
@@ -496,26 +524,57 @@ Content-Security-Policy devra l'autoriser par empreinte.
     `sessionInvalid` (401 `AUTH_TOKEN_INVALID`, ou 401 sans code) et
     `signedOut` (après « Se déconnecter »).
 - `features/auth/session.ts` est le magasin de session **en mémoire**
-  (ADR-007, 09 §4.2). Rien n'est écrit dans localStorage, sessionStorage,
-  les cookies ou IndexedDB : recharger la page impose de se reconnecter. Le
-  jeton est absent de l'état lu par React. Il refuse une session autre
-  qu'administrateur.
-- Expiration (09 §4.1 : 60 min, sans refresh) : la session se termine seule
-  en `sessionExpired` quand `expiresIn` secondes se sont écoulées depuis la
-  réception de la réponse de connexion. Compter depuis la réception, et non
-  comparer `expiresAt` à l'horloge du navigateur, rend l'échéance
-  insensible à une horloge décalée. Le serveur reste l'autorité : tout 401
-  antérieur termine la session aussi.
+  (ADR-007, ADR-016, 09 §4.2). Rien n'est écrit dans localStorage,
+  sessionStorage, les cookies ou IndexedDB, et le cookie `HttpOnly` posé par
+  le serveur n'est jamais lisible par le script. Le jeton est absent de l'état
+  lu par React. Il refuse une session autre qu'administrateur. Le serveur
+  reste l'autorité : le client ne décide jamais seul qu'une session est
+  valide.
+- Restauration (ADR-016, 09 §10.4) : au chargement de toute page, hors
+  aperçu, `main.tsx` appelle `restore()`, c'est-à-dire
+  `POST /auth/session/refresh` avec le cookie. L'état `restoring` s'affiche
+  sur une page protégée sans aucune redirection tant que le serveur n'a pas
+  répondu. Une réponse 200 démarre la session et garde l'adresse demandée,
+  lien direct compris. Un 401 laisse le visiteur anonyme, sans motif
+  d'arrivée, et une seule redirection mène à `/connexion`. Tout autre échec
+  (réseau, délai, 5xx, 403 d'origine, corps hors contrat) est l'état
+  `restoreFailed` : « Restauration de votre session » avec une alerte, un
+  bouton « Réessayer » et « Se connecter » en repli. Le Manager ne se
+  déconnecte pas en silence quand il ne peut pas interroger le serveur.
+  Seuls `login`, `refresh` et `revoke` sont envoyés avec
+  `credentials: 'same-origin'`; toute autre route garde `omit`.
+- Expiration (09 §4.1 : 60 min, ou la fin absolue de la session si elle
+  survient avant) : à l'échéance de `expiresIn`, comptée depuis la réception,
+  le magasin tente **une** restauration. Un 401 termine la session en
+  `sessionExpired`; un échec réseau ou 5xx donne `restoreFailed` plutôt
+  qu'une fausse expiration. Les restaurations sont à vol unique : l'échéance,
+  le démarrage et tous les 401 simultanés partagent une seule requête, et une
+  réponse dépassée par une connexion ou une déconnexion est ignorée.
+- Déconnexion explicite (09 §10.5) : `signOut()` révoque d'abord côté
+  serveur, puis efface la mémoire. Si la révocation n'est pas confirmée, la
+  session reste ouverte (un rechargement la rétablirait) et le shell affiche
+  « Déconnexion non confirmée » avec « Réessayer la déconnexion ».
 - `features/auth/authorizedRequest.ts` porte chaque appel protégé :
-  - un 401 termine la session avec le motif du serveur
-    (`AUTH_TOKEN_EXPIRED` → `sessionExpired`, sinon `sessionInvalid`);
+  - un 401 demande au magasin une restauration partagée, puis rejoue l'appel
+    **une seule fois** avec le nouveau jeton; un second 401 termine la session
+    avec le motif du serveur (`AUTH_TOKEN_EXPIRED` → `sessionExpired`, sinon
+    `sessionInvalid`), sans boucle. Un 401 prouve que la requête n'a pas été
+    traitée, donc le rejeu ne répète aucune transition;
   - une réponse tardive pour un ancien jeton ne termine jamais la session
-    suivante.
+    suivante;
+  - le cache TanStack n'est vidé que si le compte change ou si la session se
+    termine, pas à chaque renouvellement de jeton.
   - `fetchCurrentAdminProfile` (`GET /auth/me`) termine aussi la session en
     `sessionInvalid` sur un 403 ou un profil qui n'est plus `ADMIN` : le
     serveur relit le compte à chaque requête (09 §4.1).
-- `app/RequireAdminSession.tsx` protège `/equipements`. Sans session
-  (jamais connecté, rechargement, déconnexion, expiration, 401), il remplace
+- Retour après connexion forcée : `RequireAdminSession` envoie vers
+  `/connexion?retour=<chemin>` et `app/returnPath.ts` valide la valeur à la
+  lecture : un chemin relatif de la même origine menant à une page protégée,
+  sans `//hôte`, barre oblique inverse, caractère de contrôle ni retour vers
+  `/connexion`. Toute autre valeur donne la page par défaut. Après une
+  déconnexion explicite, rien n'est retenu.
+- `app/RequireAdminSession.tsx` protège les pages du Manager. Sans session
+  (jamais connecté, déconnexion, expiration, révocation, 401), il remplace
   l'entrée d'historique par `/connexion`, qui affiche le motif d'arrivée.
 - État serveur (TanStack Query) :
   - `src/api/serverState.ts` crée le client : nouvel essai, deux au plus,
@@ -563,3 +622,68 @@ Content-Security-Policy devra l'autoriser par empreinte.
 Le [guide Railway](deploy/README.md) décrit le build Docker de production,
 le relais HTTPS `/api`, les vérifications isolées et le retour arrière du
 service Web. Il ne nécessite aucune modification du broker ni du firmware.
+
+## Réservations et prêts : lecture seule (#48)
+
+Page protégée `/reservations-prets`, la troisième section de la barre latérale, d'après la console Manager
+approuvée par Philippe le 11 novembre 2026 (`docs/design/manager-console/` de la branche
+`158-docs-manager-console-design`). Trois vues d'une même liste maîtresse et d'un dossier : Réservations, Prêts,
+Opérations physiques.
+
+- **Sources** : `GET /admin/reservations`, `/admin/loans`, `/admin/locker-operations` et leurs détails par
+  identifiant (09 §8.3, §8.4, §8.5, §17; `src/features/transactions/`). Aucune écriture : ni fin de prêt, ni
+  confirmation, ni retour forcé, ni ouverture à distance; `availableActions` n'est jamais lu ni affiché.
+- **Adresse** : `?vue=prets|operations` (réservations par défaut), `statut`, `equipement` (UUID), `du` et `au`
+  (jours du laboratoire, fuseau `America/Toronto`), `page` (à partir de 1) et `dossier` (identifiant). Une valeur
+  inutilisable est ignorée et n'est jamais envoyée. `du` est inclusif; `au` désigne un jour inclus, la borne
+  exclusive envoyée (`to`) est le début du jour suivant.
+- **Ordre** : les plus récents d'abord, départagés par identifiant (décision D1 du 11 novembre, #67) :
+  réservations et opérations par `createdAt`, prêts par `checkedOutAt`. Aucun tri n'est envoyé et aucune taille de
+  page n'est proposée (20).
+- **Titulaire (G1)** : les lectures administrateur ajoutent `user: {id, displayName}` aux réservations et
+  `holder: {id, displayName}` aux prêts. Le nom s'affiche à côté de l'identifiant. Un serveur sans ce résumé donne
+  l'identifiant seul; un résumé dont l'`id` diffère, nul ou sans nom rejette la vue (erreur du service). Les
+  opérations n'ont pas de résumé.
+- **Retard** : le booléen `overdue` du serveur, jamais recalculé avec l'horloge du navigateur; un prêt en retard
+  reste emprunté, un prêt terminé n'est jamais dit en retard.
+- **Erreurs** : un `404` sur une liste est une erreur du service avec identifiant de suivi (jamais une liste vide);
+  sur un dossier, « Dossier introuvable ». Injoignable, 403, périmé et chargement ont leur état; un `401` renvoie à
+  la connexion.
+- **Opérations** : chaque étape n'affiche que l'instant transmis; une étape sans instant est « Non reçue » (opération
+  terminale) ou « Pas encore reçue ». L'équipement et la cellule du dossier viennent de `GET /admin/assets/{id}`
+  (identifiant seul si la lecture échoue); les listes n'affichent que des identifiants abrégés.
+- **Tests** : `src/features/transactions/*.test.ts`, `src/pages/ReservationsLoansPage.test.tsx`. Lecture réelle
+  contre une API isolée : `src/integration/custodyReads.integration.test.ts` (voir son en-tête).
+
+## Vue d'ensemble : cinq blocs indépendants (#159)
+
+Page protégée `/vue-d-ensemble`, première section de la barre latérale (plus aucune section « à venir »), d'après la
+console Manager approuvée le 11 novembre 2026 (`docs/design/manager-console/`, branche
+`158-docs-manager-console-design`). Ordre de `sections.md` §5.1 : anomalies ouvertes, prêts en retard, casier,
+opération en cours, réservations actives. Lecture seule : chaque rangée ouvre le dossier dans la page qui le
+possède (`/anomalies?anomalie=`, `/reservations-prets?vue=…&dossier=`), aucune action corrective.
+
+- **Blocs indépendants** (`src/features/overview/`) : chaque bloc lit ses propres routes et a ses états de
+  chargement, d'erreur, de données périmées (avis + heure de lecture + « Réessayer ») et de vide. Une route
+  indisponible (`404` d'une liste, réseau, 5xx, 403) est une erreur dans son bloc, jamais un zéro; elle ne cache
+  pas les autres blocs. Si tous les blocs échouent de la même façon, une seule alerte le dit. « Actualiser » relit
+  tout; « Réessayer » relit le seul bloc concerné. L'heure « Mis à jour » est la plus ancienne lecture réussie.
+- **Totaux** : une lecture unique donne le `totalItems` du serveur, jamais la taille d'une page. Un compte qui
+  rassemble plusieurs lectures (une par statut, §17) n'est ni un total ni un minimum : les lectures ne sont pas
+  simultanées, donc c'est le nombre d'éléments distincts observés, dit comme tel (« N observés », « N parmi les … lus »,
+  « Lecture incomplète »). Un élément qui change de statut entre deux lectures n'est compté qu'une fois, et peut manquer.
+
+| Bloc | Lectures | Compteur |
+|---|---|---|
+| Anomalies | `GET /admin/anomalies?status=OPEN&size=100` | `totalItems`; tri par gravité seulement si la page est complète |
+| Prêts en retard | `GET /admin/loans?status=ACTIVE` et `RETURN_PENDING`, `size=100` | boolean `overdue` du serveur sur ce qui est lu; prêts distincts observés; « parmi les prêts lus » si un statut manque ou dépasse une page |
+| Casier | `GET /admin/lockers`, puis `GET /lockers/{id}/status` (même clé et même intervalle de 15 s que Casiers) | aucun; état et cellules tels que le serveur les évalue, bandeau si hors ligne ou inconnu |
+| Opération en cours | `GET /admin/locker-operations?status=<s>&size=100` pour chacun des 7 statuts non terminaux | opérations distinctes observées, jamais la somme des `totalItems` (une opération qui change de statut entre deux lectures y serait comptée deux fois); « parmi les opérations lues » si un statut manque ou dépasse une page |
+| Réservations | `GET /admin/reservations?status=ACTIVE&size=5` | `totalItems` |
+
+- **Manques de contrat** (09 §17 : un seul `status` par requête, aucun filtre `overdue`, aucun filtre d'opérations
+  non terminales) : voir le rapport de livraison de #159. Aucune route ni aucun paramètre n'est ajouté.
+- **Libellés** : le code de cellule et celui de l'équipement d'une anomalie ou d'une opération viennent de la liste
+  des casiers (`GET /admin/lockers`, G3); sinon l'identifiant abrégé.
+- **Tests** : `src/features/overview/overviewModel.test.ts`, `src/pages/OverviewPage.test.tsx`; lecture réelle contre
+  une API isolée : `src/integration/overview.integration.test.ts` (voir son en-tête).

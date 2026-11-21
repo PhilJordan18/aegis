@@ -12,6 +12,7 @@
 .ag-chip--blocked { --fg: var(--ag-blocked-fg); --bg: var(--ag-blocked-bg); --ic: var(--ag-blocked-icon); }
 .ag-chip--unknown { --fg: var(--ag-unknown-fg); --bg: var(--ag-unknown-bg); --ic: var(--ag-unknown-icon); }
 .ag-chip--progress { --fg: var(--ag-progress-fg); --bg: var(--ag-progress-bg); --ic: var(--ag-progress-icon); }
+.ag-chip--anomaly { --fg: var(--ag-anomaly-fg); --bg: var(--ag-anomaly-bg); --ic: var(--ag-anomaly-icon); }
 .ag-chip--info { --fg: var(--ag-info-fg); --bg: var(--ag-info-bg); --ic: var(--ag-info-icon); }
 
 @media (forced-colors: active) {

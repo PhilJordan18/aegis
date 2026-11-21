@@ -2,6 +2,7 @@ package ca.aegis.control.audit;
 
 /** The event types written so far; the complete list is {@code ck_audit_events_type} (document 08, section 4.9). */
 public enum AuditEventType {
+    PASSWORD_CHANGED,
     ASSET_CREATED,
     ASSET_UPDATED,
     ASSET_ARCHIVED,
@@ -11,6 +12,9 @@ public enum AuditEventType {
     RESERVATION_CREATED,
     RESERVATION_CANCELLED,
     RESERVATION_EXPIRED,
+    OPERATION_REQUESTED,
+    LOCAL_CHALLENGE_CREATED,
+    LOCAL_CHALLENGE_DISPLAYED,
     LOCAL_CHALLENGE_EXPIRED,
     LOCAL_CHALLENGE_INVALIDATED,
     OPERATION_FAILED,
@@ -19,5 +23,6 @@ public enum AuditEventType {
     COMMAND_ACKNOWLEDGED,
     COMMAND_REJECTED,
     ANOMALY_CREATED,
+    ANOMALY_ACKNOWLEDGED,
     MQTT_MESSAGE_DUPLICATE_IGNORED
 }

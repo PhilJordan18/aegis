@@ -167,7 +167,7 @@ public final class ReservationFixtures {
      * {@code AWAITING_LOCAL_PROOF} never are; an authorized {@code ANOMALY} attempt had its command sent. A terminal
      * attempt ended a minute after creation.
      */
-    UUID attempt(UUID asset, UUID user, UUID reservation, String status, boolean authorized, Instant at) {
+    public UUID attempt(UUID asset, UUID user, UUID reservation, String status, boolean authorized, Instant at) {
         boolean confirmed = status.equals("CONFIRMED");
         boolean terminal = List.of("CONFIRMED", "FAILED", "EXPIRED", "ANOMALY").contains(status);
         boolean sent = authorized && (confirmed || List.of("COMMAND_SENT", "ANOMALY").contains(status));
@@ -265,7 +265,7 @@ public final class ReservationFixtures {
      * An anomaly of {@code attempt}, detected at {@code at}: {@code OPEN}, or {@code RESOLVED} a minute later by an
      * identifier detection that a new RFID scan of the attempt's locker recorded.
      */
-    UUID anomaly(UUID attempt, String status, Instant at) {
+    public UUID anomaly(UUID attempt, String status, Instant at) {
         UUID evidence = null;
         if (status.equals("RESOLVED")) {
             UUID device = hub(jdbc.sql("SELECT locker_id FROM aegis.locker_operations WHERE id = :id")
@@ -323,12 +323,12 @@ public final class ReservationFixtures {
                         .param("session", UUID.randomUUID()).query(UUID.class).single());
     }
 
-    String operationStatus(UUID operation) {
+    public String operationStatus(UUID operation) {
         return jdbc.sql("SELECT status FROM aegis.locker_operations WHERE id = :id").param("id", operation)
                 .query(String.class).single();
     }
 
-    String reservationStatus(UUID reservation) {
+    public String reservationStatus(UUID reservation) {
         return jdbc.sql("SELECT status FROM aegis.reservations WHERE id = :id").param("id", reservation)
                 .query(String.class).single();
     }

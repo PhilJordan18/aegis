@@ -29,14 +29,19 @@ import ca.aegis.control.audit.AuditSubjectType;
 import ca.aegis.control.audit.AuditTrail;
 import ca.aegis.control.identity.AccountStatus;
 import ca.aegis.control.identity.Role;
+import ca.aegis.control.identity.UserSummaries;
+import ca.aegis.control.identity.UserSummary;
 import ca.aegis.control.locker.LockerSchedules;
 import ca.aegis.control.locker.OpenWindow;
 import ca.aegis.control.locker.OperatingHours;
 import ca.aegis.control.locker.OperatingHoursException;
+import ca.aegis.control.reservation.ReservationRepository.AdminFilter;
 import ca.aegis.control.reservation.ReservationRepository.LockedUser;
 import ca.aegis.control.reservation.ReservationRepository.ReservationRow;
 import ca.aegis.control.shared.web.ApiError;
 import ca.aegis.control.shared.web.InvalidRequestException;
+import ca.aegis.control.shared.web.PageQuery;
+import ca.aegis.control.shared.web.PageResponse;
 import ca.aegis.control.shared.web.ResourceNotFoundException;
 
 /**
@@ -57,17 +62,19 @@ class ReservationService {
     private final ReservableAssets assets;
     private final LockerSchedules schedules;
     private final AuditTrail audit;
+    private final UserSummaries users;
     private final Clock clock;
 
     ReservationService(ReservationRepository reservations, CheckoutAttemptRepository attempts,
             PendingCheckouts pendingCheckouts, ReservableAssets assets, LockerSchedules schedules, AuditTrail audit,
-            Clock clock) {
+            UserSummaries users, Clock clock) {
         this.reservations = reservations;
         this.attempts = attempts;
         this.pendingCheckouts = pendingCheckouts;
         this.assets = assets;
         this.schedules = schedules;
         this.audit = audit;
+        this.users = users;
         this.clock = clock;
     }
 
@@ -199,6 +206,39 @@ class ReservationService {
         return reservations.find(reservationId).filter(row -> row.userId().equals(technicianId))
                 .map(row -> view(row, now))
                 .orElseThrow(ResourceNotFoundException::new);
+    }
+
+    /** Document 09, section 17: every reservation, read only; the count and the page see one snapshot. */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    PageResponse<AdminReservationView> adminList(AdminFilter filter, PageQuery page) {
+        long total = reservations.count(filter);
+        List<ReservationRow> rows = total == 0 ? List.of() : reservations.page(filter, page);
+        Map<UUID, AssetSummary> summaries = assets.summaries(rows.stream().map(ReservationRow::assetId).toList());
+        Map<UUID, UserSummary> holders = users.of(rows.stream().map(ReservationRow::userId).toList());
+        return PageResponse.of(rows.stream()
+                .map(row -> adminView(row, summaries.get(row.assetId()), holders.get(row.userId()))).toList(),
+                page, total);
+    }
+
+    /** Document 09, section 17: any reservation, whoever holds it. */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    AdminReservationView adminGet(UUID reservationId) {
+        return reservations.find(reservationId)
+                .map(row -> adminView(row, assets.summaries(List.of(row.assetId())).get(row.assetId()),
+                        users.of(List.of(row.userId())).get(row.userId())))
+                .orElseThrow(ResourceNotFoundException::new);
+    }
+
+    /**
+     * Rule D4 approved on 11 November 2026 (#67): section 8.10 lists the mutations of the requester, and
+     * an administrator performs none of them, so {@code availableActions} is always empty here.
+     */
+    private AdminReservationView adminView(ReservationRow row, AssetSummary asset, UserSummary user) {
+        UUID currentOperation = row.status() == ReservationStatus.ACTIVE
+                ? reservations.currentOperationOf(row.id()).orElse(null) : null;
+        return new AdminReservationView(row.id(), asset, row.userId(), user, row.status(), row.reservedFrom(),
+                row.reservedUntil(), row.createdAt(), row.cancelledAt(), row.fulfilledAt(), row.expiredAt(),
+                currentOperation, List.of());
     }
 
     private OpenWindow openWindow(UUID lockerId, Instant now) {

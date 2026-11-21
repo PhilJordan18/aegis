@@ -25,6 +25,8 @@ export default defineConfig(({ command, mode }) => {
     test: {
       environment: 'jsdom',
       include: ['src/**/*.test.{ts,tsx}'],
+      // The live API tests are collected only when AEGIS_IT_API_ORIGIN names an isolated API: CI rejects skipped tests.
+      exclude: process.env.AEGIS_IT_API_ORIGIN ? [] : ['src/integration/**'],
       restoreMocks: true,
     },
   }

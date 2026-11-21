@@ -1,4 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { Alert } from '../../ui/Alert'
+import { Button } from '../../ui/Button'
+import { useSession } from '../../features/auth/session'
 import { AppearanceSwitch } from '../../features/appearance/AppearanceSwitch'
 import type { UserProfile } from '../../features/auth/contract'
 import { LanguageSwitch } from '../../features/language/LanguageSwitch'
@@ -11,16 +14,18 @@ import { pathOf } from '../routes'
 import './shell.css'
 
 /**
- * Order imposed by sections.md §5 and handoff §6 SidebarNav. Équipements (the static preview in design-review
- * builds, the protected page otherwise) and Casiers (the read-only locker status) exist so far.
+ * Order imposed by sections.md §5 and handoff §6 SidebarNav. Every section has its page: the Vue d'ensemble, Équipements
+ * (the static preview in design-review builds, the protected page otherwise), Réservations et prêts, Casiers (the
+ * read-only locker status), Anomalies and Audit (the read-only history). A section without a `path` would be drawn
+ * as « à venir », with its legend.
  */
 const SECTIONS: readonly { id: keyof Messages['shell']['sections']; icon: IconName; path: string | null }[] = [
-  { id: 'overview', icon: 'grid', path: null },
+  { id: 'overview', icon: 'grid', path: pathOf('overview') },
   { id: 'equipment', icon: 'box', path: pathOf(__AEGIS_PREVIEW__ ? 'equipmentPreview' : 'equipment') },
-  { id: 'reservationsLoans', icon: 'calendar', path: null },
+  { id: 'reservationsLoans', icon: 'calendar', path: pathOf('reservationsLoans') },
   { id: 'lockers', icon: 'locker', path: pathOf('lockers') },
-  { id: 'anomalies', icon: 'alert', path: null },
-  { id: 'audit', icon: 'list', path: null },
+  { id: 'anomalies', icon: 'alert', path: pathOf('anomalies') },
+  { id: 'audit', icon: 'list', path: pathOf('audit') },
 ]
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -43,6 +48,8 @@ interface ShellProps {
 
 export function ManagerShell({ currentPath, profile, onSignOut, children }: ShellProps) {
   const { m } = useI18n()
+  const session = useSession()
+  const signOutState = session.status === 'authenticated' ? session.signOut : 'idle'
   return (
     <div className="ag-shell">
       <a className="ag-skip" href="#contenu">
@@ -57,7 +64,24 @@ export function ManagerShell({ currentPath, profile, onSignOut, children }: Shel
       </nav>
       <div className="ag-shell__main">
         <CompactNav currentPath={currentPath} profile={profile} onSignOut={onSignOut} />
-        <div className="ag-shell__content">{children}</div>
+        <div className="ag-shell__content">
+          {/* Sign-out is a server revocation (ADR-016): until it is confirmed the session stays open, and says so. */}
+          {signOutState === 'pending' && (
+            <p className="ag-sr-only" role="status">
+              {m.session.signingOut}
+            </p>
+          )}
+          {signOutState === 'failed' && (
+            <div className="ag-shell__notice">
+              <Alert kind="error" icon="status-error" title={m.session.signOutFailedTitle}>
+                <Button variant="secondary" size="sm" onClick={onSignOut}>
+                  {m.session.signOutRetry}
+                </Button>
+              </Alert>
+            </div>
+          )}
+          {children}
+        </div>
       </div>
     </div>
   )
@@ -86,16 +110,20 @@ function SectionList({ currentPath }: { readonly currentPath: string }) {
           </li>
         ))}
       </ul>
-      <p className="ag-nav__legend" aria-hidden="true">
-        <span className="ag-soon" />
-        {m.shell.soonLegend}
-      </p>
+      {SECTIONS.some((section) => section.path === null) && (
+        <p className="ag-nav__legend" aria-hidden="true">
+          <span className="ag-soon" />
+          {m.shell.soonLegend}
+        </p>
+      )}
     </>
   )
 }
 
 function AccountDetails({ profile, onSignOut }: { readonly profile: UserProfile; readonly onSignOut: () => void }) {
   const { m } = useI18n()
+  const session = useSession()
+  const pending = session.status === 'authenticated' && session.signOut === 'pending'
   return (
     <>
       <div className="ag-menu__id">
@@ -107,7 +135,7 @@ function AccountDetails({ profile, onSignOut }: { readonly profile: UserProfile;
       <div className="ag-menu__sep" />
       <LanguageSwitch />
       <div className="ag-menu__sep" />
-      <button type="button" className="ag-menu__item" onClick={onSignOut}>
+      <button type="button" className="ag-menu__item" aria-disabled={pending || undefined} onClick={pending ? undefined : onSignOut}>
         <Icon name="logout" />
         {m.shell.signOut}
       </button>
@@ -162,7 +190,15 @@ function AccountMenu({ profile, onSignOut }: { readonly profile: UserProfile; re
         <Icon name="updown" className="ag-account__chevron" />
       </button>
       <div id={panelId} className="ag-menu" role="group" aria-label={m.shell.accountLabel} hidden={!open}>
-        <AccountDetails profile={profile} onSignOut={onSignOut} />
+        <AccountDetails
+          profile={profile}
+          onSignOut={() => {
+            // The result, or its error, appears in the page: leave the disclosure and keep focus on its button.
+            setOpen(false)
+            buttonRef.current?.focus()
+            onSignOut()
+          }}
+        />
       </div>
     </div>
   )
@@ -197,7 +233,7 @@ function CompactNav({ currentPath, profile, onSignOut }: Omit<ShellProps, 'child
 
   return (
     <>
-      <div className="ag-topbar">
+      <header className="ag-topbar">
         <Brand />
         <button
           ref={triggerRef}
@@ -209,7 +245,7 @@ function CompactNav({ currentPath, profile, onSignOut }: Omit<ShellProps, 'child
         >
           <Icon name="menu" />
         </button>
-      </div>
+      </header>
       <dialog
         ref={dialogRef}
         className="ag-drawer"
@@ -234,7 +270,13 @@ function CompactNav({ currentPath, profile, onSignOut }: Omit<ShellProps, 'child
             <SectionList currentPath={currentPath} />
           </nav>
           <div className="ag-drawer__account" role="group" aria-label={m.shell.accountLabel}>
-            <AccountDetails profile={profile} onSignOut={onSignOut} />
+            <AccountDetails
+              profile={profile}
+              onSignOut={() => {
+                close()
+                onSignOut()
+              }}
+            />
           </div>
         </div>
       </dialog>

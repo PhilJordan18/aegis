@@ -142,6 +142,101 @@ priment sur les claims émis à la connexion. Changer `AEGIS_JWT_SECRET`
 invalide tous les jetons émis. Le mot de passe, le jeton et la clé ne sont
 jamais journalisés.
 
+## Session navigateur du Manager (ADR-016)
+
+Une connexion Web avec `browserSession: true` pose le cookie
+`__Secure-aegis_session` (`HttpOnly`, `Secure`, `SameSite=Strict`, chemin
+`/api/v1/auth/session`). Ce cookie permet à une page rechargée de demander un
+nouveau jeton par `POST /api/v1/auth/session/refresh`, et la déconnexion le
+révoque par `POST /api/v1/auth/session/revoke`. La base ne garde que son
+empreinte SHA-256 (`aegis.browser_sessions`). Ni sa valeur ni le jeton restauré
+ne sont journalisés.
+
+| Variable | Défaut | Règle |
+|---|---|---|
+| `AEGIS_WEB_ALLOWED_ORIGINS` | vide | Origines exactes du Manager, séparées par des virgules, par exemple `https://manager.example`; `http` seulement pour `localhost`. Vide, aucune session navigateur ne démarre et un rechargement impose une nouvelle connexion |
+| `AEGIS_WEB_SESSION_LIFETIME` | `PT8H` | Durée absolue d'une session, au plus `PT12H`; un rafraîchissement ne la prolonge jamais |
+
+En déploiement, `AEGIS_WEB_ALLOWED_ORIGINS` reçoit l'origine publique du
+service Web, celle que le navigateur affiche. Le cookie traverse le proxy Caddy
+du Manager sans attribut `Domain` : il reste attaché à cette origine.
+
+Un changement effectif de mot de passe passe par `PasswordChanges`. Ce point
+d'écriture est le seul qui existe; le provisionnement de démonstration
+l'utilise aussi. Le changement révoque toutes les sessions navigateur du
+compte et écrit l'audit `PASSWORD_CHANGED` (ADR-017). Un redémarrage avec le
+même mot de passe ne révoque rien. Une tâche planifiée supprime les sessions
+terminées depuis plus de 30 jours. La fin d'une session est le plus tôt de sa
+révocation et de sa fin absolue; une session ouverte n'est jamais supprimée :
+
+| Propriété | Défaut | Règle |
+|---|---|---|
+| `aegis.security.browser-session.purge.interval` | `PT1H` | Délai entre deux purges |
+| `aegis.security.browser-session.purge.batch-size` | `500` | Lignes supprimées par lot |
+| `aegis.security.browser-session.purge.scheduled` | `true` | `false` seulement dans les tests qui contrôlent l'horloge |
+
+Le cycle de vie complet (rechargement, échéance, déconnexion, mot de passe,
+compte changé, panne, redémarrage) est la matrice du document 09, §10.6. Les
+jetons d'accès déjà émis restent valables jusqu'à leur expiration; leur
+révocation (ADR-018) arrive dans la tranche suivante.
+
+Les journaux de l'application (`ca.aegis`) ne contiennent ni cookie, ni
+jeton, ni mot de passe, ni empreinte, même à TRACE. Cette garantie ne couvre
+pas les journaux du framework. À DEBUG ou TRACE, Tomcat, le pilote PostgreSQL et
+`org.springframework.jdbc` écrivent le corps de la connexion, l'en-tête
+`Cookie` et les paramètres SQL liés. N'activez jamais ces niveaux, ni
+`LOGGING_LEVEL_ROOT` au-delà de `INFO`, hors d'une pile jetable.
+
+### Déploiement Railway (#178)
+
+Aucun mot de passe ni secret n'est transmis par cette procédure.
+
+1. **Variables de l'API.**
+   - Définir `AEGIS_WEB_ALLOWED_ORIGINS` avec l'origine publique exacte du
+     Manager : schéma et hôte, sans chemin ni barre finale.
+   - Laisser `AEGIS_WEB_SESSION_LIFETIME` absent pour garder `PT8H`.
+   - Ne changer ni `AEGIS_JWT_SECRET` ni les mots de passe de démonstration à
+     cette occasion.
+2. **Ordre de déploiement.**
+   1. Déployer l'API d'abord. Flyway applique `V010` puis `V011` au
+      démarrage; les deux migrations sont additives. Vérifier dans les
+      journaux `Successfully applied 2 migrations` et la santé
+      `GET /api/v1/system/health`.
+   2. Déployer le Web ensuite.
+
+   Un Web nouveau devant une API ancienne échouerait à la restauration
+   (`404`), ce qui équivaut à l'ancien comportement : une reconnexion.
+3. **Vérification sur le Manager déployé**, par une personne qui détient un
+   compte administrateur non exposé :
+   - **Connexion.** Se connecter. Dans les outils du navigateur, le cookie
+     `__Secure-aegis_session` est `HttpOnly`, `Secure`, `SameSite=Strict`,
+     avec le chemin `/api/v1/auth/session`. Ne pas copier sa valeur.
+   - **Rechargement et lien direct.** Ouvrir une page protégée, l'actualiser,
+     puis coller son URL dans un nouvel onglet. La page reste affichée, sans
+     passage par `/connexion`.
+   - **Déconnexion.** Se déconnecter, puis actualiser l'autre onglet. Les deux
+     renvoient à `/connexion`, et l'actualisation ne restaure rien.
+   - **Échéance.** Facultatif, sur un service de recette seulement : avec
+     `AEGIS_WEB_SESSION_LIFETIME=PT5M`, une actualisation après 5 minutes
+     renvoie une seule fois à `/connexion`, sans boucle. Remettre ensuite la
+     valeur par défaut.
+   - **Changement de mot de passe.** Seulement si une rotation prévue a lieu :
+     1. ouvrir une session navigateur;
+     2. changer la variable du mot de passe de ce compte sur Railway et
+        redéployer l'API;
+     3. l'actualisation renvoie à `/connexion`;
+     4. l'audit montre un `PASSWORD_CHANGED`.
+
+     Un redéploiement sans changement de mot de passe garde la session.
+
+     La rotation n'est effective qu'après la ligne de journal « Updated the
+     password of demo account … ». Le serveur HTTP accepte des requêtes
+     quelques centaines de millisecondes avant elle :
+     - une session navigateur ouverte dans cette fenêtre est révoquée par le
+       changement;
+     - un jeton porteur émis dans cette fenêtre vit jusqu'à son expiration
+       (60 minutes au plus), jusqu'à l'ADR-018 (#179).
+
 ## Autorisation des routes
 
 `identity/ApiRoutes.java` liste chaque route du document 09, section 9, avec
@@ -555,6 +650,59 @@ attente et l'opération autorisée garde le casier; le job partage le planificat
 de l'application, et un broker qui n'accuse plus réception peut retarder les
 autres jobs d'au plus `publish-timeout` par commande. La règle d'un accusé reçu
 avant le marquage (ligne encore `CLAIMED`) reste à fixer avec IOT-02.
+
+## Préparation du retrait et défi du hub (LOC-01, CHK-01)
+
+`POST /api/v1/checkouts` (document 09, §15.1) prépare un retrait sans rien
+ouvrir. Une seule transaction verrouille, dans l'ordre, l'utilisateur, l'actif,
+la réservation, le casier, l'opération et le défi. Elle crée l'opération
+`AWAITING_LOCAL_PROOF` et le défi de 60 s, puis incrémente la révision
+d'affichage du casier. Elle insère enfin l'instruction chiffrée dans
+`hub_display_outbox`. Aucune commande `UNLOCK_COMPARTMENT` n'est créée. La
+réponse `202` porte `Location` et `Cache-Control: no-store`, sans jeton : seul
+le hub reçoit le jeton, dans `DISPLAY_ACCESS_CHALLENGE` (document 10, §27.1).
+La base, l'audit et l'idempotence n'en gardent que le hash.
+
+Le dispatcher d'affichage suit les mêmes étapes que celui des commandes :
+réclamation, publication hors transaction en QoS 1 non retenue, marquage et
+reprise avec délai. L'accusé `ACCESS_CHALLENGE_DISPLAYED` fixe
+`localProofDisplayedAt` une seule fois. Un rejet du hub annule l'instruction et
+purge son ciphertext. Toutes les 5 s, un job expire les défis échus
+(`LOCAL_PROOF_EXPIRED`) et invalide ceux dont le hub a redémarré
+(`HUB_RESTARTED`) ou dont le casier n'est plus `ONLINE` (`LOCKER_OFFLINE`). Il
+envoie alors un `DISPLAY_OPERATION_STATUS` qui efface l'écran et purge le
+ciphertext échu.
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `AEGIS_DISPLAY_ENABLED` | `false` | Active la préparation; sinon `503 LOCKER_OFFLINE` |
+| `AEGIS_DISPLAY_KEYS` | vide | `keyId:base64`, séparées par des virgules, 32 octets chacune |
+| `AEGIS_DISPLAY_ACTIVE_KEY_ID` | vide | Clé qui scelle les nouvelles instructions |
+| `AEGIS_DISPLAY_DISPATCHER_ENABLED` | `false` | Publie les instructions; exige MQTT et le flux activé |
+| `AEGIS_PREPARATION_MAX_PER_WINDOW` | `6` | Préparations par utilisateur et par fenêtre, puis `429` |
+| `AEGIS_PREPARATION_WINDOW` | `PT10M` | Fenêtre de cette limite |
+
+Les clés, leur rotation et leur retrait suivent
+[ADR-015](../../docs/adr/ADR-015-cles-affichage-hub.md). Une clé se génère avec
+`openssl rand -base64 32` et ne s'écrit que dans le gestionnaire de secrets de
+la plateforme ou dans un fichier local hors Git. Le flux activé sans clé valide
+arrête l'API au démarrage. Avant de retirer une clé, cette requête ne doit plus
+la lister :
+
+```sql
+SELECT encryption_key_id, count(*)
+FROM aegis.hub_display_outbox
+WHERE encrypted_payload IS NOT NULL
+GROUP BY encryption_key_id;
+```
+
+`CheckoutPreparationApiTests` et `DisplayDispatcherTests` s'exécutent sur
+PostgreSQL. `DisplayBrokerTests` utilise le broker de développement et le hub
+de test. La recette `scripts/check-hub-challenge.sh`, lancée depuis la racine,
+démarre un projet Compose jetable avec le simulateur Node. Elle prouve le refus
+de démarrage sans clé, la concurrence, la rotation, l'affichage, l'absence du
+jeton et l'expiration. Elle tire ses propres clés et ne les affiche jamais. Le
+hub y est simulé : elle ne prouve pas l'écran physique.
 
 ## Catalogue technicien et readiness (RDY-01, RDY-02)
 
