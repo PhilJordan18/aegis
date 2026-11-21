@@ -95,7 +95,12 @@ if want V5 || want V6; then # real rotation through the provisioner
     [[ $open_a == 0 && $pc -ge 2 && $ra == 401 && $rb == 401 ]] && pass "V5a admin rotation: every admin session revoked PASSWORD_CHANGED ($pc), refresh 401/401" || fail "V5a open=$open_a revoked=$pc refresh $ra/$rb"
     [[ $((ev1 - ev0)) == 1 && $evs == 1 ]] && pass "V5b exactly one PASSWORD_CHANGED audit event, subject = admin" || fail "V5b events +$((ev1 - ev0)), on admin $evs"
     [[ $rt == 200 ]] && pass "V5c technician session untouched (refresh 200)" || fail "V5c technician refresh $rt"
-    obs "V5d pre-rotation access token on /auth/me: $(me "$tk") (ADR-018 proposed, not implemented: expected 200 until its expiry)"
+    v5d=$(me "$tk")
+    if [[ -f services/api/src/main/resources/db/migration/V012__add_user_credential_version.sql ]]; then
+      [[ $v5d == 401 ]] && pass "V5d pre-rotation access token refused at once (ADR-018 in effect): 401" || fail "V5d pre-rotation access token: expected 401 (ADR-018), got $v5d"
+    else
+      obs "V5d pre-rotation access token on /auth/me: $v5d (before ADR-018: expected 200 until its expiry)"
+    fi
     hm=$(json 'd.get("code")' <<<"$(curl -s -H 'Content-Type: application/json' --data-binary @- "$api/auth/login" <<<"{\"email\":\"$A\",\"password\":\"$AP\"}")" 2>/dev/null)
     echo "  old password login after rotation: ${hm:-?}"
     n0=$(sql "SELECT count(*) FROM aegis.browser_sessions WHERE revoked_at IS NOT NULL"); a2c=$(open_session $A "$NEWP")

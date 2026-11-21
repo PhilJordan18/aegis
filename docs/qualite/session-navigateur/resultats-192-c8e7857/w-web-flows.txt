@@ -1,0 +1,34 @@
+  17 passed (2.4m)
+web real-API exit 0
+PASS W1 reload on a deep link (/audit?type=…) restores in place with exactly one refresh
+PASS W1b the query string of the deep link survives the reload
+PASS W2 token only in memory: no localStorage, sessionStorage, IndexedDB, readable cookie, nor token in the DOM
+PASS W2b cookie HttpOnly, Secure, SameSite=Strict, Path=/api/v1/auth/session
+PASS W13 the cookie travels only to /auth/session/* routes
+PASS W3 revoked server-side: one refresh, 401, then sign-in with retour=/casiers and no loop over 5 s
+PASS W3b the 401 cleared the cookie in the browser
+PASS W5 disabled account: back to sign-in once, no refresh loop
+PASS W5b its browser session is revoked ACCOUNT_CHANGED
+PASS W6 fault-injected abort on restore: stays on /casiers, Retry shown, cookie kept, no revoke
+PASS W6b after the fault clears, Retry restores the session in place
+PASS W7 fault-injected 503 on restore: stays on /casiers, Retry shown, cookie kept, no revoke
+PASS W7b after the fault clears, Retry restores the session in place
+PASS W8 fault-injected 403 on admin reads: no sign-out, no revoke, cookie kept
+PASS W9 fault-injected 500 on revoke: exact message, still signed in, cookie kept
+PASS W9b after the failed sign-out a reload still restores the session (nothing pretended)
+PASS W10a a second tab of the same browser restores the same session
+PASS W9c confirmed sign-out: sign-in page and cookie cleared
+PASS W10 the other tab leaves the protected page without a reload
+PASS W9d reload after the sign-out stays on sign-in
+browser failures: 0
+browser failures: 0
+PASS W4 after a real password rotation the old browser session cannot restore: one refresh, sign-in
+PASS W14 the audit view shows « Mot de passe changé » for the rotation
+PASS W14b the revokedBrowserSessions detail is labelled
+browser failures: 0
+PASS W10c without BroadcastChannel the storage fallback sends the other tab to sign-in
+PASS W10d the fallback signal is only "<signal>:<nonce>" (no token, no account data)
+PASS W10e the signal key is removed immediately (localStorage empty)
+browser failures: 0
+failures: 0
+exit=0
