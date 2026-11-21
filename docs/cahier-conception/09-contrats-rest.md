@@ -20,6 +20,7 @@
 **Mise à jour ciblée :** 28 octobre 2026 — recherche `q` commune à l’API, au Web et à iOS : espaces Unicode de bordure, longueur en grappes de graphèmes, corpus partagé (§11.1, §22.3, §26.6), décision commune consignée par l’[ADR-014](../adr/ADR-014-recherche-q-graphemes.md), acceptée par Philippe le 6 novembre 2026 (#109)  
 **Mise à jour ciblée :** 6 novembre 2026 — lectures administratives approuvées par Philippe (#25, #26, #28) : `GET /admin/lockers` et `AdminLockerView` (§9.3, §16.2), historique des identifiants `GET /admin/assets/{assetId}/identifiers` (§9.3, §12.3); aucune migration  
 **Mise à jour ciblée :** 6 novembre 2026 — refus du catalogue liés à la garde de l’actif (#26) : placement refusé pendant une réservation active, un prêt ouvert ou une opération non terminale, attribution refusée pendant une opération non terminale et révocation de l’identifiant qu’elle attend, avec les codes de l’archivage (§12.3, §12.4, §21); ordre des refus approuvé par Philippe le 6 novembre 2026; aucun code ni champ nouveau  
+**Mise à jour ciblée :** 21 novembre 2026 — cycle de vie d’une session (§10.6); révocation des sessions navigateur au changement de mot de passe et type d’audit `PASSWORD_CHANGED` (ADR-017, §10.4, §19.1); migration `V011`; révocation des JWT émis proposée seulement (ADR-018)  
 **Mise à jour ciblée :** 18 novembre 2026 — session navigateur révocable du Manager (ADR-016, #178) : champ optionnel `browserSession` de la connexion, routes `POST /auth/session/refresh` et `POST /auth/session/revoke` (§9.1, §10.2, §10.4, §10.5), code `401 AUTH_SESSION_INVALID` (§21); §4.1 et §4.2 remplacés pour le Web; migration `V010`  
 **Mise à jour ciblée :** 6 novembre 2026 — erreurs signalées par le hub (#29) : champ requis `deviceErrors` et `DeviceErrorView` de `LockerStatusView` (§8.6, §16.1), limités à la session courante du hub, approuvés par Philippe le 6 novembre 2026; ajout compatible, aucune migration
 
@@ -798,7 +799,7 @@ Réponse 200 : même forme que §10.2 (`accessToken`, `tokenType`, `expiresIn`, 
 
 Erreurs :
 
-- `401 AUTH_SESSION_INVALID`, qui efface aussi le cookie (`Max-Age=0`) : cookie absent, mal formé ou inconnu, session révoquée ou échue, compte désactivé ou archivé, rôle changé depuis la connexion. Les deux derniers cas révoquent la session définitivement.
+- `401 AUTH_SESSION_INVALID`, qui efface aussi le cookie (`Max-Age=0`) : cookie absent, mal formé ou inconnu, session révoquée (déconnexion, compte changé ou mot de passe changé, ADR-017) ou échue, compte désactivé ou archivé, rôle changé depuis la connexion. Les deux derniers cas révoquent la session définitivement.
 - `403 FORBIDDEN` : `Origin` absent ou non autorisé.
 
 Le client n’essaie qu’une restauration par démarrage ou par jeton échu, et ne boucle jamais sur un 401.
@@ -806,6 +807,25 @@ Le client n’essaie qu’une restauration par démarrage ou par jeton échu, et
 ### 10.5 POST /auth/session/revoke
 
 Déconnexion explicite du Web (ADR-016). Révoque côté serveur la session du cookie, s’il en reste une, puis efface le cookie. Réponse `204`, idempotente, avec ou sans cookie. Erreur : `403 FORBIDDEN` si `Origin` est absent ou non autorisé. Un jeton d’accès déjà émis reste valable jusqu’à son expiration (§4.2).
+
+### 10.6 Cycle de vie d’une session (ADR-016, ADR-017)
+
+« JWT émis » désigne un jeton d’accès déjà remis à un client. Le serveur relit le compte à chaque requête protégée (§4.1). La colonne JWT décrit le comportement en vigueur; la révocation des JWT proposée par l’ADR-018 n’est pas en vigueur.
+
+| Événement | Cookie | Ligne `browser_sessions` | JWT émis | Autres onglets du navigateur | iOS |
+|---|---|---|---|---|---|
+| Actualisation, lien direct, nouvel onglet | conservé, ni renouvelé ni prolongé | `last_refreshed_at` mis à jour | inchangés; un nouveau JWT est émis, borné par la fin de la session | indépendants; chacun restaure son propre JWT | non concerné |
+| JWT échu pendant l’usage (session vivante) | conservé | `last_refreshed_at` mis à jour | le JWT échu reçoit `401`; le Web restaure une seule fois, puis renvoie à la connexion si la restauration échoue | chacun restaure de son côté, sans boucle | reconnexion (aucun refresh iOS) |
+| Fin absolue (8 h par défaut) | effacé par le `401 AUTH_SESSION_INVALID` de la restauration | inchangée, échue | aucun ne dépasse la fin de la session : leur expiration y est bornée | renvoyés à la connexion à leur prochaine restauration | non concerné |
+| Déconnexion explicite du Web | effacé (`204`) | révoquée `SIGNED_OUT` | **restent valides jusqu’à leur expiration (≤ 60 min)**; le Web efface le sien et ses caches | le Web propage la déconnexion aux onglets ouverts; leur restauration échoue | non concerné; ses sessions restent ouvertes |
+| Changement réel du mot de passe | effacé à la prochaine restauration | **toutes** les sessions ouvertes du compte révoquées `PASSWORD_CHANGED`, dans la transaction du changement | **restent valides jusqu’à leur expiration (≤ 60 min)** | renvoyés à la connexion à leur prochaine restauration | ses JWT restent valides jusqu’à expiration; nouvelle connexion avec le nouveau mot de passe |
+| Redémarrage avec le même mot de passe de démonstration | conservé | inchangée : aucun changement effectif, donc aucune révocation | inchangés (même clé de signature) | inchangés | inchangé |
+| Compte désactivé ou archivé | effacé à la prochaine restauration | révoquée `ACCOUNT_CHANGED` à la prochaine restauration | **refusés immédiatement** (`401`), car le compte est relu à chaque requête | renvoyés à la connexion | refusé immédiatement |
+| Rôle changé | effacé à la prochaine restauration | révoquée `ACCOUNT_CHANGED` à la prochaine restauration | authentifiés avec le **rôle courant**; l’ancien rôle ne donne aucun droit (`403`) | renvoyés à la connexion à leur prochaine restauration | droits du rôle courant |
+| Panne réseau ou API indisponible (`5xx`, délai) | conservé | inchangée | inchangés | le Web affiche un état récupérable avec une nouvelle tentative; ce n’est pas une session invalide | message d’indisponibilité |
+| Redémarrage de l’API ou nouvelle instance | conservé | conservée en base, révocations comprises | valides si la clé `AEGIS_JWT_SECRET` est inchangée | inchangés | inchangé |
+
+Une ligne révoquée ne redevient jamais ouverte : un déclencheur de `V011` refuse toute modification d’une session déjà révoquée. Une ligne terminée (révoquée ou échue) est supprimée 30 jours après sa fin; la trace durable d’un changement de mot de passe est l’événement d’audit `PASSWORD_CHANGED` (ADR-017).
 
 ---
 
@@ -1424,6 +1444,7 @@ Règles approuvées par Philippe le 11 novembre 2026 (#67, D8 à D10) :
 - tri du plus récent au plus ancien par `occurredAt`, puis `id` décroissant; `from` et `to` bornent `occurredAt`; `limit` vaut 50 par défaut; `eventType` et `subjectType` acceptent chacun une seule valeur de l’ensemble contrôlé, et les erreurs de filtre suivent §17;
 - `actor` est un `UserSummary` (§8.8) pour un acteur humain, sinon `null`, sans attribution inventée;
 - `details` suit une liste explicite de champs scalaires par type d’événement. Un champ n’est exposé que si son chemin complet figure dans la liste et que sa valeur est une chaîne, un nombre, un booléen ou `null`. Les secrets, hashes, notes, textes libres, valeurs d’identifiant brutes et payloads sont exclus. Un type d’événement absent de la liste expose `{}`;
+- `PASSWORD_CHANGED` (ADR-017, sujet `USER`) n’expose que `revokedBrowserSessions`, le nombre de sessions navigateur révoquées par le changement;
 - le curseur est lié aux filtres qui l’ont produit, mais pas à `limit`; réutilisé avec d’autres filtres ou mal formé, il donne `400 INVALID_CURSOR`.
 
 Garanties d’un parcours, c’est-à-dire de la première page jusqu’à `hasMore = false` : aucun événement n’apparaît deux fois, et tout événement validé avant la lecture de la première page apparaît. Le parcours n’est pas un instantané : chaque page est une lecture distincte, et `occurredAt` est l’horloge de la mutation, pas l’instant de sa validation. Un événement validé pendant le parcours n’apparaît que s’il se classe après la position du curseur. Un événement plus récent que la première page, ou qui se classe avant le curseur (arrivée tardive ou antidatée), apparaît au parcours suivant. Pour le voir, le client relance la lecture depuis la première page.

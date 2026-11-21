@@ -3,7 +3,8 @@
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de révision :** 16 septembre 2026
-**Mise à jour ciblée :** 23 septembre 2026 — statut des paramètres QR et de RS-485; SQL inchangé.
+**Mise à jour ciblée :** 23 septembre 2026 — statut des paramètres QR et de RS-485; SQL inchangé.  
+**Mise à jour ciblée :** 21 novembre 2026 — ADR-017 (#178), migration `V011` : motif `PASSWORD_CHANGED`, révocation définitive et purge à 30 jours de `browser_sessions` (§4.2); type d’audit `PASSWORD_CHANGED` (§4.9).
 **Version :** 1.2 — contrôle local QR et étoile
 
 ---
@@ -176,7 +177,13 @@ CREATE TABLE users (
 
 #### `browser_sessions`
 
-Session navigateur révocable du Manager (ADR-016, migration `V010`). Seule l’empreinte SHA-256 du cookie est stockée; la fin absolue, d’au plus 12 heures, ne bouge jamais. Les lignes sont des créances, non un historique de possession : une ligne terminée peut être supprimée.
+Session navigateur révocable du Manager (ADR-016, migration `V010`; ADR-017, migration `V011`).
+
+- Seule l’empreinte SHA-256 du cookie est stockée.
+- La fin absolue, d’au plus 12 heures, ne bouge jamais.
+- Un changement effectif du mot de passe révoque toutes les sessions ouvertes du compte (`PASSWORD_CHANGED`), dans sa transaction.
+- Une révocation est définitive : un déclencheur refuse toute modification d’une ligne révoquée.
+- Les lignes sont des créances, non un historique de possession. Une ligne terminée est supprimée 30 jours après sa fin (révocation ou échéance) par une purge planifiée. La trace durable d’un changement de mot de passe est l’événement d’audit `PASSWORD_CHANGED`.
 
 ```sql
 CREATE TABLE browser_sessions (
@@ -204,10 +211,18 @@ CREATE TABLE browser_sessions (
         CHECK ((revoked_at IS NULL) = (revocation_reason IS NULL)),
     CONSTRAINT ck_browser_sessions_revocation_reason
         CHECK (revocation_reason IS NULL
-            OR revocation_reason IN ('SIGNED_OUT', 'ACCOUNT_CHANGED'))
+            OR revocation_reason IN ('SIGNED_OUT', 'ACCOUNT_CHANGED', 'PASSWORD_CHANGED'))
 );
 
 CREATE INDEX ix_browser_sessions_user ON browser_sessions (user_id);
+CREATE INDEX ix_browser_sessions_ended ON browser_sessions ((coalesce(revoked_at, expires_at)));
+
+-- V011 : une session révoquée est définitive.
+CREATE TRIGGER tr_browser_sessions_revoked_final
+    BEFORE UPDATE ON browser_sessions
+    FOR EACH ROW
+    WHEN (OLD.revoked_at IS NOT NULL)
+    EXECUTE FUNCTION refuse_revoked_browser_session_change();
 ```
 
 ### 4.3 Catalogue
@@ -1194,7 +1209,7 @@ CREATE TABLE audit_events (
         FOREIGN KEY (physical_observation_id) REFERENCES physical_observations (id),
     CONSTRAINT ck_audit_events_type
         CHECK (event_type IN (
-            'AUTHENTICATION_SUCCEEDED', 'AUTHENTICATION_REJECTED',
+            'AUTHENTICATION_SUCCEEDED', 'AUTHENTICATION_REJECTED', 'PASSWORD_CHANGED',
             'ASSET_CREATED', 'ASSET_UPDATED', 'ASSET_ARCHIVED',
             'ASSET_IDENTIFIER_ASSIGNED', 'ASSET_PLACEMENT_CHANGED',
             'SCHEDULE_UPDATED', 'READINESS_EVALUATED',
