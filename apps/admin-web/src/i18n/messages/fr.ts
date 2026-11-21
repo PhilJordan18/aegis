@@ -633,6 +633,29 @@ export const fr = {
     requiredActionField: 'Action attendue',
     expiresAt: "Expire à",
     failureReason: 'Motif transmis',
+    /**
+     * Reasons of 09 §8.5 and §15.5 that are not anomaly types (those read the anomaly catalog, so that a type has one
+     * wording everywhere). The code stays visible beside the label: the server sends it as free text (G12).
+     */
+    failureReasonLabel: {
+      LOCAL_PROOF_EXPIRED: 'Code du casier expiré avant le scan',
+      LOCAL_PROOF_ATTEMPTS_EXHAUSTED: 'Cinq codes erronés : tentative terminée',
+      LOCAL_PROOF_GUARD_FAILED: 'Contrôle refusé au scan : tentative terminée',
+      LOCAL_PROOF_INVALID: 'Code erroné',
+      LOCAL_PROOF_MALFORMED: 'Code mal formé',
+      LOCAL_PROOF_ALREADY_USED: 'Code déjà utilisé',
+      LOCAL_PROOF_NOT_DISPLAYED: "Code pas encore affiché sur le casier",
+      LOCAL_PROOF_CONTEXT_MISMATCH: "Code d'une autre opération",
+      LOCAL_PROOF_INVALIDATED: 'Code invalidé',
+      LOCAL_PROOF_RATE_LIMITED: 'Trop de préparations en peu de temps',
+      HUB_RESTARTED: 'Casier redémarré avant le scan',
+      LOCKER_OFFLINE: 'Casier hors ligne avant le scan',
+      RESERVATION_CANCELLED: 'Réservation annulée pendant la préparation',
+      OPERATION_EXPIRED: "Échéance atteinte sans ouverture de la porte",
+      COMMAND_CORRELATION_INVALID: 'Corrélation de la commande invalide',
+    } as Readonly<Record<string, string>>,
+    /** `COMMAND_REJECTED_<result>` (09 §8.5): the suffix is the hub's own result and stays in the code. */
+    commandRejectedReason: 'Commande refusée par le casier',
     challenge: 'Défi local',
     sequence: {
       created: 'Demande reçue',
@@ -979,7 +1002,7 @@ export const fr = {
       ASSET_PRESENT_WITH_ACTIVE_LOAN: 'Équipement présent malgré un prêt actif',
       DOOR_NOT_CLOSED_BEFORE_EXPIRY: 'Porte non refermée avant l’échéance',
       COMMAND_REJECTED: 'Commande rejetée',
-      DEVICE_OFFLINE_DURING_OPERATION: 'Casier hors ligne pendant une opération',
+      DEVICE_OFFLINE_DURING_OPERATION: 'Casier hors ligne ou issue indéterminée',
       INCONSISTENT_PHYSICAL_STATE: 'État physique incohérent',
     } satisfies Record<AnomalyType, string>,
     /** 09 §3: a value this version does not know is never drawn as a known one. */

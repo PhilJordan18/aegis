@@ -566,6 +566,29 @@ export const en: Messages = {
     requiredActionField: 'Required action',
     expiresAt: 'Expires at',
     failureReason: 'Reason provided',
+    /**
+     * Reasons of 09 §8.5 and §15.5 that are not anomaly types (those read the anomaly catalog, so that a type has one
+     * wording everywhere). The code stays visible beside the label: the server sends it as free text (G12).
+     */
+    failureReasonLabel: {
+      LOCAL_PROOF_EXPIRED: 'Locker code expired before the scan',
+      LOCAL_PROOF_ATTEMPTS_EXHAUSTED: 'Five wrong codes: attempt ended',
+      LOCAL_PROOF_GUARD_FAILED: 'Check refused at the scan: attempt ended',
+      LOCAL_PROOF_INVALID: 'Wrong code',
+      LOCAL_PROOF_MALFORMED: 'Malformed code',
+      LOCAL_PROOF_ALREADY_USED: 'Code already used',
+      LOCAL_PROOF_NOT_DISPLAYED: 'Code not yet shown on the locker',
+      LOCAL_PROOF_CONTEXT_MISMATCH: 'Code of another operation',
+      LOCAL_PROOF_INVALIDATED: 'Code invalidated',
+      LOCAL_PROOF_RATE_LIMITED: 'Too many preparations in a short time',
+      HUB_RESTARTED: 'Locker restarted before the scan',
+      LOCKER_OFFLINE: 'Locker offline before the scan',
+      RESERVATION_CANCELLED: 'Reservation cancelled during preparation',
+      OPERATION_EXPIRED: 'Deadline reached without the door opening',
+      COMMAND_CORRELATION_INVALID: 'Invalid command correlation',
+    } as Readonly<Record<string, string>>,
+    /** `COMMAND_REJECTED_<result>` (09 §8.5): the suffix is the hub's own result and stays in the code. */
+    commandRejectedReason: 'Command refused by the locker',
     challenge: 'Local challenge',
     sequence: {
       created: 'Request received',
@@ -898,7 +921,7 @@ export const en: Messages = {
       ASSET_PRESENT_WITH_ACTIVE_LOAN: 'Equipment present despite an active loan',
       DOOR_NOT_CLOSED_BEFORE_EXPIRY: 'Door not closed before expiry',
       COMMAND_REJECTED: 'Command rejected',
-      DEVICE_OFFLINE_DURING_OPERATION: 'Locker offline during an operation',
+      DEVICE_OFFLINE_DURING_OPERATION: 'Locker offline or outcome undetermined',
       INCONSISTENT_PHYSICAL_STATE: 'Inconsistent physical state',
     },
     unrecognizedType: 'Type not recognized by this version',

@@ -98,6 +98,19 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
     expect(within(screen.getByRole('group', { name: 'Code du casier refusé' })).getByText('CHALLENGE_MISMATCH')).toBeTruthy()
   })
 
+  it('labels a known reason beside its code and leaves an unknown reason as the code alone', async () => {
+    const known = eventView(6, { eventType: 'OPERATION_FAILED', result: 'ACCEPTED', reason: 'LOCAL_PROOF_GUARD_FAILED' })
+    const view = renderAudit([pageOk(auditPage([known]))])
+    await timeline()
+    const dossier = screen.getByRole('group', { name: /./ })
+    expect(plain(within(dossier).getByText('LOCAL_PROOF_GUARD_FAILED').parentElement?.textContent)).toBe('Contrôle refusé au scan : tentative terminée LOCAL_PROOF_GUARD_FAILED')
+    view.unmount()
+
+    renderAudit([pageOk(auditPage([known]))], { locale: 'en' })
+    await timeline()
+    expect(plain(within(screen.getByRole('group', { name: /./ })).getByText('LOCAL_PROOF_GUARD_FAILED').parentElement?.textContent)).toBe('Check refused at the scan: attempt ended LOCAL_PROOF_GUARD_FAILED')
+  })
+
   it('says what is missing instead of completing it: no result, no reason, no operation, no evidence', async () => {
     renderAudit([pageOk(auditPage([eventView(4, { result: null, reason: null, operationId: null })]))])
     await timeline()

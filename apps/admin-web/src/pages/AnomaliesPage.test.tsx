@@ -89,6 +89,19 @@ describe('Anomalies — list and dossier', () => {
     expect(within(dossier).getByText('Ne résout pas l’anomalie.')).toBeDefined()
   })
 
+  it('labels the offline type as « hors ligne ou issue indéterminée » in both languages (decision of 21 November 2026)', async () => {
+    const offline = parsedAnomaly({ type: 'DEVICE_OFFLINE_DURING_OPERATION', summary: 'Texte du serveur, jamais affiché pour un type connu.' })
+    const gateway = fakeAnomalyGateway({ listAnomalies: async () => listOf(offline), getAnomaly: detailsOf(offline) })
+    const view = renderAnomalies(gateway)
+    await screen.findByText('1 anomalie')
+    expect(within(listEl()).getByText('Casier hors ligne ou issue indéterminée')).toBeDefined()
+    expect(await screen.findByRole('group', { name: 'Casier hors ligne ou issue indéterminée' })).toBeDefined()
+    expect(document.body.textContent).not.toContain('pendant une opération')
+    view.unmount()
+    renderAnomalies(gateway, { locale: 'en' })
+    expect(await screen.findByRole('group', { name: 'Locker offline or outcome undetermined' })).toBeDefined()
+  })
+
   it('shows the French server summary as the label of an unknown type, with the raw code in the dossier', async () => {
     const odd = parsedAnomaly({ id: SECOND_ID, type: 'NEW_FAULT_KIND', summary: 'Texte du serveur pour un type inconnu.' })
     const gateway = fakeAnomalyGateway({ listAnomalies: async () => listOf(HIGH_OPEN, odd), getAnomaly: detailsOf(HIGH_OPEN, odd) })
