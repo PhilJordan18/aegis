@@ -82,7 +82,7 @@ class ReturnPreparation {
         LoanRow loan = loans.lock(loanId).orElseThrow();
         Instant now = clock.instant().truncatedTo(ChronoUnit.MILLIS);
 
-        ReturnGuards.requireReturnable(loan.status());
+        boolean recovery = returnGuards.requireReturnable(loan.id(), loan.status());
         if (asset.lockerId() == null) {
             // The asset lost its placement: the cell that must receive it is unknown.
             throw new ReservationRefusedException(ApiError.PHYSICAL_STATE_UNKNOWN);
@@ -94,7 +94,7 @@ class ReturnPreparation {
         Cell cell = preparation.lockPlacedCell(asset.id(), lockerId)
                 .orElseThrow(() -> new ReservationRefusedException(ApiError.PHYSICAL_STATE_UNKNOWN));
         Device device = issuer.requireOnline(lockerId, now);
-        returnGuards.requireCell(asset.id(), cell);
+        returnGuards.requireCell(asset.id(), cell, recovery ? loan.id() : null);
         UUID identifierId = preparation.activeRfidIdentifier(asset.id()).orElseThrow();
         if (preparation.hasOpenOperation(lockerId)) {
             throw new ReservationRefusedException(ApiError.LOCKER_OPERATION_IN_PROGRESS);
@@ -114,6 +114,7 @@ class ReturnPreparation {
         details.put("lockerId", lockerId);
         details.put("compartmentId", cell.id());
         details.put("status", LockerOperationStatus.AWAITING_LOCAL_PROOF.name());
+        details.put("recovery", recovery);
         audit.record(new AuditEvent(AuditEventType.OPERATION_REQUESTED, user.id(),
                 AuditSubjectType.LOCKER_OPERATION, operationId, AuditResult.ACCEPTED, details, now));
         issuer.issue(user.id(), operationId, LockerOperationType.RETURN, cell, device, now, expiresAt);

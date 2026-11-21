@@ -385,7 +385,7 @@ Une opération `CHECKOUT` exige aussi :
 
 Une opération `RETURN` exige aussi :
 
-- un prêt `ACTIVE` appartenant au demandeur;
+- un prêt `ACTIVE` appartenant au demandeur, ou un prêt `RETURN_PENDING` admissible à une reprise (§13.4);
 - aucun autre retour non terminal pour ce prêt;
 - la même affectation physique attendue que celle utilisée pour l’actif;
 - l’absence d’une opération précédente non terminale.
@@ -1091,6 +1091,31 @@ sequenceDiagram
         A-->>M: Correction physique requise
     end
 ```
+
+### 13.4 Reprise d’un retour
+
+Décision humaine du 21 novembre 2026 (#67). Un prêt `RETURN_PENDING` admet une nouvelle opération `RETURN`, avec un nouveau défi QR, lorsque :
+
+- un retour précédent du prêt s’est terminé en `ANOMALY`;
+- aucune anomalie liée aux retours du prêt n’est encore `OPEN` : elles ont toutes été acquittées;
+- aucune opération non terminale n’existe sur le casier (aucune tentative concurrente);
+- toutes les autres gardes de §6.1 et §6.3 passent. Les anomalies `ACKNOWLEDGED` des retours du prêt ne bloquent pas la reprise, puisqu’elle sert à les résoudre; toute autre anomalie non résolue de l’actif ou de la cellule la bloque encore.
+
+La reprise suit la préparation et l’autorisation locale d’un retour, à deux différences près :
+
+- l’autorisation laisse le prêt `RETURN_PENDING` et ne modifie pas `returnRequestedAt`; aucun `LOAN_RETURN_STARTED` n’est audité;
+- une fin sûre après l’autorisation (`FAILED` ou `EXPIRED` selon §13.1) laisse le prêt `RETURN_PENDING` avec ses anomalies acquittées, au lieu de le rendre `ACTIVE`.
+
+Seule la preuve cohérente de la reprise (§10.3) clôture le prêt. Dans la même transaction, l’opération devient `CONFIRMED`, le prêt `COMPLETED`, et chaque anomalie `ACKNOWLEDGED` des retours précédents du prêt devient `RESOLVED`, avec `resolvedAt`, l’observation `ASSET_PRESENT` du scan comme preuve et une note fixe; chaque résolution est auditée (`ANOMALY_RESOLVED`).
+
+Les échecs répétés ne créent pas de cul-de-sac :
+
+| Fin de la reprise | Prêt | Nouvelle reprise |
+|---|---|---|
+| Défi expiré ou invalidé avant le scan | `RETURN_PENDING`, inchangé | Admise aussitôt |
+| Fin sûre après l’autorisation | `RETURN_PENDING` | Admise aussitôt |
+| `ANOMALY` | `RETURN_PENDING`, nouvelle anomalie `OPEN` | Admise après acquittement de cette anomalie |
+| Preuve cohérente | `COMPLETED` | Sans objet |
 
 ---
 

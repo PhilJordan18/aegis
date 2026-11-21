@@ -589,7 +589,7 @@ Le serveur n’émet une valeur que lorsque sa mutation est implémentée. Tant 
 
 À partir de `reservedUntil`, une réservation encore `ACTIVE` (expiration différée par un retrait autorisé, ou pas encore appliquée) n’expose aucune action : les règles temporelles sont réévaluées au début de chaque action (`06` §14). La limitation de fréquence des préparations (§15.5) n’est pas reflétée; elle se manifeste par `429` avec `Retry-After`.
 
-Pour un prêt `RETURN_PENDING`, `05` §4.3 et `06` §6.3 n’admettent une nouvelle tentative de récupération que si l’opération précédente est terminale **et** si la procédure de récupération l’autorise. Cette procédure n’est pas encore définie : tant qu’elle ne l’est pas, `RETURN` n’est pas émis pour un prêt `RETURN_PENDING` (question ouverte Q2). Cette lecture n’ajoute aucune règle de retour.
+Pour un prêt `RETURN_PENDING`, `RETURN` est émis lorsque la reprise de `06` §13.4 est admissible : un retour précédent du prêt terminé en `ANOMALY`, aucune anomalie liée à ses retours encore `OPEN`, aucune opération en cours sur le locker et toutes les autres gardes satisfaites (Q2, tranchée le 21 novembre 2026, #67).
 
 | Situation lue | `ReservationView` | `LoanView` |
 |---|---|---|
@@ -604,7 +604,8 @@ Pour un prêt `RETURN_PENDING`, `05` §4.3 et `06` §6.3 n’admettent une nouve
 | Prêt `ACTIVE`, en retard ou non, plage ouverte, gardes satisfaites, aucune tentative non terminale | — | `["RETURN"]` |
 | Prêt `ACTIVE`, mais locker non `ONLINE`, garde physique incompatible, plage fermée ou autre opération en cours sur le locker | — | `[]` |
 | Prêt `ACTIVE`, dernière tentative de retour `AWAITING_LOCAL_PROOF` | — | `[]` |
-| Prêt `RETURN_PENDING` (Q2) ou `COMPLETED` | — | `[]` |
+| Prêt `RETURN_PENDING`, reprise admissible (`06` §13.4) et gardes satisfaites | — | `["RETURN"]` |
+| Prêt `RETURN_PENDING` dont une anomalie liée est `OPEN`, sans retour terminé en `ANOMALY`, ou gardes non satisfaites; prêt `COMPLETED` | — | `[]` |
 
 Une tentative terminée sans avoir été autorisée (défi expiré ou invalidé) ne change rien : les trois premières lignes s’appliquent. Après un retour terminé sans interaction physique, le prêt est de nouveau `ACTIVE` (`05` §4.3) et les lignes du prêt `ACTIVE` s’appliquent.
 
@@ -677,9 +678,9 @@ Ces deux points ne sont pas approuvés. En attendant, la section applique le tex
   - Lecture appliquée : littérale; `CANCEL` n’est plus émis et l’actif reste réservé jusqu’à `reservedUntil`, qui ne dépasse pas la fermeture.
   - Recommandation : confirmer la lecture littérale pour le P0; l’assouplir serait une nouvelle règle d’annulation.
   - Propriétaires : décision de Philippe; contrat tenu par la session API/Web; mise en œuvre RES-02 (#38).
-- **Q2 — Récupération d’un prêt `RETURN_PENDING`.** La procédure qui autorise une nouvelle tentative n’est pas définie.
-  - Référence : `05` §4.3, `06` §6.3.
-  - Lecture appliquée : `RETURN` n’est pas émis et §15.2 refuse la préparation par `409 LOAN_NOT_RETURNABLE` (#50).
+- **Q2 — Récupération d’un prêt `RETURN_PENDING`.** Tranchée le 21 novembre 2026 (#67) : reprise de `06` §13.4.
+  - Référence : `05` §4.3 et §4.6, `06` §6.3 et §13.4.
+  - Lecture appliquée : `RETURN` est émis et §15.2 accepte la préparation lorsque la reprise est admissible; sinon `409 LOAN_NOT_RETURNABLE`. Avant la décision : ni émission ni préparation (#50).
   - Recommandation : émettre `RETURN` quand la dernière tentative de retour est `ANOMALY`, que son anomalie est `ACKNOWLEDGED` (`05` §6.2 : correction physique engagée) et que toutes les autres gardes sont satisfaites.
   - Propriétaires : décision de Philippe; contrat tenu par la session API/Web; mise en œuvre RET-01 (#50) et ANO-01 (#52).
 
@@ -1190,7 +1191,8 @@ Réponse `202` avec `Location` et `LockerOperationView`. Le passage de `ACTIVE` 
 
 Mise en œuvre RET-01 (#50, 11 novembre 2026) :
 
-- Le prêt d’un autre titulaire n’est pas trouvé (`404 RESOURCE_NOT_FOUND`, §26.2). Un prêt autre que `ACTIVE` répond `409 LOAN_NOT_RETURNABLE`, y compris `RETURN_PENDING` tant que Q2 n’est pas tranchée (§8.10).
+- Le prêt d’un autre titulaire n’est pas trouvé (`404 RESOURCE_NOT_FOUND`, §26.2). Un prêt `COMPLETED`, ou `RETURN_PENDING` non admissible à une reprise (`06` §13.4 : aucun retour terminé en `ANOMALY`, ou une anomalie liée encore `OPEN`), répond `409 LOAN_NOT_RETURNABLE`.
+- Reprise (`06` §13.4) : les anomalies `ACKNOWLEDGED` des retours du prêt ne bloquent pas la garde d’anomalie; toute autre anomalie non résolue de l’actif ou de la cellule répond `422 PHYSICAL_STATE_UNKNOWN`. L’autorisation laisse le prêt `RETURN_PENDING`; une fin sûre le laisse `RETURN_PENDING`; seule la preuve cohérente le termine et résout les anomalies liées dans la même transaction (`ANOMALY_RESOLVED`).
 - Les gardes du locker, de la cellule et de la plage d’exploitation, le refus d’une seconde opération ouverte sur le locker et la limitation de §15.5 sont ceux du retrait, avec les mêmes codes; la limite compte ensemble les préparations de retrait et de retour d’un même couple utilisateur–locker.
 - La readiness n’intervient pas : un actif emprunté n’est jamais `READY`, et `05` §7 exige qu’un retour ne le demande pas. `overdue` n’intervient pas non plus.
 - L’opération `RETURN` porte `loanId`, jamais `reservationId`, et l’identifiant actif de l’actif comme identifiant attendu. Le défi affiché porte l’action `RETURN`.
@@ -1754,7 +1756,7 @@ Ces cas sont à implémenter et à exécuter, pas déclarés réussis par la pr�
 2. Tentative `AWAITING_LOCAL_PROOF` : `CANCEL` présent, `CHECKOUT` absent; dès `AUTHORIZED`, la liste de la réservation est vide.
 3. Après un refus `503` ou une tentative `FAILED`, une nouvelle lecture dont les gardes sont satisfaites rend `CHECKOUT`.
 4. À `reservedUntil`, une réservation encore `ACTIVE` n’expose aucune action; un retrait autorisé avant cette heure et confirmé après crée un prêt avec `dueAt = reservedUntil` et `overdue = true`.
-5. Un prêt en retard garde `RETURN` lorsque les gardes le permettent; un prêt `RETURN_PENDING` n’expose aucune action.
+5. Un prêt en retard garde `RETURN` lorsque les gardes le permettent; un prêt `RETURN_PENDING` n’expose `RETURN` que si sa reprise est admissible (`06` §13.4).
 6. Une valeur listée ne dispense d’aucune garde : une mutation envoyée après un changement d’état est refusée sans effet.
 
 ---

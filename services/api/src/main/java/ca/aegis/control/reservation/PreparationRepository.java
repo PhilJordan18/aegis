@@ -103,6 +103,24 @@ class PreparationRepository {
                 """).param("asset", assetId).param("compartment", compartmentId).query(Boolean.class).single();
     }
 
+    /**
+     * The same guard for the recovery of {@code recoveredLoanId} (document 06, section 13.4): the acknowledged
+     * anomalies of that loan's own returns are what the recovery resolves, so they do not block it. Any other
+     * unresolved anomaly of the asset or the compartment, and any {@code OPEN} one, still does.
+     */
+    boolean hasUnresolvedAnomaly(UUID assetId, UUID compartmentId, UUID recoveredLoanId) {
+        return jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1 FROM aegis.anomalies a
+                    WHERE a.status IN ('OPEN', 'ACKNOWLEDGED') AND (a.asset_id = :asset OR a.compartment_id = :compartment)
+                      AND NOT (a.status = 'ACKNOWLEDGED' AND EXISTS (
+                          SELECT 1 FROM aegis.locker_operations o
+                          WHERE o.id = a.locker_operation_id AND o.loan_id = :loan AND o.type = 'RETURN'))
+                )
+                """).param("asset", assetId).param("compartment", compartmentId).param("loan", recoveredLoanId)
+                .query(Boolean.class).single();
+    }
+
     /** Any non-terminal physical operation of the locker; the P0 serializes openings per locker. */
     boolean hasOpenOperation(UUID lockerId) {
         return jdbc.sql("""

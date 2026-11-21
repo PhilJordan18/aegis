@@ -401,6 +401,143 @@ class ReturnApiTests extends HubChallengeApiTest {
         assertEquals(0L, audits("LOAN_COMPLETED"));
     }
 
+    @Test
+    void aRecoveryAfterAnAcknowledgedAnomalyCompletesTheLoanAndResolvesIt() throws Exception {
+        UUID failed = failedReturn();
+        Object requestedAt = returnRequestedAt();
+        // An OPEN anomaly of the loan's return blocks any new attempt.
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        loanView().andExpect(jsonPath("$.availableActions").isEmpty());
+        expectProblem(prepare(key()), 409, "LOAN_NOT_RETURNABLE");
+        UUID anomaly = acknowledgeAnomalyOf(failed);
+        loanView().andExpect(jsonPath("$.status").value("RETURN_PENDING"))
+                .andExpect(jsonPath("$.availableActions[0]").value("RETURN"));
+
+        authorized();
+        // The recovery leaves the loan RETURN_PENDING as it found it.
+        assertEquals("AUTHORIZED", fixtures.operationStatus(operation));
+        assertEquals("RETURN_PENDING", loanStatus());
+        assertEquals(requestedAt, returnRequestedAt());
+        assertEquals(0L, audits("LOAN_RETURN_STARTED"));
+        assertEquals("ACKNOWLEDGED", anomalyStatus(anomaly));
+
+        doorSequence();
+        assertEquals(Outcome.ACCEPTED, scan(operation, "HEALTHY", Map.of(tag, 3)));
+        assertEquals("CONFIRMED", fixtures.operationStatus(operation));
+        assertEquals("COMPLETED", loanStatus());
+        Map<String, Object> resolved = jdbc.sql("""
+                SELECT a.status, a.resolved_at, a.resolution_note, p.type, p.inbound_message_id
+                FROM aegis.anomalies a JOIN aegis.physical_observations p ON p.id = a.resolution_evidence_observation_id
+                WHERE a.id = :id
+                """).param("id", anomaly).query().singleRow();
+        assertEquals("RESOLVED", resolved.get("status"));
+        assertEquals("ASSET_PRESENT", resolved.get("type"));
+        assertNotNull(resolved.get("resolved_at"));
+        assertNotNull(resolved.get("resolution_note"));
+        assertEquals(1L, fixtures.count("""
+                SELECT count(*) FROM aegis.audit_events
+                WHERE subject_id = :id AND event_type = 'ANOMALY_RESOLVED' AND from_state = 'ACKNOWLEDGED'
+                  AND to_state = 'RESOLVED'
+                """, anomaly));
+        // The resolution and the completion are one transaction: the asset is ready again at once.
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        mvc.perform(get("/api/v1/assets/" + asset).header(AUTHORIZATION, bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.readiness.result").value("READY"));
+    }
+
+    @Test
+    void anUnrelatedUnresolvedAnomalyStillBlocksTheRecovery() throws Exception {
+        UUID failed = failedReturn();
+        acknowledgeAnomalyOf(failed);
+        jdbc.sql("""
+                INSERT INTO aegis.anomalies (type, severity, status, compartment_id, detected_at, acknowledged_at,
+                                             acknowledged_by_user_id, acknowledgement_note)
+                VALUES ('INCONSISTENT_PHYSICAL_STATE', 'HIGH', 'ACKNOWLEDGED', :compartment, :now, :now, :admin,
+                        'Inspection pending.')
+                """).param("compartment", compartment).param("now", ReservationFixtures.utc(clock.instant()))
+                .param("admin", accounts.admin().id()).update();
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        loanView().andExpect(jsonPath("$.availableActions").isEmpty());
+        expectProblem(prepare(key()), 422, "PHYSICAL_STATE_UNKNOWN");
+    }
+
+    @Test
+    void repeatedRecoveryFailuresNeverLeaveADeadEnd() throws Exception {
+        UUID first = failedReturn();
+        UUID firstAnomaly = acknowledgeAnomalyOf(first);
+
+        // A recovery ending in a new anomaly: blocked until that one is acknowledged, then eligible again.
+        UUID second = failedReturn();
+        assertEquals("RETURN_PENDING", loanStatus());
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        expectProblem(prepare(key()), 409, "LOAN_NOT_RETURNABLE");
+        UUID secondAnomaly = acknowledgeAnomalyOf(second);
+        loanView().andExpect(jsonPath("$.availableActions[0]").value("RETURN"));
+
+        // A recovery ending safely after its authorization keeps the loan pending and eligible.
+        authorized();
+        expire();
+        assertEquals("EXPIRED", fixtures.operationStatus(operation));
+        assertEquals("RETURN_PENDING", loanStatus());
+        assertEquals(0L, audits("LOAN_RETURN_REVERTED_SAFE"));
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        loanView().andExpect(jsonPath("$.availableActions[0]").value("RETURN"));
+
+        // A recovery whose challenge expires before any scan never touches the loan.
+        prepare(key()).andExpect(status().isAccepted());
+        clock.advance(Duration.ofSeconds(61));
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        challengeExpiry.run(100);
+        assertEquals("RETURN_PENDING", loanStatus());
+        loanView().andExpect(jsonPath("$.availableActions[0]").value("RETURN"));
+
+        // The coherent proof of a later recovery resolves every acknowledged anomaly of the loan's returns.
+        authorized();
+        doorSequence();
+        scan(operation, "HEALTHY", Map.of(tag, 4));
+        assertEquals("COMPLETED", loanStatus());
+        assertEquals("RESOLVED", anomalyStatus(firstAnomaly));
+        assertEquals("RESOLVED", anomalyStatus(secondAnomaly));
+    }
+
+    /** Authorizes a return that ends in ANOMALY at once (a faulted reader after the closing); returns its id. */
+    private UUID failedReturn() throws Exception {
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        authorized();
+        doorSequence();
+        scan(operation, "FAULTED", Map.of());
+        assertEquals("ANOMALY", fixtures.operationStatus(operation));
+        assertEquals("RETURN_PENDING", loanStatus());
+        return operation;
+    }
+
+    private UUID acknowledgeAnomalyOf(UUID failed) throws Exception {
+        UUID anomaly = jdbc.sql("SELECT id FROM aegis.anomalies WHERE locker_operation_id = :id AND status = 'OPEN'")
+                .param("id", failed).query(UUID.class).single();
+        mvc.perform(post("/api/v1/admin/anomalies/" + anomaly + "/acknowledge")
+                .header(AUTHORIZATION, bearer(accessToken(accounts.admin()))).header("Idempotency-Key", key())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"note\":\"Asset seen on the bench.\"}"))
+                .andExpect(status().isOk());
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        return anomaly;
+    }
+
+    private void expire() {
+        clock.set(instant(jdbc.sql("SELECT expires_at FROM aegis.locker_operations WHERE id = :id")
+                .param("id", operation).query(OffsetDateTime.class).single()));
+        confirmation.run(1000);
+    }
+
+    private String anomalyStatus(UUID anomaly) {
+        return jdbc.sql("SELECT status FROM aegis.anomalies WHERE id = :id").param("id", anomaly).query(String.class)
+                .single();
+    }
+
+    private Object returnRequestedAt() {
+        return jdbc.sql("SELECT return_requested_at FROM aegis.loans WHERE id = :id").param("id", loan).query()
+                .singleValue();
+    }
+
     private void assertSafelyReverted() throws Exception {
         assertEquals("ACTIVE", loanStatus());
         assertEquals(0L, openAnomalies());
@@ -428,7 +565,8 @@ class ReturnApiTests extends HubChallengeApiTest {
     }
 
     private void authorized() throws Exception {
-        scan(displayed()).andExpect(status().isAccepted());
+        var response = scan(displayed()).andReturn().getResponse();
+        assertEquals(202, response.getStatus(), response.getContentAsString(StandardCharsets.UTF_8));
     }
 
     /** Prepares a return and reports its challenge displayed; returns the challenge id and its secret. */
@@ -444,8 +582,8 @@ class ReturnApiTests extends HubChallengeApiTest {
         UUID challenge = (UUID) display.get("challenge_id");
         String secret = open(display).get("payload").get("token").asString();
         clock.advance(Duration.ofSeconds(2));
-        report("ACCESS_CHALLENGE_DISPLAYED", operation, (UUID) display.get("message_id"), challenge, 1, null,
-                session);
+        report("ACCESS_CHALLENGE_DISPLAYED", operation, (UUID) display.get("message_id"), challenge,
+                ((Number) display.get("display_revision")).longValue(), null, session);
         return new String[] {challenge.toString(), secret};
     }
 
