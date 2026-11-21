@@ -75,9 +75,8 @@ class RfidScanNormalization {
      * dated too far ahead of the backend, is kept without a verdict (section 17.2).
      */
     static boolean stable(RfidScan scan, Instant occurredAt, Instant receivedAt) {
-        return scan.healthy() && scan.coversStableWindow()
-                && !occurredAt.isAfter(receivedAt.plus(InboundMessages.MAX_CLOCK_LEAD))
-                && !receivedAt.isAfter(occurredAt.plus(MAX_DELIVERY_DELAY));
+        return ScanStability.stable(scan.readerStatus(), scan.windowStartedAt(), scan.windowEndedAt(), occurredAt,
+                receivedAt);
     }
 
     private record Verdict(Type type, ExpectedTag expected, Integer readCount) {

@@ -813,9 +813,11 @@ Mise en œuvre RET-02 du 11 novembre 2026. L’évaluation, ses déclencheurs, l
 | Étape | Condition | Résultat |
 |---|---|---|
 | Tag | `ASSET_PRESENT` normalisé pour l’identifiant attendu, soit au moins trois lectures dans une fenêtre stable d’un lecteur sain (`10` §12.2) | `COHERENT_RETURN` |
-| Tag | Sinon, un autre identifiant lu au moins trois fois par ce scan | `INCONSISTENT` : `ANOMALY` avec `UNEXPECTED_ASSET_OBSERVED` |
+| Tag | Sinon, un même autre identifiant lu au moins trois fois par ce scan, dans une fenêtre stabilisée (lecteur `HEALTHY`, au moins trois secondes, délai de livraison respecté, `10` §12.2) | `INCONSISTENT` : `ANOMALY` avec `UNEXPECTED_ASSET_OBSERVED` |
 | Tag | `ASSET_ABSENT` normalisé pour l’identifiant attendu | `INCOMPLETE`, puis à `expiresAt` : `ANOMALY` avec `EXPECTED_ASSET_NOT_OBSERVED` |
 | Tag | Une ou deux lectures, ou aucun verdict normalisé | `INCOMPLETE`, puis à `expiresAt` : `ANOMALY` avec `DEVICE_OFFLINE_DURING_OPERATION` |
+
+Les lectures d’un tag étranger ne s’additionnent ni entre identifiants ni entre messages : un message dupliqué n’est enregistré qu’une fois (`10` §16), et un même identifiant n’apparaît qu’une fois par scan. Une fenêtre qui n’est pas stabilisée ne compte aucun tag étranger, comme elle ne donne aucun verdict au tag attendu (décision du 21 novembre 2026, #67).
 
 Une autre cellule qui détecte le tag attendu depuis `authorizedAt` rend la preuve `INCONSISTENT` avec `INCONSISTENT_PHYSICAL_STATE`, comme un lecteur `FAULTED` ou `UNKNOWN` après la fermeture. Les autres issues à l’échéance suivent §13.1.
 

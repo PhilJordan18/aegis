@@ -44,6 +44,9 @@ import ca.aegis.control.device.DeviceMessageIngestion.Outcome;
 class ReturnApiTests extends HubChallengeApiTest {
 
     /** {@code expiresAt} of the authorized return: authorized at START + 2 s, for 120 s. */
+    static final String FOREIGN = "E28011700000020A1B2C3D4F";
+    static final String OTHER_FOREIGN = "E28011700000020A1B2C3D50";
+
     static final Instant DEADLINE = START.plusSeconds(122);
 
     @Autowired
@@ -327,6 +330,34 @@ class ReturnApiTests extends HubChallengeApiTest {
     }
 
     @Test
+    void aForeignTagCountsOnlyWithThreeReadsOfItsOwnInAStabilizedWindow() throws Exception {
+        authorized();
+        doorSequence();
+        // A window shorter than three seconds is not a stabilized reading, whatever its counts.
+        assertEquals(Outcome.ACCEPTED, ingest(scanMessage(operation, "HEALTHY", Map.of(FOREIGN, 5), 2)));
+        assertEquals("OBSERVATION_RECEIVED", fixtures.operationStatus(operation));
+        // Two other tags read twice each are never summed into three reads.
+        door("DOOR_OPENED");
+        door("DOOR_CLOSED");
+        assertEquals(Outcome.ACCEPTED, scan(operation, "HEALTHY", Map.of(FOREIGN, 2, OTHER_FOREIGN, 2)));
+        assertEquals("OBSERVATION_RECEIVED", fixtures.operationStatus(operation));
+        // A duplicated message is stored once: its two reads stay two.
+        door("DOOR_OPENED");
+        door("DOOR_CLOSED");
+        Map<String, Object> twice = scanMessage(operation, "HEALTHY", Map.of(FOREIGN, 2), 3);
+        assertEquals(Outcome.ACCEPTED, ingest(twice));
+        assertEquals(Outcome.DUPLICATE, ingest(twice));
+        assertEquals("OBSERVATION_RECEIVED", fixtures.operationStatus(operation));
+        assertEquals("RETURN_PENDING", loanStatus());
+        assertEquals(0L, openAnomalies());
+        // Three reads of one other tag in a stabilized window contradict the return at once.
+        door("DOOR_OPENED");
+        door("DOOR_CLOSED");
+        scan(operation, "HEALTHY", Map.of(FOREIGN, 3));
+        assertReturnAnomaly("UNEXPECTED_ASSET_OBSERVED", "UNEXPECTED_ASSET_OBSERVED");
+    }
+
+    @Test
     void aFaultedReaderAfterTheClosingIsInconsistentAtOnce() throws Exception {
         authorized();
         doorSequence();
@@ -462,8 +493,13 @@ class ReturnApiTests extends HubChallengeApiTest {
 
     /** A 3-second window that starts at the last closing, reported at its end, for this operation or none. */
     private Outcome scan(UUID forOperation, String reader, Map<String, Integer> reads) {
+        return ingest(scanMessage(forOperation, reader, reads, 3));
+    }
+
+    private Map<String, Object> scanMessage(UUID forOperation, String reader, Map<String, Integer> reads,
+            int windowSeconds) {
         Instant started = closedAt;
-        clock.set(closedAt.plusSeconds(3));
+        clock.set(closedAt.plusSeconds(windowSeconds));
         Map<String, Object> message = envelope("RFID_SCAN_COMPLETED");
         if (forOperation != null) {
             message.put("operationId", forOperation.toString());
@@ -481,7 +517,7 @@ class ReturnApiTests extends HubChallengeApiTest {
             identifiers.add(identifier);
         });
         message.put("observedIdentifiers", identifiers);
-        return ingest(message);
+        return message;
     }
 
     private void doorSequence() {
