@@ -75,7 +75,7 @@ public class CommandAcknowledgements {
      * {@code LOCK_ACTUATION_FAILED} and {@code PREVIOUS_EXECUTION_UNCERTAIN} are absent: the physical state is then
      * unknown, which is never a safe failure (document 05, section 5).
      */
-    static final Set<String> SAFE_REJECTIONS = Set.of("INVALID_PAYLOAD", "UNSUPPORTED_SCHEMA", "WRONG_LOCKER",
+    public static final Set<String> SAFE_REJECTIONS = Set.of("INVALID_PAYLOAD", "UNSUPPORTED_SCHEMA", "WRONG_LOCKER",
             "UNKNOWN_COMPARTMENT", "CLOCK_NOT_SYNCHRONIZED", "COMMAND_EXPIRED", "LOCAL_OPERATION_IN_PROGRESS",
             "CELL_UNREACHABLE", "COMPARTMENT_DISABLED", "DOOR_STATE_UNSAFE", "POWER_STATE_UNSAFE",
             "INTERNAL_DEVICE_ERROR");

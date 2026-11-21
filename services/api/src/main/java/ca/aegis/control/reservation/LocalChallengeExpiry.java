@@ -27,7 +27,7 @@ import ca.aegis.control.display.HubDisplayOutbox;
 import ca.aegis.control.reservation.CheckoutAttemptRepository.PendingAttempt;
 
 /**
- * The end of a local challenge that nobody consumed (document 05, sections 5.4 and 5.7; document 10, section 27.4):
+ * The end of a local challenge that nobody consumed, of a checkout or of a return, whose loan it leaves unchanged (document 05, sections 5.4 and 5.7; document 10, section 27.4):
  *
  * <ul>
  * <li>its deadline passed: the challenge and the operation become {@code EXPIRED};</li>
@@ -53,12 +53,13 @@ public class LocalChallengeExpiry {
     private static final Logger log = LoggerFactory.getLogger(LocalChallengeExpiry.class);
 
     private record Candidate(UUID challengeId, UUID operationId, UUID userId, UUID assetId, UUID reservationId,
-            UUID lockerId) {
+            UUID loanId, UUID lockerId) {
     }
 
     private final JdbcClient jdbc;
     private final TransactionTemplate transactions;
     private final ReservationRepository reservations;
+    private final ReturnRepository loans;
     private final ReservableAssets assets;
     private final PreparationRepository preparation;
     private final CheckoutAttemptRepository attempts;
@@ -69,12 +70,13 @@ public class LocalChallengeExpiry {
     private final Clock clock;
 
     LocalChallengeExpiry(JdbcClient jdbc, TransactionTemplate transactions, ReservationRepository reservations,
-            ReservableAssets assets, PreparationRepository preparation, CheckoutAttemptRepository attempts,
+            ReturnRepository loans, ReservableAssets assets, PreparationRepository preparation, CheckoutAttemptRepository attempts,
             LocalChallengeRepository challenges, LockerAvailability availability, HubDisplayOutbox display,
             AuditTrail audit, Clock clock) {
         this.jdbc = jdbc;
         this.transactions = transactions;
         this.reservations = reservations;
+        this.loans = loans;
         this.assets = assets;
         this.preparation = preparation;
         this.attempts = attempts;
@@ -105,10 +107,10 @@ public class LocalChallengeExpiry {
 
     private List<Candidate> pending(int max) {
         return jdbc.sql("""
-                SELECT c.id, c.operation_id, o.user_id, o.asset_id, o.reservation_id, o.locker_id
+                SELECT c.id, c.operation_id, o.user_id, o.asset_id, o.reservation_id, o.loan_id, o.locker_id
                 FROM aegis.local_access_challenges c
                 JOIN aegis.locker_operations o ON o.id = c.operation_id
-                WHERE c.status = 'PENDING' AND o.type = 'CHECKOUT'
+                WHERE c.status = 'PENDING'
                 ORDER BY c.expires_at, c.id
                 LIMIT :max
                 """)
@@ -116,14 +118,19 @@ public class LocalChallengeExpiry {
                 .query((row, number) -> new Candidate(row.getObject("id", UUID.class),
                         row.getObject("operation_id", UUID.class), row.getObject("user_id", UUID.class),
                         row.getObject("asset_id", UUID.class), row.getObject("reservation_id", UUID.class),
-                        row.getObject("locker_id", UUID.class)))
+                        row.getObject("loan_id", UUID.class), row.getObject("locker_id", UUID.class)))
                 .list();
     }
 
     private boolean decide(Candidate candidate) {
         reservations.lockUser(candidate.userId());
         assets.lockForCustody(candidate.assetId());
-        reservations.lock(candidate.reservationId());
+        // The reservation of a checkout, or the loan of a return, third (document 08, section 7.1).
+        if (candidate.reservationId() != null) {
+            reservations.lock(candidate.reservationId());
+        } else {
+            loans.lock(candidate.loanId());
+        }
         preparation.lockLocker(candidate.lockerId());
         Optional<PendingAttempt> attempt = lockAwaitingAttempt(candidate.operationId(), candidate.lockerId());
         Optional<ChallengeState> challenge = attempt.flatMap(found -> lockPending(candidate.challengeId()));
@@ -150,8 +157,8 @@ public class LocalChallengeExpiry {
         } else {
             return false;
         }
-        end(candidate.challengeId(), candidate.operationId(), candidate.reservationId(), candidate.lockerId(), null,
-                closed, terminal, reason, now);
+        end(candidate.challengeId(), candidate.operationId(), source(candidate.reservationId(), candidate.loanId()),
+                candidate.lockerId(), null, closed, terminal, reason, now);
         return true;
     }
 
@@ -161,7 +168,7 @@ public class LocalChallengeExpiry {
      * caller holds the locks of document 06, section 3.3 and read {@code now} after them. A challenge closed for
      * {@link #LOCAL_PROOF_ATTEMPTS_EXHAUSTED} records its fifth failed attempt with its closing.
      */
-    void end(UUID challengeId, UUID operationId, UUID reservationId, UUID lockerId, UUID actorUserId,
+    void end(UUID challengeId, UUID operationId, Map<String, Object> source, UUID lockerId, UUID actorUserId,
             LocalChallengeStatus closed, LockerOperationStatus terminal, String reason, Instant now) {
         attempts.end(new PendingAttempt(operationId, lockerId, LockerOperationStatus.AWAITING_LOCAL_PROOF), terminal,
                 reason, now);
@@ -176,12 +183,17 @@ public class LocalChallengeExpiry {
                 ? AuditEventType.OPERATION_EXPIRED : AuditEventType.OPERATION_FAILED, actorUserId,
                 AuditSubjectType.LOCKER_OPERATION, operationId, operationId,
                 LockerOperationStatus.AWAITING_LOCAL_PROOF, terminal, reason,
-                Map.of("reservationId", reservationId), now));
+                source, now));
         audit.record(AuditEvent.transition(closed == LocalChallengeStatus.EXPIRED
                 ? AuditEventType.LOCAL_CHALLENGE_EXPIRED : AuditEventType.LOCAL_CHALLENGE_INVALIDATED, actorUserId,
                 AuditSubjectType.LOCAL_ACCESS_CHALLENGE, challengeId, operationId,
                 LocalChallengeStatus.PENDING, closed, reason, Map.of("displayInstructionsStopped", stopped,
                         "statusDisplayQueued", statusMessage.isPresent()), now));
+    }
+
+    /** The reservation of a checkout or the loan of a return, as audit details name it. */
+    static Map<String, Object> source(UUID reservationId, UUID loanId) {
+        return reservationId != null ? Map.of("reservationId", reservationId) : Map.of("loanId", loanId);
     }
 
     private record ChallengeState(Instant expiresAt, UUID targetSession) {
