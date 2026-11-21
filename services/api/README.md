@@ -229,6 +229,14 @@ Aucun mot de passe ni secret n'est transmis par cette procédure.
 
      Un redéploiement sans changement de mot de passe garde la session.
 
+     La rotation n'est effective qu'après la ligne de journal « Updated the
+     password of demo account … ». Le serveur HTTP accepte des requêtes
+     quelques centaines de millisecondes avant elle :
+     - une session navigateur ouverte dans cette fenêtre est révoquée par le
+       changement;
+     - un jeton porteur émis dans cette fenêtre vit jusqu'à son expiration
+       (60 minutes au plus), jusqu'à l'ADR-018 (#179).
+
 ## Autorisation des routes
 
 `identity/ApiRoutes.java` liste chaque route du document 09, section 9, avec

@@ -1,5 +1,6 @@
 package ca.aegis.control.identity;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -211,6 +212,11 @@ class PasswordChangeSessionTests extends ApiIntegrationTest {
         UUID live = insertSession(admin.id(), Instant.now(), null);
         assertThrows(DataAccessException.class, () -> jdbc.sql("DELETE FROM aegis.browser_sessions WHERE id = :id")
                 .param("id", live).update());
+        assertTrue(exists(live));
+
+        // An application clock ahead of the database skips that row instead of failing the whole batch.
+        Instant aheadOfDatabase = Instant.now().plus(Duration.ofHours(9));
+        assertDoesNotThrow(() -> browserSessions.purgeEnded(aheadOfDatabase, Duration.ZERO, Integer.MAX_VALUE));
         assertTrue(exists(live));
     }
 
