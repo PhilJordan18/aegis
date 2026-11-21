@@ -13,9 +13,13 @@ const ADMIN_PASSWORD = process.env.AEGIS_DEMO_ADMIN_PASSWORD ?? ''
 const TECHNICIAN_PASSWORD = process.env.AEGIS_DEMO_TECHNICIAN_PASSWORD ?? ''
 const ORIGIN = 'http://localhost:5181'
 
+/**
+ * The API requests that completed. A request cut short by a navigation never gets its extra headers, so
+ * `allHeaders()` would wait for it until the test times out: only finished requests are kept.
+ */
 function apiCalls(page: Page): Request[] {
   const calls: Request[] = []
-  page.on('request', (request) => {
+  page.on('requestfinished', (request) => {
     if (new URL(request.url()).pathname.startsWith('/api/')) calls.push(request)
   })
   return calls
