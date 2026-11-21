@@ -7,7 +7,7 @@ import { ManagerShell } from '../app/shell/ManagerShell'
 import type { UserProfile } from '../features/auth/contract'
 import { useSessionStore } from '../features/auth/session'
 import { useCurrentAdminProfile } from '../features/auth/useCurrentAdminProfile'
-import { operationTypeLabel, transactionTimes } from '../features/transactions/transactionPresentation'
+import { operationChip, operationTypeLabel, transactionTimes } from '../features/transactions/transactionPresentation'
 import { classifyTransactionFailure } from '../features/transactions/transactionFailure'
 import { hasFilters, NO_FILTERS, readTransactionLocation, transactionHref, type TransactionFilterValues, type TransactionView } from '../features/transactions/transactionHref'
 import { TransactionDossier } from '../features/transactions/TransactionDossier'
@@ -75,6 +75,15 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
   const detail = useTransactionDetail(view, selectedId, listed)
 
   const [selectionNote, setSelectionNote] = useState('')
+  // The dossier of an operation follows the server (ADR-006): a change of status is announced politely, from the
+  // second read of the same operation on, and says only the status the server reported.
+  const [operationNote, setOperationNote] = useState('')
+  const [observed, setObserved] = useState<{ readonly id: string; readonly status: string } | null>(null)
+  const followed = detail.isPlaceholderData || detail.data?.kind !== 'operations' ? null : detail.data.item
+  if (followed !== null && (observed?.id !== followed.id || observed.status !== followed.status)) {
+    setObserved({ id: followed.id, status: followed.status })
+    setOperationNote(observed?.id === followed.id ? t.operationUpdated({ status: operationChip(followed.status, i18n).label }) : '')
+  }
   const focusAfterSelection = useRef(false)
   const dossierRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -160,6 +169,9 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
         </div>
         <div className="ag-sr-only" role="status">
           {selectionNote}
+        </div>
+        <div className="ag-sr-only" role="status">
+          {operationNote}
         </div>
 
         <TransactionFilters
