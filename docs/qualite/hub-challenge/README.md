@@ -59,3 +59,30 @@ l'arrêt à 10 s, puis tue le processus.
 
 Ces vérifications ne prouvent rien sur un écran réel. L'affichage physique, l'ACK et l'échéance
 sur le hub relèvent de #45 et d'une séance humaine.
+
+## Garde devenue invalide au scan (§6.5) : `guard-at-scan.sh`
+
+```bash
+docs/qualite/hub-challenge/guard-at-scan.sh   # depuis la racine du commit testé, environ 4 minutes
+```
+
+Le script utilise la même pile jetable, avec son propre projet Compose : `aegis-qa-guard-scan`, ports 58543, 54994 et 19391.
+
+Il reproduit le point 3 du registre de décisions de Backend ([#67](https://github.com/PhilJordan18/aegis/issues/67#issuecomment-7063175563)) sur la route de scan de #173.
+
+| ID | Vérification | Attendu |
+|---|---|---|
+| G0 | Révocation de l'identifiant RFID attendu pendant la tentative | `409 ASSET_OPERATION_IN_PROGRESS` |
+| G0b | Passage de l'actif en `MAINTENANCE` par la route admin réelle, sans SQL | `OBS` : la mise à jour est acceptée |
+| G1 | Scan avec le bon secret alors que l'actif n'est plus `READY` | 05 §5.4 et 06 §6.5 : opération `FAILED`, défi `INVALIDATED`, refus audité, aucune commande. Tout motif `FAILED` est accepté, car sa valeur reste une décision humaine |
+| G2 | Même bon secret à nouveau | toujours refusé, aucune commande |
+| G3 | État réel jusqu'à l'échéance | `OBS` |
+
+**Constat sur `79d19a0` (#173).**
+- G0 et G2 sont PASS.
+- **G1 échoue : c'est un défaut.** Le scan reçoit `422 ASSET_NOT_READY` (et non le `409` de 09 §15.5). Pourtant :
+  - l'opération reste `AWAITING_LOCAL_PROOF` ;
+  - le défi reste `PENDING` avec 0 essai ;
+  - aucun audit n'est écrit ;
+  - la tentative ne se termine qu'à l'échéance, en `EXPIRED LOCAL_PROOF_EXPIRED`.
+- Aucune commande et aucun prêt n'ont été créés.
