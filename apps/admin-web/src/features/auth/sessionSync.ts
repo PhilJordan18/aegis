@@ -30,6 +30,11 @@ export interface SignalWindow {
   removeEventListener(type: 'storage', listener: (event: StorageEvent) => void): void
 }
 
+/** Unpredictable enough to make two signals distinct; `getRandomValues` also works outside a secure context. */
+function randomNonce(): string {
+  return Array.from(crypto.getRandomValues(new Uint32Array(2)), (part) => part.toString(36)).join('')
+}
+
 export function createSessionSignals(win: SignalWindow = window): SessionSignals {
   const listeners = new Set<(signal: SessionSignal) => void>()
   const deliver = (signal: unknown) => {
@@ -61,7 +66,7 @@ export function createSessionSignals(win: SignalWindow = window): SessionSignals
       try {
         const storage = win.localStorage
         if (!storage) return
-        const nonce = Math.random().toString(36).slice(2)
+        const nonce = randomNonce()
         storage.setItem(SIGNAL_STORAGE_KEY, `${signal}:${nonce}`)
         storage.removeItem(SIGNAL_STORAGE_KEY)
       } catch {

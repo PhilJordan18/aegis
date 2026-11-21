@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { Page, Route } from '@playwright/test'
 import { routeCatalog, unitId, unitsOf, view, type Unit } from './catalogFakes.ts'
 
@@ -149,7 +150,7 @@ export async function routeFakeSessionApi(page: Pick<Page, 'route'>, allowedOrig
       if (body.browserSession === true && headers.origin !== allowedOrigin) return problemResponse(route, 403, 'FORBIDDEN', path)
       const account = ACCOUNTS.find(({ profile, password }) => profile.email === body.email && password === body.password)
       if (!account) return problemResponse(route, 401, 'AUTH_INVALID_CREDENTIALS', path)
-      const value = `opaque-session-${counter + 1}-${Math.random().toString(36).slice(2)}`
+      const value = `opaque-session-${counter + 1}-${randomUUID()}`
       sessions.set(value, account.profile)
       return json(route, 200, issue(account.profile), { 'Set-Cookie': cookieHeader(value, 28800) })
     }
