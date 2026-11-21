@@ -568,7 +568,7 @@ export const en: Messages = {
     attemptFailed: 'Attempt failed: no physical confirmation.',
     attemptExpired: 'Attempt expired: no physical confirmation.',
     attemptAnomaly: 'Anomaly found on this attempt: no physical confirmation.',
-    attemptDeferredExpiry: 'The reservation stays active until this attempt ends, even after the reserved period is over: its expiry is deferred.',
+    attemptDeferredExpiry: 'The reserved period is over, but the reservation stays active until the server establishes the physical outcome of this attempt: its expiry is deferred.',
     openOperation: 'Open the operation',
     openReservation: 'Open the reservation',
     openLoan: 'Open the loan',

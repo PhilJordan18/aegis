@@ -635,7 +635,7 @@ export const fr = {
     attemptFailed: 'Tentative en échec : aucune confirmation physique.',
     attemptExpired: 'Tentative expirée : aucune confirmation physique.',
     attemptAnomaly: 'Anomalie constatée sur cette tentative : aucune confirmation physique.',
-    attemptDeferredExpiry: "La réservation reste active tant que cette tentative n'est pas terminée, même après la fin de la période réservée : son expiration est différée.",
+    attemptDeferredExpiry: "La période réservée est passée, mais la réservation reste active tant que le serveur n'a pas établi l'issue physique de cette tentative : son expiration est différée.",
     openOperation: "Ouvrir l'opération",
     openReservation: 'Ouvrir la réservation',
     openLoan: 'Ouvrir le prêt',

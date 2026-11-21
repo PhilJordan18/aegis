@@ -3,7 +3,7 @@ import type { I18n } from '../../i18n/useI18n'
 import { StatusChip } from '../../ui/StatusChip'
 import { UNRECOGNIZED } from '../catalog/contract'
 import type { LockerOperationView } from './contract'
-import { isTerminalOperation, operationChip, type TransactionTimes } from './transactionPresentation'
+import { operationChip, type TransactionTimes } from './transactionPresentation'
 import { LinkedAnomaly } from './LinkedAnomaly'
 import { useOperationRead } from './useTransactionQueries'
 
@@ -40,11 +40,28 @@ function attemptLines(operation: LockerOperationView, i18n: I18n): readonly stri
 }
 
 /**
+ * 06 §14.1: past `reservedUntil`, the server keeps an ACTIVE reservation only while its CHECKOUT is authorized and not
+ * yet classified, or physically uncertain (ANOMALY). The QR wait (REQUESTED, AWAITING_LOCAL_PROOF) never defers expiry.
+ */
+const DEFERRING_STATUSES: ReadonlySet<string> = new Set(['AUTHORIZED', 'COMMAND_SENT', 'COMMAND_ACKNOWLEDGED', 'DOOR_OPENED', 'OBSERVATION_RECEIVED', 'ANOMALY'])
+
+/**
  * State of the current attempt of a reservation or loan, read through `currentOperationId`. The words follow the
  * attempt's own status as the server sent it, never the browser clock. Nothing is added when there is no attempt or it
  * cannot be read: the dossier keeps its link to the operation.
  */
-export function CurrentAttempt({ operationId, deferrable, i18n, times }: { readonly operationId: string | null; readonly deferrable: boolean; readonly i18n: I18n; readonly times: TransactionTimes }) {
+export function CurrentAttempt({
+  operationId,
+  activeReservedUntil,
+  i18n,
+  times,
+}: {
+  readonly operationId: string | null
+  /** `reservedUntil` of an ACTIVE reservation; null for a loan or a reservation in any other status. */
+  readonly activeReservedUntil: string | null
+  readonly i18n: I18n
+  readonly times: TransactionTimes
+}) {
   const t = i18n.m.reservations
   const read = useOperationRead(operationId)
   if (operationId === null) return null
@@ -54,7 +71,9 @@ export function CurrentAttempt({ operationId, deferrable, i18n, times }: { reado
   const operation = record.item
   const chip = operationChip(operation.status, i18n)
   const lines = [...attemptLines(operation, i18n)]
-  if (deferrable && !isTerminalOperation(operation) && operation.status !== UNRECOGNIZED) lines.push(t.attemptDeferredExpiry)
+  // Past due at the time of this read, still ACTIVE, and an attempt the server may defer for: the deferral is the server's.
+  const pastDue = activeReservedUntil !== null && Date.parse(activeReservedUntil) <= read.dataUpdatedAt
+  if (pastDue && DEFERRING_STATUSES.has(operation.status)) lines.push(t.attemptDeferredExpiry)
   return (
     <LinkRow label={t.attemptState}>
       <StatusChip role={chip.role} icon={chip.icon}>

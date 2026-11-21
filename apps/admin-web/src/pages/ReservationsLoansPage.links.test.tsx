@@ -173,7 +173,7 @@ describe('R4: the current attempt of a reservation or a loan', () => {
     expect(text).toContain("Tentative en cours : le serveur n'a pas encore décidé de son issue.")
     expect(text).toContain("Ce n'est pas une confirmation physique.")
     expect(text).toContain("La confirmation physique est une décision du serveur ; elle n'est pas encore rendue.")
-    expect(text).toContain('La réservation reste active tant que cette tentative n’est pas terminée'.replace('’', "'"))
+    expect(text).toContain("La période réservée est passée, mais la réservation reste active tant que le serveur n'a pas établi l'issue physique de cette tentative")
     expect(gateway.getLockerOperation.mock.calls.map((call) => call[1])).toEqual([ATTEMPT_ID])
     expect(hrefOf("Ouvrir l'opération")).toBe(`/reservations-prets?vue=operations&dossier=${ATTEMPT_ID}`)
   })
@@ -195,6 +195,27 @@ describe('R4: the current attempt of a reservation or a loan', () => {
     renderPage(fakeGateway({ reservations: [reservation({ currentOperationId: ATTEMPT_ID })], operations: [attempt({ status: 'CONFIRMED' })] }), { url: '/reservations-prets' })
     await waitFor(() => expect(plain(dossier().textContent)).toContain('Confirmation physique : décision du serveur'))
     expect(plain(dossier().textContent)).not.toContain('reste active')
+  })
+
+  it.each(['REQUESTED', 'AWAITING_LOCAL_PROOF'])('never says the expiry is deferred during the QR wait (%s), even past due (06 §14.1)', async (status) => {
+    const waiting = attempt({ status, doorOpenedAt: null, observationReceivedAt: null, confirmedAt: null, terminalAt: null, commandSentAt: null, commandAcknowledgedAt: null })
+    renderPage(fakeGateway({ reservations: [reservation({ reservedUntil: '2020-01-01T00:00:00Z', currentOperationId: ATTEMPT_ID })], operations: [waiting] }), { url: '/reservations-prets' })
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Tentative en cours'))
+    expect(plain(dossier().textContent)).not.toContain('expiration est différée')
+  })
+
+  it('does not say the expiry is deferred before the end of the reserved period', async () => {
+    const authorized = attempt({ status: 'AUTHORIZED', terminalAt: null, confirmedAt: null })
+    renderPage(fakeGateway({ reservations: [reservation({ reservedUntil: '2999-01-01T00:00:00Z', currentOperationId: ATTEMPT_ID })], operations: [authorized] }), { url: '/reservations-prets' })
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Accès autorisé'))
+    expect(plain(dossier().textContent)).not.toContain('expiration est différée')
+  })
+
+  it('says the expiry is deferred for a physically uncertain attempt (ANOMALY) on an active reservation past due', async () => {
+    const anomalies = fakeAnomalyGateway({ getAnomaly: async () => anomalyOk(parsedDetail({ status: 'OPEN' })) })
+    renderPage(fakeGateway({ reservations: [reservation({ reservedUntil: '2020-01-01T00:00:00Z', currentOperationId: ATTEMPT_ID })], operations: [attempt({ status: 'ANOMALY', anomalyId: ANOMALY })] }), { url: '/reservations-prets', anomalyGateway: anomalies })
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Anomalie constatée sur cette tentative'))
+    expect(plain(dossier().textContent)).toContain('son expiration est différée')
   })
 
   it('shows a failed attempt as no physical confirmation', async () => {
