@@ -74,7 +74,7 @@ Il reproduit le point 3 du registre de décisions de Backend ([#67](https://gith
 |---|---|---|
 | G0 | Révocation de l'identifiant RFID attendu pendant la tentative | `409 ASSET_OPERATION_IN_PROGRESS` |
 | G0b | Passage de l'actif en `MAINTENANCE` par la route admin réelle, sans SQL | `OBS` : la mise à jour est acceptée |
-| G1 | Scan avec le bon secret alors que l'actif n'est plus `READY` | 05 §5.4 et 06 §6.5 : opération `FAILED`, défi `INVALIDATED`, refus audité, aucune commande. Tout motif `FAILED` est accepté, car sa valeur reste une décision humaine |
+| G1 | Scan avec le bon secret alors que l'actif n'est plus `READY` | 05 §5.4 et 06 §6.5 : opération `FAILED`, défi `INVALIDATED`, refus audité, aucune commande. Motif approuvé le 21 novembre (règle 3, [#67](https://github.com/PhilJordan18/aegis/issues/67#issuecomment-7064405022)) : `LOCAL_PROOF_GUARD_FAILED`, audit `LOCAL_CHALLENGE_REJECTED` |
 | G2 | Même bon secret à nouveau | toujours refusé, aucune commande |
 | G3 | État réel jusqu'à l'échéance | `OBS` |
 

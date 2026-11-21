@@ -95,7 +95,7 @@ la récupération suit les contrats.
 | K11 | Opération terminale (`ANOMALY`, `EXPIRED` ou `FAILED`), puis arrivée d'un scan sain sans le tag | **Aucune transition vers `CONFIRMED`**, aucun prêt ; événement conservé comme preuve |
 | K12 | Opération `CONFIRMED`, puis scan `FAULTED` ou tag présent | Aucune transition, prêt inchangé |
 | K13 | Événement portant un autre `operationId` ou une autre cellule | Ignoré pour la transition |
-| K14 | Mauvais tag observé | `ANOMALY` / `UNEXPECTED_ASSET_OBSERVED`, aucun prêt |
+| K14 | Tag attendu absent de façon stable, tag étranger lu | `CONFIRMED`, un prêt : précédence de 06 §10.3, règle 5 approuvée par Philippe le 21 novembre ([#67](https://github.com/PhilJordan18/aegis/issues/67#issuecomment-7064405022)) |
 
 ## #50 / #51 — Retour (à détailler à la livraison)
 

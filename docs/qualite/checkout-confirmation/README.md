@@ -35,7 +35,7 @@ QA_CHK_CASES="C1 C3" docs/qualite/checkout-confirmation/run.sh   # quelques cas 
 | C5 | K7 | Scan `FAULTED` porte ouverte, puis scan sain après la fermeture | Pas de règle 2 : `CONFIRMED` |
 | C6 | K8, K11 | Porte refermée 115 s après le déverrouillage ; le scan de 10 s se termine après `expiresAt` | `ANOMALY` / `DEVICE_OFFLINE_DURING_OPERATION` à l'échéance ; le scan tardif sain, sans le tag, ne change rien |
 | C7 | doc 05 §5.5 | Même séquence, passe d'évaluation à 5 min (`AEGIS_OPERATIONS_EVALUATION_INTERVAL=PT5M`) | Une preuve reçue après `expiresAt` ne confirme pas : la livraison ne prolonge aucun délai |
-| C8 | K14 | Tag attendu retiré, tag étranger laissé dans la cellule | Doc 05 §5.4 : `UNEXPECTED_ASSET_OBSERVED` ; doc 06 §10.3 vérifie d'abord l'absence du tag attendu. Constat (`OBS`) en cas d'écart |
+| C8 | K14 | Tag attendu retiré, tag étranger laissé dans la cellule | `CONFIRMED` et un prêt : précédence de doc 06 §10.3, règle 5 approuvée par Philippe le 21 novembre ([#67](https://github.com/PhilJordan18/aegis/issues/67#issuecomment-7064405022)) |
 | C9 | K8 | Hub coupé (Last Will) après la fermeture, avant son scan | L'absence de message n'est pas une preuve : `ANOMALY` / `DEVICE_OFFLINE_DURING_OPERATION` à l'échéance |
 
 Chaque cas vérifie aussi qu'il y a au plus une commande, et un prêt seulement pour une opération

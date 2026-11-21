@@ -9,7 +9,8 @@
 #   G1 definitive guard: an administrator sets the asset to MAINTENANCE (the real admin route, no SQL) between the
 #      preparation and a scan with the right secret, so readiness is no longer READY. Expected by doc 05 §5.4 l.271 and doc 06 §6.5: the
 #      attempt ends now (operation FAILED, challenge INVALIDATED, refusal audited, screen cleared), no command.
-#      Any FAILED reason is accepted: the value is PENDING-HUMAN (ledger questions 3-4).
+#      Reason approved by Philippe on 21 November (#67 comment 7064405022, rules 3-4): LOCAL_PROOF_GUARD_FAILED, audit
+#      LOCAL_CHALLENGE_REJECTED.
 #   G2 the same right secret again: still refused, no command.
 #   G3 what the unrevised code does instead: operation and challenge state until expiry (reported as OBS).
 # Same disposable stack and conventions as run.sh (own Compose project and ports). Exit code = number of FAIL lines.
@@ -289,12 +290,14 @@ sleep 2
 s1=$(state "$op")
 c1=$(sql "SELECT status || ' ' || failed_attempts FROM aegis.local_access_challenges WHERE operation_id = '$op'")
 audit_after=$(sql "SELECT count(*) FROM aegis.audit_events")
+rejected=$(sql "SELECT count(*) FROM aegis.audit_events WHERE event_type = 'LOCAL_CHALLENGE_REJECTED'")
 echo "  G1 scan $g1 $g1code; operation '$s1'; challenge '$c1'; audit events +$((audit_after - audit_before))"
-if [[ $g1 != 202 && $s1 == FAILED* && $c1 == INVALIDATED* && $audit_after -gt $audit_before && $(commands "$op") == 0 ]]; then
+if [[ $g1 != 202 && $s1 == "FAILED LOCAL_PROOF_GUARD_FAILED"* && $c1 == INVALIDATED* && $rejected -ge 1 &&
+      $(commands "$op") == 0 ]]; then
   pass "G1 definitive guard (asset set to MAINTENANCE) at scan: $g1 $g1code, operation '$s1', challenge '$c1', audited, no command"
 else
   fail "G1 DEFECT (doc 06 §6.5, doc 05 §5.4 l.271): scan $g1 $g1code, operation '$s1', challenge '$c1'," \
-    "audit +$((audit_after - audit_before)), commands $(commands "$op"); expected FAILED + INVALIDATED + audit, no command"
+    "audit +$((audit_after - audit_before)), commands $(commands "$op"); expected FAILED LOCAL_PROOF_GUARD_FAILED + INVALIDATED + LOCAL_CHALLENGE_REJECTED ($rejected), no command"
 fi
 g2=$(authorize g2-scan "$op" "$ch" "$secret")
 [[ $g2 != 202 && $(commands "$op") == 0 ]] && pass "G2 the right secret again: $g2 $(json 'd.get("code","")' <"$work/g2-scan.body" 2>/dev/null), no command" ||

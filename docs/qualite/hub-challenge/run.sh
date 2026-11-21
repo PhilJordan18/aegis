@@ -367,12 +367,13 @@ late=$(forge ACCESS_CHALLENGE_DISPLAYED "$op5" "$dmid5" "$ch5" "$rev5" "$session
 sleep 3
 late5=$(row "$op5")
 late_kept=$(sql "SELECT processing_status FROM aegis.inbound_device_messages WHERE message_id = '$late'")
-if [[ $late5 =~ true$ ]]; then
-  obs "Q5b a correctly correlated ACCESS_CHALLENGE_DISPLAYED after DISPLAY_REJECTED sets displayedAt" \
-    "('$late5', message $late_kept): the instruction stays REJECTED and purged; doc 10 §27.2 does not say" \
-    "whether a rejected instruction may still be acknowledged"
+# Rule 2 approved by Philippe on 21 November (#67 comment 7064405022): an acknowledgement of a REJECTED instruction is
+# stored REJECTED (COMMAND_CORRELATION_INVALID) and never sets displayedAt.
+if [[ $late5 =~ false$ && $late_kept == REJECTED ]]; then
+  pass "Q5b a correlated ACCESS_CHALLENGE_DISPLAYED after DISPLAY_REJECTED is stored REJECTED, displayedAt empty ('$late5')"
 else
-  obs "Q5b a correctly correlated acknowledgement after DISPLAY_REJECTED is ignored ('$late5', $late_kept)"
+  fail "Q5b late acknowledgement after DISPLAY_REJECTED: '$late5', message $late_kept; expected displayedAt empty and the" \
+    "message REJECTED (rule 2)"
 fi
 end5=$(wait_terminal "$op5" 75)
 [[ $end5 == EXPIRED\ LOCAL_PROOF_EXPIRED* && $(commands "$op5") == 0 ]] &&

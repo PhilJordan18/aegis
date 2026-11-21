@@ -436,12 +436,13 @@ if wanted C8 && setup C8 '{ "wait": 1000 }, { "do": "openDoor", "code": "A1" },
   { "do": "takeTag", "code": "A1", "identifier": "'$tag'" },
   { "do": "putTag", "code": "A1", "identifier": "'$foreign'" }, { "wait": 1500 }, { "do": "closeDoor", "code": "A1" }'; then
   end=$(wait_terminal 40)
-  if [[ $end == "ANOMALY UNEXPECTED_ASSET_OBSERVED" && $(loans) == 0 ]]; then
-    pass "K14 foreign tag in the cell: '$end', no loan"
+  # Rule 5 approved by Philippe on 21 November (#67 comment 7064405022): the doc 06 §10.3 precedence, a stably absent
+  # expected tag confirms the checkout even with a foreign tag read.
+  if [[ $end == "CONFIRMED -" && $(loans) == 1 ]]; then
+    pass "K14 foreign tag in the cell with the expected tag removed: '$end', one loan (rule 5)"
   else
-    obs "K14 foreign tag in the cell with the expected tag removed: '$end', loans $(loans), anomaly '$(anomalies)'." \
-      "Document 05 §5.4 maps a wrong asset observed to ANOMALY UNEXPECTED_ASSET_OBSERVED; document 06 §10.3 checks" \
-      "the expected tag's absence first for a CHECKOUT. Contradiction for the contract owner."
+    fail "K14 foreign tag in the cell with the expected tag removed: '$end', loans $(loans), anomaly '$(anomalies)';" \
+      "expected CONFIRMED and one loan (rule 5)"
   fi
   invariant C8
 fi
