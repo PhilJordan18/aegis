@@ -1,0 +1,16 @@
+# ref c9473c4 (Backend integration build; = final PR heads except one doc line), step 3-checkout-confirmation
+PASS K1 nominal: CONFIRMED, reservation FULFILLED, one ACTIVE loan with dueAt = reservedUntil, REST 'CONFIRMED None'
+PASS K9 acknowledgement, door and scan messages replayed with their messageId: still one loan and one OPERATION_CONFIRMED audit (4 distinct proof messages stored)
+PASS K2 rule 1: 'OBSERVATION_RECEIVED -' after the scan and 'OBSERVATION_RECEIVED -' at expiresAt - 1.5 s, no loan, no anomaly
+PASS K3 rule 1 at the deadline: 'ANOMALY INCONSISTENT_PHYSICAL_STATE' 0.5 s after expiresAt, anomaly '1 INCONSISTENT_PHYSICAL_STATE/EXPECTED_ASSET_STILL_PRESENT', no loan
+PASS K4 the 1 s evaluation pass ran again after the deadline: one anomaly, one ANOMALY_CREATED audit
+PASS K5 rule 2: closing scan 'FAULTED' -> 'ANOMALY INCONSISTENT_PHYSICAL_STATE' at once (-113.5 s before expiresAt), anomaly '1 INCONSISTENT_PHYSICAL_STATE/READER_NOT_HEALTHY', no loan
+PASS K6 rule 2: closing scan 'UNKNOWN' -> 'ANOMALY INCONSISTENT_PHYSICAL_STATE' at once (-114.3 s before expiresAt), anomaly '1 INCONSISTENT_PHYSICAL_STATE/READER_NOT_HEALTHY', no loan
+PASS K7 FAULTED scan while the door was open (1 stored with the operation): no rule 2, then 'CONFIRMED -' on the healthy closing scan
+PASS K8 door closed (received at expiresAt -6.7 s), no scan before the deadline, healthy reader: 'ANOMALY DEVICE_OFFLINE_DURING_OPERATION' 0.1 s after expiresAt
+PASS K11 healthy scan without the tag received 3.3 s after expiresAt, operation already terminal: unchanged 'ANOMALY DEVICE_OFFLINE_DURING_OPERATION', no loan
+PASS C7 a coherent proof received 3.3 s after expiresAt did not confirm: 'ANOMALY DEVICE_OFFLINE_DURING_OPERATION'
+PASS K14 foreign tag in the cell with the expected tag removed: 'CONFIRMED -', one loan (rule 5)
+PASS C9 hub lost after the closing, no scan: 'DOOR_OPENED -' 20 s later (cell reader 'HEALTHY'), then 'ANOMALY DEVICE_OFFLINE_DURING_OPERATION' at expiresAt + 0.4 s
+QA CHECKOUT CONFIRMATION: all checks passed
+exit=0
