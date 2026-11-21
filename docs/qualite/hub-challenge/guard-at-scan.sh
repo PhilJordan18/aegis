@@ -20,9 +20,9 @@ cd "$root"
 project=aegis-qa-guard-scan
 work=$(mktemp -d "${TMPDIR:-/tmp}/aegis-qa-hub.XXXXXX")
 scenarios=$(mktemp -d tools/hub-simulator/.qa-hub.XXXXXX)
-db_port=${QA_GUARD_DB_PORT:-58543}
-mqtt_port=${QA_GUARD_MQTT_PORT:-54994}
-api_port=${QA_GUARD_API_PORT:-19391}
+db_port=${QA_GUARD_DB_PORT:-58563}
+mqtt_port=${QA_GUARD_MQTT_PORT:-55014}
+api_port=${QA_GUARD_API_PORT:-19411}
 locker=d46a74ae-39dc-460b-8af0-38fc791b376a
 
 sed -e "s/^AEGIS_DB_PORT=.*/AEGIS_DB_PORT=$db_port/" -e "s/^AEGIS_MQTT_PORT=.*/AEGIS_MQTT_PORT=$mqtt_port/" \

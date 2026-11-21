@@ -66,7 +66,7 @@ sur le hub relèvent de #45 et d'une séance humaine.
 docs/qualite/hub-challenge/guard-at-scan.sh   # depuis la racine du commit testé, environ 4 minutes
 ```
 
-Le script utilise la même pile jetable, avec son propre projet Compose : `aegis-qa-guard-scan`, ports 58543, 54994 et 19391.
+Le script utilise la même pile jetable, avec son propre projet Compose : `aegis-qa-guard-scan`, ports 58563, 55014 et 19411, distincts des autres recettes.
 
 Il reproduit le point 3 du registre de décisions de Backend ([#67](https://github.com/PhilJordan18/aegis/issues/67#issuecomment-7063175563)) sur la route de scan de #173.
 
