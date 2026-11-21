@@ -74,6 +74,10 @@ export function SessionRestoreFailed({ failure, traceId }: { readonly failure: R
           <Alert kind="error" icon="status-offline" title={t.unreachableTitle}>
             <p>{t.unreachableBody}</p>
           </Alert>
+        ) : failure === 'forbidden' ? (
+          <Alert kind="error" icon="status-blocked" title={t.forbiddenTitle} code={traceId ?? undefined} codeLabel={traceId === null ? undefined : t.traceIdLabel}>
+            <p>{t.forbiddenBody}</p>
+          </Alert>
         ) : (
           <Alert
             kind="error"

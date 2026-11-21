@@ -126,10 +126,12 @@ describe('fetchCurrentAdminProfile', () => {
     expect(session.getSnapshot()).toMatchObject({ status: 'anonymous', arrivalReason: 'sessionInvalid' })
   })
 
-  it('ends the session as invalid on a 403', async () => {
+  it('keeps the session on a 403: an authorization answer, never a sign-out', async () => {
     const session = signedIn()
-    await expect(fetchCurrentAdminProfile(profileGateway(problem(403, 'FORBIDDEN')), session)).rejects.toBeInstanceOf(ApiRequestError)
-    expect(session.getSnapshot()).toMatchObject({ status: 'anonymous', arrivalReason: 'sessionInvalid' })
+    const error = await fetchCurrentAdminProfile(profileGateway(problem(403, 'FORBIDDEN')), session).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(ApiRequestError)
+    expect(session.getSnapshot()).toMatchObject({ status: 'authenticated', profile: adminProfile })
+    expect(session.getAccessToken()).toBe('token-a')
   })
 
   it('keeps the session through a network failure, which is retried', async () => {

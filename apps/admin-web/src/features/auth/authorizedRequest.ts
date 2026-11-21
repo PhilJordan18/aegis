@@ -39,25 +39,16 @@ export async function authorizedRequest<T>(session: SessionStore, call: (accessT
 }
 
 /**
- * GET /auth/me (09 §10.3): the server re-reads the account on every protected
- * request (09 §4.1), so this confirms that the session may still act as an
- * administrator. A profile that is no longer ADMIN, or a 403, ends the session
- * as invalid: the Manager never keeps a token it may not use.
+ * GET /auth/me (09 §10.3): the server re-reads the account on every protected request (09 §4.1), so this confirms
+ * that the session may still act as an administrator. A profile that is no longer ADMIN ends the session as invalid:
+ * the Manager never keeps a token it may not use. A 403 never ends the session: it is an authorization answer, and
+ * the pages show their own forbidden view; only a 401 (after the one allowed renewal) sends the user to sign-in.
  */
 export async function fetchCurrentAdminProfile(gateway: AuthGateway, session: SessionStore, signal?: AbortSignal): Promise<UserProfile> {
   const token = session.getAccessToken()
-  const stillCurrent = () => token !== null && session.getAccessToken() === token
-  let profile: UserProfile
-  try {
-    profile = await authorizedRequest(session, (accessToken) => gateway.currentProfile(accessToken, signal))
-  } catch (error) {
-    if (error instanceof ApiRequestError && error.failure.kind === 'httpProblem' && error.failure.status === 403 && stillCurrent()) {
-      session.end('sessionInvalid')
-    }
-    throw error
-  }
+  const profile = await authorizedRequest(session, (accessToken) => gateway.currentProfile(accessToken, signal))
   if (profile.role !== 'ADMIN') {
-    if (stillCurrent()) session.end('sessionInvalid')
+    if (token !== null && session.getAccessToken() === token) session.end('sessionInvalid')
     throw new SessionEndedError()
   }
   return profile

@@ -77,11 +77,13 @@ export const fr = {
     serviceErrorBody: "Votre session n'est pas fermée. Réessayez dans un instant. Si le problème persiste, transmettez l'identifiant de suivi au support.",
     serviceErrorBodyWithoutCode: "Votre session n'est pas fermée. Réessayez dans un instant.",
     traceIdLabel: `Identifiant de suivi${NBSP}:`,
+    forbiddenTitle: 'Le serveur refuse de rétablir votre session depuis cette adresse.',
+    forbiddenBody: "Votre session n'a pas été fermée ni modifiée. Contactez un administrateur si le problème persiste.",
     retry: 'Réessayer',
     signInInstead: 'Se connecter',
-    signOutFailedTitle: 'Déconnexion non confirmée.',
-    signOutFailedBody: `Le serveur n’a pas confirmé la fermeture de votre session. Vous restez connecté${NBSP}: réessayez la déconnexion.`,
-    signOutRetry: 'Réessayer la déconnexion',
+    /** Texte exact retenu par Philippe (#178) : aucune autre phrase n'accompagne l'alerte. */
+    signOutFailedTitle: 'Impossible de confirmer la déconnexion. Réessayez.',
+    signOutRetry: 'Réessayer',
     signingOut: 'Déconnexion en cours',
   },
 

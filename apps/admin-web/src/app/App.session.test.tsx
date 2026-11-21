@@ -145,6 +145,25 @@ describe('boot restoration of a protected page (ADR-016)', () => {
     expect(refreshSession).toHaveBeenCalledTimes(2)
   })
 
+  it('shows a forbidden view for a 403, without signing anyone out, with a retry', async () => {
+    const forbidden = httpProblem(403, problemBody(403, 'FORBIDDEN', { traceId: 'trace-403' }))
+    const refreshSession = vi.fn<AuthGateway['refreshSession']>().mockResolvedValueOnce(forbidden).mockResolvedValueOnce(loginOk(adminProfile))
+    const revokeSession = vi.fn(async () => revoked)
+    const { restoring, session } = boot('/audit', gatewayWith({ refreshSession, revokeSession }))
+    await act(async () => {
+      await restoring
+    })
+    const alert = screen.getByRole('alert')
+    expect(alert.textContent).toContain(t.forbiddenTitle)
+    expect(within(alert).getByText('trace-403')).toBeDefined()
+    expect(where()).toBe('/audit')
+    expect(revokeSession).not.toHaveBeenCalled()
+    expect(session.getSnapshot().status).toBe('restoreFailed')
+
+    await userEvent.setup().click(screen.getByRole('button', { name: t.retry }))
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /Administratrice Test/ }).length).toBeGreaterThan(0))
+  })
+
   it('shows the trace id of a service error', async () => {
     const failure = httpProblem(503, problemBody(503, 'INTERNAL_ERROR', { traceId: 'trace-123' }))
     const { restoring } = boot('/audit', gatewayWith({ refreshSession: async () => failure }))
@@ -210,7 +229,9 @@ describe('explicit sign-out (ADR-016)', () => {
     await user.click(screen.getAllByRole('button', { name: fr.shell.signOut })[0] as HTMLElement)
 
     const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toContain(t.signOutFailedTitle)
+    // Exactly this sentence, in both languages (catalog parity), and a retry; nothing else is said.
+    expect(alert.textContent).toBe(`${t.signOutFailedTitle}${t.signOutRetry}`)
+    expect(t.signOutFailedTitle).toBe('Impossible de confirmer la déconnexion. Réessayez.')
     expect(session.getSnapshot().status).toBe('authenticated')
     expect(session.getAccessToken()).toBe('token')
     expect(where()).toBe('/casiers')

@@ -74,7 +74,6 @@ export function ManagerShell({ currentPath, profile, onSignOut, children }: Shel
           {signOutState === 'failed' && (
             <div className="ag-shell__notice">
               <Alert kind="error" icon="status-error" title={m.session.signOutFailedTitle}>
-                <p>{m.session.signOutFailedBody}</p>
                 <Button variant="secondary" size="sm" onClick={onSignOut}>
                   {m.session.signOutRetry}
                 </Button>
