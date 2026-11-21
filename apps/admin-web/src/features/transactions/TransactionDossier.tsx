@@ -421,6 +421,8 @@ function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { rea
               <Link className="ag-link" to={transactionHref({ view: 'loans', selectedId: o.loanId })}>
                 {t.openLoan}
               </Link>
+            ) : o.type === 'CHECKOUT' ? (
+              t.checkoutLoanNote
             ) : (
               t.none
             )}

@@ -360,6 +360,15 @@ describe('Réservations et prêts: locker operations', () => {
     expect(within(dossier()).queryByRole('button', { name: /déverrouill|unlock/i })).toBeNull()
   })
 
+  it('does not read « no loan » on a confirmed checkout: the loan names the operation (08), nothing is inferred', async () => {
+    const op = operation({ type: 'CHECKOUT', status: 'CONFIRMED', loanId: null })
+    renderPage(fakeGateway({ operations: ok(pageOf([op])) }), { url: '/reservations-prets?vue=operations' })
+    await screen.findByRole('heading', { level: 2, name: '1 opération' })
+    await waitFor(() => expect(plain(dossier().textContent)).toContain("c'est le prêt qui désigne cette opération"))
+    expect(within(dossier()).queryByRole('link', { name: 'Ouvrir le prêt' })).toBeNull()
+    expect(plain(dossier().textContent)).toContain('Aucun prêt n\'est déduit.')
+  })
+
   it('shows an unknown failure reason as the code alone, with no invented label', async () => {
     const op = operation({ status: 'EXPIRED', failureReason: 'FUTURE_REASON', confirmedAt: null })
     renderPage(fakeGateway({ operations: ok(pageOf([op])) }), { url: '/reservations-prets?vue=operations' })
