@@ -54,47 +54,9 @@ import ca.aegis.control.support.TestAccounts.TestAccount;
 /**
  * LOC-01 and the preparation of CHK-01 (#43, #46; document 09, section 15.1; document 06, sections 6.1 to 6.5;
  * document 10, section 27): the 202, the encrypted display instruction, the hub's display reports, and the end of an
- * unconsumed challenge. The test hub is brought online by real heartbeats through the ingestion, without a broker.
+ * unconsumed challenge.
  */
-@Import(PresentAssetsConfiguration.class)
-class CheckoutPreparationApiTests extends ApiIntegrationTest {
-
-    static final Instant UNTIL = Instant.parse("2026-09-28T15:30:00Z");
-
-    @Autowired
-    JdbcClient jdbc;
-
-    @Autowired
-    DeviceMessageIngestion ingestion;
-
-    @Autowired
-    LocalChallengeExpiry challengeExpiry;
-
-    ReservationFixtures fixtures;
-    TestAccount technician;
-    String token;
-    UUID locker;
-    UUID asset;
-    UUID reservation;
-    UUID session;
-    UUID connection;
-    long sequence;
-
-    @BeforeEach
-    void prepare() throws Exception {
-        fixtures = new ReservationFixtures(jdbc);
-        technician = accounts.technician();
-        token = accessToken(technician);
-        locker = fixtures.scheduledLocker(accounts.admin().id());
-        asset = fixtures.asset(locker);
-        reservation = fixtures.reservation(asset, technician.id(), "ACTIVE", START.minusSeconds(600), UNTIL);
-        UUID device = fixtures.hub(locker);
-        jdbc.sql("""
-                UPDATE aegis.locker_devices SET provisioned_at = :past, device_session_id = NULL, boot_count = NULL
-                WHERE id = :id
-                """).param("past", ReservationFixtures.utc(ReservationFixtures.PAST)).param("id", device).update();
-        boot(1);
-    }
+class CheckoutPreparationApiTests extends HubChallengeApiTest {
 
     @Test
     void preparationAnswers202WithoutSecretAndQueuesOnlyAnEncryptedDisplay() throws Exception {
@@ -233,8 +195,120 @@ class CheckoutPreparationApiTests extends ApiIntegrationTest {
             heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
             challengeExpiry.run(100);
         }
-        expectProblem(checkout(key()), 429, "RATE_LIMITED");
+        // The first of the six, prepared at START, leaves the 10-minute window 234 s from now (START + 366 s).
+        expectProblem(checkout(key()), 429, "LOCAL_PROOF_RATE_LIMITED")
+                .andExpect(header().string("Retry-After", "234"));
         assertEquals(6L, operations());
+    }
+
+    /** Ends the open preparation at its deadline, as the expiry job does, and keeps the hub online. */
+    private void expireOpenPreparation() {
+        clock.advance(Duration.ofSeconds(61));
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        challengeExpiry.run(100);
+    }
+
+    @Test
+    void theLimitIsSixPerTenMinutesExactlyAndReplaysDoNotCount() throws Exception {
+        String firstKey = key();
+        String first = checkout(firstKey).andExpect(status().isAccepted()).andReturn().getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+        expireOpenPreparation();
+        for (int attempt = 1; attempt < 6; attempt++) {
+            checkout(key()).andExpect(status().isAccepted());
+            expireOpenPreparation();
+        }
+        // A replay of a counted preparation answers its first response, never 429, and creates nothing.
+        String replay = checkout(firstKey).andExpect(status().isAccepted())
+                .andExpect(header().string("Idempotency-Replayed", "true")).andReturn().getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+        assertEquals(jsonMapper.readTree(first), jsonMapper.readTree(replay));
+        expectProblem(checkout(key()), 429, "LOCAL_PROOF_RATE_LIMITED")
+                .andExpect(header().string("Retry-After", "234"));
+        assertEquals(6L, operations());
+
+        // One millisecond before the first preparation leaves the window, the limit still holds.
+        clock.advance(Duration.ofMillis(233_999));
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        expectProblem(checkout(key()), 429, "LOCAL_PROOF_RATE_LIMITED")
+                .andExpect(header().string("Retry-After", "1"));
+        clock.advance(Duration.ofMillis(1));
+        checkout(key()).andExpect(status().isAccepted());
+        assertEquals(7L, operations());
+    }
+
+    @Test
+    void theLimitIsKeptPerTechnicianAndLocker() throws Exception {
+        for (int attempt = 0; attempt < 6; attempt++) {
+            checkout(key()).andExpect(status().isAccepted());
+            expireOpenPreparation();
+        }
+        expectProblem(checkout(key()), 429, "LOCAL_PROOF_RATE_LIMITED");
+
+        // Another technician on the same locker is not limited by this pair.
+        TestAccount colleague = accounts.technician();
+        UUID otherAsset = fixtures.asset(locker);
+        UUID otherReservation = fixtures.reservation(otherAsset, colleague.id(), "ACTIVE", START.minusSeconds(600),
+                UNTIL);
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        mvc.perform(post("/api/v1/reservations/" + otherReservation + "/checkout")
+                .header(AUTHORIZATION, bearer(accessToken(colleague))).header("Idempotency-Key", key()))
+                .andExpect(status().isAccepted());
+        expireOpenPreparation();
+
+        // The same technician on another locker is not limited either.
+        mvc.perform(post("/api/v1/reservations/" + reservation + "/cancel").header(AUTHORIZATION, bearer(token))
+                .header("Idempotency-Key", key())).andExpect(status().isOk());
+        UUID firstLocker = locker;
+        locker = fixtures.scheduledLocker(accounts.admin().id());
+        asset = fixtures.asset(locker);
+        reservation = fixtures.reservation(asset, technician.id(), "ACTIVE", clock.instant().minusSeconds(60), UNTIL);
+        UUID device = fixtures.hub(locker);
+        jdbc.sql("""
+                UPDATE aegis.locker_devices SET provisioned_at = :past, device_session_id = NULL, boot_count = NULL
+                WHERE id = :id
+                """).param("past", ReservationFixtures.utc(ReservationFixtures.PAST)).param("id", device).update();
+        boot(1);
+        checkout(key()).andExpect(status().isAccepted());
+        assertEquals(6L, fixtures.count("""
+                SELECT count(*) FROM aegis.locker_operations WHERE locker_id = :id AND user_id = '"""
+                + technician.id() + "'", firstLocker));
+    }
+
+    @Test
+    void concurrentPreparationsAtTheBoundCountOnce() throws Exception {
+        for (int attempt = 0; attempt < 5; attempt++) {
+            checkout(key()).andExpect(status().isAccepted());
+            expireOpenPreparation();
+        }
+        int callers = 4;
+        ExecutorService pool = Executors.newFixedThreadPool(callers);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<MvcResult>> results = new ArrayList<>();
+        try {
+            for (int i = 0; i < callers; i++) {
+                results.add(pool.submit(() -> {
+                    start.await();
+                    return checkout(key()).andReturn();
+                }));
+            }
+            start.countDown();
+            List<String> outcomes = new ArrayList<>();
+            for (Future<MvcResult> result : results) {
+                MvcResult done = result.get(30, TimeUnit.SECONDS);
+                outcomes.add(done.getResponse().getStatus() == 202 ? "202"
+                        : JsonPath.read(done.getResponse().getContentAsString(StandardCharsets.UTF_8), "$.code"));
+            }
+            // The user lock serializes the count: the sixth is accepted once, the others see it.
+            assertEquals(1, outcomes.stream().filter("202"::equals).count(), outcomes.toString());
+            assertEquals(callers - 1, outcomes.stream().filter("LOCKER_OPERATION_IN_PROGRESS"::equals).count(),
+                    outcomes.toString());
+        } finally {
+            pool.shutdownNow();
+        }
+        assertEquals(6L, operations());
+        expireOpenPreparation();
+        expectProblem(checkout(key()), 429, "LOCAL_PROOF_RATE_LIMITED");
     }
 
     @Test
@@ -339,161 +413,5 @@ class CheckoutPreparationApiTests extends ApiIntegrationTest {
         mvc.perform(post("/api/v1/reservations/" + reservation + "/cancel").header(AUTHORIZATION, bearer(token))
                 .header("Idempotency-Key", key())).andExpect(status().isOk());
         assertEnded(operation, "FAILED", "INVALIDATED", "RESERVATION_CANCELLED");
-    }
-
-    private void assertEnded(UUID operation, String status, String challenge, String reason) throws Exception {
-        assertEquals(status, fixtures.operationStatus(operation));
-        assertEquals(challenge, challengeStatus(operation));
-        assertEquals(reason, jdbc.sql("SELECT failure_reason FROM aegis.locker_operations WHERE id = :id")
-                .param("id", operation).query(String.class).single());
-        Map<String, Object> stopped = displayRow(operation, "DISPLAY_ACCESS_CHALLENGE");
-        assertEquals("CANCELLED", stopped.get("status"));
-        assertNull(stopped.get("encrypted_payload"));
-        Map<String, Object> clear = displayRow(operation, "DISPLAY_OPERATION_STATUS");
-        assertTrue(((Number) clear.get("display_revision")).longValue()
-                > ((Number) stopped.get("display_revision")).longValue());
-        JsonNode message = open(clear);
-        assertEquals(status, message.get("payload").get("status").asString());
-        assertEquals(reason, message.get("payload").get("reasonCode").asString());
-        assertFalse(message.get("payload").has("token"));
-        assertEquals(0L, fixtures.count("SELECT count(*) FROM aegis.command_outbox WHERE operation_id = :id",
-                operation));
-        mvc.perform(get("/api/v1/locker-operations/" + operation).header(AUTHORIZATION, bearer(token)))
-                .andExpect(jsonPath("$.status").value(status))
-                .andExpect(jsonPath("$.requiredAction").value("NONE"))
-                .andExpect(header().doesNotExist("Retry-After"));
-    }
-
-    private UUID prepared() throws Exception {
-        String body = checkout(key()).andExpect(status().isAccepted()).andReturn().getResponse()
-                .getContentAsString(StandardCharsets.UTF_8);
-        return UUID.fromString(JsonPath.read(body, "$.id"));
-    }
-
-    private ResultActions checkout(String key) throws Exception {
-        return mvc.perform(post("/api/v1/reservations/" + reservation + "/checkout")
-                .header(AUTHORIZATION, bearer(token)).header("Idempotency-Key", key));
-    }
-
-    private long operations() {
-        return fixtures.count("SELECT count(*) FROM aegis.locker_operations WHERE reservation_id = :id", reservation);
-    }
-
-    private long statusRows(UUID operation) {
-        return fixtures.count("""
-                SELECT count(*) FROM aegis.hub_display_outbox
-                WHERE operation_id = :id AND message_type = 'DISPLAY_OPERATION_STATUS'
-                """, operation);
-    }
-
-    private String challengeStatus(UUID operation) {
-        return jdbc.sql("SELECT status FROM aegis.local_access_challenges WHERE operation_id = :id")
-                .param("id", operation).query(String.class).single();
-    }
-
-    private Instant displayedAt(UUID operation) {
-        return jdbc.sql("SELECT displayed_at FROM aegis.local_access_challenges WHERE operation_id = :id")
-                .param("id", operation).query(java.time.OffsetDateTime.class).optional()
-                .map(java.time.OffsetDateTime::toInstant).orElse(null);
-    }
-
-    private Map<String, Object> displayRow(UUID operation, String type) {
-        return jdbc.sql("""
-                SELECT * FROM aegis.hub_display_outbox WHERE operation_id = :id AND message_type = :type
-                ORDER BY display_revision DESC LIMIT 1
-                """).param("id", operation).param("type", type).query().singleRow();
-    }
-
-    private JsonNode open(Map<String, Object> row) {
-        DisplayKeyRing keys = DisplayKeyRing.parse(DISPLAY_KEY_ID + ":" + DISPLAY_KEY, DISPLAY_KEY_ID);
-        byte[] plain = keys.open((String) row.get("encryption_key_id"), (byte[]) row.get("encrypted_payload"),
-                DisplayAad.of((UUID) row.get("id"), (UUID) row.get("locker_id"), (UUID) row.get("operation_id"),
-                        ((Number) row.get("display_revision")).longValue()));
-        assertNotNull(plain);
-        JsonNode message = jsonMapper.readTree(new String(plain, StandardCharsets.UTF_8));
-        assertEquals(row.get("message_id").toString(), message.get("messageId").asString());
-        return message;
-    }
-
-    /** A new boot of the test hub, then its first heartbeat. */
-    private void boot(long bootCount) {
-        session = UUID.randomUUID();
-        connection = UUID.randomUUID();
-        sequence = 0;
-        bootCount(bootCount);
-        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
-    }
-
-    private long bootCount = 1;
-
-    private void bootCount(long value) {
-        bootCount = value;
-    }
-
-    private void heartbeat(String connectionStatus, String reader, String door, String lock) {
-        Map<String, Object> message = envelope("HEARTBEAT");
-        message.put("connectionId", connection.toString());
-        message.put("firmwareVersion", "0.1.0-test");
-        message.put("clockSynchronized", true);
-        List<Map<String, Object>> cells = new ArrayList<>();
-        jdbc.sql("SELECT id, local_address FROM aegis.compartments WHERE locker_id = :id ORDER BY local_address")
-                .param("id", locker).query().listOfRows().forEach(row -> {
-                    Map<String, Object> cell = new LinkedHashMap<>();
-                    cell.put("compartmentId", row.get("id").toString());
-                    cell.put("cellAddress", ((Number) row.get("local_address")).intValue());
-                    cell.put("connectionStatus", connectionStatus);
-                    cell.put("readerStatus", reader);
-                    cell.put("doorState", door);
-                    cell.put("lockState", lock);
-                    cells.add(cell);
-                });
-        message.put("compartments", cells);
-        assertEquals(DeviceMessageIngestion.Outcome.ACCEPTED,
-                ingestion.ingest("aegis/v1/lockers/" + locker + "/status", bytes(message)));
-    }
-
-    private DeviceMessageIngestion.Outcome report(String type, UUID operation, UUID displayMessageId, UUID challenge,
-            long revision, String reason, UUID from) {
-        Map<String, Object> message = reportMessage(type, operation, displayMessageId, challenge, revision, reason);
-        message.put("deviceSessionId", from.toString());
-        return ingest(message);
-    }
-
-    private Map<String, Object> reportMessage(String type, UUID operation, UUID displayMessageId, UUID challenge,
-            long revision, String reason) {
-        Map<String, Object> message = envelope(type);
-        message.put("operationId", operation.toString());
-        message.put("compartmentId", jdbc.sql("SELECT compartment_id FROM aegis.locker_operations WHERE id = :id")
-                .param("id", operation).query(UUID.class).single().toString());
-        message.put("displayMessageId", displayMessageId.toString());
-        if (challenge != null) {
-            message.put("challengeId", challenge.toString());
-        }
-        message.put("displayRevision", revision);
-        if (reason != null) {
-            message.put("reason", reason);
-        }
-        return message;
-    }
-
-    private DeviceMessageIngestion.Outcome ingest(Map<String, Object> message) {
-        return ingestion.ingest("aegis/v1/lockers/" + locker + "/events", bytes(message));
-    }
-
-    private Map<String, Object> envelope(String type) {
-        Map<String, Object> message = new LinkedHashMap<>();
-        message.put("schemaVersion", "3.0");
-        message.put("messageId", UUID.randomUUID().toString());
-        message.put("type", type);
-        message.put("lockerId", locker.toString());
-        message.put("timestamp", clock.instant().toString());
-        message.put("deviceSessionId", session.toString());
-        message.put("bootCount", bootCount);
-        message.put("sequence", ++sequence);
-        return message;
-    }
-
-    private byte[] bytes(Map<String, Object> message) {
-        return jsonMapper.writeValueAsString(message).getBytes(StandardCharsets.UTF_8);
     }
 }
