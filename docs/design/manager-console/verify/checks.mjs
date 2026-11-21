@@ -12,7 +12,6 @@
 import { chromium, open, url, PROTO, SCREENS, ROOT, HERE } from './lib.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
-import vm from 'node:vm'
 
 let failed = 0
 const pass = (m) => console.log('PASS', m)
@@ -28,18 +27,6 @@ const COPIES = [
 const drift = COPIES.filter(([src, dst]) => !fs.readFileSync(path.join(ROOT, 'apps/admin-web/src', src)).equals(fs.readFileSync(path.join(HERE, '../prototype/css/app', dst))))
 check(drift.length === 0, `${COPIES.length} feuilles de apps/admin-web/src copiées sans écart`, `écart avec l'application : ${drift.map((d) => d[0]).join(', ')}`)
 
-// ---- 2. parité FR / EN
-const sandbox = { window: { AG: { lang: 'fr' } }, Intl }
-vm.createContext(sandbox)
-vm.runInContext(fs.readFileSync(path.join(HERE, '../prototype/js/copy.js'), 'utf8'), sandbox)
-const { fr, en } = sandbox.window.AG.copy
-function keys(o, prefix = '') {
-  return Object.entries(o).flatMap(([k, v]) => (v && typeof v === 'object' ? keys(v, `${prefix}${k}.`) : [`${prefix}${k}:${typeof v}`]))
-}
-const kf = new Set(keys(fr)), ke = new Set(keys(en))
-const onlyFr = [...kf].filter((k) => !ke.has(k)), onlyEn = [...ke].filter((k) => !kf.has(k))
-check(onlyFr.length === 0 && onlyEn.length === 0, `FR et EN ont les mêmes ${kf.size} clés`, `clés différentes : FR seul ${onlyFr.join(', ')}; EN seul ${onlyEn.join(', ')}`)
-
 // ---- 3. états déclarés
 for (const [page, states] of Object.entries(SCREENS)) {
   const src = fs.readFileSync(path.join(HERE, `../prototype/js/${page}.js`), 'utf8')
@@ -48,6 +35,19 @@ for (const [page, states] of Object.entries(SCREENS)) {
 }
 
 const browser = await chromium.launch()
+
+// ---- 2. parité FR / EN : les textes sont lus dans le navigateur, tels que le prototype les charge (aucune évaluation de code dans Node)
+{
+  const { ctx, page: p } = await open(browser, url('overview', { lang: 'fr', theme: 'light' }))
+  const { fr, en } = await p.evaluate(() => JSON.parse(JSON.stringify(window.AG.copy, (_k, v) => (typeof v === 'function' ? '[function]' : v))))
+  await ctx.close()
+  const keys = (o, prefix = '') =>
+    Object.entries(o).flatMap(([k, v]) => (v && typeof v === 'object' ? keys(v, `${prefix}${k}.`) : [`${prefix}${k}:${v === '[function]' ? 'function' : typeof v}`]))
+  const kf = new Set(keys(fr)), ke = new Set(keys(en))
+  const onlyFr = [...kf].filter((k) => !ke.has(k)), onlyEn = [...ke].filter((k) => !kf.has(k))
+  check(onlyFr.length === 0 && onlyEn.length === 0, `FR et EN ont les mêmes ${kf.size} clés`, `clés différentes : FR seul ${onlyFr.join(', ')}; EN seul ${onlyEn.join(', ')}`)
+}
+
 
 // ---- 4. réseau et erreurs de page : relevés pendant la passe 6 (une seule ouverture par page)
 let pages = 0
