@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -163,22 +164,54 @@ class PasswordChangeSessionTests extends ApiIntegrationTest {
     }
 
     @Test
-    void endedSessionsArePurgedAfterThirtyDaysWhileOpenOnesAndTheAuditStay() throws Exception {
+    void retentionCountsThirtyDaysFromTheEarlierOfRevocationAndEndAndKeepsTheAudit() throws Exception {
         String open = browserSession(admin);
+        TestAccount rotated = accounts.admin();
+        browserSession(rotated);
+        passwordChanges.change(rotated.id(), NEW_PASSWORD, null);
         Instant now = clock.instant();
-        UUID oldRevoked = insertSession(admin.id(), now.minus(Duration.ofDays(40)), now.minus(Duration.ofDays(31)));
-        UUID oldExpired = insertSession(admin.id(), now.minus(Duration.ofDays(40)), null);
-        UUID recentRevoked = insertSession(admin.id(), now.minus(Duration.ofDays(10)),
-                now.minus(Duration.ofDays(10)));
+        Duration thirtyDays = Duration.ofDays(30);
+        // Ended by revocation 30 days and 1 second ago: deleted. Exactly 30 days ago: kept.
+        UUID revokedJustOver = insertSession(admin.id(), now.minus(thirtyDays).minusSeconds(3601),
+                now.minus(thirtyDays).minusSeconds(1));
+        UUID revokedExactly = insertSession(admin.id(), now.minus(thirtyDays).minusSeconds(3600),
+                now.minus(thirtyDays));
+        // Never revoked, absolute end 30 days and 1 second ago: deleted.
+        UUID expiredJustOver = insertSession(admin.id(), now.minus(thirtyDays).minus(Duration.ofHours(8))
+                .minusSeconds(1), null);
+        // Signed out long after its end: the end, not the late revocation, starts the 30 days.
+        UUID lateSignOut = insertSession(admin.id(), now.minus(Duration.ofDays(40)), now.minus(Duration.ofDays(5)));
         long auditBefore = jdbc.sql("SELECT count(*) FROM aegis.audit_events").query(Long.class).single();
 
         new BrowserSessionPurgeJob(browserSessions, clock, 1).run();
 
-        assertFalse(exists(oldRevoked));
-        assertFalse(exists(oldExpired));
-        assertTrue(exists(recentRevoked));
+        assertFalse(exists(revokedJustOver));
+        assertTrue(exists(revokedExactly));
+        assertFalse(exists(expiredJustOver));
+        assertFalse(exists(lateSignOut));
         refresh(open).andExpect(status().isOk());
         assertEquals(auditBefore, jdbc.sql("SELECT count(*) FROM aegis.audit_events").query(Long.class).single());
+
+        // The rotated account's revoked sessions are purged later; its PASSWORD_CHANGED event stays.
+        clock.advance(thirtyDays.plusDays(1));
+        new BrowserSessionPurgeJob(browserSessions, clock, 10).run();
+        assertEquals(0, jdbc.sql("SELECT count(*) FROM aegis.browser_sessions WHERE user_id = :id")
+                .param("id", rotated.id()).query(Long.class).single());
+        assertEquals(List.of(Map.of("revokedBrowserSessions", 1)), passwordChangedEvents(rotated.id()));
+    }
+
+    @Test
+    void anOpenSessionIsNeverDeleted() throws Exception {
+        String open = browserSession(admin);
+
+        assertEquals(0, browserSessions.purgeEnded(clock.instant(), Duration.ZERO, 100));
+        refresh(open).andExpect(status().isOk());
+
+        // The database refuses it too, whatever the caller: here a row open by the database's own clock.
+        UUID live = insertSession(admin.id(), Instant.now(), null);
+        assertThrows(DataAccessException.class, () -> jdbc.sql("DELETE FROM aegis.browser_sessions WHERE id = :id")
+                .param("id", live).update());
+        assertTrue(exists(live));
     }
 
     private MvcResult perform(String password) {
@@ -244,7 +277,7 @@ class PasswordChangeSessionTests extends ApiIntegrationTest {
                 .query(String.class).single();
     }
 
-    private java.util.List<Map<String, Object>> passwordChangedEvents(UUID user) {
+    private List<Map<String, Object>> passwordChangedEvents(UUID user) {
         return jdbc.sql("""
                 SELECT details::text FROM aegis.audit_events
                 WHERE event_type = 'PASSWORD_CHANGED' AND subject_type = 'USER' AND subject_id = :id

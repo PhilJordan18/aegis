@@ -9,9 +9,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.Scheduled;
 
 /**
- * Bounded retention of ADR-017: deletes browser sessions 30 days after they ended, in batches. Open sessions and audit
- * events are never touched. Tests turn it off with {@code aegis.security.browser-session.purge.scheduled=false} and
- * call {@link #run()} themselves.
+ * Bounded retention of ADR-017: deletes browser sessions 30 days after they ended, in batches. A session ends at the
+ * earlier of its revocation and its absolute end. Open sessions and audit events are never touched. Tests turn it
+ * off with {@code aegis.security.browser-session.purge.scheduled=false} and call {@link #run()} themselves.
  */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "aegis.security.browser-session.purge.scheduled", havingValue = "true",
@@ -36,7 +36,7 @@ class BrowserSessionPurgeJob {
     void run() {
         int deleted;
         do {
-            deleted = sessions.purgeEndedBefore(clock.instant().minus(RETENTION), batchSize);
+            deleted = sessions.purgeEnded(clock.instant(), RETENTION, batchSize);
         } while (deleted == batchSize);
     }
 }
