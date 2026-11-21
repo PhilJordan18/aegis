@@ -1,9 +1,8 @@
 # Display node firmware (FW-04, issue #45; POC-04, issue #22)
 
 Bench firmware of the hub screen: a Freenove ESP32 Display 3.2" (FNK0103, LCDWiki E32R32P,
-ST7789 240 × 320). It is the display node of
-[ADR-016](../../docs/adr/ADR-016-ecran-hub-noeud-cyd-i2c.md) (proposed): no Wi-Fi, no MQTT
-and no network identity, it decides nothing.
+ST7789 240 × 320). It is the display node of the hub screen design proposed in ADR-016 (not on
+`dev` yet): no Wi-Fi, no MQTT and no network identity, it decides nothing.
 
 In this slice it is a **visual bench**, not yet the node behind the hub:
 
