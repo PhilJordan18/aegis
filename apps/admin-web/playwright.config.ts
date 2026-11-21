@@ -2,6 +2,8 @@ import { defineConfig, devices } from '@playwright/test'
 
 const PORT = 5180
 const reducedMotion = process.env.AEGIS_MOTION === 'no-preference' ? 'no-preference' : 'reduce'
+// Opt-in live run (npm run test:realapi): when set, this file declares only the `realapi` project and starts no server.
+const REAL_API = process.env.AEGIS_E2E_REAL_API === '1'
 
 /**
  * Projects:
@@ -20,11 +22,34 @@ const reducedMotion = process.env.AEGIS_MOTION === 'no-preference' ? 'no-prefere
  * - `forms` (npm run test:forms): the CAT-01, CFG-02 and #26 forms, axe, keyboard and 320 px; with
  *   AEGIS_FORMS_CAPTURE=1 (npm run capture:forms) it writes the review batch to docs/design/manager-forms/captures/.
  * All start their own Vite dev server, where the design-review preview is enabled.
+ *
+ * `realapi` (npm run test:realapi) is the exception, and opt-in: it exists only when AEGIS_E2E_REAL_API=1, so
+ * `npx playwright test` and every project above never see it. It starts no server: AEGIS_E2E_BASE_URL names a
+ * `vite preview` of the production build whose /api proxies to a real Aegis Control API on an isolated stack, and the
+ * administrator credentials come from AEGIS_E2E_ADMIN_EMAIL and AEGIS_E2E_ADMIN_PASSWORD at run time (e2e/realapi.spec.ts).
  */
+function requiredEnv(name: string): string {
+  const value = process.env[name]
+  // A live run that cannot start must fail, never pass with every test skipped.
+  if (!value) throw new Error(`test:realapi needs ${name} (see apps/admin-web/README.md, section « Recette navigateur contre une API réelle »).`)
+  return value
+}
+
+const realApiProject = REAL_API
+  ? {
+      name: 'realapi',
+      testMatch: 'realapi.spec.ts',
+      // One API, one in-memory login rate limiter, a cookie session per context: keep the walks sequential.
+      fullyParallel: false,
+      use: { baseURL: requiredEnv('AEGIS_E2E_BASE_URL') },
+    }
+  : null
+
 export default defineConfig({
   testDir: './e2e',
   outputDir: './test-results/playwright',
   fullyParallel: true,
+  workers: REAL_API ? 1 : undefined,
   forbidOnly: !!process.env.CI,
   retries: 0,
   reporter: [['list']],
@@ -36,7 +61,7 @@ export default defineConfig({
     reducedMotion,
     trace: 'retain-on-failure',
   },
-  projects: [
+  projects: realApiProject ? [realApiProject] : [
     { name: 'a11y', testMatch: ['entry.spec.ts', 'language.spec.ts'], metadata: { capture: false } },
     { name: 'capture', testMatch: ['entry.spec.ts', 'language.spec.ts'], grepInvert: /flow:/, metadata: { capture: true } },
     { name: 'identity', testMatch: 'identity.spec.ts' },
@@ -44,10 +69,12 @@ export default defineConfig({
     { name: 'integration', testMatch: 'integration.spec.ts' },
     { name: 'forms', testMatch: 'forms.spec.ts' },
   ],
-  webServer: {
-    command: `npm run dev -- --host 127.0.0.1 --port ${PORT} --strictPort`,
-    url: `http://127.0.0.1:${PORT}/`,
-    reuseExistingServer: false,
-    timeout: 60_000,
-  },
+  webServer: REAL_API
+    ? undefined
+    : {
+        command: `npm run dev -- --host 127.0.0.1 --port ${PORT} --strictPort`,
+        url: `http://127.0.0.1:${PORT}/`,
+        reuseExistingServer: false,
+        timeout: 60_000,
+      },
 })
