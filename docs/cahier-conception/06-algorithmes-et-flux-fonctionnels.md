@@ -783,14 +783,14 @@ Décision de Philippe du 11 novembre 2026. L’évaluation relit à chaque fois 
 | Ouverture | Premier `DOOR_OPENED` de la chaîne | Absente : `INCOMPLETE` |
 | Fermeture | Premier `DOOR_CLOSED` après l’ouverture | Absente : `INCOMPLETE` |
 | Scan | Dernier `RFID_SCAN_COMPLETED` de la chaîne après la fermeture | Absent : `INCOMPLETE` |
-| Lecteur | `readerStatus` de ce scan différent de `HEALTHY`, aucun événement de porte ne le suit | `INCONSISTENT` (règle 2) |
+| Lecteur | `readerStatus` de ce scan différent de `HEALTHY`, aucun événement de porte ne le suit, même si `windowStartedAt` précède la fermeture | `INCONSISTENT` (règle 2) |
 | Stabilité | Le dernier événement de porte avant le scan est une fermeture, `windowStartedAt` n’est pas antérieur à son `timestamp`, aucun événement de porte ne suit le scan | Sinon : `INCOMPLETE` |
 | Localisation | Le tag attendu détecté dans une autre cellule depuis `authorizedAt` | `INCONSISTENT` |
-| Tag | `ASSET_ABSENT` normalisé pour l’identifiant attendu | `COHERENT_CHECKOUT` |
+| Tag | `ASSET_ABSENT` normalisé pour l’identifiant attendu, quels que soient les autres identifiants détectés (K14) | `COHERENT_CHECKOUT` |
 | Tag | Identifiant attendu détecté par le scan | `INCOMPLETE` (règle 1) |
 | Tag | Aucun verdict normalisé | `INCOMPLETE` |
 
-Seul un scan de la chaîne renseigne sur le lecteur : la projection de la cellule, qu’un scan fait porte ouverte peut avoir modifiée, ne déclenche jamais la règle 2.
+Seul un scan de la chaîne renseigne sur le lecteur : la projection de la cellule, qu’un scan fait porte ouverte peut avoir modifiée, ne déclenche jamais la règle 2. La règle du lecteur est évaluée avant la stabilité : un scan corrélé reçu après la fermeture la déclenche même si sa fenêtre a commencé avant celle-ci (décision du 21 novembre 2026, #67). La localisation est évaluée avant le tag : une localisation ambiguë interdit la confirmation, alors qu’un tag étranger restant dans la cellule ne l’empêche pas (K14).
 
 Les jalons `DOOR_OPENED` et `OBSERVATION_RECEIVED` sont enregistrés une fois, dans l’ordre, à l’instant de réception du fait, jamais avant le jalon précédent. `INCONSISTENT` termine aussitôt en `ANOMALY` avec `INCONSISTENT_PHYSICAL_STATE` (gravité `HIGH`). À `expiresAt`, une preuve encore incomplète se termine ainsi :
 
