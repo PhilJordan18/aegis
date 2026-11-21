@@ -37,10 +37,7 @@ import ca.aegis.control.display.HubDisplayOutbox;
 import ca.aegis.control.display.HubDisplayOutbox.Target;
 import ca.aegis.control.identity.AccountStatus;
 import ca.aegis.control.identity.Role;
-import ca.aegis.control.locker.LockerSchedules;
 import ca.aegis.control.locker.OpenWindow;
-import ca.aegis.control.locker.OperatingHours;
-import ca.aegis.control.locker.OperatingHoursException;
 import ca.aegis.control.reservation.PreparationRepository.Cell;
 import ca.aegis.control.reservation.PreparationRepository.Device;
 import ca.aegis.control.reservation.ReservationRepository.LockedUser;
@@ -65,7 +62,7 @@ class CheckoutPreparation {
     private final ReservationRepository reservations;
     private final PreparationRepository preparation;
     private final ReservableAssets assets;
-    private final LockerSchedules schedules;
+    private final CheckoutGuards guards;
     private final LockerAvailability availability;
     private final DisplayEncryption encryption;
     private final HubDisplayOutbox display;
@@ -77,7 +74,7 @@ class CheckoutPreparation {
     private final SecureRandom random = new SecureRandom();
 
     CheckoutPreparation(ReservationRepository reservations, PreparationRepository preparation,
-            ReservableAssets assets, LockerSchedules schedules, LockerAvailability availability,
+            ReservableAssets assets, CheckoutGuards guards, LockerAvailability availability,
             DisplayEncryption encryption, HubDisplayOutbox display, LockerOperationReads reads, AuditTrail audit,
             Clock clock, @Value("${aegis.display.preparation.max-per-window:6}") int maxPreparations,
             @Value("${aegis.display.preparation.window:PT10M}") Duration preparationWindow) {
@@ -87,7 +84,7 @@ class CheckoutPreparation {
         this.reservations = reservations;
         this.preparation = preparation;
         this.assets = assets;
-        this.schedules = schedules;
+        this.guards = guards;
         this.availability = availability;
         this.encryption = encryption;
         this.display = display;
@@ -125,13 +122,13 @@ class CheckoutPreparation {
             throw notReady(List.of(ReadinessReason.UNKNOWN_PHYSICAL_STATE));
         }
         UUID lockerId = asset.lockerId();
-        OpenWindow window = openWindow(lockerId, now);
+        OpenWindow window = guards.requireOpen(lockerId, now);
 
         preparation.lockLocker(lockerId);
         Cell cell = preparation.lockPlacedCell(asset.id(), lockerId)
                 .orElseThrow(() -> new ReservationRefusedException(ApiError.PHYSICAL_STATE_UNKNOWN));
         Device device = requireOnline(lockerId, now);
-        requireSafe(cell);
+        CheckoutGuards.requireSafe(cell);
         UUID identifierId = preparation.activeRfidIdentifier(asset.id())
                 .orElseThrow(() -> new ReservationRefusedException(ApiError.PHYSICAL_STATE_UNKNOWN));
         if (preparation.hasUnresolvedAnomaly(asset.id(), cell.id())) {
@@ -148,8 +145,13 @@ class CheckoutPreparation {
         if (readiness.result() != ReadinessResult.READY) {
             throw notReady(readiness.reasons());
         }
-        if (preparation.preparationsSince(user.id(), lockerId, now.minus(preparationWindow)) >= maxPreparations) {
-            throw new ReservationRefusedException(ApiError.RATE_LIMITED);
+        Instant windowStart = now.minus(preparationWindow);
+        if (preparation.preparationsSince(user.id(), lockerId, windowStart) >= maxPreparations) {
+            // Document 09, section 15.5: the client may retry once the oldest counted preparation leaves the window.
+            Instant retryAt = preparation.oldestPreparationSince(user.id(), lockerId, windowStart)
+                    .plus(preparationWindow);
+            long seconds = (Duration.between(now, retryAt).toMillis() + 999) / 1000;
+            throw new LocalProofRateLimitedException(seconds);
         }
 
         Instant expiresAt = earliest(now.plus(CHALLENGE_WINDOW), window.closesAt(), reservation.reservedUntil())
@@ -192,16 +194,6 @@ class CheckoutPreparation {
         return reads.find(operationId).orElseThrow();
     }
 
-    private OpenWindow openWindow(UUID lockerId, Instant now) {
-        try {
-            return schedules.activeScheduleOf(lockerId)
-                    .map(schedule -> OperatingHours.requireOpenOperatingWindow(schedule, now))
-                    .orElseThrow(() -> new ReservationRefusedException(ApiError.OUTSIDE_OPERATING_HOURS));
-        } catch (OperatingHoursException outside) {
-            throw new ReservationRefusedException(ApiError.OUTSIDE_OPERATING_HOURS);
-        }
-    }
-
     /** Document 06, section 6.1: a hub {@code ONLINE} now, whose current boot the challenge can target. */
     private Device requireOnline(UUID lockerId, Instant now) {
         if (availability.of(lockerId, now).status() != ConnectionStatus.ONLINE) {
@@ -209,26 +201,6 @@ class CheckoutPreparation {
         }
         return preparation.activeDevice(lockerId).filter(device -> device.deviceSessionId() != null)
                 .orElseThrow(() -> new ReservationRefusedException(ApiError.LOCKER_OFFLINE));
-    }
-
-    /**
-     * Document 06, section 6.1: a connected cell with a healthy reader, a door known {@code CLOSED} and a lock known
-     * {@code LOCKED}. A cell that cannot report is unavailable; an unknown door or lock is missing proof; a known
-     * open door, unlocked lock or disabled compartment is unsafe.
-     */
-    private static void requireSafe(Cell cell) {
-        if (!cell.enabled()) {
-            throw new ReservationRefusedException(ApiError.COMPARTMENT_STATE_UNSAFE);
-        }
-        if (!"CONNECTED".equals(cell.connectionStatus()) || !"HEALTHY".equals(cell.readerStatus())) {
-            throw new ReservationRefusedException(ApiError.DEVICE_UNAVAILABLE);
-        }
-        if ("UNKNOWN".equals(cell.doorState()) || "UNKNOWN".equals(cell.lockState())) {
-            throw new ReservationRefusedException(ApiError.PHYSICAL_STATE_UNKNOWN);
-        }
-        if (!"CLOSED".equals(cell.doorState()) || !"LOCKED".equals(cell.lockState())) {
-            throw new ReservationRefusedException(ApiError.COMPARTMENT_STATE_UNSAFE);
-        }
     }
 
     private static Instant earliest(Instant first, Instant... others) {
