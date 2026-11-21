@@ -29,7 +29,7 @@ public class AuditEventReads {
 
     /** Every value of {@code ck_audit_events_type}, so that a filter on a type not written yet is still valid. */
     static final Set<String> EVENT_TYPES = Set.of(
-            "AUTHENTICATION_SUCCEEDED", "AUTHENTICATION_REJECTED",
+            "AUTHENTICATION_SUCCEEDED", "AUTHENTICATION_REJECTED", "PASSWORD_CHANGED",
             "ASSET_CREATED", "ASSET_UPDATED", "ASSET_ARCHIVED",
             "ASSET_IDENTIFIER_ASSIGNED", "ASSET_PLACEMENT_CHANGED",
             "SCHEDULE_UPDATED", "READINESS_EVALUATED",

@@ -74,6 +74,7 @@ public abstract class ApiIntegrationTest {
         registry.add("spring.flyway.placeholders[application_role]", () -> "aegis_test_no_application_role");
         registry.add("aegis.security.jwt.secret", () -> JWT_SECRET);
         registry.add("aegis.security.browser-session.allowed-origins", () -> MANAGER_ORIGIN);
+        registry.add("aegis.security.browser-session.purge.scheduled", () -> "false");
         // Tests move the clock and insert due reservations: a background expiry pass would race their assertions.
         registry.add("aegis.reservations.expiry.scheduled", () -> "false");
         // A display key drawn for this run only: no key value is ever committed.
