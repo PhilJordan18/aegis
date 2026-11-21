@@ -13,11 +13,11 @@ window() { sleep 61; }
 
 echo "== Web real-API acceptance (playwright.api.config.ts), API at $api"
 (cd "$web" && AEGIS_API_ORIGIN=http://127.0.0.1:$api_port AEGIS_DEMO_ADMIN_PASSWORD="$AP" AEGIS_DEMO_TECHNICIAN_PASSWORD="$TP" \
-  timeout 900 npx playwright test -c playwright.api.config.ts --trace off >"$work/web-api.log" 2>&1); rc=$?
+  timeout 900 ./node_modules/.bin/playwright test -c playwright.api.config.ts --trace off >"$work/web-api.log" 2>&1); rc=$?
 grep -E "passed|failed|flaky|skipped" "$work/web-api.log" | tail -4; echo "web real-API exit $rc"; [[ $rc == 0 ]] || failures=$((failures + 1))
 
 echo "== QA independent browser checks (real API; fault-injected cases labelled)"
-(cd "$web" && AEGIS_API_ORIGIN=http://127.0.0.1:$api_port npx vite preview --host localhost --port 5182 --strictPort >"$work/preview.log" 2>&1) & preview=$!
+(cd "$web" && AEGIS_API_ORIGIN=http://127.0.0.1:$api_port ./node_modules/.bin/vite preview --host localhost --port 5182 --strictPort >"$work/preview.log" 2>&1) & preview=$!
 for _ in $(seq 1 30); do curl -fs http://localhost:5182/ >/dev/null && break; sleep 1; done
 export QA_BASE=http://localhost:5182 QA_WEB_DIR=$web QA_ADMIN_PW="$AP" QA_STATE=$work/state.json
 export QA_SQL="docker exec -i $project-postgres-1 psql -U aegis -d aegis -tA -c"

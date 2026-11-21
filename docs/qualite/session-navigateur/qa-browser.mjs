@@ -16,7 +16,7 @@ const pass = (m) => console.log(`PASS ${m}`)
 const fail = (m) => { console.log(`FAIL ${m}`); failures++ }
 const obs = (m) => console.log(`OBS  ${m}`)
 const check = (ok, m, detail = '') => (ok ? pass(m) : fail(`${m}${detail ? ` (${detail})` : ''}`))
-const sql = (q) => execFileSync('bash', ['-c', `${process.env.QA_SQL} "$1"`, '_', q]).toString().trim()
+const sql = (q) => execFileSync('/bin/bash', ['-c', `${process.env.QA_SQL} "$1"`, '_', q]).toString().trim()
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function track(page) {

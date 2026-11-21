@@ -15,8 +15,8 @@ c=$(login $A "$AP" https://evil.example -); [[ $c == 200 ]] && ! grep -qi '^set-
 c1=$(login $A "$AP" - true); b1=$(json 'd.get("code")' <"$work/b" 2>/dev/null || echo -)
 c2=$(login $A "wrong-password-xyz" https://evil.example true); b2=$(json 'd.get("code")' <"$work/b" 2>/dev/null || echo -)
 c3=$(login nobody@aegis.demo "wrong-password-xyz" "$ORIGIN/" true)
-c4=$(login $A "$AP" null true); c5=$(login $A "$AP" "HTTPS://manager.qa.test" true); c6=$(login $A "$AP" "http://manager.qa.test" true)
-[[ "$c1 $c2 $c3 $c4 $c5 $c6" == "403 403 403 403 403 403" ]] && pass "S2 browserSession refused before credentials: no Origin $c1/$b1, foreign+wrong password $c2/$b2, trailing slash $c3, null $c4, upper-case scheme $c5, http $c6" || fail "S2 codes '$c1 $c2 $c3 $c4 $c5 $c6' ($b1 $b2)"
+c4=$(login $A "$AP" null true); c5=$(login $A "$AP" "HTTPS://manager.qa.test" true); c6=$(login $A "$AP" "http://manager.qa.test" true) # NOSONAR(shell:S5332) negative probe: a clear-text Origin must be refused
+[[ "$c1 $c2 $c3 $c4 $c5 $c6" == "403 403 403 403 403 403" ]] && pass "S2 browserSession refused before credentials: no Origin $c1/$b1, foreign+wrong password $c2/$b2, trailing slash $c3, null $c4, upper-case scheme $c5, http $c6" || fail "S2 codes '$c1 $c2 $c3 $c4 $c5 $c6' ($b1 $b2)" # NOSONAR(shell:S5332) negative probe: the API must refuse these Origins, nothing is sent in clear text
 n=$(sql "SELECT count(*) FROM aegis.browser_sessions"); [[ $n == 0 ]] && pass "S2b no session row after refusals" || fail "S2b rows $n"
 
 # S3 cookie attributes, DB holds only the digest
