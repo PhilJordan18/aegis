@@ -475,6 +475,9 @@ LockerOperationStatus :
 | `LOCKER_OFFLINE` | `FAILED` | Le hub n’est plus `ONLINE` avant la consommation (`06` §6.1) |
 | `LOCAL_PROOF_ATTEMPTS_EXHAUSTED` | `FAILED` | Cinquième secret erroné soumis par l’initiateur (§15.5) |
 | `RESERVATION_CANCELLED` | `FAILED` | Annulation de la réservation pendant la préparation (`06` §5.5) |
+| `LOCAL_PROOF_GUARD_FAILED` | `FAILED` | Garde métier devenue définitivement invalide au scan : prêt ouvert, actif déplacé hors de la cellule préparée, identifiant RFID absent, anomalie non résolue, niveau d’accès ou disponibilité autre que `READY` (§15.5; `06` §6.5) |
+
+Au scan, une réservation annulée garde `RESERVATION_CANCELLED`; une réservation échue ou un horaire fermé termine en `EXPIRED` avec `LOCAL_PROOF_EXPIRED` (`05` §5.4). `LOCAL_PROOF_GUARD_FAILED` est neutre quant au type d’opération : il vaut aussi pour l’autorisation d’un retour. Valeur ajoutée sur décision humaine du 21 novembre 2026 (#67).
 
 Les issues après autorisation seront ajoutées avec leur tranche (#47). Un client traite une valeur inconnue comme un échec générique, sans en déduire d’état physique (§3).
 
@@ -1239,9 +1242,10 @@ Réponse `202`, `Location` identique, `LockerOperationView` avec `requiredAction
 | 409 | `LOCAL_PROOF_INVALIDATED` | Défi invalidé ou opération non admissible |
 | 410 | `LOCAL_PROOF_EXPIRED` | Échéance dépassée; nouvelle préparation nécessaire |
 | 429 | `LOCAL_PROOF_RATE_LIMITED` | Limite atteinte, avec `Retry-After` |
-| 409 | Codes de gardes métier existants | État, droits métier, réservation, horaire ou matériel devenus incompatibles |
+| 404, 403, 409, 422 | Gardes définitives : `ACTIVE_RESERVATION_NOT_FOUND`, `ASSET_ACCESS_DENIED`, `ASSET_HAS_OPEN_LOAN`, `OUTSIDE_OPERATING_HOURS`, `ASSET_NOT_READY` (avec `reasons`), `PHYSICAL_STATE_UNKNOWN` | Défi `INVALIDATED` (ou `EXPIRED`), opération terminée sans commande (§8.5), refus audité, nouvel écran; nouvelle préparation nécessaire |
+| 409, 422, 503 | Gardes transitoires : `COMPARTMENT_STATE_UNSAFE`, `PHYSICAL_STATE_UNKNOWN` (porte ou verrou `UNKNOWN`), `DEVICE_UNAVAILABLE`, `LOCKER_OFFLINE`, `LOCKER_OPERATION_IN_PROGRESS` | Aucun changement; l’échéance du défi n’est pas prolongée; nouvel essai avec nouvelle clé |
 
-La même clé et le même corps rejouent la réponse initiale; une réponse refusée rejouée ne recompte pas les essais. Les refus qui changent un état sont enregistrés avec la clé et rejoués tels quels : secret erroné compté (`403`), cinquième secret erroné, échéance constatée au scan (`410`, opération `EXPIRED`) et redémarrage du hub constaté au scan (`409 LOCAL_PROOF_INVALIDATED`, opération `FAILED`). Les autres refus ne sont pas enregistrés. Un corps différent avec la même clé est rejeté. La nouvelle clé après consommation donne un refus, jamais un second déverrouillage. Le token n’est pas copié dans la table d’idempotence : seul le hash de la requête canonique y figure.
+La même clé et le même corps rejouent la réponse initiale; une réponse refusée rejouée ne recompte pas les essais. Les refus qui changent un état sont enregistrés avec la clé et rejoués tels quels : secret erroné compté (`403`), cinquième secret erroné, échéance constatée au scan (`410`, opération `EXPIRED`) redémarrage du hub constaté au scan (`409 LOCAL_PROOF_INVALIDATED`, opération `FAILED`) et garde définitive (code de la garde, opération `FAILED` ou `EXPIRED`). Les autres refus ne sont pas enregistrés. `PHYSICAL_STATE_UNKNOWN` existe dans les deux familles : le client relit l’opération (§15.4) pour savoir si la tentative est terminée. Un corps différent avec la même clé est rejeté. La nouvelle clé après consommation donne un refus, jamais un second déverrouillage. Le token n’est pas copié dans la table d’idempotence : seul le hash de la requête canonique y figure.
 
 Le délai retenu est de 60 secondes maximum **depuis la création** du défi, borné par l’horaire et la réservation applicable. Le technicien prépare l’opération devant le casier : la latence d’affichage consomme une partie de ces 60 secondes, sans renouveler l’échéance. Les 120 secondes physiques commencent seulement à l’autorisation locale.
 
