@@ -372,6 +372,41 @@ class CheckoutPreparationApiTests extends HubChallengeApiTest {
     }
 
     @Test
+    void aLateDisplayReportNeverRevivesARejectedOrCancelledInstruction() throws Exception {
+        UUID operation = prepared();
+        Map<String, Object> display = displayRow(operation, "DISPLAY_ACCESS_CHALLENGE");
+        UUID messageId = (UUID) display.get("message_id");
+        UUID challenge = (UUID) display.get("challenge_id");
+        report("DISPLAY_REJECTED", operation, messageId, challenge, 1, "SCREEN_UNAVAILABLE", session);
+
+        clock.advance(Duration.ofSeconds(2));
+        assertEquals(DeviceMessageIngestion.Outcome.REJECTED,
+                report("ACCESS_CHALLENGE_DISPLAYED", operation, messageId, challenge, 1, null, session));
+        assertNull(displayedAt(operation));
+        assertEquals("REJECTED", displayRow(operation, "DISPLAY_ACCESS_CHALLENGE").get("status"));
+        assertEquals("COMMAND_CORRELATION_INVALID", jdbc.sql("""
+                SELECT processing_error FROM aegis.inbound_device_messages
+                WHERE display_message_id = :id AND message_type = 'ACCESS_CHALLENGE_DISPLAYED'
+                """).param("id", messageId).query(String.class).single());
+
+    }
+
+    @Test
+    void aLateDisplayReportNeverRevivesACancelledInstruction() throws Exception {
+        UUID operation = prepared();
+        Map<String, Object> display = displayRow(operation, "DISPLAY_ACCESS_CHALLENGE");
+        // The state the dispatcher leaves when it refuses to publish while the challenge is still pending.
+        jdbc.sql("UPDATE aegis.hub_display_outbox SET status = 'CANCELLED', encrypted_payload = NULL WHERE id = :id")
+                .param("id", display.get("id")).update();
+
+        assertEquals(DeviceMessageIngestion.Outcome.REJECTED, report("ACCESS_CHALLENGE_DISPLAYED", operation,
+                (UUID) display.get("message_id"), (UUID) display.get("challenge_id"), 1, null, session));
+        assertNull(displayedAt(operation));
+        assertEquals("CANCELLED", displayRow(operation, "DISPLAY_ACCESS_CHALLENGE").get("status"));
+        assertEquals("PENDING", challengeStatus(operation));
+    }
+
+    @Test
     void anUnconsumedChallengeExpiresPurgesItsSecretAndClearsTheScreen() throws Exception {
         UUID operation = prepared();
         clock.advance(Duration.ofSeconds(59));

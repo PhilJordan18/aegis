@@ -152,6 +152,36 @@ class ReturnApiTests extends HubChallengeApiTest {
     }
 
     @Test
+    void aTransientGuardAtTheReturnScanChangesNothing() throws Exception {
+        String[] challenge = displayed();
+        heartbeat("CONNECTED", "HEALTHY", "OPEN", "UNLOCKED");
+        expectProblem(scan(challenge), 409, "COMPARTMENT_STATE_UNSAFE");
+        assertEquals("AWAITING_LOCAL_PROOF", fixtures.operationStatus(operation));
+        assertEquals("ACTIVE", loanStatus());
+        assertEquals(0L, commands());
+        // The cell is safe again before the deadline: the same challenge authorizes the return.
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        scan(challenge).andExpect(status().isAccepted());
+        assertEquals("RETURN_PENDING", loanStatus());
+    }
+
+    @Test
+    void aDefinitiveGuardAtTheReturnScanEndsTheAttemptWithoutTouchingTheLoan() throws Exception {
+        String[] challenge = displayed();
+        jdbc.sql("UPDATE aegis.asset_identifiers SET active = false, revoked_at = :now WHERE asset_id = :id")
+                .param("now", ReservationFixtures.utc(clock.instant())).param("id", asset).update();
+        expectProblem(scan(challenge), 422, "PHYSICAL_STATE_UNKNOWN");
+        assertEquals("FAILED", fixtures.operationStatus(operation));
+        assertEquals("LOCAL_PROOF_GUARD_FAILED", failureReason());
+        assertEquals("ACTIVE", loanStatus());
+        assertEquals(0L, commands());
+        assertEquals(1L, audits("LOCAL_CHALLENGE_REJECTED"));
+        assertEquals(0L, audits("LOAN_RETURN_STARTED"));
+        // The challenge is closed: another scan of the same secret is refused.
+        expectProblem(scan(challenge), 409, "LOCAL_PROOF_INVALIDATED");
+    }
+
+    @Test
     void aReturnNeverSentEndsSafelyAndTheLoanIsActiveAgain() throws Exception {
         authorized();
         clock.set(DEADLINE);
@@ -367,6 +397,11 @@ class ReturnApiTests extends HubChallengeApiTest {
     }
 
     private void authorized() throws Exception {
+        scan(displayed()).andExpect(status().isAccepted());
+    }
+
+    /** Prepares a return and reports its challenge displayed; returns the challenge id and its secret. */
+    private String[] displayed() throws Exception {
         String body = prepare(key()).andExpect(status().isAccepted()).andReturn().getResponse()
                 .getContentAsString(StandardCharsets.UTF_8);
         operation = UUID.fromString(JsonPath.read(body, "$.id"));
@@ -380,11 +415,14 @@ class ReturnApiTests extends HubChallengeApiTest {
         clock.advance(Duration.ofSeconds(2));
         report("ACCESS_CHALLENGE_DISPLAYED", operation, (UUID) display.get("message_id"), challenge, 1, null,
                 session);
-        mvc.perform(post("/api/v1/locker-operations/" + operation + "/authorize-local")
+        return new String[] {challenge.toString(), secret};
+    }
+
+    private ResultActions scan(String[] challenge) throws Exception {
+        return mvc.perform(post("/api/v1/locker-operations/" + operation + "/authorize-local")
                 .header(AUTHORIZATION, bearer(token)).header("Idempotency-Key", key())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(jsonMapper.writeValueAsString(Map.of("challengeId", challenge.toString(), "token", secret))))
-                .andExpect(status().isAccepted());
+                .content(jsonMapper.writeValueAsString(Map.of("challengeId", challenge[0], "token", challenge[1]))));
     }
 
     private void acknowledge() {

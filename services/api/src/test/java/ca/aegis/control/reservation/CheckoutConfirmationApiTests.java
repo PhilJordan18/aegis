@@ -180,6 +180,31 @@ class CheckoutConfirmationApiTests extends HubChallengeApiTest {
     }
 
     @Test
+    void aFaultedScanAfterTheClosingIsInconsistentEvenIfItsWindowStartedBeforeIt() throws Exception {
+        authorized();
+        acknowledge();
+        door("DOOR_OPENED");
+        door("DOOR_CLOSED");
+        // Rule 6 (human decision of 21 November 2026, #67): the scan is correlated and received after the closing.
+        closedAt = closedAt.minusMillis(500);
+        scan("FAULTED", Map.of());
+
+        assertTrue(clock.instant().isBefore(DEADLINE));
+        assertAnomaly("INCONSISTENT_PHYSICAL_STATE", "READER_NOT_HEALTHY");
+    }
+
+    @Test
+    void aForeignTagLeftInTheCellDoesNotPreventConfirmingTheExpectedAssetsExit() throws Exception {
+        authorized();
+        acknowledge();
+        door("DOOR_OPENED");
+        door("DOOR_CLOSED");
+        // K14 (human decision of 21 November 2026, #67): every proof of the expected asset is coherent.
+        assertEquals(Outcome.ACCEPTED, scan("HEALTHY", Map.of("E28011700000020A1B2C3D4F", 5)));
+        assertConfirmed();
+    }
+
+    @Test
     void anUnhealthyReaderProjectionAloneDoesNotApplyRule2() throws Exception {
         authorized();
         acknowledge();
