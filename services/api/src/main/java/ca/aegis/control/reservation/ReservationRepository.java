@@ -49,6 +49,16 @@ class ReservationRepository {
      * {@code FOR NO KEY UPDATE}, never {@code FOR UPDATE}: the idempotency key of the same request already holds a
      * {@code KEY SHARE} lock on this row through its foreign key (document 08, section 7.1).
      */
+    /** The same facts as {@link #lockUser}, read without a lock, for a display hint. */
+    Optional<LockedUser> findUser(UUID userId) {
+        return jdbc.sql("SELECT id, status, role, maximum_access_level FROM aegis.users WHERE id = :id")
+                .param("id", userId)
+                .query((row, number) -> new LockedUser(row.getObject("id", UUID.class),
+                        AccountStatus.valueOf(row.getString("status")), Role.valueOf(row.getString("role")),
+                        AccessLevel.valueOf(row.getString("maximum_access_level"))))
+                .optional();
+    }
+
     Optional<LockedUser> lockUser(UUID userId) {
         return jdbc.sql("""
                 SELECT id, status, role, maximum_access_level FROM aegis.users WHERE id = :id FOR NO KEY UPDATE
