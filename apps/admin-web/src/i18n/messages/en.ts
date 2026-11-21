@@ -467,6 +467,8 @@ export const en: Messages = {
     emptyBody: { reservations: 'Reservations appear here as soon as they are created.', loans: 'Loans appear here once a checkout is confirmed by the locker.', operations: 'Operations appear here as soon as they are created.' },
     filteredEmptyTitle: { reservations: 'No reservation matches these filters.', loans: 'No loan matches these filters.', operations: 'No operation matches these filters.' },
     filteredEmptyBody: 'Change the filters or show everything.',
+    filterLocker: 'Locker filter:',
+    filterLockerRemove: 'Remove this filter',
 
     forbiddenTitle: 'Your account cannot access reservations and loans.',
     notFoundTitle: 'File not found.',
@@ -709,6 +711,7 @@ export const en: Messages = {
     colLastObservation: 'Last observed',
     lastKnownNote: 'Last known state, as of the last observation: the locker is not online, so these values are not the current state.',
     noObservation: 'No observation',
+    operationsOfLocker: 'See the operations of this locker',
     link: {
       CONNECTED: 'Connected',
       DISCONNECTED: 'Disconnected',

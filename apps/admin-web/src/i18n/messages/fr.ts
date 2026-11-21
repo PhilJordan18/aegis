@@ -534,6 +534,8 @@ export const fr = {
     emptyBody: { reservations: 'Les réservations apparaissent ici dès leur création.', loans: 'Les prêts apparaissent ici dès un retrait confirmé par le casier.', operations: 'Les opérations apparaissent ici dès leur création.' },
     filteredEmptyTitle: { reservations: 'Aucune réservation ne correspond à ces filtres.', loans: 'Aucun prêt ne correspond à ces filtres.', operations: 'Aucune opération ne correspond à ces filtres.' },
     filteredEmptyBody: 'Modifiez les filtres ou affichez tout.',
+    filterLocker: `Casier filtré${NBSP}:`,
+    filterLockerRemove: 'Retirer ce filtre',
 
     forbiddenTitle: "Votre compte n'a pas accès aux réservations et aux prêts.",
     notFoundTitle: 'Dossier introuvable.',
@@ -780,6 +782,7 @@ export const fr = {
     colLock: 'Serrure',
     colLastObservation: 'Dernière observation',
     /** [P] The server keeps the last heartbeat's values on the cells while the locker is not online. */
+    operationsOfLocker: 'Voir les opérations de ce casier',
     lastKnownNote: `Dernier état connu, à la dernière observation${NBSP}: le casier n'est pas en ligne, ces valeurs ne sont pas l'état actuel.`,
     noObservation: 'Aucune observation',
     link: {

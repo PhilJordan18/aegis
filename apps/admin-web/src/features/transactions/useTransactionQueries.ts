@@ -46,7 +46,9 @@ export function useTransactionList(view: TransactionView, filters: TransactionFi
   const gateway = useTransactionGateway()
   const session = useSessionStore()
   const common = { assetId: filters.assetId ?? undefined, ...periodInstants(filters), page, size: TRANSACTION_PAGE_SIZE }
-  const keyed = { ...common, status: filters.status ?? undefined }
+  // A locker filters the operations only (09 §17); the address ignores it for the other two views.
+  const lockerId = view === 'operations' ? (filters.lockerId ?? undefined) : undefined
+  const keyed = { ...common, status: filters.status ?? undefined, ...(lockerId === undefined ? {} : { lockerId }) }
   const key =
     view === 'reservations'
       ? queryKeys.transactions.reservationList(keyed)
@@ -65,7 +67,7 @@ export function useTransactionList(view: TransactionView, filters: TransactionFi
           const result = await gateway.listLoans(accessToken, { ...common, status: (filters.status ?? undefined) as LoanStatus | undefined }, signal)
           return tag(result, (value) => recordsOf(value, (item) => ({ kind: 'loans', item })))
         }
-        const result = await gateway.listLockerOperations(accessToken, { ...common, status: (filters.status ?? undefined) as LockerOperationStatus | undefined }, signal)
+        const result = await gateway.listLockerOperations(accessToken, { ...common, ...(lockerId === undefined ? {} : { lockerId }), status: (filters.status ?? undefined) as LockerOperationStatus | undefined }, signal)
         return tag(result, (value) => recordsOf(value, (item) => ({ kind: 'operations', item })))
       }),
     placeholderData: (previous, previousQuery) => (previousQuery?.queryKey[1] === key[1] ? previous : undefined),
