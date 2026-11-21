@@ -18,6 +18,7 @@ import type { TransactionFailure } from './transactionFailure'
 import { NO_FILTERS, transactionHref, type TransactionView } from './transactionHref'
 import { isShownOverdue, isTerminalOperation, lateChip, loanChip, operationChip, operationTypeLabel, reservationChip, transactionTimes, type TransactionTimes } from './transactionPresentation'
 import type { TransactionRecord } from './useTransactionQueries'
+import { CurrentAttempt } from './CurrentAttempt'
 
 interface TransactionDossierProps {
   readonly view: TransactionView
@@ -245,6 +246,7 @@ function ReservationBody({ reservation: r, titleId, i18n, times }: BodyProps & {
       <Section title={t.secOperations}>
         <div className="ag-links">
           <OperationLink label={t.factCurrentOperation} id={r.currentOperationId} empty={r.status === 'ACTIVE' ? t.noCurrentOperation : t.closedNoOperation} i18n={i18n} />
+          <CurrentAttempt operationId={r.currentOperationId} deferrable={r.status === 'ACTIVE'} i18n={i18n} times={times} />
           {r.status === 'FULFILLED' && (
             <LinkRow label={t.loanLink}>
               {t.loanLinkMissing}{' '}
@@ -307,6 +309,7 @@ function LoanBody({ loan: l, titleId, i18n, times }: BodyProps & { readonly loan
           <OperationLink label={t.factCheckoutOperation} id={l.checkoutOperationId} empty="" i18n={i18n} />
           <OperationLink label={t.factReturnOperation} id={l.returnOperationId} empty={t.noReturnOperation} i18n={i18n} />
           <OperationLink label={t.factCurrentOperation} id={l.currentOperationId} empty={t.noCurrentOperation} i18n={i18n} />
+          <CurrentAttempt operationId={l.currentOperationId} deferrable={false} i18n={i18n} times={times} />
         </div>
       </Section>
     </>

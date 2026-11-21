@@ -154,3 +154,20 @@ export function useTransactionDetail(view: TransactionView, id: string | null, l
 
   return query
 }
+
+/**
+ * The current attempt of a reservation or loan, read once by `currentOperationId` from `GET …/locker-operations/{id}`.
+ * It shares the key of the operation dossier but never follows the operation: the ADR-006 follow belongs to the open
+ * operation dossier alone. A failed read is not retried, the dossier falls back on the plain link.
+ */
+export function useOperationRead(operationId: string | null) {
+  const gateway = useTransactionGateway()
+  const session = useSessionStore()
+  return useQuery<TransactionRecord, Error, TransactionRecord, readonly unknown[]>({
+    queryKey: queryKeys.transactions.operation(operationId ?? ''),
+    queryFn: ({ signal }): Promise<TransactionRecord> =>
+      authorizedRequest(session, async (accessToken): Promise<GatewayResult<TransactionRecord>> => tag(await gateway.getLockerOperation(accessToken, operationId ?? '', signal), (item) => ({ kind: 'operations', item }))),
+    enabled: operationId !== null,
+    retry: false,
+  })
+}
