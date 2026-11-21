@@ -245,27 +245,71 @@ class LocalAuthorizationApiTests extends HubChallengeApiTest {
     }
 
     @Test
-    void everyGuardIsEvaluatedAgainAtTheScan() throws Exception {
+    void transientGuardsChangeNothingAndKeepTheDeadline() throws Exception {
         displayed();
+        Object deadline = challengeDeadline();
         heartbeat("CONNECTED", "HEALTHY", "OPEN", "UNLOCKED");
         expectProblem(authorize(key(), challenge, secret, token), 409, "COMPARTMENT_STATE_UNSAFE");
         heartbeat("CONNECTED", "FAULTED", "CLOSED", "LOCKED");
         expectProblem(authorize(key(), challenge, secret, token), 503, "DEVICE_UNAVAILABLE");
         heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
-        jdbc.sql("UPDATE aegis.assets SET operational_status = 'MAINTENANCE' WHERE id = :id").param("id", asset)
-                .update();
-        expectProblem(authorize(key(), challenge, secret, token), 422, "ASSET_NOT_READY");
-        jdbc.sql("UPDATE aegis.assets SET operational_status = 'SERVICEABLE' WHERE id = :id").param("id", asset)
-                .update();
         // A hub whose last heartbeat is older than the freshness window is offline.
         clock.advance(Duration.ofSeconds(31));
         expectProblem(authorize(key(), challenge, secret, token), 503, "LOCKER_OFFLINE");
         assertEquals(0, failedAttempts());
         assertEquals("PENDING", challengeStatus(operation));
         assertEquals("AWAITING_LOCAL_PROOF", fixtures.operationStatus(operation));
+        assertEquals(deadline, challengeDeadline());
+        assertEquals(0L, rejections());
         assertEquals(0L, commands());
         heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
         authorize(key(), challenge, secret, token).andExpect(status().isAccepted());
+    }
+
+    @Test
+    void aDefinitiveGuardEndsTheAttemptAuditedWithAClearedScreen() throws Exception {
+        displayed();
+        jdbc.sql("UPDATE aegis.assets SET operational_status = 'MAINTENANCE' WHERE id = :id").param("id", asset)
+                .update();
+        String key = key();
+        expectProblem(authorize(key, challenge, secret, token), 422, "ASSET_NOT_READY")
+                .andExpect(jsonPath("$.reasons").isNotEmpty());
+        assertEnded(operation, "FAILED", "INVALIDATED", "LOCAL_PROOF_GUARD_FAILED");
+        assertEquals(1L, rejections());
+        // The refusal committed with its key: a replay answers it again, a new key finds the attempt ended.
+        expectProblem(authorize(key, challenge, secret, token), 422, "ASSET_NOT_READY")
+                .andExpect(header().string("Idempotency-Replayed", "true"));
+        jdbc.sql("UPDATE aegis.assets SET operational_status = 'SERVICEABLE' WHERE id = :id").param("id", asset)
+                .update();
+        expectProblem(authorize(key(), challenge, secret, token), 409, "LOCAL_PROOF_INVALIDATED");
+        assertEquals(1L, rejections());
+        assertEquals(1L, statusRows(operation));
+        assertEquals(0L, commands());
+    }
+
+    @Test
+    void anEndedReservationExpiresTheAttempt() throws Exception {
+        displayed();
+        jdbc.sql("UPDATE aegis.reservations SET reserved_until = :until WHERE id = :id")
+                .param("until", START.plusSeconds(3).atOffset(java.time.ZoneOffset.UTC)).param("id", reservation)
+                .update();
+        clock.advance(Duration.ofSeconds(1));
+        expectProblem(authorize(key(), challenge, secret, token), 404, "ACTIVE_RESERVATION_NOT_FOUND");
+        assertEnded(operation, "EXPIRED", "EXPIRED", "LOCAL_PROOF_EXPIRED");
+        assertEquals(1L, rejections());
+        assertEquals(0L, commands());
+    }
+
+    private Object challengeDeadline() {
+        return jdbc.sql("SELECT expires_at FROM aegis.local_access_challenges WHERE id = :id").param("id", challenge)
+                .query().singleValue();
+    }
+
+    private long rejections() {
+        return fixtures.count("""
+                SELECT count(*) FROM aegis.audit_events
+                WHERE subject_id = :id AND event_type = 'LOCAL_CHALLENGE_REJECTED'
+                """, challenge);
     }
 
     @Test
