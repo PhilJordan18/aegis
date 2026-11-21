@@ -231,7 +231,7 @@ Ordre : ce que `dev` permet déjà, du plus important au moins important ; chaqu
 - **Fichiers.** `features/transactions/useTransactionQueries.ts`, `features/overview/useOverviewQueries.ts` (bloc « Opération en
   cours »).
 - **Contrat utilisé.** Les mêmes lectures. **Décision à prendre :** période et périmètre (dossier sélectionné seulement, ou liste
-  visible). Pas de changement visuel ; l'heure « Mis à jour à » existante suffit.
+  visible) : décidé le 21 novembre, dossier ouvert seulement selon l'ADR-006 (voir §8). Pas de changement visuel ; l'heure « Mis à jour à » existante suffit.
 - **Plan de test.** `refetchInterval` conditionnel (arrêt quand l'opération est terminale, onglet masqué ou erreur 4xx) ; compter les
   requêtes sur 60 s ; réel : passer `f04` d'un état à l'autre par SQL et lire le changement sans clic.
 
@@ -244,7 +244,7 @@ Ordre : ce que `dev` permet déjà, du plus important au moins important ; chaqu
 - **Plan de test.** Lecture des quatre pages, reconnaissance d'une anomalie synthétique, absence d'action de garde, retour à la
   connexion après désactivation du compte. Dépend de R1 pour l'audit.
 
-### R7 : lignes de la liste d'opérations lisibles (Refs #53) — décision requise avant tout code
+### R7 : lignes de la liste d'opérations lisibles (Refs #53) — décidé le 21 novembre (voir §8)
 
 - **Constat.** T14. Soit des lectures `GET /admin/assets/{id}` groupées et mises en cache (une par ligne d'une page de 20), soit
   l'ajout additif de `asset` et `user` aux vues d'opération, option que le design (G3) préfère. **Le choix revient à Philippe et
@@ -334,6 +334,27 @@ Limites assumées :
 
 ## 8. Suite
 
-Aucune tranche n'est lancée. Philippe choisit parmi R1 à R8. Ordre proposé : **R1** (défaut réel, sans décision), puis **R2** et **R3**
-(navigation, sans nouveau contrat), **R4**, puis **R5** et **R6** après sa décision sur la période d'actualisation. **R7** attend une
-décision de contrat ; **B1** et **B2** attendent les fusions. Chaque tranche livrera sa propre preuve réelle et son rapport.
+### Décisions de Philippe (21 novembre 2026)
+
+- **Livraison.** Il valide la livraison du design approuvé (#158, `docs/design/manager-console/`), ce qui corrige D1, et celle de cette matrice.
+- **R5.** Appliquer l'ADR-006 au **dossier d'opération ouvert** seulement :
+  - interrogation de l'opération environ chaque seconde, ralentie en cas d'erreur ;
+  - une seule requête en vol ;
+  - arrêt à l'état terminal ;
+  - suspension quand l'onglet est masqué, puis lecture immédiate au retour ;
+  - rafraîchissement de la réservation, du prêt et de l'actif lié une fois l'opération terminée.
+
+  **Aucun polling global des listes.**
+- **R7.** Préparer l'ajout de résumés minimaux `asset` et `user` dans la **vue administrative** des opérations, avec contrat et tests, sans élargir les vues technicien. Le contrat (09) et l'API restent au Backend ; le Web consomme ces champs une fois qu'ils sont fusionnés.
+- **Ordre de travail.** Poursuivre R1 et les travaux indépendants, puis synchroniser après #180. QA vérifiera la combinaison « session navigateur + retrait/retour » sur une version d'intégration précisément identifiée.
+- **Merges.** Philippe les conserve.
+
+### Ordre de travail
+
+1. **R1**, en cours.
+2. **R5** (dossier ouvert seulement), **R2**, **R3** et **R4**, sans nouveau contrat.
+3. **R7** côté Web, après le contrat Backend.
+4. **R6**, après R1.
+5. **B1** et **B2**, sur des références d'intégration épinglées.
+
+Chaque tranche livrera sa propre preuve réelle et son rapport.
