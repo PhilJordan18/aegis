@@ -71,6 +71,15 @@ class CheckoutProofTests {
     }
 
     @Test
+    void rule2AppliesToAScanAfterTheClosingWhoseWindowStartedBeforeIt() {
+        ack();
+        door(Kind.DOOR_OPENED);
+        Fact closed = door(Kind.DOOR_CLOSED);
+        scan("FAULTED", TagReading.NO_VERDICT, closed.occurredAt().minusMillis(500));
+        assertResult(Verdict.INCONSISTENT, Finding.READER_NOT_HEALTHY, Stage.OBSERVED);
+    }
+
+    @Test
     void rule2DoesNotApplyBeforeTheInteractionNorToAScanTakenWhileTheDoorWasOpen() {
         ack();
         door(Kind.DOOR_OPENED);
