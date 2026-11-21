@@ -369,6 +369,14 @@ describe('Réservations et prêts: locker operations', () => {
     expect(plain(dossier().textContent)).toContain('Aucun prêt n\'est déduit.')
   })
 
+  it.each(['FAILED', 'EXPIRED'])('reads « Aucun » for a %s checkout: no loan exists, none is implied', async (status) => {
+    const op = operation({ type: 'CHECKOUT', status, loanId: null, confirmedAt: null })
+    renderPage(fakeGateway({ operations: ok(pageOf([op])) }), { url: '/reservations-prets?vue=operations' })
+    await screen.findByRole('heading', { level: 2, name: '1 opération' })
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Prêt lié'))
+    expect(plain(dossier().textContent)).not.toContain("c'est le prêt qui désigne cette opération")
+  })
+
   it('shows an unknown failure reason as the code alone, with no invented label', async () => {
     const op = operation({ status: 'EXPIRED', failureReason: 'FUTURE_REASON', confirmedAt: null })
     renderPage(fakeGateway({ operations: ok(pageOf([op])) }), { url: '/reservations-prets?vue=operations' })
