@@ -48,6 +48,28 @@ export const en: Messages = {
     notFound: 'Page not found — Aegis Manager',
   },
 
+  /**
+   * Browser session (ADR-016, #178). A protected page waits for the server before any redirect; a failed
+   * restoration is neither a sign-out nor a valid session.
+   */
+  session: {
+    restoringHeading: 'Restoring your session',
+    restoringStatus: 'Checking your session.',
+    unreachableTitle: 'Unable to reach the service. Your session could not be restored.',
+    unreachableBody: 'Your session is not closed. Check your network, then try again.',
+    serviceErrorTitle: 'The service could not restore your session.',
+    serviceErrorBody: 'Your session is not closed. Try again in a moment. If the problem persists, give the trace ID to support.',
+    serviceErrorBodyWithoutCode: 'Your session is not closed. Try again in a moment.',
+    traceIdLabel: 'Trace ID:',
+    forbiddenTitle: 'The server refuses to restore your session from this address.',
+    forbiddenBody: 'Your session was not closed or changed. Contact an administrator if the problem persists.',
+    retry: 'Try again',
+    signInInstead: 'Sign in',
+    signOutFailedTitle: 'Unable to confirm the sign-out. Try again.',
+    signOutRetry: 'Try again',
+    signingOut: 'Signing out',
+  },
+
   shell: {
     skipLink: 'Skip to main content',
     sectionsLabel: 'Sections',
@@ -968,6 +990,8 @@ export const en: Messages = {
       unreachableBody: 'Unable to reach the service. Trying again is safe: the same request is recorded only once.',
       inProgressTitle: 'The acknowledgement is being processed.',
       inProgressBody: 'The first request has not finished. Trying again is safe: the same request is recorded only once.',
+      resubmitTitle: 'Your session was restored.',
+      resubmitBody: 'The acknowledgement was not sent again. Send it again: the same request is recorded only once.',
       serviceErrorTitle: 'The service could not record the acknowledgement.',
       serviceErrorBody: 'Trying again is safe: the same request is recorded only once. If the problem persists, send the trace ID to support.',
       forbiddenTitle: 'Your account is not allowed to acknowledge this anomaly.',
@@ -1073,6 +1097,8 @@ export const en: Messages = {
     unreachableBody: 'The outcome is unknown. Trying again sends the same request: it will not be applied twice.',
     inProgressTitle: 'The first request is still in progress.',
     inProgressBody: 'Try again in a moment: it will not be applied twice.',
+    resubmitTitle: 'Your session was restored.',
+    resubmitBody: 'The request was not sent again: send it again, it will not be applied twice.',
     forbiddenTitle: 'Your account is not allowed to make this change.',
     notFoundTitle: 'This item no longer exists or is no longer accessible.',
     serviceErrorTitle: 'The service could not process the request.',
@@ -1219,6 +1245,7 @@ export const en: Messages = {
       severity: 'Severity',
       lockerId: 'Locker ID',
       messageType: 'Message type',
+      revokedBrowserSessions: 'Browser sessions revoked',
     },
     evidenceTitle: 'Physical evidence',
     evidenceNote: 'This screen shows no physical evidence: the contract does not define the shape of such references.',
@@ -1294,6 +1321,7 @@ export const en: Messages = {
       MQTT_MESSAGE_DUPLICATE_IGNORED: 'Duplicate message ignored',
       LOCKER_ONLINE: 'Locker online',
       LOCKER_OFFLINE: 'Locker offline',
+      PASSWORD_CHANGED: 'Password changed',
     },
     state: {
       REQUESTED: 'Request sent',

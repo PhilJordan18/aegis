@@ -5,14 +5,14 @@ import { createQueryClient } from '../api/serverState'
 import { App } from '../app/App'
 import { unconfiguredAuthGateway, type AuthGateway } from '../features/auth/authGateway'
 import { createSessionStore } from '../features/auth/session'
-import { adminProfile } from '../features/auth/testFixtures'
+import { adminProfile, sessionStubs } from '../features/auth/testFixtures'
 import { ASSET_UPDATED_STATUS, SCHEDULE_UPDATED_CHANGED } from '../features/audit/auditDetailSamples'
 import { OPERATION_ID, SUBJECT_ID, auditPage, eventView, fakeAuditGateway, pageOk, pageProblem, pageUnreachable, uuid } from '../features/audit/testFixtures'
 import type { Locale } from '../i18n/locale'
 import { installMatchMedia } from '../test/matchMedia'
 import { renderWithProviders } from '../test/renderApp'
 
-const authGateway: AuthGateway = { ...unconfiguredAuthGateway, currentProfile: async () => ({ kind: 'ok', value: adminProfile, requestId: null }) }
+const authGateway: AuthGateway = { ...unconfiguredAuthGateway, ...sessionStubs, currentProfile: async () => ({ kind: 'ok', value: adminProfile, requestId: null }) }
 const plain = (value: string | null | undefined) => (value ?? '').replace(/[\u00A0\u202F]/g, ' ')
 
 const COMMAND = eventView(1, {
