@@ -37,6 +37,7 @@ npm run capture:integration  # 14 captures FR/EN de l'identité v3, à 1×, dans
 npm run test:identity  # mesures sur le rendu : saut de mise en page, contrastes peints, focus, texte coupé
 npm run test:forms     # formulaires CAT-01 proposés : axe, clavier, 320 px, clair et sombre, sur des faux routés
 npm run test:follow    # dossier d'opération ouvert (ADR-006, R5) : suivi sans clic, requêtes bornées, pause onglet masqué, arrêt au statut terminal
+npm run test:links     # liens entre dossiers (R2, R3) et tentative courante (R4) : chaque lien est cliqué, adresse et requête vérifiées, sans image
 npm run capture:forms  # mêmes contrôles, et écrit le lot de revue dans docs/design/manager-forms/captures/
 npm run test:e2e:api   # recette Playwright contre l'API réelle (build de production); échoue sans API ou sans identifiants
 npm run test:e2e:session   # session navigateur (ADR-016) sur des faux d'API : rechargement, lien direct, révocation, déconnexion
