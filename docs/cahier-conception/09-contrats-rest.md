@@ -1748,7 +1748,7 @@ Le P0 ne comprend pas :
 
 - inscription publique;
 - récupération autonome de mot de passe;
-- refresh token;
+- refresh token; la session navigateur révocable du Manager (ADR-016, §10.4 et §10.5) n’en est pas un : elle ne prolonge jamais sa fin absolue et ne sert qu’au Web;
 - authentification sociale;
 - gestion avancée des utilisateurs;
 - WebSocket ou Server-Sent Events;
