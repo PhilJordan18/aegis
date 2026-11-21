@@ -7,6 +7,7 @@ import type { UserProfile } from '../features/auth/contract'
 import { useSignOut } from '../features/auth/useSignOut'
 import { useCurrentAdminProfile } from '../features/auth/useCurrentAdminProfile'
 import { AuditDossier } from '../features/audit/AuditDossier'
+import { AuditEventNotLoaded } from '../features/audit/AuditEventNotLoaded'
 import { AuditFilters } from '../features/audit/AuditFilters'
 import { AuditList } from '../features/audit/AuditList'
 import { classifyAuditFailure } from '../features/audit/auditFailure'
@@ -61,7 +62,11 @@ export function AuditPage({ sessionProfile }: { readonly sessionProfile: UserPro
   const stale = query.isRefetchError && !nextFailed && !refused
   const listFailure = events === undefined ? failure : null
   const loading = query.isPending
-  const selected = events?.find((event) => event.id === selectedId) ?? events?.[0]
+  // §19.1 cannot read one event by id: an event the loaded pages do not hold is said to be missing, never replaced by
+  // the first one. Without `evenement`, the first event is shown.
+  const requested = selectedId === null ? undefined : events?.find((event) => event.id === selectedId)
+  const requestedMissing = selectedId !== null && events !== undefined && events.length > 0 && requested === undefined
+  const selected = requestedMissing ? undefined : (requested ?? events?.[0])
   const showDossier = loading || (events !== undefined && events.length > 0)
 
   // One live region for what the person did: the count after a first read, a page, a refresh, a selection.
@@ -74,9 +79,11 @@ export function AuditPage({ sessionProfile }: { readonly sessionProfile: UserPro
   const pendingEvent = useRef<string | null>(null)
   const pendingNotice = useRef(false)
   const pendingTitle = useRef(false)
+  const pendingMissing = useRef(false)
   const listRef = useRef<HTMLDivElement>(null)
   const noticeRef = useRef<HTMLDivElement>(null)
   const dossierRef = useRef<HTMLDivElement>(null)
+  const missingRef = useRef<HTMLDivElement>(null)
   const focusAfterSelection = useRef(false)
   useEffect(() => {
     if (pendingEvent.current !== null) {
@@ -95,6 +102,11 @@ export function AuditPage({ sessionProfile }: { readonly sessionProfile: UserPro
       pendingTitle.current = false
       document.getElementById(LIST_TITLE_ID)?.focus()
     }
+    // Loading from the missing-event notice: if « Charger plus » left with the last page, the notice takes focus.
+    if (pendingMissing.current && missingRef.current) {
+      pendingMissing.current = false
+      if (!missingRef.current.contains(document.activeElement)) missingRef.current.focus()
+    }
   }, [events, noteState, nextFailure])
   useEffect(() => {
     if (!focusAfterSelection.current || selected === undefined || dossierRef.current === null) return
@@ -103,15 +115,25 @@ export function AuditPage({ sessionProfile }: { readonly sessionProfile: UserPro
     dossierRef.current.scrollIntoView?.({ block: 'start' })
   }, [selected])
 
-  async function loadMore() {
+  async function loadMore(fromMissingNotice = false) {
     const result = await query.fetchNextPage()
     if (result.isError) {
       pendingNotice.current = true
       return
     }
     const added = result.data?.pages.at(-1)?.items ?? []
-    pendingEvent.current = added[0]?.id ?? null
-    setNote(t.loadedMore({ count: added.length }))
+    const arrived = fromMissingNotice ? added.find((event) => event.id === selectedId) : undefined
+    // From the notice, focus stays there until the requested event arrives; then its row takes it, never the body.
+    pendingEvent.current = fromMissingNotice ? (arrived?.id ?? null) : (added[0]?.id ?? null)
+    pendingMissing.current = fromMissingNotice && arrived === undefined
+    const count = t.loadedMore({ count: added.length })
+    setNote(arrived === undefined ? count : `${count} ${t.selectedStatus({ name: eventLabel(arrived.eventType, i18n) })}`)
+  }
+
+  function showFirst(click: MouseEvent<HTMLAnchorElement>) {
+    if (click.metaKey || click.ctrlKey || click.shiftKey || click.altKey || click.button !== 0) return
+    // The notice leaves with the address change: the dossier of the first event takes its focus.
+    focusAfterSelection.current = true
   }
 
   async function restartWalk() {
@@ -206,7 +228,20 @@ export function AuditPage({ sessionProfile }: { readonly sessionProfile: UserPro
               onClearFilters={() => apply(NO_FILTERS)}
             />
           </div>
-          {showDossier && <AuditDossier event={loading ? undefined : selected} filters={filters} focusRef={dossierRef} />}
+          {showDossier &&
+            (requestedMissing && selectedId !== null ? (
+              <AuditEventNotLoaded
+                requestedId={selectedId}
+                filters={filters}
+                canLoadMore={query.hasNextPage && nextFailure === null}
+                loadingMore={query.isFetchingNextPage}
+                onLoadMore={() => void loadMore(true)}
+                onShowFirst={showFirst}
+                focusRef={missingRef}
+              />
+            ) : (
+              <AuditDossier event={loading ? undefined : selected} filters={filters} focusRef={dossierRef} />
+            ))}
         </div>
       </main>
     </ManagerShell>

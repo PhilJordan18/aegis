@@ -1246,6 +1246,12 @@ export const fr = {
     /** [P] Without any filter an empty answer is stated as what it is: nothing came back. */
     emptyTitle: 'Aucun événement reçu.',
     emptyBody: "Le service n'a renvoyé aucun événement.",
+    /** The address names an event the loaded pages do not hold; §19.1 has no read by identifier. */
+    requestedMissingTitle: "L'événement demandé ne fait pas partie des résultats chargés.",
+    requestedMissingIdLabel: `Événement demandé${NBSP}:`,
+    requestedMissingMore: "Il est peut-être plus ancien. Chargez la suite de l'historique, ou restreignez la recherche (opération, type d'événement, période) pour le retrouver.",
+    requestedMissingEnd: "Tout l'historique correspondant aux filtres est chargé et cet événement n'en fait pas partie. Un filtre actif l'exclut peut-être, ou il n'existe pas : retirez des filtres (opération, type d'événement, période) pour le chercher.",
+    requestedMissingShowFirst: 'Afficher le premier événement',
     invalidCursorTitle: 'La liste a changé.',
     invalidCursorBody: 'Recommencez depuis le début.',
     restart: 'Recommencer',
