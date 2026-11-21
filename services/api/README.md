@@ -164,7 +164,8 @@ du Manager sans attribut `Domain` : il reste attaché à cette origine.
 Un changement effectif de mot de passe passe par `PasswordChanges`. Ce point
 d'écriture est le seul qui existe; le provisionnement de démonstration
 l'utilise aussi. Le changement révoque toutes les sessions navigateur du
-compte et écrit l'audit `PASSWORD_CHANGED` (ADR-017). Un redémarrage avec le
+compte et écrit l'audit `PASSWORD_CHANGED` (ADR-017, proposé : seule la
+révocation au changement réel est approuvée). Un redémarrage avec le
 même mot de passe ne révoque rien. Une tâche planifiée supprime les sessions
 terminées depuis plus de 30 jours :
 
@@ -178,6 +179,13 @@ Le cycle de vie complet (rechargement, échéance, déconnexion, mot de passe,
 compte changé, panne, redémarrage) est la matrice du document 09, §10.6. Les
 jetons d'accès déjà émis restent valables jusqu'à leur expiration; leur
 révocation est seulement proposée (ADR-018).
+
+Les journaux de l'application (`ca.aegis`) ne contiennent ni cookie, ni
+jeton, ni mot de passe, ni empreinte, même à TRACE. Cette garantie ne couvre
+pas les journaux du framework. À DEBUG ou TRACE, Tomcat, le pilote PostgreSQL et
+`org.springframework.jdbc` écrivent le corps de la connexion, l'en-tête
+`Cookie` et les paramètres SQL liés. N'activez jamais ces niveaux, ni
+`LOGGING_LEVEL_ROOT` au-delà de `INFO`, hors d'une pile jetable.
 
 ### Déploiement Railway (#178)
 

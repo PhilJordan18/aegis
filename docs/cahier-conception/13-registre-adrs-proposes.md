@@ -10,7 +10,7 @@
 **Mise à jour :** 28 octobre 2026 — ADR-014 proposé : recherche `q` comptée en graphèmes, commune à l’API, au Web et à iOS  
 **Mise à jour :** 6 novembre 2026 — ADR-014 accepté par Philippe : recherche `q` comptée en graphèmes
 **Mise à jour :** 18 novembre 2026 — ADR-016 accepté par Philippe : session navigateur révocable du Manager; remplace pour le Web seulement la reconnexion après rechargement de l’ADR-007
-**Mise à jour :** 21 novembre 2026 — ADR-017 accepté par Philippe : révocation des sessions navigateur au changement de mot de passe et rétention bornée; ADR-018 proposé : révocation des jetons d’accès déjà émis
+**Mise à jour :** 21 novembre 2026 — ADR-017 proposé (la règle de révocation au changement réel du mot de passe est approuvée; ses mécanismes attendent une décision); ADR-018 proposé : révocation des jetons d’accès déjà émis
 **Références :** [scope](02-scope.md), documents 03–10 et [architecture physique](12-architecture-physique.md).
 
 ## 1. Portée et statuts
@@ -54,7 +54,7 @@ les POC matériels et le seuil numérique de fréquence des préparations QR res
 | 014 | [Recherche `q` comptée en graphèmes, commune à l’API, au Web et à iOS](../adr/ADR-014-recherche-q-graphemes.md) | `ACCEPTED` — Philippe, 6 novembre 2026 (PR #131), tel que proposé; consigne la décision commune du 28 octobre 2026, liste des espaces et corpus partagé compris | Philippe, avec les sessions Web et iOS | PR coordonnées de #109 : API, Web et iOS sur le même corpus |
 | 015 | [Chiffrement des instructions d’affichage du hub par des clés hors PostgreSQL](../adr/ADR-015-cles-affichage-hub.md) | `ACCEPTED` — Philippe, 11 novembre 2026 (mandat Backend sur #67); AES-256-GCM, `AEGIS_DISPLAY_KEYS` et `AEGIS_DISPLAY_ACTIVE_KEY_ID`, anciennes clés conservées tant que des messages en dépendent | Philippe | LOC-01 (#43) et préparation CHK-01 (#46) |
 | 016 | [Session navigateur révocable pour le Manager](../adr/ADR-016-session-navigateur-revocable.md) | `ACCEPTED` — Philippe, 18 novembre 2026 (#178); cookie `HttpOnly` de durée absolue, origine autorisée, révocation serveur; remplace en partie l’ADR-007 | Philippe | IAM-03 (#178) |
-| 017 | [Révocation des sessions navigateur au changement de mot de passe et rétention bornée](../adr/ADR-017-revocation-sessions-changement-mot-de-passe.md) | `ACCEPTED` — Philippe, 21 novembre 2026 (mandat #178); révocation atomique `PASSWORD_CHANGED`, point d’écriture unique, révocation définitive, purge à 30 jours; complète l’ADR-016 | Philippe | IAM-03 (#178) |
+| 017 | [Révocation des sessions navigateur au changement de mot de passe et rétention bornée](../adr/ADR-017-revocation-sessions-changement-mot-de-passe.md) | `PROPOSED`; règle approuvée par Philippe le 21 novembre 2026 (#178) : révocation au changement réel du mot de passe, aucune au redémarrage à l’identique. En attente de décision : motif et audit `PASSWORD_CHANGED`, déclencheur de révocation définitive, purge à 30 jours (`V011`). Une alternative minimale sans `V011` est décrite | Philippe | IAM-03 (#178) |
 | 018 | [Révocation des jetons d’accès déjà émis](../adr/ADR-018-revocation-jetons-acces.md) | `PROPOSED`; version des créances (`cv`) pour le changement de mot de passe et `sid` par session navigateur pour la déconnexion du Manager; non implémenté, en attente de Philippe | Philippe | IAM-03 (#178), suite |
 
 Les pilotes préparent les preuves et recommandations; ils n’approuvent pas seuls un changement de scope. Les cibles pédagogiques sont précisées dans le document 14.

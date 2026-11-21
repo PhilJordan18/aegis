@@ -1,6 +1,6 @@
 # ADR-017 — Révocation des sessions navigateur au changement de mot de passe et rétention bornée
 
-**Statut :** ACCEPTED — Philippe, 21 novembre 2026 (mandat #178 « terminer la gestion des sessions de bout en bout »); implémentation livrée par la PR de #178
+**Statut :** PROPOSED — à valider explicitement par Philippe. Seule la règle de fond est déjà approuvée (clarification de Philippe sur #178, 21 novembre 2026) : toutes les sessions navigateur sont révoquées quand le mot de passe change réellement, et un redémarrage avec le même mot de passe ne révoque rien. Les mécanismes ci-dessous attendent une décision. L’implémentation est sur la branche de #178 et ne sera pas livrée sans cette décision.
 
 **Date de la décision :** 21 novembre 2026
 
@@ -73,6 +73,21 @@ La révocation des jetons émis fait l’objet de l’ADR-018, proposé et non a
     - `aegis.security.browser-session.purge.interval` (`PT1H`);
     - `aegis.security.browser-session.purge.batch-size` (500).
 - **Contrat.** Aucun changement de forme REST. La restauration répond déjà `401 AUTH_SESSION_INVALID` pour une session révoquée.
+
+## Alternative minimale, si la proposition est refusée
+
+La règle approuvée peut être livrée sans `V011`, sans nouveau type d’audit et sans purge :
+
+- `PasswordChanges` révoque les sessions avec le motif existant `ACCOUNT_CHANGED`;
+- il n’écrit aucun événement d’audit;
+- le point unique, la connexion gardée et les tests de courses restent identiques;
+- une révocation reste définitive par le code (aucune instruction ne remet `revoked_at` à `null`), mais aucun déclencheur ne le garantit en base;
+- les lignes terminées s’accumulent jusqu’à une décision de rétention.
+
+Coût de cette alternative :
+
+- un changement de mot de passe ne laisse aucune trace durable;
+- le motif `ACCOUNT_CHANGED` ne distingue plus un changement de mot de passe d’un compte désactivé ou d’un rôle changé.
 
 ## Sections remplacées
 

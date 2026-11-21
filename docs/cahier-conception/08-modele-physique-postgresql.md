@@ -4,7 +4,7 @@
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de révision :** 16 septembre 2026
 **Mise à jour ciblée :** 23 septembre 2026 — statut des paramètres QR et de RS-485; SQL inchangé.  
-**Mise à jour ciblée :** 21 novembre 2026 — ADR-017 (#178), migration `V011` : motif `PASSWORD_CHANGED`, révocation définitive et purge à 30 jours de `browser_sessions` (§4.2); type d’audit `PASSWORD_CHANGED` (§4.9).
+**Mise à jour ciblée :** 21 novembre 2026 — ADR-017 **proposé** (#178), migration `V011` en attente de décision : motif `PASSWORD_CHANGED`, révocation définitive et purge à 30 jours de `browser_sessions` (§4.2); type d’audit `PASSWORD_CHANGED` (§4.9).
 **Version :** 1.2 — contrôle local QR et étoile
 
 ---
@@ -177,7 +177,7 @@ CREATE TABLE users (
 
 #### `browser_sessions`
 
-Session navigateur révocable du Manager (ADR-016, migration `V010`; ADR-017, migration `V011`).
+Session navigateur révocable du Manager (ADR-016, migration `V010`; ADR-017 proposé, migration `V011` en attente de décision).
 
 - Seule l’empreinte SHA-256 du cookie est stockée.
 - La fin absolue, d’au plus 12 heures, ne bouge jamais.
