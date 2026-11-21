@@ -212,6 +212,8 @@ Après correction physique :
 - une nouvelle tentative utilise toujours une nouvelle LockerOperation;
 - la preuve ayant permis la récupération est liée à l’Anomaly et auditée.
 
+Règle P0, décidée le 21 novembre 2026 (#67) : la reprise d’un retour est admise une fois les anomalies liées aux retours du prêt acquittées, sans tentative concurrente et si les autres gardes passent. Le prêt reste `RETURN_PENDING` jusqu’à la preuve cohérente de la reprise, qui le termine et résout les anomalies liées dans une même transaction auditée. Le retour du prêt à `ACTIVE` par une preuve d’absence reste hors P0. Conditions et échecs répétés : `06` §13.4.
+
 ---
 
 ## 5. Machine à états de LockerOperation
@@ -282,7 +284,14 @@ Les sorties anormales sont volontairement décrites dans une table séparée afi
 Pour un `CHECKOUT`, deux règles approuvées par Philippe le 11 novembre 2026 (#47) précisent la dernière ligne sans ajouter de transition. Elles s’appliquent seulement après une séquence de porte valide : accusé `ACCEPTED`, puis ouverture, puis fermeture de la cellule ciblée, dans la même session du hub.
 
 1. Un scan sain et stable après la fermeture qui voit encore le tag attendu laisse la preuve incomplète : l’opération reste `OBSERVATION_RECEIVED` jusqu’à `expiresAt`, puis devient `ANOMALY` avec `INCONSISTENT_PHYSICAL_STATE`, sans prêt.
-2. Un lecteur `FAULTED` ou `UNKNOWN` dans un scan de la cellule fait après la fermeture et qu’aucun événement de porte ne suit produit immédiatement `ANOMALY` avec `INCONSISTENT_PHYSICAL_STATE`, sans conclure à une présence ni à une absence.
+2. Un lecteur `FAULTED` ou `UNKNOWN` dans un scan de la cellule fait après la fermeture et qu’aucun événement de porte ne suit produit immédiatement `ANOMALY` avec `INCONSISTENT_PHYSICAL_STATE`, sans conclure à une présence ni à une absence. La règle s’applique dès que le scan est corrélé à l’opération et reçu après la fermeture dans la chaîne, même si sa fenêtre a commencé avant la fermeture (décision humaine du 21 novembre 2026, #67).
+
+Deux précisions, décidées le même jour (#67), règlent la priorité entre ces cas :
+
+- un tag étranger qui demeure dans la cellule n’empêche pas la confirmation de la sortie de l’actif attendu lorsque toutes les preuves de cet actif sont cohérentes (K14); il ne crée ni prêt ni anomalie pour ce tag;
+- une localisation ambiguë de l’actif attendu (tag détecté dans une autre cellule depuis l’autorisation) interdit toute confirmation : `ANOMALY` avec `INCONSISTENT_PHYSICAL_STATE`, quelle que soit la lecture de la cellule ciblée.
+
+La règle 2 et la localisation ambiguë valent aussi pour un `RETURN`. Pour un `RETURN`, un tag étranger contredit le retour seulement s’il est lu au moins trois fois par lui-même dans une fenêtre stabilisée, sans additionner les lectures ni compter un message dupliqué (`06` §10.3).
 
 Ces règles ne s’étendent ni à un message simplement manquant ni aux états antérieurs à l’interaction. Une porte refermée dont aucun scan concluant n’arrive avant `expiresAt` reste une exécution impossible à déterminer : `ANOMALY` avec `DEVICE_OFFLINE_DURING_OPERATION`. Le détail des conditions est en `06` §10.3.
 

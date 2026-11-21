@@ -64,6 +64,8 @@ final class AuditDetailsFilter {
             Map.entry("ANOMALY_CREATED", Set.of("commandMessageId", "outcome", "anomalyType", "finding",
                     "anomalyCreated")),
             Map.entry("ANOMALY_ACKNOWLEDGED", Set.of("type", "severity")),
+            Map.entry("ANOMALY_RESOLVED", Set.of("type", "severity", "loanId", "resolvedByOperationId",
+                    "scanMessageId")),
             Map.entry("MQTT_MESSAGE_DUPLICATE_IGNORED", Set.of("lockerId", "messageType")));
 
     private static final Object DROPPED = new Object();

@@ -25,22 +25,24 @@ import ca.aegis.control.shared.web.ApiError;
  * 6.3: the common locker guards and an {@code ACTIVE} loan of the holder. Neither the readiness nor the access level
  * applies: a borrowed asset is returned whatever its readiness, and a holder whose level dropped can still return it.
  *
- * <p>A {@code RETURN_PENDING} loan admits no new attempt while the recovery procedure is undefined (document 09,
- * section 8.10, open question Q2): its recovery is bounded to none.
+ * <p>A {@code RETURN_PENDING} loan admits a recovery once a return of it ended in {@code ANOMALY} and no anomaly
+ * linked to its returns is still {@code OPEN} (document 06, section 13.4; decision of 21 November 2026, #67).
  */
 @Component
 public class ReturnGuards {
 
     private final ReservationRepository reservations;
+    private final ReturnRepository loans;
     private final PreparationRepository preparation;
     private final ReservableAssets assets;
     private final CheckoutGuards guards;
     private final LockerAvailability availability;
     private final DisplayEncryption encryption;
 
-    ReturnGuards(ReservationRepository reservations, PreparationRepository preparation, ReservableAssets assets,
+    ReturnGuards(ReservationRepository reservations, ReturnRepository loans, PreparationRepository preparation, ReservableAssets assets,
             CheckoutGuards guards, LockerAvailability availability, DisplayEncryption encryption) {
         this.reservations = reservations;
+        this.loans = loans;
         this.preparation = preparation;
         this.assets = assets;
         this.guards = guards;
@@ -48,23 +50,36 @@ public class ReturnGuards {
         this.encryption = encryption;
     }
 
-    /** Document 06, section 6.3: only an {@code ACTIVE} loan starts a return. */
-    static void requireReturnable(LoanStatus status) {
-        if (status != LoanStatus.ACTIVE) {
-            throw new ReservationRefusedException(ApiError.LOAN_NOT_RETURNABLE);
+    /**
+     * Document 06, sections 6.3 and 13.4: an {@code ACTIVE} loan starts a return; a recoverable
+     * {@code RETURN_PENDING} loan starts a recovery. Returns whether the attempt is a recovery.
+     */
+    boolean requireReturnable(UUID loanId, LoanStatus status) {
+        if (status == LoanStatus.ACTIVE) {
+            return false;
         }
+        if (status == LoanStatus.RETURN_PENDING && loans.recoverable(loanId)) {
+            return true;
+        }
+        throw new ReservationRefusedException(ApiError.LOAN_NOT_RETURNABLE);
     }
 
     /**
      * The guards that follow the locks of the cell: its state, the asset's active identifier and the absence of an
-     * unresolved anomaly. The caller has already checked the hub and the schedule.
+     * unresolved anomaly, except the acknowledged ones a recovery of {@code recoveredLoanId} resolves. The caller has
+     * already checked the hub and the schedule.
      */
-    void requireCell(UUID assetId, Cell cell) {
+    void requireCell(UUID assetId, Cell cell, UUID recoveredLoanId) {
         CheckoutGuards.requireSafe(cell);
-        if (preparation.activeRfidIdentifier(assetId).isEmpty()
-                || preparation.hasUnresolvedAnomaly(assetId, cell.id())) {
+        if (preparation.activeRfidIdentifier(assetId).isEmpty() || unresolvedAnomaly(assetId, cell.id(),
+                recoveredLoanId)) {
             throw new ReservationRefusedException(ApiError.PHYSICAL_STATE_UNKNOWN);
         }
+    }
+
+    boolean unresolvedAnomaly(UUID assetId, UUID compartmentId, UUID recoveredLoanId) {
+        return recoveredLoanId == null ? preparation.hasUnresolvedAnomaly(assetId, compartmentId)
+                : preparation.hasUnresolvedAnomaly(assetId, compartmentId, recoveredLoanId);
     }
 
     /**
@@ -73,8 +88,14 @@ public class ReturnGuards {
      * rate limit of section 15.5 is deliberately not reflected.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public boolean returnAdmissible(UUID holderUserId, UUID assetId, LoanStatus status, Instant now) {
-        if (!encryption.enabled() || status != LoanStatus.ACTIVE) {
+    public boolean returnAdmissible(UUID holderUserId, UUID assetId, UUID loanId, LoanStatus status, Instant now) {
+        if (!encryption.enabled()) {
+            return false;
+        }
+        boolean recovery;
+        try {
+            recovery = requireReturnable(loanId, status);
+        } catch (ReservationRefusedException refused) {
             return false;
         }
         boolean holderActive = reservations.findUser(holderUserId)
@@ -88,7 +109,8 @@ public class ReturnGuards {
         try {
             guards.requireOpen(lockerId, now);
             requireCell(assetId, preparation.placedCell(assetId, lockerId)
-                    .orElseThrow(() -> new ReservationRefusedException(ApiError.PHYSICAL_STATE_UNKNOWN)));
+                    .orElseThrow(() -> new ReservationRefusedException(ApiError.PHYSICAL_STATE_UNKNOWN)),
+                    recovery ? loanId : null);
         } catch (ReservationRefusedException refused) {
             return false;
         }

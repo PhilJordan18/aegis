@@ -69,10 +69,6 @@ class ReturnRepository {
         move(loanId, "ACTIVE", "RETURN_PENDING", ", return_requested_at = :now", now);
     }
 
-    /**
-     * Document 06, section 13.1: a return that certainly had no physical effect gives the loan back to its holder.
-     * {@code return_requested_at} keeps the latest attempt.
-     */
     /** RETURN_PENDING to COMPLETED, with the proven return operation (document 08, section 7.5). */
     void complete(UUID loanId, UUID operationId, Instant now) {
         int completed = jdbc.sql("""
@@ -85,8 +81,70 @@ class ReturnRepository {
         }
     }
 
+    /**
+     * Document 06, section 13.1: a return that certainly had no physical effect gives the loan back to its holder.
+     * {@code return_requested_at} keeps the latest attempt.
+     */
     void revert(UUID loanId, Instant now) {
         move(loanId, "RETURN_PENDING", "ACTIVE", "", now);
+    }
+
+    /**
+     * Document 06, section 13.4: a {@code RETURN_PENDING} loan admits a recovery once one of its returns ended in
+     * {@code ANOMALY} and no anomaly linked to its returns is still {@code OPEN}. Its acknowledged anomalies stay
+     * unresolved until a coherent proof of the recovery.
+     */
+    boolean recoverable(UUID loanId) {
+        return jdbc.sql("""
+                SELECT EXISTS (SELECT 1 FROM aegis.locker_operations
+                               WHERE loan_id = :loan AND type = 'RETURN' AND status = 'ANOMALY')
+                   AND NOT EXISTS (SELECT 1 FROM aegis.anomalies a
+                                   JOIN aegis.locker_operations o ON o.id = a.locker_operation_id
+                                   WHERE o.loan_id = :loan AND o.type = 'RETURN' AND a.status = 'OPEN')
+                """).param("loan", loanId).query(Boolean.class).single();
+    }
+
+    /**
+     * Whether the return operation recovers its loan: an earlier return of the loan ended in {@code ANOMALY}, so the
+     * loan was already {@code RETURN_PENDING} when this one was authorized and must stay so if it ends safely.
+     */
+    boolean isRecovery(UUID loanId, UUID operationId) {
+        return jdbc.sql("""
+                SELECT EXISTS (SELECT 1 FROM aegis.locker_operations
+                               WHERE loan_id = :loan AND type = 'RETURN' AND status = 'ANOMALY' AND id <> :operation)
+                """).param("loan", loanId).param("operation", operationId).query(Boolean.class).single();
+    }
+
+    record LinkedAnomaly(UUID id, UUID operationId, String type, String severity) {
+    }
+
+    /** The acknowledged anomalies of the loan's other returns, locked: those a coherent recovery resolves. */
+    java.util.List<LinkedAnomaly> lockAcknowledgedAnomalies(UUID loanId, UUID operationId) {
+        return jdbc.sql("""
+                SELECT a.id, a.locker_operation_id, a.type, a.severity FROM aegis.anomalies a
+                JOIN aegis.locker_operations o ON o.id = a.locker_operation_id
+                WHERE o.loan_id = :loan AND o.type = 'RETURN' AND o.id <> :operation AND a.status = 'ACKNOWLEDGED'
+                ORDER BY a.detected_at, a.id
+                FOR UPDATE OF a
+                """).param("loan", loanId).param("operation", operationId)
+                .query((row, number) -> new LinkedAnomaly(row.getObject("id", UUID.class),
+                        row.getObject("locker_operation_id", UUID.class), row.getString("type"),
+                        row.getString("severity")))
+                .list();
+    }
+
+    /** ACKNOWLEDGED to RESOLVED with the observation that proves the asset back (document 08, ck_anomalies_lifecycle). */
+    void resolve(UUID anomalyId, UUID evidenceObservationId, String note, Instant now) {
+        int resolved = jdbc.sql("""
+                UPDATE aegis.anomalies
+                SET status = 'RESOLVED', resolved_at = :now, resolution_evidence_observation_id = :evidence,
+                    resolution_note = :note
+                WHERE id = :id AND status = 'ACKNOWLEDGED'
+                """).param("now", now.atOffset(ZoneOffset.UTC)).param("evidence", evidenceObservationId)
+                .param("note", note).param("id", anomalyId).update();
+        if (resolved != 1) {
+            throw new IllegalStateException("A locked anomaly changed state: " + anomalyId);
+        }
     }
 
     private void move(UUID loanId, String from, String to, String extra, Instant now) {

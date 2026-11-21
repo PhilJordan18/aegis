@@ -31,7 +31,8 @@ import ca.aegis.control.audit.AuditTrail;
  *
  * <ul>
  * <li>{@code ACCESS_CHALLENGE_DISPLAYED} sets {@code displayedAt} of a {@code PENDING} challenge received before its
- * expiry, once; a duplicate or a late report changes nothing.</li>
+ * expiry, once; a duplicate or a late report changes nothing. A report for an instruction already {@code REJECTED} or
+ * {@code CANCELLED} is not correlated: a stopped instruction never becomes displayed or usable again.</li>
  * <li>{@code DISPLAY_REJECTED} stops the distribution of its instruction and purges its ciphertext.
  * {@code STALE_DISPLAY_REVISION} is information only (section 27.4). No rejection ends the challenge: without a
  * display, the challenge cannot be consumed (document 06, section 6.5), and its expiry ends it.</li>
@@ -56,6 +57,7 @@ public class DisplayAcknowledgements {
 
     static final Set<String> REJECTION_REASONS = Set.of("SCREEN_UNAVAILABLE", "TARGET_SESSION_MISMATCH",
             "DISPLAY_EXPIRED", "STALE_DISPLAY_REVISION", "INVALID_DISPLAY_PAYLOAD");
+    private static final Set<String> STOPPED = Set.of("REJECTED", "CANCELLED");
     private static final Logger log = LoggerFactory.getLogger(DisplayAcknowledgements.class);
 
     private final JdbcClient jdbc;
@@ -120,11 +122,13 @@ public class DisplayAcknowledgements {
         if (!report.receivedAt().isBefore(challenge.expiresAt())) {
             return Outcome.OUTSIDE_VALIDITY_WINDOW;
         }
+        if (STOPPED.contains(lockInstruction(instruction.id()))) {
+            return Outcome.NOT_CORRELATED;
+        }
         jdbc.sql("""
                 UPDATE aegis.local_access_challenges SET displayed_at = :at
                 WHERE id = :id AND status = 'PENDING' AND displayed_at IS NULL
                 """).param("id", instruction.challengeId()).param("at", utc(report.receivedAt())).update();
-        lockInstruction(instruction.id());
         jdbc.sql("""
                 UPDATE aegis.hub_display_outbox
                 SET status = 'ACKNOWLEDGED', acknowledged_at = :at, claim_until = NULL
@@ -181,9 +185,9 @@ public class DisplayAcknowledgements {
                 .single();
     }
 
-    private void lockInstruction(UUID id) {
-        jdbc.sql("SELECT id FROM aegis.hub_display_outbox WHERE id = :id FOR NO KEY UPDATE").param("id", id)
-                .query(UUID.class).single();
+    private String lockInstruction(UUID id) {
+        return jdbc.sql("SELECT status FROM aegis.hub_display_outbox WHERE id = :id FOR NO KEY UPDATE")
+                .param("id", id).query(String.class).single();
     }
 
     private static Optional<Long> revision(JsonNode root) {
