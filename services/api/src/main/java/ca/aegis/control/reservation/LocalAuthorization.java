@@ -10,6 +10,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -70,7 +71,12 @@ class LocalAuthorization {
     record Authorized(LockerOperationView operation) implements Outcome {
     }
 
-    record Refused(ApiError error) implements Outcome {
+    /** A committed refusal; {@code reasons} carries the readiness reasons of {@code ASSET_NOT_READY}, else null. */
+    record Refused(ApiError error, List<String> reasons) implements Outcome {
+
+        Refused(ApiError error) {
+            this(error, null);
+        }
     }
 
     private record Operation(UUID id, UUID userId, String type, String status, UUID assetId, UUID reservationId,
@@ -193,16 +199,20 @@ class LocalAuthorization {
             return wrongSecret(user, operation, challenge, now);
         }
 
-        if (operation.isReturn()) {
-            ReturnGuards.requireReturnable(loan.status());
-        } else {
-            requireCheckout(reservation, asset, now);
+        try {
+            if (operation.isReturn()) {
+                ReturnGuards.requireReturnable(loan.status());
+            } else {
+                requireCheckout(reservation, asset, now);
+            }
+            requireCommonGuards(asset, operation, placed, now);
+            if (!operation.isReturn()) {
+                requireCheckoutReadiness(user, asset, now);
+            }
+        } catch (ReservationRefusedException refused) {
+            return guardFailed(user, operation, challenge, reservation, refused, now);
         }
-        requireCommonGuards(asset, operation, placed, now);
-        if (!operation.isReturn()) {
-            requireCheckoutReadiness(user, asset, now);
-        }
-
+        requireTransientGuards(operation, placed.orElseThrow());
         consume(challenge.id(), now);
         authorize(operation.id(), now);
         if (operation.isReturn()) {
@@ -268,8 +278,8 @@ class LocalAuthorization {
     }
 
     /**
-     * Document 06, sections 6.1 and 6.5: schedule and every locker guard of the preparation, evaluated again at
-     * {@code now}; the only open operation allowed on the locker is this one.
+     * Document 06, sections 6.1 and 6.5: the schedule and every locker guard of the preparation that cannot become
+     * true again before the challenge's deadline, evaluated at {@code now}. A refusal here ends the attempt.
      */
     private void requireCommonGuards(LockedAsset asset, Operation operation, Optional<Cell> placed, Instant now) {
         guards.requireOpen(operation.lockerId(), now);
@@ -278,13 +288,9 @@ class LocalAuthorization {
                 || !placed.get().id().equals(operation.compartmentId())) {
             throw new ReservationRefusedException(ApiError.PHYSICAL_STATE_UNKNOWN);
         }
-        CheckoutGuards.requireSafe(placed.get());
         if (preparation.activeRfidIdentifier(asset.id()).isEmpty()
                 || preparation.hasUnresolvedAnomaly(asset.id(), operation.compartmentId())) {
             throw new ReservationRefusedException(ApiError.PHYSICAL_STATE_UNKNOWN);
-        }
-        if (hasOtherOpenOperation(operation.lockerId(), operation.id())) {
-            throw new ReservationRefusedException(ApiError.LOCKER_OPERATION_IN_PROGRESS);
         }
     }
 
@@ -299,6 +305,42 @@ class LocalAuthorization {
             throw new ReservationRefusedException(ApiError.ASSET_NOT_READY,
                     readiness.reasons().stream().map(ReadinessReason::name).toList());
         }
+    }
+
+    /**
+     * Guards that may pass again before the deadline: the cell projection lags the heartbeats by a few seconds, and
+     * another operation of the locker may end. The refusal is thrown, changes nothing and leaves the deadline as it
+     * is; the client may scan again.
+     */
+    private void requireTransientGuards(Operation operation, Cell placed) {
+        CheckoutGuards.requireSafe(placed);
+        if (hasOtherOpenOperation(operation.lockerId(), operation.id())) {
+            throw new ReservationRefusedException(ApiError.LOCKER_OPERATION_IN_PROGRESS);
+        }
+    }
+
+    /**
+     * Document 06, section 6.5, and document 05, section 5.4: a guard that became invalid closes the challenge, ends
+     * the operation without opening and clears the screen, in the transaction of the idempotency key. A cancelled
+     * reservation keeps its own reason; an ended reservation or a closed schedule is the end of the window.
+     */
+    private Outcome guardFailed(LockedUser user, Operation operation, Challenge challenge, ReservationRow reservation,
+            ReservationRefusedException refused, Instant now) {
+        audit.record(new AuditEvent(AuditEventType.LOCAL_CHALLENGE_REJECTED, user.id(),
+                AuditSubjectType.LOCAL_ACCESS_CHALLENGE, challenge.id(), operation.id(), null, null,
+                AuditResult.REJECTED, refused.error().name(), Map.of("guard", refused.error().name()), now));
+        if (reservation != null && reservation.status() == ReservationStatus.CANCELLED) {
+            end(user, operation, challenge, LocalChallengeStatus.INVALIDATED, LockerOperationStatus.FAILED,
+                    PendingCheckouts.RESERVATION_CANCELLED, now);
+        } else if (refused.error() == ApiError.ACTIVE_RESERVATION_NOT_FOUND
+                || refused.error() == ApiError.OUTSIDE_OPERATING_HOURS) {
+            end(user, operation, challenge, LocalChallengeStatus.EXPIRED, LockerOperationStatus.EXPIRED,
+                    LocalChallengeExpiry.LOCAL_PROOF_EXPIRED, now);
+        } else {
+            end(user, operation, challenge, LocalChallengeStatus.INVALIDATED, LockerOperationStatus.FAILED,
+                    LocalChallengeExpiry.LOCAL_PROOF_GUARD_FAILED, now);
+        }
+        return new Refused(refused.error(), refused.reasons());
     }
 
     private void end(LockedUser user, Operation operation, Challenge challenge, LocalChallengeStatus closed,

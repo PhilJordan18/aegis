@@ -72,7 +72,7 @@ class LockerOperationController {
                     case Authorized authorized -> IdempotentResult.accepted(IdempotentResource.LOCKER_OPERATION,
                             authorized.operation().id(), authorized.operation());
                     case Refused refused -> IdempotentResult.refused(problems.body(refused.error(),
-                            refused.error().status().value(), request, null, null));
+                            refused.error().status().value(), request, refused.reasons(), null));
                 };
             } finally {
                 LocalAuthorization.clear(token);
