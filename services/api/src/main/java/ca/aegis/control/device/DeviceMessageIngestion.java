@@ -8,11 +8,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.postgresql.util.PSQLException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -55,6 +57,10 @@ public class DeviceMessageIngestion {
 
     private static final Logger log = LoggerFactory.getLogger(DeviceMessageIngestion.class);
 
+    /** The facts that can advance an operation's proof (document 06, section 10.3). */
+    private static final Set<InboundMessageType> PROOF_TYPES = Set.of(InboundMessageType.COMMAND_ACKNOWLEDGED,
+            InboundMessageType.DOOR_OPENED, InboundMessageType.DOOR_CLOSED, InboundMessageType.RFID_SCAN_COMPLETED);
+
     private final LockerDeviceRepository devices;
     private final InboundMessageRepository messages;
     private final PhysicalObservationRepository observations;
@@ -64,11 +70,12 @@ public class DeviceMessageIngestion {
     private final Clock clock;
     private final CommandAcknowledgements acknowledgements;
     private final DisplayAcknowledgements displays;
+    private final ApplicationEventPublisher events;
 
     DeviceMessageIngestion(LockerDeviceRepository devices, InboundMessageRepository messages,
             PhysicalObservationRepository observations, RfidScanNormalization scans, AuditTrail audit,
             TransactionTemplate transactions, Clock clock, CommandAcknowledgements acknowledgements,
-            DisplayAcknowledgements displays) {
+            DisplayAcknowledgements displays, ApplicationEventPublisher events) {
         this.devices = devices;
         this.messages = messages;
         this.observations = observations;
@@ -78,6 +85,7 @@ public class DeviceMessageIngestion {
         this.clock = clock;
         this.acknowledgements = acknowledgements;
         this.displays = displays;
+        this.events = events;
     }
 
     public Outcome ingest(String topic, byte[] payload) {
@@ -95,8 +103,9 @@ public class DeviceMessageIngestion {
             return Outcome.LOGGED;
         }
         Storable storable = (Storable) inspection;
+        Outcome outcome;
         try {
-            return transactions.execute(status -> store(inbound, storable, payload, receivedAt));
+            outcome = transactions.execute(status -> store(inbound, storable, payload, receivedAt));
         } catch (DataIntegrityViolationException refused) {
             // Deterministic: a redelivery would be refused again. PgJDBC's own message quotes the failing row,
             // hence the payload, so only the SQLState and the constraint name are logged.
@@ -105,6 +114,13 @@ public class DeviceMessageIngestion {
                     constraint(refused));
             return Outcome.LOGGED;
         }
+        if (outcome == Outcome.ACCEPTED && storable.fact() != null && storable.fact().operationId() != null
+                && PROOF_TYPES.contains(storable.type())) {
+            // After the commit, never inside it: the evaluation locks the operation's owners in the order of document
+            // 08, section 7.1, which the device lock taken above would invert (#47).
+            events.publishEvent(new PhysicalEvidenceStored(storable.fact().operationId()));
+        }
+        return outcome;
     }
 
     private static String sqlState(Throwable failure) {
