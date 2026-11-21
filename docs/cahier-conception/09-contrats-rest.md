@@ -1410,6 +1410,7 @@ Règles approuvées par Philippe le 11 novembre 2026 (#67, D1 à D4 et G1) :
 - un identifiant inconnu donne `404 RESOURCE_NOT_FOUND`;
 - `availableActions` est toujours vide dans ces vues : l’administrateur n’exécute aucune des mutations de §8.10. Le `requiredAction` d’une opération est informatif (§15.4) et n’ouvre aucune action;
 - `AdminReservationView` reprend `ReservationView` (§8.3) et ajoute `user` juste après `userId`; `AdminLoanView` reprend `LoanView` (§8.4) et ajoute `holder` juste après `holderUserId`. Ces deux champs sont un `UserSummary` (§8.8), jamais `null`. Les vues du technicien ne changent pas.
+- `AdminLockerOperationView` reprend `LockerOperationView` (§8.5) et ajoute `user` juste après `userId`, un `UserSummary` (§8.8), et `asset` juste après `assetId`, un `AssetSummary` (§8.8, `placement` éventuellement `null`); les deux sont présents dans la liste et le détail et ne valent jamais `null` (R7, #48, 21 novembre 2026). La `LockerOperationView` du technicien (§15.4) ne change pas.
 
 Ces routes ne permettent jamais de modifier un état. Il n’existe aucune route administrative de type complete-loan, confirm-operation ou force-return.
 
