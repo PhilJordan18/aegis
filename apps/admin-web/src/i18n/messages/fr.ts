@@ -625,6 +625,8 @@ export const fr = {
     noLinkedAnomaly: 'Aucune anomalie liée',
     linkedReservation: 'Réservation liée',
     linkedLoan: 'Prêt lié',
+    /** 08: a CHECKOUT never carries `loan_id`; the loan it opens names this operation, not the other way round. */
+    checkoutLoanNote: "Non fourni par un retrait : c'est le prêt qui désigne cette opération. Aucun prêt n'est déduit.",
     none: 'Aucun',
     cell: 'Cellule',
     locker: 'Casier',
@@ -1452,6 +1454,10 @@ export const fr = {
       OPEN: 'Ouverte',
       ACKNOWLEDGED: 'Reconnue',
       RESOLVED: 'Résolue',
+      /** LocalChallengeStatus: the code of a locker display, written by the LOCAL_CHALLENGE_* events (from and to). */
+      PENDING: 'En attente',
+      CONSUMED: 'Utilisé',
+      INVALIDATED: 'Invalidé',
     } as Readonly<Record<string, string>>,
   },
 

@@ -36,6 +36,15 @@ describe('labels from codes', () => {
     expect(subjectLabel('USER', i18n('en'))).toBe('User')
   })
 
+  it('labels every state the stack writes in from and to, including the local challenge statuses', () => {
+    // Seen on the integration stack 43fed3c: LOCAL_CHALLENGE_* events move PENDING to CONSUMED, EXPIRED or INVALIDATED.
+    const states = ['REQUESTED', 'AWAITING_LOCAL_PROOF', 'AUTHORIZED', 'COMMAND_SENT', 'COMMAND_ACKNOWLEDGED', 'DOOR_OPENED', 'OBSERVATION_RECEIVED', 'CONFIRMED', 'FAILED', 'EXPIRED', 'ANOMALY',
+      'ACTIVE', 'FULFILLED', 'CANCELLED', 'RETURN_PENDING', 'COMPLETED', 'OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'PENDING', 'CONSUMED', 'INVALIDATED']
+    for (const locale of ['fr', 'en'] as const) for (const code of states) expect(stateLabel(code, i18n(locale)), `${locale} ${code}`).not.toContain('·')
+    expect(stateLabel('CONSUMED', i18n('fr'))).toBe('Utilisé')
+    expect(stateLabel('INVALIDATED', i18n('en'))).toBe('Invalidated')
+  })
+
   it('has a label for every event type the database admits', () => {
     // V002_2 ck_audit_events_type: a code without a label would show as unrecognized although it is known.
     const admitted = [

@@ -558,6 +558,8 @@ export const en: Messages = {
     noLinkedAnomaly: 'No linked anomaly',
     linkedReservation: 'Linked reservation',
     linkedLoan: 'Linked loan',
+    /** 08: a CHECKOUT never carries `loan_id`; the loan it opens names this operation, not the other way round. */
+    checkoutLoanNote: 'Not provided by a checkout: the loan names this operation. No loan is inferred.',
     none: 'None',
     cell: 'Cell',
     locker: 'Locker',
@@ -1354,6 +1356,9 @@ export const en: Messages = {
       OPEN: 'Open',
       ACKNOWLEDGED: 'Acknowledged',
       RESOLVED: 'Resolved',
+      PENDING: 'Pending',
+      CONSUMED: 'Used',
+      INVALIDATED: 'Invalidated',
     },
   },
 
