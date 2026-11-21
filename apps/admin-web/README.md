@@ -68,7 +68,14 @@ est jointe, jamais PostgreSQL ni MQTT.
   session côté serveur : un chargement complet suivant demande une restauration,
   refusée, et ramène à la connexion;
 - le refus du compte technicien, sans autre requête que la révocation de sa
-  session navigateur;
+  session navigateur (l'API pose le cookie même à un compte technicien qui
+  demande `browserSession`; le Web le révoque aussitôt);
+- la session navigateur de l'ADR-016 (`api.session.spec.ts`), contre l'API et
+  non contre des faux : cookie `HttpOnly` posé par l'API, rechargement et lien
+  direct restaurés, cookie envoyé aux seules routes de session, révocation
+  effective côté serveur (le cookie rejoué est refusé en 401
+  `AUTH_SESSION_INVALID`), et `403 FORBIDDEN` pour une origine absente ou
+  étrangère;
 - un compte inconnu (401), une violation serveur (400) et la limite de débit
   (429 avec `Retry-After`).
 

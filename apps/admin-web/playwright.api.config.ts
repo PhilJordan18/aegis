@@ -23,7 +23,7 @@ if (!process.env.AEGIS_DEMO_ADMIN_PASSWORD || !process.env.AEGIS_DEMO_TECHNICIAN
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: 'api.spec.ts',
+  testMatch: ['api.spec.ts', 'api.session.spec.ts'],
   globalSetup: './e2e/api.global-setup.ts',
   outputDir: './test-results/playwright-api',
   forbidOnly: !!process.env.CI,
