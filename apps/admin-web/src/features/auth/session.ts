@@ -47,7 +47,14 @@ export type SessionSnapshot =
       readonly signOut: 'idle' | 'pending' | 'failed'
     }
 
-export type RestoreFailure = 'unreachable' | 'serviceError'
+/** `forbidden`: the server refused the restoration itself (403, e.g. an origin it does not allow). It is not a sign-out. */
+export type RestoreFailure = 'unreachable' | 'serviceError' | 'forbidden'
+
+/**
+ * What one tab tells the others (sessionSync.ts). Signals never carry a token or an identity: a receiving tab
+ * asks the server what is true. `signedOut` is sent only once the server confirmed the revocation.
+ */
+export type SessionSignal = 'signedOut' | 'signedIn'
 
 /** What `renew` made of a protected 401. */
 export type RenewOutcome =
@@ -65,10 +72,18 @@ export interface SessionStore {
   /** Binds the transport used to restore, refresh and revoke. Until then every call fails as unreachable. */
   connect(transport: SessionTransport): void
   /**
-   * Accepts administrator sessions only; any other role is refused before anything is kept.
-   * `expiresIn` is the token lifetime in seconds from the login or refresh response.
+   * A sign-in through the form. Accepts administrator sessions only; any other role is refused before anything is
+   * kept. `expiresIn` is the token lifetime in seconds from the login response. Other tabs are told (`signedIn`).
    */
   start(session: { accessToken: string; expiresAt: string; expiresIn: number; profile: UserProfile }): void
+  /** Local events other tabs must hear about: a confirmed sign-out and a sign-in through the form. */
+  subscribeSignals(listener: (signal: SessionSignal) => void): () => void
+  /**
+   * What another tab announced. `signedOut` drops this tab's token and shows the signed-out arrival;
+   * `signedIn` makes an open session ask the server again, so that a tab never keeps showing the data of an account
+   * that is no longer the one the browser session belongs to. Anonymous tabs ignore `signedIn`.
+   */
+  receive(signal: SessionSignal): void
   /**
    * Boot restoration (ADR-016): asks the server for a session from the browser cookie. `restoring`
    * while pending; 401 leaves the visitor anonymous without an arrival notice; any other failure is
@@ -120,6 +135,7 @@ function restoreFailureOf(failure: GatewayFailure): { failure: RestoreFailure; t
     case 'invalidResponse':
       return { failure: 'serviceError', traceId: failure.requestId }
     case 'httpProblem':
+      if (failure.status === 403) return { failure: 'forbidden', traceId: failure.problem?.traceId ?? failure.requestId }
       if (failure.status >= 500 && failure.problem === null) return { failure: 'unreachable', traceId: null }
       return { failure: 'serviceError', traceId: failure.problem?.traceId ?? failure.requestId }
   }
@@ -134,6 +150,8 @@ export function createSessionStore(): SessionStore {
   // Bumped by every state change: a refresh that started before one must not apply its answer.
   let epoch = 0
   const listeners = new Set<() => void>()
+  const signalListeners = new Set<(signal: SessionSignal) => void>()
+  const emit = (signal: SessionSignal) => signalListeners.forEach((listener) => listener(signal))
 
   function publish(next: SessionSnapshot, token: string | null) {
     accessToken = token
@@ -155,7 +173,7 @@ export function createSessionStore(): SessionStore {
     set({ status: 'anonymous', arrivalReason: reason, email: endedEmail }, null)
   }
 
-  function start({ accessToken: token, expiresAt, expiresIn, profile }: Parameters<SessionStore['start']>[0]) {
+  function begin({ accessToken: token, expiresAt, expiresIn, profile }: Parameters<SessionStore['start']>[0]) {
     if (profile.role !== 'ADMIN') throw new Error('Aegis Manager sessions are limited to administrators')
     if (!Number.isFinite(expiresIn) || expiresIn <= 0) throw new Error('A session needs a positive token lifetime')
     const signOut = snapshot.status === 'authenticated' ? snapshot.signOut : 'idle'
@@ -173,7 +191,7 @@ export function createSessionStore(): SessionStore {
       if (result.kind === 'ok') {
         const { user, accessToken: token, expiresAt, expiresIn } = result.value
         if (user.role === 'ADMIN') {
-          start({ accessToken: token, expiresAt, expiresIn, profile: user })
+          begin({ accessToken: token, expiresAt, expiresIn, profile: user })
           return { kind: 'renewed' }
         }
         // Not an administrator: the Web never keeps this session, and the cookie would restore it again.
@@ -189,9 +207,20 @@ export function createSessionStore(): SessionStore {
     return run
   }
 
+  /**
+   * The access token ran out: one refresh. A 401 ends the session as expired. When the server cannot be reached
+   * (or refuses for another reason) the session and what the user sees are kept: the next protected request gets
+   * a 401, asks again, and the page shows its own recoverable state with a retry.
+   */
   async function onExpiry() {
     const outcome = await refreshOnce()
     if (outcome.kind === 'invalid') end('sessionExpired')
+  }
+
+  async function restoreFromServer() {
+    if (snapshot.status !== 'restoring') set({ status: 'restoring' }, null)
+    const outcome = await refreshOnce()
+    if (outcome.kind === 'invalid') set(ANONYMOUS, null)
     else if (outcome.kind === 'failed') set({ status: 'restoreFailed', ...restoreFailureOf(outcome.failure) }, null)
   }
 
@@ -205,13 +234,24 @@ export function createSessionStore(): SessionStore {
     connect(next) {
       transport = next
     },
-    start,
-    async restore() {
-      if (snapshot.status === 'authenticated') return
-      if (snapshot.status !== 'restoring') set({ status: 'restoring' }, null)
-      const outcome = await refreshOnce()
-      if (outcome.kind === 'invalid') set(ANONYMOUS, null)
-      else if (outcome.kind === 'failed') set({ status: 'restoreFailed', ...restoreFailureOf(outcome.failure) }, null)
+    start(session) {
+      begin(session)
+      emit('signedIn')
+    },
+    subscribeSignals(listener) {
+      signalListeners.add(listener)
+      return () => signalListeners.delete(listener)
+    },
+    receive(signal) {
+      if (signal === 'signedOut') {
+        if (snapshot.status !== 'anonymous') set({ status: 'anonymous', arrivalReason: 'signedOut', email: null }, null)
+      } else if (snapshot.status === 'authenticated' || snapshot.status === 'restoreFailed') {
+        void restoreFromServer()
+      }
+    },
+    restore() {
+      if (snapshot.status === 'authenticated') return Promise.resolve()
+      return restoreFromServer()
     },
     async renew(failedToken, reason) {
       // Another caller already replaced or ended this token: nothing left to ask the server.
@@ -242,6 +282,8 @@ export function createSessionStore(): SessionStore {
       const result = await transport.revokeSession()
       if (result.kind === 'ok') {
         set({ status: 'anonymous', arrivalReason: 'signedOut', email: null }, null)
+        // Only a confirmed revocation is announced: another tab must never be signed out by a failed attempt.
+        emit('signedOut')
         return true
       }
       if (snapshot.status === 'authenticated') {

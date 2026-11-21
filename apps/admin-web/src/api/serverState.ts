@@ -62,6 +62,8 @@ export function clearCacheOnSessionChange(client: QueryClient, session: SessionS
     const next = accountOf()
     if (next === account) return
     account = next
+    // A read still running for the previous account must not land in the next one's cache.
+    void client.cancelQueries()
     client.clear()
   })
 }

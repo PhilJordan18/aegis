@@ -211,7 +211,7 @@ describe('createSessionStore — restoration (ADR-016, 09 §10.4)', () => {
     ['a timeout', { kind: 'network', reason: 'timeout' } as const, 'unreachable', null],
     ['a 5xx without problem body', httpProblem(502, null), 'unreachable', null],
     ['a 503 problem', httpProblem(503, problemBody(503, 'INTERNAL_ERROR')), 'serviceError', problemBody(503, 'INTERNAL_ERROR').traceId],
-    ['a 403 (origin not allowed)', httpProblem(403, problemBody(403, 'FORBIDDEN')), 'serviceError', problemBody(403, 'FORBIDDEN').traceId],
+    ['a 403 (origin not allowed)', httpProblem(403, problemBody(403, 'FORBIDDEN')), 'forbidden', problemBody(403, 'FORBIDDEN').traceId],
     ['a body that is not the contract', { kind: 'invalidResponse', status: 200, requestId: 'req-9' } as const, 'serviceError', 'req-9'],
   ] as const)('is an honest restoreFailed state, never a silent sign-out, on %s', async (_name, failure, expected, traceId) => {
     const store = createSessionStore()
@@ -341,13 +341,16 @@ describe('createSessionStore — renewal (single flight)', () => {
       expect(store.getSnapshot()).toEqual({ status: 'anonymous', arrivalReason: 'sessionExpired', email: adminProfile.email })
     })
 
-    it('does not pretend the session expired when the server cannot be reached: restoreFailed, with a retry', async () => {
+    it('keeps the session and what the user sees when the server cannot be reached at expiry', async () => {
       const store = createSessionStore()
-      store.connect(transport({ refresh: [{ kind: 'network', reason: 'timeout' }, loginOk(adminProfile, 'back')] }).transport)
+      const { transport: stub, refreshSession } = transport({ refresh: [{ kind: 'network', reason: 'timeout' }, loginOk(adminProfile, 'back')] })
+      store.connect(stub)
       start(store)
       await vi.advanceTimersByTimeAsync(3600 * 1000)
-      expect(store.getSnapshot()).toEqual({ status: 'restoreFailed', failure: 'unreachable', traceId: null })
-      await store.restore()
+      expect(refreshSession).toHaveBeenCalledTimes(1)
+      expect(store.getSnapshot()).toMatchObject({ status: 'authenticated', profile: adminProfile })
+      // The next protected request will get a 401 and ask again: the failure is recoverable.
+      expect(await store.renew('old', 'sessionExpired')).toEqual({ kind: 'renewed' })
       expect(store.getAccessToken()).toBe('back')
     })
   })

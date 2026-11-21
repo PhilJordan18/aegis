@@ -38,4 +38,16 @@ describe('clearCacheOnSessionChange', () => {
     start(session, 'second', { ...adminProfile, id: '00000000-0000-4000-8000-000000000002' })
     expect(client.getQueryData(['assets'])).toBeUndefined()
   })
+
+  it('a read of the previous account that finishes after the switch never reaches the next account cache', async () => {
+    const { client, session } = setup()
+    start(session, 'first')
+    let finish: (value: string[]) => void = () => {}
+    const pending = client.fetchQuery({ queryKey: ['assets'], queryFn: () => new Promise<string[]>((resolve) => (finish = resolve)) }).catch(() => undefined)
+    session.end('sessionExpired')
+    start(session, 'second', { ...adminProfile, id: '00000000-0000-4000-8000-000000000002' })
+    finish(['MM-001 du premier compte'])
+    await pending
+    expect(client.getQueryData(['assets'])).toBeUndefined()
+  })
 })
