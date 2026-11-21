@@ -1,0 +1,19 @@
+PASS 11 feuilles de apps/admin-web/src copiées sans écart
+PASS FR et EN ont les mêmes 441 clés
+PASS overview : 11 états déclarés
+PASS reservations : 11 états déclarés
+PASS anomalies : 15 états déclarés
+PASS audit : 10 états déclarés
+PASS aucun défilement horizontal à 320, 390, 768, 1024 et 1440 px (6 vues)
+PASS 94 pages sans requête externe ni erreur de page
+PASS aucun contrôle Résoudre, fin de prêt, confirmation, retour forcé ni ouverture à distance (94 pages, boutons et liens)
+PASS un prêt en retard ne porte jamais « Disponible » ni « Prêt »
+  ordre de tabulation overview : Aller au contenu principal → Aegis Manager, accueil → Vue d'ensemble → Réservations et prêts → Anomalies → Audit → Index des écrans → Actualiser → Gravité élevéeOuverteÉquipement attendu  → Voir les anomalies → Retour en coursEn retardMultimètre 1 MM- → Voir les prêts → Commande acquittéeRetrait · Multimètre 2 → Voir les opérations
+  ordre de tabulation reservations&tab=loans : Aller au contenu principal → Aegis Manager, accueil → Vue d'ensemble → Réservations et prêts → Anomalies → Audit → Index des écrans → Réservations → Prêts → Opérations physiques → Actualiser → Statut → Équipement → Du
+  ordre de tabulation anomalies : Aller au contenu principal → Aegis Manager, accueil → Vue d'ensemble → Réservations et prêts → Anomalies → Audit → Index des écrans → Actualiser → Statut → Gravité → Type → Filtrer → Tout afficher → Gravité élevéeOuverteÉquipement attendu 
+  ordre de tabulation audit&filters=1 : Aller au contenu principal → Aegis Manager, accueil → Vue d'ensemble → Réservations et prêts → Anomalies → Audit → Index des écrans → Actualiser → Filtres(aucun) → Du → Du → Du → Du → Au
+PASS clavier : lien d’évitement en premier, contour de focus de 2 px à chaque arrêt (4 écrans)
+PASS reconnaissance : note de 1 à 500 caractères (graphèmes), vide et espaces refusés
+
+Tous les contrôles passent.
+checks-exit=0
