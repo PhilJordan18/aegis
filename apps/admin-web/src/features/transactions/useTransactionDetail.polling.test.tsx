@@ -4,9 +4,9 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { queryKeys } from '../../api/queryKeys'
 import { createQueryClient } from '../../api/serverState'
-import { adminProfile, problemBody } from '../auth/testFixtures'
+import { adminProfile, problemBody, sessionStubs } from '../auth/testFixtures'
 import type { GatewayResult } from '../auth/authGateway'
-import { createSessionStore, SessionContext } from '../auth/session'
+import { createSessionStore, SessionContext, type SessionTransport } from '../auth/session'
 import { parseLockerOperationView, parseReservationView } from './contractParsers'
 import type { LockerOperationView, ReservationView } from './contract'
 import { TransactionGatewayContext } from './TransactionGatewayContext'
@@ -62,8 +62,10 @@ function scriptedGateway(script: Answer[]) {
   return { gateway: gateway as unknown as TransactionGateway & typeof gateway, times }
 }
 
-function setup(gateway: TransactionGateway, client: QueryClient = createQueryClient()) {
+// The browser-session transport (ADR-016): by default the server refuses the renewal, as for a revoked session.
+function setup(gateway: TransactionGateway, client: QueryClient = createQueryClient(), transport: SessionTransport = sessionStubs) {
   const session = createSessionStore()
+  session.connect(transport)
   session.start({ accessToken: 'token-value', expiresAt: '2026-09-30T15:30:00Z', expiresIn: 3600, profile: adminProfile })
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>
@@ -248,6 +250,23 @@ describe('the open operation dossier follows the server (ADR-006)', () => {
     expect(result.current.isRefetchError).toBe(true)
     await tick(120_000)
     expect(gateway.getLockerOperation).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps following, with backoff, after a 401 whose renewal could not reach the server', async () => {
+    // A network failure does not prove the session invalid (#178): the session stays and the follow backs off.
+    const unreachable: SessionTransport = { ...sessionStubs, refreshSession: async (): Promise<GatewayResult<never>> => ({ kind: 'network', reason: 'offline' }) }
+    const { gateway } = scriptedGateway([ok(operation('COMMAND_ACKNOWLEDGED')), refusal(401, 'AUTH_TOKEN_INVALID'), refusal(401, 'AUTH_TOKEN_INVALID'), ok(operation('DOOR_OPENED'))])
+    const { wrapper } = setup(gateway, undefined, unreachable)
+    const { result } = renderDetail(wrapper)
+    await tick(0)
+    await tick(1_000)
+    expect(gateway.getLockerOperation).toHaveBeenCalledTimes(2)
+    expect(result.current.isRefetchError).toBe(true)
+    await tick(2_000)
+    expect(gateway.getLockerOperation).toHaveBeenCalledTimes(3)
+    await tick(4_000)
+    expect(gateway.getLockerOperation).toHaveBeenCalledTimes(4)
+    expect(result.current.data?.kind === 'operations' && result.current.data.item.status).toBe('DOOR_OPENED')
   })
 
   it('keeps trying, with backoff, after a 503 or a 429', async () => {
