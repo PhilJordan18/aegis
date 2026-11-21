@@ -640,7 +640,7 @@ export const fr = {
      * wording everywhere). The code stays visible beside the label: the server sends it as free text (G12).
      */
     failureReasonLabel: {
-      LOCAL_PROOF_EXPIRED: 'Code du casier expiré avant le scan',
+      LOCAL_PROOF_EXPIRED: 'Échéance dépassée au scan : nouvelle préparation nécessaire',
       LOCAL_PROOF_ATTEMPTS_EXHAUSTED: 'Cinq codes erronés : tentative terminée',
       LOCAL_PROOF_GUARD_FAILED: 'Contrôle refusé au scan : tentative terminée',
       LOCAL_PROOF_INVALID: 'Code erroné',

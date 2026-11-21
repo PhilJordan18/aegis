@@ -573,7 +573,7 @@ export const en: Messages = {
      * wording everywhere). The code stays visible beside the label: the server sends it as free text (G12).
      */
     failureReasonLabel: {
-      LOCAL_PROOF_EXPIRED: 'Locker code expired before the scan',
+      LOCAL_PROOF_EXPIRED: 'Deadline passed at the scan: a new preparation is needed',
       LOCAL_PROOF_ATTEMPTS_EXHAUSTED: 'Five wrong codes: attempt ended',
       LOCAL_PROOF_GUARD_FAILED: 'Check refused at the scan: attempt ended',
       LOCAL_PROOF_INVALID: 'Wrong code',
