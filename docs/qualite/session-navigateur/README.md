@@ -68,7 +68,19 @@ Aucun cas ne touche à la garde (custody), aux réservations, aux prêts ni à `
 
 Les tests Playwright `playwright.session.config.ts` du Web **simulent toute l'API** : ils ne prouvent pas l'intégration.
 
-## Rapport de livraison — tête combinée `1e464af` (PR #180)
+## Rapport de livraison — tête finale `e27baad` (PR #180)
+
+**Tête finale :** `e27baad64640bf678e0801ba83d4c7dc2316521c`. C'est `1e464af` plus un commit Web qui remplace `Math.random` par un générateur cryptographique dans deux fichiers seulement : `sessionSync.ts` et `e2e/sessionFakes.ts`.
+
+Sur cette tête :
+- **Web hors ligne :** typecheck, lint, vitest, build et 32/32 tests de session simulés, rc=0.
+- **Recette Web contre l'API réelle :** 17/17.
+- **Chromium W1-W14 et W10c-e :** tous PASS. W10c-e exercent le code modifié, le repli localStorage, avec BroadcastChannel retiré.
+- **CI :** tous les contrôles sont verts, Quality Gate SonarCloud **OK**.
+
+Le code API de `e27baad` est identique à celui de `1e464af` : les résultats S, V et R ci-dessous s'appliquent donc tels quels. Ils ont été relancés depuis les copies de ce dossier sur `1e464af`, avec exit 0 pour chacune.
+
+### Tête combinée `1e464af`
 
 **Commit testé :** `1e464affbfd5be90bc68c8675432bce8a51bca2e`. C'est Web `a33009e` plus une ligne de documentation (09 §10.6).
 
@@ -78,7 +90,7 @@ Les tests Playwright `playwright.session.config.ts` du Web **simulent toute l'AP
 |---|---|
 | Web hors ligne : typecheck, lint, vitest, build, `playwright.session.config.ts` (API simulée) | rc=0 ; 32/32 |
 | Recette Web contre l'API réelle (`playwright.api.config.ts`) | 17/17 |
-| W1-W14 Chromium, API réelle | tous PASS |
+| W1-W14 Chromium, API réelle | tous PASS (W10c-e ajoutés ensuite, exécutés sur `e27baad`) |
 | W6-W9, panne injectée | tous PASS |
 | S1-S13 | tous PASS |
 | V1-V9 | tous PASS ; observations V1b et V8b |
@@ -95,4 +107,4 @@ Les tests Playwright `playwright.session.config.ts` du Web **simulent toute l'AP
 - V8b : à TRACE **racine**, les journaux du framework (Tomcat, pgjdbc, Spring JDBC) exposent mot de passe, cookie, hash et empreinte. Ne jamais activer TRACE racine.
 - Le provisionneur applique la rotation environ 300 ms après que Tomcat accepte des requêtes : ligne de runbook.
 
-**Pas couvert :** Railway, Caddy et l'origine publique, Safari et WebKit, le repli BroadcastChannel sur un navigateur qui ne l'a pas, et la CI de la PR (lue sur la PR, voir #178).
+**Pas couvert :** Railway, Caddy et l'origine publique, Safari et WebKit, et la CI de la PR (lue sur la PR, voir #178).
