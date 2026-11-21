@@ -1,5 +1,6 @@
 import { useId, type Ref } from 'react'
 import { Link } from '../../app/Link'
+import { transactionHref } from '../transactions/transactionHref'
 import { useI18n } from '../../i18n/useI18n'
 import { ReadOnlyMark } from '../../ui/ReadOnlyMark'
 import { StatusChip } from '../../ui/StatusChip'
@@ -138,6 +139,13 @@ export function AuditDossier({ event, filters, focusRef }: AuditDossierProps) {
             </div>
           </dl>
           <ul className="ag-au-links">
+            {event.operationId !== null && (
+              <li>
+                <Link className="ag-link" to={transactionHref({ view: 'operations', selectedId: event.operationId })}>
+                  {t.openOperation}
+                </Link>
+              </li>
+            )}
             {event.operationId !== null && (
               <li>
                 <Link className="ag-link" to={auditHref({ ...filters, operationId: event.operationId })}>

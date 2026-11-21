@@ -534,14 +534,14 @@ export const fr = {
     filterAll: 'Tous',
     filterSubmit: 'Filtrer',
     filterClear: 'Tout afficher',
+    filterLocker: `Casier filtré${NBSP}:`,
+    filterLockerRemove: 'Retirer ce filtre',
 
     selectedOverline: { reservations: 'Réservation sélectionnée', loans: 'Prêt sélectionné', operations: 'Opération sélectionnée' },
     emptyTitle: { reservations: 'Aucune réservation.', loans: 'Aucun prêt.', operations: 'Aucune opération physique.' },
     emptyBody: { reservations: 'Les réservations apparaissent ici dès leur création.', loans: 'Les prêts apparaissent ici dès un retrait confirmé par le casier.', operations: 'Les opérations apparaissent ici dès leur création.' },
     filteredEmptyTitle: { reservations: 'Aucune réservation ne correspond à ces filtres.', loans: 'Aucun prêt ne correspond à ces filtres.', operations: 'Aucune opération ne correspond à ces filtres.' },
     filteredEmptyBody: 'Modifiez les filtres ou affichez tout.',
-    filterLocker: `Casier filtré${NBSP}:`,
-    filterLockerRemove: 'Retirer ce filtre',
 
     forbiddenTitle: "Votre compte n'a pas accès aux réservations et aux prêts.",
     notFoundTitle: 'Dossier introuvable.',
@@ -630,6 +630,10 @@ export const fr = {
     loanLink: 'Prêt lié',
     loanLinkMissing: "Non fourni par la réservation. Aucun prêt n'est déduit d'une réservation.",
     operationsOfAsset: 'Voir les opérations de cet équipement',
+    loansOfAsset: 'Voir les prêts de cet équipement',
+    openAnomaly: "Ouvrir l'anomalie",
+    linkedAudit: 'Journal d’audit',
+    auditOfOperation: 'Audit de cette opération',
     linkedAnomaly: 'Anomalie liée',
     noLinkedAnomaly: 'Aucune anomalie liée',
     linkedReservation: 'Réservation liée',
@@ -766,6 +770,7 @@ export const fr = {
     neverSignal: 'Aucun signal reçu',
     evaluatedNote: ({ time }: { time: string }) => `Évalué par le serveur à ${time}. Cette lecture n'autorise aucune ouverture.`,
     readOnlyNote: "Aucune commande n'est envoyée au casier depuis cet écran.",
+    operationsOfLocker: 'Voir les opérations de ce casier',
 
     windowTitle: "Horaire d'exploitation",
     windowOpen: 'Ouvert',
@@ -788,7 +793,6 @@ export const fr = {
     colLock: 'Serrure',
     colLastObservation: 'Dernière observation',
     /** [P] The server keeps the last heartbeat's values on the cells while the locker is not online. */
-    operationsOfLocker: 'Voir les opérations de ce casier',
     lastKnownNote: `Dernier état connu, à la dernière observation${NBSP}: le casier n'est pas en ligne, ces valeurs ne sont pas l'état actuel.`,
     noObservation: 'Aucune observation',
     link: {
@@ -1008,6 +1012,8 @@ export const fr = {
     secOperation: 'Opération liée',
     fOperation: 'Identifiant de l’opération',
     noOperation: 'Aucune opération liée',
+    openOperation: "Ouvrir l'opération",
+    auditOfOperation: 'Audit de cette opération',
     secAck: 'Reconnaissance',
     notAcknowledged: 'Cette anomalie n’a pas encore été reconnue.',
     acknowledgedBy: ({ name, time }: { name: string; time: string }) => `Reconnue par ${name} à ${time}.`,
@@ -1306,6 +1312,7 @@ export const fr = {
     noResult: 'Résultat non renseigné',
     filterOnOperation: 'Filtrer sur cette opération',
     filterOnSubject: 'Filtrer sur ce sujet',
+    openOperation: "Ouvrir le dossier de l'opération",
     detailsTitle: 'Détails filtrés',
     detailsNone: 'Aucun détail',
     /** D9: the server sends scalar fields only, an explicit allowlist per event type. */

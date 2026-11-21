@@ -10,6 +10,8 @@ import { UNRECOGNIZED } from '../catalog/contract'
 import { StaleNotice } from '../catalog/StaleNotice'
 import { useAsset } from '../catalog/useCatalogQueries'
 import type { AssetSummary, LoanView, LockerOperationView, ReservationView, UserSummary } from './contract'
+import { operationAuditHref } from '../audit/operationAuditHref'
+import { LinkedAnomaly } from './LinkedAnomaly'
 import { Timeline, type TimelineEntry } from './Timeline'
 import { TransactionAlert } from './TransactionAlert'
 import type { TransactionFailure } from './transactionFailure'
@@ -246,6 +248,10 @@ function ReservationBody({ reservation: r, titleId, i18n, times }: BodyProps & {
           {r.status === 'FULFILLED' && (
             <LinkRow label={t.loanLink}>
               {t.loanLinkMissing}{' '}
+              <Link className="ag-link" to={transactionHref({ view: 'loans', filters: { ...NO_FILTERS, assetId: r.asset.id } })}>
+                {t.loansOfAsset}
+              </Link>
+              {' · '}
               <Link className="ag-link" to={transactionHref({ view: 'operations', filters: { ...NO_FILTERS, assetId: r.asset.id } })}>
                 {t.operationsOfAsset}
               </Link>
@@ -423,7 +429,12 @@ function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { rea
               t.none
             )}
           </LinkRow>
-          <LinkRow label={t.linkedAnomaly}>{o.anomalyId !== null ? <IdText id={o.anomalyId} /> : t.noLinkedAnomaly}</LinkRow>
+          <LinkRow label={t.linkedAnomaly}>{o.anomalyId !== null ? <LinkedAnomaly anomalyId={o.anomalyId} i18n={i18n} full /> : t.noLinkedAnomaly}</LinkRow>
+          <LinkRow label={t.linkedAudit}>
+            <Link className="ag-link" to={operationAuditHref(o.id)}>
+              {t.auditOfOperation}
+            </Link>
+          </LinkRow>
         </div>
       </Section>
       <Section title={t.secTechnical}>
