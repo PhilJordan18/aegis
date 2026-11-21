@@ -6,7 +6,7 @@ import type { Locale } from '../../i18n/locale'
 import { MESSAGES } from '../../i18n/messages'
 import { installMatchMedia } from '../../test/matchMedia'
 import { renderWithProviders } from '../../test/renderApp'
-import type { AuthGateway, GatewayResult } from './authGateway'
+import { unconfiguredAuthGateway, type AuthGateway, type GatewayResult } from './authGateway'
 import type { LoginResponse, UserProfile } from './contract'
 import { createSessionStore } from './session'
 import { SignInPage } from './SignInPage'
@@ -22,7 +22,7 @@ const LOCALES: readonly Locale[] = ['fr', 'en']
 
 function gatewayReturning(result: GatewayResult<LoginResponse>) {
   const signIn = vi.fn<AuthGateway['signIn']>(async () => result)
-  return { signIn, currentProfile: vi.fn<AuthGateway['currentProfile']>() } satisfies AuthGateway
+  return { ...unconfiguredAuthGateway, signIn, currentProfile: vi.fn<AuthGateway['currentProfile']>() } satisfies AuthGateway
 }
 
 const label = (text: string, selector?: string) => screen.getByLabelText(text, selector ? { selector } : undefined) as HTMLInputElement
@@ -178,7 +178,7 @@ describe.each(LOCALES)('SignInPage — every state in %s', (locale) => {
   it('shows the busy label and announces it in a polite status', async () => {
     let release: (value: GatewayResult<LoginResponse>) => void = () => {}
     const signIn = vi.fn<AuthGateway['signIn']>(() => new Promise((resolve) => (release = resolve)))
-    renderWithProviders(<SignInPage afterSignInPath="/" />, { locale, gateway: { signIn, currentProfile: vi.fn() } })
+    renderWithProviders(<SignInPage afterSignInPath="/" />, { locale, gateway: { ...unconfiguredAuthGateway, signIn, currentProfile: vi.fn() } })
     await fillAndSubmit(locale)
     expect(screen.getByRole('button', { name: t.submitting }).getAttribute('aria-disabled')).toBe('true')
     expect(screen.getByText(t.submittingStatus).getAttribute('role')).toBe('status')

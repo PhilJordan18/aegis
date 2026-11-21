@@ -40,6 +40,9 @@ final class ApiRoutes {
             // 9.1 Public and profile
             route(GET, "/system/health", Access.PUBLIC),
             route(POST, "/auth/login", Access.PUBLIC),
+            // ADR-016: authenticated by the browser session cookie and an allowed Origin, never by a bearer token
+            route(POST, "/auth/session/refresh", Access.PUBLIC),
+            route(POST, "/auth/session/revoke", Access.PUBLIC),
             route(GET, "/auth/me", Access.ADMIN_OR_TECHNICIAN),
             // 9.2 Technician; sections 5 and 16.1 also open the locker status to administrators
             route(GET, "/assets", Access.TECHNICIAN),
