@@ -8,6 +8,7 @@ public enum AuditSubjectType {
     ASSET_IDENTIFIER,
     OPERATING_SCHEDULE,
     RESERVATION,
+    LOAN,
     LOCKER_OPERATION,
     COMMAND_OUTBOX,
     ANOMALY,
