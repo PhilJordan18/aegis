@@ -1020,6 +1020,16 @@ Le résultat dépend de la certitude physique, pas uniquement du type d’erreur
 | Hub perdu après l’envoi | `ANOMALY` | Reste `RETURN_PENDING` | `OPEN` |
 | État physique contradictoire ou inconnu | `ANOMALY` | Reste `RETURN_PENDING` | `OPEN` |
 
+Mise en œuvre RET-01 (#50, 11 novembre 2026). La conclusion d’un retour autorisé a lieu à son `expiresAt`, dans la même transaction que le retour éventuel du prêt à `ACTIVE`, et dans cet ordre :
+
+1. fermeture reçue, ouverture reçue ou événement de porte de la cellule possible depuis l’autorisation : `ANOMALY`;
+2. anomalie déjà ouverte par un rapport de commande incertain (`10` §9.1) : `ANOMALY`, en conservant cette anomalie;
+3. rejet explicite du hub dont la raison garantit l’absence d’actionnement : `FAILED` avec `COMMAND_REJECTED_<raison>`, prêt `ACTIVE`;
+4. commande jamais publiée, ou hub `ONLINE` dans la session ciblée avec la porte projetée fermée : `EXPIRED` avec `OPERATION_EXPIRED`, prêt `ACTIVE`;
+5. tout autre cas : `ANOMALY` (`DEVICE_OFFLINE_DURING_OPERATION`), prêt `RETURN_PENDING`.
+
+Un rejet sûr reçu avant l’échéance est donc conclu à l’échéance, pas à sa réception. Le retour du prêt à `ACTIVE` est audité par `LOAN_RETURN_REVERTED_SAFE`. La preuve positive, qui termine le prêt, et la détection anticipée d’une incohérence relèvent de RET-02 (#51).
+
 ### 13.2 Algorithme
 
 ```text
