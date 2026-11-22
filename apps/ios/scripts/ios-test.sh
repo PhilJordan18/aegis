@@ -46,6 +46,8 @@ LIVE_TESTS=(
 # 1 health + 4 authentication + 1 catalogue + 3 reservation client tests, 1 health + 3 sign-in and
 # catalogue + 1 reservation UI tests.
 LIVE_TEST_COUNT=14
+# The journey against a disposable stack: scripts/live-journey.sh owns it and its bridge; no recipe runs it.
+JOURNEY_TESTS=("AegisMobileUITests/OperationLiveUITests")
 
 # One UI test per critical path, in one language. Every other standalone UI
 # test runs in extended, so no test is dropped by the split.
@@ -111,7 +113,7 @@ check_results() {
 
 standalone() {
     local bundle="$RESULTS_DIR/standalone.xcresult" status=0
-    run_tests "$bundle" "${LIVE_TESTS[@]/#/-skip-testing:}" || status=$?
+    run_tests "$bundle" "${LIVE_TESTS[@]/#/-skip-testing:}" "${JOURNEY_TESTS[@]/#/-skip-testing:}" || status=$?
     check_results "$bundle" standalone
     python3 scripts/check-strings.py "$DERIVED_DATA"
     return "$status"
@@ -129,7 +131,7 @@ pr() {
 extended() {
     local bundle="$RESULTS_DIR/extended.xcresult" status=0
     run_tests "$bundle" -only-testing:AegisMobileUITests "${PR_UI_TESTS[@]/#/-skip-testing:}" \
-        "${LIVE_TESTS[@]/#/-skip-testing:}" || status=$?
+        "${LIVE_TESTS[@]/#/-skip-testing:}" "${JOURNEY_TESTS[@]/#/-skip-testing:}" || status=$?
     check_results "$bundle" extended
     return "$status"
 }
