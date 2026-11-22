@@ -64,6 +64,29 @@ export const fr = {
     notFound: 'Page introuvable — Aegis Manager',
   } satisfies Record<RouteId, string>,
 
+  /**
+   * Session du navigateur (ADR-016, #178). La page protégée attend la réponse du serveur avant toute
+   * redirection; un échec de restauration n'est ni une déconnexion ni une session valide.
+   */
+  session: {
+    restoringHeading: 'Restauration de votre session',
+    restoringStatus: 'Vérification de votre session en cours.',
+    unreachableTitle: "Le service est injoignable. Votre session n'a pas pu être rétablie.",
+    unreachableBody: 'Votre session n’est pas fermée. Vérifiez le réseau, puis réessayez.',
+    serviceErrorTitle: "Le service n'a pas pu rétablir votre session.",
+    serviceErrorBody: "Votre session n'est pas fermée. Réessayez dans un instant. Si le problème persiste, transmettez l'identifiant de suivi au support.",
+    serviceErrorBodyWithoutCode: "Votre session n'est pas fermée. Réessayez dans un instant.",
+    traceIdLabel: `Identifiant de suivi${NBSP}:`,
+    forbiddenTitle: 'Le serveur refuse de rétablir votre session depuis cette adresse.',
+    forbiddenBody: "Votre session n'a pas été fermée ni modifiée. Contactez un administrateur si le problème persiste.",
+    retry: 'Réessayer',
+    signInInstead: 'Se connecter',
+    /** Texte exact retenu par Philippe (#178) : aucune autre phrase n'accompagne l'alerte. */
+    signOutFailedTitle: 'Impossible de confirmer la déconnexion. Réessayez.',
+    signOutRetry: 'Réessayer',
+    signingOut: 'Déconnexion en cours',
+  },
+
   shell: {
     skipLink: 'Aller au contenu principal',
     sectionsLabel: 'Sections',
@@ -1049,6 +1072,8 @@ export const fr = {
       unreachableBody: 'Connexion au service impossible. Réessayer est sans risque : la même demande n’est enregistrée qu’une fois.',
       inProgressTitle: 'La reconnaissance est en cours de traitement.',
       inProgressBody: 'La première demande n’est pas terminée. Réessayer est sans risque : la même demande n’est enregistrée qu’une fois.',
+      resubmitTitle: 'Votre session a été rétablie.',
+      resubmitBody: 'La reconnaissance n’a pas été envoyée de nouveau. Envoyez-la à nouveau : la même demande n’est enregistrée qu’une fois.',
       serviceErrorTitle: 'Le service n’a pas pu enregistrer la reconnaissance.',
       serviceErrorBody: 'Réessayer est sans risque : la même demande n’est enregistrée qu’une fois. Si le problème persiste, transmettez l’identifiant de suivi au support.',
       forbiddenTitle: 'Votre compte n’a pas le droit de reconnaître cette anomalie.',
@@ -1155,6 +1180,8 @@ export const fr = {
     unreachableBody: `Le résultat n’est pas connu. Réessayer renvoie la même demande${NBSP}: elle ne sera pas appliquée deux fois.`,
     inProgressTitle: 'La première demande est encore en cours.',
     inProgressBody: `Réessayez dans un instant${NBSP}: elle ne sera pas appliquée deux fois.`,
+    resubmitTitle: 'Votre session a été rétablie.',
+    resubmitBody: `La demande n’a pas été envoyée de nouveau${NBSP}: envoyez-la à nouveau, elle ne sera pas appliquée deux fois.`,
     forbiddenTitle: 'Votre compte n’a pas le droit de faire cette modification.',
     notFoundTitle: 'Cet élément n’existe plus ou n’est plus accessible.',
     serviceErrorTitle: 'Le service n’a pas pu traiter la demande.',
@@ -1303,6 +1330,7 @@ export const fr = {
       severity: 'Gravité',
       lockerId: 'Identifiant du casier',
       messageType: 'Type de message',
+      revokedBrowserSessions: 'Sessions navigateur révoquées',
     } as Readonly<Record<string, string>>,
     evidenceTitle: 'Preuves physiques',
     /** [P] The approved text says none is referenced; this screen cannot verify it, so it says what it does not show. */
@@ -1379,6 +1407,7 @@ export const fr = {
       MQTT_MESSAGE_DUPLICATE_IGNORED: 'Message en double ignoré',
       LOCKER_ONLINE: 'Casier en ligne',
       LOCKER_OFFLINE: 'Casier hors ligne',
+      PASSWORD_CHANGED: 'Mot de passe changé',
     } as Readonly<Record<string, string>>,
     state: {
       REQUESTED: 'Demande envoyée',

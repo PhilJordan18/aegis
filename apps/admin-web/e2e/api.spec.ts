@@ -73,11 +73,12 @@ test('an administrator signs in, reaches the Manager shell, and the token stays 
   await expect(page).toHaveURL(/\/connexion$/)
   await expect(page.getByRole('status').filter({ hasText: 'Vous êtes déconnecté.' })).toBeVisible()
 
-  // The token is gone: the protected page sends back to sign-in without calling the API.
+  // The server revoked the session and cleared the cookie (ADR-016): a full load of the protected page asks
+  // to restore it once, is refused, and sends back to sign-in remembering the page. Nothing else is requested.
   const before = requests.length
   await page.goto('/equipements')
-  await expect(page).toHaveURL(/\/connexion$/)
-  expect(requests.slice(before)).toEqual([])
+  await expect(page).toHaveURL(/\/connexion\?retour=%2Fequipements$/)
+  expect(requests.slice(before).map((request) => `${request.method()} ${new URL(request.url()).pathname}`)).toEqual(['POST /api/v1/auth/session/refresh'])
 })
 
 test('a technician account is refused, its token is dropped and no request follows', async ({ page }) => {
@@ -89,8 +90,11 @@ test('a technician account is refused, its token is dropped and no request follo
   await expect(page.getByRole('alert')).toContainText("Ce compte technicien s'utilise dans Aegis Mobile.")
   await expect(page.locator('form')).toHaveCount(0)
   await page.waitForLoadState('networkidle')
-  // Only sign-in attempts (a 429 waited out is one more): nothing follows the accepted one.
-  expect(requests.map((request) => new URL(request.url()).pathname).filter((path) => path !== '/api/v1/auth/login')).toEqual([])
+  // Only sign-in attempts (a 429 waited out is one more) and the boot restoration of the sign-in page. After
+  // the accepted one, the only call is the revocation of the browser session the login set: no profile, no data.
+  expect(requests.map((request) => new URL(request.url()).pathname).filter((path) => path !== '/api/v1/auth/login' && path !== '/api/v1/auth/session/refresh')).toEqual([
+    '/api/v1/auth/session/revoke',
+  ])
   await expect(page).toHaveURL(/\/connexion$/)
 })
 
@@ -332,9 +336,9 @@ async function expectPageShows(page: Page, status: LiveStatus) {
   }
 }
 
-/** Every request of the page that reaches the API, as « METHOD path ». The sign-in POST is the only write allowed. */
+/** Every request of the page that reaches the API, as « METHOD path ». The sign-in and browser-session POSTs are the only writes allowed. */
 function expectOnlyReads(requests: Request[]) {
-  const writes = requests.filter((candidate) => candidate.method() !== 'GET' && !(candidate.method() === 'POST' && new URL(candidate.url()).pathname === '/api/v1/auth/login'))
+  const writes = requests.filter((candidate) => candidate.method() !== 'GET' && !(candidate.method() === 'POST' && ['/api/v1/auth/login', '/api/v1/auth/session/refresh', '/api/v1/auth/session/revoke'].includes(new URL(candidate.url()).pathname)))
   expect(writes.map((candidate) => `${candidate.method()} ${new URL(candidate.url()).pathname}`), 'write requests made by the page').toEqual([])
 }
 
@@ -757,8 +761,8 @@ test('#26 custody: an administrator assigns and revokes an identifier, then move
     expect(back.status()).toBe(200)
   }
 
-  // Apart from the sign-in, every write went to the unit's /admin routes; the page never sent a command to the locker.
-  const writes = requests.filter((candidate) => candidate.method() !== 'GET' && new URL(candidate.url()).pathname !== '/api/v1/auth/login')
+  // Apart from the sign-in and the browser-session calls, every write went to the unit's /admin routes; the page never sent a command to the locker.
+  const writes = requests.filter((candidate) => candidate.method() !== 'GET' && !new URL(candidate.url()).pathname.startsWith('/api/v1/auth/'))
   // Assign, refused assign, revoke, move, refused move.
   expect(writes.length).toBe(5)
   expect(writes.every((candidate) => new URL(candidate.url()).pathname.startsWith('/api/v1/admin/assets/'))).toBe(true)

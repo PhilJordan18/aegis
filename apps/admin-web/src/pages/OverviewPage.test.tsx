@@ -8,7 +8,7 @@ import type { AnomalyPage } from '../features/anomalies/contract'
 import { anomalyPageOf, anomalyView, fakeAnomalyGateway } from '../features/anomalies/testFixtures'
 import { unconfiguredAuthGateway, type AuthGateway, type GatewayResult } from '../features/auth/authGateway'
 import { createSessionStore } from '../features/auth/session'
-import { adminProfile, problemBody } from '../features/auth/testFixtures'
+import { adminProfile, problemBody, sessionStubs } from '../features/auth/testFixtures'
 import type { AdminLockerPage, AdminLockerView } from '../features/custody/contract'
 import { fakeCustodyGateway } from '../features/custody/testFixtures'
 import type { LockerStatus } from '../features/lockers/contract'
@@ -25,7 +25,7 @@ import { renderWithProviders } from '../test/renderApp'
 
 configure({ asyncUtilTimeout: 4000 })
 
-const authGateway: AuthGateway = { ...unconfiguredAuthGateway, currentProfile: async () => ({ kind: 'ok', value: adminProfile, requestId: null }) }
+const authGateway: AuthGateway = { ...unconfiguredAuthGateway, ...sessionStubs, currentProfile: async () => ({ kind: 'ok', value: adminProfile, requestId: null }) }
 const plain = (value: string | null | undefined) => (value ?? '').replace(/[\u00A0\u202F]/g, ' ')
 const ok = <T,>(value: T): GatewayResult<T> => ({ kind: 'ok', value, requestId: 'req-ov' })
 const problem = (status: number, code: string, traceId = 'trace-0001') => ({ kind: 'httpProblem', status, problem: problemBody(status, code, { traceId }), retryAfter: null, requestId: 'req-x' }) as const

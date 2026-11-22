@@ -53,7 +53,7 @@ function problem(status: number, code: string, title: string, detail: string, ex
   }
 }
 
-function failure(status: number, body: ProblemResponse | null, retryAfter: string | null = null): GatewayResult<LoginResponse> {
+function failure(status: number, body: ProblemResponse | null, retryAfter: string | null = null): GatewayResult<never> {
   return { kind: 'httpProblem', status, problem: body, retryAfter, requestId: PREVIEW_TRACE_ID }
 }
 
@@ -105,6 +105,16 @@ export function createPreviewAuthGateway(getScenario: () => SignInPreviewScenari
     },
     async currentProfile() {
       return { kind: 'ok', value: PREVIEW_ADMIN, requestId: PREVIEW_TRACE_ID }
+    },
+    // The fictitious session lives in memory only and there is no cookie: a reloaded preview has nothing to restore.
+    async refreshSession() {
+      return failure(
+        401,
+        problem(401, 'AUTH_SESSION_INVALID', 'Session invalide', 'Aucune session navigateur à restaurer.', { instance: '/api/v1/auth/session/refresh' }),
+      )
+    },
+    async revokeSession() {
+      return { kind: 'ok', value: true, requestId: PREVIEW_TRACE_ID }
     },
   }
 }

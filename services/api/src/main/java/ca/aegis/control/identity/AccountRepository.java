@@ -54,13 +54,6 @@ class AccountRepository {
         return inserted == 1;
     }
 
-    void updatePasswordHash(UUID id, String passwordHash) {
-        jdbc.sql("UPDATE aegis.users SET password_hash = :passwordHash WHERE id = :id")
-                .param("passwordHash", passwordHash)
-                .param("id", id)
-                .update();
-    }
-
     private static Account map(ResultSet row, int rowNumber) throws SQLException {
         OffsetDateTime archivedAt = row.getObject("archived_at", OffsetDateTime.class);
         return new Account(
