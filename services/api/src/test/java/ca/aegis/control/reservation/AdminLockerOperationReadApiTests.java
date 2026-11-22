@@ -67,7 +67,14 @@ class AdminLockerOperationReadApiTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.type").value("CHECKOUT"))
                 .andExpect(jsonPath("$.status").value("AWAITING_LOCAL_PROOF"))
                 .andExpect(jsonPath("$.userId").value(technician.id().toString()))
+                .andExpect(jsonPath("$.user.id").value(technician.id().toString()))
+                .andExpect(jsonPath("$.user.displayName").value(technician.displayName()))
+                .andExpect(jsonPath("$.user.length()").value(2))
                 .andExpect(jsonPath("$.assetId").value(asset.toString()))
+                .andExpect(jsonPath("$.asset.id").value(asset.toString()))
+                .andExpect(jsonPath("$.asset.assetCode").isString())
+                .andExpect(jsonPath("$.asset.model").isMap())
+                .andExpect(jsonPath("$.asset.placement.lockerId").value(locker.toString()))
                 .andExpect(jsonPath("$.lockerId").value(locker.toString()))
                 .andExpect(jsonPath("$.compartmentId").value(compartment.toString()))
                 .andExpect(jsonPath("$.reservationId").value(reservation.toString()))
@@ -84,9 +91,15 @@ class AdminLockerOperationReadApiTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.terminalAt").value(nullValue()))
                 .andExpect(jsonPath("$.failureReason").value(nullValue()))
                 .andExpect(jsonPath("$.anomalyId").value(nullValue()))
-                .andExpect(jsonPath("$.length()").value(25))
+                .andExpect(jsonPath("$.length()").value(27))
                 .andExpect(content().string(not(containsString("token"))))
                 .andExpect(content().string(not(containsString("payload"))));
+        // The technician's own view of the same operation is unchanged: no summary is added to it.
+        mvc.perform(get("/api/v1/locker-operations/" + attempt)
+                .header(AUTHORIZATION, bearer(accessToken(technician)))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(25))
+                .andExpect(jsonPath("$.user").doesNotExist())
+                .andExpect(jsonPath("$.asset").doesNotExist());
 
         assertEquals(auditBefore, auditEvents());
         assertEquals("AWAITING_LOCAL_PROOF", fixtures.operationStatus(attempt));
@@ -138,6 +151,10 @@ class AdminLockerOperationReadApiTests extends ApiIntegrationTest {
         read(OPERATIONS + "?lockerId=" + locker).andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[*].id").value(contains(ids(second, first))))
                 .andExpect(jsonPath("$.items[0].requiredAction").value("NONE"))
+                .andExpect(jsonPath("$.items[0].user.id").value(other.id().toString()))
+                .andExpect(jsonPath("$.items[0].asset.id").value(secondAsset.toString()))
+                .andExpect(jsonPath("$.items[1].user.id").value(technician.id().toString()))
+                .andExpect(jsonPath("$.items[1].asset.id").value(firstAsset.toString()))
                 .andExpect(jsonPath("$.items[1].confirmedAt").value("2026-09-28T12:46:00Z"))
                 .andExpect(jsonPath("$.totalItems").value(2));
         read(OPERATIONS + "?lockerId=" + locker + "&status=CONFIRMED")

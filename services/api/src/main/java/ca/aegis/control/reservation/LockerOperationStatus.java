@@ -18,4 +18,9 @@ enum LockerOperationStatus {
     boolean beforeAuthorization() {
         return this == REQUESTED || this == AWAITING_LOCAL_PROOF;
     }
+
+    /** Document 05, section 5.2: no transition leaves these states. */
+    boolean terminal() {
+        return this == CONFIRMED || this == FAILED || this == EXPIRED || this == ANOMALY;
+    }
 }

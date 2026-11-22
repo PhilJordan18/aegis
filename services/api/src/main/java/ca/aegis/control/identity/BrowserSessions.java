@@ -53,51 +53,55 @@ class BrowserSessions {
         this.clock = clock;
     }
 
-    /** A started session: the cookie value, never logged, and its absolute end. */
-    record Started(String token, Instant expiresAt) {
+    /** A started session: its id, the cookie value, never logged, and its absolute end. */
+    record Started(UUID id, String token, Instant expiresAt) {
 
         @Override
         public String toString() {
-            return "Started[expiresAt=%s]".formatted(expiresAt);
+            return "Started[id=%s, expiresAt=%s]".formatted(id, expiresAt);
         }
     }
 
     /**
-     * Opens a session for an account whose password was just verified against {@code verifiedPasswordHash}. The row is
-     * inserted only while the account still holds that hash and may sign in, under a share lock on the account row:
+     * Opens a session for an account whose password was just verified against {@code verifiedPasswordHash}, read with
+     * {@code credentialVersion}. The row is inserted only while the account still holds that hash and that version and
+     * may sign in, under a share lock on the account row:
      * a concurrent password change (ADR-017) either waits for this insert and then revokes it, or has already
      * committed, and then nothing is inserted and the sign-in is refused.
      */
-    Started start(CurrentAccount account, String verifiedPasswordHash) {
+    Started start(CurrentAccount account, String verifiedPasswordHash, int credentialVersion) {
         byte[] secret = new byte[TOKEN_BYTES];
         random.nextBytes(secret);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(secret);
         Instant now = clock.instant().truncatedTo(ChronoUnit.SECONDS);
         Instant expiresAt = now.plus(properties.lifetime());
-        int inserted = jdbc.sql("""
+        Optional<UUID> inserted = jdbc.sql("""
                 INSERT INTO aegis.browser_sessions (user_id, token_hash, role, created_at, expires_at)
                 SELECT u.id, :hash, u.role, :now, :expiresAt
                 FROM aegis.users u
-                WHERE u.id = :user AND u.password_hash = :verified AND u.role = :role
-                    AND u.status = 'ACTIVE' AND u.archived_at IS NULL
+                WHERE u.id = :user AND u.password_hash = :verified AND u.credential_version = :version
+                    AND u.role = :role AND u.status = 'ACTIVE' AND u.archived_at IS NULL
                 FOR SHARE
+                RETURNING id
                 """)
                 .param("user", account.id())
                 .param("verified", verifiedPasswordHash)
+                .param("version", credentialVersion)
                 .param("hash", digest(token))
                 .param("role", account.role().name())
                 .param("now", now.atOffset(ZoneOffset.UTC))
                 .param("expiresAt", expiresAt.atOffset(ZoneOffset.UTC))
-                .update();
-        if (inserted != 1) {
-            throw new InvalidCredentialsException();
-        }
-        return new Started(token, expiresAt);
+                .query(UUID.class)
+                .optional();
+        return new Started(inserted.orElseThrow(InvalidCredentialsException::new), token, expiresAt);
     }
 
     /**
      * The new access token of a live session, or empty when the cookie is missing, malformed, unknown, revoked or
      * past its end, or when the account may no longer sign in or changed role; that last case revokes the session.
+     * The account, and so its credential version, is read while this session's row is locked (ADR-018): a concurrent
+     * password change either revokes the row first, and nothing is issued, or commits after, and the token issued here
+     * carries the previous version and is refused from then on.
      */
     @Transactional
     Optional<LoginResponse> refresh(String token) {
@@ -133,7 +137,8 @@ class BrowserSessions {
         jdbc.sql("UPDATE aegis.browser_sessions SET last_refreshed_at = :now WHERE id = :id")
                 .param("now", now.atOffset(ZoneOffset.UTC)).param("id", session.id()).update();
         CurrentAccount current = CurrentAccount.of(account.get());
-        return Optional.of(LoginResponse.of(accessTokens.issue(current, notAfter), current));
+        IssuedToken issued = accessTokens.issue(current, account.get().credentialVersion(), session.id(), notAfter);
+        return Optional.of(LoginResponse.of(issued, current));
     }
 
     /** Ends the session of this cookie, if any is still open. Unknown or malformed values are ignored. */

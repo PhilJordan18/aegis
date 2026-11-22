@@ -85,8 +85,8 @@ class PasswordChangeSessionTests extends ApiIntegrationTest {
                 """).param("id", admin.id()).query(Long.class).single());
         assertEquals(Map.of("revokedBrowserSessions", 2), passwordChangedEvents(admin.id()).getFirst());
         assertEquals(1, passwordChangedEvents(admin.id()).size());
-        // Not an access-token revocation (ADR-018 is only proposed): an already issued token still works.
-        mvc.perform(get(ME).header(AUTHORIZATION, bearer(iosToken))).andExpect(status().isOk());
+        // ADR-018: the credential version moved, so a token issued before the change is refused too.
+        mvc.perform(get(ME).header(AUTHORIZATION, bearer(iosToken))).andExpect(status().isUnauthorized());
         mvc.perform(login(admin.email(), admin.password())).andExpect(status().isUnauthorized());
         mvc.perform(login(admin.email(), NEW_PASSWORD)).andExpect(status().isOk());
     }
