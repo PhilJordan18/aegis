@@ -143,12 +143,14 @@ function Row({ record, selected, page, filters, times, i18n, onSelect }: RowProp
       const { item } = record
       chips.push(operationChip(item.status, i18n))
       title = operationTypeLabel(item.type, i18n)
+      code = item.asset.assetCode
+      facts = `${times.short(item.createdAt)} · ${item.asset.model.name}`
       holder = t.userLine
       break
     }
   }
   const holderId = record.kind === 'loans' ? record.item.holderUserId : record.item.userId
-  const person = record.kind === 'loans' ? record.item.holder : record.kind === 'reservations' ? record.item.user : null
+  const person = record.kind === 'loans' ? record.item.holder : record.item.user
   const late = record.kind === 'loans' && isShownOverdue(record.item)
   return (
     <Link
@@ -168,15 +170,9 @@ function Row({ record, selected, page, filters, times, i18n, onSelect }: RowProp
         {title}
         {code !== null && <span className="ag-item__code">{code}</span>}
       </span>
-      {record.kind === 'operations' ? (
-        <span className="ag-item__facts">
-          {times.short(record.item.createdAt)} · {t.assetIdOnly} <code className="ag-id">{shortId(record.item.assetId)}</code>
-        </span>
-      ) : (
-        <span className={late ? 'ag-item__facts ag-item__facts--late' : 'ag-item__facts'}>{facts}</span>
-      )}
+      <span className={late ? 'ag-item__facts ag-item__facts--late' : 'ag-item__facts'}>{facts}</span>
       <span className="ag-item__facts">
-        {person === null ? holder : `${t.holderLabel} ${person.displayName}`} <code className="ag-id">{shortId(holderId)}</code>
+        {person === null ? holder : `${record.kind === 'operations' ? t.userLabel : t.holderLabel} ${person.displayName}`} <code className="ag-id">{shortId(holderId)}</code>
       </span>
     </Link>
   )

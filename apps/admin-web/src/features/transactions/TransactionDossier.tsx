@@ -3,12 +3,9 @@ import { Link } from '../../app/Link'
 import { useI18n, type I18n } from '../../i18n/useI18n'
 import { ReadOnlyMark } from '../../ui/ReadOnlyMark'
 import { StatusChip } from '../../ui/StatusChip'
-import { Alert } from '../../ui/Alert'
-import { Button } from '../../ui/Button'
 import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
 import { UNRECOGNIZED } from '../catalog/contract'
 import { StaleNotice } from '../catalog/StaleNotice'
-import { useAsset } from '../catalog/useCatalogQueries'
 import { failureReasonLabel } from './failureReason'
 import type { AssetSummary, LoanView, LockerOperationView, ReservationView, UserSummary } from './contract'
 import { operationAuditHref } from '../audit/operationAuditHref'
@@ -321,12 +318,11 @@ function LoanBody({ loan: l, titleId, i18n, times }: BodyProps & { readonly loan
 
 function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { readonly operation: LockerOperationView }) {
   const t = i18n.m.reservations
-  // The operation carries ids only. The equipment and its cell are read from the catalog (a read that exists), and
-  // fall back to the identifier when it fails: nothing is guessed.
-  const asset = useAsset(o.assetId, undefined)
-  const unit = asset.data
-  const cellCode = unit?.placement != null && unit.placement.compartmentId === o.compartmentId ? unit.placement.compartmentCode : null
-  const lockerCode = unit?.placement != null && unit.placement.lockerId === o.lockerId ? unit.placement.lockerCode : null
+  // R7: the administrative operation names its user and its asset, so no catalog read is joined. The asset's placement
+  // is where it is NOW: it names the cell of this operation only when it is the same compartment, otherwise that cell
+  // stays an identifier and nothing is guessed.
+  const cellCode = o.asset.placement !== null && o.asset.placement.compartmentId === o.compartmentId ? o.asset.placement.compartmentCode : null
+  const lockerCode = o.asset.placement !== null && o.asset.placement.lockerId === o.lockerId ? o.asset.placement.lockerCode : null
   const terminal = isTerminalOperation(o)
   const absent = terminal ? t.sequence.notReceived : t.sequence.notYetReceived
   const step = (key: string, instant: string | null, label: string, applicable = true): TimelineEntry => {
@@ -354,7 +350,6 @@ function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { rea
   const tone = o.status === 'ANOMALY' ? 'anomaly' : o.status === 'CONFIRMED' ? 'none' : o.status === 'EXPIRED' ? 'warn' : o.status === 'FAILED' ? 'none' : 'info'
   const typeLabel = operationTypeLabel(o.type, i18n)
   const requiredAction = o.requiredAction === UNRECOGNIZED ? t.unrecognized : t.requiredAction[o.requiredAction]
-  const joinFailed = asset.isError
   return (
     <>
       <Header
@@ -362,40 +357,24 @@ function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { rea
         titleId={titleId}
         title={
           <>
-            {typeLabel}
-            {unit !== undefined && <> · {assetTitle({ ...unit })}</>}
+            {typeLabel} · {assetTitle(o.asset)}
           </>
         }
         sub={times.full(o.createdAt)}
       />
       <Diagnostic tone={tone} chips={<Chip chip={operationChip(o.status, i18n)} />} notes={[t.callOperation]} />
-      {joinFailed && (
-        <div className="ag-dossier__join">
-          <Alert kind="warning" icon="status-offline" title={t.joinFailedTitle}>
-            <p>{t.joinFailedBody}</p>
-            <div className="ag-alert__action">
-              <Button variant="secondary" size="sm" onClick={() => void asset.refetch()}>
-                {i18n.m.equipment.retry}
-              </Button>
-            </div>
-          </Alert>
-        </div>
-      )}
       <Section title={t.secSequence} note={`${t.sequenceNote} ${t.zoneNote({ zone: LAB_TIME_ZONE })}`}>
         <Timeline entries={sequence} />
       </Section>
       <Section title={t.secFacts}>
         <dl className="ag-facts ag-facts--grid">
           <Fact label={t.factAsset}>
-            {unit !== undefined ? (
-              assetTitle({ ...unit })
-            ) : (
-              <>
-                {t.assetIdOnly}
-                <br />
-                <IdText id={o.assetId} />
-              </>
-            )}
+            {assetTitle(o.asset)}
+            <br />
+            <IdText id={o.assetId} />
+          </Fact>
+          <Fact label={t.factCurrentPlacement} help={t.currentPlacementHelp}>
+            {placementText(o.asset, i18n)}
           </Fact>
           <Fact label={t.cell}>
             {cellCode !== null ? (
@@ -409,7 +388,7 @@ function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { rea
             )}
           </Fact>
           <Fact label={t.locker}>{lockerCode ?? <IdText id={o.lockerId} />}</Fact>
-          <HolderFact label={t.userField} id={o.userId} person={null} i18n={i18n} />
+          <HolderFact label={t.userField} id={o.userId} person={o.user} i18n={i18n} />
           <Fact label={t.requiredActionField}>{requiredAction}</Fact>
           {o.expiresAt !== null && <Fact label={t.expiresAt}>{times.zoned(o.expiresAt)}</Fact>}
         </dl>
