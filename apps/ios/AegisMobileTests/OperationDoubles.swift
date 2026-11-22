@@ -32,19 +32,22 @@ enum OperationFixtures {
                      lockerId: String = lockerId, challengeId: String? = challengeId,
                      terminalAt: String? = nil, failureReason: String? = nil,
                      displayedAt: String? = "2026-09-16T14:31:02.250Z", authorizedAt: String? = nil,
-                     expiresAt: String? = nil) -> String {
+                     expiresAt: String? = nil, commandSentAt: String? = nil,
+                     acknowledgedAt: String? = nil) -> String {
         func text(_ value: String?) -> String { value.map { "\"\($0)\"" } ?? "null" }
-        return #"{"id":"\#(id)","type":"\#(type)","status":"\#(status)","userId":"\#(CatalogFixtures.technicianId)","assetId":"\#(CatalogFixtures.id(1).uuidString.lowercased())","lockerId":"\#(lockerId)","compartmentId":"\#(compartmentId)","reservationId":"\#(ActivityFixtures.reservationId)","loanId":null,"createdAt":"2026-09-16T14:31:00Z","authorizedAt":\#(text(authorizedAt)),"localAccessChallengeId":\#(text(challengeId)),"localProofExpiresAt":"2026-09-16T14:32:00Z","localProofDisplayedAt":\#(text(displayedAt)),"localProofValidatedAt":null,"requiredAction":"\#(requiredAction)","expiresAt":\#(text(expiresAt)),"commandSentAt":null,"acknowledgedAt":null,"doorOpenedAt":null,"observationReceivedAt":null,"confirmedAt":null,"terminalAt":\#(text(terminalAt)),"failureReason":\#(text(failureReason)),"anomalyId":null}"#
+        return #"{"id":"\#(id)","type":"\#(type)","status":"\#(status)","userId":"\#(CatalogFixtures.technicianId)","assetId":"\#(CatalogFixtures.id(1).uuidString.lowercased())","lockerId":"\#(lockerId)","compartmentId":"\#(compartmentId)","reservationId":"\#(ActivityFixtures.reservationId)","loanId":null,"createdAt":"2026-09-16T14:31:00Z","authorizedAt":\#(text(authorizedAt)),"localAccessChallengeId":\#(text(challengeId)),"localProofExpiresAt":"2026-09-16T14:32:00Z","localProofDisplayedAt":\#(text(displayedAt)),"localProofValidatedAt":null,"requiredAction":"\#(requiredAction)","expiresAt":\#(text(expiresAt)),"commandSentAt":\#(text(commandSentAt)),"acknowledgedAt":\#(text(acknowledgedAt)),"doorOpenedAt":null,"observationReceivedAt":null,"confirmedAt":null,"terminalAt":\#(text(terminalAt)),"failureReason":\#(text(failureReason)),"anomalyId":null}"#
     }
 
     static func view(id: String = operationId, status: String = "AWAITING_LOCAL_PROOF",
                      requiredAction: String = "SCAN_HUB_QR", challengeId: String? = challengeId,
                      terminalAt: String? = nil, failureReason: String? = nil,
                      displayedAt: String? = "2026-09-16T14:31:02.250Z", authorizedAt: String? = nil,
-                     expiresAt: String? = nil) -> LockerOperationView {
+                     expiresAt: String? = nil, commandSentAt: String? = nil,
+                     acknowledgedAt: String? = nil) -> LockerOperationView {
         CatalogFixtures.decode(json(id: id, status: status, requiredAction: requiredAction, challengeId: challengeId,
                                     terminalAt: terminalAt, failureReason: failureReason, displayedAt: displayedAt,
-                                    authorizedAt: authorizedAt, expiresAt: expiresAt))
+                                    authorizedAt: authorizedAt, expiresAt: expiresAt, commandSentAt: commandSentAt,
+                                    acknowledgedAt: acknowledgedAt))
     }
 
     static var awaiting: LockerOperationView { view() }

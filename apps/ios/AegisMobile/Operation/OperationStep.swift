@@ -96,12 +96,14 @@ struct OperationStep: Equatable, Sendable {
         case .expired:
             self.init(title: String(localized: "Délai dépassé"),
                       instruction: String(localized: "Aucune porte n’a été ouverte. Recommencez la préparation."),
-                      phase: operation.authorizedAt == nil ? 2 : 5, tone: .failure, ending: .expired)
+                      phase: Self.stoppedPhase(operation), tone: .failure, ending: .expired)
         case .failed:
             // `failureReason` stays generic (C8): no reason is shown.
+            // The server decides whether a new attempt exists (`availableActions`),
+            // so the screen promises none.
             self.init(title: String(localized: "Opération arrêtée sans ouverture"),
-                      instruction: String(localized: "Vous pouvez recommencer."),
-                      phase: operation.authorizedAt == nil ? 2 : 4, tone: .failure, ending: .failed)
+                      instruction: String(localized: "Consultez votre activité pour savoir si une nouvelle tentative est possible."),
+                      phase: min(Self.stoppedPhase(operation), 4), tone: .failure, ending: .failed)
         case .anomaly:
             self.init(title: String(localized: "Intervention requise"),
                       instruction: String(localized: "Ne réessayez pas. Un administrateur doit vérifier la cellule \(compartment)."),
@@ -114,6 +116,16 @@ struct OperationStep: Equatable, Sendable {
             self.init(title: String(localized: "État indisponible"), instruction: nil, phase: 0, tone: .neutral,
                       ending: operation.isTerminal ? .unrecognized : nil)
         }
+    }
+
+    /// Where a stopped operation stopped, from the evidence the server recorded
+    /// (§8.5): a phase counts as done only once its evidence exists, so an
+    /// authorization that expired before any command marks « Autorisation ».
+    private static func stoppedPhase(_ operation: LockerOperationView) -> Int {
+        if operation.authorizedAt == nil { return 2 }
+        if operation.commandSentAt == nil { return 3 }
+        if operation.acknowledgedAt == nil { return 4 }
+        return 5
     }
 
     private init(state: String, received: String, instruction: String, phase: Int, interrupted: Bool,
