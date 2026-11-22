@@ -15,7 +15,8 @@
 #                            diagnose (read only: when the loan does not list RETURN yet, the server state is kept in
 #                            diagnose.txt and a NOTE line reports it before the test taps « Actualiser » once)
 # The QR token is never printed. A SHA-256 of each token served is kept, and at the end every log, the xcodebuild
-# output and the test activities are searched for any of them.
+# output, the test activities and the text attachments are searched for any of them. A failing test's screen
+# recording and per-event screenshots may show the pasted URI: the script deletes them with the result bundle.
 #
 # The hub plays five unlocks in order: checkout, return without the asset (ANOMALY at the deadline), Q2 return,
 # checkout with the door held open 45 s (lost API, background), return with the door held open 30 s (relaunch).
@@ -304,17 +305,42 @@ totals=$(sql "SELECT (SELECT count(*) FROM aegis.loans) || ' ' ||
 expected="2 2 CHECKOUT:CONFIRMED:-,RETURN:ANOMALY:EXPECTED_ASSET_NOT_OBSERVED,RETURN:CONFIRMED:-,CHECKOUT:CONFIRMED:-,RETURN:CONFIRMED:- 1 RESOLVED"
 [[ $totals == "$expected" ]] && pass "SERVER $totals" || fail "SERVER '$totals', expected '$expected'"
 
-# Token secrecy: no served token in any log, the xcodebuild output or the test activities.
+# Token secrecy: no served token in any log, the xcodebuild output, the test activities or a text attachment.
 xcrun xcresulttool get test-results activities --path "$bundle" \
   --test-id 'OperationLiveUITests/testTechnicianCompletesTheJourneyAgainstTheRealStack()' \
   >"$work/activities.json" 2>/dev/null || true
+attachments="$work/attachments"
+mkdir -p "$attachments"
+xcrun xcresulttool export attachments --path "$bundle" --output-path "$attachments" >/dev/null 2>&1 || true
+# The named screenshots (live-fr-*) are taken once the code sheet is closed. A failing test also keeps a screen
+# recording and a screenshot per event, whose pixels may show the pasted URI: those are deleted with the bundle.
+captures=$(python3 -I - "$attachments" <<'PY'
+import json, os, sys
+folder = sys.argv[1]
+try:
+    tests = json.load(open(os.path.join(folder, "manifest.json")))
+except (OSError, ValueError):
+    tests = []
+for test in tests:
+    for attachment in test.get("attachments", []):
+        name, file = attachment.get("suggestedHumanReadableName", ""), attachment["exportedFileName"]
+        if not name.startswith("live-fr-") and not file.endswith(".txt"):
+            os.remove(os.path.join(folder, file))
+            print(file)
+PY
+)
+if [[ -n "$captures" ]]; then
+  rm -rf "$bundle"
+  echo "NOTE $(wc -l <<<"$captures" | tr -d ' ') system captures may show the pasted URI: the result bundle is" \
+    "deleted; its text attachments and named screenshots stay in $attachments"
+fi
 served_count=$(wc -l <"$work/served-token-hashes" 2>/dev/null | tr -d ' ' || echo 0)
-leaks=$(cat "$work"/api.log "$work"/simulator.log "$work"/xcodebuild.log "$work"/activities.json 2>/dev/null |
-  grep -oE '[A-Za-z0-9_-]{43}' | sort -u | while read -r candidate; do printf '%s' "$candidate" | shasum -a 256 |
-  cut -d' ' -f1; done | grep -cxF -f "$work/served-token-hashes" || true)
+leaks=$(cat "$work"/api.log "$work"/simulator.log "$work"/xcodebuild.log "$work"/activities.json \
+  "$attachments"/*.txt 2>/dev/null | LC_ALL=C grep -aoE '[A-Za-z0-9_-]{43}' | sort -u | while read -r candidate; do
+  printf '%s' "$candidate" | shasum -a 256 | cut -d' ' -f1; done | grep -cxF -f "$work/served-token-hashes" || true)
 [[ ${served_count:-0} -ge 5 && ${leaks:-0} -eq 0 ]] &&
-  pass "SECRECY $served_count tokens served, none in the API, simulator, xcodebuild or activity logs" ||
-  fail "SECRECY $served_count tokens served, $leaks found in logs"
+  pass "SECRECY $served_count tokens served, none in the logs, the activities or the text attachments" ||
+  fail "SECRECY $served_count tokens served, $leaks found in the logs, activities or text attachments"
 
 echo "IOS JOURNEY: $failures failed"
 exit "$failures"
