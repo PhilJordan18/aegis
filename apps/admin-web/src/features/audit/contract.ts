@@ -28,17 +28,21 @@ export interface AuditEventView {
   readonly result: string | null
   readonly reason: string | null
   readonly occurredAt: string
-  /** The scalar entries of the filtered `details`, in the order sent; never a non-scalar value. */
+  /** The allowlisted scalar leaves of the filtered `details`, in the order sent; never a non-scalar value. */
   readonly details: AuditDetails
 }
 
-/** A value the client renders: D9 sends scalar fields only. */
+/** A value the client renders: D9 sends scalar leaves only, at allowlisted paths. */
 export type AuditDetailValue = string | number | boolean | null
 
 export interface AuditDetails {
-  /** An array and not a map: a key such as `__proto__` stays an ordinary entry. */
+  /**
+   * An array and not a map: a key such as `__proto__` stays an ordinary entry. The key is the path of the leaf as sent
+   * (`created.name`, `changes.operationalStatus.to`, `windows[0].opensAt`, `endedOperationIds[1]`); a top-level scalar
+   * keeps its own key.
+   */
   readonly entries: readonly (readonly [key: string, value: AuditDetailValue])[]
-  /** How many entries were dropped because their value is an object or a list. They are counted, never displayed. */
+  /** How many values were dropped: off the allowlisted paths, a structure where a scalar belongs, or beyond the bounds. Counted, never displayed. */
   readonly omitted: number
 }
 

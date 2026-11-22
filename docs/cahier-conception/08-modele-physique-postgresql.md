@@ -4,6 +4,7 @@
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de révision :** 16 septembre 2026
 **Mise à jour ciblée :** 23 septembre 2026 — statut des paramètres QR et de RS-485; SQL inchangé.  
+**Mise à jour ciblée :** 21 novembre 2026 — ADR-018 (#179), migration `V012` : `users.credential_version` et son déclencheur de garde (§4.1).  
 **Mise à jour ciblée :** 21 novembre 2026 — ADR-017 (#178), migration `V011` : motif `PASSWORD_CHANGED`, révocation définitive et purge à 30 jours de `browser_sessions` (§4.2); type d’audit `PASSWORD_CHANGED` (§4.9).
 **Version :** 1.2 — contrôle local QR et étoile
 
@@ -146,6 +147,8 @@ SET search_path TO aegis, public;
 
 Compte humain authentifiable. `archived_at` ne remplace pas `status` : un compte peut être désactivé sans être archivé.
 
+`credential_version` (ADR-018, migration `V012`) est copiée dans le claim `cv` de chaque jeton d’accès; un jeton dont `cv` diffère est refusé. Seul un changement réel du mot de passe l’incrémente, dans la transaction de l’ADR-017. Le déclencheur `tr_users_credential_version_guarded` refuse une version abaissée, qui rendrait valides des jetons révoqués, et un nouveau `password_hash` sans nouvelle version, qui laisserait valides les jetons antérieurs.
+
 ```sql
 CREATE TABLE users (
     id                    uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
@@ -157,6 +160,7 @@ CREATE TABLE users (
     status                text NOT NULL DEFAULT 'ACTIVE',
     created_at            timestamptz NOT NULL DEFAULT now(),
     archived_at           timestamptz NULL,
+    credential_version    integer NOT NULL DEFAULT 0,  -- V012
 
     CONSTRAINT ck_users_display_name_non_blank
         CHECK (btrim(display_name) <> ''),
@@ -171,7 +175,9 @@ CREATE TABLE users (
     CONSTRAINT ck_users_status
         CHECK (status IN ('ACTIVE', 'DISABLED')),
     CONSTRAINT ck_users_archived_disabled
-        CHECK (archived_at IS NULL OR status = 'DISABLED')
+        CHECK (archived_at IS NULL OR status = 'DISABLED'),
+    CONSTRAINT ck_users_credential_version_non_negative  -- V012
+        CHECK (credential_version >= 0)
 );
 ```
 

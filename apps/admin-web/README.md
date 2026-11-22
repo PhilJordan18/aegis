@@ -36,6 +36,7 @@ npm run capture:evidence  # 16 captures choisies, à 1×, dans docs/design/manag
 npm run capture:integration  # 14 captures FR/EN de l'identité v3, à 1×, dans docs/design/manager-v3/captures-integration/
 npm run test:identity  # mesures sur le rendu : saut de mise en page, contrastes peints, focus, texte coupé
 npm run test:forms     # formulaires CAT-01 proposés : axe, clavier, 320 px, clair et sombre, sur des faux routés
+npm run test:follow    # dossier d'opération ouvert (ADR-006, R5) : suivi sans clic, requêtes bornées, pause onglet masqué, arrêt au statut terminal
 npm run capture:forms  # mêmes contrôles, et écrit le lot de revue dans docs/design/manager-forms/captures/
 npm run test:e2e:api   # recette Playwright contre l'API réelle (build de production); échoue sans API ou sans identifiants
 npm run test:e2e:session   # session navigateur (ADR-016) sur des faux d'API : rechargement, lien direct, révocation, déconnexion
@@ -100,7 +101,7 @@ démarrage, la déconnexion et sa révocation non confirmée, ainsi qu'axe (clai
 et sombre, 1280 et 390 px) sur les deux nouveaux états.
 
 Ces trois commandes Playwright démarrent leur propre serveur Vite sur
-`127.0.0.1:5180`. Ils utilisent le Chromium de Playwright 1.63 déjà installé
+`127.0.0.1:5180` (`AEGIS_E2E_PORT` change le port, par exemple pour deux copies de travail en parallèle). Ils utilisent le Chromium de Playwright 1.63 déjà installé
 (`npx playwright install chromium` s'il manque). Pour filtrer les cas :
 `npm run capture -- --grep connexion`. Les captures sont faites en mouvement
 réduit par défaut; `AEGIS_MOTION=no-preference` le désactive.
