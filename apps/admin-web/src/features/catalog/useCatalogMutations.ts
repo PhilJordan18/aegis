@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../../api/queryKeys'
-import { authorizedRequest } from '../auth/authorizedRequest'
+import { authorizedCommand } from '../auth/authorizedRequest'
 import { useSessionStore } from '../auth/session'
 import { useCatalogGateway } from './CatalogGatewayContext'
 import type { AdminAssetView, AssetModelRequest, AssetModelView, AssetRequest } from './contract'
@@ -25,30 +25,30 @@ export function useCatalogMutations() {
 
   const createAsset = useMutation({
     mutationFn: ({ request, idempotencyKey }: { request: AssetRequest; idempotencyKey: string }) =>
-      authorizedRequest(session, (token) => gateway.createAsset(token, request, idempotencyKey)),
+      authorizedCommand(session, (token) => gateway.createAsset(token, request, idempotencyKey)),
     onSuccess: settledAsset,
   })
   const updateAsset = useMutation({
-    mutationFn: ({ assetId, request }: { assetId: string; request: AssetRequest }) => authorizedRequest(session, (token) => gateway.updateAsset(token, assetId, request)),
+    mutationFn: ({ assetId, request }: { assetId: string; request: AssetRequest }) => authorizedCommand(session, (token) => gateway.updateAsset(token, assetId, request)),
     onSuccess: settledAsset,
   })
   const archiveAsset = useMutation({
     mutationFn: ({ assetId, idempotencyKey }: { assetId: string; idempotencyKey: string }) =>
-      authorizedRequest(session, (token) => gateway.archiveAsset(token, assetId, idempotencyKey)),
+      authorizedCommand(session, (token) => gateway.archiveAsset(token, assetId, idempotencyKey)),
     onSuccess: settledAsset,
   })
   const createModel = useMutation({
     mutationFn: ({ request, idempotencyKey }: { request: AssetModelRequest; idempotencyKey: string }): Promise<AssetModelView> =>
-      authorizedRequest(session, (token) => gateway.createModel(token, request, idempotencyKey)),
+      authorizedCommand(session, (token) => gateway.createModel(token, request, idempotencyKey)),
     onSuccess: settledModel,
   })
   const updateModel = useMutation({
-    mutationFn: ({ modelId, request }: { modelId: string; request: AssetModelRequest }) => authorizedRequest(session, (token) => gateway.updateModel(token, modelId, request)),
+    mutationFn: ({ modelId, request }: { modelId: string; request: AssetModelRequest }) => authorizedCommand(session, (token) => gateway.updateModel(token, modelId, request)),
     onSuccess: settledModel,
   })
   const archiveModel = useMutation({
     mutationFn: ({ modelId, idempotencyKey }: { modelId: string; idempotencyKey: string }) =>
-      authorizedRequest(session, (token) => gateway.archiveModel(token, modelId, idempotencyKey)),
+      authorizedCommand(session, (token) => gateway.archiveModel(token, modelId, idempotencyKey)),
     onSuccess: settledModel,
   })
 

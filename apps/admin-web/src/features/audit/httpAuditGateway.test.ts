@@ -27,16 +27,15 @@ describe('parseAuditEventView (09 §19.1)', () => {
     expect(parseAuditEventView(auditEvent({ eventType: 'FUTURE_EVENT' }))?.eventType).toBe('FUTURE_EVENT')
   })
 
-  it('keeps the scalar details in the order sent and drops, then counts, every object and list', () => {
+  it('keeps the scalar details in the order sent and drops, then counts, every structure off the allowlist', () => {
     const parsed = parseAuditEventView(
-      auditEvent({ details: { lockerId: 'L1', attempt: 2, displayInstructionsStopped: true, revoked: null, changes: { name: 'x' }, endedOperationIds: ['a'], nested: [] } }),
+      auditEvent({ details: { lockerId: 'L1', attempt: 2, displayInstructionsStopped: true, revoked: null, changes: { name: 'x' }, secret: { token: 'x' }, nested: [] } }),
     )
     expect(parsed?.details).toEqual({
       entries: [
         ['lockerId', 'L1'],
         ['attempt', 2],
         ['displayInstructionsStopped', true],
-        ['revoked', null],
       ],
       omitted: 3,
     })

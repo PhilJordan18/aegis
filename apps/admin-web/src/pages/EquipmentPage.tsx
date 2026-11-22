@@ -5,7 +5,7 @@ import { pathOf } from '../app/routes'
 import { ManagerShell } from '../app/shell/ManagerShell'
 import { Link } from '../app/Link'
 import type { UserProfile } from '../features/auth/contract'
-import { useSessionStore } from '../features/auth/session'
+import { useSignOut } from '../features/auth/useSignOut'
 import { useCurrentAdminProfile } from '../features/auth/useCurrentAdminProfile'
 import { assetName } from '../features/catalog/assetPresentation'
 import { AssetDossier } from '../features/catalog/AssetDossier'
@@ -76,7 +76,6 @@ function revealDossier(target: HTMLElement | null) {
  */
 export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: UserProfile }) {
   const { m } = useI18n()
-  const sessionStore = useSessionStore()
   const router = useRouter()
   const { search } = useLocation()
   const currentProfile = useCurrentAdminProfile()
@@ -127,10 +126,7 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
     revealDossier(dossierRef.current)
   }, [selectedId, asset.data])
 
-  function signOut() {
-    sessionStore.signOut()
-    router.navigate(pathOf('signIn'))
-  }
+  const signOut = useSignOut()
 
   function select(selected: AdminAssetView, event: MouseEvent<HTMLAnchorElement>) {
     // A modified click opens another tab: nothing changes here.

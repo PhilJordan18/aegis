@@ -385,7 +385,7 @@ Une opération `CHECKOUT` exige aussi :
 
 Une opération `RETURN` exige aussi :
 
-- un prêt `ACTIVE` appartenant au demandeur;
+- un prêt `ACTIVE` appartenant au demandeur, ou un prêt `RETURN_PENDING` admissible à une reprise (§13.4);
 - aucun autre retour non terminal pour ce prêt;
 - la même affectation physique attendue que celle utilisée pour l’actif;
 - l’absence d’une opération précédente non terminale.
@@ -463,7 +463,7 @@ La validation ne fait aucun appel réseau dans la transaction SQL. Un rollback n
 
 Un secret erroné incrémente `failedAttempts` dans une transaction **effectivement validée**, même si l’API renvoie un refus. Ne pas annuler ce compteur par une exception entraînant un rollback. Au cinquième échec, invalider le défi et terminer l’opération en `FAILED`. Une requête provenant d’un autre compte ne peut pas consommer le défi ni épuiser ces essais.
 
-Les refus devenus définitifs (expiration, nouvelle session du hub, réservation annulée, garde devenue invalide) ferment le défi, terminent l’opération sans ouverture et programment un nouvel état d’écran. Un simple secret erroné laisse le défi utilisable tant que les limites ne sont pas atteintes. La limite retenue est de cinq secrets erronés soumis par défi; une lecture caméra sans soumission ne compte pas. La fréquence des préparations est limitée par utilisateur et casier selon un seuil configurable à qualifier contre les rafales et les cycles normaux. Un rejeu idempotent ne compte pas comme nouvelle préparation. L’ancien plafond de trois préparations en quinze minutes est abandonné conformément à l’ADR-009; la limitation elle-même n’est pas supprimée.
+Les refus devenus définitifs (expiration, nouvelle session du hub, réservation annulée, garde devenue invalide) ferment le défi, terminent l’opération sans ouverture et programment un nouvel état d’écran. Ils sont audités (`LOCAL_CHALLENGE_REJECTED`); une garde définitive sans motif propre porte `LOCAL_PROOF_GUARD_FAILED` (`09` §8.5). Deux gardes restent transitoires et ne changent rien, sans prolonger l’échéance : la sécurité momentanée de la cellule (porte, verrou, lecteur, connexion), dont la projection suit les heartbeats avec quelques secondes de retard, et une autre opération en cours sur le casier. L’affichage non confirmé (`LOCAL_PROOF_NOT_DISPLAYED`) et le secret erroné gardent leurs règles propres. Un accusé d’affichage tardif d’une instruction déjà rejetée ou annulée n’est pas corrélé : il ne rend jamais le défi affiché ni utilisable (`10` §27.2). Un simple secret erroné laisse le défi utilisable tant que les limites ne sont pas atteintes. La limite retenue est de cinq secrets erronés soumis par défi; une lecture caméra sans soumission ne compte pas. La fréquence des préparations est limitée par utilisateur et casier selon un seuil configurable; la limite initiale du P0, approuvée par Philippe le 11 novembre 2026 (#44), est de 6 nouvelles préparations par période glissante de 10 minutes pour chaque couple utilisateur–casier (`09` §15.5). Un rejeu idempotent ne compte pas comme nouvelle préparation. L’ancien plafond de trois préparations en quinze minutes est abandonné conformément à l’ADR-009; la limitation elle-même n’est pas supprimée.
 
 ### 6.6 Portée de la preuve et affichage
 
@@ -772,6 +772,57 @@ function evaluatePhysicalProof(operation, observations):
 
 Une preuve `INCOMPLETE` avant `expiresAt` maintient l’opération en cours. Une preuve `INCONSISTENT` après une interaction physique produit une anomalie. À l’expiration, l’algorithme de la section 14 décide entre `EXPIRED` et `ANOMALY`.
 
+#### 10.3.1 Retrait : conditions exactes (#47)
+
+Décision de Philippe du 11 novembre 2026. L’évaluation relit à chaque fois tous les faits acceptés de l’opération, de sorte que l’ordre de réception ne compte pas (`10` §17.3). Elle s’exécute après la validation de chaque accusé, porte ou scan de l’opération, puis à intervalle régulier pour l’échéance, dans une transaction distincte de l’ingestion. Un fait reçu à `expiresAt` ou après ne prouve rien : quelle que soit l’heure de l’évaluation qui le lit, c’est l’échéance qui décide.
+
+| Étape | Condition | Résultat |
+|---|---|---|
+| Accusé | Premier `COMMAND_ACKNOWLEDGED` accepté de l’opération | Absent : `INCOMPLETE` |
+| Chaîne | Faits de la cellule ciblée, même `deviceSessionId` et `bootCount` que l’accusé, `sequence` supérieure, triés par `sequence` | Un autre boot, une autre cellule ou un fait antérieur à l’accusé ne prouve rien |
+| Ouverture | Premier `DOOR_OPENED` de la chaîne | Absente : `INCOMPLETE` |
+| Fermeture | Premier `DOOR_CLOSED` après l’ouverture | Absente : `INCOMPLETE` |
+| Scan | Dernier `RFID_SCAN_COMPLETED` de la chaîne après la fermeture | Absent : `INCOMPLETE` |
+| Lecteur | `readerStatus` de ce scan différent de `HEALTHY`, aucun événement de porte ne le suit, même si `windowStartedAt` précède la fermeture | `INCONSISTENT` (règle 2) |
+| Stabilité | Le dernier événement de porte avant le scan est une fermeture, `windowStartedAt` n’est pas antérieur à son `timestamp`, aucun événement de porte ne suit le scan | Sinon : `INCOMPLETE` |
+| Localisation | Le tag attendu détecté dans une autre cellule depuis `authorizedAt` | `INCONSISTENT` |
+| Tag | `ASSET_ABSENT` normalisé pour l’identifiant attendu, quels que soient les autres identifiants détectés (K14) | `COHERENT_CHECKOUT` |
+| Tag | Identifiant attendu détecté par le scan | `INCOMPLETE` (règle 1) |
+| Tag | Aucun verdict normalisé | `INCOMPLETE` |
+
+Seul un scan de la chaîne renseigne sur le lecteur : la projection de la cellule, qu’un scan fait porte ouverte peut avoir modifiée, ne déclenche jamais la règle 2. La règle du lecteur est évaluée avant la stabilité : un scan corrélé reçu après la fermeture la déclenche même si sa fenêtre a commencé avant celle-ci (décision du 21 novembre 2026, #67). La localisation est évaluée avant le tag : une localisation ambiguë interdit la confirmation, alors qu’un tag étranger restant dans la cellule ne l’empêche pas (K14).
+
+Les jalons `DOOR_OPENED` et `OBSERVATION_RECEIVED` sont enregistrés une fois, dans l’ordre, à l’instant de réception du fait, jamais avant le jalon précédent. `INCONSISTENT` termine aussitôt en `ANOMALY` avec `INCONSISTENT_PHYSICAL_STATE` (gravité `HIGH`). À `expiresAt`, une preuve encore incomplète se termine ainsi :
+
+| Situation | Résultat | `failureReason` |
+|---|---|---|
+| Porte refermée, tag attendu encore vu par un scan sain (règle 1) | `ANOMALY` | `INCONSISTENT_PHYSICAL_STATE` |
+| Porte refermée, aucun scan concluant | `ANOMALY` | `DEVICE_OFFLINE_DURING_OPERATION` |
+| Porte ouverte, jamais refermée | `ANOMALY` | `DOOR_NOT_CLOSED_BEFORE_EXPIRY` |
+| Aucune ouverture prouvée, mais une ouverture acceptée de la cellule ou un événement de porte rejeté du casier depuis `authorizedAt` | `ANOMALY` | `DEVICE_OFFLINE_DURING_OPERATION` |
+| Commande jamais réclamée ni publiée | `EXPIRED` | `OPERATION_EXPIRED` |
+| Casier `ONLINE` dans le boot ciblé par la commande, cellule `CONNECTED` et porte projetée `CLOSED` | `EXPIRED` | `OPERATION_EXPIRED` |
+| Tout autre cas | `ANOMALY` | `DEVICE_OFFLINE_DURING_OPERATION` |
+
+Une anomalie déjà ouverte pour l’opération, par exemple par un accusé incertain (#41), est conservée plutôt que dupliquée. Toute issue terminale annule une commande encore `PENDING`, marque les faits de l’opération `PROCESSED`, ajoute une instruction d’écran sans secret et n’est plus jamais modifiée; la réservation reste `ACTIVE` après `EXPIRED` ou `ANOMALY`.
+
+#### 10.3.2 Retour : conditions exactes (#51)
+
+Mise en œuvre RET-02 du 11 novembre 2026. L’évaluation, ses déclencheurs, la règle de l’instant de réception et les étapes Accusé, Chaîne, Ouverture, Fermeture, Scan, Lecteur (règle 2), Stabilité et Localisation sont ceux du retrait (§10.3.1). Seule la lecture du tag attendu change, selon §10.2 :
+
+| Étape | Condition | Résultat |
+|---|---|---|
+| Tag | `ASSET_PRESENT` normalisé pour l’identifiant attendu, soit au moins trois lectures dans une fenêtre stable d’un lecteur sain (`10` §12.2) | `COHERENT_RETURN` |
+| Tag | Sinon, un même autre identifiant lu au moins trois fois par ce scan, dans une fenêtre stabilisée (lecteur `HEALTHY`, au moins trois secondes, délai de livraison respecté, `10` §12.2) | `INCONSISTENT` : `ANOMALY` avec `UNEXPECTED_ASSET_OBSERVED` |
+| Tag | `ASSET_ABSENT` normalisé pour l’identifiant attendu | `INCOMPLETE`, puis à `expiresAt` : `ANOMALY` avec `EXPECTED_ASSET_NOT_OBSERVED` |
+| Tag | Une ou deux lectures, ou aucun verdict normalisé | `INCOMPLETE`, puis à `expiresAt` : `ANOMALY` avec `DEVICE_OFFLINE_DURING_OPERATION` |
+
+Les lectures d’un tag étranger ne s’additionnent ni entre identifiants ni entre messages : un message dupliqué n’est enregistré qu’une fois (`10` §16), et un même identifiant n’apparaît qu’une fois par scan. Une fenêtre qui n’est pas stabilisée ne compte aucun tag étranger, comme elle ne donne aucun verdict au tag attendu (décision du 21 novembre 2026, #67).
+
+Une autre cellule qui détecte le tag attendu depuis `authorizedAt` rend la preuve `INCONSISTENT` avec `INCONSISTENT_PHYSICAL_STATE`, comme un lecteur `FAULTED` ou `UNKNOWN` après la fermeture. Les autres issues à l’échéance suivent §13.1.
+
+La présence du tag n’est lue que dans la chaîne d’une opération `RETURN` autorisée : un scan d’inventaire, un scan antérieur à la fermeture ou un scan reçu à `expiresAt` ou après ne termine jamais le prêt (§12.4).
+
 ---
 
 ## 11. Confirmation d’un retrait
@@ -895,6 +946,8 @@ Une preuve `COHERENT_RETURN` provoque dans une seule transaction :
 6. l’ajout des événements d’audit;
 7. le recalcul de la disponibilité et de la readiness.
 
+Mise en œuvre RET-02 (#51) : la transaction ajoute les audits `OPERATION_CONFIRMED`, avec les références de l’accusé, des événements de porte et du scan, et `LOAN_COMPLETED`; `returnedAt` est l’instant de la décision, égal à `confirmedAt`. La disponibilité et la readiness étant dérivées à la lecture, la première lecture après validation voit l’actif de nouveau sous garde. Aucune anomalie n’est résolue automatiquement : le P0 ne crée encore aucune anomalie que cette preuve corrige, et l’anomalie d’une tentative précédente reste traitée par l’administrateur.
+
 ### 12.2 Pseudocode
 
 ```text
@@ -986,6 +1039,16 @@ Le résultat dépend de la certitude physique, pas uniquement du type d’erreur
 | Hub perdu après l’envoi | `ANOMALY` | Reste `RETURN_PENDING` | `OPEN` |
 | État physique contradictoire ou inconnu | `ANOMALY` | Reste `RETURN_PENDING` | `OPEN` |
 
+Mise en œuvre RET-01 (#50, 11 novembre 2026). La conclusion d’un retour autorisé a lieu à son `expiresAt`, dans la même transaction que le retour éventuel du prêt à `ACTIVE`, et dans cet ordre :
+
+1. fermeture reçue, ouverture reçue ou événement de porte de la cellule possible depuis l’autorisation : `ANOMALY`;
+2. anomalie déjà ouverte par un rapport de commande incertain (`10` §9.1) : `ANOMALY`, en conservant cette anomalie;
+3. rejet explicite du hub dont la raison garantit l’absence d’actionnement : `FAILED` avec `COMMAND_REJECTED_<raison>`, prêt `ACTIVE`;
+4. commande jamais publiée, ou hub `ONLINE` dans la session ciblée avec la porte projetée fermée : `EXPIRED` avec `OPERATION_EXPIRED`, prêt `ACTIVE`;
+5. tout autre cas : `ANOMALY` (`DEVICE_OFFLINE_DURING_OPERATION`), prêt `RETURN_PENDING`.
+
+Un rejet sûr reçu avant l’échéance est donc conclu à l’échéance, pas à sa réception. Le retour du prêt à `ACTIVE` est audité par `LOAN_RETURN_REVERTED_SAFE`. Depuis RET-02 (#51), une preuve cohérente ou incohérente est conclue dès sa réception (§10.3.2) et cet ordre ne s’applique qu’à une preuve encore incomplète; au point 1, une fermeture suivie d’un scan sain sans le tag attendu donne `EXPECTED_ASSET_NOT_OBSERVED`.
+
 ### 13.2 Algorithme
 
 ```text
@@ -1028,6 +1091,31 @@ sequenceDiagram
         A-->>M: Correction physique requise
     end
 ```
+
+### 13.4 Reprise d’un retour
+
+Décision humaine du 21 novembre 2026 (#67). Un prêt `RETURN_PENDING` admet une nouvelle opération `RETURN`, avec un nouveau défi QR, lorsque :
+
+- un retour précédent du prêt s’est terminé en `ANOMALY`;
+- aucune anomalie liée aux retours du prêt n’est encore `OPEN` : elles ont toutes été acquittées;
+- aucune opération non terminale n’existe sur le casier (aucune tentative concurrente);
+- toutes les autres gardes de §6.1 et §6.3 passent. Les anomalies `ACKNOWLEDGED` des retours du prêt ne bloquent pas la reprise, puisqu’elle sert à les résoudre; toute autre anomalie non résolue de l’actif ou de la cellule la bloque encore.
+
+La reprise suit la préparation et l’autorisation locale d’un retour, à deux différences près :
+
+- l’autorisation laisse le prêt `RETURN_PENDING` et ne modifie pas `returnRequestedAt`; aucun `LOAN_RETURN_STARTED` n’est audité;
+- une fin sûre après l’autorisation (`FAILED` ou `EXPIRED` selon §13.1) laisse le prêt `RETURN_PENDING` avec ses anomalies acquittées, au lieu de le rendre `ACTIVE`.
+
+Seule la preuve cohérente de la reprise (§10.3) clôture le prêt. Dans la même transaction, l’opération devient `CONFIRMED`, le prêt `COMPLETED`, et chaque anomalie `ACKNOWLEDGED` des retours précédents du prêt devient `RESOLVED`, avec `resolvedAt`, l’observation `ASSET_PRESENT` du scan comme preuve et une note fixe; chaque résolution est auditée (`ANOMALY_RESOLVED`).
+
+Les échecs répétés ne créent pas de cul-de-sac :
+
+| Fin de la reprise | Prêt | Nouvelle reprise |
+|---|---|---|
+| Défi expiré ou invalidé avant le scan | `RETURN_PENDING`, inchangé | Admise aussitôt |
+| Fin sûre après l’autorisation | `RETURN_PENDING` | Admise aussitôt |
+| `ANOMALY` | `RETURN_PENDING`, nouvelle anomalie `OPEN` | Admise après acquittement de cette anomalie |
+| Preuve cohérente | `COMPLETED` | Sans objet |
 
 ---
 
@@ -1183,7 +1271,7 @@ function evaluateAnomalyResolution(anomalyId, newEvidence):
         anomaly.status = RESOLVED
         anomaly.resolvedAt = now
         anomaly.resolutionEvidenceObservationId = newEvidence.id
-        append AuditEvent(ANOMALY_RESOLVED_BY_EVIDENCE)
+        append AuditEvent(ANOMALY_RESOLVED)
     commit
 ```
 

@@ -1,0 +1,31 @@
+PASS X0a browser login 1 (200)
+PASS X0b browser login 2 (200)
+PASS X0c device login (no browser session) (200)
+PASS X1 browser token carries cv and sid; device token carries cv only
+PASS X1b sid is the open browser_sessions row
+PASS X2a sign-out of browser session 1 (204)
+PASS X2b its token, at once (401)
+PASS X2c the other browser session's token (200)
+PASS X2d the device token (200)
+PASS X3a restore of session 2 (200)
+PASS X3b the restored token carries the same sid
+PASS X4 token of an ended (expired) browser session (401)
+PASS X4b the device token is still accepted (200)
+PASS X5a re-signed control token with cv accepted (200)
+PASS X5b same token without cv (401)
+PASS X6a lowering credential_version refused by the trigger
+PASS X6b new hash without a new version refused
+PASS X6c the device token after the version bump (401)
+PASS X7a device login before the rotation (200)
+PASS X7b browser login before the rotation (200)
+PASS X7c technician login (200)
+PASS X7d earlier device token after the rotation (401)
+PASS X7e earlier browser token after the rotation (401)
+PASS X7f technician token (other account) untouched (200)
+PASS X7g new password login (200)
+PASS X7h its token (200)
+PASS X7i one PASSWORD_CHANGED audit
+PASS X8 token still accepted after a restart with the same password (200)
+PASS X9 no token, cookie or password in the API logs
+failures: 0
+exit=0

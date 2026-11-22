@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Link } from '../app/Link'
 import { PageHeading } from '../app/PageHeading'
@@ -5,15 +6,16 @@ import { useLocation, useRouter } from '../app/router'
 import { pathOf } from '../app/routes'
 import { ManagerShell } from '../app/shell/ManagerShell'
 import type { UserProfile } from '../features/auth/contract'
-import { useSessionStore } from '../features/auth/session'
+import { useSignOut } from '../features/auth/useSignOut'
 import { useCurrentAdminProfile } from '../features/auth/useCurrentAdminProfile'
-import { operationTypeLabel, transactionTimes } from '../features/transactions/transactionPresentation'
+import { operationChip, operationTypeLabel, transactionTimes } from '../features/transactions/transactionPresentation'
 import { classifyTransactionFailure } from '../features/transactions/transactionFailure'
 import { hasFilters, NO_FILTERS, readTransactionLocation, transactionHref, type TransactionFilterValues, type TransactionView } from '../features/transactions/transactionHref'
 import { TransactionDossier } from '../features/transactions/TransactionDossier'
 import { TransactionFilters } from '../features/transactions/TransactionFilters'
 import { TransactionList } from '../features/transactions/TransactionList'
 import { useTransactionDetail, useTransactionList, type TransactionRecord } from '../features/transactions/useTransactionQueries'
+import { queryKeys } from '../api/queryKeys'
 import { useI18n } from '../i18n/useI18n'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
@@ -51,8 +53,8 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
   const i18n = useI18n()
   const { m } = i18n
   const t = m.reservations
-  const sessionStore = useSessionStore()
   const router = useRouter()
+  const client = useQueryClient()
   const { search } = useLocation()
   const currentProfile = useCurrentAdminProfile()
   const profile = currentProfile.data ?? sessionProfile
@@ -75,6 +77,15 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
   const detail = useTransactionDetail(view, selectedId, listed)
 
   const [selectionNote, setSelectionNote] = useState('')
+  // The dossier of an operation follows the server (ADR-006): a change of status is announced politely, from the
+  // second read of the same operation on, and says only the status the server reported.
+  const [operationNote, setOperationNote] = useState('')
+  const [observed, setObserved] = useState<{ readonly id: string; readonly status: string } | null>(null)
+  const followed = detail.isPlaceholderData || detail.data?.kind !== 'operations' ? null : detail.data.item
+  if (followed !== null && (observed?.id !== followed.id || observed.status !== followed.status)) {
+    setObserved({ id: followed.id, status: followed.status })
+    setOperationNote(observed?.id === followed.id ? t.operationUpdated({ status: operationChip(followed.status, i18n).label }) : '')
+  }
   const focusAfterSelection = useRef(false)
   const dossierRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -84,10 +95,7 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
     revealDossier(dossierRef.current)
   }, [selectedId, detail.data])
 
-  function signOut() {
-    sessionStore.signOut()
-    router.navigate(pathOf('signIn'))
-  }
+  const signOut = useSignOut()
 
   function select(record: TransactionRecord, event: MouseEvent<HTMLAnchorElement>) {
     // A modified click opens another tab: nothing changes here.
@@ -147,6 +155,9 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
                 if (refreshing) return
                 void list.refetch()
                 if (selectedId !== null) void detail.refetch()
+                // The attempt shown inline is its own read: it is read again with the dossier, never followed.
+                const attempt = detail.data?.kind === 'operations' ? null : (detail.data?.item.currentOperationId ?? null)
+                if (attempt !== null) void client.invalidateQueries({ queryKey: queryKeys.transactions.operation(attempt) })
               }}
             >
               <Icon name="refresh" />
@@ -160,6 +171,9 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
         </div>
         <div className="ag-sr-only" role="status">
           {selectionNote}
+        </div>
+        <div className="ag-sr-only" role="status">
+          {operationNote}
         </div>
 
         <TransactionFilters

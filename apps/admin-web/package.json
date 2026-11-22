@@ -22,8 +22,12 @@
     "capture:evidence": "playwright test --project=evidence",
     "capture:integration": "playwright test --project=integration",
     "test:forms": "playwright test --project=forms",
+    "test:follow": "playwright test --project=follow",
+    "test:links": "playwright test --project=links",
     "capture:forms": "AEGIS_FORMS_CAPTURE=1 playwright test --project=forms",
-    "test:e2e:api": "playwright test -c playwright.api.config.ts"
+    "test:e2e:api": "playwright test -c playwright.api.config.ts",
+    "test:realapi": "AEGIS_E2E_REAL_API=1 playwright test --project=realapi",
+    "test:e2e:session": "playwright test -c playwright.session.config.ts"
   },
   "dependencies": {
     "@fontsource-variable/geist": "5.3.0",

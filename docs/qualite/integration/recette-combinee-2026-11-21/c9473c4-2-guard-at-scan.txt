@@ -1,0 +1,8 @@
+# ref c9473c4 (Backend integration build; = final PR heads except one doc line), step 2-guard-at-scan
+PASS G0 revoking the expected RFID identifier during the attempt is refused (409 ASSET_OPERATION_IN_PROGRESS)
+OBS  G0b an administrator can set the asset to MAINTENANCE while its checkout waits for the scan (200)
+PASS G1 definitive guard (asset set to MAINTENANCE) at scan: 422 ASSET_NOT_READY, operation 'FAILED LOCAL_PROOF_GUARD_FAILED 2026-11-21T16:04:50.164147Z', challenge 'INVALIDATED 0', audited, no command
+PASS G2 the right secret again: 409 LOCAL_PROOF_INVALIDATED, no command
+PASS INV no loan
+QA GUARD AT SCAN: 0 failed
+exit=0

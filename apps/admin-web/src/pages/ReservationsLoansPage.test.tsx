@@ -5,20 +5,20 @@ import { createQueryClient } from '../api/serverState'
 import { App } from '../app/App'
 import { unconfiguredAuthGateway, type AuthGateway, type GatewayResult } from '../features/auth/authGateway'
 import { createSessionStore } from '../features/auth/session'
-import { adminProfile, problemBody } from '../features/auth/testFixtures'
+import { adminProfile, problemBody, sessionStubs } from '../features/auth/testFixtures'
 import type { CatalogGateway } from '../features/catalog/catalogGateway'
-import { asset, fakeCatalogGateway, MM001, ok as catalogOk } from '../features/catalog/testFixtures'
+import { asset, fakeCatalogGateway, ok as catalogOk } from '../features/catalog/testFixtures'
 import { parseLoanView, parseLockerOperationView, parseReservationView } from '../features/transactions/contractParsers'
 import type { LoanView, LockerOperationView, ReservationView, TransactionPage } from '../features/transactions/contract'
 import { unconfiguredTransactionGateway, type TransactionGateway } from '../features/transactions/transactionGateway'
-import { ASSET_ID, LOAN_ID, OPERATION_ID, RESERVATION_ID, USER_ID, loanView, lockerOperationView, reservationView } from '../features/transactions/testFixtures'
+import { ASSET_ID, LOAN_ID, OPERATION_ID, RESERVATION_ID, USER_ID, assetSummary, loanView, lockerOperationView, reservationView } from '../features/transactions/testFixtures'
 import type { Locale } from '../i18n/locale'
 import { installMatchMedia } from '../test/matchMedia'
 import { renderWithProviders } from '../test/renderApp'
 
 configure({ asyncUtilTimeout: 4000 })
 
-const authGateway: AuthGateway = { ...unconfiguredAuthGateway, currentProfile: async () => ({ kind: 'ok', value: adminProfile, requestId: null }) }
+const authGateway: AuthGateway = { ...unconfiguredAuthGateway, ...sessionStubs, currentProfile: async () => ({ kind: 'ok', value: adminProfile, requestId: null }) }
 const plain = (value: string | null | undefined) => (value ?? '').replace(/[\u00A0\u202F]/g, ' ')
 const ok = <T,>(value: T): GatewayResult<T> => ({ kind: 'ok', value, requestId: 'req-tx' })
 const problem = (status: number, code: string, traceId = 'trace-0001') => ({ kind: 'httpProblem', status, problem: problemBody(status, code, { traceId }), retryAfter: null, requestId: 'req-x' }) as const
@@ -344,19 +344,78 @@ describe('Réservations et prêts: locker operations', () => {
     expect(plain(dossier().textContent)).toContain('9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d')
   })
 
-  it('resolves the equipment and the cell from the catalog and falls back to identifiers when that read fails', async () => {
-    const ok1 = renderPage(fakeGateway(), { url: '/reservations-prets?vue=operations' })
+  it('labels a failure reason beside its code, in the sequence and in the technical details, in both languages', async () => {
+    const op = operation({ status: 'FAILED', failureReason: 'LOCAL_PROOF_GUARD_FAILED', confirmedAt: null, observationReceivedAt: null })
+    const fr = renderPage(fakeGateway({ operations: ok(pageOf([op])) }), { url: '/reservations-prets?vue=operations' })
     await screen.findByRole('heading', { level: 2, name: '1 opération' })
-    await waitFor(() => expect(plain(dossier().textContent)).toContain('A1'))
-    expect(plain(dossier().textContent)).toContain('AEGIS-DEMO-01')
-    ok1.unmount()
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Contrôle refusé au scan : tentative terminée'))
+    expect(plain(dossier().textContent)).toContain('LOCAL_PROOF_GUARD_FAILED')
+    expect(within(dossier()).queryByRole('button', { name: /déverrouill|unlock/i })).toBeNull()
+    fr.unmount()
 
-    const failing = fakeCatalogGateway({ units: { [MM001.id]: catalogOk(MM001), [ASSET_ID]: problem(500, 'INTERNAL_ERROR') as never } })
-    renderPage(fakeGateway(), { url: '/reservations-prets?vue=operations', catalogGateway: failing })
+    renderPage(fakeGateway({ operations: ok(pageOf([op])) }), { url: '/reservations-prets?vue=operations', locale: 'en' })
+    await screen.findByRole('heading', { level: 2, name: '1 operation' })
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Check refused at the scan: attempt ended'))
+    expect(plain(dossier().textContent)).toContain('LOCAL_PROOF_GUARD_FAILED')
+    expect(within(dossier()).queryByRole('button', { name: /déverrouill|unlock/i })).toBeNull()
+  })
+
+  it('does not read « no loan » on a confirmed checkout: the loan names the operation (08), nothing is inferred', async () => {
+    const op = operation({ type: 'CHECKOUT', status: 'CONFIRMED', loanId: null })
+    renderPage(fakeGateway({ operations: ok(pageOf([op])) }), { url: '/reservations-prets?vue=operations' })
     await screen.findByRole('heading', { level: 2, name: '1 opération' })
-    expect(await screen.findByText('Libellés non résolus.')).toBeDefined()
+    await waitFor(() => expect(plain(dossier().textContent)).toContain("c'est le prêt qui désigne cette opération"))
+    expect(within(dossier()).queryByRole('link', { name: 'Ouvrir le prêt' })).toBeNull()
+    expect(plain(dossier().textContent)).toContain('Aucun prêt n\'est déduit.')
+  })
+
+  it.each(['FAILED', 'EXPIRED'])('reads « Aucun » for a %s checkout: no loan exists, none is implied', async (status) => {
+    const op = operation({ type: 'CHECKOUT', status, loanId: null, confirmedAt: null })
+    renderPage(fakeGateway({ operations: ok(pageOf([op])) }), { url: '/reservations-prets?vue=operations' })
+    await screen.findByRole('heading', { level: 2, name: '1 opération' })
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Prêt lié'))
+    expect(plain(dossier().textContent)).not.toContain("c'est le prêt qui désigne cette opération")
+  })
+
+  it('shows an unknown failure reason as the code alone, with no invented label', async () => {
+    const op = operation({ status: 'EXPIRED', failureReason: 'FUTURE_REASON', confirmedAt: null })
+    renderPage(fakeGateway({ operations: ok(pageOf([op])) }), { url: '/reservations-prets?vue=operations' })
+    await screen.findByRole('heading', { level: 2, name: '1 opération' })
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('FUTURE_REASON'))
+    expect(dossier().querySelector('.ag-kvs__label')).toBeNull()
+  })
+
+  it('names the equipment, the user and the cell from the R7 summaries, with no catalog read', async () => {
+    const catalog = fakeCatalogGateway({})
+    const gateway = fakeGateway()
+    renderPage(gateway, { url: '/reservations-prets?vue=operations', catalogGateway: catalog })
+    await screen.findByRole('heading', { level: 2, name: '1 opération' })
+    // The row: the equipment (name and code) and the user by name, with the identifier beside it.
+    expect(plain(rows()[0]?.textContent)).toContain('Multimètre numérique')
+    expect(plain(rows()[0]?.textContent)).toContain('MM-001')
+    expect(plain(rows()[0]?.textContent)).toContain('Utilisateur : Technicien Démo')
+    expect(plain(rows()[0]?.textContent)).not.toContain('identifiant seulement')
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('AEGIS-DEMO-01'))
+    expect(plain(dossier().textContent)).toContain('A1')
+    expect(plain(dossier().textContent)).toContain('Technicien Démo')
+    expect(plain(dossier().textContent)).not.toContain('Libellés non résolus')
+    expect(catalog.getAsset).not.toHaveBeenCalled()
+  })
+
+  it('does not name the cell of an operation after the asset moved: the current placement is labelled as such', async () => {
+    const moved = { ...assetSummary, placement: { lockerId: '3d4e5f60-7182-4a93-8ba4-c5d6e7f80912', lockerCode: 'AEGIS-DEMO-01', compartmentId: 'aaaaaaaa-0000-4000-8000-000000000002', compartmentCode: 'A2' } }
+    renderPage(fakeGateway({ operations: ok(pageOf([operation({ asset: moved })])) }), { url: '/reservations-prets?vue=operations' })
+    await screen.findByRole('heading', { level: 2, name: '1 opération' })
+    await waitFor(() => expect(plain(dossier().textContent)).toContain("Placement actuel de l'équipement"))
+    expect(plain(dossier().textContent)).toContain('AEGIS-DEMO-01 · Cellule A2')
     expect(plain(dossier().textContent)).toContain('Cellule : identifiant seulement')
-    expect(plain(dossier().textContent)).toContain(OPERATION_ID)
+  })
+
+  it('shows an asset with no placement without inventing one', async () => {
+    renderPage(fakeGateway({ operations: ok(pageOf([operation({ asset: { ...assetSummary, placement: null } })])) }), { url: '/reservations-prets?vue=operations' })
+    await screen.findByRole('heading', { level: 2, name: '1 opération' })
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Aucun placement connu'))
+    expect(plain(dossier().textContent)).toContain('Cellule : identifiant seulement')
   })
 
   it('shows an unknown status as not recognized, never as a known state', async () => {

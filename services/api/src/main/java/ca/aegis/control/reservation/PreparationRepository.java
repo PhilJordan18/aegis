@@ -46,14 +46,21 @@ class PreparationRepository {
      * state until this decision commits.
      */
     Optional<Cell> lockPlacedCell(UUID assetId, UUID lockerId) {
+        return placedCell(assetId, lockerId, " FOR SHARE OF c");
+    }
+
+    /** The same compartment read without a lock, for a display hint such as {@code availableActions}. */
+    Optional<Cell> placedCell(UUID assetId, UUID lockerId) {
+        return placedCell(assetId, lockerId, "");
+    }
+
+    private Optional<Cell> placedCell(UUID assetId, UUID lockerId, String lock) {
         return jdbc.sql("""
                 SELECT c.id, c.locker_id, c.code, c.enabled, c.connection_status, c.rfid_reader_status,
                        c.door_state, c.lock_state
                 FROM aegis.asset_placements p
                 JOIN aegis.compartments c ON c.id = p.compartment_id
-                WHERE p.asset_id = :asset AND p.removed_at IS NULL AND c.locker_id = :locker
-                FOR SHARE OF c
-                """)
+                WHERE p.asset_id = :asset AND p.removed_at IS NULL AND c.locker_id = :locker""" + lock)
                 .param("asset", assetId)
                 .param("locker", lockerId)
                 .query((row, number) -> new Cell(row.getObject("id", UUID.class),
@@ -96,6 +103,24 @@ class PreparationRepository {
                 """).param("asset", assetId).param("compartment", compartmentId).query(Boolean.class).single();
     }
 
+    /**
+     * The same guard for the recovery of {@code recoveredLoanId} (document 06, section 13.4): the acknowledged
+     * anomalies of that loan's own returns are what the recovery resolves, so they do not block it. Any other
+     * unresolved anomaly of the asset or the compartment, and any {@code OPEN} one, still does.
+     */
+    boolean hasUnresolvedAnomaly(UUID assetId, UUID compartmentId, UUID recoveredLoanId) {
+        return jdbc.sql("""
+                SELECT EXISTS (
+                    SELECT 1 FROM aegis.anomalies a
+                    WHERE a.status IN ('OPEN', 'ACKNOWLEDGED') AND (a.asset_id = :asset OR a.compartment_id = :compartment)
+                      AND NOT (a.status = 'ACKNOWLEDGED' AND EXISTS (
+                          SELECT 1 FROM aegis.locker_operations o
+                          WHERE o.id = a.locker_operation_id AND o.loan_id = :loan AND o.type = 'RETURN'))
+                )
+                """).param("asset", assetId).param("compartment", compartmentId).param("loan", recoveredLoanId)
+                .query(Boolean.class).single();
+    }
+
     /** Any non-terminal physical operation of the locker; the P0 serializes openings per locker. */
     boolean hasOpenOperation(UUID lockerId) {
         return jdbc.sql("""
@@ -113,6 +138,15 @@ class PreparationRepository {
                 WHERE user_id = :user AND locker_id = :locker AND created_at > :since
                 """).param("user", userId).param("locker", lockerId).param("since", utc(since))
                 .query(Integer.class).single();
+    }
+
+    /** The oldest preparation counted by {@link #preparationsSince}: the first to leave the window. */
+    Instant oldestPreparationSince(UUID userId, UUID lockerId, Instant since) {
+        return jdbc.sql("""
+                SELECT min(created_at) FROM aegis.locker_operations
+                WHERE user_id = :user AND locker_id = :locker AND created_at > :since
+                """).param("user", userId).param("locker", lockerId).param("since", utc(since))
+                .query(java.time.OffsetDateTime.class).single().toInstant();
     }
 
     /** A checkout already waiting for its local proof: no lock command exists, nor may one exist yet. */

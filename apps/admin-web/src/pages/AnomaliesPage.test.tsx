@@ -8,13 +8,13 @@ import { anomalyPageOf, fakeAnomalyGateway, OBSERVATION_ID, ok, OPERATION_ID, pa
 import { unconfiguredAuthGateway, type AuthGateway } from '../features/auth/authGateway'
 import type { ProblemResponse } from '../features/auth/contract'
 import { createSessionStore } from '../features/auth/session'
-import { adminProfile, problemBody } from '../features/auth/testFixtures'
+import { adminProfile, problemBody, sessionStubs } from '../features/auth/testFixtures'
 import type { Locale } from '../i18n/locale'
 import { installDialogPolyfill } from '../test/dialog'
 import { installMatchMedia } from '../test/matchMedia'
 import { renderWithProviders } from '../test/renderApp'
 
-const authGateway: AuthGateway = { ...unconfiguredAuthGateway, currentProfile: async () => ({ kind: 'ok', value: adminProfile, requestId: null }) }
+const authGateway: AuthGateway = { ...unconfiguredAuthGateway, ...sessionStubs, currentProfile: async () => ({ kind: 'ok', value: adminProfile, requestId: null }) }
 const problem = (status: number, code: string, extra: Partial<ProblemResponse> = {}) =>
   ({ kind: 'httpProblem', status, problem: problemBody(status, code, { traceId: 'trace-0001', ...extra }), retryAfter: null, requestId: 'req-x' }) as const
 const offline = { kind: 'network', reason: 'offline' } as const
@@ -87,6 +87,19 @@ describe('Anomalies — list and dossier', () => {
     expect(screen.queryByRole('button', { name: /résoudre|resolve/i })).toBeNull()
     expect(within(dossier).getByRole('button', { name: 'Reconnaître' })).toBeDefined()
     expect(within(dossier).getByText('Ne résout pas l’anomalie.')).toBeDefined()
+  })
+
+  it('labels the offline type with the backend summary wording in both languages', async () => {
+    const offline = parsedAnomaly({ type: 'DEVICE_OFFLINE_DURING_OPERATION', summary: 'Texte du serveur, jamais affiché pour un type connu.' })
+    const gateway = fakeAnomalyGateway({ listAnomalies: async () => listOf(offline), getAnomaly: detailsOf(offline) })
+    const view = renderAnomalies(gateway)
+    await screen.findByText('1 anomalie')
+    expect(within(listEl()).getByText("Casier hors ligne ou issue physique indéterminée pendant l'opération")).toBeDefined()
+    expect(await screen.findByRole('group', { name: "Casier hors ligne ou issue physique indéterminée pendant l'opération" })).toBeDefined()
+    expect(document.body.textContent).not.toContain('pendant une opération')
+    view.unmount()
+    renderAnomalies(gateway, { locale: 'en' })
+    expect(await screen.findByRole('group', { name: 'Locker offline or physical outcome undetermined during the operation' })).toBeDefined()
   })
 
   it('shows the French server summary as the label of an unknown type, with the raw code in the dossier', async () => {

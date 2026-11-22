@@ -6,11 +6,22 @@ const UUID = '7c9e6679-7425-40de-944b-e07fc1f90ae7'
 
 describe('transaction address', () => {
   it('round-trips the view, filters, page and selection', () => {
-    const filters = { status: 'ACTIVE', assetId: UUID, from: '2026-11-01', to: '2026-11-10' }
+    const filters = { status: 'ACTIVE', assetId: UUID, lockerId: null, from: '2026-11-01', to: '2026-11-10' }
     const href = transactionHref({ view: 'loans', page: 2, selectedId: UUID, filters })
     expect(href).toBe(`/reservations-prets?vue=prets&statut=ACTIVE&equipement=${UUID}&du=2026-11-01&au=2026-11-10&page=3&dossier=${UUID}`)
     const read = readTransactionLocation(href.split('?')[1] ?? '')
     expect(read).toEqual({ view: 'loans', page: 2, selectedId: UUID, filters })
+  })
+
+  it('carries a locker on the operations view only, as `casier`', () => {
+    const filters = { ...NO_FILTERS, lockerId: UUID }
+    const href = transactionHref({ view: 'operations', filters })
+    expect(href).toBe(`/reservations-prets?vue=operations&casier=${UUID}`)
+    expect(readTransactionLocation(href.split('?')[1] ?? '').filters.lockerId).toBe(UUID)
+    expect(transactionHref({ view: 'loans', filters })).toBe('/reservations-prets?vue=prets')
+    expect(readTransactionLocation(`vue=prets&casier=${UUID}`).filters.lockerId).toBeNull()
+    expect(readTransactionLocation(`vue=operations&casier=${UUID.toUpperCase()}`).filters.lockerId).toBe(UUID)
+    expect(readTransactionLocation('vue=operations&casier=not-a-uuid').filters.lockerId).toBeNull()
   })
 
   it('keeps the bare path for the default view and no filter', () => {

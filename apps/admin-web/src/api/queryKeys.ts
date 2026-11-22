@@ -33,6 +33,8 @@ export const queryKeys = {
     loanList: (query: object) => ['transactions', 'loans', 'list', query] as const,
     loan: (id: string) => ['transactions', 'loans', 'detail', id] as const,
     operationList: (query: object) => ['transactions', 'operations', 'list', query] as const,
+    /** Prefix of every operation list, whatever its filters and page. */
+    operationLists: ['transactions', 'operations', 'list'] as const,
     operation: (id: string) => ['transactions', 'operations', 'detail', id] as const,
   },
   /** The Vue d'ensemble reads: one key per block, so a failing route never invalidates another block. */

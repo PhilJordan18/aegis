@@ -16,11 +16,13 @@ export const STATUSES_OF_VIEW: Readonly<Record<TransactionView, readonly string[
 export interface TransactionFilterValues {
   readonly status: string | null
   readonly assetId: string | null
+  /** Operations only (09 §17): a locker named by a link from Casiers; there is no free field for it. */
+  readonly lockerId: string | null
   readonly from: string | null
   readonly to: string | null
 }
 
-export const NO_FILTERS: TransactionFilterValues = { status: null, assetId: null, from: null, to: null }
+export const NO_FILTERS: TransactionFilterValues = { status: null, assetId: null, lockerId: null, from: null, to: null }
 
 export interface TransactionLocation {
   readonly view: TransactionView
@@ -47,7 +49,7 @@ export function isCalendarDay(value: string): boolean {
 }
 
 /**
- * `?vue=prets&statut=ACTIVE&equipement=<uuid>&du=2026-11-01&au=2026-11-10&page=2&dossier=<id>`. The page is one-based in the
+ * `?vue=prets&statut=ACTIVE&equipement=<uuid>&casier=<uuid>&du=2026-11-01&au=2026-11-10&page=2&dossier=<id>`. The page is one-based in the
  * address. An unusable value is ignored (it filters nothing); it is never sent to the server.
  */
 export function readTransactionLocation(search: string): TransactionLocation {
@@ -56,6 +58,7 @@ export function readTransactionLocation(search: string): TransactionLocation {
   const page = Number.parseInt(params.get('page') ?? '', 10)
   const status = params.get('statut')
   const assetId = params.get('equipement')
+  const lockerId = params.get('casier')
   const from = params.get('du')
   const to = params.get('au')
   const selected = params.get('dossier')
@@ -66,6 +69,7 @@ export function readTransactionLocation(search: string): TransactionLocation {
     filters: {
       status: status !== null && STATUSES_OF_VIEW[view].includes(status) ? status : null,
       assetId: assetId !== null && UUID.test(assetId) ? assetId.toLowerCase() : null,
+      lockerId: view === 'operations' && lockerId !== null && UUID.test(lockerId) ? lockerId.toLowerCase() : null,
       from: from !== null && isCalendarDay(from) ? from : null,
       to: to !== null && isCalendarDay(to) ? to : null,
     },
@@ -77,6 +81,7 @@ export function transactionHref({ view, page = 0, selectedId = null, filters = N
   if (view !== 'reservations') params.set('vue', VIEW_PARAM[view])
   if (filters.status !== null) params.set('statut', filters.status)
   if (filters.assetId !== null) params.set('equipement', filters.assetId)
+  if (filters.lockerId !== null && view === 'operations') params.set('casier', filters.lockerId)
   if (filters.from !== null) params.set('du', filters.from)
   if (filters.to !== null) params.set('au', filters.to)
   if (page > 0) params.set('page', String(page + 1))

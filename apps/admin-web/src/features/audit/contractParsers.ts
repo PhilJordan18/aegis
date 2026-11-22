@@ -1,4 +1,5 @@
 import { isInstant, isUuid } from '../lockers/contractParsers'
+import { flattenAuditDetails } from './auditDetailPaths'
 import type { AuditActor, AuditDetails, AuditEventView, AuditPage } from './contract'
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -13,16 +14,10 @@ function parseActor(value: unknown): AuditActor {
 
 const NO_DETAILS: AuditDetails = { entries: [], omitted: 0 }
 
-/** D9: scalar fields only. An object or a list is dropped and counted, never read or rendered. */
+/** D9 and 09 §19.1: the allowlisted scalar leaves, nested ones as dotted paths. Anything else is counted, never read. */
 export function parseAuditDetails(details: unknown): AuditDetails {
   if (!isRecord(details)) return NO_DETAILS
-  const entries: [string, string | number | boolean | null][] = []
-  let omitted = 0
-  for (const [key, value] of Object.entries(details)) {
-    if (value === null || typeof value === 'string' || typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) entries.push([key, value])
-    else omitted += 1
-  }
-  return { entries, omitted }
+  return flattenAuditDetails(details)
 }
 
 /** §19.1. The fields §19.1 does type are strict; an `actor` shape the contract does not send is kept visible as unreadable, not dropped. */

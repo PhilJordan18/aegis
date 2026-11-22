@@ -48,6 +48,12 @@ function parseUserSummary(value: unknown, expectedId: string): UserSummary | nul
   return { id: expectedId, displayName: value.displayName }
 }
 
+/** R7 (#48): required, never null, and it must name the same user as the id beside it. */
+function parseRequiredUserSummary(value: unknown, expectedId: string): UserSummary | null {
+  if (!isRecord(value) || value.id !== expectedId || !isText(value.displayName) || value.displayName.trim() === '') return null
+  return { id: expectedId, displayName: value.displayName }
+}
+
 /**
  * §8.3. A structural break rejects the whole response, so the screen reports a service error instead of guessing;
  * an unknown status is tolerated per value (09 §3) and becomes UNRECOGNIZED.
@@ -118,6 +124,9 @@ export function parseLockerOperationView(body: unknown): LockerOperationView | n
     body.terminalAt,
   ]
   if (!instants.every(isInstantOrNull)) return null
+  const user = parseRequiredUserSummary(body.user, userId)
+  const asset = parseAssetSummary(body.asset)
+  if (user === null || asset === null || asset.id !== assetId) return null
   const type = lenientEnum(body.type, LOCKER_OPERATION_TYPES, 'lockerOperation.type')
   const status = lenientEnum(body.status, LOCKER_OPERATION_STATUSES, 'lockerOperation.status')
   const requiredAction = lenientEnum(body.requiredAction, REQUIRED_ACTIONS, 'lockerOperation.requiredAction')
@@ -127,7 +136,9 @@ export function parseLockerOperationView(body: unknown): LockerOperationView | n
     type,
     status,
     userId,
+    user,
     assetId,
+    asset,
     lockerId,
     compartmentId,
     reservationId,
