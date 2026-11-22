@@ -39,6 +39,15 @@ export class SessionRestoredError extends Error {
 
 const MAX_RETRIES = 2
 
+/**
+ * How long a read is trusted before the screen that shows it asks again when it is entered or the tab comes back.
+ * Availability, reservations, loans, operations and anomalies change outside the Manager (the technician app, the
+ * hub), and ADR-006 forbids polling the catalogue, so these two moments are the only ones where a screen learns of
+ * them: 30 s let a Manager return to a screen and read a reserved or borrowed unit as available (#197). It is not
+ * zero so that two components mounting together, or a tab flickering, share one request.
+ */
+export const READ_STALE_MS = 5_000
+
 /** Only transport failures and 5xx are retried; 4xx answers are authoritative (09 §21). */
 export function isTransientFailure(error: unknown): boolean {
   if (!(error instanceof ApiRequestError)) return false
@@ -51,7 +60,7 @@ export function createQueryClient(): QueryClient {
     defaultOptions: {
       queries: {
         retry: (failureCount, error) => failureCount < MAX_RETRIES && isTransientFailure(error),
-        staleTime: 30_000,
+        staleTime: READ_STALE_MS,
       },
       // Commands are never replayed automatically; custody-critical ones need explicit user intent.
       mutations: { retry: false },

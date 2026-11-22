@@ -50,6 +50,12 @@ class CheckoutConfirmationApiTests extends HubChallengeApiTest {
     @Autowired
     TransactionTemplate transactions;
 
+    @Autowired
+    CheckoutAnomalyRecovery recovery;
+
+    @Autowired
+    ReservationExpiry expiry;
+
     UUID operation;
     UUID compartment;
     String tag;
@@ -338,6 +344,146 @@ class CheckoutConfirmationApiTests extends HubChallengeApiTest {
         pass();
         assertEquals("ANOMALY", fixtures.operationStatus(operation));
         assertEquals(0L, loans());
+    }
+
+    /**
+     * Document 06, section 15.2: an uncertain checkout is resolved by a new stable presence of its asset, door closed,
+     * reported outside any operation (document 10, section 12.2). No loan; the reservation is usable again.
+     */
+    @Test
+    void anUncertainCheckoutIsResolvedWhenItsAssetIsSeenBackAndTheReservationIsUsableAgain() throws Exception {
+        authorized();
+        acknowledge();
+        door("DOOR_OPENED");
+        clock.set(DEADLINE);
+        pass();
+        assertAnomaly("DOOR_NOT_CLOSED_BEFORE_EXPIRY", "DOOR_NOT_CLOSED");
+        heartbeatWithOpenDoor();
+        reservationActions().andExpect(jsonPath("$.availableActions").isEmpty());
+
+        // The door still open: a scan proves nothing (document 03, section 4.16).
+        outsideScan(Map.of(tag, 5));
+        assertEquals("OPEN", anomalyStatus());
+
+        // The closing alone leaves the cell's projected door open until the hub reports it closed.
+        outsideDoorClosed();
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        outsideScan(Map.of(tag, 5));
+        assertResolvedWithoutLoan();
+        assertEquals("ACTIVE", reservationStatus());
+        reservationActions().andExpect(jsonPath("$.availableActions[0]").value("CHECKOUT"));
+    }
+
+    /** Document 05, section 6.3: only a new proof resolves; the operation's own scan, older, never does. */
+    @Test
+    void aPresenceSeenBeforeTheAnomalyResolvesNothingButANewOneDoes() throws Exception {
+        authorized();
+        acknowledge();
+        door("DOOR_OPENED");
+        door("DOOR_CLOSED");
+        scan("HEALTHY", Map.of(tag, 5));
+        clock.set(DEADLINE);
+        pass();
+        assertAnomaly("INCONSISTENT_PHYSICAL_STATE", "EXPECTED_ASSET_STILL_PRESENT");
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        recovery.run();
+        assertEquals("OPEN", anomalyStatus());
+
+        // Two reads prove neither presence nor absence (document 10, section 12.2).
+        outsideScan(Map.of(tag, 2));
+        recovery.run();
+        assertEquals("OPEN", anomalyStatus());
+
+        outsideScan(Map.of(tag, 4));
+        assertResolvedWithoutLoan();
+    }
+
+    /** Document 05, section 7: once the window is over, the resolved reservation expires instead of being usable. */
+    @Test
+    void aReservationHeldByAnUncertainCheckoutExpiresOnceItsAnomalyIsResolvedAfterItsWindow() throws Exception {
+        authorized();
+        acknowledge();
+        door("DOOR_OPENED");
+        door("DOOR_CLOSED");
+        clock.set(DEADLINE);
+        pass();
+        assertAnomaly("DEVICE_OFFLINE_DURING_OPERATION", "SCAN_MISSING");
+
+        clock.set(UNTIL.plusSeconds(60));
+        assertEquals(ReservationExpiry.Outcome.DEFERRED, expiry.expire(reservation, clock.instant(), true));
+        // After hours of silence the hub restarts; its new session reports the door closed.
+        boot(2);
+        closedAt = clock.instant();
+        outsideScan(Map.of(tag, 5));
+        assertResolvedWithoutLoan();
+        assertEquals("EXPIRED", reservationStatus());
+    }
+
+    /** A heartbeat that reports the cell's door open, as the hub would while it stands open. */
+    private void heartbeatWithOpenDoor() {
+        heartbeat("CONNECTED", "HEALTHY", "OPEN", "UNLOCKED");
+    }
+
+    /** A door closing reported outside any operation (document 10, section 12.2). */
+    private void outsideDoorClosed() {
+        clock.advance(Duration.ofSeconds(1));
+        Map<String, Object> message = envelope("DOOR_CLOSED");
+        message.put("compartmentId", compartment.toString());
+        message.put("doorState", "CLOSED");
+        assertEquals(Outcome.ACCEPTED, ingest(message));
+        closedAt = clock.instant();
+    }
+
+    /** An explicit scan outside any operation: a 3-second window after the last closing, reported at its end. */
+    private void outsideScan(Map<String, Integer> reads) {
+        Instant started = closedAt == null || clock.instant().isAfter(closedAt) ? clock.instant() : closedAt;
+        clock.set(started.plusSeconds(3));
+        Map<String, Object> message = envelope("RFID_SCAN_COMPLETED");
+        message.put("compartmentId", compartment.toString());
+        message.put("windowStartedAt", started.toString());
+        message.put("windowEndedAt", clock.instant().toString());
+        message.put("readerStatus", "HEALTHY");
+        List<Map<String, Object>> identifiers = new ArrayList<>();
+        reads.forEach((value, count) -> {
+            Map<String, Object> identifier = new LinkedHashMap<>();
+            identifier.put("identifierType", "RFID_UHF");
+            identifier.put("identifierValue", value);
+            identifier.put("readCount", count);
+            identifiers.add(identifier);
+        });
+        message.put("observedIdentifiers", identifiers);
+        assertEquals(Outcome.ACCEPTED, ingest(message));
+    }
+
+    private void assertResolvedWithoutLoan() {
+        Map<String, Object> anomaly = jdbc.sql("""
+                SELECT a.status, a.resolution_note, p.type AS evidence_type, p.identifier_value
+                FROM aegis.anomalies a
+                JOIN aegis.physical_observations p ON p.id = a.resolution_evidence_observation_id
+                WHERE a.locker_operation_id = :id
+                """).param("id", operation).query().singleRow();
+        assertEquals("RESOLVED", anomaly.get("status"));
+        assertEquals(CheckoutAnomalyRecovery.RESOLUTION_NOTE, anomaly.get("resolution_note"));
+        assertEquals("ASSET_PRESENT", anomaly.get("evidence_type"));
+        assertEquals(tag, anomaly.get("identifier_value"));
+        assertEquals("ANOMALY", fixtures.operationStatus(operation));
+        assertEquals(0L, loans());
+        assertEquals(1L, audits("ANOMALY_RESOLVED"));
+    }
+
+    private String anomalyStatus() {
+        return jdbc.sql("SELECT status FROM aegis.anomalies WHERE locker_operation_id = :id").param("id", operation)
+                .query(String.class).single();
+    }
+
+    private String reservationStatus() {
+        return jdbc.sql("SELECT status FROM aegis.reservations WHERE id = :id").param("id", reservation)
+                .query(String.class).single();
+    }
+
+    private org.springframework.test.web.servlet.ResultActions reservationActions() throws Exception {
+        return mvc.perform(get("/api/v1/reservations/" + reservation).header(AUTHORIZATION, bearer(token)))
+                .andExpect(status().isOk());
     }
 
     /** One scheduled pass, which also sweeps operations other tests left open, then this operation's status. */

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { refreshAssetSummaries } from '../../api/invalidation'
 import { queryKeys } from '../../api/queryKeys'
 import { authorizedCommand, authorizedRequest } from '../auth/authorizedRequest'
 import { useSessionStore } from '../auth/session'
@@ -42,6 +43,8 @@ export function useCustodyMutations(assetId: string) {
     void client.invalidateQueries({ queryKey: queryKeys.catalog.all })
     void client.invalidateQueries({ queryKey: queryKeys.custody.all })
     void client.invalidateQueries({ queryKey: queryKeys.lockers.all })
+    // A reservation, a loan and an operation name the placement of the unit (09 §8.9).
+    refreshAssetSummaries(client)
   }
 
   const assign = useMutation({

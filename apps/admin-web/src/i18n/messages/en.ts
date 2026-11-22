@@ -311,6 +311,7 @@ export const en: Messages = {
     modelsTab: 'Models',
     selectedOverline: 'Selected unit',
     listTitle: ({ count: value }) => plural(value, { one: `${count.format(value)} unit`, other: `${count.format(value)} units` }),
+    refresh: 'Refresh',
     listMeta: 'Operational diagnostic',
     listFoot: ({ time }) => `Sorted by code · diagnostic evaluated at ${time}`,
     blockers: ({ count: value }) => plural(value, { one: `${count.format(value)} blocker`, other: `${count.format(value)} blockers` }),

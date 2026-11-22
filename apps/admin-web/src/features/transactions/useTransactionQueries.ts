@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
+import { refreshCustodyFacts } from '../../api/invalidation'
 import { queryKeys } from '../../api/queryKeys'
 import { authorizedRequest } from '../auth/authorizedRequest'
 import { useSessionStore } from '../auth/session'
@@ -75,15 +76,13 @@ export function useTransactionList(view: TransactionView, filters: TransactionFi
 }
 
 /**
- * Reads again what an operation that has just become terminal changed (ADR-006): the linked reservation and loan by
- * id, the equipment, and the operation lists. Only queries that are on screen request again; the others are marked
- * stale and read on their next mount. No list is ever polled: this runs once, at the transition.
+ * Reads again what an operation that has just become terminal changed (ADR-006): the linked reservation and loan, the
+ * equipment, and every list and count that shows them (`refreshCustodyFacts`). Only queries that are on screen request
+ * again; the others are marked stale and read on their next mount. No list is ever polled: this runs once, at the
+ * transition, and the followed operation itself is not asked a second time.
  */
 function refreshAfterTerminal(client: QueryClient, operation: LockerOperationView) {
-  void client.invalidateQueries({ queryKey: queryKeys.catalog.asset(operation.assetId) })
-  if (operation.reservationId !== null) void client.invalidateQueries({ queryKey: queryKeys.transactions.reservation(operation.reservationId) })
-  if (operation.loanId !== null) void client.invalidateQueries({ queryKey: queryKeys.transactions.loan(operation.loanId) })
-  void client.invalidateQueries({ queryKey: queryKeys.transactions.operationLists })
+  refreshCustodyFacts(client, { except: queryKeys.transactions.operation(operation.id) })
 }
 
 /**
