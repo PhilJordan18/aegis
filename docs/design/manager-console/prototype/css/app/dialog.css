@@ -1,0 +1,45 @@
+/*
+ * Modal dialog (forms and confirmations). Identity v3: opaque surface, hairline, the menu shadow; no glass.
+ * The panel never exceeds the viewport: the body scrolls, the head and actions stay (320 px, 200 % zoom).
+ */
+.ag-dialog {
+  margin: auto; padding: 0; border: 0; background: transparent; color: var(--ag-text);
+  width: min(640px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); overflow: visible;
+}
+.ag-dialog--sm { width: min(480px, calc(100vw - 32px)); }
+.ag-dialog::backdrop { background: var(--ag-scrim); }
+.ag-dialog[open] { animation: ag-dialog-in var(--ag-motion-slow) var(--ag-ease-out); }
+@keyframes ag-dialog-in { from { transform: translateY(8px); opacity: 0; } }
+.ag-dialog:focus-visible { outline: none; }
+.ag-dialog:focus-visible .ag-dialog__panel { outline: 2px solid var(--ag-focus); outline-offset: 2px; }
+.ag-dialog__panel {
+  display: flex; flex-direction: column; max-height: calc(100dvh - 32px); min-width: 0;
+  background: var(--ag-surface); border: 1px solid var(--ag-border); border-radius: var(--ag-r-panel); box-shadow: var(--ag-shadow-menu);
+}
+.ag-dialog__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 16px 4px 24px; }
+.ag-dialog__title { padding-top: 6px; font-size: 1.25rem; line-height: 1.3; font-weight: 600; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.ag-dialog__description { padding: 4px 24px 0; color: var(--ag-text-2); font-size: 0.9375rem; line-height: 1.5; overflow-wrap: anywhere; }
+.ag-dialog__description p + p { margin-top: 8px; }
+.ag-dialog__body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px 24px 8px; display: grid; gap: 4px; align-content: start; }
+.ag-dialog__actions {
+  display: flex; flex-wrap: wrap-reverse; justify-content: flex-end; gap: 10px; padding: 16px 24px 20px;
+  border-top: 1px solid var(--ag-separator);
+}
+@media (max-width: 479px) {
+  .ag-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
+  .ag-dialog__panel { max-height: calc(100dvh - 16px); border-radius: var(--ag-r-card); }
+  .ag-dialog__head { padding: 16px 8px 4px 16px; }
+  .ag-dialog__description { padding: 4px 16px 0; }
+  .ag-dialog__body { padding: 14px 16px 8px; }
+  .ag-dialog__actions { padding: 14px 16px 16px; }
+  .ag-dialog__actions .ag-btn { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ag-dialog[open] { animation: none; }
+}
+@media (forced-colors: active) {
+  .ag-dialog__panel { border-color: CanvasText; }
+}
+.ag-dialog__alert { margin-bottom: 12px; }
+.ag-dialog__alert:focus-visible { outline: 2px solid var(--ag-focus); outline-offset: 2px; border-radius: var(--ag-r-control); }
+.ag-dialog__form { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }

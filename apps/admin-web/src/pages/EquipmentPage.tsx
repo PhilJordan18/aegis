@@ -94,11 +94,25 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
   const { archiveAsset, archiveModel } = useCatalogMutations()
   const [editing, setEditing] = useState<Editing | null>(null)
   const [outcome, setOutcome] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
   const sessions = useRef(0)
   const open = (next: EditIntent) => {
     sessions.current += 1
     setOutcome('')
     setEditing({ ...next, session: sessions.current, open: true })
+  }
+  /**
+   * « Actualiser »: availability and placement change outside the Manager and the catalogue is never polled (ADR-006),
+   * so the administrator can read the list and the open dossier again at once, as on the other screens.
+   */
+  const refresh = () => {
+    if (refreshing) return
+    setRefreshing(true)
+    setOutcome('')
+    void Promise.all([list.refetch(), selectedId === null ? undefined : asset.refetch()]).then(([read]) => {
+      setRefreshing(false)
+      if (read.isSuccess) setOutcome(m.equipment.loaded({ count: read.data.totalItems, page: read.data.page + 1, pages: Math.max(read.data.totalPages, 1) }))
+    })
   }
   const close = () => setEditing((current) => (current === null ? null : { ...current, open: false }))
 
@@ -205,6 +219,12 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
             </nav>
           </div>
           <div className="ag-page__actions">
+            {!modelsView && (
+              <Button variant="secondary" busy={refreshing} onClick={refresh}>
+                <Icon name="refresh" />
+                {m.equipment.refresh}
+              </Button>
+            )}
             <Button onClick={() => open({ kind: modelsView ? 'createModel' : 'createAsset' })}>
               <Icon name="plus" />
               {modelsView ? t.newModel : t.newAsset}

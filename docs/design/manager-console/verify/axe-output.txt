@@ -1,0 +1,1317 @@
+[
+ {
+  "label": "reservations nominal fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations nominal en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations nominal en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations nominal fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations partial fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations partial en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations partial en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations partial fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations stale fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations stale en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations stale en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations stale fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations join-failed fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations join-failed en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations join-failed en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies nominal fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations join-failed fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies nominal en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies nominal en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies nominal fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies partial fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies partial en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies partial en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies partial fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies stale fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies stale en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies stale en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies stale fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies join-failed fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies join-failed en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies join-failed en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies ack-resolved fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies ack-resolved en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies join-failed fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies ack-resolved en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies ack-not-acknowledgeable fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies ack-resolved fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies ack-not-acknowledgeable en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies ack-not-acknowledgeable en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies ack-validation fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies ack-not-acknowledgeable fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies ack-validation en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies ack-validation en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies ack-unreachable fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies ack-unreachable en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies ack-validation fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies ack-unreachable en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies ack-unreachable fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit nominal fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit nominal en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit nominal en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit nominal fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit partial fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit partial en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit partial en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit partial fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit invalid-cursor fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit invalid-cursor en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit invalid-cursor en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit invalid-cursor fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit stale en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit stale fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit stale fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit stale en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations loans en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations loans fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations loans fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations loans en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations operations fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations operations en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations operations fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "reservations operations en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     "#dossier-title > .ag-tnum"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies all en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies all fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies all fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies dialog fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#ack-desc > p:nth-child(1)",
+     "#ack-desc > p:nth-child(2)",
+     "#ack-help"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies dialog en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#ack-desc > p:nth-child(2)",
+     "#ack-help"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies all en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#dossier > .ag-overline",
+     "#dossier-title",
+     ".ag-dossier__sub"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies dialog fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#ack-desc > p:nth-child(2)"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies dialog en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#ack-desc > p:nth-child(2)"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies dialog erreur de champ fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#ack-desc > p:nth-child(1)",
+     "#ack-desc > p:nth-child(2)",
+     "#ack-err-msg > span"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies dialog erreur de champ en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#ack-desc > p:nth-child(2)",
+     "#ack-help"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies dialog erreur de champ fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#ack-desc > p:nth-child(2)"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "anomalies dialog erreur de champ en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     "#ack-desc > p:nth-child(2)"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit filtres ouverts fr light 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit filtres ouverts en dark 390",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit filtres ouverts fr dark 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ {
+  "label": "audit filtres ouverts en light 1440",
+  "violations": [],
+  "incomplete": [
+   {
+    "id": "color-contrast",
+    "nodes": [
+     ".ag-item.cs-ev[aria-current=\"true\"] > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(2) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]",
+     "li:nth-child(3) > .ag-item.cs-ev > .cs-ev__body > .cs-ev__line:nth-child(3) > .cs-arrow[aria-hidden=\"true\"]"
+    ]
+   }
+  ],
+  "errors": []
+ }
+]
+
+218 pages analysées (109 sombres, 109 claires)
+0 page(s) avec violation, 0 noeud(s) en violation
+88 règle(s) « à vérifier » (incomplete)
+axe-exit=0

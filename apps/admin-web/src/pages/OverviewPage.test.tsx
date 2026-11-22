@@ -1,7 +1,7 @@
 import { cleanup, configure, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createQueryClient } from '../api/serverState'
+import { createQueryClient, READ_STALE_MS } from '../api/serverState'
 import { App } from '../app/App'
 import { parseAnomalyView } from '../features/anomalies/contractParsers'
 import type { AnomalyPage } from '../features/anomalies/contract'
@@ -443,6 +443,47 @@ describe("Vue d'ensemble: stale data and refresh", () => {
     await waitFor(() => expect(fakes.lockerGateway.getStatus).toHaveBeenCalledTimes(2))
     expect(fakes.anomalyGateway.listAnomalies).toHaveBeenCalledTimes(1)
     expect(fakes.transactionGateway.listLoans).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe("Vue d'ensemble: what the server says now (#197)", () => {
+  /** A reservation made by a technician while the Manager keeps the page open: no refresh, no polling. */
+  function technicianReserves() {
+    let reserved = false
+    const fakes = gateways({ reservations: async () => ok(reserved ? pageOf([reservation({ id: id(3), reservedUntil: '2026-11-10T21:30:00Z' })]) : pageOf<ReservationView>([])) })
+    return { fakes, reserve: () => (reserved = true) }
+  }
+  const tabBack = () => document.dispatchEvent(new Event('visibilitychange', { bubbles: true }))
+
+  it('counts a reservation made elsewhere when the tab comes back after the read went stale', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const { fakes, reserve } = technicianReserves()
+    renderWith(fakes)
+    await waitFor(() => expect(blockText('Réservations actives')).toContain('Aucune réservation active'))
+    await waitFor(() => expect(fakes.lockerGateway.getStatus).toHaveBeenCalledTimes(1))
+
+    reserve()
+    vi.setSystemTime(Date.now() + READ_STALE_MS + 1_000)
+    tabBack()
+    await waitFor(() => expect(blockText('Réservations actives')).toContain('1 active'))
+    expect(fakes.transactionGateway.listReservations).toHaveBeenCalledTimes(2)
+    // The whole page is read again, not only the block that changed: operations, loans and anomalies too.
+    expect(fakes.anomalyGateway.listAnomalies).toHaveBeenCalledTimes(2)
+    expect(fakes.transactionGateway.listLoans).toHaveBeenCalledTimes(4)
+  })
+
+  it('does not read again for a tab that comes back a moment after a read', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const { fakes, reserve } = technicianReserves()
+    renderWith(fakes)
+    await waitFor(() => expect(blockText('Réservations actives')).toContain('Aucune réservation active'))
+    await waitFor(() => expect(fakes.lockerGateway.getStatus).toHaveBeenCalledTimes(1))
+    reserve()
+    vi.setSystemTime(Date.now() + READ_STALE_MS - 2_000)
+    tabBack()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(fakes.transactionGateway.listReservations).toHaveBeenCalledTimes(1)
+    expect(blockText('Réservations actives')).toContain('Aucune réservation active')
   })
 })
 

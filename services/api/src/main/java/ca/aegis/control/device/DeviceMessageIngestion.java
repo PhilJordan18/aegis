@@ -120,6 +120,10 @@ public class DeviceMessageIngestion {
             // 08, section 7.1, which the device lock taken above would invert (#47).
             events.publishEvent(new PhysicalEvidenceStored(storable.fact().operationId()));
         }
+        if (outcome == Outcome.ACCEPTED && storable.type() == InboundMessageType.RFID_SCAN_COMPLETED
+                && storable.fact() != null && storable.fact().compartmentId() != null) {
+            events.publishEvent(new PresenceScanStored(storable.fact().compartmentId()));
+        }
         return outcome;
     }
 
