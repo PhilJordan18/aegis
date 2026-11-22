@@ -1303,10 +1303,23 @@ export const fr = {
     detailNull: 'Non renseigné',
     detailTrue: 'Oui',
     detailFalse: 'Non',
+    /** Spoken before the two sides of a change, which are shown as « valeur → valeur ». */
+    detailAbsent: 'Aucun',
+    detailBefore: 'Avant',
+    detailAfter: 'Après',
     detailsOmitted: ({ count: value }: { count: number }) =>
       plural(value, { one: `${count.format(value)} champ structuré n’est pas affiché.`, other: `${count.format(value)} champs structurés ne sont pas affichés.` }),
     /** [P] Labels of the keys of the backend allowlist (AuditDetailsFilter); a key not listed shows as sent. */
     detailKey: {
+      created: 'Créé',
+      assigned: 'Attribué',
+      assetModelId: 'Identifiant du modèle',
+      placementId: 'Identifiant du placement',
+      lockerCode: 'Code du casier',
+      compartmentId: 'Identifiant de la cellule',
+      compartmentCode: 'Code de la cellule',
+      assignedAt: 'Placé le',
+      endedOperationIds: 'Opérations terminées',
       revoked: 'Révoqué',
       revokedAt: 'Révoqué le',
       archivedAt: 'Archivé le',
