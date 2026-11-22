@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../../api/queryKeys'
-import { authorizedRequest } from '../auth/authorizedRequest'
+import { authorizedCommand } from '../auth/authorizedRequest'
 import { useSessionStore } from '../auth/session'
 import { useAnomalyGateway } from './AnomalyGatewayContext'
 import { anomalyDetailOptions } from './useAnomalyQueries'
@@ -18,7 +18,7 @@ export function useAcknowledgeAnomaly() {
 
   const acknowledge = useMutation({
     mutationFn: ({ anomalyId, note, idempotencyKey }: { anomalyId: string; note: string; idempotencyKey: string }) =>
-      authorizedRequest(session, (token) => gateway.acknowledge(token, anomalyId, { note }, idempotencyKey)),
+      authorizedCommand(session, (token) => gateway.acknowledge(token, anomalyId, { note }, idempotencyKey)),
     onSuccess: (view: AnomalyView) => {
       client.setQueryData<AnomalyDetail>(queryKeys.anomalies.detail(view.id), (previous) => ({ ...view, evidence: previous?.evidence ?? null }))
       void client.invalidateQueries({ queryKey: queryKeys.anomalies.all })

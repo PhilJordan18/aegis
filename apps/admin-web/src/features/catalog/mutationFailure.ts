@@ -1,4 +1,4 @@
-import { ApiRequestError, SessionEndedError } from '../../api/serverState'
+import { ApiRequestError, SessionEndedError, SessionRestoredError } from '../../api/serverState'
 
 export interface FieldViolation {
   readonly field: string
@@ -12,6 +12,11 @@ export interface FieldViolation {
 export type MutationFailure =
   /** 401 or no token: the session store already sent the user back to sign-in. */
   | { readonly kind: 'ended' }
+  /**
+   * The command got a 401, the session was restored, and the command was not sent again (#178). The user sends it
+   * again; the form keeps its `Idempotency-Key`, so the server records the intent once.
+   */
+  | { readonly kind: 'resubmit' }
   /**
    * No answer (offline, timeout, gateway without a body). The outcome is unknown: repeating the same intent
    * with the same `Idempotency-Key` cannot apply it twice (09 §20.2).
@@ -29,6 +34,7 @@ export type MutationFailure =
 
 export function classifyMutationFailure(error: unknown): MutationFailure {
   if (error instanceof SessionEndedError) return { kind: 'ended' }
+  if (error instanceof SessionRestoredError) return { kind: 'resubmit' }
   if (!(error instanceof ApiRequestError)) return { kind: 'serviceError', traceId: null }
   const { failure } = error
   switch (failure.kind) {

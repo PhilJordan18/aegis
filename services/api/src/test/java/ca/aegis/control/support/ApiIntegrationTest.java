@@ -43,6 +43,7 @@ public abstract class ApiIntegrationTest {
     public static final String DISPLAY_KEY = randomBase64(32);
     public static final String LOGIN = "/api/v1/auth/login";
     public static final String ME = "/api/v1/auth/me";
+    public static final String MANAGER_ORIGIN = "https://manager.aegis.test";
 
     @Autowired
     protected MockMvc mvc;
@@ -72,6 +73,8 @@ public abstract class ApiIntegrationTest {
         // Nor may AEGIS_DB_APPLICATION_ROLE grant anything in the test databases: this role never exists.
         registry.add("spring.flyway.placeholders[application_role]", () -> "aegis_test_no_application_role");
         registry.add("aegis.security.jwt.secret", () -> JWT_SECRET);
+        registry.add("aegis.security.browser-session.allowed-origins", () -> MANAGER_ORIGIN);
+        registry.add("aegis.security.browser-session.purge.scheduled", () -> "false");
         // Tests move the clock and insert due reservations: a background expiry pass would race their assertions.
         registry.add("aegis.reservations.expiry.scheduled", () -> "false");
         // A display key drawn for this run only: no key value is ever committed.

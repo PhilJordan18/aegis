@@ -14,8 +14,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Creates the prepared demonstration accounts when explicitly enabled. Re-running is idempotent: a missing account
- * is created and a changed password is re-hashed, but the role, access level and status of an existing account are
- * never altered, so an administrator's decision to disable an account survives a restart.
+ * is created and a changed password is re-hashed through {@link PasswordChanges}, which revokes the account's browser
+ * sessions (ADR-017); an unchanged password changes nothing. The role, access level and status of an existing
+ * account are never altered, so an administrator's decision to disable an account survives a restart.
  */
 @Component
 @ConditionalOnProperty(prefix = "aegis.identity.demo-accounts", name = "enabled", havingValue = "true")
@@ -29,13 +30,15 @@ class DemoAccountProvisioner implements ApplicationRunner {
     private final DemoAccountProperties properties;
     private final AccountRepository accounts;
     private final PasswordEncoder passwordEncoder;
+    private final PasswordChanges passwordChanges;
     private final TransactionTemplate transactions;
 
     DemoAccountProvisioner(DemoAccountProperties properties, AccountRepository accounts,
-            PasswordEncoder passwordEncoder, TransactionTemplate transactions) {
+            PasswordEncoder passwordEncoder, PasswordChanges passwordChanges, TransactionTemplate transactions) {
         this.properties = properties;
         this.accounts = accounts;
         this.passwordEncoder = passwordEncoder;
+        this.passwordChanges = passwordChanges;
         this.transactions = transactions;
     }
 
@@ -83,9 +86,8 @@ class DemoAccountProvisioner implements ApplicationRunner {
             return;
         }
         Account existing = accounts.findByEmail(demo.email()).orElseThrow();
-        if (!passwordEncoder.matches(demo.password(), existing.passwordHash())) {
-            accounts.updatePasswordHash(existing.id(), passwordEncoder.encode(demo.password()));
-            log.info("Updated the password of demo account {}", demo.email());
+        if (passwordChanges.change(existing.id(), demo.password(), null)) {
+            log.info("Updated the password of demo account {}; its browser sessions were revoked", demo.email());
         }
         if (existing.role() != demo.role() || existing.maximumAccessLevel() != demo.maximumAccessLevel()
                 || !existing.canAuthenticate()) {

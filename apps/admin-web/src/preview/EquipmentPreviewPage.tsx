@@ -1,11 +1,11 @@
 import { useId } from 'react'
 import { Link } from '../app/Link'
 import { PageHeading } from '../app/PageHeading'
-import { useRouter } from '../app/router'
 import { pathOf } from '../app/routes'
 import { ManagerShell } from '../app/shell/ManagerShell'
 import { PREVIEW_ADMIN } from '../features/auth/previewAuthGateway'
-import { useSession, useSessionStore } from '../features/auth/session'
+import { useSession } from '../features/auth/session'
+import { useSignOut } from '../features/auth/useSignOut'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { StatusChip } from '../ui/StatusChip'
@@ -22,15 +22,10 @@ import './equipment-preview.css'
  */
 export default function EquipmentPreviewPage() {
   const session = useSession()
-  const sessionStore = useSessionStore()
-  const router = useRouter()
   const profile = session.status === 'authenticated' ? session.profile : PREVIEW_ADMIN
   const ids = { note: useId(), list: useId(), dossier: useId(), saveHint: useId() }
 
-  function signOut() {
-    sessionStore.signOut()
-    router.navigate(pathOf('signIn'))
-  }
+  const signOut = useSignOut()
 
   return (
     <ManagerShell currentPath={pathOf('equipmentPreview')} profile={profile} onSignOut={signOut}>

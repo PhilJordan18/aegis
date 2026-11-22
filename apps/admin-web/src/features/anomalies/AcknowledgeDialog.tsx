@@ -108,6 +108,9 @@ export function AcknowledgeDialog({ open, anomaly, onClose, onAcknowledged, onRe
           break
         case 'ended':
           break
+        case 'resubmit':
+          setOutcome({ kind: 'alert', content: { title: d.resubmitTitle, body: d.resubmitBody, traceId: null, retryable: true } })
+          break
         case 'unreachable':
           setOutcome({ kind: 'alert', content: { title: d.unreachableTitle, body: d.unreachableBody, traceId: null, retryable: true } })
           break

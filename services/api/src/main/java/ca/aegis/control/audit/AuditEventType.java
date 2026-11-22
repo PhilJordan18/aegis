@@ -2,6 +2,7 @@ package ca.aegis.control.audit;
 
 /** The event types written so far; the complete list is {@code ck_audit_events_type} (document 08, section 4.9). */
 public enum AuditEventType {
+    PASSWORD_CHANGED,
     ASSET_CREATED,
     ASSET_UPDATED,
     ASSET_ARCHIVED,

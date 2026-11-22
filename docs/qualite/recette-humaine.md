@@ -95,6 +95,29 @@ Lancez `docs/qualite/recette-cloud/run.sh` depuis la racine, sur la machine qui 
 | Erreurs signalées par le hub, session courante (#29, #142, #148) | API et Manager | Scénario API sur `49bf5f8` (ci-dessus, hub simulé). Sur `49bf5f8`, Web : W1 et W2 réussis. Le cas Web de 09 §22.3 n'a pas de test dédié | Avec le vrai hub : provoquer un message invalide, le voir dans Casiers ; redémarrer le hub, la liste se vide. **Le simulateur ne vaut pas preuve matérielle** |
 | Refus de déplacer un actif réservé (#133) | API | Recette R9 (réservation). Prêt et opération : **fixtures seulement** | — |
 
+### Manager : chaîne de garde en lecture (`dev` `c6845e6`)
+
+Ces pages sont arrivées sur `dev` après `49bf5f8` : #163, #164, #165, #170, avec les routes API #166, #167, #168.
+
+**Sur `dev`, aucune route ne crée encore de prêt, de retour ni d'anomalie physique** (#175 à #177 non fusionnées). Ces lignes se vérifient donc sur les données **synthétiques** du seed QA. Elles ne valent ni retrait ni retour réel.
+
+- La recette pas à pas est dans [`manager-admin/README.md`](manager-admin/README.md) §5 (étapes 1 à 7). Elle n'est pas recopiée ici.
+- Sur staging, ce sont les lignes S5 à S8 de [`recette-staging/README.md`](recette-staging/README.md).
+- La colonne « Matrice » renvoie aux identifiants de `docs/design/manager-integre/matrice-livre-manquant-recette.md` (PR #183, non fusionnée).
+
+| Parcours | Où | Preuve existante | À vérifier par l'humain | Matrice |
+|---|---|---|---|---|
+| Réservations et prêts : listes, filtres, dossiers, prêt en retard toujours emprunté (#48) | Manager | QA `manager-admin/run.sh` (#161) ; Web : sondes réelles et synthétiques de #183 | §5 étapes 2 et 3 : filtre « Expirée » sans doublon ; `SYN-LOAN-OVERDUE` « En retard » et toujours emprunté | 48-1, 48-3 |
+| Opérations : états lus, accusé de commande distinct de l'ouverture (#48, #53) | Manager | #183 T5 et T9 (synthétique) | Ouvrir une opération `COMMAND_ACKNOWLEDGED` : la page ne dit ni « déverrouillé » ni « ouvert ». Aucun bouton Déverrouiller | T5, T9, T12 |
+| Anomalies : reconnaître sans résoudre (#52) | Manager | QA #161 ; Web `AnomaliesPage.acknowledge.test.tsx` ; #183 52-2, T11 | §5 étapes 4 et 5 : preuve bornée, sans contenu brut ; après reconnaissance « Reconnue », jamais « Résolue », et aucun bouton Résoudre | 52-2, 52-3, T11 |
+| Audit : chronologie, filtres, aucun secret (#53) | Manager | QA #161 ; Web `AuditPage.test.tsx` ; #183 53-2, 53-3 | §5 étape 6 : un seul événement de reconnaissance, avec son auteur. **Écart connu (R1, #183) :** les détails du catalogue et de l'horaire sont annoncés « non affichés ». Le noter, ce n'est pas un échec de la recette | 53-2, 53-4 |
+| Vue d'ensemble : un bloc par question, jamais « 0 » à la place d'« indisponible » (#159) | Manager | QA : revue rendue 35/0 sur `482714a` (#159) ; Web : navigateur réel de #183 | Suivre le lien de chaque bloc ; couper l'API et voir « indisponible » plutôt que « 0 » ; affichage étroit et clavier | 159-1 à 159-4 |
+| Technicien refusé sur toute URL Manager | Manager | Suite Web en direct ; QA S7 (#178) | §5 étape 7 | T4 |
+
+**Pas couvert par ces lignes :** les liens entre opération, anomalie et audit (R2 de #183, manquants), l'actualisation automatique d'une opération (R5), et tout prêt ou retour réel.
+
+**Après la fusion de #173 à #177,** reprendre ces lignes sur la référence d'intégration épinglée, avec des prêts créés par la recette simulée, sans SQL.
+
 ## En attente de fusion (Philippe fusionne) : preuves sur branche
 
 | PR | Apporte | Vérification QA | Ordre proposé |
