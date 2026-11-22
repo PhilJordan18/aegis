@@ -299,7 +299,8 @@ private struct LoanCard: View {
 
     /// §6 « Prêt actif », « Retour indisponible » and « Retour en attente »:
     /// the notice that explains the button, then the button. A
-    /// `RETURN_PENDING` loan without an operation offers no business action.
+    /// `RETURN_PENDING` loan offers a new return only when the server lists
+    /// `RETURN` (Q2, doc 09 §8.10); otherwise only Actualiser.
     @ViewBuilder
     private var returnSection: some View {
         let listed = !stale && loan.actions.contains(.return)

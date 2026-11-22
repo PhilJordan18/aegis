@@ -225,6 +225,33 @@ struct ReturnPreparationTests {
         await model.hideOperation()
     }
 
+    /// Q2 (doc 09 §8.10, `06` §13.4): after a return that ended in `ANOMALY`
+    /// the loan stays `RETURN_PENDING`. A new return follows only the
+    /// server's `RETURN`; the finished attempt is never offered to resume.
+    @Test(arguments: [true, false])
+    func aPendingLoanAfterAnAnomalyFollowsTheListedReturn(_ listed: Bool) async {
+        let anomaly = Self.returning("ANOMALY", requiredAction: "NONE", terminalAt: "2026-09-16T14:32:00Z")
+        let loan = ActivityDoubles.loan(status: "RETURN_PENDING", actions: listed ? ["RETURN"] : [],
+                                        currentOperationId: OperationFixtures.operationId)
+        let operations = ScriptedOperationService(
+            reads: [OperationFixtures.read(anomaly, retryAfter: nil)],
+            returns: [.success(OperationFixtures.view(id: OperationFixtures.otherOperationId, type: "RETURN"))])
+        let model = model(loanOnly([.success(loan)]), operations: operations)
+
+        await model.load()
+
+        #expect(operations.reads == 1)
+        #expect(!model.isResumable(loan.currentOperationId))
+        #expect(!model.operationInProgress)
+        #expect(model.canPrepareReturn == listed)
+
+        await model.prepareReturn()
+
+        #expect(operations.returnKeys.count == (listed ? 1 : 0))
+        #expect((model.guided?.kind == .return) == listed)
+        await model.hideOperation()
+    }
+
     /// A reservation and a loan each with an operation: both are read, and
     /// each card knows its own state.
     @Test func theReservationAndTheLoanKeepTheirOwnOperation() async throws {
