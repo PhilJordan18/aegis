@@ -156,8 +156,8 @@ enum ActivityFixtures {
     }
 
     static func reservation(status: String = "ACTIVE", actions: [String] = ["CHECKOUT", "CANCEL"],
-                            assetExtra: String = "") -> String {
-        #"{"id":"\#(reservationId)","asset":\#(asset(extra: assetExtra)),"userId":"\#(CatalogFixtures.technicianId)","status":"\#(status)","reservedFrom":"2026-09-16T18:00:00Z","reservedUntil":"2026-09-16T20:30:00Z","createdAt":"2026-09-16T18:00:00.123456Z","cancelledAt":null,"fulfilledAt":null,"expiredAt":null,"currentOperationId":null,"availableActions":\#(list(actions))}"#
+                            assetExtra: String = "", currentOperationId: String? = nil) -> String {
+        #"{"id":"\#(reservationId)","asset":\#(asset(extra: assetExtra)),"userId":"\#(CatalogFixtures.technicianId)","status":"\#(status)","reservedFrom":"2026-09-16T18:00:00Z","reservedUntil":"2026-09-16T20:30:00Z","createdAt":"2026-09-16T18:00:00.123456Z","cancelledAt":null,"fulfilledAt":null,"expiredAt":null,"currentOperationId":\#(currentOperationId.map { "\"\($0)\"" } ?? "null"),"availableActions":\#(list(actions))}"#
     }
 
     static func loan(status: String = "ACTIVE", overdue: Bool = true, actions: [String] = ["RETURN"],

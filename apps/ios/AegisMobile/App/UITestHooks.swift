@@ -92,13 +92,38 @@ enum UITestScenario: String {
     /// An active reservation; the first loan read fails 503, later ones
     /// answer 404 ACTIVE_LOAN_NOT_FOUND.
     case activityLoanUnavailable = "activity-loan-unavailable"
+    /// An active reservation listing CHECKOUT and CANCEL. Preparing answers
+    /// 202 with the code displayed; the fictional code of
+    /// `UITestActivityFixtures` is authorized; each later read moves one state
+    /// forward until CONFIRMED, then the reservation is fulfilled and a loan
+    /// without actions opens.
+    case checkout = "checkout"
+    /// As `checkout`, but the first proof is refused 403 LOCAL_PROOF_INVALID.
+    case checkoutRefused = "checkout-refused"
+    /// Preparing answers 503 LOCKER_OFFLINE; the reservation still lists
+    /// CHECKOUT and CANCEL.
+    case checkoutOffline = "checkout-offline"
+    /// After the authorization the operation reads EXPIRED; the reservation
+    /// then lists CHECKOUT only, and a new preparation opens a new operation.
+    case checkoutExpired = "checkout-expired"
+    /// After the authorization every operation read is lost on the network.
+    case checkoutNetworkLost = "checkout-network-lost"
+    /// A relaunch during a checkout: the reservation points to an operation
+    /// in COMMAND_SENT, which stays there.
+    case checkoutResume = "checkout-resume"
+
+    var isCheckout: Bool {
+        [.checkout, .checkoutRefused, .checkoutOffline, .checkoutExpired, .checkoutNetworkLost, .checkoutResume]
+            .contains(self)
+    }
 
     var storedSession: StoredSession? {
         switch self {
         case .resumeSlow, .resumeOffline, .resumeRecovers, .resumeInvalid, .signedIn,
              .catalog, .catalogEmpty, .catalogPages, .catalogOffline, .catalogDetailOffline, .catalogDetailGone,
              .reservation, .reservationRefused, .reservationOffline, .reservationClosed,
-             .activityReserved, .activityNotCancellable, .activityLoan, .activityLoanUnavailable:
+             .activityReserved, .activityNotCancellable, .activityLoan, .activityLoanUnavailable, .checkout,
+             .checkoutRefused, .checkoutOffline, .checkoutExpired, .checkoutNetworkLost, .checkoutResume:
             StoredSession(accessToken: "scenario-token", expiresAt: .now + 3600, email: Self.technicianEmail)
         case .resumeExpired:
             StoredSession(accessToken: "scenario-token", expiresAt: .now - 60, email: Self.technicianEmail)
@@ -119,6 +144,7 @@ struct ScenarioTransport: HTTPTransport {
     private let listReads = Counter()
     private let loanReads = Counter()
     private let activity: ActivityState
+    private let checkoutServer = CheckoutServer()
 
     init(scenario: UITestScenario) {
         self.scenario = scenario
@@ -165,6 +191,7 @@ struct ScenarioTransport: HTTPTransport {
         if path.hasSuffix("/auth/me") { return try await me(request) }
         if path.hasSuffix("/assets") { return try assets(request) }
         if path.contains("/assets/") { return try asset(request) }
+        if scenario.isCheckout { return try checkout(request, path: path) }
         guard [.reservation, .reservationRefused, .reservationOffline, .reservationClosed, .activityReserved,
                .activityNotCancellable, .activityLoan, .activityLoanUnavailable, .catalog, .catalogEmpty,
                .catalogPages, .catalogOffline, .catalogDetailOffline, .catalogDetailGone].contains(scenario) else {
@@ -214,7 +241,8 @@ struct ScenarioTransport: HTTPTransport {
             throw URLError(.timedOut)
         case .signedIn, .loginSuccess, .catalog, .catalogEmpty, .catalogPages, .catalogOffline, .catalogDetailOffline,
              .catalogDetailGone, .reservation, .reservationRefused, .reservationOffline, .reservationClosed,
-             .activityReserved, .activityNotCancellable, .activityLoan, .activityLoanUnavailable:
+             .activityReserved, .activityNotCancellable, .activityLoan, .activityLoanUnavailable, .checkout,
+             .checkoutRefused, .checkoutOffline, .checkoutExpired, .checkoutNetworkLost, .checkoutResume:
             return response(request, 200, UITestScenario.technician)
         case .resumeRecovers where profileChecks.next() > 1:
             return response(request, 200, UITestScenario.technician)
@@ -308,6 +336,147 @@ struct ScenarioTransport: HTTPTransport {
     private func lockerStatus(_ request: URLRequest) -> (Data, URLResponse) {
         guard scenario == .reservationClosed else { return problem(request, 404, "RESOURCE_NOT_FOUND") }
         return response(request, 200, UITestActivityFixtures.closedLocker(nextOpensAt: .now + 15 * 3600))
+    }
+
+    /// The fake server of the checkout scenarios: it holds one operation and
+    /// moves it only on the requests a real server would act on.
+    private final class CheckoutServer: @unchecked Sendable {
+        enum Stage: Equatable {
+            case reserved
+            case awaitingProof(operationId: String)
+            /// Index in `progression` of the last state read.
+            case authorized(operationId: String, at: Date, step: Int)
+            case expired(operationId: String, at: Date)
+            case confirmed
+        }
+
+        static let progression = ["AUTHORIZED", "COMMAND_SENT", "COMMAND_ACKNOWLEDGED", "DOOR_OPENED",
+                                  "OBSERVATION_RECEIVED", "CONFIRMED"]
+
+        private let lock = NSLock()
+        private var _stage: Stage?
+        private var refusals = 0
+        private var preparations = 0
+
+        func stage(_ scenario: UITestScenario) -> Stage {
+            lock.withLock {
+                if let _stage { return _stage }
+                let initial: Stage = scenario == .checkoutResume
+                    ? .authorized(operationId: UITestActivityFixtures.operationId, at: .now - 10, step: 1)
+                    : .reserved
+                _stage = initial
+                return initial
+            }
+        }
+
+        func set(_ stage: Stage) { lock.withLock { _stage = stage } }
+
+        func nextPreparation() -> Int { lock.withLock { preparations += 1; return preparations } }
+
+        /// True the first time only.
+        func refuseOnce() -> Bool { lock.withLock { refusals += 1; return refusals == 1 } }
+    }
+
+    private func checkout(_ request: URLRequest, path: String) throws -> (Data, URLResponse) {
+        guard request.value(forHTTPHeaderField: "Authorization") == "Bearer scenario-token" else {
+            return problem(request, 401, "AUTH_TOKEN_INVALID")
+        }
+        let until = UITestActivityFixtures.instant(.now + 2 * 3600)
+        let server = checkoutServer
+        let stage = server.stage(scenario)
+        let fixtures = UITestActivityFixtures.self
+
+        if path.hasSuffix("/me/reservation") {
+            switch stage {
+            case .reserved:
+                return response(request, 200, fixtures.reservation(until: until))
+            case let .awaitingProof(id):
+                return response(request, 200, fixtures.reservation(until: until, actions: ["CANCEL"],
+                                                                   currentOperationId: id))
+            case let .authorized(id, _, _):
+                return response(request, 200, fixtures.reservation(until: until, actions: [], currentOperationId: id))
+            case let .expired(id, _):
+                return response(request, 200, fixtures.reservation(until: until, actions: ["CHECKOUT"],
+                                                                   currentOperationId: id))
+            case .confirmed:
+                return problem(request, 404, "ACTIVE_RESERVATION_NOT_FOUND")
+            }
+        }
+        if path.hasSuffix("/me/loan") {
+            if stage == .confirmed { return response(request, 200, fixtures.checkedOutLoan()) }
+            return problem(request, 404, "ACTIVE_LOAN_NOT_FOUND")
+        }
+        if path.hasSuffix("/checkout") {
+            guard request.value(forHTTPHeaderField: "Idempotency-Key") != nil else {
+                return problem(request, 400, "IDEMPOTENCY_KEY_REQUIRED")
+            }
+            if scenario == .checkoutOffline { return problem(request, 503, "LOCKER_OFFLINE") }
+            switch stage {
+            case .reserved, .expired:
+                let id = server.nextPreparation() == 1 ? fixtures.operationId : fixtures.retryOperationId
+                server.set(.awaitingProof(operationId: id))
+                return response(request, 202, fixtures.operation(id: id, status: "AWAITING_LOCAL_PROOF",
+                                                                 requiredAction: "SCAN_HUB_QR"),
+                                headers: ["Location": "/api/v1/locker-operations/\(id)", "Retry-After": "1"])
+            default:
+                return problem(request, 409, "LOCKER_OPERATION_IN_PROGRESS")
+            }
+        }
+        if path.hasSuffix("/authorize-local") {
+            let body = request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: String] }
+            guard case let .awaitingProof(id) = stage, path.contains(id) else {
+                return problem(request, 409, "LOCAL_PROOF_ALREADY_USED")
+            }
+            guard body?["challengeId"] == fixtures.challengeId, body?["token"] == fixtures.token else {
+                return problem(request, 403, "LOCAL_PROOF_INVALID")
+            }
+            if scenario == .checkoutRefused, server.refuseOnce() {
+                return problem(request, 403, "LOCAL_PROOF_INVALID")
+            }
+            let now = Date.now
+            server.set(.authorized(operationId: id, at: now, step: 0))
+            return response(request, 202, fixtures.operation(id: id, status: "AUTHORIZED", requiredAction: "WAIT",
+                                                             authorized: now))
+        }
+        if path.contains("/locker-operations/") {
+            switch stage {
+            case let .awaitingProof(id) where path.hasSuffix(id):
+                return response(request, 200, fixtures.operation(id: id, status: "AWAITING_LOCAL_PROOF",
+                                                                 requiredAction: "SCAN_HUB_QR"),
+                                headers: ["Retry-After": "1"])
+            case let .authorized(id, at, step) where path.hasSuffix(id):
+                if scenario == .checkoutNetworkLost { throw URLError(.notConnectedToInternet) }
+                if scenario == .checkoutExpired {
+                    let end = Date.now
+                    server.set(.expired(operationId: id, at: end))
+                    return response(request, 200, fixtures.operation(id: id, status: "EXPIRED", requiredAction: "NONE",
+                                                                     authorized: at, terminal: end))
+                }
+                if scenario == .checkoutResume {
+                    return response(request, 200, fixtures.operation(id: id, status: "COMMAND_SENT",
+                                                                     requiredAction: "WAIT", authorized: at),
+                                    headers: ["Retry-After": "1"])
+                }
+                let next = min(step + 1, CheckoutServer.progression.count - 1)
+                let status = CheckoutServer.progression[next]
+                if status == "CONFIRMED" {
+                    server.set(.confirmed)
+                    return response(request, 200, fixtures.operation(id: id, status: status, requiredAction: "NONE",
+                                                                     authorized: at, terminal: .now))
+                }
+                server.set(.authorized(operationId: id, at: at, step: next))
+                return response(request, 200, fixtures.operation(id: id, status: status, requiredAction: "WAIT",
+                                                                 authorized: at),
+                                headers: ["Retry-After": "1"])
+            case let .expired(id, at) where path.hasSuffix(id):
+                return response(request, 200, fixtures.operation(id: id, status: "EXPIRED", requiredAction: "NONE",
+                                                                 authorized: at - 120, terminal: at))
+            default:
+                return problem(request, 404, "RESOURCE_NOT_FOUND")
+            }
+        }
+        if path.hasSuffix("/status"), path.contains("/lockers/") { return problem(request, 404, "RESOURCE_NOT_FOUND") }
+        throw URLError(.cannotConnectToHost)
     }
 
     private func problem(_ request: URLRequest, _ status: Int, _ code: String,

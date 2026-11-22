@@ -12,7 +12,7 @@ struct AegisMobileApp: App {
 }
 
 /// Everything the signed-in technician reads or changes; `APIClient` conforms.
-typealias TechnicianService = AssetCatalogService & ActivityService & ReservationService
+typealias TechnicianService = AssetCatalogService & ActivityService & ReservationService & LockerOperationService
 
 /// Composition root: the real network and Keychain, replaced only by the
 /// Debug-only UI-test hooks of `UITestHooks`.
@@ -117,7 +117,7 @@ struct SignedInView: View {
         self.health = health
         catalogService = catalog
         _catalog = State(initialValue: CatalogViewModel(service: catalog, session: session))
-        _activity = State(initialValue: ActivityViewModel(service: catalog, session: session))
+        _activity = State(initialValue: ActivityViewModel(service: catalog, operations: catalog, session: session))
         _tab = State(initialValue: initialTab)
     }
 

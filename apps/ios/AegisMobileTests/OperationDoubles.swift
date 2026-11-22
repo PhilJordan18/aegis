@@ -25,16 +25,21 @@ enum OperationFixtures {
     static func json(id: String = operationId, status: String = "AWAITING_LOCAL_PROOF",
                      requiredAction: String = "SCAN_HUB_QR", type: String = "CHECKOUT",
                      lockerId: String = lockerId, challengeId: String? = challengeId,
-                     terminalAt: String? = nil, failureReason: String? = nil) -> String {
+                     terminalAt: String? = nil, failureReason: String? = nil,
+                     displayedAt: String? = "2026-09-16T14:31:02.250Z", authorizedAt: String? = nil,
+                     expiresAt: String? = nil) -> String {
         func text(_ value: String?) -> String { value.map { "\"\($0)\"" } ?? "null" }
-        return #"{"id":"\#(id)","type":"\#(type)","status":"\#(status)","userId":"\#(CatalogFixtures.technicianId)","assetId":"\#(CatalogFixtures.id(1).uuidString.lowercased())","lockerId":"\#(lockerId)","compartmentId":"\#(compartmentId)","reservationId":"\#(ActivityFixtures.reservationId)","loanId":null,"createdAt":"2026-09-16T14:31:00Z","authorizedAt":null,"localAccessChallengeId":\#(text(challengeId)),"localProofExpiresAt":"2026-09-16T14:32:00Z","localProofDisplayedAt":"2026-09-16T14:31:02.250Z","localProofValidatedAt":null,"requiredAction":"\#(requiredAction)","expiresAt":null,"commandSentAt":null,"acknowledgedAt":null,"doorOpenedAt":null,"observationReceivedAt":null,"confirmedAt":null,"terminalAt":\#(text(terminalAt)),"failureReason":\#(text(failureReason)),"anomalyId":null}"#
+        return #"{"id":"\#(id)","type":"\#(type)","status":"\#(status)","userId":"\#(CatalogFixtures.technicianId)","assetId":"\#(CatalogFixtures.id(1).uuidString.lowercased())","lockerId":"\#(lockerId)","compartmentId":"\#(compartmentId)","reservationId":"\#(ActivityFixtures.reservationId)","loanId":null,"createdAt":"2026-09-16T14:31:00Z","authorizedAt":\#(text(authorizedAt)),"localAccessChallengeId":\#(text(challengeId)),"localProofExpiresAt":"2026-09-16T14:32:00Z","localProofDisplayedAt":\#(text(displayedAt)),"localProofValidatedAt":null,"requiredAction":"\#(requiredAction)","expiresAt":\#(text(expiresAt)),"commandSentAt":null,"acknowledgedAt":null,"doorOpenedAt":null,"observationReceivedAt":null,"confirmedAt":null,"terminalAt":\#(text(terminalAt)),"failureReason":\#(text(failureReason)),"anomalyId":null}"#
     }
 
     static func view(id: String = operationId, status: String = "AWAITING_LOCAL_PROOF",
                      requiredAction: String = "SCAN_HUB_QR", challengeId: String? = challengeId,
-                     terminalAt: String? = nil, failureReason: String? = nil) -> LockerOperationView {
+                     terminalAt: String? = nil, failureReason: String? = nil,
+                     displayedAt: String? = "2026-09-16T14:31:02.250Z", authorizedAt: String? = nil,
+                     expiresAt: String? = nil) -> LockerOperationView {
         CatalogFixtures.decode(json(id: id, status: status, requiredAction: requiredAction, challengeId: challengeId,
-                                    terminalAt: terminalAt, failureReason: failureReason))
+                                    terminalAt: terminalAt, failureReason: failureReason, displayedAt: displayedAt,
+                                    authorizedAt: authorizedAt, expiresAt: expiresAt))
     }
 
     static var awaiting: LockerOperationView { view() }
@@ -63,6 +68,8 @@ final class ScriptedOperationService: LockerOperationService, @unchecked Sendabl
     private let lock = NSLock()
     private var readResults: [Result<Received<LockerOperationView>, APIError>]
     private var authorizeResults: [Result<LockerOperationView, APIError>]
+    private var prepareResults: [Result<LockerOperationView, APIError>]
+    private var _prepareKeys: [IdempotencyKey] = []
     private var _reads = 0
     private var _inFlight = 0
     private var _maxInFlight = 0
@@ -72,10 +79,16 @@ final class ScriptedOperationService: LockerOperationService, @unchecked Sendabl
     var authorizeGate: Gate?
 
     init(reads: [Result<Received<LockerOperationView>, APIError>] = [.failure(.invalidResponse)],
-         authorizations: [Result<LockerOperationView, APIError>] = [.failure(.invalidResponse)]) {
+         authorizations: [Result<LockerOperationView, APIError>] = [.failure(.invalidResponse)],
+         preparations: [Result<LockerOperationView, APIError>] = [.failure(.invalidResponse)]) {
         readResults = reads
         authorizeResults = authorizations
+        prepareResults = preparations
     }
+
+    /// The keys of every `POST /reservations/{id}/checkout`, in order.
+    var prepareKeys: [IdempotencyKey] { lock.withLock { _prepareKeys } }
+    var prepareGate: Gate?
 
     var reads: Int { lock.withLock { _reads } }
     var maxInFlight: Int { lock.withLock { _maxInFlight } }
@@ -88,7 +101,12 @@ final class ScriptedOperationService: LockerOperationService, @unchecked Sendabl
 
     func prepareCheckout(reservationId: UUID, key: IdempotencyKey,
                          bearer token: String) async throws(APIError) -> LockerOperationView {
-        throw .invalidResponse
+        let result = lock.withLock {
+            _prepareKeys.append(key)
+            return Self.next(&prepareResults)
+        }
+        if let prepareGate { await prepareGate.wait() }
+        return try result.get()
     }
 
     func lockerOperation(id: UUID, bearer token: String) async throws(APIError) -> Received<LockerOperationView> {

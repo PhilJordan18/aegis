@@ -1,0 +1,24 @@
+{
+  "sourceLanguage" : "fr",
+  "strings" : {
+    "NSCameraUsageDescription" : {
+      "comment" : "Shown by iOS when the scan sheet asks for the camera",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The camera is only used to read the locker code."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’appareil photo sert uniquement à lire le code du casier."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}
