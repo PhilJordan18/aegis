@@ -176,9 +176,13 @@ révocation et de sa fin absolue; une session ouverte n'est jamais supprimée :
 | `aegis.security.browser-session.purge.scheduled` | `true` | `false` seulement dans les tests qui contrôlent l'horloge |
 
 Le cycle de vie complet (rechargement, échéance, déconnexion, mot de passe,
-compte changé, panne, redémarrage) est la matrice du document 09, §10.6. Les
-jetons d'accès déjà émis restent valables jusqu'à leur expiration; leur
-révocation (ADR-018) arrive dans la tranche suivante.
+compte changé, panne, redémarrage) est la matrice du document 09, §10.6.
+Depuis l'ADR-018 (migration `V012`), un changement réel du mot de passe refuse
+tous les jetons d'accès émis avant lui (claim `cv`), et une déconnexion du
+Manager refuse ceux de sa session (claim `sid`). Au premier démarrage avec
+`V012`, les jetons sans `cv` sont refusés : le Manager restaure une fois sa
+session, iOS se reconnecte une fois. Déployer l'API seule; le Web et iOS ne
+changent pas.
 
 Les journaux de l'application (`ca.aegis`) ne contiennent ni cookie, ni
 jeton, ni mot de passe, ni empreinte, même à TRACE. Cette garantie ne couvre
@@ -234,8 +238,8 @@ Aucun mot de passe ni secret n'est transmis par cette procédure.
      quelques centaines de millisecondes avant elle :
      - une session navigateur ouverte dans cette fenêtre est révoquée par le
        changement;
-     - un jeton porteur émis dans cette fenêtre vit jusqu'à son expiration
-       (60 minutes au plus), jusqu'à l'ADR-018 (#179).
+     - un jeton porteur émis dans cette fenêtre porte l'ancienne version des
+       créances : il est refusé dès que le changement s'engage (ADR-018).
 
 ## Autorisation des routes
 

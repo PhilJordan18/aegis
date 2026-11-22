@@ -20,6 +20,7 @@
 **Mise à jour ciblée :** 28 octobre 2026 — recherche `q` commune à l’API, au Web et à iOS : espaces Unicode de bordure, longueur en grappes de graphèmes, corpus partagé (§11.1, §22.3, §26.6), décision commune consignée par l’[ADR-014](../adr/ADR-014-recherche-q-graphemes.md), acceptée par Philippe le 6 novembre 2026 (#109)  
 **Mise à jour ciblée :** 6 novembre 2026 — lectures administratives approuvées par Philippe (#25, #26, #28) : `GET /admin/lockers` et `AdminLockerView` (§9.3, §16.2), historique des identifiants `GET /admin/assets/{assetId}/identifiers` (§9.3, §12.3); aucune migration  
 **Mise à jour ciblée :** 6 novembre 2026 — refus du catalogue liés à la garde de l’actif (#26) : placement refusé pendant une réservation active, un prêt ouvert ou une opération non terminale, attribution refusée pendant une opération non terminale et révocation de l’identifiant qu’elle attend, avec les codes de l’archivage (§12.3, §12.4, §21); ordre des refus approuvé par Philippe le 6 novembre 2026; aucun code ni champ nouveau  
+**Mise à jour ciblée :** 21 novembre 2026 — révocation des JWT émis (ADR-018, #179) : claims `cv` et `sid`, refus d’un jeton antérieur à un changement de mot de passe ou d’une session navigateur fermée, migration `V012` (§4.1, §4.2, §10.2, §10.5, §10.6)  
 **Mise à jour ciblée :** 21 novembre 2026 — cycle de vie d’une session (§10.6); révocation des sessions navigateur au changement réel du mot de passe, type d’audit `PASSWORD_CHANGED` et rétention bornée (ADR-017, §10.4, §19.1), migration `V011`; révocation des JWT émis acceptée pour la tranche suivante (ADR-018)  
 **Mise à jour ciblée :** 18 novembre 2026 — session navigateur révocable du Manager (ADR-016, #178) : champ optionnel `browserSession` de la connexion, routes `POST /auth/session/refresh` et `POST /auth/session/revoke` (§9.1, §10.2, §10.4, §10.5), code `401 AUTH_SESSION_INVALID` (§21); §4.1 et §4.2 remplacés pour le Web; migration `V010`  
 **Mise à jour ciblée :** 6 novembre 2026 — erreurs signalées par le hub (#29) : champ requis `deviceErrors` et `DeviceErrorView` de `LockerStatusView` (§8.6, §16.1), limités à la session courante du hub, approuvés par Philippe le 6 novembre 2026; ajout compatible, aucune migration
@@ -97,11 +98,18 @@ Après une connexion réussie, le backend émet un JWT signé et expirable, conf
 - le client le traite comme une chaîne opaque;
 - sa durée P0 est de 60 minutes;
 - il transporte au minimum userId, role, maximumAccessLevel, issuedAt, expiresAt et un identifiant de jeton;
+- depuis l’ADR-018, il transporte aussi `cv`, la version des créances du compte à l’émission, et, s’il est émis avec une session navigateur (connexion `browserSession: true` ou restauration), `sid`, l’identifiant de cette session;
 - aucun refresh token n’est émis dans le P0; le Web dispose seulement de la session navigateur révocable de l’ADR-016 (§10.4), qui émet un nouveau jeton d’au plus 60 minutes sans jamais dépasser sa propre fin absolue;
 - l’expiration du jeton n’altère jamais une réservation ou un prêt existant;
 - l’utilisateur se reconnecte après expiration.
 
-Spring Security vérifie la signature, l’algorithme explicitement autorisé, l’émetteur, le destinataire et la validité temporelle. L’algorithme, la gestion des clés et le mapping des claims techniques doivent être consignés au bootstrap avant la première connexion réelle. Ils ne deviennent pas une dépendance du code des clients. L’état actif du compte, son rôle et ses droits courants sont vérifiés côté serveur sur les requêtes protégées; un ancien claim ne conserve pas un droit retiré.
+Spring Security vérifie la signature, l’algorithme explicitement autorisé, l’émetteur, le destinataire et la validité temporelle. L’algorithme, la gestion des clés et le mapping des claims techniques doivent être consignés au bootstrap avant la première connexion réelle. Ils ne deviennent pas une dépendance du code des clients. L’état actif du compte, son rôle et ses droits courants sont vérifiés côté serveur sur les requêtes protégées; un ancien claim ne conserve pas un droit retiré. La même lecture refuse par `401 AUTH_TOKEN_INVALID` (ADR-018) :
+
+- un jeton sans `cv`, y compris un jeton émis avant le déploiement de l’ADR-018;
+- un jeton dont `cv` diffère de la version courante du compte, incrémentée par chaque changement réel du mot de passe;
+- un jeton porteur de `sid` dont la session est révoquée, échue ou appartient à un autre compte.
+
+Ces contrôles prennent effet dès l’engagement du changement ou de la révocation. Une requête déjà authentifiée à cet instant se termine : la fenêtre acceptée est la durée d’une requête.
 
 ### 4.2 Stockage côté client
 
@@ -111,7 +119,7 @@ Spring Security vérifie la signature, l’algorithme explicitement autorisé, l
 | Web | Jeton conservé en mémoire; jamais dans localStorage ou sessionStorage. Seul le cookie `HttpOnly` de la session navigateur (ADR-016) survit au rechargement; il n’est pas lisible par le script et n’est pas un jeton d’accès. |
 | Tous | Jeton supprimé localement lors de la déconnexion. |
 
-La déconnexion locale ne révoque pas immédiatement une copie du JWT. Ce compromis P0 est explicite : un jeton copié reste utilisable jusqu’à son expiration, sous réserve des contrôles courants du compte. Depuis l’ADR-016, le rechargement du Web restaure la session tant que sa session navigateur est valide (§10.4); la déconnexion explicite du Web révoque cette session côté serveur (§10.5). L’expiration ne suspend ni les délais ni le traitement d’une opération physique déjà autorisée.
+Depuis l’ADR-018, une copie du JWT ne survit ni à un changement réel du mot de passe (tous les jetons du compte, Web et iOS) ni à la déconnexion confirmée du Manager (les jetons de cette session seulement; iOS et les autres navigateurs ne sont pas touchés). Hors de ces deux cas, un jeton copié reste utilisable jusqu’à son expiration, sous réserve des contrôles courants du compte; la suppression locale d’un jeton iOS ne le révoque pas. Depuis l’ADR-016, le rechargement du Web restaure la session tant que sa session navigateur est valide (§10.4); la déconnexion explicite du Web révoque cette session côté serveur (§10.5). L’expiration ne suspend ni les délais ni le traitement d’une opération physique déjà autorisée.
 
 ### 4.3 En-tête
 
@@ -842,29 +850,30 @@ Le client n’essaie qu’une restauration par démarrage ou par jeton échu, et
 
 ### 10.5 POST /auth/session/revoke
 
-Déconnexion explicite du Web (ADR-016). Révoque côté serveur la session du cookie, s’il en reste une, puis efface le cookie. Réponse `204`, idempotente, avec ou sans cookie. Erreur : `403 FORBIDDEN` si `Origin` est absent ou non autorisé. Un jeton d’accès déjà émis reste valable jusqu’à son expiration (§4.2).
+Déconnexion explicite du Web (ADR-016). Révoque côté serveur la session du cookie, s’il en reste une, puis efface le cookie. Réponse `204`, idempotente, avec ou sans cookie. Erreur : `403 FORBIDDEN` si `Origin` est absent ou non autorisé. Dès l’engagement de la révocation, les jetons de cette session (claim `sid`) reçoivent `401 AUTH_TOKEN_INVALID` (ADR-018); les jetons d’une autre session et ceux d’iOS ne sont pas touchés.
 
 ### 10.6 Cycle de vie d’une session (ADR-016, ADR-017)
 
-« JWT émis » désigne un jeton d’accès déjà remis à un client. Le serveur relit le compte à chaque requête protégée (§4.1). La colonne JWT décrit le comportement en vigueur; la révocation des JWT de l’ADR-018 (acceptée, options A + B) arrive avec #179 et n’est pas encore en vigueur.
+« JWT émis » désigne un jeton d’accès déjà remis à un client. Le serveur relit le compte à chaque requête protégée (§4.1). La colonne JWT décrit le comportement en vigueur depuis l’ADR-018 (#179) : un refus de JWT est un `401 AUTH_TOKEN_INVALID`, que le Web traite par sa restauration unique.
 
 | Événement | Cookie | Ligne `browser_sessions` | JWT émis | Autres onglets du navigateur | iOS |
 |---|---|---|---|---|---|
 | Actualisation, lien direct, nouvel onglet | conservé, ni renouvelé ni prolongé | `last_refreshed_at` mis à jour | inchangés; un nouveau JWT est émis, borné par la fin de la session | indépendants; chacun restaure son propre JWT | non concerné |
 | JWT échu pendant l’usage (session vivante) | conservé | `last_refreshed_at` mis à jour | le JWT échu reçoit `401`; le Web restaure une seule fois, puis renvoie à la connexion seulement si la restauration répond `401`; une panne réseau, un délai ou un `5xx` suit la ligne « Panne réseau » et garde la session | chacun restaure de son côté, sans boucle | reconnexion (aucun refresh iOS) |
-| Fin absolue (8 h par défaut) | effacé par le `401 AUTH_SESSION_INVALID` de la restauration | inchangée, échue | jetons restaurés bornés à la fin de la session; jeton de connexion : voir la note ci-dessous | renvoyés à la connexion à leur prochaine restauration | non concerné |
-| Déconnexion explicite du Web, confirmée (`204`) | effacé | révoquée `SIGNED_OUT` | **restent valides jusqu’à leur expiration (≤ 60 min)**; le Web efface le sien et ses caches | le Web propage la déconnexion aux onglets ouverts; leur restauration échoue | non concerné; ses sessions restent ouvertes |
+| Fin absolue (8 h par défaut) | effacé par le `401 AUTH_SESSION_INVALID` de la restauration | inchangée, échue | refusés à la fin de la session, jeton de connexion compris (`sid`) | renvoyés à la connexion à leur prochaine restauration | non concerné |
+| Déconnexion explicite du Web, confirmée (`204`) | effacé | révoquée `SIGNED_OUT` | ceux de cette session **refusés dès l’engagement** (`sid`); le Web efface le sien et ses caches | le Web propage la déconnexion aux onglets ouverts; leur restauration échoue | non concerné; ses sessions restent ouvertes |
 | Déconnexion non confirmée (réseau, `5xx`) | conservé | inchangée, ouverte | inchangés | le Web n’annonce pas de déconnexion : « Impossible de confirmer la déconnexion. Réessayez. », avec nouvel essai; la session reste en place | non concerné |
-| Changement réel du mot de passe | effacé à la prochaine restauration | **toutes** les sessions ouvertes du compte révoquées `PASSWORD_CHANGED`, dans la transaction du changement | **restent valides jusqu’à leur expiration (≤ 60 min)** | renvoyés à la connexion à leur prochaine restauration | ses JWT restent valides jusqu’à expiration; nouvelle connexion avec le nouveau mot de passe |
+| Changement réel du mot de passe | effacé à la prochaine restauration | **toutes** les sessions ouvertes du compte révoquées `PASSWORD_CHANGED`, dans la transaction du changement | **tous refusés dès l’engagement** (`cv` incrémenté dans la même transaction) | renvoyés à la connexion à leur prochaine restauration | ses JWT sont refusés; nouvelle connexion avec le nouveau mot de passe |
 | Redémarrage avec le même mot de passe de démonstration | conservé | inchangée : aucun changement effectif, donc aucune révocation | inchangés (même clé de signature) | inchangés | inchangé |
 | Compte désactivé ou archivé | effacé à la prochaine restauration | révoquée `ACCOUNT_CHANGED` à la prochaine restauration | **refusés immédiatement** (`401`), car le compte est relu à chaque requête | renvoyés à la connexion | refusé immédiatement |
 | Rôle changé | effacé à la prochaine restauration | révoquée `ACCOUNT_CHANGED` à la prochaine restauration | authentifiés avec le **rôle courant**; l’ancien rôle ne donne aucun droit (`403`) | renvoyés à la connexion à leur prochaine restauration | droits du rôle courant |
 | Panne réseau ou API indisponible (`5xx`, délai) | conservé | inchangée | inchangés | le Web affiche un état récupérable avec une nouvelle tentative; ce n’est pas une session invalide | message d’indisponibilité |
 | Redémarrage de l’API ou nouvelle instance | conservé | conservée en base, révocations comprises | valides si la clé `AEGIS_JWT_SECRET` est inchangée | inchangés | inchangé |
+| Premier démarrage de l’API avec `V012` (ADR-018) | conservé | inchangée | jetons sans `cv` refusés (`401`) | le Web restaure une fois et obtient un jeton au nouveau format, sans revenir à la connexion | reconnexion unique |
 
 Une ligne révoquée ne redevient jamais ouverte : un déclencheur de `V011` refuse toute modification d’une session déjà révoquée. Une session ouverte n’est jamais supprimée. Une ligne terminée est supprimée 30 jours après sa fin, le plus tôt de sa révocation et de sa fin absolue. La trace durable d’un changement de mot de passe est l’événement d’audit `PASSWORD_CHANGED`, conservé après cette suppression (ADR-017).
 
-Le jeton remis par la connexion elle-même dure 60 minutes et n’est pas borné par la fin de la session; seul le jeton restauré l’est. Avec la durée par défaut de 8 heures, cela ne change rien. Une durée de session inférieure à 60 minutes laisserait ce premier jeton dépasser la fin de la session.
+Le jeton remis par la connexion elle-même dure 60 minutes et son `exp` n’est pas borné par la fin de la session; seul le jeton restauré l’est. Depuis l’ADR-018, il porte `sid` et il est refusé dès que sa session est échue ou révoquée, même avant son `exp`.
 
 ---
 
