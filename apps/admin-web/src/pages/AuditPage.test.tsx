@@ -443,3 +443,89 @@ describe('Audit — failures', () => {
     expect(screen.queryByText('Données non actualisées.')).toBeNull()
   })
 })
+
+describe('Audit — requested event (#191)', () => {
+  const OLDER = eventView(40, { eventType: 'ASSET_ARCHIVED' })
+
+  it('says the requested event is not loaded instead of showing the first one, and offers to load more', async () => {
+    const { auditGateway } = renderAudit([pageOk(auditPage([COMMAND, REFUSED], { hasMore: true, nextCursor: 'c1' })), pageOk(auditPage([OLDER]))], { search: `?evenement=${OLDER.id}` })
+    const list = await timeline()
+
+    expect(await screen.findByText("L'événement demandé ne fait pas partie des résultats chargés.")).toBeTruthy()
+    expect(screen.getByText(OLDER.id, { selector: 'code' })).toBeTruthy()
+    // No dossier of another event, and no row marked as the current one.
+    expect(screen.queryByRole('group', { name: 'Commande acquittée par la cellule' })).toBeNull()
+    expect(list.getAllByRole('link').every((row) => row.getAttribute('aria-current') === null)).toBe(true)
+    expect(screen.getByRole('link', { name: 'Afficher le premier événement' }).getAttribute('href')).toBe('/audit')
+    expect(auditGateway.listAuditEvents).toHaveBeenCalledTimes(1)
+  })
+
+  it('selects the event once loading more brings it in, and puts focus on its row', async () => {
+    renderAudit([pageOk(auditPage([COMMAND, REFUSED], { hasMore: true, nextCursor: 'c1' })), pageOk(auditPage([UPDATED, OLDER]))], { search: `?evenement=${OLDER.id}` })
+    const list = await timeline()
+    const notice = (await screen.findByText("L'événement demandé ne fait pas partie des résultats chargés.")).closest('.ag-dossier__alert') as HTMLElement
+    await userEvent.setup().click(within(notice).getByRole('button', { name: 'Charger plus' }))
+
+    await waitFor(() => expect(screen.queryByText("L'événement demandé ne fait pas partie des résultats chargés.")).toBeNull())
+    const rows = list.getAllByRole('link')
+    expect(rows.filter((row) => row.getAttribute('aria-current') === 'true')).toEqual([rows[3]])
+    expect(within(screen.getByRole('group', { name: /./ })).getByText(OLDER.id, { selector: 'code' })).toBeTruthy()
+    await waitFor(() => expect(document.activeElement).toBe(rows[3]))
+  })
+
+  it('keeps the notice, without « Charger plus », and moves focus to it when the last page still lacks the event', async () => {
+    renderAudit([pageOk(auditPage([COMMAND], { hasMore: true, nextCursor: 'c1' })), pageOk(auditPage([REFUSED]))], { search: `?evenement=${OLDER.id}` })
+    await timeline()
+    const notice = (await screen.findByText("L'événement demandé ne fait pas partie des résultats chargés.")).closest('.ag-dossier__alert') as HTMLElement
+    await userEvent.setup().click(within(notice).getByRole('button', { name: 'Charger plus' }))
+
+    await waitFor(() => expect(within(notice).queryByRole('button', { name: 'Charger plus' })).toBeNull())
+    expect(within(notice).getByText(/Tout l'historique correspondant aux filtres est chargé/)).toBeTruthy()
+    await waitFor(() => expect(document.activeElement).toBe(notice))
+  })
+
+  it('keeps « Charger plus » after a failed page, and never claims the whole history is loaded', async () => {
+    renderAudit([pageOk(auditPage([COMMAND], { hasMore: true, nextCursor: 'c1' })), pageUnreachable, pageOk(auditPage([OLDER]))], { search: `?evenement=${OLDER.id}` })
+    await timeline()
+    const notice = (await screen.findByText("L'événement demandé ne fait pas partie des résultats chargés.")).closest('.ag-dossier__alert') as HTMLElement
+    const user = userEvent.setup()
+    await user.click(within(notice).getByRole('button', { name: 'Charger plus' }))
+    await waitFor(() => expect(within(notice).getByRole('button', { name: 'Charger plus' })).toBeTruthy())
+    expect(within(notice).queryByText(/Tout l'historique correspondant aux filtres est chargé/)).toBeNull()
+    await user.click(within(notice).getByRole('button', { name: 'Charger plus' }))
+    await waitFor(() => expect(screen.queryByText("L'événement demandé ne fait pas partie des résultats chargés.")).toBeNull())
+  })
+
+  it('shows the first event and returns focus to its dossier from « Afficher le premier événement »', async () => {
+    renderAudit([pageOk(auditPage([COMMAND, REFUSED]))], { search: `?evenement=${OLDER.id}` })
+    await timeline()
+    await userEvent.setup().click(await screen.findByRole('link', { name: 'Afficher le premier événement' }))
+
+    const dossier = await screen.findByRole('group', { name: 'Commande acquittée par la cellule' })
+    expect(window.location.search).toBe('')
+    expect(screen.queryByText("L'événement demandé ne fait pas partie des résultats chargés.")).toBeNull()
+    await waitFor(() => expect(document.activeElement).toBe(dossier))
+  })
+
+  it('shows the first event when no event is requested, without any notice', async () => {
+    renderAudit([pageOk(auditPage([COMMAND, REFUSED]))])
+    await timeline()
+    expect(await screen.findByRole('group', { name: 'Commande acquittée par la cellule' })).toBeTruthy()
+    expect(screen.queryByText("L'événement demandé ne fait pas partie des résultats chargés.")).toBeNull()
+  })
+
+  it('selects a requested event that is already loaded', async () => {
+    renderAudit([pageOk(auditPage([COMMAND, REFUSED]))], { search: `?evenement=${REFUSED.id}` })
+    expect(await screen.findByRole('group', { name: 'Code du casier refusé' })).toBeTruthy()
+    expect(screen.queryByText("L'événement demandé ne fait pas partie des résultats chargés.")).toBeNull()
+  })
+
+  it('writes the notice in English, with the same actions', async () => {
+    renderAudit([pageOk(auditPage([COMMAND], { hasMore: true, nextCursor: 'c1' }))], { search: `?evenement=${OLDER.id}`, locale: 'en' })
+    await timeline()
+    expect(await screen.findByText('The requested event is not among the loaded results.')).toBeTruthy()
+    const notice = screen.getByText('The requested event is not among the loaded results.').closest('.ag-dossier__alert') as HTMLElement
+    expect(within(notice).getByRole('button', { name: 'Load more' })).toBeTruthy()
+    expect(within(notice).getByRole('link', { name: 'Show the first event' })).toBeTruthy()
+  })
+})
