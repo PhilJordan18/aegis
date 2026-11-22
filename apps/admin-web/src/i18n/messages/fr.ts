@@ -650,6 +650,8 @@ export const fr = {
     noLinkedAnomaly: 'Aucune anomalie liée',
     linkedReservation: 'Réservation liée',
     linkedLoan: 'Prêt lié',
+    /** 08: a CHECKOUT never carries `loan_id`; the loan it opens names this operation, not the other way round. */
+    checkoutLoanNote: "Non fourni par un retrait : c'est le prêt qui désigne cette opération. Aucun prêt n'est déduit.",
     none: 'Aucun',
     cell: 'Cellule',
     locker: 'Casier',
@@ -658,6 +660,29 @@ export const fr = {
     requiredActionField: 'Action attendue',
     expiresAt: "Expire à",
     failureReason: 'Motif transmis',
+    /**
+     * Reasons of 09 §8.5 and §15.5 that are not anomaly types (those read the anomaly catalog, so that a type has one
+     * wording everywhere). The code stays visible beside the label: the server sends it as free text (G12).
+     */
+    failureReasonLabel: {
+      LOCAL_PROOF_EXPIRED: 'Échéance dépassée au scan : nouvelle préparation nécessaire',
+      LOCAL_PROOF_ATTEMPTS_EXHAUSTED: 'Cinq codes erronés : tentative terminée',
+      LOCAL_PROOF_GUARD_FAILED: 'Contrôle refusé au scan : tentative terminée',
+      LOCAL_PROOF_INVALID: 'Code erroné',
+      LOCAL_PROOF_MALFORMED: 'Code mal formé',
+      LOCAL_PROOF_ALREADY_USED: 'Code déjà utilisé',
+      LOCAL_PROOF_NOT_DISPLAYED: "Code pas encore affiché sur le casier",
+      LOCAL_PROOF_CONTEXT_MISMATCH: "Code d'une autre opération",
+      LOCAL_PROOF_INVALIDATED: 'Code invalidé',
+      LOCAL_PROOF_RATE_LIMITED: 'Trop de préparations en peu de temps',
+      HUB_RESTARTED: 'Casier redémarré avant le scan',
+      LOCKER_OFFLINE: 'Casier hors ligne avant le scan',
+      RESERVATION_CANCELLED: 'Réservation annulée pendant la préparation',
+      OPERATION_EXPIRED: "Échéance atteinte sans ouverture de la porte",
+      COMMAND_CORRELATION_INVALID: 'Corrélation de la commande invalide',
+    } as Readonly<Record<string, string>>,
+    /** `COMMAND_REJECTED_<result>` (09 §8.5): the suffix is the hub's own result and stays in the code. */
+    commandRejectedReason: 'Commande refusée par le casier',
     challenge: 'Défi local',
     sequence: {
       created: 'Demande reçue',
@@ -1005,7 +1030,7 @@ export const fr = {
       ASSET_PRESENT_WITH_ACTIVE_LOAN: 'Équipement présent malgré un prêt actif',
       DOOR_NOT_CLOSED_BEFORE_EXPIRY: 'Porte non refermée avant l’échéance',
       COMMAND_REJECTED: 'Commande rejetée',
-      DEVICE_OFFLINE_DURING_OPERATION: 'Casier hors ligne pendant une opération',
+      DEVICE_OFFLINE_DURING_OPERATION: "Casier hors ligne ou issue physique indéterminée pendant l'opération",
       INCONSISTENT_PHYSICAL_STATE: 'État physique incohérent',
     } satisfies Record<AnomalyType, string>,
     /** 09 §3: a value this version does not know is never drawn as a known one. */
@@ -1084,6 +1109,9 @@ export const fr = {
       title: 'Reconnaître cette anomalie',
       description:
         'Reconnaître indique qu’un administrateur a pris connaissance de l’anomalie et que la vérification est engagée. L’anomalie n’est pas résolue : elle ne le sera que lorsqu’une nouvelle observation du casier le confirmera, et elle reste visible.',
+      /** 06 §13.4: once every anomaly linked to its returns is acknowledged, the loan offers RETURN again. Not a resolution. */
+      returnEffect:
+        'Pour une anomalie de retour, la reconnaître permet au technicien de tenter un nouveau retour lorsque les autres conditions sont réunies. L’anomalie reste non résolue tant que ce retour n’est pas prouvé par le casier.',
       noteLabel: 'Note de reconnaissance',
       noteHelp: 'Obligatoire, de 1 à 500 caractères. Elle est conservée avec votre nom et l’heure.',
       counter: ({ count: value }: { count: number }) => `${count.format(value)} / 500`,
@@ -1377,6 +1405,9 @@ export const fr = {
       type: 'Type',
       severity: 'Gravité',
       lockerId: 'Identifiant du casier',
+      loanId: 'Identifiant du prêt',
+      resolvedByOperationId: 'Opération qui a résolu l’anomalie',
+      scanMessageId: 'Identifiant du message de scan',
       messageType: 'Type de message',
       revokedBrowserSessions: 'Sessions navigateur révoquées',
     } as Readonly<Record<string, string>>,
@@ -1477,6 +1508,10 @@ export const fr = {
       OPEN: 'Ouverte',
       ACKNOWLEDGED: 'Reconnue',
       RESOLVED: 'Résolue',
+      /** LocalChallengeStatus: the code of a locker display, written by the LOCAL_CHALLENGE_* events (from and to). */
+      PENDING: 'En attente',
+      CONSUMED: 'Utilisé',
+      INVALIDATED: 'Invalidé',
     } as Readonly<Record<string, string>>,
   },
 

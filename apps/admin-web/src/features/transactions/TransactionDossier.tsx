@@ -9,6 +9,7 @@ import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
 import { UNRECOGNIZED } from '../catalog/contract'
 import { StaleNotice } from '../catalog/StaleNotice'
 import { useAsset } from '../catalog/useCatalogQueries'
+import { failureReasonLabel } from './failureReason'
 import type { AssetSummary, LoanView, LockerOperationView, ReservationView, UserSummary } from './contract'
 import { operationAuditHref } from '../audit/operationAuditHref'
 import { LinkedAnomaly } from './LinkedAnomaly'
@@ -334,6 +335,7 @@ function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { rea
       ? { key, instant: null, time: '', label, kind: 'absent', sub: absent }
       : { key, instant, time: times.clockSeconds(instant), label, kind: 'ok', sub: t.sequence.received }
   }
+  const reasonLabel = o.failureReason === null ? null : failureReasonLabel(o.failureReason, i18n)
   const hasChallenge = o.localAccessChallengeId !== null
   const sequence: TimelineEntry[] = [
     step('created', o.createdAt, t.sequence.created),
@@ -346,7 +348,7 @@ function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { rea
     step('observed', o.observationReceivedAt, t.sequence.observed),
     step('confirmed', o.confirmedAt, t.sequence.confirmed),
   ]
-  if (o.status === 'FAILED') sequence.push({ key: 'end', instant: o.terminalAt, time: o.terminalAt === null ? '' : times.clockSeconds(o.terminalAt), label: t.sequence.failed, kind: 'blocked', sub: o.failureReason ?? undefined })
+  if (o.status === 'FAILED') sequence.push({ key: 'end', instant: o.terminalAt, time: o.terminalAt === null ? '' : times.clockSeconds(o.terminalAt), label: t.sequence.failed, kind: 'blocked', sub: reasonLabel ?? o.failureReason ?? undefined })
   if (o.status === 'EXPIRED') sequence.push({ key: 'end', instant: o.terminalAt, time: o.terminalAt === null ? '' : times.clockSeconds(o.terminalAt), label: t.sequence.expired, kind: 'anomaly' })
   if (o.status === 'ANOMALY') sequence.push({ key: 'end', instant: o.terminalAt, time: o.terminalAt === null ? '' : times.clockSeconds(o.terminalAt), label: t.sequence.anomaly, kind: 'anomaly' })
   const tone = o.status === 'ANOMALY' ? 'anomaly' : o.status === 'CONFIRMED' ? 'none' : o.status === 'EXPIRED' ? 'warn' : o.status === 'FAILED' ? 'none' : 'info'
@@ -428,6 +430,8 @@ function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { rea
               <Link className="ag-link" to={transactionHref({ view: 'loans', selectedId: o.loanId })}>
                 {t.openLoan}
               </Link>
+            ) : o.type === 'CHECKOUT' && o.status === 'CONFIRMED' ? (
+              t.checkoutLoanNote
             ) : (
               t.none
             )}
@@ -454,7 +458,16 @@ function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { rea
           )}
           <div>
             <dt>{t.failureReason}</dt>
-            <dd>{o.failureReason ?? t.none}</dd>
+            <dd>
+              {o.failureReason === null ? (
+                t.none
+              ) : (
+                <>
+                  {reasonLabel !== null && <span className="ag-kvs__label">{reasonLabel}</span>}
+                  {o.failureReason}
+                </>
+              )}
+            </dd>
           </div>
         </dl>
       </Section>

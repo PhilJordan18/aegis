@@ -146,6 +146,7 @@ export function AcknowledgeDialog({ open, anomaly, onClose, onAcknowledged, onRe
             {anomalyTypeLabel(anomaly, i18n)} · {whereLine(anomaly, i18n)}
           </p>
           <p>{d.description}</p>
+          <p>{d.returnEffect}</p>
         </>
       }
       onClose={onClose}

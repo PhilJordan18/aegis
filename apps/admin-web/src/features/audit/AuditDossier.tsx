@@ -6,6 +6,7 @@ import { ReadOnlyMark } from '../../ui/ReadOnlyMark'
 import { StatusChip } from '../../ui/StatusChip'
 import { detailItems, type DetailValueView } from './auditDetailItems'
 import { actorView, eventLabel, fullTimeOf, resultChip, stateLabel, subjectLabel } from './auditPresentation'
+import { failureReasonLabel } from '../transactions/failureReason'
 import { auditHref, type AuditFilters } from './auditFilters'
 import type { AuditEventView } from './contract'
 
@@ -130,7 +131,16 @@ export function AuditDossier({ event, filters, focusRef }: AuditDossierProps) {
             </div>
             <div>
               <dt>{t.factReason}</dt>
-              <dd>{event.reason === null ? t.noReason : <code className="ag-au-id">{event.reason}</code>}</dd>
+              <dd>
+                {event.reason === null ? (
+                  t.noReason
+                ) : (
+                  <>
+                    {failureReasonLabel(event.reason, i18n) !== null && <>{failureReasonLabel(event.reason, i18n)} </>}
+                    <code className="ag-au-id">{event.reason}</code>
+                  </>
+                )}
+              </dd>
             </div>
             <div>
               <dt>{t.factId}</dt>

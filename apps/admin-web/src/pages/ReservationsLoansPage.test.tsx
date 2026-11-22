@@ -344,6 +344,47 @@ describe('Réservations et prêts: locker operations', () => {
     expect(plain(dossier().textContent)).toContain('9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d')
   })
 
+  it('labels a failure reason beside its code, in the sequence and in the technical details, in both languages', async () => {
+    const op = operation({ status: 'FAILED', failureReason: 'LOCAL_PROOF_GUARD_FAILED', confirmedAt: null, observationReceivedAt: null })
+    const fr = renderPage(fakeGateway({ operations: ok(pageOf([op])) }), { url: '/reservations-prets?vue=operations' })
+    await screen.findByRole('heading', { level: 2, name: '1 opération' })
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Contrôle refusé au scan : tentative terminée'))
+    expect(plain(dossier().textContent)).toContain('LOCAL_PROOF_GUARD_FAILED')
+    expect(within(dossier()).queryByRole('button', { name: /déverrouill|unlock/i })).toBeNull()
+    fr.unmount()
+
+    renderPage(fakeGateway({ operations: ok(pageOf([op])) }), { url: '/reservations-prets?vue=operations', locale: 'en' })
+    await screen.findByRole('heading', { level: 2, name: '1 operation' })
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Check refused at the scan: attempt ended'))
+    expect(plain(dossier().textContent)).toContain('LOCAL_PROOF_GUARD_FAILED')
+    expect(within(dossier()).queryByRole('button', { name: /déverrouill|unlock/i })).toBeNull()
+  })
+
+  it('does not read « no loan » on a confirmed checkout: the loan names the operation (08), nothing is inferred', async () => {
+    const op = operation({ type: 'CHECKOUT', status: 'CONFIRMED', loanId: null })
+    renderPage(fakeGateway({ operations: ok(pageOf([op])) }), { url: '/reservations-prets?vue=operations' })
+    await screen.findByRole('heading', { level: 2, name: '1 opération' })
+    await waitFor(() => expect(plain(dossier().textContent)).toContain("c'est le prêt qui désigne cette opération"))
+    expect(within(dossier()).queryByRole('link', { name: 'Ouvrir le prêt' })).toBeNull()
+    expect(plain(dossier().textContent)).toContain('Aucun prêt n\'est déduit.')
+  })
+
+  it.each(['FAILED', 'EXPIRED'])('reads « Aucun » for a %s checkout: no loan exists, none is implied', async (status) => {
+    const op = operation({ type: 'CHECKOUT', status, loanId: null, confirmedAt: null })
+    renderPage(fakeGateway({ operations: ok(pageOf([op])) }), { url: '/reservations-prets?vue=operations' })
+    await screen.findByRole('heading', { level: 2, name: '1 opération' })
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Prêt lié'))
+    expect(plain(dossier().textContent)).not.toContain("c'est le prêt qui désigne cette opération")
+  })
+
+  it('shows an unknown failure reason as the code alone, with no invented label', async () => {
+    const op = operation({ status: 'EXPIRED', failureReason: 'FUTURE_REASON', confirmedAt: null })
+    renderPage(fakeGateway({ operations: ok(pageOf([op])) }), { url: '/reservations-prets?vue=operations' })
+    await screen.findByRole('heading', { level: 2, name: '1 opération' })
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('FUTURE_REASON'))
+    expect(dossier().querySelector('.ag-kvs__label')).toBeNull()
+  })
+
   it('resolves the equipment and the cell from the catalog and falls back to identifiers when that read fails', async () => {
     const ok1 = renderPage(fakeGateway(), { url: '/reservations-prets?vue=operations' })
     await screen.findByRole('heading', { level: 2, name: '1 opération' })

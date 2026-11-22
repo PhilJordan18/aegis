@@ -583,6 +583,8 @@ export const en: Messages = {
     noLinkedAnomaly: 'No linked anomaly',
     linkedReservation: 'Linked reservation',
     linkedLoan: 'Linked loan',
+    /** 08: a CHECKOUT never carries `loan_id`; the loan it opens names this operation, not the other way round. */
+    checkoutLoanNote: 'Not provided by a checkout: the loan names this operation. No loan is inferred.',
     none: 'None',
     cell: 'Cell',
     locker: 'Locker',
@@ -591,6 +593,29 @@ export const en: Messages = {
     requiredActionField: 'Required action',
     expiresAt: 'Expires at',
     failureReason: 'Reason provided',
+    /**
+     * Reasons of 09 §8.5 and §15.5 that are not anomaly types (those read the anomaly catalog, so that a type has one
+     * wording everywhere). The code stays visible beside the label: the server sends it as free text (G12).
+     */
+    failureReasonLabel: {
+      LOCAL_PROOF_EXPIRED: 'Deadline passed at the scan: a new preparation is needed',
+      LOCAL_PROOF_ATTEMPTS_EXHAUSTED: 'Five wrong codes: attempt ended',
+      LOCAL_PROOF_GUARD_FAILED: 'Check refused at the scan: attempt ended',
+      LOCAL_PROOF_INVALID: 'Wrong code',
+      LOCAL_PROOF_MALFORMED: 'Malformed code',
+      LOCAL_PROOF_ALREADY_USED: 'Code already used',
+      LOCAL_PROOF_NOT_DISPLAYED: 'Code not yet shown on the locker',
+      LOCAL_PROOF_CONTEXT_MISMATCH: 'Code of another operation',
+      LOCAL_PROOF_INVALIDATED: 'Code invalidated',
+      LOCAL_PROOF_RATE_LIMITED: 'Too many preparations in a short time',
+      HUB_RESTARTED: 'Locker restarted before the scan',
+      LOCKER_OFFLINE: 'Locker offline before the scan',
+      RESERVATION_CANCELLED: 'Reservation cancelled during preparation',
+      OPERATION_EXPIRED: 'Deadline reached without the door opening',
+      COMMAND_CORRELATION_INVALID: 'Invalid command correlation',
+    } as Readonly<Record<string, string>>,
+    /** `COMMAND_REJECTED_<result>` (09 §8.5): the suffix is the hub's own result and stays in the code. */
+    commandRejectedReason: 'Command refused by the locker',
     challenge: 'Local challenge',
     sequence: {
       created: 'Request received',
@@ -924,7 +949,7 @@ export const en: Messages = {
       ASSET_PRESENT_WITH_ACTIVE_LOAN: 'Equipment present despite an active loan',
       DOOR_NOT_CLOSED_BEFORE_EXPIRY: 'Door not closed before expiry',
       COMMAND_REJECTED: 'Command rejected',
-      DEVICE_OFFLINE_DURING_OPERATION: 'Locker offline during an operation',
+      DEVICE_OFFLINE_DURING_OPERATION: 'Locker offline or physical outcome undetermined during the operation',
       INCONSISTENT_PHYSICAL_STATE: 'Inconsistent physical state',
     },
     unrecognizedType: 'Type not recognized by this version',
@@ -1002,6 +1027,9 @@ export const en: Messages = {
       title: 'Acknowledge this anomaly',
       description:
         'Acknowledging records that an administrator has taken note of the anomaly and that the check is under way. The anomaly is not resolved: it will be only when a new observation from the locker confirms it, and it stays visible.',
+      /** 06 §13.4: once every anomaly linked to its returns is acknowledged, the loan offers RETURN again. Not a resolution. */
+      returnEffect:
+        'For a return anomaly, acknowledging it lets the technician try a new return when the other conditions are met. The anomaly stays unresolved until the locker proves that return.',
       noteLabel: 'Acknowledgement note',
       noteHelp: 'Required, 1 to 500 characters. It is kept with your name and the time.',
       counter: ({ count: value }: { count: number }) => `${count.format(value)} / 500`,
@@ -1278,6 +1306,9 @@ export const en: Messages = {
       type: 'Type',
       severity: 'Severity',
       lockerId: 'Locker ID',
+      loanId: 'Loan ID',
+      resolvedByOperationId: 'Operation that resolved the anomaly',
+      scanMessageId: 'Scan message ID',
       messageType: 'Message type',
       revokedBrowserSessions: 'Browser sessions revoked',
     },
@@ -1377,6 +1408,9 @@ export const en: Messages = {
       OPEN: 'Open',
       ACKNOWLEDGED: 'Acknowledged',
       RESOLVED: 'Resolved',
+      PENDING: 'Pending',
+      CONSUMED: 'Used',
+      INVALIDATED: 'Invalidated',
     },
   },
 

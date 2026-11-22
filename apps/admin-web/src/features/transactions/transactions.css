@@ -57,6 +57,7 @@
 .ag-kvs div { display: grid; grid-template-columns: minmax(7rem, 11rem) minmax(0, 1fr); gap: 2px 12px; align-items: baseline; }
 .ag-kvs dt { font-size: var(--ag-type-caption-size); color: var(--ag-text-2); }
 .ag-kvs dd { font-family: var(--ag-font-mono); font-size: var(--ag-type-code-size); overflow-wrap: anywhere; }
+.ag-kvs__label { display: block; font-family: var(--ag-font-sans); font-size: var(--ag-type-body-size); margin-bottom: 2px; }
 
 /* ---------- Timeline and physical sequence ---------- */
 .ag-tl { margin-top: 10px; display: grid; }
