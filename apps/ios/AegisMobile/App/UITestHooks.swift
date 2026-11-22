@@ -111,11 +111,25 @@ enum UITestScenario: String {
     /// A relaunch during a checkout: the reservation points to an operation
     /// in COMMAND_SENT, which stays there.
     case checkoutResume = "checkout-resume"
+    /// No reservation; an open loan listing RETURN. Returning answers 202 with
+    /// the code displayed; the fictional code is authorized, the loan reads
+    /// RETURN_PENDING, and each later read moves one state forward until
+    /// CONFIRMED, after which no loan is open.
+    case returnLoan = "return"
+    /// Returning answers 409 LOAN_NOT_RETURNABLE; the loan is then read
+    /// without actions.
+    case returnRefused = "return-refused"
+    /// A relaunch during a return: the loan is RETURN_PENDING and points to an
+    /// operation in COMMAND_SENT, which stays there.
+    case returnResume = "return-resume"
 
+    /// Served by the fake server of the guided operations.
     var isCheckout: Bool {
         [.checkout, .checkoutRefused, .checkoutOffline, .checkoutExpired, .checkoutNetworkLost, .checkoutResume]
-            .contains(self)
+            .contains(self) || isReturn
     }
+
+    var isReturn: Bool { [.returnLoan, .returnRefused, .returnResume].contains(self) }
 
     var storedSession: StoredSession? {
         switch self {
@@ -123,7 +137,8 @@ enum UITestScenario: String {
              .catalog, .catalogEmpty, .catalogPages, .catalogOffline, .catalogDetailOffline, .catalogDetailGone,
              .reservation, .reservationRefused, .reservationOffline, .reservationClosed,
              .activityReserved, .activityNotCancellable, .activityLoan, .activityLoanUnavailable, .checkout,
-             .checkoutRefused, .checkoutOffline, .checkoutExpired, .checkoutNetworkLost, .checkoutResume:
+             .checkoutRefused, .checkoutOffline, .checkoutExpired, .checkoutNetworkLost, .checkoutResume,
+             .returnLoan, .returnRefused, .returnResume:
             StoredSession(accessToken: "scenario-token", expiresAt: .now + 3600, email: Self.technicianEmail)
         case .resumeExpired:
             StoredSession(accessToken: "scenario-token", expiresAt: .now - 60, email: Self.technicianEmail)
@@ -242,7 +257,8 @@ struct ScenarioTransport: HTTPTransport {
         case .signedIn, .loginSuccess, .catalog, .catalogEmpty, .catalogPages, .catalogOffline, .catalogDetailOffline,
              .catalogDetailGone, .reservation, .reservationRefused, .reservationOffline, .reservationClosed,
              .activityReserved, .activityNotCancellable, .activityLoan, .activityLoanUnavailable, .checkout,
-             .checkoutRefused, .checkoutOffline, .checkoutExpired, .checkoutNetworkLost, .checkoutResume:
+             .checkoutRefused, .checkoutOffline, .checkoutExpired, .checkoutNetworkLost, .checkoutResume,
+             .returnLoan, .returnRefused, .returnResume:
             return response(request, 200, UITestScenario.technician)
         case .resumeRecovers where profileChecks.next() > 1:
             return response(request, 200, UITestScenario.technician)
@@ -348,6 +364,8 @@ struct ScenarioTransport: HTTPTransport {
             case authorized(operationId: String, at: Date, step: Int)
             case expired(operationId: String, at: Date)
             case confirmed
+            /// The return was refused; the loan no longer lists RETURN.
+            case refused
         }
 
         static let progression = ["AUTHORIZED", "COMMAND_SENT", "COMMAND_ACKNOWLEDGED", "DOOR_OPENED",
@@ -361,7 +379,7 @@ struct ScenarioTransport: HTTPTransport {
         func stage(_ scenario: UITestScenario) -> Stage {
             lock.withLock {
                 if let _stage { return _stage }
-                let initial: Stage = scenario == .checkoutResume
+                let initial: Stage = scenario == .checkoutResume || scenario == .returnResume
                     ? .authorized(operationId: UITestActivityFixtures.operationId, at: .now - 10, step: 1)
                     : .reserved
                 _stage = initial
@@ -385,6 +403,41 @@ struct ScenarioTransport: HTTPTransport {
         let server = checkoutServer
         let stage = server.stage(scenario)
         let fixtures = UITestActivityFixtures.self
+        let type = scenario.isReturn ? "RETURN" : "CHECKOUT"
+
+        if scenario.isReturn, path.hasSuffix("/me/reservation") {
+            return problem(request, 404, "ACTIVE_RESERVATION_NOT_FOUND")
+        }
+        if scenario.isReturn, path.hasSuffix("/me/loan") {
+            switch stage {
+            case .reserved:
+                return response(request, 200, fixtures.openLoan(actions: ["RETURN"]))
+            case .refused:
+                return response(request, 200, fixtures.openLoan(actions: []))
+            case let .awaitingProof(id):
+                return response(request, 200, fixtures.openLoan(actions: [], currentOperationId: id))
+            case let .authorized(id, _, _), let .expired(id, _):
+                return response(request, 200, fixtures.openLoan(status: "RETURN_PENDING", actions: [],
+                                                                currentOperationId: id))
+            case .confirmed:
+                return problem(request, 404, "ACTIVE_LOAN_NOT_FOUND")
+            }
+        }
+        if scenario.isReturn, path.hasSuffix("/return"), path.contains("/loans/") {
+            guard request.value(forHTTPHeaderField: "Idempotency-Key") != nil else {
+                return problem(request, 400, "IDEMPOTENCY_KEY_REQUIRED")
+            }
+            guard stage == .reserved else { return problem(request, 409, "LOCKER_OPERATION_IN_PROGRESS") }
+            if scenario == .returnRefused {
+                server.set(.refused)
+                return problem(request, 409, "LOAN_NOT_RETURNABLE")
+            }
+            let id = fixtures.operationId
+            server.set(.awaitingProof(operationId: id))
+            return response(request, 202, fixtures.operation(id: id, type: type, status: "AWAITING_LOCAL_PROOF",
+                                                             requiredAction: "SCAN_HUB_QR"),
+                            headers: ["Location": "/api/v1/locker-operations/\(id)", "Retry-After": "1"])
+        }
 
         if path.hasSuffix("/me/reservation") {
             switch stage {
@@ -398,7 +451,7 @@ struct ScenarioTransport: HTTPTransport {
             case let .expired(id, _):
                 return response(request, 200, fixtures.reservation(until: until, actions: ["CHECKOUT"],
                                                                    currentOperationId: id))
-            case .confirmed:
+            case .confirmed, .refused:
                 return problem(request, 404, "ACTIVE_RESERVATION_NOT_FOUND")
             }
         }
@@ -415,7 +468,7 @@ struct ScenarioTransport: HTTPTransport {
             case .reserved, .expired:
                 let id = server.nextPreparation() == 1 ? fixtures.operationId : fixtures.retryOperationId
                 server.set(.awaitingProof(operationId: id))
-                return response(request, 202, fixtures.operation(id: id, status: "AWAITING_LOCAL_PROOF",
+                return response(request, 202, fixtures.operation(id: id, type: type, status: "AWAITING_LOCAL_PROOF",
                                                                  requiredAction: "SCAN_HUB_QR"),
                                 headers: ["Location": "/api/v1/locker-operations/\(id)", "Retry-After": "1"])
             default:
@@ -435,13 +488,13 @@ struct ScenarioTransport: HTTPTransport {
             }
             let now = Date.now
             server.set(.authorized(operationId: id, at: now, step: 0))
-            return response(request, 202, fixtures.operation(id: id, status: "AUTHORIZED", requiredAction: "WAIT",
+            return response(request, 202, fixtures.operation(id: id, type: type, status: "AUTHORIZED", requiredAction: "WAIT",
                                                              authorized: now))
         }
         if path.contains("/locker-operations/") {
             switch stage {
             case let .awaitingProof(id) where path.hasSuffix(id):
-                return response(request, 200, fixtures.operation(id: id, status: "AWAITING_LOCAL_PROOF",
+                return response(request, 200, fixtures.operation(id: id, type: type, status: "AWAITING_LOCAL_PROOF",
                                                                  requiredAction: "SCAN_HUB_QR"),
                                 headers: ["Retry-After": "1"])
             case let .authorized(id, at, step) where path.hasSuffix(id):
@@ -449,11 +502,11 @@ struct ScenarioTransport: HTTPTransport {
                 if scenario == .checkoutExpired {
                     let end = Date.now
                     server.set(.expired(operationId: id, at: end))
-                    return response(request, 200, fixtures.operation(id: id, status: "EXPIRED", requiredAction: "NONE",
+                    return response(request, 200, fixtures.operation(id: id, type: type, status: "EXPIRED", requiredAction: "NONE",
                                                                      authorized: at, terminal: end))
                 }
-                if scenario == .checkoutResume {
-                    return response(request, 200, fixtures.operation(id: id, status: "COMMAND_SENT",
+                if scenario == .checkoutResume || scenario == .returnResume {
+                    return response(request, 200, fixtures.operation(id: id, type: type, status: "COMMAND_SENT",
                                                                      requiredAction: "WAIT", authorized: at),
                                     headers: ["Retry-After": "1"])
                 }
@@ -461,15 +514,15 @@ struct ScenarioTransport: HTTPTransport {
                 let status = CheckoutServer.progression[next]
                 if status == "CONFIRMED" {
                     server.set(.confirmed)
-                    return response(request, 200, fixtures.operation(id: id, status: status, requiredAction: "NONE",
+                    return response(request, 200, fixtures.operation(id: id, type: type, status: status, requiredAction: "NONE",
                                                                      authorized: at, terminal: .now))
                 }
                 server.set(.authorized(operationId: id, at: at, step: next))
-                return response(request, 200, fixtures.operation(id: id, status: status, requiredAction: "WAIT",
+                return response(request, 200, fixtures.operation(id: id, type: type, status: status, requiredAction: "WAIT",
                                                                  authorized: at),
                                 headers: ["Retry-After": "1"])
             case let .expired(id, at) where path.hasSuffix(id):
-                return response(request, 200, fixtures.operation(id: id, status: "EXPIRED", requiredAction: "NONE",
+                return response(request, 200, fixtures.operation(id: id, type: type, status: "EXPIRED", requiredAction: "NONE",
                                                                  authorized: at - 120, terminal: at))
             default:
                 return problem(request, 404, "RESOURCE_NOT_FOUND")

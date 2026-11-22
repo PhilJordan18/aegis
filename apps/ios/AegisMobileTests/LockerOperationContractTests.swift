@@ -94,6 +94,28 @@ struct LockerOperationContractTests {
         #expect(request.value(forHTTPHeaderField: "Content-Type") == nil)
     }
 
+    /// §15.2: the holder's loan, the same key header and no body.
+    @Test func preparesAReturnWithTheKeyAndNoBody() async throws {
+        let (client, transport) = client(.response(
+            status: 202, contentType: "application/json", body: OperationFixtures.json(type: "RETURN"),
+            headers: ["Location": "/api/v1/locker-operations/\(OperationFixtures.operationId)", "Retry-After": "1",
+                      "Cache-Control": "no-store"]))
+        let key = IdempotencyKey()
+        let loanId = try #require(UUID(uuidString: ActivityFixtures.loanId))
+
+        let view = try await client.prepareReturn(loanId: loanId, key: key, bearer: "token-1")
+
+        #expect(view.awaitsLocalProof)
+        #expect(view.type == .known(.return))
+        let request = try #require(transport.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.absoluteString == "\(Self.base)/loans/\(ActivityFixtures.loanId)/return")
+        #expect(request.value(forHTTPHeaderField: "Idempotency-Key") == key.value)
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer token-1")
+        #expect(request.httpBody == nil)
+        #expect(request.value(forHTTPHeaderField: "Content-Type") == nil)
+    }
+
     @Test func readsAnOperationWithTheServerPace() async throws {
         let (client, transport) = client(.response(status: 200, contentType: "application/json",
                                                    body: OperationFixtures.json(), headers: ["Retry-After": "3"]))

@@ -230,7 +230,7 @@ struct CheckoutPreparationTests {
         #expect(model.operationInProgress)
         #expect(!model.canPrepareCheckout)
 
-        model.resumeOperation()
+        model.resumeOperation(OperationFixtures.id)
         #expect(model.guided?.kind == .checkout)
         await model.hideOperation()
     }
@@ -247,7 +247,7 @@ struct CheckoutPreparationTests {
         await model.load()
 
         #expect(model.resumableOperationId == OperationFixtures.id)
-        #expect(model.currentOperation == nil)
+        #expect(model.knownOperations[OperationFixtures.id] == nil)
         #expect(model.finishedAttempt == nil)
     }
 
@@ -285,7 +285,7 @@ struct CheckoutPreparationTests {
         #expect(model.guided == nil)
         #expect(service.cancelKeys.isEmpty)
         #expect(service.reads == readsBefore + 1)
-        #expect(model.currentOperation == OperationFixtures.commandSent)
+        #expect(model.knownOperations[OperationFixtures.id] == OperationFixtures.commandSent)
         #expect(model.operationInProgress)
         #expect(model.resumableOperationId == OperationFixtures.id)
     }
@@ -306,7 +306,7 @@ struct CheckoutPreparationTests {
         await model.prepareCheckout()
         #expect(model.guided?.step.ending == .expired)
 
-        await model.restartCheckout()
+        await model.restartOperation()
 
         #expect(operations.prepareKeys.count == (listed ? 2 : 1))
         #expect((model.guided != nil) == listed)

@@ -1,7 +1,7 @@
 import Foundation
 
-/// Why preparing a checkout did not open a guided operation (doc 09 §15.1,
-/// handoff `mobile-parcours` §7.1). A 401 is not one: it ends the session.
+/// Why preparing a checkout or a return did not open a guided operation (doc 09 §15.1,
+/// §15.2, handoff `mobile-parcours` §7.1). A 401 is not one: it ends the session.
 enum PreparationProblem: Equatable, Sendable {
     /// No HTTP answer: the outcome is unknown, so a new tap reuses the key.
     case unreachable
@@ -19,7 +19,7 @@ enum PreparationProblem: Equatable, Sendable {
         case compartmentUnsafe
         case presenceUnknown
         case lockerClosed
-        /// The reservation is no longer one that can be checked out.
+        /// The reservation or the loan no longer allows this preparation.
         case noLongerPossible
         case accessDenied
         case rateLimited(retryAfter: Duration?)
@@ -45,9 +45,11 @@ enum PreparationProblem: Equatable, Sendable {
             case (403, "ASSET_ACCESS_DENIED"): self = .refused(.accessDenied)
             case (429, _): self = .refused(.rateLimited(retryAfter: retryAfter))
             case (_, "IDEMPOTENCY_REQUEST_IN_PROGRESS"), (500..., _): self = .service(traceId: traceId)
-            // The reservation ended, was fulfilled, or its asset left: §7.1
-            // « Cette action n'est plus possible. », then a new read.
-            case (409, "RESERVATION_NOT_CANCELLABLE"), (409, "ASSET_HAS_OPEN_LOAN"), (404, _):
+            // The reservation ended or was fulfilled, its asset left, or the
+            // loan is no longer returnable: §7.1 « Cette action n'est plus
+            // possible. », then a new read.
+            case (409, "RESERVATION_NOT_CANCELLABLE"), (409, "ASSET_HAS_OPEN_LOAN"),
+                 (409, "LOAN_NOT_RETURNABLE"), (404, _):
                 self = .refused(.noLongerPossible)
             default: self = .refused(.other(traceId: traceId))
             }

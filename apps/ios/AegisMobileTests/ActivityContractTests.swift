@@ -161,8 +161,8 @@ enum ActivityFixtures {
     }
 
     static func loan(status: String = "ACTIVE", overdue: Bool = true, actions: [String] = ["RETURN"],
-                     returnRequestedAt: String = "null") -> String {
-        #"{"id":"\#(loanId)","asset":\#(asset()),"holderUserId":"\#(CatalogFixtures.technicianId)","status":"\#(status)","checkedOutAt":"2026-09-16T18:05:00Z","dueAt":"2026-09-16T20:30:00Z","overdue":\#(overdue),"returnRequestedAt":\#(returnRequestedAt),"returnedAt":null,"checkoutOperationId":"5f0e2b8c-3a4d-4e6f-8a9b-0c1d2e3f4a5b","returnOperationId":null,"currentOperationId":null,"availableActions":\#(list(actions))}"#
+                     returnRequestedAt: String = "null", currentOperationId: String? = nil) -> String {
+        #"{"id":"\#(loanId)","asset":\#(asset()),"holderUserId":"\#(CatalogFixtures.technicianId)","status":"\#(status)","checkedOutAt":"2026-09-16T18:05:00Z","dueAt":"2026-09-16T20:30:00Z","overdue":\#(overdue),"returnRequestedAt":\#(returnRequestedAt),"returnedAt":null,"checkoutOperationId":"5f0e2b8c-3a4d-4e6f-8a9b-0c1d2e3f4a5b","returnOperationId":null,"currentOperationId":\#(currentOperationId.map { "\"\($0)\"" } ?? "null"),"availableActions":\#(list(actions))}"#
     }
 
     private static func list(_ values: [String]) -> String {

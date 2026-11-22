@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The guided checkout (handoff `mobile-parcours` §7.3): cell in very large
+/// The guided checkout or return (handoff `mobile-parcours` §7.3): cell in very large
 /// type, the state received and its single instruction, the time left, the
 /// six phases, then the action of the state. « Fermer » hides the tracking
 /// without cancelling; no button ends or confirms an operation.
@@ -144,8 +144,9 @@ struct GuidedOperationScreen: View {
                     .fontWidth(typeSize.isAccessibilitySize ? .condensed : .standard)
             }
             .buttonStyle(PrimaryButtonStyle())
-            .accessibilityLabel(Text("Recommencer le retrait"))
-            .accessibilityHint(Text("Relance la préparation du retrait."))
+            .accessibilityLabel(model.kind == .checkout ? Text("Recommencer le retrait") : Text("Recommencer le retour"))
+            .accessibilityHint(model.kind == .checkout ? Text("Relance la préparation du retrait.")
+                                                       : Text("Relance la préparation du retour."))
             .accessibilityIdentifier("operation.restart")
         case .confirmed:
             Button("Voir mon activité", action: close)

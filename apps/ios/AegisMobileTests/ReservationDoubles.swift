@@ -84,8 +84,10 @@ enum ActivityDoubles {
                                                             currentOperationId: currentOperationId))
     }
 
-    static func loan(overdue: Bool = true) -> LoanView {
-        CatalogFixtures.decode(ActivityFixtures.loan(overdue: overdue))
+    static func loan(status: String = "ACTIVE", overdue: Bool = true, actions: [String] = ["RETURN"],
+                     currentOperationId: String? = nil) -> LoanView {
+        CatalogFixtures.decode(ActivityFixtures.loan(status: status, overdue: overdue, actions: actions,
+                                                     currentOperationId: currentOperationId))
     }
 
     static func refusal(_ status: Int, _ code: String, reasons: [String]? = nil,
