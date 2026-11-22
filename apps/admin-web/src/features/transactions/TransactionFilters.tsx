@@ -1,9 +1,10 @@
 import { useRef, useState, type FormEvent } from 'react'
+import { Link } from '../../app/Link'
 import { useI18n } from '../../i18n/useI18n'
 import { Button } from '../../ui/Button'
 import { SelectField, TextField } from '../../ui/FormField'
 import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
-import { isCalendarDay, isUuidText, STATUSES_OF_VIEW, type TransactionFilterValues, type TransactionView } from './transactionHref'
+import { isCalendarDay, isUuidText, NO_FILTERS, STATUSES_OF_VIEW, transactionHref, type TransactionFilterValues, type TransactionView } from './transactionHref'
 
 interface TransactionFiltersProps {
   readonly view: TransactionView
@@ -42,11 +43,11 @@ export function TransactionFilters({ view, values, onApply }: TransactionFilters
       ;(formRef.current?.elements.namedItem(field) as HTMLElement | null)?.focus()
       return
     }
-    onApply({ status: status === '' ? null : status, assetId: asset === '' ? null : asset.toLowerCase(), from: from === '' ? null : from, to: to === '' ? null : to })
+    onApply({ status: status === '' ? null : status, assetId: asset === '' ? null : asset.toLowerCase(), lockerId: values.lockerId, from: from === '' ? null : from, to: to === '' ? null : to })
   }
 
   function clear() {
-    onApply({ status: null, assetId: null, from: null, to: null })
+    onApply(NO_FILTERS)
   }
 
   return (
@@ -81,6 +82,14 @@ export function TransactionFilters({ view, values, onApply }: TransactionFilters
           {t.filterClear}
         </Button>
       </div>
+      {view === 'operations' && values.lockerId !== null && (
+        <p className="ag-filters__help" data-testid="locker-filter">
+          {t.filterLocker} <code className="ag-id">{values.lockerId}</code>{' '}
+          <Link className="ag-link" to={transactionHref({ view, filters: { ...values, lockerId: null } })}>
+            {t.filterLockerRemove}
+          </Link>
+        </p>
+      )}
       <p className="ag-filters__help">
         {t.filterAssetHelp} {t.filterPeriodHelp({ zone: LAB_TIME_ZONE })}
       </p>

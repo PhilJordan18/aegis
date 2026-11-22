@@ -17,8 +17,9 @@ import ca.aegis.control.audit.AuditSubjectType;
 import ca.aegis.control.audit.AuditTrail;
 
 /**
- * The only writer of {@code users.password_hash} after an account exists (ADR-017). An effective change revokes every
- * open browser session of the account and records {@code PASSWORD_CHANGED} in the same transaction; a password equal
+ * The only writer of {@code users.password_hash} after an account exists (ADR-017). An effective change increments the
+ * account's credential version, which refuses every access token issued before it (ADR-018), revokes every open
+ * browser session of the account and records {@code PASSWORD_CHANGED} in the same transaction; a password equal
  * to the current one changes nothing, so re-applying a configuration on restart signs no one out.
  *
  * <p>The account row is locked first. A browser sign-in inserts its session only while that row still holds the hash
@@ -59,7 +60,10 @@ class PasswordChanges {
         if (passwordEncoder.matches(newPassword, currentHash)) {
             return false;
         }
-        jdbc.sql("UPDATE aegis.users SET password_hash = :hash WHERE id = :id")
+        jdbc.sql("""
+                UPDATE aegis.users SET password_hash = :hash, credential_version = credential_version + 1
+                WHERE id = :id
+                """)
                 .param("hash", passwordEncoder.encode(newPassword))
                 .param("id", accountId)
                 .update();

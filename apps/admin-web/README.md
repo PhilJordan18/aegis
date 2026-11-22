@@ -36,9 +36,12 @@ npm run capture:evidence  # 16 captures choisies, à 1×, dans docs/design/manag
 npm run capture:integration  # 14 captures FR/EN de l'identité v3, à 1×, dans docs/design/manager-v3/captures-integration/
 npm run test:identity  # mesures sur le rendu : saut de mise en page, contrastes peints, focus, texte coupé
 npm run test:forms     # formulaires CAT-01 proposés : axe, clavier, 320 px, clair et sombre, sur des faux routés
+npm run test:follow    # dossier d'opération ouvert (ADR-006, R5) : suivi sans clic, requêtes bornées, pause onglet masqué, arrêt au statut terminal
+npm run test:links     # liens entre dossiers (R2, R3) et tentative courante (R4) : chaque lien est cliqué, adresse et requête vérifiées, sans image
 npm run capture:forms  # mêmes contrôles, et écrit le lot de revue dans docs/design/manager-forms/captures/
 npm run test:e2e:api   # recette Playwright contre l'API réelle (build de production); échoue sans API ou sans identifiants
 npm run test:e2e:session   # session navigateur (ADR-016) sur des faux d'API : rechargement, lien direct, révocation, déconnexion
+npm run test:realapi   # recette navigateur des pages de chaîne de garde contre une API réelle d'une pile isolée (voir ci-dessous); jamais exécutée par défaut
 ```
 
 ### Développer contre l'API
@@ -100,7 +103,7 @@ démarrage, la déconnexion et sa révocation non confirmée, ainsi qu'axe (clai
 et sombre, 1280 et 390 px) sur les deux nouveaux états.
 
 Ces trois commandes Playwright démarrent leur propre serveur Vite sur
-`127.0.0.1:5180`. Ils utilisent le Chromium de Playwright 1.63 déjà installé
+`127.0.0.1:5180` (`AEGIS_E2E_PORT` change le port, par exemple pour deux copies de travail en parallèle). Ils utilisent le Chromium de Playwright 1.63 déjà installé
 (`npx playwright install chromium` s'il manque). Pour filtrer les cas :
 `npm run capture -- --grep connexion`. Les captures sont faites en mouvement
 réduit par défaut; `AEGIS_MOTION=no-preference` le désactive.
@@ -142,6 +145,33 @@ de langue : préférence du navigateur, repli, choix mémorisé qui l'emporte,
 changement au clavier, rechargement, menu du compte, tiroir et lien
 d'évitement en anglais. `npm run test:a11y` et `npm run capture` incluent les
 deux fichiers.
+
+### Recette navigateur contre une API réelle (`test:realapi`)
+
+`npm run test:realapi` ouvre, en lecture seule, Vue d'ensemble, Réservations et prêts (les trois vues), Anomalies et
+Audit contre une API réelle, en français et en anglais, à 1280 et 390 px (`e2e/realapi.spec.ts`) : connexion par le vrai
+formulaire, nombres affichés égaux à ceux des réponses de l'API, navigation par les liens, rechargement qui garde la
+session, axe sans violation, aucune écriture hors connexion et restauration de session. Le projet `realapi` n'existe
+que si `AEGIS_E2E_REAL_API=1` (le script le pose) : `npm test`, `npx playwright test` et la CI ne le voient jamais. Pile
+isolée seulement (conteneur ou poste de développement), jamais le staging ni la production.
+
+```bash
+# Depuis la racine : infra, API (jar de services/api), compte administrateur (services/api/README.md), jeu de données par l'API REST.
+docker compose -p aegis-r6 --env-file infra/docker/.env.example -f infra/docker/compose.yaml up -d --wait
+# API démarrée avec AEGIS_WEB_ALLOWED_ORIGINS=http://localhost:5191 (http seulement pour localhost), puis, depuis apps/admin-web :
+npm run build
+AEGIS_API_ORIGIN=http://127.0.0.1:8080 npx vite preview --host localhost --port 5191 --strictPort &
+AEGIS_E2E_BASE_URL=http://localhost:5191 AEGIS_E2E_ADMIN_EMAIL=admin@aegis.demo \
+AEGIS_E2E_ADMIN_PASSWORD="$AEGIS_DEMO_ADMIN_PASSWORD" AEGIS_E2E_REQUIRE_DATA=reservations,operations,audit \
+  npm run test:realapi -- --trace off
+```
+
+Les identifiants ne viennent que de l'environnement, au moment de l'exécution. `AEGIS_E2E_REQUIRE_DATA` (liste de
+`reservations`, `loans`, `operations`, `anomalies`, `audit`; `audit` par défaut) nomme les vues qui ne doivent pas être
+vides : sans cela une pile vide passerait. Une vue non listée peut être vide et est alors prouvée par son compte à zéro
+et l'absence d'alerte. La connexion est limitée à 5 tentatives par minute par adresse et par compte : un `429` est
+attendu selon `Retry-After`. Les spécifications trouvent les éléments par rôle, adresse et nom de champ plutôt que par
+texte, donc un changement de libellé ne les casse pas.
 
 ## Dépendances
 

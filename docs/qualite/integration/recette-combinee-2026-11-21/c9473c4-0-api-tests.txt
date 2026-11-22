@@ -1,0 +1,4 @@
+# ref c9473c4, services/api ./mvnw test on an isolated stack
+[INFO] Tests run: 715, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+exit=0

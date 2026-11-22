@@ -1,4 +1,5 @@
 import { useId, useLayoutEffect, useRef, type ReactNode, type Ref } from 'react'
+import { Link } from '../../app/Link'
 import { useI18n } from '../../i18n/useI18n'
 import { ReadOnlyMark } from '../../ui/ReadOnlyMark'
 import { StatusChip } from '../../ui/StatusChip'
@@ -18,6 +19,8 @@ import {
   reasonLabel,
   serviceStateLabel,
 } from './assetPresentation'
+import { auditHref, NO_FILTERS as NO_AUDIT_FILTERS } from '../audit/auditFilters'
+import { NO_FILTERS as NO_TRANSACTION_FILTERS, transactionHref } from '../transactions/transactionHref'
 import { CatalogAlert } from './CatalogAlert'
 import type { CatalogFailure } from './catalogFailure'
 import type { AdminAssetView } from './contract'
@@ -222,6 +225,34 @@ function DossierBody({ asset, titleId, stale, retrying, onRetry, returnFocus, ac
           </dl>
         </div>
       </div>
+      <section className="ag-eq-history" aria-labelledby={`${titleId}-history`}>
+        <h3 className="ag-overline ag-sec-title" id={`${titleId}-history`}>
+          {t.historyTitle}
+        </h3>
+        <ul className="ag-eq-history__links">
+          <li>
+            <Link className="ag-link" to={transactionHref({ view: 'loans', filters: { ...NO_TRANSACTION_FILTERS, assetId: asset.id } })}>
+              {t.historyLoans}
+            </Link>
+          </li>
+          <li>
+            <Link className="ag-link" to={transactionHref({ view: 'reservations', filters: { ...NO_TRANSACTION_FILTERS, assetId: asset.id } })}>
+              {t.historyReservations}
+            </Link>
+          </li>
+          <li>
+            <Link className="ag-link" to={transactionHref({ view: 'operations', filters: { ...NO_TRANSACTION_FILTERS, assetId: asset.id } })}>
+              {t.historyOperations}
+            </Link>
+          </li>
+          <li>
+            <Link className="ag-link" to={auditHref({ ...NO_AUDIT_FILTERS, subjectType: 'ASSET', subjectId: asset.id })}>
+              {t.historyAudit}
+            </Link>
+          </li>
+        </ul>
+        <p className="ag-help">{t.historyAuditNote}</p>
+      </section>
       {custody}
     </>
   )

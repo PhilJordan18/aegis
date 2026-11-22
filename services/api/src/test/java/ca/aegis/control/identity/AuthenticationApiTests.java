@@ -118,8 +118,10 @@ class AuthenticationApiTests extends ApiIntegrationTest {
         assertEquals(JOSEObjectType.JWT, jwt.getHeader().getType());
         assertTrue(jwt.verify(new MACVerifier(signingKey())));
         JWTClaimsSet claims = jwt.getJWTClaimsSet();
-        assertEquals(Set.of("iss", "aud", "sub", "jti", "iat", "exp", "role", "maximumAccessLevel"),
+        // A sign-in without a browser session carries no sid (ADR-018).
+        assertEquals(Set.of("iss", "aud", "sub", "jti", "iat", "exp", "role", "maximumAccessLevel", "cv"),
                 claims.getClaims().keySet());
+        assertEquals(0L, claims.getLongClaim("cv"));
         assertEquals("aegis-control", claims.getIssuer());
         assertEquals(List.of("aegis-api"), claims.getAudience());
         assertEquals(technician.id().toString(), claims.getSubject());
@@ -329,6 +331,19 @@ class AuthenticationApiTests extends ApiIntegrationTest {
                 .expirationTime(Date.from(now.plus(LIFETIME).plusSeconds(1))).build()));
         forged.put("no expiry", signed(JWSAlgorithm.HS256, key, claims(id).expirationTime(null).build()));
         forged.put("no issue time", signed(JWSAlgorithm.HS256, key, claims(id).issueTime(null).build()));
+        forged.put("no credential version, as before ADR-018",
+                signed(JWSAlgorithm.HS256, key, claims(id).claim("cv", null).build()));
+        forged.put("stale credential version", signed(JWSAlgorithm.HS256, key, claims(id).claim("cv", 1).build()));
+        forged.put("negative credential version",
+                signed(JWSAlgorithm.HS256, key, claims(id).claim("cv", -1).build()));
+        forged.put("credential version as a string",
+                signed(JWSAlgorithm.HS256, key, claims(id).claim("cv", "0").build()));
+        forged.put("fractional credential version",
+                signed(JWSAlgorithm.HS256, key, claims(id).claim("cv", 0.5).build()));
+        forged.put("session identifier is not a UUID",
+                signed(JWSAlgorithm.HS256, key, claims(id).claim("sid", "session").build()));
+        forged.put("unknown session", signed(JWSAlgorithm.HS256, key,
+                claims(id).claim("sid", UUID.randomUUID().toString()).build()));
         forged.put("expired and signed with another key", signed(JWSAlgorithm.HS256,
                 Base64.getDecoder().decode(randomBase64(48)), expiredClaims(id).build()));
         forged.put("expired and for another audience",
@@ -453,7 +468,8 @@ class AuthenticationApiTests extends ApiIntegrationTest {
                 .issueTime(Date.from(now))
                 .expirationTime(Date.from(now.plus(LIFETIME)))
                 .claim("role", "TECHNICIAN")
-                .claim("maximumAccessLevel", "STANDARD");
+                .claim("maximumAccessLevel", "STANDARD")
+                .claim("cv", 0);
     }
 
     private JWTClaimsSet.Builder expiredClaims(UUID subject) {

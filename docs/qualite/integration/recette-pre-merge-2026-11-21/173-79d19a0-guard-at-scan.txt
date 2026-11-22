@@ -1,0 +1,8 @@
+PASS G0 revoking the expected RFID identifier during the attempt is refused (409 ASSET_OPERATION_IN_PROGRESS)
+OBS  G0b an administrator can set the asset to MAINTENANCE while its checkout waits for the scan (200)
+FAIL G1 DEFECT (doc 06 §6.5, doc 05 §5.4 l.271): scan 422 ASSET_NOT_READY, operation 'AWAITING_LOCAL_PROOF None 2026-11-21T13:32:54.214881Z', challenge 'PENDING 0', audit +0, commands 0; expected FAILED + INVALIDATED + audit, no command
+PASS G2 the right secret again: 422 ASSET_NOT_READY, no command
+OBS  G3 without the §6.5 ending, the attempt stays open until expiry and then ends 'EXPIRED LOCAL_PROOF_EXPIRED 2026-11-21T13:32:54.214881Z'; challenge 'EXPIRED'
+PASS INV no loan
+QA GUARD AT SCAN: 1 failed
+exit=1

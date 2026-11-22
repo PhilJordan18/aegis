@@ -6,6 +6,7 @@ import { App } from '../app/App'
 import { unconfiguredAuthGateway, type AuthGateway } from '../features/auth/authGateway'
 import { createSessionStore } from '../features/auth/session'
 import { adminProfile, sessionStubs } from '../features/auth/testFixtures'
+import { ASSET_UPDATED_STATUS, SCHEDULE_UPDATED_CHANGED } from '../features/audit/auditDetailSamples'
 import { OPERATION_ID, SUBJECT_ID, auditPage, eventView, fakeAuditGateway, pageOk, pageProblem, pageUnreachable, uuid } from '../features/audit/testFixtures'
 import type { Locale } from '../i18n/locale'
 import { installMatchMedia } from '../test/matchMedia'
@@ -98,6 +99,19 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
     expect(within(screen.getByRole('group', { name: 'Code du casier refusé' })).getByText('CHALLENGE_MISMATCH')).toBeTruthy()
   })
 
+  it('labels a known reason beside its code and leaves an unknown reason as the code alone', async () => {
+    const known = eventView(6, { eventType: 'OPERATION_FAILED', result: 'ACCEPTED', reason: 'LOCAL_PROOF_GUARD_FAILED' })
+    const view = renderAudit([pageOk(auditPage([known]))])
+    await timeline()
+    const dossier = screen.getByRole('group', { name: /./ })
+    expect(plain(within(dossier).getByText('LOCAL_PROOF_GUARD_FAILED').parentElement?.textContent)).toBe('Contrôle refusé au scan : tentative terminée LOCAL_PROOF_GUARD_FAILED')
+    view.unmount()
+
+    renderAudit([pageOk(auditPage([known]))], { locale: 'en' })
+    await timeline()
+    expect(plain(within(screen.getByRole('group', { name: /./ })).getByText('LOCAL_PROOF_GUARD_FAILED').parentElement?.textContent)).toBe('Check refused at the scan: attempt ended LOCAL_PROOF_GUARD_FAILED')
+  })
+
   it('says what is missing instead of completing it: no result, no reason, no operation, no evidence', async () => {
     renderAudit([pageOk(auditPage([eventView(4, { result: null, reason: null, operationId: null })]))])
     await timeline()
@@ -127,6 +141,7 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
       futureKey: 'valeur',
       changes: { name: 'secret-looking' },
       endedOperationIds: [OPERATION_ID],
+      payload: { token: 'secret-looking' },
     }
     renderAudit([pageOk(auditPage([eventView(4, { details }), eventView(5)]))])
     await timeline()
@@ -138,23 +153,48 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
       "État de l'opération": 'Commande acquittée COMMAND_ACKNOWLEDGED',
       Tentative: '2',
       "Affichage des consignes arrêté": 'Oui',
-      Révoqué: 'Non renseigné',
       "Réservé jusqu'au": expect.stringContaining('2026'),
       'Identifiant du casier': SUBJECT_ID,
       futureKey: 'valeur',
+      'Opérations terminées': OPERATION_ID,
     })
     expect(within(section).getByText('futureKey', { selector: 'code' })).toBeTruthy()
     expect(within(section).getByText('2 champs structurés ne sont pas affichés.')).toBeTruthy()
     expect(section.textContent).not.toContain('secret-looking')
+    expect(section.textContent).not.toContain('{')
     expect(within(section).queryByRole('button')).toBeNull()
     expect(within(section).queryByRole('textbox')).toBeNull()
   })
 
   it('says structured details are not shown when they are all that was sent', async () => {
-    renderAudit([pageOk(auditPage([eventView(4, { details: { created: { name: 'x' } } })]))])
+    renderAudit([pageOk(auditPage([eventView(4, { details: { payload: { name: 'x' } } })]))])
     await timeline()
     expect(screen.getByText('1 champ structuré n’est pas affiché.')).toBeTruthy()
     expect(screen.queryByText('Aucun détail')).toBeNull()
+  })
+
+  it('shows what a catalog update changed, as « champ : avant → après », from the nested allowlisted paths', async () => {
+    renderAudit([pageOk(auditPage([eventView(4, { details: ASSET_UPDATED_STATUS }), eventView(5)]))])
+    await timeline()
+    const dossier = screen.getByRole('group', { name: /./ })
+    const section = within(dossier).getByRole('heading', { level: 3, name: 'Détails filtrés' }).closest('section') as HTMLElement
+    const terms = within(section).getAllByRole('term')
+    expect(terms.map((term) => plain(term.textContent))).toEqual(['État de service'])
+    expect(plain(terms[0]?.nextElementSibling?.textContent)).toBe('Avant En service SERVICEABLE → Après En maintenance MAINTENANCE')
+    expect(within(section).queryByText(/champ structuré|champs structurés/)).toBeNull()
+    expect(within(section).queryByText('Aucun détail')).toBeNull()
+  })
+
+  it('shows a schedule update day by day and counts an unknown key next to it', async () => {
+    renderAudit([pageOk(auditPage([eventView(4, { eventType: 'SCHEDULE_UPDATED', subjectType: 'OPERATING_SCHEDULE', details: { ...SCHEDULE_UPDATED_CHANGED, extra: { a: 1 } } }), eventView(5)]))], { locale: 'en' })
+    await timeline()
+    const dossier = screen.getByRole('group', { name: /./ })
+    const section = within(dossier).getByRole('heading', { level: 3, name: 'Filtered details' }).closest('section') as HTMLElement
+    const rows = Object.fromEntries(within(section).getAllByRole('term').map((term) => [plain(term.textContent), plain(term.nextElementSibling?.textContent)]))
+    expect(rows.Monday).toBe('Before 07:00 – 18:00 → After 07:00 – 19:30')
+    expect(rows.Saturday).toBe('Before Closed all day → After Closed all day')
+    expect(Object.keys(rows).filter((key) => /day$/.test(key))).toHaveLength(7)
+    expect(within(section).getByText('1 structured field is not displayed.')).toBeTruthy()
   })
 
   it('states the order and that new events appear after a refresh, without claiming a snapshot', async () => {
@@ -414,5 +454,91 @@ describe('Audit — failures', () => {
     await user.click(within(alert).getByRole('button', { name: 'Réessayer' }))
     await waitFor(() => expect(list.getAllByRole('link')).toHaveLength(1))
     expect(screen.queryByText('Données non actualisées.')).toBeNull()
+  })
+})
+
+describe('Audit — requested event (#191)', () => {
+  const OLDER = eventView(40, { eventType: 'ASSET_ARCHIVED' })
+
+  it('says the requested event is not loaded instead of showing the first one, and offers to load more', async () => {
+    const { auditGateway } = renderAudit([pageOk(auditPage([COMMAND, REFUSED], { hasMore: true, nextCursor: 'c1' })), pageOk(auditPage([OLDER]))], { search: `?evenement=${OLDER.id}` })
+    const list = await timeline()
+
+    expect(await screen.findByText("L'événement demandé ne fait pas partie des résultats chargés.")).toBeTruthy()
+    expect(screen.getByText(OLDER.id, { selector: 'code' })).toBeTruthy()
+    // No dossier of another event, and no row marked as the current one.
+    expect(screen.queryByRole('group', { name: 'Commande acquittée par la cellule' })).toBeNull()
+    expect(list.getAllByRole('link').every((row) => row.getAttribute('aria-current') === null)).toBe(true)
+    expect(screen.getByRole('link', { name: 'Afficher le premier événement' }).getAttribute('href')).toBe('/audit')
+    expect(auditGateway.listAuditEvents).toHaveBeenCalledTimes(1)
+  })
+
+  it('selects the event once loading more brings it in, and puts focus on its row', async () => {
+    renderAudit([pageOk(auditPage([COMMAND, REFUSED], { hasMore: true, nextCursor: 'c1' })), pageOk(auditPage([UPDATED, OLDER]))], { search: `?evenement=${OLDER.id}` })
+    const list = await timeline()
+    const notice = (await screen.findByText("L'événement demandé ne fait pas partie des résultats chargés.")).closest('.ag-dossier__alert') as HTMLElement
+    await userEvent.setup().click(within(notice).getByRole('button', { name: 'Charger plus' }))
+
+    await waitFor(() => expect(screen.queryByText("L'événement demandé ne fait pas partie des résultats chargés.")).toBeNull())
+    const rows = list.getAllByRole('link')
+    expect(rows.filter((row) => row.getAttribute('aria-current') === 'true')).toEqual([rows[3]])
+    expect(within(screen.getByRole('group', { name: /./ })).getByText(OLDER.id, { selector: 'code' })).toBeTruthy()
+    await waitFor(() => expect(document.activeElement).toBe(rows[3]))
+  })
+
+  it('keeps the notice, without « Charger plus », and moves focus to it when the last page still lacks the event', async () => {
+    renderAudit([pageOk(auditPage([COMMAND], { hasMore: true, nextCursor: 'c1' })), pageOk(auditPage([REFUSED]))], { search: `?evenement=${OLDER.id}` })
+    await timeline()
+    const notice = (await screen.findByText("L'événement demandé ne fait pas partie des résultats chargés.")).closest('.ag-dossier__alert') as HTMLElement
+    await userEvent.setup().click(within(notice).getByRole('button', { name: 'Charger plus' }))
+
+    await waitFor(() => expect(within(notice).queryByRole('button', { name: 'Charger plus' })).toBeNull())
+    expect(within(notice).getByText(/Tout l'historique correspondant aux filtres est chargé/)).toBeTruthy()
+    await waitFor(() => expect(document.activeElement).toBe(notice))
+  })
+
+  it('keeps « Charger plus » after a failed page, and never claims the whole history is loaded', async () => {
+    renderAudit([pageOk(auditPage([COMMAND], { hasMore: true, nextCursor: 'c1' })), pageUnreachable, pageOk(auditPage([OLDER]))], { search: `?evenement=${OLDER.id}` })
+    await timeline()
+    const notice = (await screen.findByText("L'événement demandé ne fait pas partie des résultats chargés.")).closest('.ag-dossier__alert') as HTMLElement
+    const user = userEvent.setup()
+    await user.click(within(notice).getByRole('button', { name: 'Charger plus' }))
+    await waitFor(() => expect(within(notice).getByRole('button', { name: 'Charger plus' })).toBeTruthy())
+    expect(within(notice).queryByText(/Tout l'historique correspondant aux filtres est chargé/)).toBeNull()
+    await user.click(within(notice).getByRole('button', { name: 'Charger plus' }))
+    await waitFor(() => expect(screen.queryByText("L'événement demandé ne fait pas partie des résultats chargés.")).toBeNull())
+  })
+
+  it('shows the first event and returns focus to its dossier from « Afficher le premier événement »', async () => {
+    renderAudit([pageOk(auditPage([COMMAND, REFUSED]))], { search: `?evenement=${OLDER.id}` })
+    await timeline()
+    await userEvent.setup().click(await screen.findByRole('link', { name: 'Afficher le premier événement' }))
+
+    const dossier = await screen.findByRole('group', { name: 'Commande acquittée par la cellule' })
+    expect(window.location.search).toBe('')
+    expect(screen.queryByText("L'événement demandé ne fait pas partie des résultats chargés.")).toBeNull()
+    await waitFor(() => expect(document.activeElement).toBe(dossier))
+  })
+
+  it('shows the first event when no event is requested, without any notice', async () => {
+    renderAudit([pageOk(auditPage([COMMAND, REFUSED]))])
+    await timeline()
+    expect(await screen.findByRole('group', { name: 'Commande acquittée par la cellule' })).toBeTruthy()
+    expect(screen.queryByText("L'événement demandé ne fait pas partie des résultats chargés.")).toBeNull()
+  })
+
+  it('selects a requested event that is already loaded', async () => {
+    renderAudit([pageOk(auditPage([COMMAND, REFUSED]))], { search: `?evenement=${REFUSED.id}` })
+    expect(await screen.findByRole('group', { name: 'Code du casier refusé' })).toBeTruthy()
+    expect(screen.queryByText("L'événement demandé ne fait pas partie des résultats chargés.")).toBeNull()
+  })
+
+  it('writes the notice in English, with the same actions', async () => {
+    renderAudit([pageOk(auditPage([COMMAND], { hasMore: true, nextCursor: 'c1' }))], { search: `?evenement=${OLDER.id}`, locale: 'en' })
+    await timeline()
+    expect(await screen.findByText('The requested event is not among the loaded results.')).toBeTruthy()
+    const notice = screen.getByText('The requested event is not among the loaded results.').closest('.ag-dossier__alert') as HTMLElement
+    expect(within(notice).getByRole('button', { name: 'Load more' })).toBeTruthy()
+    expect(within(notice).getByRole('link', { name: 'Show the first event' })).toBeTruthy()
   })
 })

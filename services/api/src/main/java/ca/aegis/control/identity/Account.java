@@ -12,7 +12,8 @@ record Account(
         Role role,
         AccessLevel maximumAccessLevel,
         AccountStatus status,
-        Instant archivedAt) {
+        Instant archivedAt,
+        int credentialVersion) {
 
     boolean canAuthenticate() {
         return status == AccountStatus.ACTIVE && archivedAt == null;

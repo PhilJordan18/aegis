@@ -150,6 +150,8 @@ caméra et leur ordre viennent des contrats approuvés et du POC (docs 05, 06 et
   déployé ; clés provisionnées par le responsable Railway.
 - [ ] #44 (autorisation par QR) fusionné et déployé pour C2 et au-delà.
 - [ ] #47 (retrait confirmé physiquement) pour C3 ; #50 et #51 (retour) pour C4 et C5.
+  **#176 (#50) ne se déploie jamais sans #177 (#51)** : seul, #176 termine un dépôt
+  cohérent en `DEVICE_OFFLINE_DURING_OPERATION`, faute de preuve positive.
 - [ ] Client iOS intégré aux **futures** routes de préparation et de scan, installé sur un appareil réel (en plus du client de réservation de la partie A).
 - [ ] Firmware du hub avec affichage du défi, lecture QR, porte et RFID qualifiés par Jimmy.
 - [ ] Procédure de récupération approuvée connue des deux testeurs avant C6.
@@ -181,16 +183,25 @@ réessayer.
 | C6.6 | Hub redémarré ou reconnecté pendant `AWAITING_LOCAL_PROOF` | Nouvelle session ⇒ ancien défi invalidé, aucune commande | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
 | C6.7 | Hub déconnecté après l'envoi de la commande | `ANOMALY` (`DEVICE_OFFLINE_DURING_OPERATION`), pas de prêt fabriqué | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
 | C6.8 | Porte non refermée avant l'échéance | `ANOMALY` (`DOOR_NOT_CLOSED_BEFORE_EXPIRY`) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
-| C6.9 | **Retour** : préparer et autoriser le retour, ouvrir puis refermer **sans déposer** l'actif attendu (lecteur sain) | `ANOMALY` (`EXPECTED_ASSET_NOT_OBSERVED`, doc 05 §5.4). Le prêt reste `RETURN_PENDING` jusqu'à la correction ; la preuve que rien n'a été déposé le ramène à `ACTIVE` (doc 05 §4.4) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
-| C6.10 | Retrait ou retour : un **autre** tag que l'actif attendu est lu dans la cellule ciblée | `ANOMALY` (`UNEXPECTED_ASSET_OBSERVED`, doc 05 §5.4) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
+| C6.9 | **Retour** : préparer et autoriser le retour, ouvrir puis refermer **sans déposer** l'actif attendu (lecteur sain) | `ANOMALY` (`EXPECTED_ASSET_NOT_OBSERVED`, doc 05 §5.4). Le prêt reste `RETURN_PENDING`. Un nouveau retour est **refusé tant que l'anomalie est `OPEN`** (règle 1) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
+| C6.9b | Suite de C6.9 : l'administrateur acquitte l'anomalie dans le Manager (note), puis le détenteur prépare un nouveau retour, scanne, dépose l'actif et referme | Retour proposé de nouveau après l'acquittement. Preuve cohérente : prêt `COMPLETED`, anomalie `RESOLVED` avec sa preuve, un audit `ANOMALY_RESOLVED` (règle 1). Si cette tentative échoue aussi : nouvelle anomalie `OPEN`, même chemin après son acquittement, **aucune impasse** | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
+| C6.10 | **Retrait** : l'actif attendu est retiré, mais un **autre** tag reste lu dans la cellule ciblée | `CONFIRMED`, un seul prêt : l'absence stable du tag attendu prime (règle 5, K14) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
+| C6.10b | **Retour** : un **autre** tag est lu au moins trois fois, de façon stable, dans la cellule ciblée | `ANOMALY` (`UNEXPECTED_ASSET_OBSERVED`), prêt non clôturé. Moins de trois lectures, ou des doublons d'une même lecture, ne suffisent pas (règle 7, seuil à requalifier par POC-01 et ADR-003) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
 | C6.11 | Retrait ou retour : lectures contradictoires ou localisation ambiguë (par exemple, tag lu dans deux cellules) | `ANOMALY` (`INCONSISTENT_PHYSICAL_STATE`, doc 05 §5.4) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
 | C6.12 | Deux scans quasi simultanés du même QR | Exactement une commande | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
 | C6.13 | **Retrait** : ouvrir puis refermer correctement **sans retirer** l'actif (lecteur sain, tag toujours présent) | Opération non terminale jusqu'à `expiresAt` (preuve incomplète), puis `ANOMALY` (`INCONSISTENT_PHYSICAL_STATE`). **Aucun prêt** créé | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
+| C6.15 | Pendant `AWAITING_LOCAL_PROOF`, l'administrateur passe l'actif en maintenance, puis le technicien scanne le QR | Refus. Opération `FAILED` / `LOCAL_PROOF_GUARD_FAILED`, défi invalidé, écran effacé, aucune commande ; un second scan du même QR est refusé (règle 3). Un refus transitoire (cellule non sûre, autre opération en cours) ne change rien (règle 4) | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
 | C6.14 | Retrait ou retour : après un accusé et une porte ouverte puis fermée valides, le scan d'évaluation est `FAULTED` ou `UNKNOWN` | `ANOMALY` (`INCONSISTENT_PHYSICAL_STATE`) **dès ce constat**, sans attendre l'échéance et sans conclure présence ni absence. Aucun prêt créé au retrait ; aucun prêt clôturé au retour | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN |
 
 **Absence normale au retrait.** Au retrait, l'absence stable du tag attendu après la
 fermeture, avec un lecteur sain, est la **preuve nominale** (doc 06 §10.2) : c'est C3, pas
 une anomalie. Elle ne doit jamais être consignée comme `EXPECTED_ASSET_NOT_OBSERVED`.
+
+**Règles QR, retrait et retour validées par Philippe le 21 novembre** ([#67](https://github.com/PhilJordan18/aegis/issues/67#issuecomment-7064405022)) :
+récupération après anomalie acquittée (C6.9b), accusé d'affichage tardif rejeté, garde
+définitive au scan (C6.15), gardes transitoires, tag étranger au retrait (C6.10), lecteur
+non sain après la fermeture (C6.14), tag étranger au retour (C6.10b). Les seuils restent à
+requalifier par POC-01.
 
 **Règles #47 validées par Philippe le 11 novembre (C6.13 et C6.14).**
 

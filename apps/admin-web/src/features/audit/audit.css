@@ -76,3 +76,4 @@
 @media (forced-colors: active) {
   .ag-au-disclosure { border-color: CanvasText; }
 }
+.ag-au-missing-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }

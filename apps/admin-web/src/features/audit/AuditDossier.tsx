@@ -1,9 +1,12 @@
 import { useId, type Ref } from 'react'
 import { Link } from '../../app/Link'
+import { transactionHref } from '../transactions/transactionHref'
 import { useI18n } from '../../i18n/useI18n'
 import { ReadOnlyMark } from '../../ui/ReadOnlyMark'
 import { StatusChip } from '../../ui/StatusChip'
-import { actorView, detailRows, eventLabel, fullTimeOf, resultChip, stateLabel, subjectLabel } from './auditPresentation'
+import { detailItems, type DetailValueView } from './auditDetailItems'
+import { actorView, eventLabel, fullTimeOf, resultChip, stateLabel, subjectLabel } from './auditPresentation'
+import { failureReasonLabel } from '../transactions/failureReason'
 import { auditHref, type AuditFilters } from './auditFilters'
 import type { AuditEventView } from './contract'
 
@@ -17,7 +20,7 @@ interface AuditDossierProps {
 }
 
 /**
- * Dossier of one event: everything the contract sends, as sent; `details` are its scalar fields only, read only. Codes
+ * Dossier of one event: everything the contract sends, as sent; `details` are its allowlisted scalar leaves only, read only. Codes
  * (event type, subject type, result, reason, states) are shown here only, beside their label. Nothing is completed: a missing operation, reason, result, detail or
  * piece of evidence is said to be missing (handoff §6, states.md §5).
  */
@@ -41,7 +44,7 @@ export function AuditDossier({ event, filters, focusRef }: AuditDossierProps) {
 
   const actor = actorView(event.actor, i18n)
   const chip = resultChip(event.result, i18n)
-  const rows = detailRows(event.details, i18n)
+  const rows = detailItems(event.details, i18n)
   const transition = event.fromState !== null && event.toState !== null ? { from: event.fromState, to: event.toState } : null
 
   return (
@@ -128,7 +131,16 @@ export function AuditDossier({ event, filters, focusRef }: AuditDossierProps) {
             </div>
             <div>
               <dt>{t.factReason}</dt>
-              <dd>{event.reason === null ? t.noReason : <code className="ag-au-id">{event.reason}</code>}</dd>
+              <dd>
+                {event.reason === null ? (
+                  t.noReason
+                ) : (
+                  <>
+                    {failureReasonLabel(event.reason, i18n) !== null && <>{failureReasonLabel(event.reason, i18n)} </>}
+                    <code className="ag-au-id">{event.reason}</code>
+                  </>
+                )}
+              </dd>
             </div>
             <div>
               <dt>{t.factId}</dt>
@@ -138,6 +150,13 @@ export function AuditDossier({ event, filters, focusRef }: AuditDossierProps) {
             </div>
           </dl>
           <ul className="ag-au-links">
+            {event.operationId !== null && (
+              <li>
+                <Link className="ag-link" to={transactionHref({ view: 'operations', selectedId: event.operationId })}>
+                  {t.openOperation}
+                </Link>
+              </li>
+            )}
             {event.operationId !== null && (
               <li>
                 <Link className="ag-link" to={auditHref({ ...filters, operationId: event.operationId })}>
@@ -164,17 +183,30 @@ export function AuditDossier({ event, filters, focusRef }: AuditDossierProps) {
               <p className="ag-au-note">{t.detailsHelp}</p>
               <dl className="ag-facts ag-au-facts">
                 {rows.map((row) => (
-                  <div key={row.key}>
+                  <div key={row.id}>
                     <dt>{row.label ?? <code className="ag-au-id">{row.key}</code>}</dt>
-                    <dd className={row.instant !== null ? 'ag-tnum' : undefined}>
-                      {row.instant !== null ? <time dateTime={row.instant}>{row.text}</time> : row.raw ? <code className="ag-au-id">{row.text}</code> : row.text}
-                      {row.code !== null && (
-                        <>
-                          {' '}
-                          <code className="ag-au-id">{row.code}</code>
-                        </>
-                      )}
-                    </dd>
+                    {row.kind === 'row' && (
+                      <dd className={row.value.instant !== null ? 'ag-tnum' : undefined}>
+                        <DetailValue value={row.value} />
+                      </dd>
+                    )}
+                    {row.kind === 'change' && (
+                      <dd>
+                        <span className="ag-sr-only">{t.detailBefore} </span>
+                        <DetailValue value={row.before} />{' '}
+                        <span className="ag-au-arrow" aria-hidden="true">
+                          →
+                        </span>
+                        <span className="ag-sr-only"> {t.detailAfter} </span>
+                        <DetailValue value={row.after} />
+                      </dd>
+                    )}
+                    {row.kind === 'list' &&
+                      row.values.map((value, index) => (
+                        <dd key={index}>
+                          <DetailValue value={value} />
+                        </dd>
+                      ))}
                   </div>
                 ))}
               </dl>
@@ -191,5 +223,19 @@ export function AuditDossier({ event, filters, focusRef }: AuditDossierProps) {
         </section>
       </div>
     </section>
+  )
+}
+
+function DetailValue({ value }: { readonly value: DetailValueView }) {
+  return (
+    <>
+      {value.instant !== null ? <time dateTime={value.instant}>{value.text}</time> : value.raw ? <code className="ag-au-id">{value.text}</code> : value.text}
+      {value.code !== null && (
+        <>
+          {' '}
+          <code className="ag-au-id">{value.code}</code>
+        </>
+      )}
+    </>
   )
 }
