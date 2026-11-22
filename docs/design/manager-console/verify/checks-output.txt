@@ -1,9 +1,9 @@
-PASS 11 feuilles de apps/admin-web/src copiées sans écart
-PASS FR et EN ont les mêmes 441 clés
+FAIL écart avec l'application : app/shell/shell.css, features/catalog/equipment.css, ui/form.css, ui/status-chip.css
 PASS overview : 11 états déclarés
 PASS reservations : 11 états déclarés
 PASS anomalies : 15 états déclarés
 PASS audit : 10 états déclarés
+PASS FR et EN ont les mêmes 441 clés
 PASS aucun défilement horizontal à 320, 390, 768, 1024 et 1440 px (6 vues)
 PASS 94 pages sans requête externe ni erreur de page
 PASS aucun contrôle Résoudre, fin de prêt, confirmation, retour forcé ni ouverture à distance (94 pages, boutons et liens)
@@ -15,5 +15,4 @@ PASS un prêt en retard ne porte jamais « Disponible » ni « Prêt »
 PASS clavier : lien d’évitement en premier, contour de focus de 2 px à chaque arrêt (4 écrans)
 PASS reconnaissance : note de 1 à 500 caractères (graphèmes), vide et espaces refusés
 
-Tous les contrôles passent.
-checks-exit=0
+1 contrôle(s) en échec.

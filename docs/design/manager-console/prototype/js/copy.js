@@ -169,7 +169,7 @@
       types: {
         EXPECTED_ASSET_NOT_OBSERVED: 'Équipement attendu non observé', UNEXPECTED_ASSET_OBSERVED: 'Équipement inattendu observé',
         ASSET_PRESENT_WITH_ACTIVE_LOAN: 'Équipement présent malgré un prêt actif', DOOR_NOT_CLOSED_BEFORE_EXPIRY: "Porte non refermée avant l'échéance",
-        COMMAND_REJECTED: 'Commande rejetée', DEVICE_OFFLINE_DURING_OPERATION: 'Casier hors ligne pendant une opération', INCONSISTENT_PHYSICAL_STATE: 'État physique incohérent'
+        COMMAND_REJECTED: 'Commande rejetée', DEVICE_OFFLINE_DURING_OPERATION: "Casier hors ligne ou issue physique indéterminée pendant l'opération", INCONSISTENT_PHYSICAL_STATE: 'État physique incohérent'
       },
       unknownType: 'Type non reconnu par cette version',
       detected: function (a) { return 'Détectée ' + a.time; },
@@ -420,7 +420,7 @@
       types: {
         EXPECTED_ASSET_NOT_OBSERVED: 'Expected equipment not observed', UNEXPECTED_ASSET_OBSERVED: 'Unexpected equipment observed',
         ASSET_PRESENT_WITH_ACTIVE_LOAN: 'Equipment present despite an active loan', DOOR_NOT_CLOSED_BEFORE_EXPIRY: 'Door not closed before expiry',
-        COMMAND_REJECTED: 'Command rejected', DEVICE_OFFLINE_DURING_OPERATION: 'Locker offline during an operation', INCONSISTENT_PHYSICAL_STATE: 'Inconsistent physical state'
+        COMMAND_REJECTED: 'Command rejected', DEVICE_OFFLINE_DURING_OPERATION: 'Locker offline or physical outcome undetermined during the operation', INCONSISTENT_PHYSICAL_STATE: 'Inconsistent physical state'
       },
       unknownType: 'Type not recognized by this version',
       detected: function (a) { return 'Detected ' + a.time; },
