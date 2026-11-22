@@ -17,7 +17,8 @@ final class CheckoutUITests: XCTestCase {
     }
 
     /// The fictional code of `UITestActivityFixtures`.
-    private static let code = "aegis://local-access?v=1&challengeId=9d65cbae-4610-4e40-a314-3b93af07be9c&operationId=2f38d3b6-c18f-4a74-aa9a-2d574286013f&lockerId=d46a74ae-39dc-460b-8af0-38fc791b376a&token=q2Vw0gE3uYvJ1m9bX4sZr8TtQ7nLkH6cA5dF0e-_PjM"
+    private static let code = "aegis://local-access?v=1&challengeId=9d65cbae-4610-4e40-a314-3b93af07be9c&operationId=2f38d3b6-c18f-4a74-aa9a-2d574286013f&lockerId=d46a74ae-39dc-460b-8af0-38fc791b376a&token="
+        + String(Data((0..<32).map(UInt8.init)).base64EncodedString().dropLast())
     private static let retryCode = code.replacingOccurrences(of: "2f38d3b6-c18f-4a74-aa9a-2d574286013f",
                                                              with: "6c2a9e41-5d3b-4f7a-8e0c-1b2d3f4a5c6e")
 
@@ -317,6 +318,7 @@ final class CheckoutUITests: XCTestCase {
 
     private static let liveClocks: Set<String> = ["operation.countdown"]
 
+    @MainActor
     private static func signature(_ root: any XCUIElementSnapshot) -> [String] {
         var lines: [String] = []
         var pending: [any XCUIElementSnapshot] = [root]

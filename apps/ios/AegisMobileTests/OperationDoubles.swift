@@ -2,7 +2,7 @@ import Foundation
 @testable import AegisMobile
 
 /// FICTIONAL operation, challenge and QR values (doc 09 §8.5, doc 10 §27.1).
-/// The token is a made-up string of the right shape, never a real secret.
+/// The tokens encode fixed byte runs (base64url, no padding), never a real secret.
 enum OperationFixtures {
     static let operationId = "2f38d3b6-c18f-4a74-aa9a-2d574286013f"
     static let otherOperationId = "5a1f3c2e-7b4d-4e8f-9a0b-1c2d3e4f5a6b"
@@ -11,8 +11,13 @@ enum OperationFixtures {
     static let compartmentId = "1ae77ae3-8490-4f09-9412-a7816b77bff9"
     static let challengeId = "9d65cbae-4610-4e40-a314-3b93af07be9c"
     static let otherChallengeId = "0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f"
-    static let token = "q2Vw0gE3uYvJ1m9bX4sZr8TtQ7nLkH6cA5dF0e-_PjM"
-    static let otherToken = "Zz9Yy8Xx7Ww6Vv5Uu4Tt3Ss2Rr1Qq0Pp_-OoNnMmLlK"
+    static let token = fixtureToken(0..<32)
+    static let otherToken = fixtureToken(32..<64)
+
+    /// 43 base64url characters; these byte runs encode without `+`, `/` or padding beyond the one dropped `=`.
+    private static func fixtureToken(_ bytes: Range<UInt8>) -> String {
+        String(Data(bytes).base64EncodedString().dropLast())
+    }
 
     static var id: UUID { UUID(uuidString: operationId)! }
 

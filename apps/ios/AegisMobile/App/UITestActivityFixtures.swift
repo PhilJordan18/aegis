@@ -32,13 +32,13 @@ enum UITestActivityFixtures {
     }
 
     // FICTIONAL checkout operation and hub QR (doc 09 §8.5, doc 10 §27.1).
-    // The token has the right shape and is no secret: the UI tests type the
-    // same URI into the Debug-only code field.
+    // The token has the right shape and is no secret: it encodes the bytes
+    // 0x00…0x1F, and the UI tests type the same URI into the Debug-only code field.
     static let operationId = "2f38d3b6-c18f-4a74-aa9a-2d574286013f"
     static let retryOperationId = "6c2a9e41-5d3b-4f7a-8e0c-1b2d3f4a5c6e"
     static let lockerId = "d46a74ae-39dc-460b-8af0-38fc791b376a"
     static let challengeId = "9d65cbae-4610-4e40-a314-3b93af07be9c"
-    static let token = "q2Vw0gE3uYvJ1m9bX4sZr8TtQ7nLkH6cA5dF0e-_PjM"
+    static let token = String(Data((0..<32).map(UInt8.init)).base64EncodedString().dropLast())
 
     /// §8.5. `authorized` stamps `authorizedAt` and the 120 s window.
     static func operation(id: String = operationId, status: String, requiredAction: String,
