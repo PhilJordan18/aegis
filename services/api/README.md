@@ -142,6 +142,105 @@ priment sur les claims émis à la connexion. Changer `AEGIS_JWT_SECRET`
 invalide tous les jetons émis. Le mot de passe, le jeton et la clé ne sont
 jamais journalisés.
 
+## Session navigateur du Manager (ADR-016)
+
+Une connexion Web avec `browserSession: true` pose le cookie
+`__Secure-aegis_session` (`HttpOnly`, `Secure`, `SameSite=Strict`, chemin
+`/api/v1/auth/session`). Ce cookie permet à une page rechargée de demander un
+nouveau jeton par `POST /api/v1/auth/session/refresh`, et la déconnexion le
+révoque par `POST /api/v1/auth/session/revoke`. La base ne garde que son
+empreinte SHA-256 (`aegis.browser_sessions`). Ni sa valeur ni le jeton restauré
+ne sont journalisés.
+
+| Variable | Défaut | Règle |
+|---|---|---|
+| `AEGIS_WEB_ALLOWED_ORIGINS` | vide | Origines exactes du Manager, séparées par des virgules, par exemple `https://manager.example`; `http` seulement pour `localhost`. Vide, aucune session navigateur ne démarre et un rechargement impose une nouvelle connexion |
+| `AEGIS_WEB_SESSION_LIFETIME` | `PT8H` | Durée absolue d'une session, au plus `PT12H`; un rafraîchissement ne la prolonge jamais |
+
+En déploiement, `AEGIS_WEB_ALLOWED_ORIGINS` reçoit l'origine publique du
+service Web, celle que le navigateur affiche. Le cookie traverse le proxy Caddy
+du Manager sans attribut `Domain` : il reste attaché à cette origine.
+
+Un changement effectif de mot de passe passe par `PasswordChanges`. Ce point
+d'écriture est le seul qui existe; le provisionnement de démonstration
+l'utilise aussi. Le changement révoque toutes les sessions navigateur du
+compte et écrit l'audit `PASSWORD_CHANGED` (ADR-017). Un redémarrage avec le
+même mot de passe ne révoque rien. Une tâche planifiée supprime les sessions
+terminées depuis plus de 30 jours. La fin d'une session est le plus tôt de sa
+révocation et de sa fin absolue; une session ouverte n'est jamais supprimée :
+
+| Propriété | Défaut | Règle |
+|---|---|---|
+| `aegis.security.browser-session.purge.interval` | `PT1H` | Délai entre deux purges |
+| `aegis.security.browser-session.purge.batch-size` | `500` | Lignes supprimées par lot |
+| `aegis.security.browser-session.purge.scheduled` | `true` | `false` seulement dans les tests qui contrôlent l'horloge |
+
+Le cycle de vie complet (rechargement, échéance, déconnexion, mot de passe,
+compte changé, panne, redémarrage) est la matrice du document 09, §10.6.
+Depuis l'ADR-018 (migration `V012`), un changement réel du mot de passe refuse
+tous les jetons d'accès émis avant lui (claim `cv`), et une déconnexion du
+Manager refuse ceux de sa session (claim `sid`). Au premier démarrage avec
+`V012`, les jetons sans `cv` sont refusés : le Manager restaure une fois sa
+session, iOS se reconnecte une fois. Déployer l'API seule; le Web et iOS ne
+changent pas.
+
+Les journaux de l'application (`ca.aegis`) ne contiennent ni cookie, ni
+jeton, ni mot de passe, ni empreinte, même à TRACE. Cette garantie ne couvre
+pas les journaux du framework. À DEBUG ou TRACE, Tomcat, le pilote PostgreSQL et
+`org.springframework.jdbc` écrivent le corps de la connexion, l'en-tête
+`Cookie` et les paramètres SQL liés. N'activez jamais ces niveaux, ni
+`LOGGING_LEVEL_ROOT` au-delà de `INFO`, hors d'une pile jetable.
+
+### Déploiement Railway (#178)
+
+Aucun mot de passe ni secret n'est transmis par cette procédure.
+
+1. **Variables de l'API.**
+   - Définir `AEGIS_WEB_ALLOWED_ORIGINS` avec l'origine publique exacte du
+     Manager : schéma et hôte, sans chemin ni barre finale.
+   - Laisser `AEGIS_WEB_SESSION_LIFETIME` absent pour garder `PT8H`.
+   - Ne changer ni `AEGIS_JWT_SECRET` ni les mots de passe de démonstration à
+     cette occasion.
+2. **Ordre de déploiement.**
+   1. Déployer l'API d'abord. Flyway applique `V010` puis `V011` au
+      démarrage; les deux migrations sont additives. Vérifier dans les
+      journaux `Successfully applied 2 migrations` et la santé
+      `GET /api/v1/system/health`.
+   2. Déployer le Web ensuite.
+
+   Un Web nouveau devant une API ancienne échouerait à la restauration
+   (`404`), ce qui équivaut à l'ancien comportement : une reconnexion.
+3. **Vérification sur le Manager déployé**, par une personne qui détient un
+   compte administrateur non exposé :
+   - **Connexion.** Se connecter. Dans les outils du navigateur, le cookie
+     `__Secure-aegis_session` est `HttpOnly`, `Secure`, `SameSite=Strict`,
+     avec le chemin `/api/v1/auth/session`. Ne pas copier sa valeur.
+   - **Rechargement et lien direct.** Ouvrir une page protégée, l'actualiser,
+     puis coller son URL dans un nouvel onglet. La page reste affichée, sans
+     passage par `/connexion`.
+   - **Déconnexion.** Se déconnecter, puis actualiser l'autre onglet. Les deux
+     renvoient à `/connexion`, et l'actualisation ne restaure rien.
+   - **Échéance.** Facultatif, sur un service de recette seulement : avec
+     `AEGIS_WEB_SESSION_LIFETIME=PT5M`, une actualisation après 5 minutes
+     renvoie une seule fois à `/connexion`, sans boucle. Remettre ensuite la
+     valeur par défaut.
+   - **Changement de mot de passe.** Seulement si une rotation prévue a lieu :
+     1. ouvrir une session navigateur;
+     2. changer la variable du mot de passe de ce compte sur Railway et
+        redéployer l'API;
+     3. l'actualisation renvoie à `/connexion`;
+     4. l'audit montre un `PASSWORD_CHANGED`.
+
+     Un redéploiement sans changement de mot de passe garde la session.
+
+     La rotation n'est effective qu'après la ligne de journal « Updated the
+     password of demo account … ». Le serveur HTTP accepte des requêtes
+     quelques centaines de millisecondes avant elle :
+     - une session navigateur ouverte dans cette fenêtre est révoquée par le
+       changement;
+     - un jeton porteur émis dans cette fenêtre porte l'ancienne version des
+       créances : il est refusé dès que le changement s'engage (ADR-018).
+
 ## Autorisation des routes
 
 `identity/ApiRoutes.java` liste chaque route du document 09, section 9, avec
@@ -558,7 +657,7 @@ avant le marquage (ligne encore `CLAIMED`) reste à fixer avec IOT-02.
 
 ## Préparation du retrait et défi du hub (LOC-01, CHK-01)
 
-`POST /api/v1/checkouts` (document 09, §15.1) prépare un retrait sans rien
+`POST /api/v1/reservations/{reservationId}/checkout` (document 09, §15.1) prépare un retrait sans rien
 ouvrir. Une seule transaction verrouille, dans l'ordre, l'utilisateur, l'actif,
 la réservation, le casier, l'opération et le défi. Elle crée l'opération
 `AWAITING_LOCAL_PROOF` et le défi de 60 s, puis incrémente la révision
@@ -584,8 +683,24 @@ ciphertext échu.
 | `AEGIS_DISPLAY_KEYS` | vide | `keyId:base64`, séparées par des virgules, 32 octets chacune |
 | `AEGIS_DISPLAY_ACTIVE_KEY_ID` | vide | Clé qui scelle les nouvelles instructions |
 | `AEGIS_DISPLAY_DISPATCHER_ENABLED` | `false` | Publie les instructions; exige MQTT et le flux activé |
-| `AEGIS_PREPARATION_MAX_PER_WINDOW` | `6` | Préparations par utilisateur et par fenêtre, puis `429` |
-| `AEGIS_PREPARATION_WINDOW` | `PT10M` | Fenêtre de cette limite |
+| `AEGIS_PREPARATION_MAX_PER_WINDOW` | `6` | Nouvelles préparations par couple utilisateur–casier dans la fenêtre glissante, puis `429 LOCAL_PROOF_RATE_LIMITED` avec `Retry-After` |
+| `AEGIS_PREPARATION_WINDOW` | `PT10M` | Fenêtre glissante de cette limite |
+
+`POST /api/v1/locker-operations/{operationId}/authorize-local` (document 09,
+§15.5; #44) reçoit `{challengeId, token}` lus dans le QR. Après les verrous
+(utilisateur, actif, réservation, casier, compartiment, opération, défi), elle
+vérifie le propriétaire, le défi `PENDING`, l'échéance, l'affichage confirmé, la
+session courante du hub, le secret en temps constant, puis toutes les gardes de
+la préparation. Dans la même transaction, elle consomme le défi, passe
+l'opération à `AUTHORIZED` pour 120 s, crée l'unique `UNLOCK_COMPARTMENT` et
+purge le ciphertext du QR. Un secret erroné est compté dans une transaction
+validée (`403`, réponse rejouée sans recompter); le cinquième termine
+l'opération `FAILED` (`LOCAL_PROOF_ATTEMPTS_EXHAUSTED`). Un scan après
+l'échéance ou après un redémarrage du hub termine aussi l'opération (`410`,
+`409 LOCAL_PROOF_INVALIDATED`). Les autres refus ne changent rien : le défi
+reste `PENDING` jusqu'à son échéance (écart signalé sur #44 par rapport à la
+fermeture immédiate d'une garde devenue invalide, document 06, §6.5). Un autre
+compte reçoit `404` sans toucher au défi.
 
 Les clés, leur rotation et leur retrait suivent
 [ADR-015](../../docs/adr/ADR-015-cles-affichage-hub.md). Une clé se génère avec

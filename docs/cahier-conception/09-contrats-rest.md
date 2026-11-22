@@ -20,7 +20,11 @@
 **Mise à jour ciblée :** 28 octobre 2026 — recherche `q` commune à l’API, au Web et à iOS : espaces Unicode de bordure, longueur en grappes de graphèmes, corpus partagé (§11.1, §22.3, §26.6), décision commune consignée par l’[ADR-014](../adr/ADR-014-recherche-q-graphemes.md), acceptée par Philippe le 6 novembre 2026 (#109)  
 **Mise à jour ciblée :** 6 novembre 2026 — lectures administratives approuvées par Philippe (#25, #26, #28) : `GET /admin/lockers` et `AdminLockerView` (§9.3, §16.2), historique des identifiants `GET /admin/assets/{assetId}/identifiers` (§9.3, §12.3); aucune migration  
 **Mise à jour ciblée :** 6 novembre 2026 — refus du catalogue liés à la garde de l’actif (#26) : placement refusé pendant une réservation active, un prêt ouvert ou une opération non terminale, attribution refusée pendant une opération non terminale et révocation de l’identifiant qu’elle attend, avec les codes de l’archivage (§12.3, §12.4, §21); ordre des refus approuvé par Philippe le 6 novembre 2026; aucun code ni champ nouveau  
+**Mise à jour ciblée :** 21 novembre 2026 — révocation des JWT émis (ADR-018, #179) : claims `cv` et `sid`, refus d’un jeton antérieur à un changement de mot de passe ou d’une session navigateur fermée, migration `V012` (§4.1, §4.2, §10.2, §10.5, §10.6)  
+**Mise à jour ciblée :** 21 novembre 2026 — cycle de vie d’une session (§10.6); révocation des sessions navigateur au changement réel du mot de passe, type d’audit `PASSWORD_CHANGED` et rétention bornée (ADR-017, §10.4, §19.1), migration `V011`; révocation des JWT émis acceptée pour la tranche suivante (ADR-018)  
+**Mise à jour ciblée :** 18 novembre 2026 — session navigateur révocable du Manager (ADR-016, #178) : champ optionnel `browserSession` de la connexion, routes `POST /auth/session/refresh` et `POST /auth/session/revoke` (§9.1, §10.2, §10.4, §10.5), code `401 AUTH_SESSION_INVALID` (§21); §4.1 et §4.2 remplacés pour le Web; migration `V010`  
 **Mise à jour ciblée :** 6 novembre 2026 — erreurs signalées par le hub (#29) : champ requis `deviceErrors` et `DeviceErrorView` de `LockerStatusView` (§8.6, §16.1), limités à la session courante du hub, approuvés par Philippe le 6 novembre 2026; ajout compatible, aucune migration
+**Mise à jour ciblée :** 11 novembre 2026 — validation locale du QR (#44), décisions approuvées par Philippe le 11 novembre 2026 ([#44](https://github.com/PhilJordan18/aegis/issues/44#issuecomment-6806492151)) : valeurs publiques de `failureReason` avant autorisation (§8.5), limite initiale des préparations (§15.5), émission de `CHECKOUT` (§8.10) et refus enregistrés de `authorize-local` (§15.5); transitions inchangées, aucune migration  
 
 ---
 
@@ -94,21 +98,28 @@ Après une connexion réussie, le backend émet un JWT signé et expirable, conf
 - le client le traite comme une chaîne opaque;
 - sa durée P0 est de 60 minutes;
 - il transporte au minimum userId, role, maximumAccessLevel, issuedAt, expiresAt et un identifiant de jeton;
-- aucun refresh token n’est émis dans le P0;
+- depuis l’ADR-018, il transporte aussi `cv`, la version des créances du compte à l’émission, et, s’il est émis avec une session navigateur (connexion `browserSession: true` ou restauration), `sid`, l’identifiant de cette session;
+- aucun refresh token n’est émis dans le P0; le Web dispose seulement de la session navigateur révocable de l’ADR-016 (§10.4), qui émet un nouveau jeton d’au plus 60 minutes sans jamais dépasser sa propre fin absolue;
 - l’expiration du jeton n’altère jamais une réservation ou un prêt existant;
 - l’utilisateur se reconnecte après expiration.
 
-Spring Security vérifie la signature, l’algorithme explicitement autorisé, l’émetteur, le destinataire et la validité temporelle. L’algorithme, la gestion des clés et le mapping des claims techniques doivent être consignés au bootstrap avant la première connexion réelle. Ils ne deviennent pas une dépendance du code des clients. L’état actif du compte, son rôle et ses droits courants sont vérifiés côté serveur sur les requêtes protégées; un ancien claim ne conserve pas un droit retiré.
+Spring Security vérifie la signature, l’algorithme explicitement autorisé, l’émetteur, le destinataire et la validité temporelle. L’algorithme, la gestion des clés et le mapping des claims techniques doivent être consignés au bootstrap avant la première connexion réelle. Ils ne deviennent pas une dépendance du code des clients. L’état actif du compte, son rôle et ses droits courants sont vérifiés côté serveur sur les requêtes protégées; un ancien claim ne conserve pas un droit retiré. La même lecture refuse par `401 AUTH_TOKEN_INVALID` (ADR-018) :
+
+- un jeton sans `cv`, y compris un jeton émis avant le déploiement de l’ADR-018;
+- un jeton dont `cv` diffère de la version courante du compte, incrémentée par chaque changement réel du mot de passe;
+- un jeton porteur de `sid` dont la session est révoquée, échue ou appartient à un autre compte.
+
+Ces contrôles prennent effet dès l’engagement du changement ou de la révocation. Une requête déjà authentifiée à cet instant se termine : la fenêtre acceptée est la durée d’une requête.
 
 ### 4.2 Stockage côté client
 
 | Client | Règle |
 |---|---|
 | iOS | Jeton stocké dans le Keychain; jamais dans UserDefaults. |
-| Web | Jeton conservé en mémoire; jamais dans localStorage ou sessionStorage. |
+| Web | Jeton conservé en mémoire; jamais dans localStorage ou sessionStorage. Seul le cookie `HttpOnly` de la session navigateur (ADR-016) survit au rechargement; il n’est pas lisible par le script et n’est pas un jeton d’accès. |
 | Tous | Jeton supprimé localement lors de la déconnexion. |
 
-La déconnexion locale ne révoque pas immédiatement une copie du JWT. Ce compromis P0 est explicite : un jeton copié reste utilisable jusqu’à son expiration, sous réserve des contrôles courants du compte. Le rechargement du Web impose une reconnexion. L’expiration ne suspend ni les délais ni le traitement d’une opération physique déjà autorisée.
+Depuis l’ADR-018, une copie du JWT ne survit ni à un changement réel du mot de passe (tous les jetons du compte, Web et iOS) ni à la déconnexion confirmée du Manager (les jetons de cette session seulement; iOS et les autres navigateurs ne sont pas touchés). Hors de ces deux cas, un jeton copié reste utilisable jusqu’à son expiration, sous réserve des contrôles courants du compte; la suppression locale d’un jeton iOS ne le révoque pas. Depuis l’ADR-016, le rechargement du Web restaure la session tant que sa session navigateur est valide (§10.4); la déconnexion explicite du Web révoque cette session côté serveur (§10.5). L’expiration ne suspend ni les délais ni le traitement d’une opération physique déjà autorisée.
 
 ### 4.3 En-tête
 
@@ -465,6 +476,40 @@ LockerOperationStatus :
 - EXPIRED;
 - ANOMALY.
 
+`failureReason` est public : il est lu par l’initiateur (§15.4) et par l’administration (§17). Une tentative de retrait terminée **avant son autorisation** porte l’une des valeurs suivantes, approuvées par Philippe le 11 novembre 2026 (#44); elles ne changent aucune transition de `05` §5.4.
+
+| `failureReason` | Statut terminal | Cause |
+|---|---|---|
+| `LOCAL_PROOF_EXPIRED` | `EXPIRED` | Échéance du défi atteinte sans consommation (`06` §6.5) |
+| `HUB_RESTARTED` | `FAILED` | Le hub a changé de `deviceSessionId` ou son appareil a été désactivé (`10` §27.4) |
+| `LOCKER_OFFLINE` | `FAILED` | Le hub n’est plus `ONLINE` avant la consommation (`06` §6.1) |
+| `LOCAL_PROOF_ATTEMPTS_EXHAUSTED` | `FAILED` | Cinquième secret erroné soumis par l’initiateur (§15.5) |
+| `RESERVATION_CANCELLED` | `FAILED` | Annulation de la réservation pendant la préparation (`06` §5.5) |
+| `LOCAL_PROOF_GUARD_FAILED` | `FAILED` | Garde métier devenue définitivement invalide au scan : prêt ouvert, actif déplacé hors de la cellule préparée, identifiant RFID absent, anomalie non résolue, niveau d’accès ou disponibilité autre que `READY` (§15.5; `06` §6.5) |
+
+Au scan, une réservation annulée garde `RESERVATION_CANCELLED`; une réservation échue ou un horaire fermé termine en `EXPIRED` avec `LOCAL_PROOF_EXPIRED` (`05` §5.4). `LOCAL_PROOF_GUARD_FAILED` est neutre quant au type d’opération : il vaut aussi pour l’autorisation d’un retour. Valeur ajoutée sur décision humaine du 21 novembre 2026 (#67).
+
+Une tentative de retrait terminée **après son autorisation** porte l’une des valeurs suivantes (#47; conditions exactes en `06` §10.3.1). Une opération `CONFIRMED` n’a pas de `failureReason`.
+
+| `failureReason` | Statut terminal | Cause |
+|---|---|---|
+| `OPERATION_EXPIRED` | `EXPIRED` | `expiresAt` atteint sans ouverture, commande jamais envoyée ou porte certainement restée fermée |
+| `DOOR_NOT_CLOSED_BEFORE_EXPIRY` | `ANOMALY` | Porte ouverte et non refermée avant `expiresAt` |
+| `INCONSISTENT_PHYSICAL_STATE` | `ANOMALY` | Tag attendu encore vu après la fermeture, lecteur `FAULTED` ou `UNKNOWN` après la fermeture, ou localisation ambiguë |
+| `DEVICE_OFFLINE_DURING_OPERATION` | `ANOMALY` | Exécution impossible à déterminer avant `expiresAt`, dont une preuve manquante |
+
+Une tentative de retour terminée après son autorisation (#50, #51; `06` §10.3.2 et §13.1) peut porter les mêmes valeurs, ainsi que :
+
+| `failureReason` | Statut terminal | Cause |
+|---|---|---|
+| `EXPECTED_ASSET_NOT_OBSERVED` | `ANOMALY` | Porte refermée, scan sain et stable sans le tag attendu à `expiresAt` |
+| `UNEXPECTED_ASSET_OBSERVED` | `ANOMALY` | Un autre actif lu de façon stable dans la cellule à la place de l’actif attendu |
+| `COMMAND_REJECTED_<raison>` | `FAILED` | Rejet sûr du hub, conclu à `expiresAt`; le prêt redevient `ACTIVE` |
+
+Après `OPERATION_EXPIRED` ou `COMMAND_REJECTED_<raison>`, le prêt d’un retour redevient `ACTIVE`; après `ANOMALY`, il reste `RETURN_PENDING`.
+
+Un refus de commande avant toute actuation garde la valeur `COMMAND_REJECTED_<résultat>` de #41. Un client traite une valeur inconnue comme un échec générique, sans en déduire d’état physique (§3).
+
 ### 8.6 LockerStatusView
 
 | Champ | Type | Requis |
@@ -550,11 +595,11 @@ Le serveur n’émet que les valeurs suivantes; leur ordre n’a pas de sens et 
 | `CANCEL` | `ReservationView` | `POST /reservations/{id}/cancel` (§14.4) | Réservation `ACTIVE` du demandeur; instant antérieur à `reservedUntil`; aucune tentative de retrait de cette réservation n’a été autorisée, quelle que soit son issue (§14.4, `06` §5.5; question ouverte Q1); aucune incertitude physique, c’est-à-dire aucune tentative `ANOMALY` dont l’anomalie n’est pas `RESOLVED`. Une tentative `AWAITING_LOCAL_PROOF` laisse `CANCEL` : l’annulation la termine (§14.4). L’horaire et la connexion du locker n’interviennent pas. |
 | `RETURN` | `LoanView` | `POST /loans/{id}/return` (§15.2) | Prêt `ACTIVE` du titulaire; plage d’exploitation ouverte; aucune opération physique non terminale sur le locker, y compris une tentative de ce prêt; gardes communes et de retour satisfaites (`06` §6.1, §6.3), donc hub `ONLINE`. `overdue` n’intervient pas. |
 
-Le serveur n’émet une valeur que lorsque sa mutation est implémentée. Tant que l’annulation (§14.4), le retrait (§15.1) et le retour (§15.2) ne le sont pas, `availableActions` est vide, même si les conditions ci-dessus sont réunies; un client n’affiche donc pas ces boutons (décision du 28 octobre 2026, RES-01).
+Le serveur n’émet une valeur que lorsque sa mutation est implémentée. Tant que l’annulation (§14.4), le retrait (§15.1) et le retour (§15.2) ne le sont pas, `availableActions` est vide, même si les conditions ci-dessus sont réunies; un client n’affiche donc pas ces boutons (décision du 28 octobre 2026, RES-01). Depuis #44 (11 novembre 2026), `CHECKOUT` est émis lorsque ses conditions sont réunies et que le flux du défi du hub est activé; il est évalué sans verrou, et la préparation revalide toutes ses gardes. Depuis #50 (11 novembre 2026), `RETURN` est émis au titulaire lorsque ses conditions sont réunies, avec la même évaluation sans verrou; une vue administrateur (§17) n’expose jamais d’action.
 
 À partir de `reservedUntil`, une réservation encore `ACTIVE` (expiration différée par un retrait autorisé, ou pas encore appliquée) n’expose aucune action : les règles temporelles sont réévaluées au début de chaque action (`06` §14). La limitation de fréquence des préparations (§15.5) n’est pas reflétée; elle se manifeste par `429` avec `Retry-After`.
 
-Pour un prêt `RETURN_PENDING`, `05` §4.3 et `06` §6.3 n’admettent une nouvelle tentative de récupération que si l’opération précédente est terminale **et** si la procédure de récupération l’autorise. Cette procédure n’est pas encore définie : tant qu’elle ne l’est pas, `RETURN` n’est pas émis pour un prêt `RETURN_PENDING` (question ouverte Q2). Cette lecture n’ajoute aucune règle de retour.
+Pour un prêt `RETURN_PENDING`, `RETURN` est émis lorsque la reprise de `06` §13.4 est admissible : un retour précédent du prêt terminé en `ANOMALY`, aucune anomalie liée à ses retours encore `OPEN`, aucune opération en cours sur le locker et toutes les autres gardes satisfaites (Q2, tranchée le 21 novembre 2026, #67).
 
 | Situation lue | `ReservationView` | `LoanView` |
 |---|---|---|
@@ -569,7 +614,8 @@ Pour un prêt `RETURN_PENDING`, `05` §4.3 et `06` §6.3 n’admettent une nouve
 | Prêt `ACTIVE`, en retard ou non, plage ouverte, gardes satisfaites, aucune tentative non terminale | — | `["RETURN"]` |
 | Prêt `ACTIVE`, mais locker non `ONLINE`, garde physique incompatible, plage fermée ou autre opération en cours sur le locker | — | `[]` |
 | Prêt `ACTIVE`, dernière tentative de retour `AWAITING_LOCAL_PROOF` | — | `[]` |
-| Prêt `RETURN_PENDING` (Q2) ou `COMPLETED` | — | `[]` |
+| Prêt `RETURN_PENDING`, reprise admissible (`06` §13.4) et gardes satisfaites | — | `["RETURN"]` |
+| Prêt `RETURN_PENDING` dont une anomalie liée est `OPEN`, sans retour terminé en `ANOMALY`, ou gardes non satisfaites; prêt `COMPLETED` | — | `[]` |
 
 Une tentative terminée sans avoir été autorisée (défi expiré ou invalidé) ne change rien : les trois premières lignes s’appliquent. Après un retour terminé sans interaction physique, le prêt est de nouveau `ACTIVE` (`05` §4.3) et les lignes du prêt `ACTIVE` s’appliquent.
 
@@ -642,9 +688,9 @@ Ces deux points ne sont pas approuvés. En attendant, la section applique le tex
   - Lecture appliquée : littérale; `CANCEL` n’est plus émis et l’actif reste réservé jusqu’à `reservedUntil`, qui ne dépasse pas la fermeture.
   - Recommandation : confirmer la lecture littérale pour le P0; l’assouplir serait une nouvelle règle d’annulation.
   - Propriétaires : décision de Philippe; contrat tenu par la session API/Web; mise en œuvre RES-02 (#38).
-- **Q2 — Récupération d’un prêt `RETURN_PENDING`.** La procédure qui autorise une nouvelle tentative n’est pas définie.
-  - Référence : `05` §4.3, `06` §6.3.
-  - Lecture appliquée : `RETURN` n’est pas émis.
+- **Q2 — Récupération d’un prêt `RETURN_PENDING`.** Tranchée le 21 novembre 2026 (#67) : reprise de `06` §13.4.
+  - Référence : `05` §4.3 et §4.6, `06` §6.3 et §13.4.
+  - Lecture appliquée : `RETURN` est émis et §15.2 accepte la préparation lorsque la reprise est admissible; sinon `409 LOAN_NOT_RETURNABLE`. Avant la décision : ni émission ni préparation (#50).
   - Recommandation : émettre `RETURN` quand la dernière tentative de retour est `ANOMALY`, que son anomalie est `ACKNOWLEDGED` (`05` §6.2 : correction physique engagée) et que toutes les autres gardes sont satisfaites.
   - Propriétaires : décision de Philippe; contrat tenu par la session API/Web; mise en œuvre RET-01 (#50) et ANO-01 (#52).
 
@@ -658,6 +704,8 @@ Ces deux points ne sont pas approuvés. En attendant, la section applique le tex
 |---|---|---|---|
 | GET | /system/health | Public | Santé minimale |
 | POST | /auth/login | Public | Jeton et profil |
+| POST | /auth/session/refresh | Cookie de session navigateur et origine autorisée (ADR-016) | Nouveau jeton et profil |
+| POST | /auth/session/revoke | Cookie de session navigateur et origine autorisée (ADR-016) | Session navigateur révoquée |
 | GET | /auth/me | Authentifié | Profil courant |
 
 ### 9.2 Technicien
@@ -747,7 +795,14 @@ Validations :
 
 - email requis, normalisé et limité à 320 caractères;
 - password requis et limité en taille avant hachage;
-- message identique pour compte absent, désactivé ou mot de passe invalide.
+- message identique pour compte absent, désactivé ou mot de passe invalide;
+- `browserSession`, booléen optionnel (ADR-016) : `true` demande une session navigateur. Seul le Manager l’envoie; iOS l’omet. Un champ inconnu reste refusé.
+
+Avec `browserSession: true`, l’en-tête `Origin` doit appartenir à `AEGIS_WEB_ALLOWED_ORIGINS`; sinon la réponse est `403 FORBIDDEN`, avant toute vérification des identifiants. En cas de succès, la réponse 200 ci-dessous pose aussi :
+
+```http
+Set-Cookie: __Secure-aegis_session=<opaque>; Path=/api/v1/auth/session; Max-Age=28800; HttpOnly; Secure; SameSite=Strict
+```
 
 Réponse 200 :
 
@@ -779,6 +834,46 @@ sans valeur valide, il indique seulement qu’il y a eu trop de tentatives.
 ### 10.3 GET /auth/me
 
 Retourne 200 avec le profil minimal. Cette route permet au client de réhydrater son contexte sans décoder le jeton.
+
+### 10.4 POST /auth/session/refresh
+
+Restaure l’accès d’une page Web rechargée (ADR-016). Sans corps; le navigateur joint le cookie `__Secure-aegis_session`. Un en-tête `Authorization` est ignoré.
+
+Réponse 200 : même forme que §10.2 (`accessToken`, `tokenType`, `expiresIn`, `expiresAt`, `user`). Le jeton expire 60 minutes après son émission, ou à la fin absolue de la session si elle survient avant. Le cookie n’est ni renouvelé ni prolongé.
+
+Erreurs :
+
+- `401 AUTH_SESSION_INVALID`, qui efface aussi le cookie (`Max-Age=0`) : cookie absent, mal formé ou inconnu, session révoquée (déconnexion, compte changé ou mot de passe changé, ADR-017) ou échue, compte désactivé ou archivé, rôle changé depuis la connexion. Les deux derniers cas révoquent la session définitivement.
+- `403 FORBIDDEN` : `Origin` absent ou non autorisé.
+
+Le client n’essaie qu’une restauration par démarrage ou par jeton échu, et ne boucle jamais sur un 401.
+
+### 10.5 POST /auth/session/revoke
+
+Déconnexion explicite du Web (ADR-016). Révoque côté serveur la session du cookie, s’il en reste une, puis efface le cookie. Réponse `204`, idempotente, avec ou sans cookie. Erreur : `403 FORBIDDEN` si `Origin` est absent ou non autorisé. Dès l’engagement de la révocation, les jetons de cette session (claim `sid`) reçoivent `401 AUTH_TOKEN_INVALID` (ADR-018); les jetons d’une autre session et ceux d’iOS ne sont pas touchés.
+
+### 10.6 Cycle de vie d’une session (ADR-016, ADR-017)
+
+« JWT émis » désigne un jeton d’accès déjà remis à un client. Le serveur relit le compte à chaque requête protégée (§4.1). La colonne JWT décrit le comportement en vigueur depuis l’ADR-018 (#179) : un refus de JWT est un `401 AUTH_TOKEN_INVALID`, que le Web traite par sa restauration unique.
+
+| Événement | Cookie | Ligne `browser_sessions` | JWT émis | Autres onglets du navigateur | iOS |
+|---|---|---|---|---|---|
+| Actualisation, lien direct, nouvel onglet | conservé, ni renouvelé ni prolongé | `last_refreshed_at` mis à jour | inchangés; un nouveau JWT est émis, borné par la fin de la session | indépendants; chacun restaure son propre JWT | non concerné |
+| JWT échu pendant l’usage (session vivante) | conservé | `last_refreshed_at` mis à jour | le JWT échu reçoit `401`; le Web restaure une seule fois, puis renvoie à la connexion seulement si la restauration répond `401`; une panne réseau, un délai ou un `5xx` suit la ligne « Panne réseau » et garde la session | chacun restaure de son côté, sans boucle | reconnexion (aucun refresh iOS) |
+| Fin absolue (8 h par défaut) | effacé par le `401 AUTH_SESSION_INVALID` de la restauration | inchangée, échue | refusés à la fin de la session, jeton de connexion compris (`sid`) | renvoyés à la connexion à leur prochaine restauration | non concerné |
+| Déconnexion explicite du Web, confirmée (`204`) | effacé | révoquée `SIGNED_OUT` | ceux de cette session **refusés dès l’engagement** (`sid`); le Web efface le sien et ses caches | le Web propage la déconnexion aux onglets ouverts; leur restauration échoue | non concerné; ses sessions restent ouvertes |
+| Déconnexion non confirmée (réseau, `5xx`) | conservé | inchangée, ouverte | inchangés | le Web n’annonce pas de déconnexion : « Impossible de confirmer la déconnexion. Réessayez. », avec nouvel essai; la session reste en place | non concerné |
+| Changement réel du mot de passe | effacé à la prochaine restauration | **toutes** les sessions ouvertes du compte révoquées `PASSWORD_CHANGED`, dans la transaction du changement | **tous refusés dès l’engagement** (`cv` incrémenté dans la même transaction) | renvoyés à la connexion à leur prochaine restauration | ses JWT sont refusés; nouvelle connexion avec le nouveau mot de passe |
+| Redémarrage avec le même mot de passe de démonstration | conservé | inchangée : aucun changement effectif, donc aucune révocation | inchangés (même clé de signature) | inchangés | inchangé |
+| Compte désactivé ou archivé | effacé à la prochaine restauration | révoquée `ACCOUNT_CHANGED` à la prochaine restauration | **refusés immédiatement** (`401`), car le compte est relu à chaque requête | renvoyés à la connexion | refusé immédiatement |
+| Rôle changé | effacé à la prochaine restauration | révoquée `ACCOUNT_CHANGED` à la prochaine restauration | authentifiés avec le **rôle courant**; l’ancien rôle ne donne aucun droit (`403`) | renvoyés à la connexion à leur prochaine restauration | droits du rôle courant |
+| Panne réseau ou API indisponible (`5xx`, délai) | conservé | inchangée | inchangés | le Web affiche un état récupérable avec une nouvelle tentative; ce n’est pas une session invalide | message d’indisponibilité |
+| Redémarrage de l’API ou nouvelle instance | conservé | conservée en base, révocations comprises | valides si la clé `AEGIS_JWT_SECRET` est inchangée | inchangés | inchangé |
+| Premier démarrage de l’API avec `V012` (ADR-018) | conservé | inchangée | jetons sans `cv` refusés (`401`) | le Web restaure une fois et obtient un jeton au nouveau format, sans revenir à la connexion | reconnexion unique |
+
+Une ligne révoquée ne redevient jamais ouverte : un déclencheur de `V011` refuse toute modification d’une session déjà révoquée. Une session ouverte n’est jamais supprimée. Une ligne terminée est supprimée 30 jours après sa fin, le plus tôt de sa révocation et de sa fin absolue. La trace durable d’un changement de mot de passe est l’événement d’audit `PASSWORD_CHANGED`, conservé après cette suppression (ADR-017).
+
+Le jeton remis par la connexion elle-même dure 60 minutes et son `exp` n’est pas borné par la fin de la session; seul le jeton restauré l’est. Depuis l’ADR-018, il porte `sid` et il est refusé dès que sa session est échue ou révoquée, même avant son `exp`.
 
 ---
 
@@ -1153,6 +1248,16 @@ Même préparation que le retrait, pour un prêt `ACTIVE`, ou une nouvelle tenta
 
 Réponse `202` avec `Location` et `LockerOperationView`. Le passage de `ACTIVE` à `RETURN_PENDING` intervient seulement lors de l’autorisation locale en §15.5.
 
+Mise en œuvre RET-01 (#50, 11 novembre 2026) :
+
+- Le prêt d’un autre titulaire n’est pas trouvé (`404 RESOURCE_NOT_FOUND`, §26.2). Un prêt `COMPLETED`, ou `RETURN_PENDING` non admissible à une reprise (`06` §13.4 : aucun retour terminé en `ANOMALY`, ou une anomalie liée encore `OPEN`), répond `409 LOAN_NOT_RETURNABLE`.
+- Reprise (`06` §13.4) : les anomalies `ACKNOWLEDGED` des retours du prêt ne bloquent pas la garde d’anomalie; toute autre anomalie non résolue de l’actif ou de la cellule répond `422 PHYSICAL_STATE_UNKNOWN`. L’autorisation laisse le prêt `RETURN_PENDING`; une fin sûre le laisse `RETURN_PENDING`; seule la preuve cohérente le termine et résout les anomalies liées dans la même transaction (`ANOMALY_RESOLVED`).
+- Les gardes du locker, de la cellule et de la plage d’exploitation, le refus d’une seconde opération ouverte sur le locker et la limitation de §15.5 sont ceux du retrait, avec les mêmes codes; la limite compte ensemble les préparations de retrait et de retour d’un même couple utilisateur–locker.
+- La readiness n’intervient pas : un actif emprunté n’est jamais `READY`, et `05` §7 exige qu’un retour ne le demande pas. `overdue` n’intervient pas non plus.
+- L’opération `RETURN` porte `loanId`, jamais `reservationId`, et l’identifiant actif de l’actif comme identifiant attendu. Le défi affiché porte l’action `RETURN`.
+- Un défi expiré ou invalidé termine l’opération sans toucher au prêt.
+- Après l’autorisation, une présence stable du tag attendu après la fermeture confirme l’opération et termine le prêt (`COMPLETED`, RET-02 #51, `06` §10.3.2). Une preuve encore incomplète est conclue à `expiresAt` selon `06` §13.1 : sans effet physique possible, `EXPIRED` ou `FAILED` et le prêt redevient `ACTIVE`; sinon `ANOMALY` et le prêt reste `RETURN_PENDING`.
+
 ### 15.3 Lecture du prêt
 
 `GET /me/loan` retourne le prêt courant de l’utilisateur dans le parcours P0; aucun prêt ouvert donne `404 ACTIVE_LOAN_NOT_FOUND`. `GET /loans/{loanId}` exige que l’utilisateur soit le titulaire.
@@ -1226,13 +1331,14 @@ Réponse `202`, `Location` identique, `LockerOperationView` avec `requiredAction
 | 409 | `LOCAL_PROOF_INVALIDATED` | Défi invalidé ou opération non admissible |
 | 410 | `LOCAL_PROOF_EXPIRED` | Échéance dépassée; nouvelle préparation nécessaire |
 | 429 | `LOCAL_PROOF_RATE_LIMITED` | Limite atteinte, avec `Retry-After` |
-| 409 | Codes de gardes métier existants | État, droits métier, réservation, horaire ou matériel devenus incompatibles |
+| 404, 403, 409, 422 | Gardes définitives : `ACTIVE_RESERVATION_NOT_FOUND`, `ASSET_ACCESS_DENIED`, `ASSET_HAS_OPEN_LOAN`, `OUTSIDE_OPERATING_HOURS`, `ASSET_NOT_READY` (avec `reasons`), `PHYSICAL_STATE_UNKNOWN`; pour un retour, `LOAN_NOT_RETURNABLE` et les gardes communes seulement (ni réservation, ni accès, ni disponibilité) | Défi `INVALIDATED` (ou `EXPIRED`), opération terminée sans commande (§8.5), refus audité, nouvel écran; le prêt d’un retour n’est pas modifié; nouvelle préparation nécessaire |
+| 409, 422, 503 | Gardes transitoires : `COMPARTMENT_STATE_UNSAFE`, `PHYSICAL_STATE_UNKNOWN` (porte ou verrou `UNKNOWN`), `DEVICE_UNAVAILABLE`, `LOCKER_OFFLINE`, `LOCKER_OPERATION_IN_PROGRESS` | Aucun changement; l’échéance du défi n’est pas prolongée; nouvel essai avec nouvelle clé |
 
-La même clé et le même corps rejouent la réponse initiale; une réponse refusée rejouée ne recompte pas les essais. Un corps différent avec la même clé est rejeté. La nouvelle clé après consommation donne un refus, jamais un second déverrouillage. Le token n’est pas copié dans la table d’idempotence : seul le hash de la requête canonique y figure.
+La même clé et le même corps rejouent la réponse initiale; une réponse refusée rejouée ne recompte pas les essais. Les refus qui changent un état sont enregistrés avec la clé et rejoués tels quels : secret erroné compté (`403`), cinquième secret erroné, échéance constatée au scan (`410`, opération `EXPIRED`) redémarrage du hub constaté au scan (`409 LOCAL_PROOF_INVALIDATED`, opération `FAILED`) et garde définitive (code de la garde, opération `FAILED` ou `EXPIRED`). Les autres refus ne sont pas enregistrés. `PHYSICAL_STATE_UNKNOWN` existe dans les deux familles : le client relit l’opération (§15.4) pour savoir si la tentative est terminée. Un corps différent avec la même clé est rejeté. La nouvelle clé après consommation donne un refus, jamais un second déverrouillage. Le token n’est pas copié dans la table d’idempotence : seul le hash de la requête canonique y figure.
 
 Le délai retenu est de 60 secondes maximum **depuis la création** du défi, borné par l’horaire et la réservation applicable. Le technicien prépare l’opération devant le casier : la latence d’affichage consomme une partie de ces 60 secondes, sans renouveler l’échéance. Les 120 secondes physiques commencent seulement à l’autorisation locale.
 
-Au cinquième secret erroné soumis par l’initiateur, le défi est invalidé et l’opération termine en `FAILED`. Une lecture caméra sans soumission ne compte pas. Un tiers ne peut épuiser les essais du titulaire. La fréquence des nouvelles préparations reste limitée par utilisateur et casier, avec un seuil configurable à qualifier avant intégration et `429 LOCAL_PROOF_RATE_LIMITED` accompagné de `Retry-After`. Les rejeux idempotents ne comptent pas comme nouvelles préparations. L’ancien plafond de trois préparations en quinze minutes est abandonné : il peut bloquer une série normale de retraits/retours. Cela ne supprime ni la limitation de débit ni les autres contrôles (ADR-009).
+Au cinquième secret erroné soumis par l’initiateur, le défi est invalidé et l’opération termine en `FAILED`. Une lecture caméra sans soumission ne compte pas. Un tiers ne peut épuiser les essais du titulaire. La fréquence des nouvelles préparations reste limitée par utilisateur et casier. Limite initiale du P0, approuvée par Philippe le 11 novembre 2026 (#44) : **6 nouvelles préparations par période glissante de 10 minutes pour chaque couple utilisateur–casier**, configurable (`AEGIS_PREPARATION_MAX_PER_WINDOW`, `AEGIS_PREPARATION_WINDOW`). Au-delà, `429 LOCAL_PROOF_RATE_LIMITED` avec `Retry-After`, en secondes arrondies vers le haut, jusqu’à la sortie de la plus ancienne préparation comptée. Les rejeux idempotents ne comptent pas comme nouvelles préparations. L’ancien plafond de trois préparations en quinze minutes est abandonné : il peut bloquer une série normale de retraits/retours. Cela ne supprime ni la limitation de débit ni les autres contrôles (ADR-009).
 
 ---
 
@@ -1313,6 +1419,7 @@ Règles approuvées par Philippe le 11 novembre 2026 (#67, D1 à D4 et G1) :
 - un identifiant inconnu donne `404 RESOURCE_NOT_FOUND`;
 - `availableActions` est toujours vide dans ces vues : l’administrateur n’exécute aucune des mutations de §8.10. Le `requiredAction` d’une opération est informatif (§15.4) et n’ouvre aucune action;
 - `AdminReservationView` reprend `ReservationView` (§8.3) et ajoute `user` juste après `userId`; `AdminLoanView` reprend `LoanView` (§8.4) et ajoute `holder` juste après `holderUserId`. Ces deux champs sont un `UserSummary` (§8.8), jamais `null`. Les vues du technicien ne changent pas.
+- `AdminLockerOperationView` reprend `LockerOperationView` (§8.5) et ajoute `user` juste après `userId`, un `UserSummary` (§8.8), et `asset` juste après `assetId`, un `AssetSummary` (§8.8, `placement` éventuellement `null`); les deux sont présents dans la liste et le détail et ne valent jamais `null` (R7, #48, 21 novembre 2026). La `LockerOperationView` du technicien (§15.4) ne change pas.
 
 Ces routes ne permettent jamais de modifier un état. Il n’existe aucune route administrative de type complete-loan, confirm-operation ou force-return.
 
@@ -1397,6 +1504,7 @@ Règles approuvées par Philippe le 11 novembre 2026 (#67, D8 à D10) :
 - tri du plus récent au plus ancien par `occurredAt`, puis `id` décroissant; `from` et `to` bornent `occurredAt`; `limit` vaut 50 par défaut; `eventType` et `subjectType` acceptent chacun une seule valeur de l’ensemble contrôlé, et les erreurs de filtre suivent §17;
 - `actor` est un `UserSummary` (§8.8) pour un acteur humain, sinon `null`, sans attribution inventée;
 - `details` suit une liste explicite de champs scalaires par type d’événement. Un champ n’est exposé que si son chemin complet figure dans la liste et que sa valeur est une chaîne, un nombre, un booléen ou `null`. Les secrets, hashes, notes, textes libres, valeurs d’identifiant brutes et payloads sont exclus. Un type d’événement absent de la liste expose `{}`;
+- `PASSWORD_CHANGED` (ADR-017, sujet `USER`) n’expose que `revokedBrowserSessions`, le nombre de sessions navigateur révoquées par le changement;
 - le curseur est lié aux filtres qui l’ont produit, mais pas à `limit`; réutilisé avec d’autres filtres ou mal formé, il donne `400 INVALID_CURSOR`.
 
 Garanties d’un parcours, c’est-à-dire de la première page jusqu’à `hasMore = false` : aucun événement n’apparaît deux fois, et tout événement validé avant la lecture de la première page apparaît. Le parcours n’est pas un instantané : chaque page est une lecture distincte, et `occurredAt` est l’horloge de la mutation, pas l’instant de sa validation. Un événement validé pendant le parcours n’apparaît que s’il se classe après la position du curseur. Un événement plus récent que la première page, ou qui se classe avant le curseur (arrivée tardive ou antidatée), apparaît au parcours suivant. Pour le voir, le client relance la lecture depuis la première page.
@@ -1465,6 +1573,7 @@ Les PUT sont idempotents par définition. Une répétition identique ne crée pa
 | 401 | AUTH_INVALID_CREDENTIALS | Connexion refusée |
 | 401 | AUTH_TOKEN_INVALID | Jeton invalide |
 | 401 | AUTH_TOKEN_EXPIRED | Jeton expiré |
+| 401 | AUTH_SESSION_INVALID | Session navigateur absente, échue ou révoquée (§10.4) |
 | 403 | FORBIDDEN | Rôle insuffisant |
 | 403 | ASSET_ACCESS_DENIED | Niveau d’accès insuffisant |
 | 404 | RESOURCE_NOT_FOUND | Ressource absente ou non visible |
@@ -1709,7 +1818,7 @@ Ces cas sont à implémenter et à exécuter, pas déclarés réussis par la pr�
 2. Tentative `AWAITING_LOCAL_PROOF` : `CANCEL` présent, `CHECKOUT` absent; dès `AUTHORIZED`, la liste de la réservation est vide.
 3. Après un refus `503` ou une tentative `FAILED`, une nouvelle lecture dont les gardes sont satisfaites rend `CHECKOUT`.
 4. À `reservedUntil`, une réservation encore `ACTIVE` n’expose aucune action; un retrait autorisé avant cette heure et confirmé après crée un prêt avec `dueAt = reservedUntil` et `overdue = true`.
-5. Un prêt en retard garde `RETURN` lorsque les gardes le permettent; un prêt `RETURN_PENDING` n’expose aucune action.
+5. Un prêt en retard garde `RETURN` lorsque les gardes le permettent; un prêt `RETURN_PENDING` n’expose `RETURN` que si sa reprise est admissible (`06` §13.4).
 6. Une valeur listée ne dispense d’aucune garde : une mutation envoyée après un changement d’état est refusée sans effet.
 
 ---
@@ -1720,7 +1829,7 @@ Le P0 ne comprend pas :
 
 - inscription publique;
 - récupération autonome de mot de passe;
-- refresh token;
+- refresh token; la session navigateur révocable du Manager (ADR-016, §10.4 et §10.5) n’en est pas un : elle ne prolonge jamais sa fin absolue et ne sert qu’au Web;
 - authentification sociale;
 - gestion avancée des utilisateurs;
 - WebSocket ou Server-Sent Events;

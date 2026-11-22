@@ -48,7 +48,7 @@ import ca.aegis.control.support.TestDatabases;
  */
 class IotEvidenceSchemaTests {
 
-    private static final int MIGRATIONS = 11;
+    private static final int MIGRATIONS = 14;
     private static final OffsetDateTime CREATED = OffsetDateTime.of(2026, 11, 2, 13, 0, 0, 0, ZoneOffset.UTC);
     private static final OffsetDateTime DISPLAYED = CREATED.plusSeconds(5);
     private static final OffsetDateTime CONSUMED = CREATED.plusSeconds(20);

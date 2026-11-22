@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../../api/queryKeys'
 import { ApiRequestError } from '../../api/serverState'
-import { authorizedRequest } from '../auth/authorizedRequest'
+import { authorizedCommand, authorizedRequest } from '../auth/authorizedRequest'
 import { useSessionStore } from '../auth/session'
 import type { OperatingScheduleRequest, OperatingScheduleView } from './contract'
 import { useScheduleGateway } from './ScheduleGatewayContext'
@@ -37,7 +37,7 @@ export function useSaveSchedule(lockerId: string) {
   const session = useSessionStore()
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (request: OperatingScheduleRequest) => authorizedRequest(session, (token) => gateway.putSchedule(token, lockerId, request)),
+    mutationFn: (request: OperatingScheduleRequest) => authorizedCommand(session, (token) => gateway.putSchedule(token, lockerId, request)),
     onSuccess: (saved) => {
       client.setQueryData(queryKeys.lockers.schedule(lockerId), saved)
       void client.invalidateQueries({ queryKey: queryKeys.lockers.status(lockerId) })

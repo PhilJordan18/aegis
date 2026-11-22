@@ -16,7 +16,7 @@ import { LAB_TIME_ZONE } from '../features/catalog/assetPresentation'
 import type { AnomalyListQuery, AnomalyView } from '../features/anomalies/contract'
 import { useAnomaly, useAnomalyList } from '../features/anomalies/useAnomalyQueries'
 import type { UserProfile } from '../features/auth/contract'
-import { useSessionStore } from '../features/auth/session'
+import { useSignOut } from '../features/auth/useSignOut'
 import { useCurrentAdminProfile } from '../features/auth/useCurrentAdminProfile'
 import { useI18n } from '../i18n/useI18n'
 import { Button } from '../ui/Button'
@@ -53,7 +53,6 @@ export function AnomaliesPage({ sessionProfile }: { readonly sessionProfile: Use
   const i18n = useI18n()
   const { m, format } = i18n
   const t = m.anomalies
-  const sessionStore = useSessionStore()
   const router = useRouter()
   const client = useQueryClient()
   const { search } = useLocation()
@@ -123,10 +122,7 @@ export function AnomaliesPage({ sessionProfile }: { readonly sessionProfile: Use
     dossierRef.current?.focus()
   }, [acknowledging])
 
-  function signOut() {
-    sessionStore.signOut()
-    router.navigate(pathOf('signIn'))
-  }
+  const signOut = useSignOut()
 
   function openAcknowledgement(anomaly: AnomalyView) {
     // Pin the selection in the address: once acknowledged, the anomaly leaves « Ouvertes » and the list's first row changes.

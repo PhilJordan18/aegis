@@ -100,13 +100,26 @@ describe('§17 pages', () => {
 })
 
 describe('parseLockerOperationView (09 §8.5)', () => {
-  it('reads a complete operation as ids and the instants sent, with no display name', () => {
+  it('reads a complete operation with the R7 summaries of the user and the asset beside their ids', () => {
     const parsed = parseLockerOperationView(lockerOperationView())
     expect(parsed?.status).toBe('CONFIRMED')
     expect(parsed?.acknowledgedAt).toBe('2026-11-10T14:01:32Z')
     expect(parsed?.assetId).toBe(lockerOperationView().assetId)
-    expect(parsed).not.toHaveProperty('displayName')
-    expect(parsed).not.toHaveProperty('asset')
+    expect(parsed?.user).toEqual({ id: lockerOperationView().userId, displayName: 'Technicien Démo' })
+    expect(parsed?.asset.assetCode).toBe('MM-001')
+    expect(parsed?.asset.model.name).toBe('Multimètre numérique')
+  })
+
+  it('accepts an asset summary with no placement, also in a list row', () => {
+    const row = lockerOperationView({ asset: { ...assetSummary, placement: null } })
+    expect(parseLockerOperationView(row)?.asset.placement).toBeNull()
+    expect(parseLockerOperationPage(pageOf([row]))?.items[0]?.asset.placement).toBeNull()
+  })
+
+  it('keeps no field of the local access challenge but its id', () => {
+    const parsed = parseLockerOperationView(lockerOperationView({ localAccessChallengeId: '666410af-eca5-47a7-ba57-e5e779a0868b', token: 'x', payload: { token: 'y' }, qr: 'z' }))
+    expect(parsed?.localAccessChallengeId).toBe('666410af-eca5-47a7-ba57-e5e779a0868b')
+    expect(JSON.stringify(parsed)).not.toMatch(/token|payload|qr/i)
   })
 
   it('keeps an absent step as null and does not infer it from a later one', () => {
@@ -128,6 +141,13 @@ describe('parseLockerOperationView (09 §8.5)', () => {
     ['a failure reason that is not text', { failureReason: 3 }],
     ['an empty status', { status: '' }],
     ['a non-UUID anomaly', { anomalyId: 'x' }],
+    ['a missing user summary (R7 makes it required)', { user: undefined }],
+    ['a null user summary', { user: null }],
+    ['a user summary that names another user', { user: { id: '11111111-1111-4111-8111-111111111111', displayName: 'Autre' } }],
+    ['a user summary without a name', { user: { id: lockerOperationView().userId, displayName: ' ' } }],
+    ['a missing asset summary (R7 makes it required)', { asset: undefined }],
+    ['a null asset summary', { asset: null }],
+    ['an asset summary that names another asset', { asset: { ...assetSummary, id: '11111111-1111-4111-8111-111111111111' } }],
   ])('rejects %s', (_label, overrides) => {
     expect(parseLockerOperationView(lockerOperationView(overrides))).toBeNull()
   })

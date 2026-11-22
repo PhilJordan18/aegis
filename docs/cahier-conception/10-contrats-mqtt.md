@@ -1362,7 +1362,7 @@ L’horloge du hub doit être synchronisée avant affichage. Il vérifie son loc
 }
 ```
 
-Cet extrait est ajouté à l’enveloppe complète, pas publié seul. Il est émis après rendu effectif du QR. Le backend valide le device, la session et la correspondance exacte du message et du défi avant de renseigner `displayedAt`. Un PUBACK MQTT ne suffit pas.
+Cet extrait est ajouté à l’enveloppe complète, pas publié seul. Il est émis après rendu effectif du QR. Le backend valide le device, la session et la correspondance exacte du message et du défi avant de renseigner `displayedAt`. Un PUBACK MQTT ne suffit pas. Un accusé d’une instruction que le backend a déjà arrêtée (`REJECTED` ou `CANCELLED` dans `hub_display_outbox`) est refusé comme non corrélé (`COMMAND_CORRELATION_INVALID`) : il ne renseigne jamais `displayedAt`, même si le défi est encore `PENDING`.
 
 `DISPLAY_REJECTED` utilise la même corrélation (`challengeId` seulement pour un défi) et une raison : `SCREEN_UNAVAILABLE`, `TARGET_SESSION_MISMATCH`, `DISPLAY_EXPIRED`, `STALE_DISPLAY_REVISION` ou `INVALID_DISPLAY_PAYLOAD`. Aucun de ces événements ne contient le token ni `commandMessageId`.
 

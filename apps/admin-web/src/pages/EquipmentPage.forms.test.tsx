@@ -1,11 +1,11 @@
 import { cleanup, configure, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClient } from '../api/serverState'
 import { App } from '../app/App'
 import { unconfiguredAuthGateway, type AuthGateway } from '../features/auth/authGateway'
 import { createSessionStore } from '../features/auth/session'
-import { adminProfile, problemBody } from '../features/auth/testFixtures'
+import { adminProfile, loginOk, problemBody } from '../features/auth/testFixtures'
 import type { CatalogGateway } from '../features/catalog/catalogGateway'
 import type { ProblemResponse } from '../features/auth/contract'
 import { asset, fakeCatalogGateway, FLUKE_117, MM001, model, modelPageOf, ok, pageOf } from '../features/catalog/testFixtures'
@@ -28,13 +28,13 @@ afterEach(() => {
   window.history.replaceState(null, '', '/')
 })
 
-function renderEquipment(catalogGateway: CatalogGateway, { locale = 'fr', url = '/equipements' }: { locale?: Locale; url?: string } = {}) {
+function renderEquipment(catalogGateway: CatalogGateway, { locale = 'fr', url = '/equipements', gateway = authGateway }: { locale?: Locale; url?: string; gateway?: AuthGateway } = {}) {
   const session = createSessionStore()
   session.start({ accessToken: 'token-value', expiresAt: '2026-09-30T15:30:00Z', expiresIn: 3600, profile: adminProfile })
   window.history.replaceState(null, '', url)
   const queryClient = createQueryClient()
   queryClient.setDefaultOptions({ queries: { ...queryClient.getDefaultOptions().queries, retry: false } })
-  return renderWithProviders(<App />, { gateway: authGateway, catalogGateway, session, queryClient, locale })
+  return renderWithProviders(<App />, { gateway, catalogGateway, session, queryClient, locale })
 }
 
 const openDialog = () => screen.getByRole('dialog')
@@ -320,6 +320,35 @@ describe('Équipements — edit and archive a unit', () => {
     expect(keys[1]).toBe(keys[0])
     expect(keys[2]).not.toBe(keys[0])
     expect(gateway.archiveAsset.mock.calls.every((call) => call[1] === MM001.id)).toBe(true)
+  })
+
+  it('never replays a command that got a 401: the session is restored, the user sends it again with the same key', async () => {
+    const user = userEvent.setup()
+    const refreshSession = vi.fn(async () => loginOk(adminProfile, 'renewed-token'))
+    const archived = asset({ id: MM001.id, assetCode: 'MM-001', archivedAt: '2026-10-02T12:00:00Z' })
+    const archiveAsset = vi
+      .fn<CatalogGateway['archiveAsset']>()
+      .mockResolvedValueOnce(problem(401, 'AUTH_TOKEN_EXPIRED'))
+      .mockResolvedValueOnce(ok(archived))
+    const gateway = fakeCatalogGateway({ pages: [ok(pageOf([MM001]))], units: { [MM001.id]: ok(MM001) }, overrides: { archiveAsset } })
+    const { session } = renderEquipment(gateway, { gateway: { ...authGateway, refreshSession } })
+    await screen.findByRole('heading', { level: 2, name: /MM-001/ })
+    await user.click(screen.getByRole('button', { name: 'Archiver' }))
+    const dialog = screen.getByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Archiver' }))
+
+    expect(await within(dialog).findByText('Votre session a été rétablie.')).toBeDefined()
+    expect(refreshSession).toHaveBeenCalledTimes(1)
+    expect(archiveAsset).toHaveBeenCalledTimes(1)
+    expect(archiveAsset.mock.calls[0]?.[0]).toBe('token-value')
+    expect(session.getAccessToken()).toBe('renewed-token')
+    expect(session.getSnapshot().status).toBe('authenticated')
+
+    await user.click(within(dialog).getByRole('button', { name: 'Réessayer' }))
+    await waitFor(() => expect(archiveAsset).toHaveBeenCalledTimes(2))
+    expect(archiveAsset.mock.calls[1]?.[0]).toBe('renewed-token')
+    expect(archiveAsset.mock.calls[1]?.[2]).toBe(archiveAsset.mock.calls[0]?.[2])
+    expect(refreshSession).toHaveBeenCalledTimes(1)
   })
 
   it('offers no command for an archived unit', async () => {

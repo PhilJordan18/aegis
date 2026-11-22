@@ -84,6 +84,10 @@ a.ag-item:hover { background: var(--ag-field); }
 .ag-diag__note { margin-top: 10px; font-size: var(--ag-type-caption-size); line-height: 1.45; color: var(--ag-text-2); }
 .ag-diag__note--unknown { color: var(--ag-text); }
 .ag-cols { margin-top: 20px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+.ag-eq-history { margin-top: 24px; }
+.ag-eq-history__links { margin-top: 10px; display: grid; gap: 6px; font-size: 0.9375rem; }
+.ag-eq-history__links .ag-link { min-height: 24px; display: inline-flex; align-items: center; }
+.ag-eq-history > .ag-help { margin-top: 8px; display: block; }
 .ag-sec-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .ag-readonly {
   display: inline-flex; gap: 4px; align-items: center; font-family: var(--ag-font-sans); font-size: var(--ag-type-small-size);

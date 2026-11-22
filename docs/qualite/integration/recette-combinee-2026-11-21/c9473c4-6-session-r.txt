@@ -1,0 +1,15 @@
+# ref c9473c4 (Backend integration build; = final PR heads except one doc line), step 6-session-r
+PASS R0 browser login before the rotation (200)
+PASS R1 API log: demo admin password updated at startup
+PASS R2a old password login (401)
+PASS R2b new password login (200)
+PASS R3 access token issued before the rotation, on /auth/me (valid until expiry until #179) (200)
+PASS R4a refresh with the pre-rotation cookie (401)
+PASS R4b problem code (AUTH_SESSION_INVALID)
+PASS R4c revocation reason (PASSWORD_CHANGED)
+PASS R4d PASSWORD_CHANGED audit events (1)
+PASS R6a explicit revoke of the dead cookie (idempotent) (204)
+PASS R6b refresh after it (401)
+PASS R8a disabled account (the admin remedy today): refresh (401)
+PASS R8b revocation reason (ACCOUNT_CHANGED)
+exit=0

@@ -1,0 +1,21 @@
+PASS S1 login without browserSession: 200, no Set-Cookie
+PASS S1b browserSession false: 200, no cookie
+PASS S1c foreign Origin without the field: 200, no cookie (bearer login unaffected)
+PASS S2 browserSession refused before credentials: no Origin 403/FORBIDDEN, foreign+wrong password 403/FORBIDDEN, trailing slash 403, null 403, upper-case scheme 403, http 403
+PASS S2b no session row after refusals
+PASS S3 Set-Cookie Path=/api/v1/auth/session; HttpOnly; Secure; SameSite=Strict; no Domain; 8 h; DB keeps SHA-256 only (row 't|ADMIN|28800'), raw value absent from a dump
+PASS S4 cookie as bearer 401, cookie on /me 401, cookie on admin 401, token in query 401; real bearer 200
+PASS S5 refresh: no Origin 403, foreign 403, allowed 200 with a token of ~60 min usable on admin; cookie not rotated
+PASS S6 six concurrent refreshes: all 200 ( 6 200)
+PASS S7 technician browser session restores a token that gets 403 on admin
+PASS S8 revoke from a foreign Origin 403 (session still live), revoke 204 clears the cookie, refresh then 401 AUTH_SESSION_INVALID with the cookie cleared; repeat/no cookie/garbage 204; reason SIGNED_OUT
+PASS S9 account DISABLED: refresh 401, session revoked ACCOUNT_CHANGED; re-enabling does not revive it
+PASS S9b role change (escalation TECHNICIAN to ADMIN): refresh 401 and revoked for good
+PASS S10 rotation: old password 401, old session refresh 401
+PASS S11 lifetime 40 s (Max-Age=39): token expiresAt 2026-11-21T17:40:54Z <= session end 2026-11-21T17:40:54Z; after the end refresh 401 and the restored token 401
+PASS S11b lifetime PT13H refused at startup
+PASS S11c http origin other than localhost refused at startup
+PASS S11d no origin configured: browserSession 403, bearer login 200
+PASS S12 DB CHECK refuses a 13 h session
+PASS S13 no session cookie value in any API log (247 lines)
+exit=0

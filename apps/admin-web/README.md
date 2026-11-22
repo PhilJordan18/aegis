@@ -36,8 +36,12 @@ npm run capture:evidence  # 16 captures choisies, à 1×, dans docs/design/manag
 npm run capture:integration  # 14 captures FR/EN de l'identité v3, à 1×, dans docs/design/manager-v3/captures-integration/
 npm run test:identity  # mesures sur le rendu : saut de mise en page, contrastes peints, focus, texte coupé
 npm run test:forms     # formulaires CAT-01 proposés : axe, clavier, 320 px, clair et sombre, sur des faux routés
+npm run test:follow    # dossier d'opération ouvert (ADR-006, R5) : suivi sans clic, requêtes bornées, pause onglet masqué, arrêt au statut terminal
+npm run test:links     # liens entre dossiers (R2, R3) et tentative courante (R4) : chaque lien est cliqué, adresse et requête vérifiées, sans image
 npm run capture:forms  # mêmes contrôles, et écrit le lot de revue dans docs/design/manager-forms/captures/
 npm run test:e2e:api   # recette Playwright contre l'API réelle (build de production); échoue sans API ou sans identifiants
+npm run test:e2e:session   # session navigateur (ADR-016) sur des faux d'API : rechargement, lien direct, révocation, déconnexion
+npm run test:realapi   # recette navigateur des pages de chaîne de garde contre une API réelle d'une pile isolée (voir ci-dessous); jamais exécutée par défaut
 ```
 
 ### Développer contre l'API
@@ -51,13 +55,30 @@ est jointe, jamais PostgreSQL ni MQTT.
    (`services/api/README.md`, « Pour lancer l'API »).
 2. `npm run dev:api`, puis ouvrir `/connexion`. `npm run dev` garde l'aperçu
    de conception et n'appelle jamais l'API.
+3. Pour que la session survive à un rechargement (ADR-016), lancer l'API avec
+   `AEGIS_WEB_ALLOWED_ORIGINS=http://localhost:5173` et ouvrir le Manager par
+   `http://localhost:5173`, pas par `127.0.0.1` : l'API n'accepte une origine
+   `http` que pour `localhost`, et refuse sinon la connexion du Manager par un
+   `403 FORBIDDEN`. Le proxy Vite transmet `Origin`, `Cookie` et `Set-Cookie`
+   sans les modifier (pas de `changeOrigin` ni de réécriture de cookie).
 
 `npm run test:e2e:api` construit le build de production, le sert avec
-`vite preview` sur `127.0.0.1:5181` et vérifie, contre l'API :
+`vite preview` sur `localhost:5181` et vérifie, contre l'API (démarrée avec
+`AEGIS_WEB_ALLOWED_ORIGINS=http://localhost:5181`) :
 
 - la connexion de l'administrateur jusqu'au shell, avec `GET /auth/me`;
-- l'absence de tout jeton dans le stockage, puis la déconnexion;
-- le refus du compte technicien, sans requête après la connexion;
+- l'absence de tout jeton dans le stockage, puis la déconnexion, qui révoque la
+  session côté serveur : un chargement complet suivant demande une restauration,
+  refusée, et ramène à la connexion;
+- le refus du compte technicien, sans autre requête que la révocation de sa
+  session navigateur (l'API pose le cookie même à un compte technicien qui
+  demande `browserSession`; le Web le révoque aussitôt);
+- la session navigateur de l'ADR-016 (`api.session.spec.ts`), contre l'API et
+  non contre des faux : cookie `HttpOnly` posé par l'API, rechargement et lien
+  direct restaurés, cookie envoyé aux seules routes de session, révocation
+  effective côté serveur (le cookie rejoué est refusé en 401
+  `AUTH_SESSION_INVALID`), et `403 FORBIDDEN` pour une origine absente ou
+  étrangère;
 - un compte inconnu (401), une violation serveur (400) et la limite de débit
   (429 avec `Retry-After`).
 
@@ -72,8 +93,17 @@ scénarios ont réellement passé contre l'API. Les contrôles hors ligne resten
 configuration. Les mots de passe ne sont jamais écrits dans un fichier ni
 affichés.
 
+`npm run test:e2e:session` démarre `npm run dev:api` sur `127.0.0.1:5182`
+(sans aperçu, avec la vraie passerelle HTTP) et répond à tout `/api/v1` par des
+routes : le faux dépose et efface le vrai cookie `__Secure-aegis_session`, donc
+le navigateur décide seul de ce qu'il stocke et envoie. Il couvre le
+rechargement, le lien direct (avec sa requête), l'état de restauration, une
+session révoquée sans boucle, l'échéance du jeton, un serveur injoignable au
+démarrage, la déconnexion et sa révocation non confirmée, ainsi qu'axe (clair
+et sombre, 1280 et 390 px) sur les deux nouveaux états.
+
 Ces trois commandes Playwright démarrent leur propre serveur Vite sur
-`127.0.0.1:5180`. Ils utilisent le Chromium de Playwright 1.63 déjà installé
+`127.0.0.1:5180` (`AEGIS_E2E_PORT` change le port, par exemple pour deux copies de travail en parallèle). Ils utilisent le Chromium de Playwright 1.63 déjà installé
 (`npx playwright install chromium` s'il manque). Pour filtrer les cas :
 `npm run capture -- --grep connexion`. Les captures sont faites en mouvement
 réduit par défaut; `AEGIS_MOTION=no-preference` le désactive.
@@ -115,6 +145,33 @@ de langue : préférence du navigateur, repli, choix mémorisé qui l'emporte,
 changement au clavier, rechargement, menu du compte, tiroir et lien
 d'évitement en anglais. `npm run test:a11y` et `npm run capture` incluent les
 deux fichiers.
+
+### Recette navigateur contre une API réelle (`test:realapi`)
+
+`npm run test:realapi` ouvre, en lecture seule, Vue d'ensemble, Réservations et prêts (les trois vues), Anomalies et
+Audit contre une API réelle, en français et en anglais, à 1280 et 390 px (`e2e/realapi.spec.ts`) : connexion par le vrai
+formulaire, nombres affichés égaux à ceux des réponses de l'API, navigation par les liens, rechargement qui garde la
+session, axe sans violation, aucune écriture hors connexion et restauration de session. Le projet `realapi` n'existe
+que si `AEGIS_E2E_REAL_API=1` (le script le pose) : `npm test`, `npx playwright test` et la CI ne le voient jamais. Pile
+isolée seulement (conteneur ou poste de développement), jamais le staging ni la production.
+
+```bash
+# Depuis la racine : infra, API (jar de services/api), compte administrateur (services/api/README.md), jeu de données par l'API REST.
+docker compose -p aegis-r6 --env-file infra/docker/.env.example -f infra/docker/compose.yaml up -d --wait
+# API démarrée avec AEGIS_WEB_ALLOWED_ORIGINS=http://localhost:5191 (http seulement pour localhost), puis, depuis apps/admin-web :
+npm run build
+AEGIS_API_ORIGIN=http://127.0.0.1:8080 npx vite preview --host localhost --port 5191 --strictPort &
+AEGIS_E2E_BASE_URL=http://localhost:5191 AEGIS_E2E_ADMIN_EMAIL=admin@aegis.demo \
+AEGIS_E2E_ADMIN_PASSWORD="$AEGIS_DEMO_ADMIN_PASSWORD" AEGIS_E2E_REQUIRE_DATA=reservations,operations,audit \
+  npm run test:realapi -- --trace off
+```
+
+Les identifiants ne viennent que de l'environnement, au moment de l'exécution. `AEGIS_E2E_REQUIRE_DATA` (liste de
+`reservations`, `loans`, `operations`, `anomalies`, `audit`; `audit` par défaut) nomme les vues qui ne doivent pas être
+vides : sans cela une pile vide passerait. Une vue non listée peut être vide et est alors prouvée par son compte à zéro
+et l'absence d'alerte. La connexion est limitée à 5 tentatives par minute par adresse et par compte : un `429` est
+attendu selon `Retry-After`. Les spécifications trouvent les éléments par rôle, adresse et nom de champ plutôt que par
+texte, donc un changement de libellé ne les casse pas.
 
 ## Dépendances
 
@@ -497,26 +554,57 @@ Content-Security-Policy devra l'autoriser par empreinte.
     `sessionInvalid` (401 `AUTH_TOKEN_INVALID`, ou 401 sans code) et
     `signedOut` (après « Se déconnecter »).
 - `features/auth/session.ts` est le magasin de session **en mémoire**
-  (ADR-007, 09 §4.2). Rien n'est écrit dans localStorage, sessionStorage,
-  les cookies ou IndexedDB : recharger la page impose de se reconnecter. Le
-  jeton est absent de l'état lu par React. Il refuse une session autre
-  qu'administrateur.
-- Expiration (09 §4.1 : 60 min, sans refresh) : la session se termine seule
-  en `sessionExpired` quand `expiresIn` secondes se sont écoulées depuis la
-  réception de la réponse de connexion. Compter depuis la réception, et non
-  comparer `expiresAt` à l'horloge du navigateur, rend l'échéance
-  insensible à une horloge décalée. Le serveur reste l'autorité : tout 401
-  antérieur termine la session aussi.
+  (ADR-007, ADR-016, 09 §4.2). Rien n'est écrit dans localStorage,
+  sessionStorage, les cookies ou IndexedDB, et le cookie `HttpOnly` posé par
+  le serveur n'est jamais lisible par le script. Le jeton est absent de l'état
+  lu par React. Il refuse une session autre qu'administrateur. Le serveur
+  reste l'autorité : le client ne décide jamais seul qu'une session est
+  valide.
+- Restauration (ADR-016, 09 §10.4) : au chargement de toute page, hors
+  aperçu, `main.tsx` appelle `restore()`, c'est-à-dire
+  `POST /auth/session/refresh` avec le cookie. L'état `restoring` s'affiche
+  sur une page protégée sans aucune redirection tant que le serveur n'a pas
+  répondu. Une réponse 200 démarre la session et garde l'adresse demandée,
+  lien direct compris. Un 401 laisse le visiteur anonyme, sans motif
+  d'arrivée, et une seule redirection mène à `/connexion`. Tout autre échec
+  (réseau, délai, 5xx, 403 d'origine, corps hors contrat) est l'état
+  `restoreFailed` : « Restauration de votre session » avec une alerte, un
+  bouton « Réessayer » et « Se connecter » en repli. Le Manager ne se
+  déconnecte pas en silence quand il ne peut pas interroger le serveur.
+  Seuls `login`, `refresh` et `revoke` sont envoyés avec
+  `credentials: 'same-origin'`; toute autre route garde `omit`.
+- Expiration (09 §4.1 : 60 min, ou la fin absolue de la session si elle
+  survient avant) : à l'échéance de `expiresIn`, comptée depuis la réception,
+  le magasin tente **une** restauration. Un 401 termine la session en
+  `sessionExpired`; un échec réseau ou 5xx donne `restoreFailed` plutôt
+  qu'une fausse expiration. Les restaurations sont à vol unique : l'échéance,
+  le démarrage et tous les 401 simultanés partagent une seule requête, et une
+  réponse dépassée par une connexion ou une déconnexion est ignorée.
+- Déconnexion explicite (09 §10.5) : `signOut()` révoque d'abord côté
+  serveur, puis efface la mémoire. Si la révocation n'est pas confirmée, la
+  session reste ouverte (un rechargement la rétablirait) et le shell affiche
+  « Déconnexion non confirmée » avec « Réessayer la déconnexion ».
 - `features/auth/authorizedRequest.ts` porte chaque appel protégé :
-  - un 401 termine la session avec le motif du serveur
-    (`AUTH_TOKEN_EXPIRED` → `sessionExpired`, sinon `sessionInvalid`);
+  - un 401 demande au magasin une restauration partagée, puis rejoue l'appel
+    **une seule fois** avec le nouveau jeton; un second 401 termine la session
+    avec le motif du serveur (`AUTH_TOKEN_EXPIRED` → `sessionExpired`, sinon
+    `sessionInvalid`), sans boucle. Un 401 prouve que la requête n'a pas été
+    traitée, donc le rejeu ne répète aucune transition;
   - une réponse tardive pour un ancien jeton ne termine jamais la session
-    suivante.
+    suivante;
+  - le cache TanStack n'est vidé que si le compte change ou si la session se
+    termine, pas à chaque renouvellement de jeton.
   - `fetchCurrentAdminProfile` (`GET /auth/me`) termine aussi la session en
     `sessionInvalid` sur un 403 ou un profil qui n'est plus `ADMIN` : le
     serveur relit le compte à chaque requête (09 §4.1).
-- `app/RequireAdminSession.tsx` protège `/equipements`. Sans session
-  (jamais connecté, rechargement, déconnexion, expiration, 401), il remplace
+- Retour après connexion forcée : `RequireAdminSession` envoie vers
+  `/connexion?retour=<chemin>` et `app/returnPath.ts` valide la valeur à la
+  lecture : un chemin relatif de la même origine menant à une page protégée,
+  sans `//hôte`, barre oblique inverse, caractère de contrôle ni retour vers
+  `/connexion`. Toute autre valeur donne la page par défaut. Après une
+  déconnexion explicite, rien n'est retenu.
+- `app/RequireAdminSession.tsx` protège les pages du Manager. Sans session
+  (jamais connecté, déconnexion, expiration, révocation, 401), il remplace
   l'entrée d'historique par `/connexion`, qui affiche le motif d'arrivée.
 - État serveur (TanStack Query) :
   - `src/api/serverState.ts` crée le client : nouvel essai, deux au plus,

@@ -29,6 +29,22 @@ describe('labels from codes', () => {
     expect(stateLabel('WEIRD', i18n('en'))).toBe('Unrecognized state · WEIRD')
   })
 
+  it('labels PASSWORD_CHANGED on the USER subject, in both languages', () => {
+    expect(eventLabel('PASSWORD_CHANGED', i18n('fr'))).toBe('Mot de passe changé')
+    expect(eventLabel('PASSWORD_CHANGED', i18n('en'))).toBe('Password changed')
+    expect(subjectLabel('USER', i18n('fr'))).toBe('Utilisateur')
+    expect(subjectLabel('USER', i18n('en'))).toBe('User')
+  })
+
+  it('labels every state the stack writes in from and to, including the local challenge statuses', () => {
+    // Seen on the integration stack 43fed3c: LOCAL_CHALLENGE_* events move PENDING to CONSUMED, EXPIRED or INVALIDATED.
+    const states = ['REQUESTED', 'AWAITING_LOCAL_PROOF', 'AUTHORIZED', 'COMMAND_SENT', 'COMMAND_ACKNOWLEDGED', 'DOOR_OPENED', 'OBSERVATION_RECEIVED', 'CONFIRMED', 'FAILED', 'EXPIRED', 'ANOMALY',
+      'ACTIVE', 'FULFILLED', 'CANCELLED', 'RETURN_PENDING', 'COMPLETED', 'OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'PENDING', 'CONSUMED', 'INVALIDATED']
+    for (const locale of ['fr', 'en'] as const) for (const code of states) expect(stateLabel(code, i18n(locale)), `${locale} ${code}`).not.toContain('·')
+    expect(stateLabel('CONSUMED', i18n('fr'))).toBe('Utilisé')
+    expect(stateLabel('INVALIDATED', i18n('en'))).toBe('Invalidated')
+  })
+
   it('has a label for every event type the database admits', () => {
     // V002_2 ck_audit_events_type: a code without a label would show as unrecognized although it is known.
     const admitted = [
@@ -38,6 +54,8 @@ describe('labels from codes', () => {
       'LOCAL_CHALLENGE_INVALIDATED', 'COMMAND_SENT', 'COMMAND_ACKNOWLEDGED', 'COMMAND_REJECTED', 'DOOR_OPENED', 'OBSERVATION_RECEIVED', 'OPERATION_CONFIRMED',
       'OPERATION_FAILED', 'OPERATION_EXPIRED', 'LOAN_RETURN_STARTED', 'LOAN_RETURN_REVERTED_SAFE', 'LOAN_COMPLETED', 'ANOMALY_CREATED', 'ANOMALY_ACKNOWLEDGED',
       'ANOMALY_RESOLVED', 'CHECKOUT_CONFIRMED', 'RETURN_CONFIRMED', 'MQTT_MESSAGE_DUPLICATE_IGNORED', 'LOCKER_ONLINE', 'LOCKER_OFFLINE',
+      // V011 and ADR-017: the effective password change that revokes the account's browser sessions.
+      'PASSWORD_CHANGED',
     ]
     for (const locale of ['fr', 'en'] as const) for (const code of admitted) expect(eventLabel(code, i18n(locale)), `${locale} ${code}`).not.toContain('·')
   })
@@ -90,6 +108,16 @@ describe('detail rows', () => {
     expect(rows(JSON.parse('{"toString":"x","__proto__":"y"}'), 'en').map((row) => row.label)).toEqual([null, null])
   })
 
+  it('reads and labels the five details of ANOMALY_RESOLVED, all top-level scalars (ACKNOWLEDGED to RESOLVED, from a recovery return)', () => {
+    const details = { type: 'EXPECTED_ASSET_NOT_OBSERVED', severity: 'HIGH', loanId: uuid(1), resolvedByOperationId: uuid(2), scanMessageId: uuid(3) }
+    const fr = rows(details, 'fr')
+    expect(fr.map((row) => row.key)).toEqual(['type', 'severity', 'loanId', 'resolvedByOperationId', 'scanMessageId'])
+    expect(fr.every((row) => row.label !== null)).toBe(true)
+    expect(rows(details, 'en').every((row) => row.label !== null)).toBe(true)
+    expect(stateLabel('RESOLVED', i18n('fr'))).toBe('Résolue')
+    expect(stateLabel('ACKNOWLEDGED', i18n('fr'))).toBe('Reconnue')
+  })
+
   it('shows values as sent, with a label only for a state, a result or an instant of the allowlist', () => {
     const [outcome, status, unknownStatus, type, reservedUntil, other] = rows(
       { outcome: 'ACCEPTED', status: 'ACTIVE', operationStatus: 'WEIRD', type: 'UNEXPECTED_ASSET_OBSERVED', reservedUntil: '2026-11-11T20:00:00Z', note: '2026-11-11T20:00:00Z' },
@@ -102,6 +130,11 @@ describe('detail rows', () => {
     expect(reservedUntil?.instant).toBe('2026-11-11T20:00:00Z')
     expect(reservedUntil?.text).toMatch(/2026/)
     expect(other).toMatchObject({ text: '2026-11-11T20:00:00Z', instant: null })
+  })
+
+  it('renders the PASSWORD_CHANGED detail as a labelled number, like the other filtered details', () => {
+    expect(rows({ revokedBrowserSessions: 2 }, 'fr')[0]).toMatchObject({ key: 'revokedBrowserSessions', label: 'Sessions navigateur révoquées', text: '2', code: null, raw: false })
+    expect(rows({ revokedBrowserSessions: 0 }, 'en')[0]).toMatchObject({ label: 'Browser sessions revoked', text: '0' })
   })
 
   it('writes booleans, null and numbers explicitly and never a structured value', () => {

@@ -12,7 +12,7 @@ export type CatalogMode = 'nominal' | 'long' | 'loading' | 'empty' | 'serviceErr
 const EVALUATED_AT = '2026-10-21T14:30:00Z'
 const MODEL_ID = '8f1f3c52-5f2a-4c43-9b6b-0d2f6c1f3a01'
 
-interface Unit {
+export interface Unit {
   id: string
   assetCode: string
   name: string
@@ -25,7 +25,7 @@ interface Unit {
   operationalStatus?: 'SERVICEABLE' | 'MAINTENANCE' | 'DAMAGED'
 }
 
-const unitId = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
+export const unitId = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
 const NOMINAL: Unit[] = [
   { id: unitId(1), assetCode: 'MM-001', name: 'Multimètre 1', manufacturer: 'Fluke', modelNumber: '117', serialNumber: null, calibrationStatus: 'VALID', dueAt: '2026-12-01T05:00:00Z', reasons: ['UNKNOWN_PHYSICAL_STATE'] },
@@ -72,7 +72,7 @@ const PAGED: Unit[] = Array.from({ length: 25 }, (_, index) => ({
   reasons: ['UNKNOWN_PHYSICAL_STATE'],
 }))
 
-function view(unit: Unit) {
+export function view(unit: Unit) {
   return {
     id: unit.id,
     assetCode: unit.assetCode,
@@ -103,7 +103,7 @@ export function unitsOf(mode: CatalogMode): Unit[] {
 }
 
 /** Answers /api/v1/admin/assets and /api/v1/admin/assets/{id} for one mode, and records the requests. */
-export async function routeCatalog(page: Page, mode: CatalogMode): Promise<string[]> {
+export async function routeCatalog(page: Pick<Page, 'route'>, mode: CatalogMode): Promise<string[]> {
   const requests: string[] = []
   // staleDossier: each unit is read once, then the service fails, so a later refresh leaves the dossier stale.
   const unitReads = new Map<string, number>()
@@ -204,7 +204,7 @@ const MODELS = [
  * Model list and catalog commands for the forms spec. Commands answer with the refusals the forms must explain:
  * a unit code already used, a model still in use, a unit on loan. Registered after routeCatalog, so it answers first.
  */
-export async function routeCatalogCommands(page: Page): Promise<string[]> {
+export async function routeCatalogCommands(page: Pick<Page, 'route'>): Promise<string[]> {
   const requests: string[] = []
   await page.route('**/api/v1/admin/asset-models**', async (route) => {
     const url = new URL(route.request().url())

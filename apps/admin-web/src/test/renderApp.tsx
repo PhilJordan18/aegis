@@ -58,6 +58,7 @@ export function renderWithProviders(
     localeController?: LocaleController
   } = {},
 ) {
+  session.connect(gateway)
   const appearance = createAppearanceController(window)
   const stopClearing = clearCacheOnSessionChange(queryClient, session)
   const result = render(

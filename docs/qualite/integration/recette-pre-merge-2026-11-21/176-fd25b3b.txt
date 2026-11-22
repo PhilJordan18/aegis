@@ -1,0 +1,16 @@
+api: services/api/target/aegis-control-0.1.0-SNAPSHOT.jar, repository at fd25b3b
+PASS T1 borrowed asset readiness 'BLOCKED', overdue loan offers RETURN; preparation 202: 'RETURN AWAITING_LOCAL_PROOF true true', loan view 'ACTIVE true -', no command before the scan
+PASS D1 same Idempotency-Key: 202 with the same operation; new key: 409 LOCKER_OPERATION_IN_PROGRESS; one RETURN operation
+PASS D1 challenge action 'RETURN', scan 202: loan RETURN_PENDING, one command, expiresAt = authorizedAt + 120 s
+PASS D1 door never opened: 'COMMAND_ACKNOWLEDGED -' 60 s after the scan, then 'EXPIRED OPERATION_EXPIRED' 0.1 s after expiresAt; loan ACTIVE, one LOAN_RETURN_REVERTED_SAFE audit, RETURN offered again
+PASS D2 asset put back, door closed: 'OBSERVATION_RECEIVED -' 20 s later, then 'ANOMALY DEVICE_OFFLINE_DURING_OPERATION' 1.0 s after expiresAt; loan RETURN_PENDING, anomaly '1 DEVICE_OFFLINE_DURING_OPERATION/OPEN', new return 409 LOAN_NOT_RETURNABLE, no action offered
+OBS  D2 a complete, coherent deposit with the hub online ends 'DEVICE_OFFLINE_DURING_OPERATION' until #51 brings the positive proof; the reason names a device loss that did not happen
+PASS D3 door left open: 'ANOMALY DOOR_NOT_CLOSED_BEFORE_EXPIRY' 0.7 s after expiresAt, loan RETURN_PENDING, anomaly '1 DOOR_NOT_CLOSED_BEFORE_EXPIRY/OPEN'
+PASS D4 uncertain refusal 'LOCK_ACTUATION_FAILED': 'COMMAND_SENT -', then 'ANOMALY INCONSISTENT_PHYSICAL_STATE' (expiresAt + 0.9 s), loan RETURN_PENDING, anomaly '1 INCONSISTENT_PHYSICAL_STATE/OPEN'
+PASS D5 safe refusal 'CLOCK_NOT_SYNCHRONIZED': 'COMMAND_SENT -' 10 s after it (loan RETURN_PENDING), then 'FAILED COMMAND_REJECTED_CLOCK_NOT_SYNCHRONIZED' 0.6 s after expiresAt; loan ACTIVE, one LOAN_RETURN_REVERTED_SAFE audit, no anomaly
+PASS D6 hub lost after the acknowledged unlock: 'ANOMALY DEVICE_OFFLINE_DURING_OPERATION' 0.9 s after expiresAt, loan RETURN_PENDING
+PASS D7 return challenge never scanned: 'EXPIRED LOCAL_PROOF_EXPIRED', loan never left ACTIVE, no command, RETURN offered again
+PASS D8 administrator return preparation refused (403)
+PASS D8 one checkout already prepared, ceiling 1: return preparation 429 LOCAL_PROOF_RATE_LIMITED, Retry-After 588
+OBS  cell projection still showed the checkout's unlocked lock up to 4.3 s after CONFIRMED (heartbeat-driven); a return prepared in that interval gets 409 COMPARTMENT_STATE_UNSAFE
+exit=0

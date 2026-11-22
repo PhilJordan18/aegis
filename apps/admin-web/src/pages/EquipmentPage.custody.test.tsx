@@ -5,7 +5,7 @@ import { createQueryClient } from '../api/serverState'
 import { App } from '../app/App'
 import { unconfiguredAuthGateway, type AuthGateway } from '../features/auth/authGateway'
 import { createSessionStore } from '../features/auth/session'
-import { adminProfile, problemBody } from '../features/auth/testFixtures'
+import { adminProfile, problemBody, sessionStubs } from '../features/auth/testFixtures'
 import type { ProblemResponse } from '../features/auth/contract'
 import { asset, fakeCatalogGateway, MM001, ok, pageOf } from '../features/catalog/testFixtures'
 import type { CustodyGateway } from '../features/custody/custodyGateway'
@@ -15,7 +15,7 @@ import { installDialogPolyfill } from '../test/dialog'
 import { installMatchMedia } from '../test/matchMedia'
 import { renderWithProviders } from '../test/renderApp'
 
-const authGateway: AuthGateway = { ...unconfiguredAuthGateway, currentProfile: async () => ({ kind: 'ok', value: adminProfile, requestId: null }) }
+const authGateway: AuthGateway = { ...unconfiguredAuthGateway, ...sessionStubs, currentProfile: async () => ({ kind: 'ok', value: adminProfile, requestId: null }) }
 const plain = (value: string | null | undefined) => (value ?? '').replace(/[\u00A0\u202F]/g, ' ')
 const problem = (status: number, code: string, extra: Partial<ProblemResponse> = {}) =>
   ({ kind: 'httpProblem', status, problem: problemBody(status, code, { traceId: 'trace-0001', ...extra }), retryAfter: null, requestId: 'req-x' }) as const

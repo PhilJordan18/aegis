@@ -1,0 +1,23 @@
+# ref c9473c4 (Backend integration build; = final PR heads except one doc line), step 1-hub-challenge
+PASS Q1 5 malformed key configurations refused at startup, no key material in the logs
+PASS Q2 202, AWAITING_LOCAL_PROOF None None, outbox 'PENDING k1 616 PENDING false' (envelope bytes: 12 nonce + ciphertext + 16 tag), no command, no token in REST
+PASS Q3 altered ciphertext: 'CANCELLED k1 purged PENDING false', never published, then EXPIRED LOCAL_PROOF_EXPIRED None, no command
+PASS Q5 screen unavailable: DISPLAY_REJECTED purged the row ('REJECTED k1 purged PENDING false'); 5 forged acknowledgements left displayedAt empty ('REJECTED k1 purged PENDING false'); 4 stored as REJECTED evidence ( 4 REJECTED:COMMAND_CORRELATION_INVALID;), 4 rejection log line(s)
+PASS Q5b a correlated ACCESS_CHALLENGE_DISPLAYED after DISPLAY_REJECTED is stored REJECTED, displayedAt empty ('REJECTED k1 purged PENDING false')
+PASS Q5c rejected challenge then EXPIRED LOCAL_PROOF_EXPIRED None, no command
+PASS Q6 same messageId replayed and a second acknowledgement: displayedAt unchanged, 1 display audit, duplicate audited
+PASS Q7 cancelled reservation: FAILED RESERVATION_CANCELLED 2026-11-21T16:00:45.258746Z, 'ACKNOWLEDGED k1 purged INVALIDATED true', no command; status messages on the hub screen: 1
+PASS Q8 new hub session: FAILED LOCKER_OFFLINE 2026-11-21T16:00:54.291779Z, 'ACKNOWLEDGED k1 purged INVALIDATED true', no command
+PASS Q4 k1 removed: startup warning names k1 and 2 unpurged row(s); challenge row 'CANCELLED k1 purged PENDING false', never published
+PASS Q9a 6 preparations accepted (window count 6), the same Idempotency-Key replayed twice returned the same operation and was not counted
+PASS Q9b 7th preparation: 429 LOCAL_PROOF_RATE_LIMITED, Retry-After 44 s
+OBS  Q9c isolation not demonstrated: the demo set has one technician and one locker, and the administrator cannot reserve (FORBIDDEN)
+PASS Q9d window boundary: 429 two seconds before the oldest preparation leaves the window, 202 one second after
+OBS  Q9e shipped defaults: aegis.display.preparation.max-per-window=${AEGIS_PREPARATION_MAX_PER_WINDOW:6} aegis.display.preparation.window=${AEGIS_PREPARATION_WINDOW:PT10M} 
+PASS Q10b administrator account: 403 FORBIDDEN, not counted; five wrong secrets: 403 403 403 403 403 -> FAILED LOCAL_PROOF_ATTEMPTS_EXHAUSTED 2026-11-21T16:03:23.390627Z, challenge 'INVALIDATED 5'; the right secret afterwards: 409 LOCAL_PROOF_INVALIDATED, no command
+OBS  Q10d another technician (404 OPERATION_NOT_FOUND) not demonstrated: the demo set has one technician
+PASS Q10a 4 concurrent scans: 202 409 409 409 , exactly 1 command, AUTHORIZED with expiresAt = authorizedAt + 120 s; wrong challengeId 409; replay after consumption 409 LOCAL_PROOF_ALREADY_USED
+PASS Q10c the scanned token is absent from the API and simulator logs, REST bodies and a data dump
+PASS INV no loan, 1 command(s) for 1 authorized operation(s), no key value in any log
+QA HUB CHALLENGE: all checks passed
+exit=0

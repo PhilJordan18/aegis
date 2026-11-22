@@ -1,5 +1,8 @@
 import { useId, useLayoutEffect, useRef, type ReactNode, type Ref } from 'react'
+import { Link } from '../../app/Link'
 import { useI18n } from '../../i18n/useI18n'
+import { operationAuditHref } from '../audit/operationAuditHref'
+import { transactionHref } from '../transactions/transactionHref'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
 import { StatusChip } from '../../ui/StatusChip'
@@ -234,6 +237,20 @@ function DossierBody({ anomaly, detail, loading, failure, retrying, titleId, onR
               </dd>
             </div>
           </dl>
+        )}
+        {anomaly.lockerOperationId !== null && (
+          <ul className="ag-an-links">
+            <li>
+              <Link className="ag-link" to={transactionHref({ view: 'operations', selectedId: anomaly.lockerOperationId })}>
+                {t.openOperation}
+              </Link>
+            </li>
+            <li>
+              <Link className="ag-link" to={operationAuditHref(anomaly.lockerOperationId)}>
+                {t.auditOfOperation}
+              </Link>
+            </li>
+          </ul>
         )}
       </Section>
 

@@ -3,7 +3,9 @@
 **Cours :** 420-5X7-SO — Écosystème connecté  
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de révision :** 16 septembre 2026
-**Mise à jour ciblée :** 23 septembre 2026 — statut des paramètres QR et de RS-485; SQL inchangé.
+**Mise à jour ciblée :** 23 septembre 2026 — statut des paramètres QR et de RS-485; SQL inchangé.  
+**Mise à jour ciblée :** 21 novembre 2026 — ADR-018 (#179), migration `V012` : `users.credential_version` et son déclencheur de garde (§4.1).  
+**Mise à jour ciblée :** 21 novembre 2026 — ADR-017 (#178), migration `V011` : motif `PASSWORD_CHANGED`, révocation définitive et purge à 30 jours de `browser_sessions` (§4.2); type d’audit `PASSWORD_CHANGED` (§4.9).
 **Version :** 1.2 — contrôle local QR et étoile
 
 ---
@@ -145,6 +147,8 @@ SET search_path TO aegis, public;
 
 Compte humain authentifiable. `archived_at` ne remplace pas `status` : un compte peut être désactivé sans être archivé.
 
+`credential_version` (ADR-018, migration `V012`) est copiée dans le claim `cv` de chaque jeton d’accès; un jeton dont `cv` diffère est refusé. Seul un changement réel du mot de passe l’incrémente, dans la transaction de l’ADR-017. Le déclencheur `tr_users_credential_version_guarded` refuse une version abaissée, qui rendrait valides des jetons révoqués, et un nouveau `password_hash` sans nouvelle version, qui laisserait valides les jetons antérieurs.
+
 ```sql
 CREATE TABLE users (
     id                    uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
@@ -156,6 +160,7 @@ CREATE TABLE users (
     status                text NOT NULL DEFAULT 'ACTIVE',
     created_at            timestamptz NOT NULL DEFAULT now(),
     archived_at           timestamptz NULL,
+    credential_version    integer NOT NULL DEFAULT 0,  -- V012
 
     CONSTRAINT ck_users_display_name_non_blank
         CHECK (btrim(display_name) <> ''),
@@ -170,8 +175,68 @@ CREATE TABLE users (
     CONSTRAINT ck_users_status
         CHECK (status IN ('ACTIVE', 'DISABLED')),
     CONSTRAINT ck_users_archived_disabled
-        CHECK (archived_at IS NULL OR status = 'DISABLED')
+        CHECK (archived_at IS NULL OR status = 'DISABLED'),
+    CONSTRAINT ck_users_credential_version_non_negative  -- V012
+        CHECK (credential_version >= 0)
 );
+```
+
+#### `browser_sessions`
+
+Session navigateur révocable du Manager (ADR-016, migration `V010`; ADR-017, migration `V011`).
+
+- Seule l’empreinte SHA-256 du cookie est stockée.
+- La fin absolue, d’au plus 12 heures, ne bouge jamais.
+- Un changement effectif du mot de passe révoque toutes les sessions ouvertes du compte (`PASSWORD_CHANGED`), dans sa transaction.
+- Une révocation est définitive : un déclencheur refuse toute modification d’une ligne révoquée.
+- Une session ouverte (ni révoquée ni échue) n’est jamais supprimée : un second déclencheur refuse sa suppression.
+- Les lignes sont des créances, non un historique de possession. Une purge planifiée supprime une ligne quand sa fin, `LEAST(revoked_at, expires_at)`, est strictement antérieure à `maintenant − 30 jours`. La trace durable d’un changement de mot de passe est l’événement d’audit `PASSWORD_CHANGED`.
+
+```sql
+CREATE TABLE browser_sessions (
+    id                 uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
+    user_id            uuid NOT NULL,
+    token_hash         bytea NOT NULL,
+    role               text NOT NULL,
+    created_at         timestamptz NOT NULL,
+    expires_at         timestamptz NOT NULL,
+    last_refreshed_at  timestamptz NULL,
+    revoked_at         timestamptz NULL,
+    revocation_reason  text NULL,
+
+    CONSTRAINT fk_browser_sessions_user
+        FOREIGN KEY (user_id) REFERENCES users (id),
+    CONSTRAINT uq_browser_sessions_token_hash
+        UNIQUE (token_hash),
+    CONSTRAINT ck_browser_sessions_token_hash_length
+        CHECK (octet_length(token_hash) = 32),
+    CONSTRAINT ck_browser_sessions_role
+        CHECK (role IN ('ADMIN', 'TECHNICIAN')),
+    CONSTRAINT ck_browser_sessions_lifetime
+        CHECK (expires_at > created_at AND expires_at <= created_at + interval '12 hours'),
+    CONSTRAINT ck_browser_sessions_revocation
+        CHECK ((revoked_at IS NULL) = (revocation_reason IS NULL)),
+    CONSTRAINT ck_browser_sessions_revocation_reason
+        CHECK (revocation_reason IS NULL
+            OR revocation_reason IN ('SIGNED_OUT', 'ACCOUNT_CHANGED', 'PASSWORD_CHANGED'))
+);
+
+CREATE INDEX ix_browser_sessions_user ON browser_sessions (user_id);
+CREATE INDEX ix_browser_sessions_ended ON browser_sessions ((LEAST(revoked_at, expires_at)));
+
+-- V011 : une session révoquée est définitive.
+CREATE TRIGGER tr_browser_sessions_revoked_final
+    BEFORE UPDATE ON browser_sessions
+    FOR EACH ROW
+    WHEN (OLD.revoked_at IS NOT NULL)
+    EXECUTE FUNCTION refuse_revoked_browser_session_change();
+
+-- V011 : une session ouverte n’est jamais supprimée.
+CREATE TRIGGER tr_browser_sessions_open_kept
+    BEFORE DELETE ON browser_sessions
+    FOR EACH ROW
+    WHEN (OLD.revoked_at IS NULL AND OLD.expires_at > now())
+    EXECUTE FUNCTION refuse_open_browser_session_delete();
 ```
 
 ### 4.3 Catalogue
@@ -1158,7 +1223,7 @@ CREATE TABLE audit_events (
         FOREIGN KEY (physical_observation_id) REFERENCES physical_observations (id),
     CONSTRAINT ck_audit_events_type
         CHECK (event_type IN (
-            'AUTHENTICATION_SUCCEEDED', 'AUTHENTICATION_REJECTED',
+            'AUTHENTICATION_SUCCEEDED', 'AUTHENTICATION_REJECTED', 'PASSWORD_CHANGED',
             'ASSET_CREATED', 'ASSET_UPDATED', 'ASSET_ARCHIVED',
             'ASSET_IDENTIFIER_ASSIGNED', 'ASSET_PLACEMENT_CHANGED',
             'SCHEDULE_UPDATED', 'READINESS_EVALUATED',

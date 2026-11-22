@@ -43,8 +43,10 @@ export type GatewayFailure =
  * adapter is `httpAuthGateway.ts`; the design-review preview has its own.
  *
  * Every adapter must:
- * - send `POST /api/v1/auth/login` with a JSON `LoginRequest` and read a
+ * - send `POST /api/v1/auth/login` with a JSON `BrowserLoginRequest` and read a
  *   `LoginResponse` (09 §10.2);
+ * - send the three browser-session calls (login, refresh, revoke) with
+ *   `credentials: 'same-origin'` and every other call with `'omit'`;
  * - send `GET /api/v1/auth/me` with `Authorization: Bearer <token>` (09 §4.3, §10.3);
  * - parse `application/problem+json` bodies into `ProblemResponse` (09 §7), and
  *   return `problem: null` when a body is missing or malformed instead of guessing;
@@ -56,10 +58,19 @@ export type GatewayFailure =
 export interface AuthGateway {
   signIn(request: LoginRequest, signal?: AbortSignal): Promise<GatewayResult<LoginResponse>>
   currentProfile(accessToken: string, signal?: AbortSignal): Promise<GatewayResult<UserProfile>>
+  /**
+   * `POST /api/v1/auth/session/refresh` (09 §10.4, ADR-016): no body, the HttpOnly cookie travels
+   * by itself. 200 has the shape of the login response; 401 AUTH_SESSION_INVALID ends the session.
+   */
+  refreshSession(signal?: AbortSignal): Promise<GatewayResult<LoginResponse>>
+  /** `POST /api/v1/auth/session/revoke` (09 §10.5): 204, idempotent, also without a cookie. */
+  revokeSession(signal?: AbortSignal): Promise<GatewayResult<true>>
 }
 
 /** Context default when no adapter is provided: every call honestly fails as unreachable. */
 export const unconfiguredAuthGateway: AuthGateway = {
   signIn: async () => ({ kind: 'network', reason: 'notConfigured' }),
   currentProfile: async () => ({ kind: 'network', reason: 'notConfigured' }),
+  refreshSession: async () => ({ kind: 'network', reason: 'notConfigured' }),
+  revokeSession: async () => ({ kind: 'network', reason: 'notConfigured' }),
 }

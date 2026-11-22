@@ -44,7 +44,7 @@ afterEach(() => {
 })
 
 describe('httpAuthGateway — request shape', () => {
-  it('posts exactly the documented login body, same origin, without cookies', async () => {
+  it('posts exactly the documented login body with browserSession, sending the session cookie (same-origin)', async () => {
     const { gateway, fetchMock } = gatewayWith(async () => json(200, loginBody()))
     await gateway.signIn({ email: 'admin@aegis.test', password: PASSWORD })
 
@@ -52,8 +52,8 @@ describe('httpAuthGateway — request shape', () => {
     const [url, init] = fetchMock.mock.calls[0] ?? []
     expect(url).toBe('/api/v1/auth/login')
     expect(init?.method).toBe('POST')
-    expect(init?.credentials).toBe('omit')
-    expect(JSON.parse(String(init?.body))).toEqual({ email: 'admin@aegis.test', password: PASSWORD })
+    expect(init?.credentials).toBe('same-origin')
+    expect(JSON.parse(String(init?.body))).toEqual({ email: 'admin@aegis.test', password: PASSWORD, browserSession: true })
     expect(init?.headers).toEqual({
       Accept: 'application/json, application/problem+json',
       'Content-Type': 'application/json',
@@ -69,8 +69,44 @@ describe('httpAuthGateway — request shape', () => {
     const [url, init] = fetchMock.mock.calls[0] ?? []
     expect(url).toBe('/api/v1/auth/me')
     expect(init?.method).toBe('GET')
+    expect(init?.credentials).toBe('omit')
     expect(init?.body).toBeUndefined()
     expect(init?.headers).toMatchObject({ Authorization: `Bearer ${TOKEN}`, 'X-Request-Id': REQUEST_ID })
+  })
+
+  it('refreshes with no body and no token, sending the session cookie (same-origin)', async () => {
+    const { gateway, fetchMock } = gatewayWith(async () => json(200, loginBody()))
+    const result = await gateway.refreshSession()
+
+    expect(result).toEqual({ kind: 'ok', value: loginBody(), requestId: SERVER_REQUEST_ID })
+    const [url, init] = fetchMock.mock.calls[0] ?? []
+    expect(url).toBe('/api/v1/auth/session/refresh')
+    expect(init?.method).toBe('POST')
+    expect(init?.credentials).toBe('same-origin')
+    expect(init?.body).toBeUndefined()
+    expect(init?.headers).toEqual({ Accept: 'application/json, application/problem+json', 'X-Request-Id': REQUEST_ID })
+  })
+
+  it('revokes with no body and no token, sending the session cookie (same-origin)', async () => {
+    const { gateway, fetchMock } = gatewayWith(async () => new Response(null, { status: 204, headers: { 'X-Request-Id': SERVER_REQUEST_ID } }))
+    const result = await gateway.revokeSession()
+
+    expect(result).toEqual({ kind: 'ok', value: true, requestId: SERVER_REQUEST_ID })
+    const [url, init] = fetchMock.mock.calls[0] ?? []
+    expect(url).toBe('/api/v1/auth/session/revoke')
+    expect(init?.method).toBe('POST')
+    expect(init?.credentials).toBe('same-origin')
+    expect(init?.body).toBeUndefined()
+    expect(init?.headers).toEqual({ Accept: 'application/json, application/problem+json', 'X-Request-Id': REQUEST_ID })
+  })
+
+  it('keeps credentials omitted on every other route, whatever the caller sends', async () => {
+    const { createHttpClient } = await import('../../api/http')
+    const fetchMock = vi.fn<typeof fetch>(async () => json(200, {}))
+    const http = createHttpClient({ fetch: fetchMock as typeof fetch, createRequestId: () => REQUEST_ID })
+    await http.send({ method: 'GET', path: '/admin/assets', accessToken: TOKEN, parse: () => true })
+    await http.send({ method: 'PUT', path: '/admin/assets/1', accessToken: TOKEN, body: {}, parse: () => true })
+    expect(fetchMock.mock.calls.map(([, init]) => init?.credentials)).toEqual(['omit', 'omit'])
   })
 
   it('generates RFC 9562 version 4 request ids without crypto.randomUUID', () => {
@@ -212,5 +248,57 @@ describe('httpAuthGateway — profile outcomes', () => {
     }
     const { result } = await signInState(problem(401, 'AUTH_INVALID_CREDENTIALS'))
     expect(JSON.stringify(result)).not.toContain(PASSWORD)
+  })
+})
+
+describe('httpAuthGateway — browser session responses (ADR-016, 09 §10.4, §10.5)', () => {
+  it('refresh 200 with a shortened lifetime near the end of the session is kept as sent', async () => {
+    const { gateway } = gatewayWith(async () => json(200, { ...loginBody(), expiresIn: 1200 }))
+    const result = await gateway.refreshSession()
+    expect(result).toMatchObject({ kind: 'ok', value: { expiresIn: 1200, accessToken: TOKEN } })
+  })
+
+  it('refresh 401 AUTH_SESSION_INVALID is an http problem carrying the stable code', async () => {
+    const { gateway } = gatewayWith(async () => problem(401, 'AUTH_SESSION_INVALID'))
+    const result = await gateway.refreshSession()
+    expect(result).toMatchObject({ kind: 'httpProblem', status: 401, problem: { code: 'AUTH_SESSION_INVALID' } })
+  })
+
+  it('refresh 403 FORBIDDEN (origin not allowed) is an http problem', async () => {
+    const { gateway } = gatewayWith(async () => problem(403, 'FORBIDDEN'))
+    expect(await gateway.refreshSession()).toMatchObject({ kind: 'httpProblem', status: 403, problem: { code: 'FORBIDDEN' } })
+  })
+
+  it.each([
+    ['a body that is not a login response', json(200, { accessToken: TOKEN })],
+    ['a non-JSON body', new Response('<html>', { status: 200, headers: { 'Content-Type': 'text/html' } })],
+    ['an empty 200', new Response(null, { status: 200 })],
+  ])('refresh answered with %s is an invalid response, never a session', async (_name, response) => {
+    const { gateway } = gatewayWith(async () => response)
+    expect(await gateway.refreshSession()).toMatchObject({ kind: 'invalidResponse', status: 200 })
+  })
+
+  it('refresh reports a network failure and a timeout', async () => {
+    const offline = gatewayWith(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    expect(await offline.gateway.refreshSession()).toEqual({ kind: 'network', reason: 'offline' })
+
+    vi.useFakeTimers()
+    const hanging = gatewayWith(
+      (_input, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+        }),
+      50,
+    )
+    const pending = hanging.gateway.refreshSession()
+    await vi.advanceTimersByTimeAsync(50)
+    expect(await pending).toEqual({ kind: 'network', reason: 'timeout' })
+  })
+
+  it('revoke 403 and revoke 5xx are failures, not confirmations', async () => {
+    expect(await gatewayWith(async () => problem(403, 'FORBIDDEN')).gateway.revokeSession()).toMatchObject({ kind: 'httpProblem', status: 403 })
+    expect(await gatewayWith(async () => problem(503, 'INTERNAL_ERROR')).gateway.revokeSession()).toMatchObject({ kind: 'httpProblem', status: 503 })
   })
 })
