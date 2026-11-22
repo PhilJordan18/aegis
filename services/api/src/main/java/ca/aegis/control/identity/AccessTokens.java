@@ -22,7 +22,8 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Component;
 
 /**
- * Issues and validates the P0 access token (ADR-007): an HS256 JWT valid for 60 minutes, without refresh token.
+ * Issues and validates the P0 access token (ADR-007): an HS256 JWT valid for 60 minutes. ADR-016 adds no refresh token: a
+ * browser session may only issue a new token that ends no later than the session itself.
  * Claim mapping: {@code sub} = account id, {@code jti} = random token id, {@code iat}/{@code exp}, {@code iss},
  * {@code aud}, plus {@code role} and {@code maximumAccessLevel} as issued. Those two claims describe the account at
  * login time only; protected requests re-read the account and never grant a right from them.
@@ -45,8 +46,17 @@ class AccessTokens {
     }
 
     IssuedToken issue(CurrentAccount account) {
+        return issue(account, Instant.MAX);
+    }
+
+    /** A token that expires after {@link #LIFETIME} or at {@code notAfter}, whichever comes first (ADR-016). */
+    IssuedToken issue(CurrentAccount account, Instant notAfter) {
         Instant issuedAt = clock.instant().truncatedTo(ChronoUnit.SECONDS);
-        Instant expiresAt = issuedAt.plus(LIFETIME);
+        Instant full = issuedAt.plus(LIFETIME);
+        Instant expiresAt = notAfter.isBefore(full) ? notAfter : full;
+        if (!expiresAt.isAfter(issuedAt)) {
+            throw new IllegalArgumentException("A token must outlive its issue instant");
+        }
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer(properties.issuer())
                 .audience(List.of(properties.audience()))

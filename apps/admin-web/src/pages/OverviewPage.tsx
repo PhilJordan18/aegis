@@ -1,9 +1,8 @@
 import { PageHeading } from '../app/PageHeading'
-import { useRouter } from '../app/router'
 import { pathOf } from '../app/routes'
 import { ManagerShell } from '../app/shell/ManagerShell'
 import type { UserProfile } from '../features/auth/contract'
-import { useSessionStore } from '../features/auth/session'
+import { useSignOut } from '../features/auth/useSignOut'
 import { useCurrentAdminProfile } from '../features/auth/useCurrentAdminProfile'
 import { LAB_TIME_ZONE } from '../features/catalog/assetPresentation'
 import { useScrollable } from '../features/lockers/useScrollable'
@@ -34,8 +33,6 @@ export function OverviewPage({ sessionProfile }: { readonly sessionProfile: User
   const i18n = useI18n()
   const { m } = i18n
   const t = m.overview
-  const sessionStore = useSessionStore()
-  const router = useRouter()
   const currentProfile = useCurrentAdminProfile()
   const profile = currentProfile.data ?? sessionProfile
 
@@ -72,10 +69,7 @@ export function OverviewPage({ sessionProfile }: { readonly sessionProfile: User
 
   const [scrollRef, scrollable] = useScrollable<HTMLDivElement>(reads.map((read) => read.kind).join())
 
-  function signOut() {
-    sessionStore.signOut()
-    router.navigate(pathOf('signIn'))
-  }
+  const signOut = useSignOut()
 
   const refetchFailed = (queries: readonly { isError: boolean; refetch: () => unknown }[]) => () => queries.forEach((query) => query.isError && void query.refetch())
   const retryAll = () => {

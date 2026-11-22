@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import { Link } from '../../app/Link'
+import { returnPathFromSearch } from '../../app/returnPath'
 import { useRouter } from '../../app/router'
 import { pathOf } from '../../app/routes'
 import { usePreviewControls, useSignInPreviewAutoSubmit } from '../../preview/PreviewContext'
@@ -37,7 +38,7 @@ interface RoleScreen {
 }
 
 interface SignInPageProps {
-  /** Where an administrator goes after a confirmed sign-in. */
+  /** Where an administrator goes after a confirmed sign-in, unless a valid return path asks for another page. */
   readonly afterSignInPath: string
 }
 
@@ -65,6 +66,9 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
 
   const inFlight = useRef<AbortController | null>(null)
   const mounted = useRef(false)
+  const signedInHere = useRef(false)
+  // True while the boot refresh has not answered and this page is up: its success then leaves for the requested page.
+  const awaitingRestore = useRef(session.status === 'restoring')
   const pendingFocus = useRef<FocusTarget | null>(
     initialArrival === 'sessionExpired' || initialArrival === 'sessionInvalid' ? 'password' : 'email',
   )
@@ -93,6 +97,17 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
       }, 0)
     }
   }, [router])
+
+  // A cookie-backed session restored behind this page (reload on /connexion): go where the user was headed.
+  useEffect(() => {
+    if (session.status === 'restoring') {
+      awaitingRestore.current = true
+      return
+    }
+    const restored = awaitingRestore.current && session.status === 'authenticated' && !signedInHere.current
+    awaitingRestore.current = false
+    if (restored) router.navigate(returnPathFromSearch(router.getSnapshot().search) ?? afterSignInPath, { replace: true })
+  }, [session.status, router, afterSignInPath])
 
   useLayoutEffect(() => {
     const target = pendingFocus.current
@@ -173,11 +188,15 @@ export function SignInPage({ afterSignInPath }: SignInPageProps) {
       setStatusKey(null)
       switch (next.kind) {
         case 'signedIn':
+          signedInHere.current = true
           sessionStore.start({ accessToken: next.accessToken, expiresAt: next.expiresAt, expiresIn: next.expiresIn, profile: next.profile })
-          router.navigate(afterSignInPath)
+          // Only a same-origin path to a protected page is honoured (returnPath.ts); anything else is the default page.
+          router.navigate(returnPathFromSearch(router.getSnapshot().search) ?? afterSignInPath)
           return
         case 'unauthorizedRole':
-          // U6: the token only ever existed in the discarded `result`; nothing is stored or requested.
+          // U6: the token only ever existed in the discarded `result`; nothing is stored and no data requested.
+          // The login also set the browser-session cookie: close that session so a reload cannot restore it.
+          void gateway.revokeSession()
           setRoleScreen({ role: next.role, email: values.email.trim() })
           setEmail('')
           setPassword('')

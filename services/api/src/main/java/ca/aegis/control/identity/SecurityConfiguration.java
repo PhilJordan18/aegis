@@ -31,7 +31,7 @@ import ca.aegis.control.shared.web.Problems;
 
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
-@EnableConfigurationProperties({JwtProperties.class, DemoAccountProperties.class})
+@EnableConfigurationProperties({JwtProperties.class, DemoAccountProperties.class, BrowserSessionProperties.class})
 class SecurityConfiguration {
 
     private static final RequestMatcher PUBLIC_ROUTES = ApiRoutes.publicRoutes();
@@ -77,7 +77,11 @@ class SecurityConfiguration {
         return http.build();
     }
 
-    /** Clients send bearer tokens explicitly; no cookie, session or browser flow can carry an identity. */
+    /**
+     * Clients send bearer tokens explicitly; no servlet session or browser flow can carry an identity. The one cookie
+     * of ADR-016 is read only by the browser session routes, which check the Origin themselves, so CSRF tokens stay
+     * off.
+     */
     private static HttpSecurity statelessApi(HttpSecurity http, SecurityProblemHandlers handlers) throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)

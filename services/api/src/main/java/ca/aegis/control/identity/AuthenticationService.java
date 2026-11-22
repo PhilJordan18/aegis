@@ -24,7 +24,19 @@ class AuthenticationService {
         this.unknownAccountHash = passwordEncoder.encode(UUID.randomUUID().toString());
     }
 
-    LoginResponse login(LoginRequest request, String clientAddress) {
+    /**
+     * A successful sign-in: the response body, the account it was issued for, and the password hash that was
+     * verified, which a browser session requires to be still current when it opens (ADR-017).
+     */
+    record SignedIn(LoginResponse response, CurrentAccount account, String verifiedPasswordHash) {
+
+        @Override
+        public String toString() {
+            return "SignedIn[account=%s]".formatted(account.id());
+        }
+    }
+
+    SignedIn login(LoginRequest request, String clientAddress) {
         attempts.acquire(clientAddress, request.email());
         Optional<Account> candidate = accounts.findByEmail(request.email());
         // A hash is always checked so that response time does not reveal which addresses have an account.
@@ -34,6 +46,7 @@ class AuthenticationService {
                 .filter(existing -> passwordMatches && existing.canAuthenticate())
                 .orElseThrow(InvalidCredentialsException::new);
         CurrentAccount current = CurrentAccount.of(account);
-        return LoginResponse.of(accessTokens.issue(current), current);
+        return new SignedIn(LoginResponse.of(accessTokens.issue(current), current), current,
+                account.passwordHash());
     }
 }
