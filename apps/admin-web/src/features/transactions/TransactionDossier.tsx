@@ -10,12 +10,15 @@ import { UNRECOGNIZED } from '../catalog/contract'
 import { StaleNotice } from '../catalog/StaleNotice'
 import { useAsset } from '../catalog/useCatalogQueries'
 import type { AssetSummary, LoanView, LockerOperationView, ReservationView, UserSummary } from './contract'
+import { operationAuditHref } from '../audit/operationAuditHref'
+import { LinkedAnomaly } from './LinkedAnomaly'
 import { Timeline, type TimelineEntry } from './Timeline'
 import { TransactionAlert } from './TransactionAlert'
 import type { TransactionFailure } from './transactionFailure'
 import { NO_FILTERS, transactionHref, type TransactionView } from './transactionHref'
 import { isShownOverdue, isTerminalOperation, lateChip, loanChip, operationChip, operationTypeLabel, reservationChip, transactionTimes, type TransactionTimes } from './transactionPresentation'
 import type { TransactionRecord } from './useTransactionQueries'
+import { CurrentAttempt } from './CurrentAttempt'
 
 interface TransactionDossierProps {
   readonly view: TransactionView
@@ -243,9 +246,14 @@ function ReservationBody({ reservation: r, titleId, i18n, times }: BodyProps & {
       <Section title={t.secOperations}>
         <div className="ag-links">
           <OperationLink label={t.factCurrentOperation} id={r.currentOperationId} empty={r.status === 'ACTIVE' ? t.noCurrentOperation : t.closedNoOperation} i18n={i18n} />
+          <CurrentAttempt operationId={r.currentOperationId} activeReservedUntil={r.status === 'ACTIVE' ? r.reservedUntil : null} i18n={i18n} times={times} />
           {r.status === 'FULFILLED' && (
             <LinkRow label={t.loanLink}>
               {t.loanLinkMissing}{' '}
+              <Link className="ag-link" to={transactionHref({ view: 'loans', filters: { ...NO_FILTERS, assetId: r.asset.id } })}>
+                {t.loansOfAsset}
+              </Link>
+              {' · '}
               <Link className="ag-link" to={transactionHref({ view: 'operations', filters: { ...NO_FILTERS, assetId: r.asset.id } })}>
                 {t.operationsOfAsset}
               </Link>
@@ -301,6 +309,7 @@ function LoanBody({ loan: l, titleId, i18n, times }: BodyProps & { readonly loan
           <OperationLink label={t.factCheckoutOperation} id={l.checkoutOperationId} empty="" i18n={i18n} />
           <OperationLink label={t.factReturnOperation} id={l.returnOperationId} empty={t.noReturnOperation} i18n={i18n} />
           <OperationLink label={t.factCurrentOperation} id={l.currentOperationId} empty={t.noCurrentOperation} i18n={i18n} />
+          <CurrentAttempt operationId={l.currentOperationId} activeReservedUntil={null} i18n={i18n} times={times} />
         </div>
       </Section>
     </>
@@ -423,7 +432,12 @@ function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { rea
               t.none
             )}
           </LinkRow>
-          <LinkRow label={t.linkedAnomaly}>{o.anomalyId !== null ? <IdText id={o.anomalyId} /> : t.noLinkedAnomaly}</LinkRow>
+          <LinkRow label={t.linkedAnomaly}>{o.anomalyId !== null ? <LinkedAnomaly anomalyId={o.anomalyId} i18n={i18n} full /> : t.noLinkedAnomaly}</LinkRow>
+          <LinkRow label={t.linkedAudit}>
+            <Link className="ag-link" to={operationAuditHref(o.id)}>
+              {t.auditOfOperation}
+            </Link>
+          </LinkRow>
         </div>
       </Section>
       <Section title={t.secTechnical}>

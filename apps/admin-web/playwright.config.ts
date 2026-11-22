@@ -22,6 +22,8 @@ const reducedMotion = process.env.AEGIS_MOTION === 'no-preference' ? 'no-prefere
  *   AEGIS_FORMS_CAPTURE=1 (npm run capture:forms) it writes the review batch to docs/design/manager-forms/captures/.
  * - `follow` (npm run test:follow): ADR-006 follow-up of the open operation dossier on a routed fake: no click, bounded
  *   request count, pause while hidden, stop at a terminal status; writes no image.
+ * - `links` (npm run test:links): the links between custody dossiers (R2, R3) and the inline attempt (R4) on a routed fake:
+ *   each link is clicked, its address and the request it sends are checked; writes no image.
  * All start their own Vite dev server, where the design-review preview is enabled.
  */
 export default defineConfig({
@@ -47,6 +49,7 @@ export default defineConfig({
     { name: 'integration', testMatch: 'integration.spec.ts' },
     { name: 'forms', testMatch: 'forms.spec.ts' },
     { name: 'follow', testMatch: 'follow.spec.ts' },
+    { name: 'links', testMatch: 'links.spec.ts' },
   ],
   webServer: {
     command: `npm run dev -- --host 127.0.0.1 --port ${PORT} --strictPort`,
