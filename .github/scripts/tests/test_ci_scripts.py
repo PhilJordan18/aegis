@@ -478,6 +478,18 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertIn("timeout-minutes: 8", step)
         self.assertIn("xcrun simctl bootstatus", step)
 
+    def test_ios_job_is_bounded_at_45_minutes_without_retries(self):
+        ios = self.text[self.text.index("  ios:\n"):self.text.index("  scripts:\n")]
+        job = ios[:ios.index("    steps:\n")]
+        # The job limit is a capacity bound (#67): 30 min cancelled complete
+        # green runs of about 312 tests. It must not hide a retry or a rerun.
+        self.assertIn("    timeout-minutes: 45\n", job)
+        self.assertNotIn("timeout-minutes: 30", ios)
+        recipe = (ROOT / "apps/ios/scripts/ios-test.sh").read_text()
+        for forbidden in ("retry", "-test-iterations", "-run-tests-until-failure"):
+            self.assertNotIn(forbidden, ios)
+            self.assertNotIn(forbidden, recipe)
+
     def test_api_tests_start_the_development_broker_first(self):
         api = self.text.split("\n  api:\n", 1)[1].split("\n  web:\n", 1)[0]
         broker = api.index("up -d --wait mosquitto")

@@ -282,6 +282,34 @@ seule fois, et seulement sur l'erreur -56.
 C'est à la session iOS de la rendre visible dans le résumé, de la justifier et de la
 traiter.
 
+## 8. Limite du job portée à 45 minutes (22 novembre, branche `67-ci-ios-job-timeout`)
+
+La limite de 30 minutes notée en section 6 ne tient plus. Avec les branches #46 et #50,
+la suite `standalone` compte environ 312 tests, et des runs complets et verts étaient
+annulés.
+
+| Tête | Démarrage du simulateur | Étape « iOS recipe » | Job | Issue |
+|---|---|---|---|---|
+| #198 `f65f37b` | 2 min 25 s | **26 min 35 s** (312/312 réussis, chaînes 271/271) | 30 min 08 s | annulé à la limite |
+| #199 `aee89f8` | 2 min 15 s | annulée après 27 min 06 s | 32 min 16 s | bundle non finalisé, aucun décompte |
+| #199 `a3c0fac` | 1 min 30 s | annulée après 27 min 33 s | — | aucun décompte |
+| #198 `d15aa52` | 1 min 37 s | annulée après 27 min 51 s | — | aucun décompte |
+
+Décision de Philippe (#67, commentaire 7083109682) : porter `timeout-minutes` du job à
+**45**, comme correctif de capacité, et ne rien changer d'autre :
+
+- même sélection de tests, mêmes assertions, même couverture d'accessibilité ;
+- aucune relance ni répétition de test, et aucun délai d'audit allongé.
+
+Le test `test_ios_job_is_bounded_at_45_minutes_without_retries` vérifie trois choses :
+- la limite du job est bien de 45 ;
+- l'ancienne valeur de 30 a disparu ;
+- ni le job ni `apps/ios/scripts/ios-test.sh` ne contiennent `retry`, `-test-iterations`
+  ou `-run-tests-until-failure`.
+
+Si 45 minutes expirent encore, il ne faut pas relever la limite une nouvelle fois. Il
+faut proposer un découpage mesuré de la recette à partir des durées de chaque phase.
+
 ## Limites
 
 - La fenêtre d'audit est déduite des activités voisines ; XCTest n'horodate pas l'audit
