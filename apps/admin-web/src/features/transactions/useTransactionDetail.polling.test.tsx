@@ -170,24 +170,37 @@ describe('the open operation dossier follows the server (ADR-006)', () => {
     expect(gateway.getLockerOperation).toHaveBeenCalledTimes(9)
   })
 
-  it('stops at a terminal status, then reads the linked reservation, loan, equipment and operation lists once', async () => {
+  it('stops at a terminal status, then marks every read that shows the change stale, once', async () => {
     const { gateway } = scriptedGateway([ok(operation('DOOR_OPENED')), ok(operation('CONFIRMED'))])
     const { wrapper, client } = setup(gateway)
-    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    // What other screens have read and still hold: the units, the three lists, the Vue d'ensemble blocks, the anomalies.
+    const held = {
+      assetList: queryKeys.catalog.assetList({ page: 0, size: 20, sort: 'assetCode,asc' }),
+      assetDossier: queryKeys.catalog.asset(ASSET_ID),
+      reservationList: queryKeys.transactions.reservationList({ page: 0, size: 20 }),
+      reservation: queryKeys.transactions.reservation(RESERVATION_ID),
+      loanList: queryKeys.transactions.loanList({ page: 0, size: 20 }),
+      loan: queryKeys.transactions.loan(LOAN_ID),
+      operationList: queryKeys.transactions.operationList({ page: 0, size: 20 }),
+      overviewReservations: queryKeys.overview.reservations({ status: 'ACTIVE', page: 0, size: 5 }),
+      overviewLoans: queryKeys.overview.loans({ status: 'ACTIVE', page: 0, size: 100 }),
+      overviewOperations: queryKeys.overview.operations({ status: 'DOOR_OPENED', page: 0, size: 100 }),
+      anomalies: queryKeys.anomalies.list({ status: 'OPEN', page: 0, size: 100 }),
+    }
+    for (const key of Object.values(held)) client.setQueryData(key, { held: true })
+    const stale = () => Object.entries(held).filter(([, key]) => client.getQueryState(key)?.isInvalidated).map(([name]) => name)
     renderDetail(wrapper)
     await tick(0)
-    expect(invalidate).not.toHaveBeenCalled()
+    expect(stale()).toEqual([])
     await tick(1_000)
     expect(gateway.getLockerOperation).toHaveBeenCalledTimes(2)
-    expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
-      queryKeys.catalog.asset(ASSET_ID),
-      queryKeys.transactions.reservation(RESERVATION_ID),
-      queryKeys.transactions.loan(LOAN_ID),
-      queryKeys.transactions.operationLists,
-    ])
+    // Before #197 only the dossier of the unit and the operation lists were marked: a unit list, the reservation and
+    // loan lists and every Vue d'ensemble count kept the state from before the checkout until their 30 s ran out.
+    expect(stale()).toEqual(Object.keys(held))
+    // The followed operation is not asked a third time by the change it just delivered.
+    expect(client.getQueryState(queryKeys.transactions.operation(OPERATION_ID))?.isInvalidated).toBe(false)
     await tick(60_000)
     expect(gateway.getLockerOperation).toHaveBeenCalledTimes(2)
-    expect(invalidate).toHaveBeenCalledTimes(4)
   })
 
   it('does not refresh anything for an operation that was already terminal when opened', async () => {

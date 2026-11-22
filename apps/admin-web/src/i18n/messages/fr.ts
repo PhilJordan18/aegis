@@ -365,6 +365,7 @@ export const fr = {
     selectedOverline: 'Exemplaire sélectionné',
     listTitle: ({ count: value }: { count: number }) =>
       plural(value, { one: `${count.format(value)} exemplaire`, other: `${count.format(value)} exemplaires` }),
+    refresh: 'Actualiser',
     listMeta: 'Diagnostic opérationnel',
     listFoot: ({ time }: { time: string }) => `Triés par code · diagnostic évalué à ${time}`,
     blockers: ({ count: value }: { count: number }) =>

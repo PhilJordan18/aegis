@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { refreshAssetSummaries } from '../../api/invalidation'
 import { queryKeys } from '../../api/queryKeys'
 import { authorizedCommand } from '../auth/authorizedRequest'
 import { useSessionStore } from '../auth/session'
@@ -8,7 +9,7 @@ import type { AdminAssetView, AssetModelRequest, AssetModelView, AssetRequest } 
 /**
  * Catalog commands (09 §12.1–12.2). The server's answer is the new truth: a unit's answer replaces its
  * cached dossier, then every catalog list is read again (an edit can move a unit between pages or change
- * a model's name shown on units). Mutations are never retried automatically (serverState.ts).
+ * a model's name shown on units), and so is every reservation, loan and operation that names the unit. Mutations are never retried automatically (serverState.ts).
  */
 export function useCatalogMutations() {
   const gateway = useCatalogGateway()
@@ -18,9 +19,11 @@ export function useCatalogMutations() {
   function settledAsset(asset: AdminAssetView) {
     client.setQueryData(queryKeys.catalog.asset(asset.id), asset)
     void client.invalidateQueries({ queryKey: queryKeys.catalog.all, predicate: (query) => query.queryKey[2] !== 'detail' || query.queryKey[3] !== asset.id })
+    refreshAssetSummaries(client)
   }
   function settledModel() {
     void client.invalidateQueries({ queryKey: queryKeys.catalog.all })
+    refreshAssetSummaries(client)
   }
 
   const createAsset = useMutation({
