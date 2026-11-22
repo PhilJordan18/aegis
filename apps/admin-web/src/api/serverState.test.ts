@@ -1,8 +1,8 @@
 import { QueryClient } from '@tanstack/react-query'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { adminProfile } from '../features/auth/testFixtures'
 import { createSessionStore } from '../features/auth/session'
-import { clearCacheOnSessionChange } from './serverState'
+import { clearCacheOnSessionChange, createQueryClient, READ_STALE_MS } from './serverState'
 
 const start = (store: ReturnType<typeof createSessionStore>, accessToken: string, profile = adminProfile) =>
   store.start({ accessToken, expiresAt: '2026-09-30T15:30:00Z', expiresIn: 3600, profile })
@@ -49,5 +49,27 @@ describe('clearCacheOnSessionChange', () => {
     finish(['MM-001 du premier compte'])
     await pending
     expect(client.getQueryData(['assets'])).toBeUndefined()
+  })
+})
+
+describe('the freshness of a read (#197)', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('trusts a read for a few seconds, not the 30 s that let a reserved unit be read as available', () => {
+    expect(READ_STALE_MS).toBeLessThanOrEqual(5_000)
+    expect(createQueryClient().getDefaultOptions().queries?.staleTime).toBe(READ_STALE_MS)
+  })
+
+  it('reads again when a screen is entered after that, and shares the read with a screen entered at once', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const client = createQueryClient()
+    const queryFn = vi.fn(async () => 'AVAILABLE')
+    const read = () => client.fetchQuery({ queryKey: ['catalog', 'assets', 'list'], queryFn })
+    await read()
+    await read()
+    expect(queryFn).toHaveBeenCalledTimes(1)
+    vi.setSystemTime(Date.now() + READ_STALE_MS + 1)
+    await read()
+    expect(queryFn).toHaveBeenCalledTimes(2)
   })
 })

@@ -464,7 +464,8 @@ describe('Équipements — commands', () => {
     renderEquipment(fakeCatalogGateway({ pages: [ok(pageOf([MM001]))], units: { [MM001.id]: ok(MM001) } }))
     await screen.findByRole('heading', { level: 2, name: /Multimètre 1 · MM-001/ })
     const main = screen.getByRole('main')
-    expect(within(main).getAllByRole('button').map((button) => plain(button.textContent)).slice(0, 6)).toEqual([
+    expect(within(main).getAllByRole('button').map((button) => plain(button.textContent)).slice(0, 7)).toEqual([
+      'Actualiser',
       'Nouvel exemplaire',
       'Rechercher',
       'Modifier',

@@ -17,6 +17,8 @@ export const queryKeys = {
   },
   catalog: {
     all: ['catalog'] as const,
+    /** Prefix of every unit read, lists and dossiers: availability and placement are derived from custody facts. */
+    assets: ['catalog', 'assets'] as const,
     assetList: (query: { readonly page: number; readonly size: number; readonly sort: string }) => ['catalog', 'assets', 'list', query] as const,
     asset: (assetId: string) => ['catalog', 'assets', 'detail', assetId] as const,
     modelList: (query: { readonly page: number; readonly size: number }) => ['catalog', 'models', 'list', query] as const,
