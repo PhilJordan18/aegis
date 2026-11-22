@@ -1,0 +1,15 @@
+# ref c9473c4 (Backend integration build; = final PR heads except one doc line), step 8-dix-cycles
+  C1 done at +17 s
+  C2 done at +39 s
+  C3 done at +61 s
+  C4 done at +619 s
+  C5 done at +641 s
+  C6 done at +664 s
+  C7 done at +1221 s
+  C8 done at +1243 s
+  C9 done at +1266 s
+  C10 done at +1825 s
+PASS CYCLES 10 checkouts and 10 returns in 1825 s: loans/completed/fulfilled reservations/confirmed operations/operations/commands/max commands per operation/anomalies/OPERATION_CONFIRMED/ LOAN_COMPLETED = '10 10 10 20 20 20 1 0 20 10'; ceiling waits 7
+PASS READY the asset is READY again after the last return, without any manual SQL
+QA CYCLES: 0 failed
+exit=0

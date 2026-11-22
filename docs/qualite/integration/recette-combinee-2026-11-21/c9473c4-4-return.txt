@@ -1,0 +1,23 @@
+# ref c9473c4 (Backend integration build; = final PR heads except one doc line), step 4-return
+PASS T1 borrowed asset readiness 'BLOCKED', overdue loan offers RETURN; preparation 202: 'RETURN AWAITING_LOCAL_PROOF true true', loan view 'ACTIVE true -', no command before the scan
+PASS D1 same Idempotency-Key: 202 with the same operation; new key: 409 LOCKER_OPERATION_IN_PROGRESS; one RETURN operation
+PASS D1 challenge action 'RETURN', scan 202: loan RETURN_PENDING, one command, expiresAt = authorizedAt + 120 s
+PASS D1 door never opened: 'COMMAND_ACKNOWLEDGED -' 60 s after the scan, then 'EXPIRED OPERATION_EXPIRED' 0.1 s after expiresAt; loan ACTIVE, one LOAN_RETURN_REVERTED_SAFE audit, RETURN offered again
+PASS D3 door left open: 'ANOMALY DOOR_NOT_CLOSED_BEFORE_EXPIRY' 0.7 s after expiresAt, loan RETURN_PENDING, anomaly '1 DOOR_NOT_CLOSED_BEFORE_EXPIRY/OPEN'
+PASS D4 uncertain refusal 'LOCK_ACTUATION_FAILED': 'COMMAND_SENT -', then 'ANOMALY INCONSISTENT_PHYSICAL_STATE' (expiresAt + 0.5 s), loan RETURN_PENDING, anomaly '1 INCONSISTENT_PHYSICAL_STATE/OPEN'
+PASS D5 safe refusal 'CLOCK_NOT_SYNCHRONIZED': 'COMMAND_SENT -' 10 s after it (loan RETURN_PENDING), then 'FAILED COMMAND_REJECTED_CLOCK_NOT_SYNCHRONIZED' 0.9 s after expiresAt; loan ACTIVE, one LOAN_RETURN_REVERTED_SAFE audit, no anomaly
+PASS D6 hub lost after the acknowledged unlock: 'ANOMALY DEVICE_OFFLINE_DURING_OPERATION' 0.6 s after expiresAt, loan RETURN_PENDING
+PASS D7 return challenge never scanned: 'EXPIRED LOCAL_PROOF_EXPIRED', loan never left ACTIVE, no command, RETURN offered again
+PASS D8 administrator return preparation refused (403)
+PASS D8 one checkout already prepared, ceiling 1: return preparation 429 LOCAL_PROOF_RATE_LIMITED, Retry-After 588
+PASS T2 asset put back: 'CONFIRMED -' -114.3 s before expiresAt, loan COMPLETED with returnedAt = confirmedAt, one OPERATION_CONFIRMED and one LOAN_COMPLETED audit after the replays; view 'COMPLETED true -', asset availability 'AVAILABLE'
+PASS T3 door closed without the asset: 'OBSERVATION_RECEIVED -' 15 s later, 'ANOMALY EXPECTED_ASSET_NOT_OBSERVED' 1.0 s after expiresAt, loan RETURN_PENDING
+PASS T5 the tag present in an inventory scan after the anomaly (1 observation): loan still RETURN_PENDING, operation unchanged
+PASS E3 foreign tag instead of the asset: 'ANOMALY UNEXPECTED_ASSET_OBSERVED' at once (-113.6 s before expiresAt), loan RETURN_PENDING
+PASS T4 rule 2 on a return: 'ANOMALY INCONSISTENT_PHYSICAL_STATE' at once (-113.5 s before expiresAt), loan RETURN_PENDING, not completed
+PASS E5 one read of the expected tag: 'OBSERVATION_RECEIVED -', then 'ANOMALY DEVICE_OFFLINE_DURING_OPERATION' at the deadline, loan RETURN_PENDING
+PASS T5 scan seeing the asset received 3.5 s after expiresAt: 'ANOMALY DEVICE_OFFLINE_DURING_OPERATION', loan stays RETURN_PENDING
+PASS E7 first return 'ANOMALY EXPECTED_ASSET_NOT_OBSERVED'; a retry while the anomaly is OPEN is refused (409 LOAN_NOT_RETURNABLE)
+PASS E7 rule 1: acknowledged (200), retry offered ('RETURN_PENDING false RETURN'), 'CONFIRMED -', loan COMPLETED, anomaly 'RESOLVED true' with evidence, one ANOMALY_RESOLVED audit
+PASS E8 failed recovery 'ANOMALY EXPECTED_ASSET_NOT_OBSERVED' opens a new anomaly; retry while OPEN 409; after its acknowledgement the return is offered again (202)
+exit=1
