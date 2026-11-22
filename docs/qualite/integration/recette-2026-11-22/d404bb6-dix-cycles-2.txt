@@ -1,0 +1,26 @@
+run2 start 2026-11-22T05:01:02Z Toronto 00:01:02
+api: services/api/target/aegis-control-0.1.0-SNAPSHOT.jar, repository at d404bb6
+ceiling: shipped default preparations per window
+  C1 done at +23 s
+  C2 done at +41 s
+  C3 done at +58 s
+  ceiling reached, Retry-After 538 s
+  ceiling reached, Retry-After 3 s
+  C4 done at +624 s
+  C5 done at +641 s
+  ceiling reached, Retry-After 1 s
+  C6 done at +663 s
+  ceiling reached, Retry-After 540 s
+  ceiling reached, Retry-After 3 s
+  C7 done at +1226 s
+  C8 done at +1243 s
+  ceiling reached, Retry-After 2 s
+  C9 done at +1264 s
+  ceiling reached, Retry-After 541 s
+  ceiling reached, Retry-After 2 s
+  C10 done at +1830 s
+PASS CYCLES 10 checkouts and 10 returns in 1830 s: loans/completed/fulfilled reservations/confirmed operations/operations/commands/max commands per operation/anomalies/OPERATION_CONFIRMED/ LOAN_COMPLETED = '10 10 10 20 20 20 1 0 20 10'; ceiling waits 8
+PASS READY the asset is READY again after the last return, without any manual SQL
+QA CYCLES: 0 failed
+logs: (pile jetable, non conservée)
+exit=0
