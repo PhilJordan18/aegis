@@ -721,6 +721,16 @@
         }
       }
     },
+    "Consultez votre activité pour savoir si une nouvelle tentative est possible." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check your activity to see whether a new attempt is possible."
+          }
+        }
+      }
+    },
     "Demande" : {
       "localizations" : {
         "en" : {
@@ -2460,16 +2470,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "You can try again. No door opens without the locker code."
-          }
-        }
-      }
-    },
-    "Vous pouvez recommencer." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You can start again."
           }
         }
       }

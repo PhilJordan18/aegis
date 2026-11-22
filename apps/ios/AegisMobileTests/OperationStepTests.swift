@@ -45,20 +45,56 @@ struct OperationStepTests {
         #expect(!step.canScan)
     }
 
-    /// An `EXPIRED` operation stopped at the code or after the authorization.
-    @Test func anExpiryKeepsThePhaseItReached() {
-        let beforeAuthorization = step(OperationFixtures.view(status: "EXPIRED", requiredAction: "NONE",
-                                                              terminalAt: Self.deadline))
-        let afterAuthorization = step(OperationFixtures.view(status: "EXPIRED", requiredAction: "NONE",
-                                                             terminalAt: Self.deadline,
-                                                             authorizedAt: "2026-09-16T14:31:10Z"))
-        #expect(beforeAuthorization.phase == 2)
-        #expect(afterAuthorization.phase == 5)
-        #expect(beforeAuthorization.title == String(localized: "Délai dépassé"))
-        #expect(step(OperationFixtures.view(status: "EXPIRED", requiredAction: "NONE", terminalAt: Self.deadline),
-                     kind: .return).instruction
+    private static let authorizedAt = "2026-09-16T14:31:10Z"
+    private static let commandSentAt = "2026-09-16T14:31:11Z"
+    private static let acknowledgedAt = "2026-09-16T14:31:12Z"
+
+    /// A stopped operation marks the phase its recorded evidence reached, never
+    /// a later one: an authorization that expired before any command (doc 05
+    /// §5.5) does not tick « Commande » or point at the door.
+    @Test(arguments: [
+        (nil, nil, nil, 2), (authorizedAt, nil, nil, 3), (authorizedAt, commandSentAt, nil, 4),
+        (authorizedAt, commandSentAt, acknowledgedAt, 5),
+    ] as [(String?, String?, String?, Int)])
+    func anExpiryMarksThePhaseItsEvidenceReached(authorized: String?, sent: String?, acknowledged: String?,
+                                                 phase: Int) {
+        let step = step(OperationFixtures.view(status: "EXPIRED", requiredAction: "NONE", terminalAt: Self.deadline,
+                                               authorizedAt: authorized, commandSentAt: sent,
+                                               acknowledgedAt: acknowledged))
+        #expect(step.phase == phase)
+        #expect(step.title == String(localized: "Délai dépassé"))
+    }
+
+    /// The expired instruction names the return in English (its own key).
+    @Test func anExpiredReturnHasItsOwnInstruction() {
+        let expired = OperationFixtures.view(status: "EXPIRED", requiredAction: "NONE", terminalAt: Self.deadline)
+        #expect(step(expired, kind: .return).instruction
                 == String(localized: "operation.expired.return",
                           defaultValue: "Aucune porte n’a été ouverte. Recommencez la préparation."))
+    }
+
+    /// `FAILED` never involves the door (doc 05 §5.4), so it stops at
+    /// « Commande » at the latest.
+    @Test(arguments: [
+        (nil, nil, nil, 2), (authorizedAt, nil, nil, 3), (authorizedAt, commandSentAt, nil, 4),
+        (authorizedAt, commandSentAt, acknowledgedAt, 4),
+    ] as [(String?, String?, String?, Int)])
+    func aFailureMarksThePhaseItsEvidenceReached(authorized: String?, sent: String?, acknowledged: String?,
+                                                 phase: Int) {
+        let step = step(OperationFixtures.view(status: "FAILED", requiredAction: "NONE", terminalAt: Self.deadline,
+                                               authorizedAt: authorized, commandSentAt: sent,
+                                               acknowledgedAt: acknowledged))
+        #expect(step.phase == phase)
+    }
+
+    /// Whether a new attempt exists is the server's answer (`availableActions`),
+    /// for example none once the reservation was cancelled: `FAILED` promises none.
+    @Test func aFailurePromisesNoNewAttempt() {
+        let step = step(OperationFixtures.view(status: "FAILED", requiredAction: "NONE", terminalAt: Self.deadline,
+                                               failureReason: "RESERVATION_CANCELLED"))
+        #expect(step.title == String(localized: "Opération arrêtée sans ouverture"))
+        #expect(step.instruction
+                == String(localized: "Consultez votre activité pour savoir si une nouvelle tentative est possible."))
     }
 
     /// §8.5: a status this version does not know implies no progress, success
