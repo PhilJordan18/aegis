@@ -1,0 +1,20 @@
+.ag-chip {
+  --fg: var(--ag-neutral-fg); --bg: var(--ag-neutral-bg); --ic: var(--ag-neutral-icon);
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px;
+  border-radius: var(--ag-r-pill); border: 1px solid transparent;
+  background: var(--bg); color: var(--fg);
+  font-size: var(--ag-type-status-size); font-weight: var(--ag-type-status-weight); line-height: 18px; white-space: nowrap;
+}
+.ag-chip .ag-icon { width: 18px; height: 18px; color: var(--ic); }
+.ag-chip--lg { font-size: 0.9375rem; padding: 4px 12px 4px 5px; }
+.ag-chip--lg .ag-icon { width: 20px; height: 20px; }
+.ag-chip--ready { --fg: var(--ag-ready-fg); --bg: var(--ag-ready-bg); --ic: var(--ag-ready-icon); }
+.ag-chip--blocked { --fg: var(--ag-blocked-fg); --bg: var(--ag-blocked-bg); --ic: var(--ag-blocked-icon); }
+.ag-chip--unknown { --fg: var(--ag-unknown-fg); --bg: var(--ag-unknown-bg); --ic: var(--ag-unknown-icon); }
+.ag-chip--progress { --fg: var(--ag-progress-fg); --bg: var(--ag-progress-bg); --ic: var(--ag-progress-icon); }
+.ag-chip--info { --fg: var(--ag-info-fg); --bg: var(--ag-info-bg); --ic: var(--ag-info-icon); }
+
+@media (forced-colors: active) {
+  .ag-chip { border-color: CanvasText; }
+  .ag-chip .ag-icon { forced-color-adjust: none; }
+}
