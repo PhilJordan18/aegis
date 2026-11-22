@@ -4,6 +4,7 @@
 **Équipe :** Philippe Jordan Monfouayi Mba et Yoël Jimmy Razafindretsa  
 **Date de révision :** 16 septembre 2026
 **Mise à jour ciblée :** 23 septembre 2026 — statut des paramètres QR et de RS-485; SQL inchangé.  
+**Mise à jour ciblée :** 22 novembre 2026 — inventaire des migrations appliquées `V010`–`V012` et sort des index de lecture (§11.1, #67).  
 **Mise à jour ciblée :** 21 novembre 2026 — ADR-018 (#179), migration `V012` : `users.credential_version` et son déclencheur de garde (§4.1).  
 **Mise à jour ciblée :** 21 novembre 2026 — ADR-017 (#178), migration `V011` : motif `PASSWORD_CHANGED`, révocation définitive et purge à 30 jours de `browser_sessions` (§4.2); type d’audit `PASSWORD_CHANGED` (§4.9).
 **Version :** 1.2 — contrôle local QR et étoile
@@ -1881,11 +1882,13 @@ Découpage recommandé :
 | `V007__create_command_outbox.sql` | `local_access_challenges`, `hub_display_outbox`, `command_outbox`; contrainte `uq_locker_operations_id_target` sur `locker_operations`, cible de la clé composite `fk_command_outbox_operation` (§4.7); index d’invariant `ux_display_one_challenge_per_operation`, index d’expiration `ix_local_challenges_pending_expiry` et index de claim `ix_display_claimable` et `ix_command_outbox_claimable`. Les trois tables rejoignent la liste `no_delete` du callback (§12.1). Les index de lecture de §5.2 restent dans `V011`. |
 | `V008__create_device_messages_and_observations.sql` | `inbound_device_messages`, `physical_observations`; `audit_events.inbound_message_id`, `audit_events.physical_observation_id` et leurs FK `fk_audit_events_message` et `fk_audit_events_observation`, sans reconstitution des événements antérieurs. `inbound_device_messages` rejoint la liste `no_delete` du callback et `physical_observations` la liste `append_only` (§12.1). Les index de lecture de §5.2 restent dans `V011`. |
 | `V009__create_anomalies.sql` | `anomalies` et son index d’invariant `ux_anomalies_one_open_per_operation` (§5.1). `anomalies` rejoint la liste `no_delete` du callback (§12.1). `audit_events` a été déplacée vers `V002_2`; aucune migration n’est renumérotée. Les index de lecture de §5.2 restent dans `V011`. |
-| `V010__create_rest_idempotency.sql` | Déplacée vers `V002_1`; numéro laissé inutilisé, aucune migration n’est renumérotée. |
-| `V011__create_read_indexes.sql` | Index de lecture et index partiels restant. |
-| `V012__seed_demo_reference_data.sql` | Facultatif et réservé à l’environnement de démonstration; comptes et UUIDs fixes documentés. |
+| `V010__create_browser_sessions.sql` | `browser_sessions` (§4.2, ADR-016) : condensat SHA-256 du cookie seulement, fin absolue fixée à la connexion; index `ix_browser_sessions_user`. Le numéro, d’abord prévu pour `rest_idempotency_keys` (déplacée vers `V002_1`), est réutilisé avant toute application. |
+| `V011__revoke_browser_sessions_on_password_change.sql` | Motif `PASSWORD_CHANGED` (ADR-017); déclencheurs `tr_browser_sessions_revoked_final` (une session révoquée est définitive) et `tr_browser_sessions_open_kept` (une session ouverte n’est jamais supprimée); index de purge à 30 jours. |
+| `V012__add_user_credential_version.sql` | `users.credential_version` (ADR-018) et déclencheur `tr_users_credential_version_guarded` (§4.1). Additive : les comptes existants partent de 0. |
 
-Si V001–V012 existent déjà dans une base, ajouter une migration V013 dédiée : nouvelles tables/colonnes, enums textuels CHECK, FK et index partiel des opérations ouvertes. Déployer pendant une pause sans opération physique active; traiter explicitement les lignes historiques sans preuve QR. Ne pas inventer des preuves pour satisfaire le nouveau CHECK. Ce document décrit le schéma cible neuf, pas un ALTER rétroactif prêt à exécuter sur des données existantes.
+État au 22 novembre 2026 (`dev` `d404bb6`) : `V001`–`V012` sont appliquées, plus le callback `afterMigrate`. Les index de lecture de §5.2 annoncés plus haut pour « `V011` » ne sont pas encore créés : `V011` a reçu un autre contenu. Chacun, s’il est nécessaire, arrivera dans une migration `V013` ou suivante, justifiée par une mesure. Les données de démonstration ne passent pas par une migration : elles sont créées au démarrage par les propriétés `aegis.identity.demo-accounts.*` et `aegis.lockers.demo-locker.*`, désactivées par défaut.
+
+Toute évolution d’une base où V001–V012 existent passe par une migration V013 dédiée : nouvelles tables/colonnes, enums textuels CHECK, FK et index partiel des opérations ouvertes. Déployer pendant une pause sans opération physique active; traiter explicitement les lignes historiques sans preuve QR. Ne pas inventer des preuves pour satisfaire le nouveau CHECK. Ce document décrit le schéma cible neuf, pas un ALTER rétroactif prêt à exécuter sur des données existantes.
 
 Les numéros ne sont pas réécrits après application. Une correction ajoute `V013`, `V014`, etc.; elle ne modifie pas le fichier déjà enregistré dans `flyway_schema_history`.
 
@@ -1895,7 +1898,7 @@ Le callback Flyway `afterMigrate__grant_application_role.sql`, placé avec les m
 
 La plupart des `CREATE TABLE`, `ALTER TABLE` et index du P0 peuvent être exécutés dans la transaction Flyway. Une migration qui utilise `CREATE INDEX CONCURRENTLY` doit être séparée, marquée `executeInTransaction=false` dans la configuration Flyway et ne doit contenir aucune autre instruction transactionnelle.
 
-Pour le P0 initial, les index peuvent être créés dans `V011` avant l’ouverture du trafic. Pour une base déjà volumineuse, la procédure est :
+Pour le P0, un index de lecture peut être créé dans une migration `V013` ou suivante avant l’ouverture du trafic. Pour une base déjà volumineuse, la procédure est :
 
 1. ajouter d’abord les colonnes nullable ou la nouvelle table;
 2. déployer un code compatible avec l’ancien et le nouveau modèle;
@@ -1916,7 +1919,7 @@ Pour le P0 initial, les index peuvent être créés dans `V011` avant l’ouvert
 
 ### 11.4 Données de démonstration
 
-Les comptes de démo, un locker et deux compartiments peuvent être insérés par un script ou `V012` dans un profil de démonstration. Cette migration ne doit pas contenir de secret en clair : les mots de passe sont pré-hachés pour l’environnement local ou injectés par une étape de provisionnement sécurisée. Les données matérielles réelles ne sont pas mélangées aux migrations structurelles.
+Les comptes de démo, un locker et deux compartiments sont créés au démarrage par configuration, jamais par une migration (`AEGIS_DEMO_ACCOUNTS_ENABLED`, `AEGIS_DEMO_LOCKER_ENABLED`, désactivées par défaut). Aucun secret n’est versionné : les mots de passe de démonstration sont injectés par variables d’environnement. Les données matérielles réelles ne sont pas mélangées aux migrations structurelles.
 
 ---
 
