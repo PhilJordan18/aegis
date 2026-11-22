@@ -42,6 +42,8 @@
 .ag-an-outcome { margin-bottom: 16px; }
 .ag-an-actions .ag-help { align-self: center; }
 .ag-an-sec { margin-top: 24px; }
+.ag-an-links { margin-top: 10px; display: grid; gap: 6px; font-size: 0.9375rem; }
+.ag-an-links .ag-link { min-height: 24px; display: inline-flex; align-items: center; }
 .ag-an-sec__note { margin-top: 8px; font-size: var(--ag-type-caption-size); line-height: 1.45; color: var(--ag-text-2); }
 .ag-an-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 28px; }
 .ag-an-id { font-family: var(--ag-font-mono); font-size: var(--ag-type-code-size); font-weight: 450; overflow-wrap: anywhere; user-select: all; }

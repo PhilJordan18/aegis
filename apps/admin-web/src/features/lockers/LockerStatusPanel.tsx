@@ -1,4 +1,5 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
+import { Link } from '../../app/Link'
 import { useI18n } from '../../i18n/useI18n'
 import { ReadOnlyMark } from '../../ui/ReadOnlyMark'
 import { StatusChip } from '../../ui/StatusChip'
@@ -8,6 +9,7 @@ import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
 import { ScheduleDialog } from '../schedule/ScheduleDialog'
 import { Button } from '../../ui/Button'
 import { DEVICE_ERRORS_LIMIT, type CompartmentStatus, type DeviceError, type LockerStatus } from './contract'
+import { NO_FILTERS, transactionHref } from '../transactions/transactionHref'
 import { LockerAlert } from './LockerAlert'
 import {
   asLastKnown,
@@ -126,6 +128,11 @@ function LockerBody({ locker, titleId, stale, retrying, onRetry, returnFocus }: 
         {locker.name !== '' && <>{locker.name} · </>}
         <span className="ag-tnum ag-lk__code">{locker.code}</span>
       </h2>
+      <p className="ag-lk__links">
+        <Link className="ag-link" to={transactionHref({ view: 'operations', filters: { ...NO_FILTERS, lockerId: locker.lockerId } })}>
+          {m.lockers.operationsOfLocker}
+        </Link>
+      </p>
 
       <div className="ag-lk__top">
         <div className={`ag-diag ag-diag--${tone}`}>

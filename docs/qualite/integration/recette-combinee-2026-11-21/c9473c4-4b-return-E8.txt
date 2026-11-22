@@ -1,0 +1,5 @@
+# ref c9473c4 (Backend integration build; = final PR heads except one doc line), step 4b-return-E8
+PASS E8 failed recovery 'ANOMALY EXPECTED_ASSET_NOT_OBSERVED' opens a new anomaly; retry while OPEN 409; after its acknowledgement the return is offered again (202)
+PASS E8 third attempt 'CONFIRMED -', loan COMPLETED, anomalies (first, second) 'RESOLVED RESOLVED'
+QA RETURN PREPARATION: all checks passed
+exit=0

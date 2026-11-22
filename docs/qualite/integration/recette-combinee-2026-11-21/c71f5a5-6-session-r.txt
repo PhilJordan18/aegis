@@ -1,0 +1,15 @@
+# ref c71f5a5 (tree = 43fed3c), step 6-session-r
+PASS R0 browser login before the rotation (200)
+FAIL R1 no rotation logged
+FAIL R2a old password login: expected 401, got 200
+FAIL R2b new password login: expected 200, got 401
+PASS R3 access token issued before the rotation, on /auth/me (valid until expiry until #179) (200)
+PASS R4a refresh with the pre-rotation cookie (401)
+PASS R4b problem code (AUTH_SESSION_INVALID)
+PASS R4c revocation reason (PASSWORD_CHANGED)
+PASS R4d PASSWORD_CHANGED audit events (1)
+PASS R6a explicit revoke of the dead cookie (idempotent) (204)
+PASS R6b refresh after it (401)
+PASS R8a disabled account (the admin remedy today): refresh (401)
+PASS R8b revocation reason (ACCOUNT_CHANGED)
+exit=3

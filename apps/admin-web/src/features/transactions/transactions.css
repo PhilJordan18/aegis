@@ -20,6 +20,7 @@
 .ag-filters__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0 16px; align-items: start; }
 .ag-filters .ag-ff__control { font-size: 0.9375rem; }
 .ag-filters__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 2px; }
+.ag-filters__help .ag-link { margin-left: 8px; }
 .ag-filters__help { margin-top: 6px; font-size: var(--ag-type-small-size); line-height: 1.4; color: var(--ag-text-2); }
 @media (min-width: 1100px) {
   .ag-filters { grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; align-items: start; }

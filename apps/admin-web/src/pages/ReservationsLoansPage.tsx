@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Link } from '../app/Link'
 import { PageHeading } from '../app/PageHeading'
@@ -14,6 +15,7 @@ import { TransactionDossier } from '../features/transactions/TransactionDossier'
 import { TransactionFilters } from '../features/transactions/TransactionFilters'
 import { TransactionList } from '../features/transactions/TransactionList'
 import { useTransactionDetail, useTransactionList, type TransactionRecord } from '../features/transactions/useTransactionQueries'
+import { queryKeys } from '../api/queryKeys'
 import { useI18n } from '../i18n/useI18n'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
@@ -52,6 +54,7 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
   const { m } = i18n
   const t = m.reservations
   const router = useRouter()
+  const client = useQueryClient()
   const { search } = useLocation()
   const currentProfile = useCurrentAdminProfile()
   const profile = currentProfile.data ?? sessionProfile
@@ -152,6 +155,9 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
                 if (refreshing) return
                 void list.refetch()
                 if (selectedId !== null) void detail.refetch()
+                // The attempt shown inline is its own read: it is read again with the dossier, never followed.
+                const attempt = detail.data?.kind === 'operations' ? null : (detail.data?.item.currentOperationId ?? null)
+                if (attempt !== null) void client.invalidateQueries({ queryKey: queryKeys.transactions.operation(attempt) })
               }}
             >
               <Icon name="refresh" />
