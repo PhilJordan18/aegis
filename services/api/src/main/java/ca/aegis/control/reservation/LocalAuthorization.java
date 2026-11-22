@@ -97,6 +97,7 @@ class LocalAuthorization {
     private final PreparationRepository preparation;
     private final ReservableAssets assets;
     private final CheckoutGuards guards;
+    private final ReturnGuards returnGuards;
     private final LockerAvailability availability;
     private final LocalChallengeRepository challenges;
     private final LocalChallengeExpiry endings;
@@ -107,7 +108,7 @@ class LocalAuthorization {
 
     LocalAuthorization(JdbcClient jdbc, ReservationRepository reservations, ReturnRepository loans,
             PreparationRepository preparation,
-            ReservableAssets assets, CheckoutGuards guards, LockerAvailability availability,
+            ReservableAssets assets, CheckoutGuards guards, ReturnGuards returnGuards, LockerAvailability availability,
             LocalChallengeRepository challenges, LocalChallengeExpiry endings, CommandOutbox commands,
             LockerOperationReads reads, AuditTrail audit, Clock clock) {
         this.jdbc = jdbc;
@@ -116,6 +117,7 @@ class LocalAuthorization {
         this.preparation = preparation;
         this.assets = assets;
         this.guards = guards;
+        this.returnGuards = returnGuards;
         this.availability = availability;
         this.challenges = challenges;
         this.endings = endings;
@@ -199,13 +201,14 @@ class LocalAuthorization {
             return wrongSecret(user, operation, challenge, now);
         }
 
+        boolean recovery = false;
         try {
             if (operation.isReturn()) {
-                ReturnGuards.requireReturnable(loan.status());
+                recovery = returnGuards.requireReturnable(loan.id(), loan.status());
             } else {
                 requireCheckout(reservation, asset, now);
             }
-            requireCommonGuards(asset, operation, placed, now);
+            requireCommonGuards(asset, operation, placed, recovery ? loan.id() : null, now);
             if (!operation.isReturn()) {
                 requireCheckoutReadiness(user, asset, now);
             }
@@ -215,7 +218,7 @@ class LocalAuthorization {
         requireTransientGuards(operation, placed.orElseThrow());
         consume(challenge.id(), now);
         authorize(operation.id(), now);
-        if (operation.isReturn()) {
+        if (operation.isReturn() && !recovery) {
             loans.start(loan.id(), now);
         }
         UnlockCommand command = commands.enqueueUnlock(operation.id(), now);
@@ -226,14 +229,18 @@ class LocalAuthorization {
         details.put("compartmentId", operation.compartmentId());
         details.put("expiresAt", now.plus(PHYSICAL_WINDOW));
         details.put("commandMessageId", command.messageId());
+        if (operation.isReturn()) {
+            details.put("recovery", recovery);
+        }
         audit.record(AuditEvent.transition(AuditEventType.OPERATION_AUTHORIZED, user.id(),
                 AuditSubjectType.LOCKER_OPERATION, operation.id(), operation.id(),
                 LockerOperationStatus.AWAITING_LOCAL_PROOF, LockerOperationStatus.AUTHORIZED, null, details, now));
         audit.record(AuditEvent.transition(AuditEventType.LOCAL_CHALLENGE_CONSUMED, user.id(),
                 AuditSubjectType.LOCAL_ACCESS_CHALLENGE, challenge.id(), operation.id(), LocalChallengeStatus.PENDING,
                 LocalChallengeStatus.CONSUMED, null, Map.of("displayInstructionsStopped", purged), now));
-        if (operation.isReturn()) {
-            // Document 05, section 4.3: the loan stays open, now waiting for the physical proof of its return.
+        if (operation.isReturn() && !recovery) {
+            // Document 05, section 4.3: the loan stays open, now waiting for the physical proof of its return. A
+            // recovery finds it RETURN_PENDING already and leaves it so (document 06, section 13.4).
             audit.record(AuditEvent.transition(AuditEventType.LOAN_RETURN_STARTED, user.id(), AuditSubjectType.LOAN,
                     loan.id(), operation.id(), LoanStatus.ACTIVE,
                     LoanStatus.RETURN_PENDING, null,
@@ -281,7 +288,8 @@ class LocalAuthorization {
      * Document 06, sections 6.1 and 6.5: the schedule and every locker guard of the preparation that cannot become
      * true again before the challenge's deadline, evaluated at {@code now}. A refusal here ends the attempt.
      */
-    private void requireCommonGuards(LockedAsset asset, Operation operation, Optional<Cell> placed, Instant now) {
+    private void requireCommonGuards(LockedAsset asset, Operation operation, Optional<Cell> placed,
+            UUID recoveredLoanId, Instant now) {
         guards.requireOpen(operation.lockerId(), now);
         // The asset must still be placed in the compartment the challenge was prepared for.
         if (!operation.lockerId().equals(asset.lockerId()) || placed.isEmpty()
@@ -289,7 +297,7 @@ class LocalAuthorization {
             throw new ReservationRefusedException(ApiError.PHYSICAL_STATE_UNKNOWN);
         }
         if (preparation.activeRfidIdentifier(asset.id()).isEmpty()
-                || preparation.hasUnresolvedAnomaly(asset.id(), operation.compartmentId())) {
+                || returnGuards.unresolvedAnomaly(asset.id(), operation.compartmentId(), recoveredLoanId)) {
             throw new ReservationRefusedException(ApiError.PHYSICAL_STATE_UNKNOWN);
         }
     }

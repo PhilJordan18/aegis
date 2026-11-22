@@ -108,7 +108,7 @@ class LoanService {
      * a hint read without locks; the preparation checks everything again. An administrator view never offers it.
      */
     private LoanView holderView(LoanRow row, Instant now) {
-        List<String> actions = returns.returnAdmissible(row.holderUserId(), row.assetId(), row.status(), now)
+        List<String> actions = returns.returnAdmissible(row.holderUserId(), row.assetId(), row.id(), row.status(), now)
                 ? List.of("RETURN") : List.of();
         return view(row, assets.summaries(List.of(row.assetId())).get(row.assetId()), now, actions);
     }

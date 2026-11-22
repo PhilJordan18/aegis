@@ -26,6 +26,7 @@ import ca.aegis.control.audit.AuditTrail;
 import ca.aegis.control.command.CommandAcknowledgements;
 import ca.aegis.control.device.ConnectionStatus;
 import ca.aegis.control.device.LockerAvailability;
+import ca.aegis.control.device.ScanStability;
 import ca.aegis.control.display.HubDisplayOutbox;
 import ca.aegis.control.loan.LoanStatus;
 import ca.aegis.control.reservation.CheckoutProof.Fact;
@@ -51,8 +52,9 @@ import ca.aegis.control.reservation.ReservationRepository.ReservationRow;
  * {@code EXPIRED}, and every other case ends it in {@code ANOMALY}.</li>
  * </ul>
  *
- * An authorized {@code RETURN} (#50) goes through the same milestones but is only concluded at its deadline, by
- * document 06, section 13.1; its positive proof comes with #51.
+ * An authorized {@code RETURN} goes through the same chain (#51): the expected tag's stable presence after the
+ * closing confirms it and completes the loan; another asset stably read instead ends it in {@code ANOMALY}; at the
+ * deadline, document 06, section 13.1 decides between giving the loan back as {@code ACTIVE} and an anomaly (#50).
  *
  * Each operation is decided in a transaction of its own, under the locks of document 08, section 7.1, at an instant read
  * after them; a terminal operation is never changed again. It runs after each stored acknowledgement, door event or
@@ -63,10 +65,18 @@ public class CheckoutConfirmation {
 
     /** {@code failure_reason} of an authorized checkout that ended without any physical interaction. */
     static final String OPERATION_EXPIRED = "OPERATION_EXPIRED";
+    /** A fixed sentence: {@code resolution_note} never carries free text from a device or a client. */
+    static final String RECOVERY_RESOLUTION_NOTE =
+            "Résolue par la preuve physique cohérente du retour de reprise (06 §13.4).";
 
     static final String INCONSISTENT_PHYSICAL_STATE = "INCONSISTENT_PHYSICAL_STATE";
     static final String DOOR_NOT_CLOSED_BEFORE_EXPIRY = "DOOR_NOT_CLOSED_BEFORE_EXPIRY";
     static final String DEVICE_OFFLINE_DURING_OPERATION = "DEVICE_OFFLINE_DURING_OPERATION";
+    static final String EXPECTED_ASSET_NOT_OBSERVED = "EXPECTED_ASSET_NOT_OBSERVED";
+    static final String UNEXPECTED_ASSET_OBSERVED = "UNEXPECTED_ASSET_OBSERVED";
+
+    /** Document 06, section 10.2: the reads that make a stable presence, as the scan normalization counts them. */
+    private static final int STABLE_READS = 3;
 
     private static final Logger log = LoggerFactory.getLogger(CheckoutConfirmation.class);
 
@@ -168,8 +178,9 @@ public class CheckoutConfirmation {
         reservations.lockUser(t.userId());
         assets.lockForCustody(t.assetId());
         ReservationRow reservation = null;
+        ReturnRepository.LoanRow loan = null;
         if (t.isReturn()) {
-            loans.lock(t.loanId()).orElseThrow();
+            loan = loans.lock(t.loanId()).orElseThrow();
         } else {
             reservation = reservations.lock(t.reservationId()).orElseThrow();
         }
@@ -189,11 +200,17 @@ public class CheckoutConfirmation {
         // however late the evaluation that reads it runs.
         List<Fact> inTime = facts(t.id(), operation.expectedTag()).stream()
                 .filter(fact -> fact.receivedAt().isBefore(operation.expiresAt())).toList();
-        Result proof = CheckoutProof.evaluate(t.compartmentId(), inTime, tagElsewhere(t.compartmentId(), operation));
+        Result proof = CheckoutProof.evaluate(t.isReturn() ? LockerOperationType.RETURN : LockerOperationType.CHECKOUT,
+                t.compartmentId(), inTime, tagElsewhere(t.compartmentId(), operation));
         LockerOperationStatus status = advance(operation, proof, now);
         if (t.isReturn()) {
-            // #50: an authorized return is bounded by its deadline. Its physical proof, which completes the loan,
-            // comes with #51; until then a return never confirms and never frees the asset.
+            if (proof.verdict() == Verdict.COHERENT) {
+                return Optional.of(confirmReturn(t, loan, status, proof, now));
+            }
+            if (proof.verdict() == Verdict.INCONSISTENT) {
+                return Optional.of(anomaly(t, status, proof.finding() == Finding.UNEXPECTED_ASSET_OBSERVED
+                        ? UNEXPECTED_ASSET_OBSERVED : INCONSISTENT_PHYSICAL_STATE, proof.finding(), now));
+            }
             return Optional.of(now.isBefore(operation.expiresAt()) ? status
                     : returnAtDeadline(t, operation, status, proof, cell, now));
         }
@@ -318,6 +335,69 @@ public class CheckoutConfirmation {
     }
 
     /**
+     * Document 05, section 7.2; document 06, section 12.1; document 08, section 7.5: the operation {@code CONFIRMED}
+     * and the loan {@code COMPLETED} in one transaction. Availability and readiness are derived at read time, so the
+     * next read after the commit sees the asset back in custody. A recovery (document 06, section 13.4) also resolves
+     * the acknowledged anomalies of the loan's earlier returns in the same transaction, with the stable presence as
+     * their evidence.
+     */
+    private LockerOperationStatus confirmReturn(Target t, ReturnRepository.LoanRow loan, LockerOperationStatus from,
+            Result proof, Instant now) {
+        if (loan.status() != LoanStatus.RETURN_PENDING) {
+            // The authorization moved the loan to RETURN_PENDING and only this service ends it: another writer broke
+            // document 05, section 7. Nothing is fabricated.
+            throw new IllegalStateException("Return proven for a loan that is not RETURN_PENDING: " + t.id());
+        }
+        end(t.id(), from, LockerOperationStatus.CONFIRMED, null, now);
+        loans.complete(loan.id(), t.id(), now);
+        UUID scan = proof.scan().orElseThrow().messageId();
+        Map<String, Object> evidence = new LinkedHashMap<>();
+        evidence.put("loanId", loan.id());
+        evidence.put("acknowledgementMessageId", proof.acknowledgement().orElseThrow().messageId());
+        evidence.put("doorOpenedMessageId", proof.opened().orElseThrow().messageId());
+        evidence.put("doorClosedMessageId", proof.closed().orElseThrow().messageId());
+        evidence.put("scanMessageId", scan);
+        audit.recordAboutInboundMessage(AuditEvent.transition(AuditEventType.OPERATION_CONFIRMED, null,
+                AuditSubjectType.LOCKER_OPERATION, t.id(), t.id(), from, LockerOperationStatus.CONFIRMED, null,
+                evidence, now), scan);
+        audit.recordAboutInboundMessage(AuditEvent.transition(AuditEventType.LOAN_COMPLETED, null,
+                AuditSubjectType.LOAN, loan.id(), t.id(), LoanStatus.RETURN_PENDING, LoanStatus.COMPLETED, null,
+                Map.of("assetId", t.assetId(), "returnedAt", now.toString()), now), scan);
+        resolveRecoveredAnomalies(t, loan.id(), scan, now);
+        log.info("Return confirmed: operationId={}, loanId={}", t.id(), loan.id());
+        return LockerOperationStatus.CONFIRMED;
+    }
+
+    private void resolveRecoveredAnomalies(Target t, UUID loanId, UUID scan, Instant now) {
+        List<ReturnRepository.LinkedAnomaly> recovered = loans.lockAcknowledgedAnomalies(loanId, t.id());
+        if (recovered.isEmpty()) {
+            return;
+        }
+        UUID evidence = jdbc.sql("""
+                SELECT p.id FROM aegis.physical_observations p
+                JOIN aegis.locker_operations o ON o.id = :operation
+                JOIN aegis.asset_identifiers i ON i.id = o.expected_asset_identifier_id
+                WHERE p.inbound_message_id = :scan AND p.type = 'ASSET_PRESENT'
+                  AND p.identifier_value = i.identifier_value
+                ORDER BY p.created_at, p.id LIMIT 1
+                """).param("operation", t.id()).param("scan", scan).query(UUID.class).single();
+        for (ReturnRepository.LinkedAnomaly anomaly : recovered) {
+            loans.resolve(anomaly.id(), evidence, RECOVERY_RESOLUTION_NOTE, now);
+            Map<String, Object> details = new LinkedHashMap<>();
+            details.put("type", anomaly.type());
+            details.put("severity", anomaly.severity());
+            details.put("loanId", loanId);
+            details.put("resolvedByOperationId", t.id());
+            details.put("scanMessageId", scan);
+            audit.recordAboutInboundMessage(new AuditEvent(AuditEventType.ANOMALY_RESOLVED, null,
+                    AuditSubjectType.ANOMALY, anomaly.id(), anomaly.operationId(), "ACKNOWLEDGED", "RESOLVED",
+                    AuditResult.ACCEPTED, null, details, now), scan);
+            log.info("Anomaly resolved by a coherent recovery: anomalyId={}, operationId={}, loanId={}", anomaly.id(),
+                    t.id(), loanId);
+        }
+    }
+
+    /**
      * Document 06, section 13.1, after {@code expiresAt}: the loan goes back to {@code ACTIVE} only when the return
      * certainly had no physical effect (never sent, refused by the hub before any unlock, or door certainly kept
      * closed); every other case ends in {@code ANOMALY} and the loan stays {@code RETURN_PENDING}.
@@ -325,7 +405,9 @@ public class CheckoutConfirmation {
     private LockerOperationStatus returnAtDeadline(Target t, Operation operation, LockerOperationStatus status,
             Result proof, CellState cell, Instant now) {
         if (proof.closed().isPresent()) {
-            return anomaly(t, status, DEVICE_OFFLINE_DURING_OPERATION, proof.finding(), now);
+            // A healthy settled scan without the expected tag: the asset was not put back (document 06, section 12.3).
+            return anomaly(t, status, proof.finding() == Finding.EXPECTED_ASSET_NOT_OBSERVED
+                    ? EXPECTED_ASSET_NOT_OBSERVED : DEVICE_OFFLINE_DURING_OPERATION, proof.finding(), now);
         }
         if (proof.opened().isPresent()) {
             return anomaly(t, status, DOOR_NOT_CLOSED_BEFORE_EXPIRY, proof.finding(), now);
@@ -359,6 +441,13 @@ public class CheckoutConfirmation {
     }
 
     private void revertLoan(Target t, String reason, Instant now) {
+        if (loans.isRecovery(t.loanId(), t.id())) {
+            // Document 06, section 13.4: a recovery found the loan RETURN_PENDING and leaves it so, with the
+            // acknowledged anomalies of its earlier returns; the holder may try again.
+            log.info("Recovery ended without physical effect, loan still pending: operationId={}, loanId={}, "
+                    + "reason={}", t.id(), t.loanId(), reason);
+            return;
+        }
         loans.revert(t.loanId(), now);
         audit.record(AuditEvent.transition(AuditEventType.LOAN_RETURN_REVERTED_SAFE, null, AuditSubjectType.LOAN,
                 t.loanId(), t.id(), LoanStatus.RETURN_PENDING, LoanStatus.ACTIVE, reason,
@@ -513,8 +602,15 @@ public class CheckoutConfirmation {
                                WHERE p.inbound_message_id = m.id AND p.type = 'ASSET_ABSENT'
                                  AND p.identifier_value = :tag) AS absent,
                        EXISTS (SELECT 1 FROM aegis.physical_observations p
+                               WHERE p.inbound_message_id = m.id AND p.type = 'ASSET_PRESENT'
+                                 AND p.identifier_value = :tag) AS present,
+                       EXISTS (SELECT 1 FROM aegis.physical_observations p
                                WHERE p.inbound_message_id = m.id AND p.type IN ('ASSET_PRESENT',
-                                     'ASSET_IDENTIFIER_DETECTED') AND p.identifier_value = :tag) AS seen
+                                     'ASSET_IDENTIFIER_DETECTED') AND p.identifier_value = :tag) AS seen,
+                       m.parsed_payload ->> 'windowEndedAt' AS window_ended_at,
+                       (SELECT max((p.value_json ->> 'readCount')::int) FROM aegis.physical_observations p
+                        WHERE p.inbound_message_id = m.id AND p.type = 'ASSET_IDENTIFIER_DETECTED'
+                          AND p.identifier_value <> :tag) AS foreign_reads
                 FROM aegis.inbound_device_messages m
                 WHERE m.operation_id = :id AND m.processing_status <> 'REJECTED'
                   AND m.message_type IN ('COMMAND_ACKNOWLEDGED', 'DOOR_OPENED', 'DOOR_CLOSED', 'RFID_SCAN_COMPLETED')
@@ -529,14 +625,24 @@ public class CheckoutConfirmation {
                     };
                     String compartment = row.getString("compartment_id");
                     String window = row.getString("window_started_at");
-                    TagReading tag = row.getBoolean("seen") ? TagReading.SEEN
+                    String windowEnd = row.getString("window_ended_at");
+                    Instant occurred = instant(row.getObject("occurred_at", OffsetDateTime.class));
+                    Instant received = instant(row.getObject("received_at", OffsetDateTime.class));
+                    // Rule 7: one other tag read three times by itself in a stabilized window; reads are never summed
+                    // across tags or messages, and a duplicated message is stored once.
+                    Integer foreignReads = row.getObject("foreign_reads", Integer.class);
+                    boolean foreign = foreignReads != null && foreignReads >= STABLE_READS
+                            && ScanStability.stable(row.getString("reader_status"),
+                                    window == null ? null : parse(window), windowEnd == null ? null : parse(windowEnd),
+                                    occurred, received);
+                    TagReading tag = row.getBoolean("present") ? TagReading.PRESENT
+                            : row.getBoolean("seen") ? TagReading.SEEN
                             : row.getBoolean("absent") ? TagReading.ABSENT : TagReading.NO_VERDICT;
                     return new Fact(row.getObject("id", UUID.class), kind,
                             kind == Kind.ACKNOWLEDGEMENT || compartment == null ? null : uuid(compartment),
                             row.getObject("device_session_id", UUID.class), row.getLong("boot_count"),
-                            row.getLong("sequence"), instant(row.getObject("occurred_at", OffsetDateTime.class)),
-                            instant(row.getObject("received_at", OffsetDateTime.class)),
-                            row.getString("reader_status"), window == null ? null : parse(window), tag);
+                            row.getLong("sequence"), occurred, received,
+                            row.getString("reader_status"), window == null ? null : parse(window), tag, foreign);
                 })
                 .list();
     }

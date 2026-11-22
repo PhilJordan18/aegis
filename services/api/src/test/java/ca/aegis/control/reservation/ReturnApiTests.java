@@ -3,6 +3,7 @@ package ca.aegis.control.reservation;
 import static ca.aegis.control.reservation.ReservationApiTests.expectProblem;
 import static ca.aegis.control.reservation.ReservationApiTests.key;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
@@ -16,6 +17,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -40,6 +44,9 @@ import ca.aegis.control.device.DeviceMessageIngestion.Outcome;
 class ReturnApiTests extends HubChallengeApiTest {
 
     /** {@code expiresAt} of the authorized return: authorized at START + 2 s, for 120 s. */
+    static final String FOREIGN = "E28011700000020A1B2C3D4F";
+    static final String OTHER_FOREIGN = "E28011700000020A1B2C3D50";
+
     static final Instant DEADLINE = START.plusSeconds(122);
 
     @Autowired
@@ -48,6 +55,8 @@ class ReturnApiTests extends HubChallengeApiTest {
     UUID loan;
     UUID operation;
     UUID compartment;
+    String tag;
+    Instant closedAt;
 
     @BeforeEach
     void borrowed() {
@@ -245,6 +254,290 @@ class ReturnApiTests extends HubChallengeApiTest {
         loanView().andExpect(jsonPath("$.availableActions[0]").value("RETURN"));
     }
 
+    @Test
+    void aStablePresenceAfterTheClosingCompletesTheLoanOnce() throws Exception {
+        authorized();
+        doorSequence();
+        assertEquals("RETURN_PENDING", loanStatus());
+        assertEquals(Outcome.ACCEPTED, scan(operation, "HEALTHY", Map.of(tag, 3)));
+
+        assertEquals("CONFIRMED", fixtures.operationStatus(operation));
+        Map<String, Object> row = jdbc.sql("""
+                SELECT l.status, l.returned_at, l.return_operation_id, o.confirmed_at
+                FROM aegis.loans l JOIN aegis.locker_operations o ON o.id = :operation WHERE l.id = :loan
+                """).param("operation", operation).param("loan", loan).query().singleRow();
+        assertEquals("COMPLETED", row.get("status"));
+        assertEquals(operation, row.get("return_operation_id"));
+        assertEquals(row.get("confirmed_at"), row.get("returned_at"));
+        assertEquals(0L, openAnomalies());
+        for (String type : List.of("DOOR_OPENED", "OBSERVATION_RECEIVED", "OPERATION_CONFIRMED", "LOAN_COMPLETED")) {
+            assertEquals(1L, audits(type), type);
+        }
+        JsonNode screen = open(displayRow(operation, "DISPLAY_OPERATION_STATUS"));
+        assertEquals("CONFIRMED", screen.get("payload").get("status").asString());
+        assertFalse(screen.get("payload").has("token"));
+        loanView().andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.currentOperationId").doesNotExist())
+                .andExpect(jsonPath("$.availableActions").isEmpty());
+        mvc.perform(get("/api/v1/me/loan").header(AUTHORIZATION, bearer(token))).andExpect(status().isNotFound());
+        // Readiness is derived after the commit: the asset is in custody again and can be reserved.
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        mvc.perform(get("/api/v1/assets/" + asset).header(AUTHORIZATION, bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.readiness.result").value("READY"));
+
+        // Idempotency: replays and a later door sequence change nothing.
+        confirmation.run(1000);
+        assertEquals(LockerOperationStatus.CONFIRMED, confirmation.evaluate(operation).orElseThrow());
+        door("DOOR_OPENED");
+        door("DOOR_CLOSED");
+        scan(operation, "HEALTHY", Map.of());
+        assertEquals("CONFIRMED", fixtures.operationStatus(operation));
+        assertEquals("COMPLETED", loanStatus());
+        assertEquals(1L, audits("LOAN_COMPLETED"));
+    }
+
+    @Test
+    void oneOrTwoReadsDoNotProveTheReturn() throws Exception {
+        authorized();
+        doorSequence();
+        scan(operation, "HEALTHY", Map.of(tag, 2));
+        assertEquals("OBSERVATION_RECEIVED", fixtures.operationStatus(operation));
+        assertEquals("RETURN_PENDING", loanStatus());
+        clock.set(DEADLINE);
+        confirmation.run(1000);
+        assertReturnAnomaly("DEVICE_OFFLINE_DURING_OPERATION", "SCAN_NOT_CONCLUSIVE");
+    }
+
+    @Test
+    void anAbsentTagWaitsThenEndsExpectedAssetNotObserved() throws Exception {
+        authorized();
+        doorSequence();
+        scan(operation, "HEALTHY", Map.of());
+        clock.set(DEADLINE.minusMillis(1));
+        confirmation.run(1000);
+        assertEquals("OBSERVATION_RECEIVED", fixtures.operationStatus(operation));
+        clock.set(DEADLINE);
+        confirmation.run(1000);
+        assertReturnAnomaly("EXPECTED_ASSET_NOT_OBSERVED", "EXPECTED_ASSET_NOT_OBSERVED");
+    }
+
+    @Test
+    void anotherAssetStablyReadInTheCellIsAnAnomalyAtOnce() throws Exception {
+        authorized();
+        doorSequence();
+        scan(operation, "HEALTHY", Map.of("E2-FOREIGN-" + UUID.randomUUID(), 3));
+        assertReturnAnomaly("UNEXPECTED_ASSET_OBSERVED", "UNEXPECTED_ASSET_OBSERVED");
+    }
+
+    @Test
+    void aForeignTagCountsOnlyWithThreeReadsOfItsOwnInAStabilizedWindow() throws Exception {
+        authorized();
+        doorSequence();
+        // A window shorter than three seconds is not a stabilized reading, whatever its counts.
+        assertEquals(Outcome.ACCEPTED, ingest(scanMessage(operation, "HEALTHY", Map.of(FOREIGN, 5), 2)));
+        assertEquals("OBSERVATION_RECEIVED", fixtures.operationStatus(operation));
+        // Two other tags read twice each are never summed into three reads.
+        door("DOOR_OPENED");
+        door("DOOR_CLOSED");
+        assertEquals(Outcome.ACCEPTED, scan(operation, "HEALTHY", Map.of(FOREIGN, 2, OTHER_FOREIGN, 2)));
+        assertEquals("OBSERVATION_RECEIVED", fixtures.operationStatus(operation));
+        // A duplicated message is stored once: its two reads stay two.
+        door("DOOR_OPENED");
+        door("DOOR_CLOSED");
+        Map<String, Object> twice = scanMessage(operation, "HEALTHY", Map.of(FOREIGN, 2), 3);
+        assertEquals(Outcome.ACCEPTED, ingest(twice));
+        assertEquals(Outcome.DUPLICATE, ingest(twice));
+        assertEquals("OBSERVATION_RECEIVED", fixtures.operationStatus(operation));
+        assertEquals("RETURN_PENDING", loanStatus());
+        assertEquals(0L, openAnomalies());
+        // Three reads of one other tag in a stabilized window contradict the return at once.
+        door("DOOR_OPENED");
+        door("DOOR_CLOSED");
+        scan(operation, "HEALTHY", Map.of(FOREIGN, 3));
+        assertReturnAnomaly("UNEXPECTED_ASSET_OBSERVED", "UNEXPECTED_ASSET_OBSERVED");
+    }
+
+    @Test
+    void aFaultedReaderAfterTheClosingIsInconsistentAtOnce() throws Exception {
+        authorized();
+        doorSequence();
+        scan(operation, "FAULTED", Map.of());
+        assertReturnAnomaly("INCONSISTENT_PHYSICAL_STATE", "READER_NOT_HEALTHY");
+    }
+
+    @Test
+    void theTagReappearingWithoutAConfirmedReturnNeverCompletesTheLoan() throws Exception {
+        compartment = jdbc.sql("""
+                SELECT p.compartment_id FROM aegis.asset_placements p WHERE p.asset_id = :asset AND p.removed_at IS NULL
+                """).param("asset", asset).query(UUID.class).single();
+        tag = jdbc.sql("SELECT identifier_value FROM aegis.asset_identifiers WHERE asset_id = :asset AND active")
+                .param("asset", asset).query(String.class).single();
+        closedAt = clock.instant();
+        // An inventory scan outside any operation sees the asset back in its cell.
+        assertEquals(Outcome.ACCEPTED, scan(null, "HEALTHY", Map.of(tag, 5)));
+        assertEquals("ACTIVE", loanStatus());
+
+        // Within an authorized return, a presence with no door sequence proves nothing either.
+        authorized();
+        acknowledge();
+        closedAt = clock.instant();
+        scan(operation, "HEALTHY", Map.of(tag, 5));
+        assertEquals("COMMAND_ACKNOWLEDGED", fixtures.operationStatus(operation));
+        assertEquals("RETURN_PENDING", loanStatus());
+        // So does a presence received at or after the deadline, even after a door sequence.
+        door("DOOR_OPENED");
+        door("DOOR_CLOSED");
+        // A window that starts 2 s before the deadline and is reported 1 s after it.
+        Instant expiresAt = instant(jdbc.sql("SELECT expires_at FROM aegis.locker_operations WHERE id = :id")
+                .param("id", operation).query(OffsetDateTime.class).single());
+        clock.set(expiresAt.minusSeconds(2));
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        closedAt = clock.instant();
+        scan(operation, "HEALTHY", Map.of(tag, 5));
+        assertEquals(expiresAt.plusSeconds(1), clock.instant());
+        confirmation.run(1000);
+        assertEquals("ANOMALY", fixtures.operationStatus(operation));
+        assertEquals("RETURN_PENDING", loanStatus());
+        assertEquals(0L, audits("LOAN_COMPLETED"));
+    }
+
+    @Test
+    void aRecoveryAfterAnAcknowledgedAnomalyCompletesTheLoanAndResolvesIt() throws Exception {
+        UUID failed = failedReturn();
+        Object requestedAt = returnRequestedAt();
+        // An OPEN anomaly of the loan's return blocks any new attempt.
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        loanView().andExpect(jsonPath("$.availableActions").isEmpty());
+        expectProblem(prepare(key()), 409, "LOAN_NOT_RETURNABLE");
+        UUID anomaly = acknowledgeAnomalyOf(failed);
+        loanView().andExpect(jsonPath("$.status").value("RETURN_PENDING"))
+                .andExpect(jsonPath("$.availableActions[0]").value("RETURN"));
+
+        authorized();
+        // The recovery leaves the loan RETURN_PENDING as it found it.
+        assertEquals("AUTHORIZED", fixtures.operationStatus(operation));
+        assertEquals("RETURN_PENDING", loanStatus());
+        assertEquals(requestedAt, returnRequestedAt());
+        assertEquals(0L, audits("LOAN_RETURN_STARTED"));
+        assertEquals("ACKNOWLEDGED", anomalyStatus(anomaly));
+
+        doorSequence();
+        assertEquals(Outcome.ACCEPTED, scan(operation, "HEALTHY", Map.of(tag, 3)));
+        assertEquals("CONFIRMED", fixtures.operationStatus(operation));
+        assertEquals("COMPLETED", loanStatus());
+        Map<String, Object> resolved = jdbc.sql("""
+                SELECT a.status, a.resolved_at, a.resolution_note, p.type, p.inbound_message_id
+                FROM aegis.anomalies a JOIN aegis.physical_observations p ON p.id = a.resolution_evidence_observation_id
+                WHERE a.id = :id
+                """).param("id", anomaly).query().singleRow();
+        assertEquals("RESOLVED", resolved.get("status"));
+        assertEquals("ASSET_PRESENT", resolved.get("type"));
+        assertNotNull(resolved.get("resolved_at"));
+        assertNotNull(resolved.get("resolution_note"));
+        assertEquals(1L, fixtures.count("""
+                SELECT count(*) FROM aegis.audit_events
+                WHERE subject_id = :id AND event_type = 'ANOMALY_RESOLVED' AND from_state = 'ACKNOWLEDGED'
+                  AND to_state = 'RESOLVED'
+                """, anomaly));
+        // The resolution and the completion are one transaction: the asset is ready again at once.
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        mvc.perform(get("/api/v1/assets/" + asset).header(AUTHORIZATION, bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.readiness.result").value("READY"));
+    }
+
+    @Test
+    void anUnrelatedUnresolvedAnomalyStillBlocksTheRecovery() throws Exception {
+        UUID failed = failedReturn();
+        acknowledgeAnomalyOf(failed);
+        jdbc.sql("""
+                INSERT INTO aegis.anomalies (type, severity, status, compartment_id, detected_at, acknowledged_at,
+                                             acknowledged_by_user_id, acknowledgement_note)
+                VALUES ('INCONSISTENT_PHYSICAL_STATE', 'HIGH', 'ACKNOWLEDGED', :compartment, :now, :now, :admin,
+                        'Inspection pending.')
+                """).param("compartment", compartment).param("now", ReservationFixtures.utc(clock.instant()))
+                .param("admin", accounts.admin().id()).update();
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        loanView().andExpect(jsonPath("$.availableActions").isEmpty());
+        expectProblem(prepare(key()), 422, "PHYSICAL_STATE_UNKNOWN");
+    }
+
+    @Test
+    void repeatedRecoveryFailuresNeverLeaveADeadEnd() throws Exception {
+        UUID first = failedReturn();
+        UUID firstAnomaly = acknowledgeAnomalyOf(first);
+
+        // A recovery ending in a new anomaly: blocked until that one is acknowledged, then eligible again.
+        UUID second = failedReturn();
+        assertEquals("RETURN_PENDING", loanStatus());
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        expectProblem(prepare(key()), 409, "LOAN_NOT_RETURNABLE");
+        UUID secondAnomaly = acknowledgeAnomalyOf(second);
+        loanView().andExpect(jsonPath("$.availableActions[0]").value("RETURN"));
+
+        // A recovery ending safely after its authorization keeps the loan pending and eligible.
+        authorized();
+        expire();
+        assertEquals("EXPIRED", fixtures.operationStatus(operation));
+        assertEquals("RETURN_PENDING", loanStatus());
+        assertEquals(0L, audits("LOAN_RETURN_REVERTED_SAFE"));
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        loanView().andExpect(jsonPath("$.availableActions[0]").value("RETURN"));
+
+        // A recovery whose challenge expires before any scan never touches the loan.
+        prepare(key()).andExpect(status().isAccepted());
+        clock.advance(Duration.ofSeconds(61));
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        challengeExpiry.run(100);
+        assertEquals("RETURN_PENDING", loanStatus());
+        loanView().andExpect(jsonPath("$.availableActions[0]").value("RETURN"));
+
+        // The coherent proof of a later recovery resolves every acknowledged anomaly of the loan's returns.
+        authorized();
+        doorSequence();
+        scan(operation, "HEALTHY", Map.of(tag, 4));
+        assertEquals("COMPLETED", loanStatus());
+        assertEquals("RESOLVED", anomalyStatus(firstAnomaly));
+        assertEquals("RESOLVED", anomalyStatus(secondAnomaly));
+    }
+
+    /** Authorizes a return that ends in ANOMALY at once (a faulted reader after the closing); returns its id. */
+    private UUID failedReturn() throws Exception {
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        authorized();
+        doorSequence();
+        scan(operation, "FAULTED", Map.of());
+        assertEquals("ANOMALY", fixtures.operationStatus(operation));
+        assertEquals("RETURN_PENDING", loanStatus());
+        return operation;
+    }
+
+    private UUID acknowledgeAnomalyOf(UUID failed) throws Exception {
+        UUID anomaly = jdbc.sql("SELECT id FROM aegis.anomalies WHERE locker_operation_id = :id AND status = 'OPEN'")
+                .param("id", failed).query(UUID.class).single();
+        mvc.perform(post("/api/v1/admin/anomalies/" + anomaly + "/acknowledge")
+                .header(AUTHORIZATION, bearer(accessToken(accounts.admin()))).header("Idempotency-Key", key())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"note\":\"Asset seen on the bench.\"}"))
+                .andExpect(status().isOk());
+        heartbeat("CONNECTED", "HEALTHY", "CLOSED", "LOCKED");
+        return anomaly;
+    }
+
+    private void expire() {
+        clock.set(instant(jdbc.sql("SELECT expires_at FROM aegis.locker_operations WHERE id = :id")
+                .param("id", operation).query(OffsetDateTime.class).single()));
+        confirmation.run(1000);
+    }
+
+    private String anomalyStatus(UUID anomaly) {
+        return jdbc.sql("SELECT status FROM aegis.anomalies WHERE id = :id").param("id", anomaly).query(String.class)
+                .single();
+    }
+
+    private Object returnRequestedAt() {
+        return jdbc.sql("SELECT return_requested_at FROM aegis.loans WHERE id = :id").param("id", loan).query()
+                .singleValue();
+    }
+
     private void assertSafelyReverted() throws Exception {
         assertEquals("ACTIVE", loanStatus());
         assertEquals(0L, openAnomalies());
@@ -272,7 +565,8 @@ class ReturnApiTests extends HubChallengeApiTest {
     }
 
     private void authorized() throws Exception {
-        scan(displayed()).andExpect(status().isAccepted());
+        var response = scan(displayed()).andReturn().getResponse();
+        assertEquals(202, response.getStatus(), response.getContentAsString(StandardCharsets.UTF_8));
     }
 
     /** Prepares a return and reports its challenge displayed; returns the challenge id and its secret. */
@@ -282,12 +576,14 @@ class ReturnApiTests extends HubChallengeApiTest {
         operation = UUID.fromString(JsonPath.read(body, "$.id"));
         compartment = jdbc.sql("SELECT compartment_id FROM aegis.locker_operations WHERE id = :id")
                 .param("id", operation).query(UUID.class).single();
+        tag = jdbc.sql("SELECT identifier_value FROM aegis.asset_identifiers WHERE asset_id = :asset AND active")
+                .param("asset", asset).query(String.class).single();
         Map<String, Object> display = displayRow(operation, "DISPLAY_ACCESS_CHALLENGE");
         UUID challenge = (UUID) display.get("challenge_id");
         String secret = open(display).get("payload").get("token").asString();
         clock.advance(Duration.ofSeconds(2));
-        report("ACCESS_CHALLENGE_DISPLAYED", operation, (UUID) display.get("message_id"), challenge, 1, null,
-                session);
+        report("ACCESS_CHALLENGE_DISPLAYED", operation, (UUID) display.get("message_id"), challenge,
+                ((Number) display.get("display_revision")).longValue(), null, session);
         return new String[] {challenge.toString(), secret};
     }
 
@@ -328,6 +624,59 @@ class ReturnApiTests extends HubChallengeApiTest {
         message.put("compartmentId", compartment.toString());
         message.put("doorState", type.equals("DOOR_OPENED") ? "OPEN" : "CLOSED");
         assertEquals(Outcome.ACCEPTED, ingest(message));
+        if (type.equals("DOOR_CLOSED")) {
+            closedAt = clock.instant();
+        }
+    }
+
+    /** A 3-second window that starts at the last closing, reported at its end, for this operation or none. */
+    private Outcome scan(UUID forOperation, String reader, Map<String, Integer> reads) {
+        return ingest(scanMessage(forOperation, reader, reads, 3));
+    }
+
+    private Map<String, Object> scanMessage(UUID forOperation, String reader, Map<String, Integer> reads,
+            int windowSeconds) {
+        Instant started = closedAt;
+        clock.set(closedAt.plusSeconds(windowSeconds));
+        Map<String, Object> message = envelope("RFID_SCAN_COMPLETED");
+        if (forOperation != null) {
+            message.put("operationId", forOperation.toString());
+        }
+        message.put("compartmentId", compartment.toString());
+        message.put("windowStartedAt", started.toString());
+        message.put("windowEndedAt", clock.instant().toString());
+        message.put("readerStatus", reader);
+        List<Map<String, Object>> identifiers = new ArrayList<>();
+        reads.forEach((value, count) -> {
+            Map<String, Object> identifier = new LinkedHashMap<>();
+            identifier.put("identifierType", "RFID_UHF");
+            identifier.put("identifierValue", value);
+            identifier.put("readCount", count);
+            identifiers.add(identifier);
+        });
+        message.put("observedIdentifiers", identifiers);
+        return message;
+    }
+
+    private void doorSequence() {
+        acknowledge();
+        door("DOOR_OPENED");
+        door("DOOR_CLOSED");
+    }
+
+    private void assertReturnAnomaly(String type, String finding) {
+        assertEquals("ANOMALY", fixtures.operationStatus(operation));
+        assertEquals(type, failureReason());
+        assertEquals("RETURN_PENDING", loanStatus());
+        Map<String, Object> anomaly = jdbc.sql("""
+                SELECT type, status, details ->> 'finding' AS finding FROM aegis.anomalies
+                WHERE locker_operation_id = :id
+                """).param("id", operation).query().singleRow();
+        assertEquals(type, anomaly.get("type"));
+        assertEquals("OPEN", anomaly.get("status"));
+        assertEquals(finding, anomaly.get("finding"));
+        assertEquals(0L, audits("LOAN_COMPLETED"));
+        assertEquals(0L, audits("LOAN_RETURN_REVERTED_SAFE"));
     }
 
     private String loanStatus() {

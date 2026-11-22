@@ -56,6 +56,7 @@ final class AuditDetailsFilter {
             Map.entry("CHECKOUT_CONFIRMED", Set.of("assetId", "reservationId", "status", "dueAt")),
             Map.entry("LOAN_RETURN_STARTED", Set.of("assetId", "returnRequestedAt")),
             Map.entry("LOAN_RETURN_REVERTED_SAFE", Set.of("assetId")),
+            Map.entry("LOAN_COMPLETED", Set.of("assetId", "returnedAt")),
             Map.entry("COMMAND_SENT", Set.of("messageId", "attempt", "commandMessageId", "outcome")),
             Map.entry("COMMAND_ACKNOWLEDGED", Set.of("commandMessageId", "outcome", "operationStatus",
                     "commandStatus")),
@@ -63,6 +64,8 @@ final class AuditDetailsFilter {
             Map.entry("ANOMALY_CREATED", Set.of("commandMessageId", "outcome", "anomalyType", "finding",
                     "anomalyCreated")),
             Map.entry("ANOMALY_ACKNOWLEDGED", Set.of("type", "severity")),
+            Map.entry("ANOMALY_RESOLVED", Set.of("type", "severity", "loanId", "resolvedByOperationId",
+                    "scanMessageId")),
             Map.entry("MQTT_MESSAGE_DUPLICATE_IGNORED", Set.of("lockerId", "messageType")));
 
     private static final Object DROPPED = new Object();
