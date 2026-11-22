@@ -2654,6 +2654,22 @@
         }
       }
     },
+    "operation.expired.return" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No door was opened. Start the return again."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune porte n’a été ouverte. Recommencez la préparation."
+          }
+        }
+      }
+    },
     "porte ouverte" : {
       "localizations" : {
         "en" : {

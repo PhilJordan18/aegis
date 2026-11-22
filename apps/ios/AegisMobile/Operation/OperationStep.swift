@@ -94,8 +94,13 @@ struct OperationStep: Equatable, Sendable {
             self.init(title: kind == .checkout ? String(localized: "Retrait confirmé") : String(localized: "Retour confirmé"),
                       instruction: nil, phase: 7, tone: .success, ending: .confirmed)
         case .expired:
-            self.init(title: String(localized: "Délai dépassé"),
-                      instruction: String(localized: "Aucune porte n’a été ouverte. Recommencez la préparation."),
+            // One French text for both kinds; English names the operation, so
+            // the return needs its own key.
+            let instruction = kind == .checkout
+                ? String(localized: "Aucune porte n’a été ouverte. Recommencez la préparation.")
+                : String(localized: "operation.expired.return",
+                         defaultValue: "Aucune porte n’a été ouverte. Recommencez la préparation.")
+            self.init(title: String(localized: "Délai dépassé"), instruction: instruction,
                       phase: operation.authorizedAt == nil ? 2 : 5, tone: .failure, ending: .expired)
         case .failed:
             // `failureReason` stays generic (C8): no reason is shown.

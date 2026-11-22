@@ -55,6 +55,10 @@ struct OperationStepTests {
         #expect(beforeAuthorization.phase == 2)
         #expect(afterAuthorization.phase == 5)
         #expect(beforeAuthorization.title == String(localized: "Délai dépassé"))
+        #expect(step(OperationFixtures.view(status: "EXPIRED", requiredAction: "NONE", terminalAt: Self.deadline),
+                     kind: .return).instruction
+                == String(localized: "operation.expired.return",
+                          defaultValue: "Aucune porte n’a été ouverte. Recommencez la préparation."))
     }
 
     /// §8.5: a status this version does not know implies no progress, success
