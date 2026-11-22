@@ -65,7 +65,8 @@ struct OperationStepTests {
         #expect(step.phase == 0)
         #expect(step.tone == .neutral)
         #expect(step.ending == (terminalAt == nil ? nil : .unrecognized))
-        #expect(step.title == String(localized: "Patientez."))
+        #expect(step.title == String(localized: "État indisponible"))
+        #expect(step.instruction == nil)
         #expect(!step.canScan)
     }
 

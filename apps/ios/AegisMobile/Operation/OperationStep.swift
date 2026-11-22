@@ -108,8 +108,10 @@ struct OperationStep: Equatable, Sendable {
                       phase: 6, tone: .failure, ending: .anomaly)
         case nil:
             // §8.5: an unknown status implies no success, authorization or
-            // physical action; following goes on until `terminalAt`.
-            self.init(title: String(localized: "Patientez."), instruction: nil, phase: 0, tone: .neutral,
+            // physical action; following goes on until `terminalAt`. Doc 09 §3
+            // shows it as an unavailable state, not as a wait that suggests
+            // progress, even more so once the server has ended it.
+            self.init(title: String(localized: "État indisponible"), instruction: nil, phase: 0, tone: .neutral,
                       ending: operation.isTerminal ? .unrecognized : nil)
         }
     }
