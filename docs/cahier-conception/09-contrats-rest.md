@@ -577,7 +577,7 @@ Le serveur n’émet que les valeurs suivantes; leur ordre n’a pas de sens et 
 | `CANCEL` | `ReservationView` | `POST /reservations/{id}/cancel` (§14.4) | Réservation `ACTIVE` du demandeur; instant antérieur à `reservedUntil`; aucune tentative de retrait de cette réservation n’a été autorisée, quelle que soit son issue (§14.4, `06` §5.5; question ouverte Q1); aucune incertitude physique, c’est-à-dire aucune tentative `ANOMALY` dont l’anomalie n’est pas `RESOLVED`. Une tentative `AWAITING_LOCAL_PROOF` laisse `CANCEL` : l’annulation la termine (§14.4). L’horaire et la connexion du locker n’interviennent pas. |
 | `RETURN` | `LoanView` | `POST /loans/{id}/return` (§15.2) | Prêt `ACTIVE` du titulaire; plage d’exploitation ouverte; aucune opération physique non terminale sur le locker, y compris une tentative de ce prêt; gardes communes et de retour satisfaites (`06` §6.1, §6.3), donc hub `ONLINE`. `overdue` n’intervient pas. |
 
-Le serveur n’émet une valeur que lorsque sa mutation est implémentée. Tant que l’annulation (§14.4), le retrait (§15.1) et le retour (§15.2) ne le sont pas, `availableActions` est vide, même si les conditions ci-dessus sont réunies; un client n’affiche donc pas ces boutons (décision du 28 octobre 2026, RES-01). Depuis #44 (11 novembre 2026), `CHECKOUT` est émis lorsque ses conditions sont réunies et que le flux du défi du hub est activé; il est évalué sans verrou, et la préparation revalide toutes ses gardes. `RETURN` reste absent tant que §15.2 n’est pas implémenté.
+Le serveur n’émet une valeur que lorsque sa mutation est implémentée. Tant que l’annulation (§14.4), le retrait (§15.1) et le retour (§15.2) ne le sont pas, `availableActions` est vide, même si les conditions ci-dessus sont réunies; un client n’affiche donc pas ces boutons (décision du 28 octobre 2026, RES-01). Depuis #44 (11 novembre 2026), `CHECKOUT` est émis lorsque ses conditions sont réunies et que le flux du défi du hub est activé; il est évalué sans verrou, et la préparation revalide toutes ses gardes. Depuis #50 (11 novembre 2026), `RETURN` est émis au titulaire lorsque ses conditions sont réunies, avec la même évaluation sans verrou; une vue administrateur (§17) n’expose jamais d’action.
 
 À partir de `reservedUntil`, une réservation encore `ACTIVE` (expiration différée par un retrait autorisé, ou pas encore appliquée) n’expose aucune action : les règles temporelles sont réévaluées au début de chaque action (`06` §14). La limitation de fréquence des préparations (§15.5) n’est pas reflétée; elle se manifeste par `429` avec `Retry-After`.
 
@@ -671,7 +671,7 @@ Ces deux points ne sont pas approuvés. En attendant, la section applique le tex
   - Propriétaires : décision de Philippe; contrat tenu par la session API/Web; mise en œuvre RES-02 (#38).
 - **Q2 — Récupération d’un prêt `RETURN_PENDING`.** La procédure qui autorise une nouvelle tentative n’est pas définie.
   - Référence : `05` §4.3, `06` §6.3.
-  - Lecture appliquée : `RETURN` n’est pas émis.
+  - Lecture appliquée : `RETURN` n’est pas émis et §15.2 refuse la préparation par `409 LOAN_NOT_RETURNABLE` (#50).
   - Recommandation : émettre `RETURN` quand la dernière tentative de retour est `ANOMALY`, que son anomalie est `ACKNOWLEDGED` (`05` §6.2 : correction physique engagée) et que toutes les autres gardes sont satisfaites.
   - Propriétaires : décision de Philippe; contrat tenu par la session API/Web; mise en œuvre RET-01 (#50) et ANO-01 (#52).
 
@@ -1228,6 +1228,15 @@ Même préparation que le retrait, pour un prêt `ACTIVE`, ou une nouvelle tenta
 
 Réponse `202` avec `Location` et `LockerOperationView`. Le passage de `ACTIVE` à `RETURN_PENDING` intervient seulement lors de l’autorisation locale en §15.5.
 
+Mise en œuvre RET-01 (#50, 11 novembre 2026) :
+
+- Le prêt d’un autre titulaire n’est pas trouvé (`404 RESOURCE_NOT_FOUND`, §26.2). Un prêt autre que `ACTIVE` répond `409 LOAN_NOT_RETURNABLE`, y compris `RETURN_PENDING` tant que Q2 n’est pas tranchée (§8.10).
+- Les gardes du locker, de la cellule et de la plage d’exploitation, le refus d’une seconde opération ouverte sur le locker et la limitation de §15.5 sont ceux du retrait, avec les mêmes codes; la limite compte ensemble les préparations de retrait et de retour d’un même couple utilisateur–locker.
+- La readiness n’intervient pas : un actif emprunté n’est jamais `READY`, et `05` §7 exige qu’un retour ne le demande pas. `overdue` n’intervient pas non plus.
+- L’opération `RETURN` porte `loanId`, jamais `reservationId`, et l’identifiant actif de l’actif comme identifiant attendu. Le défi affiché porte l’action `RETURN`.
+- Un défi expiré ou invalidé termine l’opération sans toucher au prêt.
+- Après l’autorisation, la preuve physique qui termine le prêt (`COMPLETED`) relève de RET-02 (#51). D’ici là, une opération de retour autorisée n’est conclue qu’à son `expiresAt`, selon `06` §13.1 : sans effet physique possible, `EXPIRED` ou `FAILED` et le prêt redevient `ACTIVE`; sinon `ANOMALY` et le prêt reste `RETURN_PENDING`.
+
 ### 15.3 Lecture du prêt
 
 `GET /me/loan` retourne le prêt courant de l’utilisateur dans le parcours P0; aucun prêt ouvert donne `404 ACTIVE_LOAN_NOT_FOUND`. `GET /loans/{loanId}` exige que l’utilisateur soit le titulaire.
@@ -1301,7 +1310,7 @@ Réponse `202`, `Location` identique, `LockerOperationView` avec `requiredAction
 | 409 | `LOCAL_PROOF_INVALIDATED` | Défi invalidé ou opération non admissible |
 | 410 | `LOCAL_PROOF_EXPIRED` | Échéance dépassée; nouvelle préparation nécessaire |
 | 429 | `LOCAL_PROOF_RATE_LIMITED` | Limite atteinte, avec `Retry-After` |
-| 404, 403, 409, 422 | Gardes définitives : `ACTIVE_RESERVATION_NOT_FOUND`, `ASSET_ACCESS_DENIED`, `ASSET_HAS_OPEN_LOAN`, `OUTSIDE_OPERATING_HOURS`, `ASSET_NOT_READY` (avec `reasons`), `PHYSICAL_STATE_UNKNOWN` | Défi `INVALIDATED` (ou `EXPIRED`), opération terminée sans commande (§8.5), refus audité, nouvel écran; nouvelle préparation nécessaire |
+| 404, 403, 409, 422 | Gardes définitives : `ACTIVE_RESERVATION_NOT_FOUND`, `ASSET_ACCESS_DENIED`, `ASSET_HAS_OPEN_LOAN`, `OUTSIDE_OPERATING_HOURS`, `ASSET_NOT_READY` (avec `reasons`), `PHYSICAL_STATE_UNKNOWN`; pour un retour, `LOAN_NOT_RETURNABLE` et les gardes communes seulement (ni réservation, ni accès, ni disponibilité) | Défi `INVALIDATED` (ou `EXPIRED`), opération terminée sans commande (§8.5), refus audité, nouvel écran; le prêt d’un retour n’est pas modifié; nouvelle préparation nécessaire |
 | 409, 422, 503 | Gardes transitoires : `COMPARTMENT_STATE_UNSAFE`, `PHYSICAL_STATE_UNKNOWN` (porte ou verrou `UNKNOWN`), `DEVICE_UNAVAILABLE`, `LOCKER_OFFLINE`, `LOCKER_OPERATION_IN_PROGRESS` | Aucun changement; l’échéance du défi n’est pas prolongée; nouvel essai avec nouvelle clé |
 
 La même clé et le même corps rejouent la réponse initiale; une réponse refusée rejouée ne recompte pas les essais. Les refus qui changent un état sont enregistrés avec la clé et rejoués tels quels : secret erroné compté (`403`), cinquième secret erroné, échéance constatée au scan (`410`, opération `EXPIRED`) redémarrage du hub constaté au scan (`409 LOCAL_PROOF_INVALIDATED`, opération `FAILED`) et garde définitive (code de la garde, opération `FAILED` ou `EXPIRED`). Les autres refus ne sont pas enregistrés. `PHYSICAL_STATE_UNKNOWN` existe dans les deux familles : le client relit l’opération (§15.4) pour savoir si la tentative est terminée. Un corps différent avec la même clé est rejeté. La nouvelle clé après consommation donne un refus, jamais un second déverrouillage. Le token n’est pas copié dans la table d’idempotence : seul le hash de la requête canonique y figure.

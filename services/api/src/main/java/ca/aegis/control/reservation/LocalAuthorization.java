@@ -37,15 +37,17 @@ import ca.aegis.control.device.ConnectionStatus;
 import ca.aegis.control.device.LockerAvailability;
 import ca.aegis.control.identity.AccountStatus;
 import ca.aegis.control.identity.Role;
+import ca.aegis.control.loan.LoanStatus;
 import ca.aegis.control.reservation.PreparationRepository.Cell;
 import ca.aegis.control.reservation.ReservationRepository.LockedUser;
 import ca.aegis.control.reservation.ReservationRepository.ReservationRow;
 import ca.aegis.control.shared.web.ApiError;
 
 /**
- * The local authorization of a prepared checkout by the hub's QR (document 06, section 6.5; document 09, section 15.5;
+ * The local authorization of a prepared checkout or return by the hub's QR (document 06, section 6.5; document 09, section 15.5;
  * #44). In the transaction of the idempotency key, which it joins, it consumes the challenge once, makes the operation
- * {@code AUTHORIZED} for 120 seconds and queues its single {@code UNLOCK_COMPARTMENT}.
+ * {@code AUTHORIZED} for 120 seconds and queues its single {@code UNLOCK_COMPARTMENT}; a return also moves its
+ * loan from {@code ACTIVE} to {@code RETURN_PENDING} (#50).
  *
  * <p>A refusal that changes state is returned, not thrown, so that it commits with the idempotency key and a replay
  * neither counts it again nor runs it again: a counted wrong secret, the fifth that ends the attempt, a deadline found
@@ -78,7 +80,11 @@ class LocalAuthorization {
     }
 
     private record Operation(UUID id, UUID userId, String type, String status, UUID assetId, UUID reservationId,
-            UUID lockerId, UUID compartmentId) {
+            UUID loanId, UUID lockerId, UUID compartmentId) {
+
+        boolean isReturn() {
+            return LockerOperationType.RETURN.name().equals(type);
+        }
     }
 
     private record Challenge(UUID id, String status, Instant expiresAt, Instant displayedAt, UUID targetSession,
@@ -87,6 +93,7 @@ class LocalAuthorization {
 
     private final JdbcClient jdbc;
     private final ReservationRepository reservations;
+    private final ReturnRepository loans;
     private final PreparationRepository preparation;
     private final ReservableAssets assets;
     private final CheckoutGuards guards;
@@ -98,12 +105,14 @@ class LocalAuthorization {
     private final AuditTrail audit;
     private final Clock clock;
 
-    LocalAuthorization(JdbcClient jdbc, ReservationRepository reservations, PreparationRepository preparation,
+    LocalAuthorization(JdbcClient jdbc, ReservationRepository reservations, ReturnRepository loans,
+            PreparationRepository preparation,
             ReservableAssets assets, CheckoutGuards guards, LockerAvailability availability,
             LocalChallengeRepository challenges, LocalChallengeExpiry endings, CommandOutbox commands,
             LockerOperationReads reads, AuditTrail audit, Clock clock) {
         this.jdbc = jdbc;
         this.reservations = reservations;
+        this.loans = loans;
         this.preparation = preparation;
         this.assets = assets;
         this.guards = guards;
@@ -139,14 +148,12 @@ class LocalAuthorization {
         // Another user's operation is not visible (document 09, section 26.2): its challenge is never touched.
         Operation found = find(operationId).filter(operation -> operation.userId().equals(user.id()))
                 .orElseThrow(() -> new ReservationRefusedException(ApiError.OPERATION_NOT_FOUND));
-        if (!LockerOperationType.CHECKOUT.name().equals(found.type())) {
-            // Only the checkout has a local proof in this slice; a return comes with #50.
-            throw new ReservationRefusedException(ApiError.LOCAL_PROOF_INVALIDATED);
-        }
-
-        // Lock order of document 08, section 7.1: user, asset, reservation, locker, compartment, operation, challenge.
+        // Lock order of document 08, section 7.1: user, asset, reservation or loan, locker, compartment, operation,
+        // challenge.
         LockedAsset asset = assets.lock(found.assetId()).orElseThrow();
-        ReservationRow reservation = reservations.lock(found.reservationId()).orElseThrow();
+        ReservationRow reservation = found.isReturn() ? null
+                : reservations.lock(found.reservationId()).orElseThrow();
+        ReturnRepository.LoanRow loan = found.isReturn() ? loans.lock(found.loanId()).orElseThrow() : null;
         preparation.lockLocker(found.lockerId());
         Optional<Cell> placed = preparation.lockPlacedCell(asset.id(), found.lockerId());
         Operation operation = lockOperation(operationId);
@@ -193,19 +200,29 @@ class LocalAuthorization {
         }
 
         try {
-            requireDefinitiveGuards(user, asset, reservation, operation, placed, now);
+            if (operation.isReturn()) {
+                ReturnGuards.requireReturnable(loan.status());
+            } else {
+                requireCheckout(reservation, asset, now);
+            }
+            requireCommonGuards(asset, operation, placed, now);
+            if (!operation.isReturn()) {
+                requireCheckoutReadiness(user, asset, now);
+            }
         } catch (ReservationRefusedException refused) {
             return guardFailed(user, operation, challenge, reservation, refused, now);
         }
         requireTransientGuards(operation, placed.orElseThrow());
-
         consume(challenge.id(), now);
         authorize(operation.id(), now);
+        if (operation.isReturn()) {
+            loans.start(loan.id(), now);
+        }
         UnlockCommand command = commands.enqueueUnlock(operation.id(), now);
         int purged = challenges.stopDisplay(challenge.id());
 
-        Map<String, Object> details = new LinkedHashMap<>();
-        details.put("reservationId", operation.reservationId());
+        Map<String, Object> details = new LinkedHashMap<>(LocalChallengeExpiry.source(operation.reservationId(),
+                operation.loanId()));
         details.put("compartmentId", operation.compartmentId());
         details.put("expiresAt", now.plus(PHYSICAL_WINDOW));
         details.put("commandMessageId", command.messageId());
@@ -215,6 +232,13 @@ class LocalAuthorization {
         audit.record(AuditEvent.transition(AuditEventType.LOCAL_CHALLENGE_CONSUMED, user.id(),
                 AuditSubjectType.LOCAL_ACCESS_CHALLENGE, challenge.id(), operation.id(), LocalChallengeStatus.PENDING,
                 LocalChallengeStatus.CONSUMED, null, Map.of("displayInstructionsStopped", purged), now));
+        if (operation.isReturn()) {
+            // Document 05, section 4.3: the loan stays open, now waiting for the physical proof of its return.
+            audit.record(AuditEvent.transition(AuditEventType.LOAN_RETURN_STARTED, user.id(), AuditSubjectType.LOAN,
+                    loan.id(), operation.id(), LoanStatus.ACTIVE,
+                    LoanStatus.RETURN_PENDING, null,
+                    Map.of("assetId", asset.id(), "returnRequestedAt", now.toString()), now));
+        }
         return new Authorized(reads.find(operation.id()).orElseThrow());
     }
 
@@ -243,18 +267,21 @@ class LocalAuthorization {
         return new Refused(ApiError.LOCAL_PROOF_INVALID);
     }
 
-    /**
-     * Document 06, sections 6.1 and 6.5: identity, access, schedule and every guard of the preparation that cannot
-     * become true again before the challenge's deadline, evaluated at {@code now}. A refusal here ends the attempt.
-     */
-    private void requireDefinitiveGuards(LockedUser user, LockedAsset asset, ReservationRow reservation,
-            Operation operation, Optional<Cell> placed, Instant now) {
+    /** Document 06, section 6.2: the reservation still ACTIVE and before its end, and no open loan of the asset. */
+    private void requireCheckout(ReservationRow reservation, LockedAsset asset, Instant now) {
         if (reservation.status() != ReservationStatus.ACTIVE || !now.isBefore(reservation.reservedUntil())) {
             throw new ReservationRefusedException(ApiError.ACTIVE_RESERVATION_NOT_FOUND);
         }
         if (reservations.lockOpenLoanOfAsset(asset.id())) {
             throw new ReservationRefusedException(ApiError.ASSET_HAS_OPEN_LOAN);
         }
+    }
+
+    /**
+     * Document 06, sections 6.1 and 6.5: the schedule and every locker guard of the preparation that cannot become
+     * true again before the challenge's deadline, evaluated at {@code now}. A refusal here ends the attempt.
+     */
+    private void requireCommonGuards(LockedAsset asset, Operation operation, Optional<Cell> placed, Instant now) {
         guards.requireOpen(operation.lockerId(), now);
         // The asset must still be placed in the compartment the challenge was prepared for.
         if (!operation.lockerId().equals(asset.lockerId()) || placed.isEmpty()
@@ -265,6 +292,10 @@ class LocalAuthorization {
                 || preparation.hasUnresolvedAnomaly(asset.id(), operation.compartmentId())) {
             throw new ReservationRefusedException(ApiError.PHYSICAL_STATE_UNKNOWN);
         }
+    }
+
+    /** Document 06, section 6.2: the holder's access level and the readiness, which a return never requires. */
+    private void requireCheckoutReadiness(LockedUser user, LockedAsset asset, Instant now) {
         if (!user.maximumAccessLevel().permits(asset.requiredAccessLevel())) {
             throw new ReservationRefusedException(ApiError.ASSET_ACCESS_DENIED);
         }
@@ -298,7 +329,7 @@ class LocalAuthorization {
         audit.record(new AuditEvent(AuditEventType.LOCAL_CHALLENGE_REJECTED, user.id(),
                 AuditSubjectType.LOCAL_ACCESS_CHALLENGE, challenge.id(), operation.id(), null, null,
                 AuditResult.REJECTED, refused.error().name(), Map.of("guard", refused.error().name()), now));
-        if (reservation.status() == ReservationStatus.CANCELLED) {
+        if (reservation != null && reservation.status() == ReservationStatus.CANCELLED) {
             end(user, operation, challenge, LocalChallengeStatus.INVALIDATED, LockerOperationStatus.FAILED,
                     PendingCheckouts.RESERVATION_CANCELLED, now);
         } else if (refused.error() == ApiError.ACTIVE_RESERVATION_NOT_FOUND
@@ -314,8 +345,9 @@ class LocalAuthorization {
 
     private void end(LockedUser user, Operation operation, Challenge challenge, LocalChallengeStatus closed,
             LockerOperationStatus terminal, String reason, Instant now) {
-        endings.end(challenge.id(), operation.id(), operation.reservationId(), operation.lockerId(), user.id(), closed,
-                terminal, reason, now);
+        endings.end(challenge.id(), operation.id(),
+                LocalChallengeExpiry.source(operation.reservationId(), operation.loanId()), operation.lockerId(),
+                user.id(), closed, terminal, reason, now);
     }
 
     private Optional<Operation> find(UUID operationId) {
@@ -329,13 +361,14 @@ class LocalAuthorization {
     }
 
     private static final String OPERATION = """
-            SELECT id, user_id, type, status, asset_id, reservation_id, locker_id, compartment_id
+            SELECT id, user_id, type, status, asset_id, reservation_id, loan_id, locker_id, compartment_id
             FROM aegis.locker_operations""";
 
     private static Operation operation(java.sql.ResultSet row, int number) throws java.sql.SQLException {
         return new Operation(row.getObject("id", UUID.class), row.getObject("user_id", UUID.class),
                 row.getString("type"), row.getString("status"), row.getObject("asset_id", UUID.class),
-                row.getObject("reservation_id", UUID.class), row.getObject("locker_id", UUID.class),
+                row.getObject("reservation_id", UUID.class), row.getObject("loan_id", UUID.class),
+                row.getObject("locker_id", UUID.class),
                 row.getObject("compartment_id", UUID.class));
     }
 

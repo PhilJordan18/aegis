@@ -23,6 +23,7 @@ import ca.aegis.control.audit.AuditEventType;
 import ca.aegis.control.audit.AuditResult;
 import ca.aegis.control.audit.AuditSubjectType;
 import ca.aegis.control.audit.AuditTrail;
+import ca.aegis.control.command.CommandAcknowledgements;
 import ca.aegis.control.device.ConnectionStatus;
 import ca.aegis.control.device.LockerAvailability;
 import ca.aegis.control.display.HubDisplayOutbox;
@@ -50,6 +51,9 @@ import ca.aegis.control.reservation.ReservationRepository.ReservationRow;
  * {@code EXPIRED}, and every other case ends it in {@code ANOMALY}.</li>
  * </ul>
  *
+ * An authorized {@code RETURN} (#50) goes through the same milestones but is only concluded at its deadline, by
+ * document 06, section 13.1; its positive proof comes with #51.
+ *
  * Each operation is decided in a transaction of its own, under the locks of document 08, section 7.1, at an instant read
  * after them; a terminal operation is never changed again. It runs after each stored acknowledgement, door event or
  * scan of the operation, and on a schedule for the deadline. It never waits for MQTT.
@@ -69,7 +73,12 @@ public class CheckoutConfirmation {
     private static final List<String> OPEN_AFTER_AUTHORIZATION = List.of("AUTHORIZED", "COMMAND_SENT",
             "COMMAND_ACKNOWLEDGED", "DOOR_OPENED", "OBSERVATION_RECEIVED");
 
-    private record Target(UUID id, UUID userId, UUID assetId, UUID reservationId, UUID lockerId, UUID compartmentId) {
+    private record Target(UUID id, String type, UUID userId, UUID assetId, UUID reservationId, UUID loanId,
+            UUID lockerId, UUID compartmentId) {
+
+        boolean isReturn() {
+            return LockerOperationType.RETURN.name().equals(type);
+        }
     }
 
     private record Operation(UUID id, LockerOperationStatus status, Instant authorizedAt, Instant expiresAt,
@@ -82,6 +91,7 @@ public class CheckoutConfirmation {
     private final JdbcClient jdbc;
     private final TransactionTemplate transactions;
     private final ReservationRepository reservations;
+    private final ReturnRepository loans;
     private final ReservableAssets assets;
     private final PreparationRepository preparation;
     private final LockerAvailability availability;
@@ -90,11 +100,12 @@ public class CheckoutConfirmation {
     private final Clock clock;
 
     CheckoutConfirmation(JdbcClient jdbc, TransactionTemplate transactions, ReservationRepository reservations,
-            ReservableAssets assets, PreparationRepository preparation, LockerAvailability availability,
+            ReturnRepository loans, ReservableAssets assets, PreparationRepository preparation, LockerAvailability availability,
             HubDisplayOutbox display, AuditTrail audit, Clock clock) {
         this.jdbc = jdbc;
         this.transactions = transactions;
         this.reservations = reservations;
+        this.loans = loans;
         this.assets = assets;
         this.preparation = preparation;
         this.availability = availability;
@@ -103,12 +114,12 @@ public class CheckoutConfirmation {
         this.clock = clock;
     }
 
-    /** One pass over the authorized checkouts not yet decided; returns the number that reached a terminal state. */
+    /** One pass over the authorized checkouts and returns not yet decided; returns the number that reached a terminal state. */
     public int run(int max) {
         int ended = 0;
         for (UUID operation : jdbc.sql("""
                 SELECT id FROM aegis.locker_operations
-                WHERE type = 'CHECKOUT' AND authorized_at IS NOT NULL AND status IN (:open)
+                WHERE authorized_at IS NOT NULL AND status IN (:open)
                 ORDER BY expires_at, id
                 LIMIT :max
                 """).param("open", OPEN_AFTER_AUTHORIZATION).param("max", max).query(UUID.class).list()) {
@@ -123,7 +134,7 @@ public class CheckoutConfirmation {
      * Evaluates one operation in a transaction of its own. A failure is logged and left to the next pass: the caller,
      * an ingestion or the scheduler, must never fail because of it.
      *
-     * @return the status after the evaluation, empty when the operation is not an authorized open checkout
+     * @return the status after the evaluation, empty when the operation does not exist
      */
     public Optional<LockerOperationStatus> evaluate(UUID operationId) {
         try {
@@ -137,13 +148,13 @@ public class CheckoutConfirmation {
 
     private Optional<LockerOperationStatus> decide(UUID operationId) {
         Optional<Target> target = jdbc.sql("""
-                SELECT id, user_id, asset_id, reservation_id, locker_id, compartment_id
-                FROM aegis.locker_operations WHERE id = :id AND type = 'CHECKOUT'
+                SELECT id, type, user_id, asset_id, reservation_id, loan_id, locker_id, compartment_id
+                FROM aegis.locker_operations WHERE id = :id
                 """).param("id", operationId)
-                .query((row, number) -> new Target(row.getObject("id", UUID.class),
+                .query((row, number) -> new Target(row.getObject("id", UUID.class), row.getString("type"),
                         row.getObject("user_id", UUID.class), row.getObject("asset_id", UUID.class),
-                        row.getObject("reservation_id", UUID.class), row.getObject("locker_id", UUID.class),
-                        row.getObject("compartment_id", UUID.class)))
+                        row.getObject("reservation_id", UUID.class), row.getObject("loan_id", UUID.class),
+                        row.getObject("locker_id", UUID.class), row.getObject("compartment_id", UUID.class)))
                 .optional();
         if (target.isEmpty()) {
             return Optional.empty();
@@ -156,7 +167,12 @@ public class CheckoutConfirmation {
         lockDevices(t.lockerId());
         reservations.lockUser(t.userId());
         assets.lockForCustody(t.assetId());
-        ReservationRow reservation = reservations.lock(t.reservationId()).orElseThrow();
+        ReservationRow reservation = null;
+        if (t.isReturn()) {
+            loans.lock(t.loanId()).orElseThrow();
+        } else {
+            reservation = reservations.lock(t.reservationId()).orElseThrow();
+        }
         preparation.lockLocker(t.lockerId());
         CellState cell = lockCell(t.compartmentId());
         Operation operation = lockOperation(t.id());
@@ -175,6 +191,12 @@ public class CheckoutConfirmation {
                 .filter(fact -> fact.receivedAt().isBefore(operation.expiresAt())).toList();
         Result proof = CheckoutProof.evaluate(t.compartmentId(), inTime, tagElsewhere(t.compartmentId(), operation));
         LockerOperationStatus status = advance(operation, proof, now);
+        if (t.isReturn()) {
+            // #50: an authorized return is bounded by its deadline. Its physical proof, which completes the loan,
+            // comes with #51; until then a return never confirms and never frees the asset.
+            return Optional.of(now.isBefore(operation.expiresAt()) ? status
+                    : returnAtDeadline(t, operation, status, proof, cell, now));
+        }
 
         if (proof.verdict() == Verdict.COHERENT) {
             return Optional.of(confirm(t, reservation, status, proof, now));
@@ -296,6 +318,79 @@ public class CheckoutConfirmation {
     }
 
     /**
+     * Document 06, section 13.1, after {@code expiresAt}: the loan goes back to {@code ACTIVE} only when the return
+     * certainly had no physical effect (never sent, refused by the hub before any unlock, or door certainly kept
+     * closed); every other case ends in {@code ANOMALY} and the loan stays {@code RETURN_PENDING}.
+     */
+    private LockerOperationStatus returnAtDeadline(Target t, Operation operation, LockerOperationStatus status,
+            Result proof, CellState cell, Instant now) {
+        if (proof.closed().isPresent()) {
+            return anomaly(t, status, DEVICE_OFFLINE_DURING_OPERATION, proof.finding(), now);
+        }
+        if (proof.opened().isPresent()) {
+            return anomaly(t, status, DOOR_NOT_CLOSED_BEFORE_EXPIRY, proof.finding(), now);
+        }
+        if (doorMaySinceHaveOpened(t, operation)) {
+            return anomaly(t, status, DEVICE_OFFLINE_DURING_OPERATION, proof.finding(), now);
+        }
+        if (hasOpenAnomaly(t.id())) {
+            // An uncertain command report (#41) already left the cell's state unknown; that anomaly is kept.
+            return anomaly(t, status, INCONSISTENT_PHYSICAL_STATE, proof.finding(), now);
+        }
+        Optional<String> rejection = safeRejection(t.id());
+        if (rejection.isPresent()) {
+            String reason = "COMMAND_REJECTED_" + rejection.get();
+            end(t.id(), status, LockerOperationStatus.FAILED, reason, now);
+            audit.record(AuditEvent.transition(AuditEventType.OPERATION_FAILED, null,
+                    AuditSubjectType.LOCKER_OPERATION, t.id(), t.id(), status, LockerOperationStatus.FAILED, reason,
+                    Map.of("loanId", t.loanId()), now));
+            revertLoan(t, reason, now);
+            return LockerOperationStatus.FAILED;
+        }
+        if (neverSent(t.id()) || certainlyClosed(t, cell, now)) {
+            end(t.id(), status, LockerOperationStatus.EXPIRED, OPERATION_EXPIRED, now);
+            audit.record(AuditEvent.transition(AuditEventType.OPERATION_EXPIRED, null,
+                    AuditSubjectType.LOCKER_OPERATION, t.id(), t.id(), status, LockerOperationStatus.EXPIRED,
+                    OPERATION_EXPIRED, Map.of("loanId", t.loanId(), "finding", proof.finding().name()), now));
+            revertLoan(t, OPERATION_EXPIRED, now);
+            return LockerOperationStatus.EXPIRED;
+        }
+        return anomaly(t, status, DEVICE_OFFLINE_DURING_OPERATION, proof.finding(), now);
+    }
+
+    private void revertLoan(Target t, String reason, Instant now) {
+        loans.revert(t.loanId(), now);
+        audit.record(AuditEvent.transition(AuditEventType.LOAN_RETURN_REVERTED_SAFE, null, AuditSubjectType.LOAN,
+                t.loanId(), t.id(), LoanStatus.RETURN_PENDING, LoanStatus.ACTIVE, reason,
+                Map.of("assetId", t.assetId()), now));
+        log.info("Return ended without physical effect, loan active again: operationId={}, loanId={}, reason={}",
+                t.id(), t.loanId(), reason);
+    }
+
+    private boolean hasOpenAnomaly(UUID operationId) {
+        return jdbc.sql("""
+                SELECT EXISTS (SELECT 1 FROM aegis.anomalies
+                               WHERE locker_operation_id = :id AND status IN ('OPEN', 'ACKNOWLEDGED'))
+                """).param("id", operationId).query(Boolean.class).single();
+    }
+
+    /**
+     * The reason of the hub's refusal of the operation's command, when it is one that guarantees no actuation
+     * (document 10, section 9.1). An uncertain refusal is never read as safe, even once its anomaly is resolved.
+     */
+    private Optional<String> safeRejection(UUID operationId) {
+        return jdbc.sql("""
+                SELECT m.parsed_payload ->> 'reason'
+                FROM aegis.inbound_device_messages m
+                JOIN aegis.command_outbox c ON c.operation_id = m.operation_id AND c.status = 'REJECTED'
+                WHERE m.operation_id = :id AND m.message_type = 'COMMAND_REJECTED'
+                  AND m.processing_status <> 'REJECTED'
+                ORDER BY m.received_at, m.id
+                """).param("id", operationId).query(String.class).list().stream()
+                .filter(CommandAcknowledgements.SAFE_REJECTIONS::contains).findFirst();
+    }
+
+    /**
      * Ends the operation in {@code ANOMALY} with one open HIGH anomaly. An anomaly the operation already has, opened by
      * an uncertain command report (#41), is kept rather than duplicated ({@code ux_anomalies_one_open_per_operation}).
      */
@@ -320,7 +415,7 @@ public class CheckoutConfirmation {
         audit.record(new AuditEvent(AuditEventType.ANOMALY_CREATED, null, AuditSubjectType.ANOMALY, anomaly, t.id(),
                 from.name(), LockerOperationStatus.ANOMALY.name(), AuditResult.ACCEPTED, type,
                 Map.of("anomalyType", type, "finding", finding.name(), "anomalyCreated", created.isPresent()), now));
-        log.warn("Checkout ended in anomaly: operationId={}, anomalyId={}, type={}, finding={}", t.id(), anomaly, type,
+        log.warn("Operation ended in anomaly: operationId={}, anomalyId={}, type={}, finding={}", t.id(), anomaly, type,
                 finding);
         return LockerOperationStatus.ANOMALY;
     }
@@ -478,13 +573,18 @@ public class CheckoutConfirmation {
                 .param("compartment", t.compartmentId().toString()).query(Boolean.class).single();
     }
 
-    /** The command never left the outbox: never claimed, never attempted, never published. */
+    /**
+     * The command never left the outbox: never claimed, never attempted, never published; or the dispatcher cancelled
+     * it at its deadline knowing no attempt could have published ({@code COMMAND_EXPIRED}, which it leaves for this
+     * expiry on a return).
+     */
     private boolean neverSent(UUID operationId) {
         return jdbc.sql("""
                 SELECT EXISTS (
                     SELECT 1 FROM aegis.command_outbox
-                    WHERE operation_id = :id AND status = 'PENDING' AND attempt_count = 0 AND claimed_at IS NULL
-                      AND published_at IS NULL
+                    WHERE operation_id = :id AND published_at IS NULL
+                      AND ((status = 'PENDING' AND attempt_count = 0 AND claimed_at IS NULL)
+                           OR (status = 'CANCELLED' AND last_error = 'COMMAND_EXPIRED'))
                 )
                 """).param("id", operationId).query(Boolean.class).single();
     }
