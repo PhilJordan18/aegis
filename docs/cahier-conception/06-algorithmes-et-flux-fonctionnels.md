@@ -1250,6 +1250,15 @@ Le backend résout une anomalie uniquement lorsqu’une nouvelle preuve physique
 
 Une détection spontanée de présence pendant un prêt ne remplace pas une nouvelle opération `RETURN`.
 
+Mise en œuvre du `CHECKOUT` incertain (#52) : la preuve est un balayage RFID stable reçu après la détection de
+l’anomalie, avec ou sans `operationId` (document 10, section 12.2), dont le verdict `ASSET_PRESENT` est retenu par
+l’évaluation de présence de la section 4.4 : cellule de placement de l’actif, porte projetée `CLOSED`, aucune
+porte bougée depuis, connexion continue et étiquette absente des autres cellules. Le backend l’évalue après chaque
+balayage accepté de la cellule et à chaque passe de l’évaluation des opérations. Il lie l’observation à
+`resolutionEvidenceObservationId`, journalise `ANOMALY_RESOLVED` et réévalue la réservation : `CHECKOUT` redevient
+possible si la fenêtre reste ouverte, sinon elle passe à `EXPIRED`. Hors opération, le hub ne balaie que sur demande
+explicite, après une porte forcée ou au redémarrage; sans ce balayage, l’anomalie reste ouverte.
+
 ### 15.3 Pseudocode
 
 ```text
