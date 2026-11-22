@@ -82,7 +82,14 @@ Deux essais de la sonde ont échoué à cause d'elle et sont rapportés sur #202
 
 ## Exécution depuis ce dossier sur dev `f442a5c` (avec #200, #202 et #182)
 
-À compléter avec le résultat de la relance.
+Les deux scripts ont été relancés depuis ce dossier sur la branche `67-test-cycles-closing-guard`. Hors
+`docs/qualite`, son code est identique à dev `f442a5c` (#200, #202 et #182 fusionnées). La relance montre que la
+preuve s'exécute depuis le dépôt et non depuis une copie dans `/tmp`.
+
+| Fichier | Résultat |
+|---|---|
+| [`f442a5c-recuperation-retrait.txt`](f442a5c-recuperation-retrait.txt) | K1 à K7 réussis ; 1 anomalie `RESOLVED` ; code de sortie 0 |
+| [`f442a5c-fraicheur-manager.txt`](f442a5c-fraicheur-manager.txt) | 1 cycle `1 1 1 2 2 2 1 0 2 1` ; F1 et F2 réussis (1 relecture chacun, la ligne suit l'API) ; code de sortie 0 |
 
 ## Hors de cette preuve
 
