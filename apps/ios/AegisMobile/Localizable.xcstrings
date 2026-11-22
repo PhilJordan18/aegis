@@ -51,6 +51,16 @@
         }
       }
     },
+    "Accès autorisé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Access authorized"
+          }
+        }
+      }
+    },
     "Accès réservé aux techniciens" : {
       "localizations" : {
         "en" : {
@@ -171,6 +181,46 @@
         }
       }
     },
+    "Aperçu de l’appareil photo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera preview"
+          }
+        }
+      }
+    },
+    "Approchez-vous de l’écran du casier." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stand in front of the locker screen."
+          }
+        }
+      }
+    },
+    "Attendez le signal de la cellule %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wait for the signal from compartment %@."
+          }
+        }
+      }
+    },
+    "Aucun appareil photo n’est disponible sur cet appareil." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No camera is available on this device."
+          }
+        }
+      }
+    },
     "Aucun placement connu" : {
       "localizations" : {
         "en" : {
@@ -211,6 +261,26 @@
         }
       }
     },
+    "Aucune porte n’a été ouverte. Recommencez la préparation." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No door was opened. Start the checkout again."
+          }
+        }
+      }
+    },
+    "Aucune porte n’est ouverte." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No door is open."
+          }
+        }
+      }
+    },
     "Aucune réservation en cours." : {
       "localizations" : {
         "en" : {
@@ -227,6 +297,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No reservation or loan in progress."
+          }
+        }
+      }
+    },
+    "Autorisation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Authorization"
+          }
+        }
+      }
+    },
+    "Autorisez l’appareil photo dans Réglages pour scanner le code." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow camera access in Settings to scan the code."
           }
         }
       }
@@ -271,6 +361,26 @@
         }
       }
     },
+    "Ce code correspond à une autre opération." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This code belongs to another operation."
+          }
+        }
+      }
+    },
+    "Ce code n’est pas un code Aegis." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is not an Aegis code."
+          }
+        }
+      }
+    },
     "Ce compte administrateur s’utilise dans Aegis Manager sur le Web. Aucune donnée n’a été chargée." : {
       "localizations" : {
         "en" : {
@@ -287,6 +397,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This account can't use the Aegis app. No data was loaded."
+          }
+        }
+      }
+    },
+    "Ce n’est ni une annulation ni une confirmation. L’état sera relu dès le retour du réseau." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This neither cancels nor confirms the operation. Its status will be read again when the network is back."
           }
         }
       }
@@ -327,6 +447,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This equipment is no longer available."
+          }
+        }
+      }
+    },
+    "Cette action n’est plus possible." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This action is no longer possible."
           }
         }
       }
@@ -431,12 +561,62 @@
         }
       }
     },
+    "Code du casier" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Locker code"
+          }
+        }
+      }
+    },
+    "Code lu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code read"
+          }
+        }
+      }
+    },
     "Code ou modèle" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Code or model"
+          }
+        }
+      }
+    },
+    "Code refusé. Scannez à nouveau l’écran du casier." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code refused. Scan the locker screen again."
+          }
+        }
+      }
+    },
+    "Commande" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Command"
+          }
+        }
+      }
+    },
+    "Commande transmise au casier" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Command sent to the locker"
           }
         }
       }
@@ -541,6 +721,36 @@
         }
       }
     },
+    "Consultez votre activité pour savoir si une nouvelle tentative est possible." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check your activity to see whether a new attempt is possible."
+          }
+        }
+      }
+    },
+    "Demande" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request"
+          }
+        }
+      }
+    },
+    "Demande envoyée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request sent"
+          }
+        }
+      }
+    },
     "Demandez l’accès à un administrateur." : {
       "localizations" : {
         "en" : {
@@ -571,6 +781,16 @@
         }
       }
     },
+    "Dernier état reçu : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last status received: %@"
+          }
+        }
+      }
+    },
     "Disponible dans la cellule %@" : {
       "localizations" : {
         "en" : {
@@ -587,6 +807,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Already reserved"
+          }
+        }
+      }
+    },
+    "Délai dépassé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Time limit reached"
+          }
+        }
+      }
+    },
+    "Déposez l’équipement, puis refermez la porte." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Put the equipment back, then close the door."
+          }
+        }
+      }
+    },
+    "Déverrouillage de %@ en préparation. N’ouvrez pas encore." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparing to unlock %@. Don’t open yet."
+          }
+        }
+      }
+    },
+    "Déverrouillage lancé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlock started"
           }
         }
       }
@@ -661,6 +921,26 @@
         }
       }
     },
+    "Essai de %@ : le casier était hors ligne." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attempt at %@: the locker was offline."
+          }
+        }
+      }
+    },
+    "Expire dans %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expires in %@"
+          }
+        }
+      }
+    },
     "Expirée" : {
       "localizations" : {
         "en" : {
@@ -691,6 +971,16 @@
         }
       }
     },
+    "Fermer masque ce suivi sans annuler l’opération. Reprenez-le depuis Mon activité." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close hides this tracking without cancelling the operation. Resume it from My activity."
+          }
+        }
+      }
+    },
     "Fermeture du casier : %@." : {
       "localizations" : {
         "en" : {
@@ -717,6 +1007,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Keep reservation"
+          }
+        }
+      }
+    },
+    "Gardez la porte fermée." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep the door closed."
           }
         }
       }
@@ -811,6 +1111,46 @@
         }
       }
     },
+    "Intervention requise" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intervention required"
+          }
+        }
+      }
+    },
+    "La cellule %@ est indisponible. Prévenez un administrateur." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartment %@ is unavailable. Tell an administrator."
+          }
+        }
+      }
+    },
+    "La cellule %@ n’est pas dans un état sûr. Prévenez un administrateur." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartment %@ is not in a safe state. Tell an administrator."
+          }
+        }
+      }
+    },
+    "La présence de l’équipement n’est pas confirmée. Réessayez plus tard." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The equipment’s presence is not confirmed. Try again later."
+          }
+        }
+      }
+    },
     "La réservation n’ouvre aucune porte." : {
       "localizations" : {
         "en" : {
@@ -861,12 +1201,72 @@
         }
       }
     },
+    "Le casier est hors ligne. Réessayez plus tard." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The locker is offline. Try again later."
+          }
+        }
+      }
+    },
+    "Le casier est occupé par une autre opération. Réessayez dans un instant." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The locker is busy with another operation. Try again in a moment."
+          }
+        }
+      }
+    },
+    "Le casier n’a pas encore confirmé l’affichage." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The locker has not confirmed the display yet."
+          }
+        }
+      }
+    },
+    "Le code a expiré. Recommencez la préparation." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The code has expired. Start the preparation again."
+          }
+        }
+      }
+    },
+    "Le code s’affiche sur le casier" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code appearing on the locker"
+          }
+        }
+      }
+    },
     "Le prêt en cours n’a pas pu être vérifié." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Your current loan couldn’t be checked."
+          }
+        }
+      }
+    },
+    "Le scan n’ouvre rien tant que le serveur n’a pas autorisé." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scanning unlocks nothing until the server authorizes it."
           }
         }
       }
@@ -981,6 +1381,26 @@
         }
       }
     },
+    "L’appareil photo sert uniquement à lire le code du casier." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The camera is only used to read the locker code."
+          }
+        }
+      }
+    },
+    "Masque le suivi sans annuler l’opération." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hides tracking without cancelling the operation."
+          }
+        }
+      }
+    },
     "Masquer le mot de passe" : {
       "localizations" : {
         "en" : {
@@ -1007,6 +1427,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Password"
+          }
+        }
+      }
+    },
+    "Ne réessayez pas. Un administrateur doit vérifier la cellule %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Don’t try again. An administrator must check compartment %@."
           }
         }
       }
@@ -1071,12 +1501,102 @@
         }
       }
     },
+    "Nouvelle tentative de retrait" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try checkout again"
+          }
+        }
+      }
+    },
+    "Opération arrêtée sans ouverture" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Operation stopped without opening"
+          }
+        }
+      }
+    },
+    "Ouvrez la porte %@ et déposez « %@ ». Si elle reste fermée, ne forcez pas et attendez le message suivant." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open door %@ and put back “%@”. If it stays shut, don’t force it; wait for the next message."
+          }
+        }
+      }
+    },
+    "Ouvrez la porte %@ et retirez « %@ ». Si elle reste fermée, ne forcez pas et attendez le message suivant." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open door %@ and take “%@”. If it stays shut, don’t force it; wait for the next message."
+          }
+        }
+      }
+    },
+    "Ouvrir Réglages" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Settings"
+          }
+        }
+      }
+    },
+    "Patientez." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please wait."
+          }
+        }
+      }
+    },
+    "Porte" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Door"
+          }
+        }
+      }
+    },
+    "Porte ouverte" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Door open"
+          }
+        }
+      }
+    },
     "Pourquoi il est bloqué" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Why it's blocked"
+          }
+        }
+      }
+    },
+    "Préparer le retrait" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prepare checkout"
           }
         }
       }
@@ -1132,6 +1652,46 @@
         }
       }
     },
+    "Recommencer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start again"
+          }
+        }
+      }
+    },
+    "Recommencer le retrait" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start the checkout again"
+          }
+        }
+      }
+    },
+    "Relance la préparation du retrait." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starts checkout preparation again."
+          }
+        }
+      }
+    },
+    "Reprendre" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume"
+          }
+        }
+      }
+    },
     "Reprise de la session…" : {
       "localizations" : {
         "en" : {
@@ -1162,6 +1722,16 @@
         }
       }
     },
+    "Retirez l’équipement, puis refermez la porte." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Take the equipment, then close the door."
+          }
+        }
+      }
+    },
     "Retiré de la circulation par l’administration" : {
       "localizations" : {
         "en" : {
@@ -1172,12 +1742,32 @@
         }
       }
     },
+    "Retour confirmé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Return confirmed"
+          }
+        }
+      }
+    },
     "Retour en attente de vérification." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Return awaiting verification."
+          }
+        }
+      }
+    },
+    "Retour guidé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guided return"
           }
         }
       }
@@ -1198,6 +1788,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Back to the list"
+          }
+        }
+      }
+    },
+    "Retrait confirmé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checkout confirmed"
+          }
+        }
+      }
+    },
+    "Retrait en cours" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checkout in progress"
+          }
+        }
+      }
+    },
+    "Retrait guidé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guided checkout"
+          }
+        }
+      }
+    },
+    "Retrait indisponible pour le moment. Actualisez pour vérifier à nouveau." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checkout isn’t available right now. Refresh to check again."
           }
         }
       }
@@ -1432,6 +2062,36 @@
         }
       }
     },
+    "Scanner le code" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan the code"
+          }
+        }
+      }
+    },
+    "Scannez le code affiché sur le casier" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan the code shown on the locker"
+          }
+        }
+      }
+    },
+    "Scannez le code du casier" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan the locker code"
+          }
+        }
+      }
+    },
     "Se connecter" : {
       "localizations" : {
         "en" : {
@@ -1522,12 +2182,42 @@
         }
       }
     },
+    "Suivi interrompu : connexion perdue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tracking interrupted: connection lost"
+          }
+        }
+      }
+    },
+    "Suivi masqué. L’opération n’est pas annulée." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tracking hidden. The operation is not cancelled."
+          }
+        }
+      }
+    },
     "Technicien" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Technician"
+          }
+        }
+      }
+    },
+    "Temps restant" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Time remaining"
           }
         }
       }
@@ -1562,6 +2252,17 @@
           }
         }
       }
+    },
+    "Trop d’essais. Réessayez dans %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Too many attempts. Try again in %@."
+          }
+        }
+      },
+      "comment" : "The argument is a localized duration, for example 42 seconds"
     },
     "Valide" : {
       "localizations" : {
@@ -1713,6 +2414,16 @@
         }
       }
     },
+    "Vous pouvez faire une nouvelle tentative. Aucune porte ne s’ouvre sans le code du casier." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can try again. No door opens without the locker code."
+          }
+        }
+      }
+    },
     "Vous pouvez réessayer." : {
       "localizations" : {
         "en" : {
@@ -1733,12 +2444,42 @@
         }
       }
     },
+    "Vérification" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verification"
+          }
+        }
+      }
+    },
+    "Vérification du code…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking the code…"
+          }
+        }
+      }
+    },
     "Vérification du service…" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Checking the service…"
+          }
+        }
+      }
+    },
+    "Vérification en cours" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verification in progress"
           }
         }
       }
@@ -1773,12 +2514,122 @@
         }
       }
     },
+    "accès autorisé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "access authorized"
+          }
+        }
+      }
+    },
+    "code du casier affiché" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "locker code displayed"
+          }
+        }
+      }
+    },
+    "commande transmise au casier" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "command sent to the locker"
+          }
+        }
+      }
+    },
+    "demande envoyée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "request sent"
+          }
+        }
+      }
+    },
+    "dernier état reçu, suivi interrompu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "last status received, tracking interrupted"
+          }
+        }
+      }
+    },
+    "déverrouillage lancé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unlock started"
+          }
+        }
+      }
+    },
+    "en cours" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in progress"
+          }
+        }
+      }
+    },
+    "le code s’affiche sur le casier" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "code appearing on the locker"
+          }
+        }
+      }
+    },
     "nom@entreprise.ca" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "name@company.ca"
+          }
+        }
+      }
+    },
+    "porte ouverte" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "door open"
+          }
+        }
+      }
+    },
+    "terminé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "done"
+          }
+        }
+      }
+    },
+    "vérification en cours" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verification in progress"
           }
         }
       }
@@ -1799,6 +2650,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Needs checking"
+          }
+        }
+      }
+    },
+    "Échéance : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deadline: %@"
+          }
+        }
+      }
+    },
+    "Échéance atteinte : en attente de confirmation du service." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deadline reached: waiting for the service to confirm."
+          }
+        }
+      }
+    },
+    "Échéance reçue : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deadline received: %@"
           }
         }
       }
@@ -1849,6 +2730,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Status checked at %@, locker time."
+          }
+        }
+      }
+    },
+    "à venir" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pending"
           }
         }
       }

@@ -65,6 +65,8 @@ PR_UI_TESTS=(
     "AegisMobileUITests/ReservationUITests/testMyOwnReservationReplacesReserveOnTheSheet"
     "AegisMobileUITests/ReservationUITests/testARefusedCancelFollowsTheNewRead"
     "AegisMobileUITests/ReservationUITests/testALoanReadFailureStaysInTheLoanSection"
+    "AegisMobileUITests/CheckoutUITests/testARefusedCodeNeedsANewScan"
+    "AegisMobileUITests/CheckoutUITests/testALostConnectionIsNeitherACancellationNorAConfirmation"
 )
 
 usage() {

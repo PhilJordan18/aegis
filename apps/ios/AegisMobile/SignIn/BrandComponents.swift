@@ -134,7 +134,10 @@ struct PrimaryButtonStyle: ButtonStyle {
             .padding(.horizontal, 18)
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity, minHeight: 54)
-            .background(isEnabled ? Color.accentColor : Color.brandField,
+            // The asset itself, not `Color.accentColor`: a screen that tints its
+            // text actions with the lighter accent must not lighten this fill
+            // under white text.
+            .background(isEnabled ? Color("AccentColor") : Color.brandField,
                         in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(isEnabled ? Color.white.opacity(0.25) : Color.fieldEdge))

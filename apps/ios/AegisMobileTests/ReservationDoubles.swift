@@ -78,8 +78,10 @@ final class ScriptedReservationService: ActivityService, ReservationService, @un
 enum ActivityDoubles {
     static let routeMissing = APIError.http(status: 404, problem: SessionFixtures.problem(404, "RESOURCE_NOT_FOUND"))
 
-    static func reservation(status: String = "ACTIVE", actions: [String] = ["CHECKOUT", "CANCEL"]) -> ReservationView {
-        CatalogFixtures.decode(ActivityFixtures.reservation(status: status, actions: actions))
+    static func reservation(status: String = "ACTIVE", actions: [String] = ["CHECKOUT", "CANCEL"],
+                            currentOperationId: String? = nil) -> ReservationView {
+        CatalogFixtures.decode(ActivityFixtures.reservation(status: status, actions: actions,
+                                                            currentOperationId: currentOperationId))
     }
 
     static func loan(overdue: Bool = true) -> LoanView {
