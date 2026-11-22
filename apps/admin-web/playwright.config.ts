@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const PORT = 5180
+// AEGIS_E2E_PORT lets two worktrees run Playwright side by side (the dev server port is fixed otherwise).
+const PORT = Number(process.env.AEGIS_E2E_PORT ?? 5180)
 const reducedMotion = process.env.AEGIS_MOTION === 'no-preference' ? 'no-preference' : 'reduce'
 
 /**
@@ -19,6 +20,8 @@ const reducedMotion = process.env.AEGIS_MOTION === 'no-preference' ? 'no-prefere
  *   integrated identity v3 in docs/design/manager-v3/captures-integration/;
  * - `forms` (npm run test:forms): the CAT-01, CFG-02 and #26 forms, axe, keyboard and 320 px; with
  *   AEGIS_FORMS_CAPTURE=1 (npm run capture:forms) it writes the review batch to docs/design/manager-forms/captures/.
+ * - `follow` (npm run test:follow): ADR-006 follow-up of the open operation dossier on a routed fake: no click, bounded
+ *   request count, pause while hidden, stop at a terminal status; writes no image.
  * All start their own Vite dev server, where the design-review preview is enabled.
  */
 export default defineConfig({
@@ -43,6 +46,7 @@ export default defineConfig({
     { name: 'evidence', testMatch: 'evidence.spec.ts' },
     { name: 'integration', testMatch: 'integration.spec.ts' },
     { name: 'forms', testMatch: 'forms.spec.ts' },
+    { name: 'follow', testMatch: 'follow.spec.ts' },
   ],
   webServer: {
     command: `npm run dev -- --host 127.0.0.1 --port ${PORT} --strictPort`,

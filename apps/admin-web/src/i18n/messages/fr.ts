@@ -509,6 +509,7 @@ export const fr = {
     loaded: ({ count: value, page, pages }: { count: number; page: number; pages: number }) =>
       `Liste chargée${NBSP}: ${count.format(value)} ${value === 1 ? 'résultat' : 'résultats'}, page ${count.format(page)} sur ${count.format(pages)}.`,
     selectedStatus: ({ name }: { name: string }) => `Dossier sélectionné${NBSP}: ${name}.`,
+    operationUpdated: ({ status }: { status: string }) => `Opération mise à jour${NBSP}: ${status}.`,
     detailLoading: 'Chargement du dossier…',
     paginationLabel: 'Pagination',
     previousPage: 'Précédent',
@@ -1331,10 +1332,23 @@ export const fr = {
     detailNull: 'Non renseigné',
     detailTrue: 'Oui',
     detailFalse: 'Non',
+    /** Spoken before the two sides of a change, which are shown as « valeur → valeur ». */
+    detailAbsent: 'Aucun',
+    detailBefore: 'Avant',
+    detailAfter: 'Après',
     detailsOmitted: ({ count: value }: { count: number }) =>
       plural(value, { one: `${count.format(value)} champ structuré n’est pas affiché.`, other: `${count.format(value)} champs structurés ne sont pas affichés.` }),
     /** [P] Labels of the keys of the backend allowlist (AuditDetailsFilter); a key not listed shows as sent. */
     detailKey: {
+      created: 'Créé',
+      assigned: 'Attribué',
+      assetModelId: 'Identifiant du modèle',
+      placementId: 'Identifiant du placement',
+      lockerCode: 'Code du casier',
+      compartmentId: 'Identifiant de la cellule',
+      compartmentCode: 'Code de la cellule',
+      assignedAt: 'Placé le',
+      endedOperationIds: 'Opérations terminées',
       revoked: 'Révoqué',
       revokedAt: 'Révoqué le',
       archivedAt: 'Archivé le',

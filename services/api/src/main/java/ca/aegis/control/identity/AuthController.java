@@ -48,11 +48,8 @@ class AuthController {
         }
         AuthenticationService.SignedIn signedIn = authentication.login(request, http.getRemoteAddr());
         ResponseEntity.BodyBuilder response = ResponseEntity.ok();
-        if (request.wantsBrowserSession()) {
-            BrowserSessions.Started started = browserSessions.start(signedIn.account(),
-                    signedIn.verifiedPasswordHash());
-            response.header(HttpHeaders.SET_COOKIE, BrowserSessions.cookie(started, clock).toString());
-        }
+        signedIn.browserSession().ifPresent(started -> response.header(HttpHeaders.SET_COOKIE,
+                BrowserSessions.cookie(started, clock).toString()));
         return response.body(signedIn.response());
     }
 
