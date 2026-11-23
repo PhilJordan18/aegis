@@ -39,12 +39,14 @@ enum OperationFixtures {
     }
 
     static func view(id: String = operationId, status: String = "AWAITING_LOCAL_PROOF",
-                     requiredAction: String = "SCAN_HUB_QR", challengeId: String? = challengeId,
+                     requiredAction: String = "SCAN_HUB_QR", type: String = "CHECKOUT",
+                     challengeId: String? = challengeId,
                      terminalAt: String? = nil, failureReason: String? = nil,
                      displayedAt: String? = "2026-09-16T14:31:02.250Z", authorizedAt: String? = nil,
                      expiresAt: String? = nil, commandSentAt: String? = nil,
                      acknowledgedAt: String? = nil) -> LockerOperationView {
-        CatalogFixtures.decode(json(id: id, status: status, requiredAction: requiredAction, challengeId: challengeId,
+        CatalogFixtures.decode(json(id: id, status: status, requiredAction: requiredAction, type: type,
+                                    challengeId: challengeId,
                                     terminalAt: terminalAt, failureReason: failureReason, displayedAt: displayedAt,
                                     authorizedAt: authorizedAt, expiresAt: expiresAt, commandSentAt: commandSentAt,
                                     acknowledgedAt: acknowledgedAt))
@@ -77,7 +79,9 @@ final class ScriptedOperationService: LockerOperationService, @unchecked Sendabl
     private var readResults: [Result<Received<LockerOperationView>, APIError>]
     private var authorizeResults: [Result<LockerOperationView, APIError>]
     private var prepareResults: [Result<LockerOperationView, APIError>]
+    private var returnResults: [Result<LockerOperationView, APIError>]
     private var _prepareKeys: [IdempotencyKey] = []
+    private var _returnKeys: [IdempotencyKey] = []
     private var _reads = 0
     private var _inFlight = 0
     private var _maxInFlight = 0
@@ -88,15 +92,19 @@ final class ScriptedOperationService: LockerOperationService, @unchecked Sendabl
 
     init(reads: [Result<Received<LockerOperationView>, APIError>] = [.failure(.invalidResponse)],
          authorizations: [Result<LockerOperationView, APIError>] = [.failure(.invalidResponse)],
-         preparations: [Result<LockerOperationView, APIError>] = [.failure(.invalidResponse)]) {
+         preparations: [Result<LockerOperationView, APIError>] = [.failure(.invalidResponse)],
+         returns: [Result<LockerOperationView, APIError>] = [.failure(.invalidResponse)]) {
         readResults = reads
         authorizeResults = authorizations
         prepareResults = preparations
+        returnResults = returns
     }
 
     /// The keys of every `POST /reservations/{id}/checkout`, in order.
     var prepareKeys: [IdempotencyKey] { lock.withLock { _prepareKeys } }
     var prepareGate: Gate?
+    /// The keys of every `POST /loans/{id}/return`, in order.
+    var returnKeys: [IdempotencyKey] { lock.withLock { _returnKeys } }
 
     var reads: Int { lock.withLock { _reads } }
     var maxInFlight: Int { lock.withLock { _maxInFlight } }
@@ -112,6 +120,16 @@ final class ScriptedOperationService: LockerOperationService, @unchecked Sendabl
         let result = lock.withLock {
             _prepareKeys.append(key)
             return Self.next(&prepareResults)
+        }
+        if let prepareGate { await prepareGate.wait() }
+        return try result.get()
+    }
+
+    func prepareReturn(loanId: UUID, key: IdempotencyKey,
+                       bearer token: String) async throws(APIError) -> LockerOperationView {
+        let result = lock.withLock {
+            _returnKeys.append(key)
+            return Self.next(&returnResults)
         }
         if let prepareGate { await prepareGate.wait() }
         return try result.get()

@@ -65,6 +65,14 @@ struct OperationStepTests {
         #expect(step.title == String(localized: "Délai dépassé"))
     }
 
+    /// The expired instruction names the return in English (its own key).
+    @Test func anExpiredReturnHasItsOwnInstruction() {
+        let expired = OperationFixtures.view(status: "EXPIRED", requiredAction: "NONE", terminalAt: Self.deadline)
+        #expect(step(expired, kind: .return).instruction
+                == String(localized: "operation.expired.return",
+                          defaultValue: "Aucune porte n’a été ouverte. Recommencez la préparation."))
+    }
+
     /// `FAILED` never involves the door (doc 05 §5.4), so it stops at
     /// « Commande » at the latest.
     @Test(arguments: [

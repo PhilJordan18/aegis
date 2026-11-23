@@ -1662,12 +1662,32 @@
         }
       }
     },
+    "Recommencer le retour" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start the return again"
+          }
+        }
+      }
+    },
     "Recommencer le retrait" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Start the checkout again"
+          }
+        }
+      }
+    },
+    "Relance la préparation du retour." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starts return preparation again."
           }
         }
       }
@@ -1762,12 +1782,32 @@
         }
       }
     },
+    "Retour en cours" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Return in progress"
+          }
+        }
+      }
+    },
     "Retour guidé" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Guided return"
+          }
+        }
+      }
+    },
+    "Retour indisponible pour le moment. Actualisez pour vérifier à nouveau." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Return isn’t available right now. Refresh to check again."
           }
         }
       }
@@ -1788,6 +1828,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Back to the list"
+          }
+        }
+      }
+    },
+    "Retourner l’équipement" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Return equipment"
           }
         }
       }
@@ -2600,6 +2650,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "name@company.ca"
+          }
+        }
+      }
+    },
+    "operation.expired.return" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No door was opened. Start the return again."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune porte n’a été ouverte. Recommencez la préparation."
           }
         }
       }

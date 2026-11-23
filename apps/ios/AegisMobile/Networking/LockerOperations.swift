@@ -116,6 +116,12 @@ extension Endpoint where Response == LockerOperationView {
                  headers: key.header)
     }
 
+    /// §15.2: the same preparation for the holder's loan; the loan keeps its
+    /// state until the code is authorized.
+    static func prepareReturn(loanId: UUID, key: IdempotencyKey) -> Endpoint {
+        Endpoint(method: "POST", path: "loans/\(loanId.uuidString.lowercased())/return", headers: key.header)
+    }
+
     static func lockerOperation(id: UUID) -> Endpoint {
         Endpoint(method: "GET", path: "locker-operations/\(id.uuidString.lowercased())")
     }
@@ -129,6 +135,8 @@ extension Endpoint where Response == LockerOperationView {
 protocol LockerOperationService: Sendable {
     func prepareCheckout(reservationId: UUID, key: IdempotencyKey,
                          bearer token: String) async throws(APIError) -> LockerOperationView
+    func prepareReturn(loanId: UUID, key: IdempotencyKey,
+                       bearer token: String) async throws(APIError) -> LockerOperationView
     /// One read, with the delay the server asked before the next one.
     func lockerOperation(id: UUID, bearer token: String) async throws(APIError) -> Received<LockerOperationView>
     func authorizeLocal(operationId: UUID, proof: LocalProof, key: IdempotencyKey,
@@ -139,6 +147,11 @@ extension APIClient: LockerOperationService {
     func prepareCheckout(reservationId: UUID, key: IdempotencyKey,
                          bearer token: String) async throws(APIError) -> LockerOperationView {
         try await send(.prepareCheckout(reservationId: reservationId, key: key), bearer: token)
+    }
+
+    func prepareReturn(loanId: UUID, key: IdempotencyKey,
+                       bearer token: String) async throws(APIError) -> LockerOperationView {
+        try await send(.prepareReturn(loanId: loanId, key: key), bearer: token)
     }
 
     func lockerOperation(id: UUID, bearer token: String) async throws(APIError) -> Received<LockerOperationView> {

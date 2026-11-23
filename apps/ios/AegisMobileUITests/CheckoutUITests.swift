@@ -1,7 +1,8 @@
 import XCTest
 
-/// Guided checkout of the real app (#46): preparation, the scan sheet, the
-/// progress read from the server, refusals, interruption and resumption. API
+/// Guided checkout (#46) and return (#50) of the real app: preparation, the
+/// scan sheet, the progress read from the server, refusals, interruption and
+/// resumption. API
 /// answers come from the Debug `AEGIS_UI_SCENARIO` hook and its FICTIONAL
 /// fixtures. The code is typed into the Debug-only field, which goes through
 /// the same parser and `authorize-local` call as the camera: these tests say
@@ -36,6 +37,9 @@ final class CheckoutUITests: XCTestCase {
             "retryCheckout": "Nouvelle tentative de retrait", "expired": "Délai dépassé",
             "lastReceived": "Dernier état reçu", "inProgress": "Retrait en cours",
             "commandSent": "Commande transmise au casier", "borrowed": "Emprunté par vous",
+            "returnConfirmed": "Retour confirmé", "returnInProgress": "Retour en cours",
+            "noLongerPossible": "Cette action n’est plus possible.",
+            "returnUnavailable": "Retour indisponible pour le moment. Actualisez pour vérifier à nouveau.",
         ])
         static let english = Language(code: "en", locale: "en_CA", texts: [
             "scan": "Scan the locker code", "confirmed": "Checkout confirmed",
@@ -44,6 +48,9 @@ final class CheckoutUITests: XCTestCase {
             "retryCheckout": "Try checkout again", "expired": "Time limit reached",
             "lastReceived": "Last status received", "inProgress": "Checkout in progress",
             "commandSent": "Command sent to the locker", "borrowed": "Borrowed by you",
+            "returnConfirmed": "Return confirmed", "returnInProgress": "Return in progress",
+            "noLongerPossible": "This action is no longer possible.",
+            "returnUnavailable": "Return isn’t available right now. Refresh to check again.",
         ])
     }
 
@@ -192,11 +199,93 @@ final class CheckoutUITests: XCTestCase {
         }
     }
 
+    // MARK: Return (#50)
+
+    /// The whole return. The loan stays in Mon activité until CONFIRMED is
+    /// read from the server; only then does a new read find no loan.
+    @MainActor
+    func testGuidedReturnReachesConfirmedOnlyFromTheServer() throws {
+        for (language, appearance) in [(Language.french, XCUIDevice.Appearance.light), (.english, .dark)] {
+            XCUIDevice.shared.appearance = appearance
+            let theme = appearance == .dark ? "dark" : "light"
+            let app = launch(language, scenario: "return")
+            XCTAssertTrue(element(app, "activity.loan").waitForExistence(timeout: 15))
+            attach(app, "\(language.code)-activity-loan-return-\(theme)")
+            try audit(app)
+
+            prepare(app, "activity.return")
+            let field = element(app, "scan.debugCode")
+            XCTAssertTrue(field.waitForExistence(timeout: 10), "The scan sheet opens once the code is displayed.")
+            submit(app, Self.code)
+            XCTAssertTrue(field.waitForNonExistence(timeout: 10), "The sheet closes once the server authorized.")
+            XCTAssertFalse(app.staticTexts[language["returnConfirmed"]].exists)
+            XCTAssertFalse(element(app, "operation.done").exists)
+
+            XCTAssertTrue(waitForLabel(title(app), language["returnConfirmed"], timeout: 30))
+            attach(app, "\(language.code)-return-confirmed-\(theme)")
+            try audit(app)
+
+            element(app, "operation.done").tap()
+            XCTAssertTrue(element(app, "activity.empty").waitForExistence(timeout: 15))
+            XCTAssertFalse(element(app, "activity.loan").exists)
+            app.terminate()
+        }
+    }
+
+    /// `409 LOAN_NOT_RETURNABLE`: no guided return opens, the loan is read
+    /// again and, without `RETURN`, the button is disabled and explained.
+    @MainActor
+    func testANoLongerReturnableLoanIsReadAgain() throws {
+        for language in [Language.french, .english] {
+            let app = launch(language, scenario: "return-refused")
+            prepare(app, "activity.return")
+
+            let feedback = element(app, "activity.feedback")
+            XCTAssertTrue(feedback.waitForExistence(timeout: 10))
+            XCTAssertTrue(feedback.label.contains(language["noLongerPossible"]))
+            XCTAssertFalse(title(app).exists)
+            let notice = element(app, "activity.return.notice")
+            XCTAssertTrue(notice.waitForExistence(timeout: 10))
+            XCTAssertTrue(notice.label.contains(language["returnUnavailable"]))
+            XCTAssertFalse(app.buttons["activity.return"].isEnabled)
+            XCTAssertTrue(element(app, "activity.loan").exists, "A refusal never ends the loan.")
+            attach(app, "\(language.code)-activity-return-refused-light")
+            try audit(app)
+            app.terminate()
+        }
+    }
+
+    /// After a relaunch, the loan points to a return in progress: « Reprendre »
+    /// reads it again; « Fermer » hides it without cancelling.
+    @MainActor
+    func testAHiddenReturnResumesFromTheLoan() throws {
+        for language in [Language.french, .english] {
+            let app = launch(language, scenario: "return-resume")
+            let status = element(app, "activity.operation.status")
+            XCTAssertTrue(status.waitForExistence(timeout: 15))
+            XCTAssertEqual(status.label, language["returnInProgress"])
+            XCTAssertTrue(element(app, "activity.loan.operation.hidden").exists)
+            XCTAssertFalse(element(app, "activity.return").exists, "« Reprendre » takes the place of the return.")
+            attach(app, "\(language.code)-activity-return-hidden-light")
+            try audit(app)
+
+            element(app, "activity.loan.resume").tap()
+            XCTAssertTrue(waitForLabel(title(app), language["commandSent"]))
+            attach(app, "\(language.code)-return-command-sent-light")
+            try audit(app)
+
+            element(app, "operation.close").tap()
+            XCTAssertTrue(element(app, "activity.loan.resume").waitForExistence(timeout: 10))
+            XCTAssertTrue(element(app, "activity.loan").exists)
+            app.terminate()
+        }
+    }
+
     // MARK: Helpers
 
     @MainActor
-    private func prepare(_ app: XCUIApplication) {
-        let button = app.buttons["activity.checkout"]
+    private func prepare(_ app: XCUIApplication, _ identifier: String = "activity.checkout") {
+        let button = app.buttons[identifier]
         XCTAssertTrue(button.waitForExistence(timeout: 15))
         XCTAssertTrue(waitUntilEnabled(button))
         button.tap()
