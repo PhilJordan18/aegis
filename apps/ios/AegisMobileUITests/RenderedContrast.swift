@@ -1,21 +1,25 @@
 import CoreGraphics
 import UIKit
 
-/// The WCAG contrast between the background and the text of a screenshot of
-/// one text element, read from its pixels: the background is the most common
-/// luminance, the text the luminance farthest from it that still covers a
-/// share of the pixels, so that anti-aliased edges are not taken for the text.
-/// Measured on what is drawn, it catches a text over the wrong background,
-/// which the colour tokens alone cannot.
+/// The WCAG contrast of the weakest ink of a screenshot of one text element,
+/// read from its pixels. The background is the most common exact colour; an
+/// ink is any other exact colour covering a share of the pixels, so the
+/// anti-aliased edges, each a rare colour, are not taken for one. Every ink
+/// must pass: a high-contrast symbol beside a faint text, as in the countdown
+/// or a status chip, cannot stand in for the text. Measured on what is drawn,
+/// it also catches a text over the wrong background, which the colour tokens
+/// alone cannot.
 enum RenderedContrast {
-    /// Share of the pixels the text luminance must cover.
+    /// Share of the pixels an exact colour must cover to count as an ink.
     static let minimumShare = 0.005
 
+    /// The lowest ratio between the background and an ink, or nil when the
+    /// image holds no ink.
     static func ratio(of image: UIImage) -> Double? {
         guard let cgImage = image.cgImage, cgImage.width > 0, cgImage.height > 0,
               let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
         let width = cgImage.width, height = cgImage.height
-        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        var pixels = [UInt32](repeating: 0, count: width * height)
         let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
             guard let context = CGContext(data: buffer.baseAddress, width: width, height: height,
                                           bitsPerComponent: 8, bytesPerRow: width * 4, space: space,
@@ -25,25 +29,25 @@ enum RenderedContrast {
         }
         guard drawn else { return nil }
 
-        let bins = 512
-        var histogram = [Int](repeating: 0, count: bins)
-        for index in stride(from: 0, to: pixels.count, by: 4) {
-            let luminance = 0.2126 * linear(pixels[index]) + 0.7152 * linear(pixels[index + 1])
-                + 0.0722 * linear(pixels[index + 2])
-            histogram[min(bins - 1, Int(luminance * Double(bins)))] += 1
-        }
-        let total = width * height
-        guard let background = histogram.indices.max(by: { histogram[$0] < histogram[$1] }) else { return nil }
-        let threshold = max(1, Int(Double(total) * minimumShare))
-        // The nearest edges of the two bins: the ratio is never overstated.
-        func contrast(_ a: Int, _ b: Int) -> Double {
-            let light = Double(max(a, b)) / Double(bins), dark = Double(min(a, b) + 1) / Double(bins)
-            return max(1, (light + 0.05) / (dark + 0.05))
-        }
-        let text = histogram.indices
-            .filter { $0 != background && histogram[$0] >= threshold }
-            .max { contrast($0, background) < contrast($1, background) }
-        return text.map { contrast($0, background) }
+        var counts: [UInt32: Int] = [:]
+        for pixel in pixels { counts[pixel & 0x00FF_FFFF, default: 0] += 1 }
+        guard let background = counts.max(by: { $0.value < $1.value })?.key else { return nil }
+        let threshold = max(1, Int(Double(pixels.count) * minimumShare))
+        let backgroundLuminance = luminance(background)
+        return counts
+            .filter { $0.key != background && $0.value >= threshold }
+            .map { contrast(luminance($0.key), backgroundLuminance) }
+            .min()
+    }
+
+    private static func contrast(_ a: Double, _ b: Double) -> Double {
+        (max(a, b) + 0.05) / (min(a, b) + 0.05)
+    }
+
+    /// The colour is packed as read on a little-endian device: red in the low byte.
+    private static func luminance(_ rgb: UInt32) -> Double {
+        0.2126 * linear(UInt8(rgb & 0xFF)) + 0.7152 * linear(UInt8((rgb >> 8) & 0xFF))
+            + 0.0722 * linear(UInt8((rgb >> 16) & 0xFF))
     }
 
     private static func linear(_ component: UInt8) -> Double {
