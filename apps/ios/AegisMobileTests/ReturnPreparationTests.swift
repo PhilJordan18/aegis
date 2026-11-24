@@ -100,6 +100,44 @@ struct ReturnPreparationTests {
         #expect(model.isEmpty)
     }
 
+    /// #208: a refresh started before the return is still waiting for its
+    /// answer, read before the return, when « Voir mon activité » asks for
+    /// the read after `CONFIRMED`. Today `load()` ignores that call and the
+    /// earlier answer is applied last: the returned loan stays on the card,
+    /// shown fresh with `RETURN`, until the next read. The server still
+    /// refuses a second return. Recorded as a known issue, not fixed here;
+    /// the test fails once the behaviour changes.
+    @Test func theReadAfterTheConfirmedReturnIsNotLostToAnEarlierRead() async {
+        let loan = ActivityDoubles.loan(overdue: false)
+        let service = loanOnly([.success(loan)])
+        let confirmed = Self.returning("CONFIRMED", requiredAction: "NONE", terminalAt: "2026-09-16T14:31:40Z")
+        let operations = ScriptedOperationService(
+            reads: [OperationFixtures.read(confirmed, retryAfter: nil)],
+            returns: [.success(Self.returning("AUTHORIZED", requiredAction: "WAIT"))])
+        let model = model(service, operations: operations, sleeper: RecordingSleeper())
+        await model.load()
+
+        let slow = Gate()
+        service.loanGate = slow
+        let earlier = Task { await model.refresh() }
+        while service.loanReads < 2 { await Task.yield() }
+        service.loanGate = nil
+        #expect(model.isLoading)
+
+        await model.prepareReturn()
+        await model.guided?.follower.waitUntilIdle()
+        #expect(model.guided?.step.ending == .confirmed)
+        service.setLoans([.success(nil)])
+        await model.hideOperation()
+        await slow.open()
+        await earlier.value
+
+        withKnownIssue("The read after CONFIRMED is dropped while an earlier read is in flight (#208).") {
+            #expect(service.loanReads == 3, "The read after CONFIRMED must reach the server.")
+            #expect(model.loan.value == nil, "An answer read before the return must not be the last word.")
+        }
+    }
+
     @Test func aSecondTapWhilePreparingIsIgnored() async {
         let gate = Gate()
         let operations = ScriptedOperationService(returns: [.success(Self.returning())])

@@ -16,6 +16,13 @@ final class ScriptedReservationService: ActivityService, ReservationService, @un
     private var _statusCalls = 0
     private var _reads = 0
     var gate: Gate?
+    /// Holds each loan read that starts while it is set, as a slow network would.
+    var loanGate: Gate? {
+        get { lock.withLock { _loanGate } }
+        set { lock.withLock { _loanGate = newValue } }
+    }
+    private var _loanGate: Gate?
+    private var _loanReads = 0
 
     init(reservations: [Result<ReservationView?, APIError>] = [.success(nil)],
          loans: [Result<LoanView?, APIError>] = [.success(nil)],
@@ -47,8 +54,15 @@ final class ScriptedReservationService: ActivityService, ReservationService, @un
     }
 
     func currentLoan(bearer token: String) async throws(APIError) -> LoanView? {
-        try lock.withLock { Self.next(&loans) }.get()
+        let (result, gate) = lock.withLock { () -> (Result<LoanView?, APIError>, Gate?) in
+            _loanReads += 1
+            return (Self.next(&loans), _loanGate)
+        }
+        if let gate { await gate.wait() }
+        return try result.get()
     }
+
+    var loanReads: Int { lock.withLock { _loanReads } }
 
     func createReservation(assetId: UUID, reservedUntil: Date, key: IdempotencyKey,
                            bearer token: String) async throws(APIError) -> ReservationView {
