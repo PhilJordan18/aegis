@@ -410,6 +410,7 @@ final class CheckoutUITests: XCTestCase {
             ? Self.sampledContrast.filter { $0.tests.contains(testMethod) } : []
         var unhandled: [String] = []
         var accepted: [String] = []
+        var ignored: [String] = []
         try app.performMeasuredAccessibilityAudit(for: .all) { issue in
             let tolerated: Bool
             if let target = issue.element {
@@ -442,11 +443,21 @@ final class CheckoutUITests: XCTestCase {
             } else {
                 tolerated = false
             }
-            if !tolerated {
-                let element = issue.element.map { "\($0.elementType) '\($0.label)' id=\($0.identifier) frame=\($0.frame)" } ?? "none"
+            let element = issue.element.map { "\($0.elementType) '\($0.label)' id=\($0.identifier) frame=\($0.frame)" } ?? "none"
+            if tolerated {
+                ignored.append("\(issue.compactDescription) — \(element)")
+            } else {
                 unhandled.append("\(issue.compactDescription) — \(element) — \(issue.detailedDescription)")
             }
             return true
+        }
+        // Every tolerated issue stays visible in the result: a rule that hides
+        // an issue must not look like an audit that found nothing.
+        if !ignored.isEmpty {
+            let report = XCTAttachment(string: (["visible=\(visible)"] + ignored).joined(separator: "\n"))
+            report.name = "audit-tolerated"
+            report.lifetime = .keepAlways
+            add(report)
         }
         if !accepted.isEmpty {
             let report = XCTAttachment(string: accepted.joined(separator: "\n"))
