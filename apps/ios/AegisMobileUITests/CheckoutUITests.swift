@@ -380,6 +380,16 @@ final class CheckoutUITests: XCTestCase {
         }
     }
 
+    /// The part of a screenshot of the screen inside `frame`, in points of `window`.
+    private static func crop(_ shot: XCUIScreenshot, to frame: CGRect, window: CGRect) -> UIImage {
+        guard let image = shot.image.cgImage, window.width > 0 else { return UIImage() }
+        let scale = CGFloat(image.width) / window.width
+        let pixels = CGRect(x: (frame.minX - window.minX) * scale, y: (frame.minY - window.minY) * scale,
+                            width: frame.width * scale, height: frame.height * scale).integral
+        guard let part = image.cropping(to: pixels) else { return UIImage() }
+        return UIImage(cgImage: part, scale: scale, orientation: .up)
+    }
+
     /// The running test method, as listed in `SampledContrast.tests`.
     private var testMethod: String {
         String(name.split(separator: " ").last?.dropLast() ?? "")
@@ -387,7 +397,9 @@ final class CheckoutUITests: XCTestCase {
 
     /// The policy of `ReservationUITests`: every issue fails, except system
     /// rendering limited to where it occurs (partly visible elements, system
-    /// bar items that do not grow, the non-wrapping large title).
+    /// bar items that do not grow, the non-wrapping large title). A contrast
+    /// issue on a partly visible element is measured on its visible part
+    /// (#208): a faint text the audit reported there must fail.
     @MainActor
     private func audit(_ app: XCUIApplication) throws {
         if !waitForStillScreen(app) {
@@ -421,8 +433,25 @@ final class CheckoutUITests: XCTestCase {
                 case .dynamicType:
                     tolerated = !visible.contains(target.frame) || bars.contains { $0.contains(center) }
                 case .contrast:
-                    if !visible.contains(target.frame) {
+                    let part = target.frame.intersection(visible)
+                    if part.isNull || part.width < 1 || part.height < 1 {
                         tolerated = true
+                    } else if !visible.contains(target.frame) {
+                        // Partly visible: the visible part is measured, never
+                        // trusted; a part without any ink has nothing to judge.
+                        let image = Self.crop(app.screenshot(), to: part, window: window)
+                        if let ratio = RenderedContrast.ratio(of: image) {
+                            tolerated = ratio >= 4.5
+                            let line = "'\(target.label)' partly visible, \(part) of frame=\(target.frame): "
+                                + String(format: "rendered %.2f:1", ratio)
+                            let evidence = XCTAttachment(image: image)
+                            evidence.name = "audit-visible-part-contrast"
+                            evidence.lifetime = .keepAlways
+                            self.add(evidence)
+                            if tolerated { accepted.append(line) } else { unhandled.append("Contrast below 4.5:1 — \(line)") }
+                        } else {
+                            tolerated = true
+                        }
                     } else if let known = Self.sampledElement(target, in: app, among: sampled) {
                         let shot = target.screenshot()
                         let ratio = RenderedContrast.ratio(of: shot.image) ?? 0
