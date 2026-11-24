@@ -335,6 +335,56 @@ final class CheckoutUITests: XCTestCase {
     /// Height above the floating tab bar covered by its scroll-edge fade.
     private let fadeHeight: CGFloat = 120
 
+    /// A text that the iOS 26 contrast audit, at an accessibility size, failed
+    /// on a sample it took after scrolling the screen itself (#207). The
+    /// texts it failed measure 8:1 to 17:1 in the catalogue, and the frames
+    /// read in the handler are the ones after its scroll, so they cannot place
+    /// the sample. Each entry names the element by an identifier the app sets,
+    /// the only tests where it was observed, and the colour pair that
+    /// `StatusContrastTests` proves in light and dark. The flagged node is the
+    /// inner text of that element and carries no identifier, so it is matched
+    /// by its frame lying inside the identified element. It is then measured
+    /// on the pixels drawn at that moment, and passes only at 4.5:1 or more.
+    /// Any other contrast issue, an issue without an element, or one of these
+    /// elements in another test or configuration still fails.
+    private struct SampledContrast {
+        let anchor: String
+        let pair: String
+        let tests: Set<String>
+    }
+
+    private static let sampledContrast = [
+        SampledContrast(anchor: "activity.asset.name", pair: "BrandText on BrandPanel",
+                        tests: ["testAnOfflineLockerOffersANewAttempt", "testANoLongerReturnableLoanIsReadAgain"]),
+        SampledContrast(anchor: "asset.status", pair: "StatusMineText on StatusMineFill",
+                        tests: ["testAnOfflineLockerOffersANewAttempt"]),
+        // A countdown: its digits change while the audit runs, so the sample
+        // may also be a re-rendered label, not only a scrolled one.
+        SampledContrast(anchor: "operation.proofCountdown", pair: "BrandText on BrandPanel",
+                        tests: ["testARefusedCodeNeedsANewScan"]),
+        // The same scan sheet: the audit failed the countdown on some runs and
+        // this message on others.
+        SampledContrast(anchor: "scan.cameraMessage", pair: "BrandText on BrandPanel",
+                        tests: ["testARefusedCodeNeedsANewScan"]),
+    ]
+
+    /// The listed element whose frame holds `target`, if `target` is a text.
+    @MainActor
+    private static func sampledElement(_ target: XCUIElement, in app: XCUIApplication,
+                                       among entries: [SampledContrast]) -> SampledContrast? {
+        guard target.elementType == .staticText else { return nil }
+        let frame = target.frame
+        return entries.first { entry in
+            app.descendants(matching: .any).matching(identifier: entry.anchor).allElementsBoundByIndex
+                .contains { $0.frame.insetBy(dx: -1, dy: -1).contains(frame) }
+        }
+    }
+
+    /// The running test method, as listed in `SampledContrast.tests`.
+    private var testMethod: String {
+        String(name.split(separator: " ").last?.dropLast() ?? "")
+    }
+
     /// The policy of `ReservationUITests`: every issue fails, except system
     /// rendering limited to where it occurs (partly visible elements, system
     /// bar items that do not grow, the non-wrapping large title).
@@ -353,22 +403,14 @@ final class CheckoutUITests: XCTestCase {
         let bar = app.navigationBars.firstMatch
         let largeTitle = bar.exists ? bar.frame : .null
         let bars = app.navigationBars.allElementsBoundByIndex.map(\.frame)
-        var types = XCUIAccessibilityAuditType.all
-        // At accessibility text sizes on iOS 26 the audit scrolls these long
-        // screens itself before it reports (#207): it flagged pairs of 8:1 to
-        // 17:1, a different element on each run, and the frames read here are
-        // those after its scroll, so they cannot place the sample. Contrast does not
-        // depend on the text size: `StatusContrastTests` computes every pair
-        // of these screens from the asset catalogue, and the audits at the
-        // default size keep it. These tests do not override the text size, so
-        // the device setting read here is the app's.
-        if ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26,
-           UIApplication.shared.preferredContentSizeCategory.isAccessibilityCategory {
-            types.remove(.contrast)
-            XCTContext.runActivity(named: "Contrast left to StatusContrastTests at an accessibility size") { _ in }
-        }
+        // These tests do not override the text size: the device setting read
+        // here is the app's.
+        let sampled = ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26
+            && UIApplication.shared.preferredContentSizeCategory.isAccessibilityCategory
+            ? Self.sampledContrast.filter { $0.tests.contains(testMethod) } : []
         var unhandled: [String] = []
-        try app.performMeasuredAccessibilityAudit(for: types) { issue in
+        var accepted: [String] = []
+        try app.performMeasuredAccessibilityAudit(for: .all) { issue in
             let tolerated: Bool
             if let target = issue.element {
                 let center = CGPoint(x: target.frame.midX, y: target.frame.midY)
@@ -378,7 +420,22 @@ final class CheckoutUITests: XCTestCase {
                 case .dynamicType:
                     tolerated = !visible.contains(target.frame) || bars.contains { $0.contains(center) }
                 case .contrast:
-                    tolerated = !visible.contains(target.frame)
+                    if !visible.contains(target.frame) {
+                        tolerated = true
+                    } else if let known = Self.sampledElement(target, in: app, among: sampled) {
+                        let shot = target.screenshot()
+                        let ratio = RenderedContrast.ratio(of: shot.image) ?? 0
+                        tolerated = ratio >= 4.5
+                        let line = "'\(target.label)' frame=\(target.frame) in \(known.anchor) (\(known.pair)): "
+                            + String(format: "rendered %.2f:1", ratio)
+                        let evidence = XCTAttachment(screenshot: shot)
+                        evidence.name = "audit-sampled-contrast-\(known.anchor)"
+                        evidence.lifetime = .keepAlways
+                        self.add(evidence)
+                        if tolerated { accepted.append(line) } else { unhandled.append("Contrast below 4.5:1 — \(line)") }
+                    } else {
+                        tolerated = false
+                    }
                 default:
                     tolerated = false
                 }
@@ -390,6 +447,12 @@ final class CheckoutUITests: XCTestCase {
                 unhandled.append("\(issue.compactDescription) — \(element) — \(issue.detailedDescription)")
             }
             return true
+        }
+        if !accepted.isEmpty {
+            let report = XCTAttachment(string: accepted.joined(separator: "\n"))
+            report.name = "audit-sampled-contrast"
+            report.lifetime = .keepAlways
+            add(report)
         }
         if !unhandled.isEmpty {
             let report = XCTAttachment(string: (["visible=\(visible)"] + unhandled).joined(separator: "\n"))

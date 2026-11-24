@@ -27,8 +27,9 @@ struct StatusContrastTests {
     }
 
     /// Every text pair of the guided checkout and return and of the activity
-    /// cards. On iOS 26 the UI audits sample them from pixels at the default
-    /// size only (#207); this check holds at every size.
+    /// cards, at every text size. `CheckoutUITests` tolerates a contrast issue
+    /// sampled after scrolling, on iOS 26 at an accessibility size, only on
+    /// elements whose pair is proven here (#207).
     @Test(arguments: [
         ("BrandText", "BrandField"),
         ("BrandText", "BrandPanel"),
