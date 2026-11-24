@@ -54,6 +54,10 @@ struct CameraScannerView: UIViewRepresentable {
         var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
     }
 
+    /// `@unchecked Sendable` holds because the non-Sendable capture session is
+    /// configured, started and stopped only on `queue`, a serial queue; the
+    /// main thread only hands it to the preview layer. Closures therefore reach
+    /// the session through this coordinator instead of capturing it directly.
     final class Coordinator: NSObject, AVCaptureMetadataOutputObjectsDelegate, @unchecked Sendable {
         @MainActor var onCode: @MainActor (String) -> Void
         private let session = AVCaptureSession()
@@ -68,28 +72,29 @@ struct CameraScannerView: UIViewRepresentable {
         func attach(to view: PreviewView) {
             view.previewLayer.session = session
             view.previewLayer.videoGravity = .resizeAspectFill
-            let session = session
-            queue.async { [weak self] in
-                guard let self,
-                      let device = AVCaptureDevice.default(for: .video),
-                      let input = try? AVCaptureDeviceInput(device: device),
-                      session.canAddInput(input) else { return }
-                session.beginConfiguration()
-                session.addInput(input)
-                let output = AVCaptureMetadataOutput()
-                if session.canAddOutput(output) {
-                    session.addOutput(output)
-                    output.setMetadataObjectsDelegate(self, queue: .main)
-                    output.metadataObjectTypes = output.availableMetadataObjectTypes.contains(.qr) ? [.qr] : []
-                }
-                session.commitConfiguration()
-                session.startRunning()
-            }
+            queue.async { [weak self] in self?.configureAndStart() }
         }
 
         func stop() {
-            let session = session
-            queue.async { session.stopRunning() }
+            // Strong capture: the coordinator must outlive the stop request.
+            queue.async { self.session.stopRunning() }
+        }
+
+        /// Runs on `queue` only.
+        private func configureAndStart() {
+            guard let device = AVCaptureDevice.default(for: .video),
+                  let input = try? AVCaptureDeviceInput(device: device),
+                  session.canAddInput(input) else { return }
+            session.beginConfiguration()
+            session.addInput(input)
+            let output = AVCaptureMetadataOutput()
+            if session.canAddOutput(output) {
+                session.addOutput(output)
+                output.setMetadataObjectsDelegate(self, queue: .main)
+                output.metadataObjectTypes = output.availableMetadataObjectTypes.contains(.qr) ? [.qr] : []
+            }
+            session.commitConfiguration()
+            session.startRunning()
         }
 
         nonisolated func metadataOutput(_ output: AVCaptureMetadataOutput,
