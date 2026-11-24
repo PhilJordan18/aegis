@@ -20,7 +20,8 @@ const uuid = (value) => {
   return value
 }
 const out = []
-const log = (s) => { out.push(s); console.log(s) }
+// Logged lines carry text read from the page and the API: one line each, no control characters.
+const log = (s) => { const line = String(s).replace(/[\u0000-\u001f\u007f]+/g, ' '); out.push(line); console.log(line) }
 async function rest(method, path, token, body) {
   const r = await fetch(API + path, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(method === 'POST' ? { 'Idempotency-Key': crypto.randomUUID() } : {}) }, body: body ? JSON.stringify(body) : undefined })
   const text = await r.text(); let j = null; try { j = JSON.parse(text) } catch {}
