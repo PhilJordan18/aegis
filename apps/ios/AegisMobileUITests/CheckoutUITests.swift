@@ -353,8 +353,22 @@ final class CheckoutUITests: XCTestCase {
         let bar = app.navigationBars.firstMatch
         let largeTitle = bar.exists ? bar.frame : .null
         let bars = app.navigationBars.allElementsBoundByIndex.map(\.frame)
+        var types = XCUIAccessibilityAuditType.all
+        // At accessibility text sizes on iOS 26 the audit scrolls these long
+        // screens itself before it reports (#207): it flagged pairs of 8:1 to
+        // 17:1, a different element on each run, and the frames read here are
+        // those after its scroll, so they cannot place the sample. Contrast does not
+        // depend on the text size: `StatusContrastTests` computes every pair
+        // of these screens from the asset catalogue, and the audits at the
+        // default size keep it. These tests do not override the text size, so
+        // the device setting read here is the app's.
+        if ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26,
+           UIApplication.shared.preferredContentSizeCategory.isAccessibilityCategory {
+            types.remove(.contrast)
+            XCTContext.runActivity(named: "Contrast left to StatusContrastTests at an accessibility size") { _ in }
+        }
         var unhandled: [String] = []
-        try app.performMeasuredAccessibilityAudit(for: .all) { issue in
+        try app.performMeasuredAccessibilityAudit(for: types) { issue in
             let tolerated: Bool
             if let target = issue.element {
                 let center = CGPoint(x: target.frame.midX, y: target.frame.midY)

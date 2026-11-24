@@ -26,6 +26,26 @@ struct StatusContrastTests {
         #expect((1 + 0.05) / (accent + 0.05) >= 4.5)
     }
 
+    /// Every text pair of the guided checkout and return and of the activity
+    /// cards. On iOS 26 the UI audits sample them from pixels at the default
+    /// size only (#207); this check holds at every size.
+    @Test(arguments: [
+        ("BrandText", "BrandField"),
+        ("BrandText", "BrandPanel"),
+        ("BrandText", "BrandTop"),
+        ("BrandMuted", "BrandField"),
+        ("BrandMuted", "BrandPanel"),
+        ("BrandMuted", "BrandTop"),
+        ("BrandAccent", "BrandField"),
+        ("BrandAccent", "BrandTop"),
+        ("ErrorText", "ErrorFill"),
+        ("StatusProgressText", "StatusProgressFill"),
+    ], [UIUserInterfaceStyle.light, .dark])
+    func operationTextReachesNormalTextContrast(_ pair: (String, String), _ style: UIUserInterfaceStyle) throws {
+        let ratio = try Self.contrast(pair.0, pair.1, style)
+        #expect(ratio >= 4.5, "\(pair.0) on \(pair.1), \(style == .dark ? "dark" : "light"): \(ratio)")
+    }
+
     @Test(arguments: [UIUserInterfaceStyle.light, .dark])
     func neutralIconReachesNonTextContrast(_ style: UIUserInterfaceStyle) throws {
         #expect(try Self.contrast("NeutralIcon", "StatusNeutralFill", style) >= 3)
