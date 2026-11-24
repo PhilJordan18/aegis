@@ -1,7 +1,24 @@
 // Manager freshness probe (#197, #202); started by fraicheur-manager.sh, which documents it. Never prints a password
 // or a token: they come from the environment and stay in memory.
 const { chromium } = require('playwright')
-const BASE = 'http://localhost:5291', API = process.env.API, LABEL = process.env.LABEL
+const BASE = 'http://localhost:5291'
+// The probe only talks to the disposable stack on this machine: the API origin must be loopback HTTP, the label a
+// short slug, and every id placed in a path a UUID read back from that API.
+const loopbackApi = (raw) => {
+  const u = new URL(raw ?? '')
+  if (u.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(u.hostname) || !/^\d{2,5}$/.test(u.port)) {
+    throw new Error('API must be http://127.0.0.1:<port>/api/v1')
+  }
+  return `http://${u.hostname}:${Number(u.port)}/api/v1`
+}
+const API = loopbackApi(process.env.API)
+const LABEL = /^[A-Za-z0-9._-]{1,32}$/.test(process.env.LABEL ?? '') ? process.env.LABEL : 'run'
+const uuid = (value) => {
+  if (typeof value !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
+    throw new Error('the API returned an id that is not a UUID')
+  }
+  return value
+}
 const out = []
 const log = (s) => { out.push(s); console.log(s) }
 async function rest(method, path, token, body) {
@@ -12,7 +29,7 @@ async function rest(method, path, token, body) {
 ;(async () => {
   const tech = (await rest('POST', '/auth/login', null, { email: 'technician@aegis.demo', password: process.env.TECH })).j.accessToken
   const adminTok = (await rest('POST', '/auth/login', null, { email: 'admin@aegis.demo', password: process.env.ADMIN })).j.accessToken
-  const assetId = (await rest('GET', '/assets?q=AEG-DEMO-001&page=0&size=10', tech)).j.items.find((a) => a.assetCode === 'AEG-DEMO-001').id
+  const assetId = uuid((await rest('GET', '/assets?q=AEG-DEMO-001&page=0&size=10', tech)).j.items.find((a) => a.assetCode === 'AEG-DEMO-001').id)
   const apiStatus = async () => (await rest('GET', `/admin/assets/${assetId}`, adminTok)).j
   const browser = await chromium.launch()
   const ctx = await browser.newContext({ locale: 'fr-CA', viewport: { width: 1280, height: 800 } })
@@ -46,7 +63,7 @@ async function rest(method, path, token, body) {
   check(listReads(mark) >= 1, `F1 re-entering Équipements 6 s after a reservation re-reads the list (${listReads(mark)} GET /admin/assets)`)
   check(afterReserve !== before, `F1 the row changed after the reservation: '${afterReserve}' (API availability ${JSON.stringify(a1.availability)})`)
   // F2: technician cancels; Manager switches to another tab and back after 6 s (no navigation).
-  const cancel = await rest('POST', `/reservations/${res.j.id}/cancel`, tech)
+  const cancel = await rest('POST', `/reservations/${uuid(res.j?.id)}/cancel`, tech)
   log(`cancel ${cancel.status}`)
   const other = await ctx.newPage(); await other.goto('about:blank'); await other.bringToFront(); await page.waitForTimeout(6000)
   mark = calls.length
