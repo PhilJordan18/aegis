@@ -9,6 +9,13 @@ import UIKit
 /// or a status chip, cannot stand in for the text. Measured on what is drawn,
 /// it also catches a text over the wrong background, which the colour tokens
 /// alone cannot.
+///
+/// Only the background's own fill is read: on each row, from its first to
+/// its last pixel. The fills of these elements, a panel or a capsule, are
+/// convex, so each row crosses them once; the page outside a rounded corner
+/// is left out, while the text and its symbol, drawn on the fill, stay in.
+/// An icon is held to 4.5:1 like the text, stricter than the 3:1 of WCAG for
+/// graphics: it can only reject more.
 enum RenderedContrast {
     /// Share of the pixels an exact colour must cover to count as an ink.
     static let minimumShare = 0.005
@@ -29,10 +36,20 @@ enum RenderedContrast {
         }
         guard drawn else { return nil }
 
+        var all: [UInt32: Int] = [:]
+        for pixel in pixels { all[pixel & 0x00FF_FFFF, default: 0] += 1 }
+        guard let background = all.max(by: { $0.value < $1.value })?.key else { return nil }
+
         var counts: [UInt32: Int] = [:]
-        for pixel in pixels { counts[pixel & 0x00FF_FFFF, default: 0] += 1 }
-        guard let background = counts.max(by: { $0.value < $1.value })?.key else { return nil }
-        let threshold = max(1, Int(Double(pixels.count) * minimumShare))
+        var inside = 0
+        for row in 0..<height {
+            let line = pixels[(row * width)..<((row + 1) * width)]
+            guard let first = line.firstIndex(where: { $0 & 0x00FF_FFFF == background }),
+                  let last = line.lastIndex(where: { $0 & 0x00FF_FFFF == background }) else { continue }
+            for pixel in line[first...last] { counts[pixel & 0x00FF_FFFF, default: 0] += 1 }
+            inside += last - first + 1
+        }
+        let threshold = max(1, Int(Double(inside) * minimumShare))
         let backgroundLuminance = luminance(background)
         return counts
             .filter { $0.key != background && $0.value >= threshold }

@@ -48,6 +48,39 @@ final class RenderedContrastTests: XCTestCase {
         XCTAssertGreaterThan(ratio, 19)
     }
 
+    /// The status chip: a capsule on the card. The card colour in the
+    /// corners outside the capsule is not an ink of the text.
+    func testThePageOutsideARoundedFillIsLeftOut() throws {
+        let image = Self.text(Self.chipText, on: Self.chipFill, icon: Self.chipText, page: .white)
+        let ratio = try XCTUnwrap(RenderedContrast.ratio(of: image))
+        XCTAssertGreaterThan(ratio, 7)
+    }
+
+    /// The mutation of #208 on the chip: a faint text beside its strong symbol.
+    func testAFaintTextInACapsuleBesideAStrongIconIsRejected() throws {
+        let grey = UIColor(white: 0.75, alpha: 1)
+        let image = Self.text(grey, on: Self.chipFill, icon: Self.chipText, page: .white)
+        let ratio = try XCTUnwrap(RenderedContrast.ratio(of: image))
+        XCTAssertLessThan(ratio, 4.5)
+    }
+
+    /// A symbol of another colour that also reaches 4.5:1 keeps the element
+    /// accepted: the weaker of the two is reported.
+    func testAContrastingIconBesideAContrastingTextPasses() throws {
+        let ratio = try XCTUnwrap(RenderedContrast.ratio(of: Self.text(.black, on: .white, icon: Self.chipText)))
+        XCTAssertGreaterThan(ratio, 4.5)
+        XCTAssertLessThan(ratio, 19)
+    }
+
+    /// Documented strictness: a symbol at 3:1 meets WCAG for graphics but is
+    /// held to 4.5:1 here. It can only reject, never accept, a text.
+    func testAnIconBelowTheTextThresholdIsRejected() throws {
+        // #949494 on white is 3.03:1.
+        let icon = UIColor(red: 0x94 / 255, green: 0x94 / 255, blue: 0x94 / 255, alpha: 1)
+        let ratio = try XCTUnwrap(RenderedContrast.ratio(of: Self.text(.black, on: .white, icon: icon)))
+        XCTAssertEqual(ratio, 3.03, accuracy: 0.01)
+    }
+
     func testLightTextOnADarkPanelIsMeasuredToo() throws {
         let panel = UIColor(red: 0.08, green: 0.09, blue: 0.11, alpha: 1)
         let ratio = try XCTUnwrap(RenderedContrast.ratio(of: Self.text(.white, on: panel)))
@@ -64,27 +97,43 @@ final class RenderedContrastTests: XCTestCase {
         XCTAssertNil(RenderedContrast.ratio(of: image))
     }
 
+    /// Light-mode colours of the status chip of the #208 screenshots: an
+    /// indigo text and symbol on a lavender capsule.
+    private static let chipText = UIColor(red: 0x37 / 255, green: 0x26 / 255, blue: 0xB8 / 255, alpha: 1)
+    private static let chipFill = UIColor(red: 0xEC / 255, green: 0xEA / 255, blue: 0xFF / 255, alpha: 1)
+
     /// A title-sized semibold text, at the scale of an iPhone screenshot,
-    /// after an optional filled symbol like the timer of the countdown.
-    private static func text(_ color: UIColor, on background: UIColor, icon: UIColor? = nil) -> UIImage {
-        let size = CGSize(width: 360, height: 66)
+    /// after an optional filled symbol like the timer of the countdown. With a
+    /// page colour, the background is a capsule on that page, like a chip.
+    private static func text(_ color: UIColor, on background: UIColor, icon: UIColor? = nil,
+                             page: UIColor? = nil) -> UIImage {
+        let size = CGSize(width: page == nil ? 360 : 420, height: page == nil ? 66 : 80)
         let format = UIGraphicsImageRendererFormat()
         format.scale = 3
         format.preferredRange = .standard
         return UIGraphicsImageRenderer(size: size, format: format).image { context in
-            background.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-            var x: CGFloat = 8
+            let bounds = CGRect(origin: .zero, size: size)
+            if let page {
+                page.setFill()
+                context.fill(bounds)
+                background.setFill()
+                UIBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), cornerRadius: 38).fill()
+            } else {
+                background.setFill()
+                context.fill(bounds)
+            }
+            let top: CGFloat = page == nil ? 0 : 7
+            var x: CGFloat = page == nil ? 8 : 30
             if let icon {
                 let symbol = UIImage(systemName: "timer", withConfiguration: UIImage.SymbolConfiguration(
                     pointSize: 40, weight: .semibold))?.withTintColor(icon, renderingMode: .alwaysOriginal)
-                symbol?.draw(at: CGPoint(x: x, y: 10))
+                symbol?.draw(at: CGPoint(x: x, y: top + 10))
                 x += 56
             }
             NSAttributedString(string: "Multimètre 1", attributes: [
                 .font: UIFont.systemFont(ofSize: 40, weight: .semibold),
                 .foregroundColor: color,
-            ]).draw(at: CGPoint(x: x, y: 8))
+            ]).draw(at: CGPoint(x: x, y: top + 8))
         }
     }
 }
