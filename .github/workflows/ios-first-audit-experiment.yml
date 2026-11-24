@@ -1,0 +1,153 @@
+# Diagnosis only (#67, mandate on #208): a bounded experiment on why the first
+# UI test of a hosted iOS run sometimes abandons its first accessibility audit
+# (-56 at about 15 s). It never gates anything and is not meant to be merged:
+# it runs only on a pull request that changes this file.
+#
+# Hypotheses, separated by the cold-audit duration rather than by pass/fail:
+#   H1 boot-cold     the first audit after a fresh simulator boot is slow;
+#   H2 process-cold  the first audit of every new test process is slow, even on
+#                    a simulator that has already audited;
+#   H3 load          slow audits follow host or simulator load, whatever the arm;
+#   H4 test-specific only the catalogue screen is slow to audit cold.
+#
+# Each block: erase and boot (first boot), then the catalogue test three times
+# in three test processes on the same booted simulator, then a plain reboot and
+# a checkout test first. Two blocks. Tests are built once and never retried,
+# skipped or given a longer audit timeout; a failed trial is recorded and the
+# next one runs. Load is sampled in the background by #209's sampler.
+name: iOS first-audit experiment
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/ios-first-audit-experiment.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-first-audit-experiment-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  experiment:
+    name: iOS first-audit experiment
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      CATALOG: AegisMobileUITests/CatalogUITests/testCatalogueFilterSheetAndBackInBothLanguagesAndAppearances
+      CHECKOUT: AegisMobileUITests/CheckoutUITests/testAnOfflineLockerOffersANewAttempt
+      SAMPLER_REF: 67-ci-ios-boot-diagnostics
+    defaults:
+      run:
+        working-directory: apps/ios
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain and simulator
+        run: |
+          sw_vers
+          xcodebuild -version
+          mkdir -p build/results
+          destination=$(scripts/ios-destination.sh 2>build/results/destination.txt)
+          cat build/results/destination.txt
+          case "$destination" in
+            "platform=iOS Simulator,id="?*) ;;
+            *) echo "::error::unexpected destination '$destination'"; exit 1 ;;
+          esac
+          echo "IOS_DESTINATION=$destination" >> "$GITHUB_ENV"
+          echo "UDID=${destination#*id=}" >> "$GITHUB_ENV"
+      - name: The sampler of #209
+        # The exact script under review in #209, read from its branch so this
+        # experiment adds no CI script of its own.
+        run: |
+          git -C ../.. fetch --depth=1 https://github.com/${{ github.repository }}.git "$SAMPLER_REF"
+          git -C ../.. show FETCH_HEAD:.github/scripts/simulator-load.sh > "$RUNNER_TEMP/simulator-load.sh"
+          chmod +x "$RUNNER_TEMP/simulator-load.sh"
+      - name: Build for testing
+        run: |
+          xcodebuild build-for-testing -project AegisMobile.xcodeproj -scheme AegisMobile \
+            -configuration Debug -destination "$IOS_DESTINATION" \
+            -derivedDataPath build/DerivedData -quiet
+      - name: Trials
+        run: |
+          log=build/results/trials.tsv
+          printf 'trial\tarm\ttest\tready_epoch\tstart_epoch\tend_epoch\texit\n' > "$log"
+          boot() { # $1 = erase|reboot
+            xcrun simctl shutdown "$UDID" 2>/dev/null || true
+            if [ "$1" = erase ]; then xcrun simctl erase "$UDID"; fi
+            xcrun simctl boot "$UDID"
+            xcrun simctl bootstatus "$UDID" >/dev/null
+            ready=$(date +%s)
+          }
+          trial() { # $1 = number, $2 = arm, $3 = test
+            start=$(date +%s); status=0
+            xcodebuild test-without-building -project AegisMobile.xcodeproj -scheme AegisMobile \
+              -configuration Debug -destination "$IOS_DESTINATION" \
+              -derivedDataPath build/DerivedData -parallel-testing-enabled NO -quiet \
+              -resultBundlePath "build/results/trial-$1.xcresult" -only-testing:"$3" || status=$?
+            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "${3##*/}" "$ready" "$start" "$(date +%s)" "$status" >> "$log"
+          }
+          n=0
+          for block in 1 2; do
+            boot erase
+            if [ "$block" = 1 ]; then
+              nohup "$RUNNER_TEMP/simulator-load.sh" "$UDID" build/results/simulator-load.tsv 2400 5 >/dev/null 2>&1 &
+            fi
+            n=$((n + 1)); trial "$n" boot-cold "$CATALOG"
+            n=$((n + 1)); trial "$n" process-cold "$CATALOG"
+            n=$((n + 1)); trial "$n" process-cold "$CATALOG"
+            boot reboot
+            n=$((n + 1)); trial "$n" reboot-other-test "$CHECKOUT"
+          done
+          cat "$log"
+      - name: Audit durations
+        if: always()
+        run: |
+          python3 - <<'EOF' | tee -a "$GITHUB_STEP_SUMMARY"
+          import csv, glob, os, re, sqlite3
+          APPLE = 978307200
+          trials = list(csv.DictReader(open("build/results/trials.tsv"), delimiter="\t"))
+          load = []
+          if os.path.exists("build/results/simulator-load.tsv"):
+              load = [(int(r["epoch"]), r["load1"], r["simulator_processes"])
+                      for r in csv.DictReader(open("build/results/simulator-load.tsv"), delimiter="\t")]
+          def near(epoch):
+              s = min(load, key=lambda r: abs(r[0] - epoch), default=None)
+              return f"{s[1]} / {s[2]}" if s else "n/a"
+          print("| Trial | Arm | Test | Start after ready | Result | Warm-up | Audit 1 | Later audits (max) | load1 / processes at audit 1 |")
+          print("|---:|---|---|---:|---|---:|---:|---:|---|")
+          for t in trials:
+              path = f"build/results/trial-{t['trial']}.xcresult/database.sqlite3"
+              warm = first = later = "n/a"; result = f"exit {t['exit']}"; at = int(t["start_epoch"])
+              if os.path.exists(path):
+                  db = sqlite3.connect(path)
+                  rows = db.execute("select title, startTime from Activities where title like 'Accessibility audit %' order by startTime").fetchall()
+                  laters = []
+                  for title, start in rows:
+                      m = re.search(r"Accessibility audit (warm-up|\d+) (completed|ended with an error) in ([\d.]+) s", title)
+                      if not m:
+                          continue
+                      value = m.group(3) + ("" if m.group(2) == "completed" else " ERR")
+                      if m.group(1) == "warm-up":
+                          warm = value
+                      elif m.group(1) == "1":
+                          first = value; at = int(start + APPLE)
+                      else:
+                          laters.append(float(m.group(3)))
+                  later = f"{max(laters):.1f}" if laters else "n/a"
+                  results = [r[0] for r in db.execute("select result from TestCaseRuns")]
+                  result = ",".join(results) or result
+              print(f"| {t['trial']} | {t['arm']} | {t['test'][:28]} | {int(t['start_epoch']) - int(t['ready_epoch'])} s | {result} | {warm} | {first} | {later} | {near(at)} |")
+          EOF
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-first-audit-experiment
+          path: |
+            apps/ios/build/results/*.tsv
+            apps/ios/build/results/*.txt
+            apps/ios/build/results/*.xcresult
+          retention-days: 14
