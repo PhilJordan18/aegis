@@ -52,7 +52,7 @@ files=$(git diff --name-only --no-renames "$BASE_SHA" "$HEAD_SHA") || all true
 # not know. A known script reruns its unit tests and the jobs that execute it on
 # real reports; the filter and the aggregator are proven by their unit tests,
 # since a full run bypasses the filter and cannot exercise it.
-known='^\.github/scripts/(tests/|changed-components\.sh$|ci-result\.py$|test-report\.py$|xcresult-summary\.py$|check-accepted-adrs\.py$)'
+known='^\.github/scripts/(tests/|changed-components\.sh$|ci-result\.py$|test-report\.py$|xcresult-summary\.py$|simulator-load\.sh$|check-accepted-adrs\.py$)'
 if printf '%s\n' "$files" | grep -Eq '^\.github/workflows/ci\.yml$'; then
   all true
 fi
@@ -98,7 +98,7 @@ if [ "$ios" = true ] && [ "${BASE_REF:-}" = dev ]; then
   visual=$(printf '%s\n' "$files" | grep -E '^apps/ios/' | grep -Ev "$ios_non_visual" || true)
   [ -n "$visual" ] || ios_fast=true
 fi
-if [ "$(changed '^\.github/scripts/xcresult-summary\.py$')" = true ]; then
+if [ "$(changed '^\.github/scripts/(xcresult-summary\.py|simulator-load\.sh)$')" = true ]; then
   ios=true; ios_fast=false
 fi
 [ "$(changed '^\.github/scripts/check-accepted-adrs\.py$')" = false ] || adrs=true
