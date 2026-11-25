@@ -613,5 +613,122 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertNotIn("ios-test.sh standalone", ios)
 
 
+def swift_audited_ui_tests(folder):
+    """UI tests whose body reaches an accessibility audit, directly or through helpers."""
+    functions = {}
+    for path in sorted(Path(folder).glob("*.swift")):
+        source = path.read_text()
+        owner = (re.findall(r"final class (\w+)\s*:\s*XCTestCase", source) or [None])[0]
+        for match in re.finditer(r"func (\w+)\s*(?:<[^>]*>)?\s*\([^)]*\)[^{]*\{", source):
+            index, depth = match.end(), 1
+            while depth:
+                depth += (source[index] == "{") - (source[index] == "}")
+                index += 1
+            functions.setdefault((owner, match.group(1)), []).append(source[match.end():index])
+    audited = {key for key, bodies in functions.items()
+               if any(re.search(r"\bperform(Measured)?AccessibilityAudit\b", body) for body in bodies)}
+    grown = True
+    while grown:
+        grown = False
+        for key, bodies in functions.items():
+            names = [name for owner, name in audited if owner in (key[0], None)]
+            if key in audited or not names:
+                continue
+            pattern = r"\b(%s)\s*\(" % "|".join(map(re.escape, names))
+            if any(re.search(pattern, body) for body in bodies):
+                audited.add(key)
+                grown = True
+    return {f"AegisMobileUITests/{owner}/{name}" for owner, name in audited
+            if owner and name.startswith("test")}
+
+
+class AuditedUiTestsLastTests(unittest.TestCase):
+    """#67, option 2: every recipe runs its audited UI tests after its other tests."""
+
+    RECIPE = ROOT / "apps/ios/scripts/ios-test.sh"
+
+    def recipe_array(self, name):
+        text = self.RECIPE.read_text()
+        body = re.search(rf"^{name}=\((.*?)\)\s*$", text, re.M | re.S).group(1)
+        return re.findall(r'"([^"]+)"', body)
+
+    def run_recipe(self, recipe):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            log = folder / "calls.log"
+            stubs = folder / "bin"
+            stubs.mkdir()
+            (stubs / "xcodebuild").write_text(
+                "#!/bin/bash\n"
+                "if [[ \"$1\" == -version ]]; then echo 'Xcode 0'; exit 0; fi\n"
+                f"echo \"xcodebuild $*\" >> {log}\n"
+                "while (( $# )); do [[ $1 == -resultBundlePath ]] && mkdir -p \"$2\"; shift; done\n")
+            (stubs / "xcrun").write_text(
+                "#!/bin/bash\n"
+                f"echo \"xcrun $*\" >> {log}\n"
+                "if [[ \"$2\" == merge ]]; then mkdir -p \"${@: -1}\"; fi\n"
+                "if [[ \"$2\" == get ]]; then echo '{\"result\": \"Passed\", \"totalTestCount\": 1, "
+                "\"passedTests\": 1, \"failedTests\": 0, \"skippedTests\": 0}'; fi\n"
+                "if [[ \"$1\" == --sdk ]]; then echo 0; fi\n")
+            real = sys.executable
+            (stubs / "python3").write_text(
+                "#!/bin/bash\n"
+                "if [[ \"$1\" == scripts/check-strings.py ]]; then exit 0; fi\n"
+                f"exec {real} \"$@\"\n")
+            for stub in stubs.iterdir():
+                stub.chmod(0o755)
+            env = {"PATH": f"{stubs}:{os.environ['PATH']}", "IOS_RESULTS_DIR": str(folder / "results")}
+            result = run(["bash", str(self.RECIPE), recipe], env=env)
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            calls = log.read_text().splitlines()
+            self.assertTrue((folder / "results" / f"{recipe}.xcresult").is_dir())
+            self.assertEqual(sorted(p.name for p in (folder / "results").glob("*.xcresult")), [f"{recipe}.xcresult"])
+        tests = [call for call in calls if call.startswith("xcodebuild test")]
+        merges = [call for call in calls if " merge " in call]
+        return tests, merges
+
+    def test_the_list_names_exactly_the_ui_tests_that_reach_an_audit(self):
+        listed = self.recipe_array("AUDITED_UI_TESTS")
+        self.assertEqual(len(listed), len(set(listed)))
+        self.assertEqual(set(listed), swift_audited_ui_tests(ROOT / "apps/ios/AegisMobileUITests"))
+        live = set(self.recipe_array("LIVE_TESTS")) | set(self.recipe_array("JOURNEY_TESTS"))
+        self.assertFalse(set(listed) & live)
+
+    def test_standalone_runs_every_audited_ui_test_last_and_once(self):
+        audited = self.recipe_array("AUDITED_UI_TESTS")
+        tests, merges = self.run_recipe("standalone")
+        self.assertEqual(len(tests), 2)
+        first, last = tests
+        for test in audited:
+            self.assertIn(f"-skip-testing:{test} ", first + " ")
+            self.assertIn(f"-only-testing:{test} ", last + " ")
+        for test in self.recipe_array("LIVE_TESTS") + self.recipe_array("JOURNEY_TESTS"):
+            self.assertIn(f"-skip-testing:{test} ", first + " ")
+        self.assertNotIn("-only-testing:", first)
+        self.assertEqual(last.count("-only-testing:"), len(audited))
+        self.assertNotIn("-skip-testing:", last)
+        self.assertEqual(len(merges), 1)
+
+    def test_pr_and_extended_split_the_audited_tests_between_them(self):
+        audited = set(self.recipe_array("AUDITED_UI_TESTS"))
+        pr_ui = set(self.recipe_array("PR_UI_TESTS"))
+        lasts = {}
+        for recipe in ("pr", "extended"):
+            tests, merges = self.run_recipe(recipe)
+            self.assertEqual(len(tests), 2, recipe)
+            self.assertEqual(len(merges), 1, recipe)
+            lasts[recipe] = set(re.findall(r"-only-testing:(\S+)", tests[1]))
+            for test in lasts[recipe]:
+                self.assertIn(f"-skip-testing:{test} ", tests[0] + " ")
+        self.assertEqual(lasts["pr"], audited & pr_ui)
+        self.assertEqual(lasts["extended"], audited - pr_ui)
+
+    def test_the_order_change_adds_no_wait_retry_or_timeout(self):
+        recipe = self.RECIPE.read_text()
+        for forbidden in ("sleep ", "-test-timeouts", "execution-time-allowance", "retry",
+                          "-test-iterations", "-run-tests-until-failure"):
+            self.assertNotIn(forbidden, recipe)
+
+
 if __name__ == "__main__":
     unittest.main()

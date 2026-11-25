@@ -72,6 +72,43 @@ PR_UI_TESTS=(
     "AegisMobileUITests/CheckoutUITests/testANoLongerReturnableLoanIsReadAgain"
 )
 
+# UI tests that run an accessibility audit, directly or through a helper. Each
+# recipe runs them after its other tests (#67, option 2 approved by Philippe):
+# on hosted runners the first minutes after the simulator's first boot carry
+# bursts of system jobs, and an audit that coincides with one can be abandoned
+# (-56). Only the order changes: every selected test still runs exactly once,
+# with the same audits, sizes and timeouts. The CI script tests check that
+# this list names exactly the UI tests that reach an audit.
+AUDITED_UI_TESTS=(
+    "AegisMobileUITests/CatalogUITests/testCatalogueFilterSheetAndBackInBothLanguagesAndAppearances"
+    "AegisMobileUITests/CatalogUITests/testLargestTextUsesTheFilterMenu"
+    "AegisMobileUITests/CatalogUITests/testOfflineRefreshKeepsTheLastListThenTryAgainRecovers"
+    "AegisMobileUITests/CatalogUITests/testOfflineSheetShowsTheLastKnownState"
+    "AegisMobileUITests/CatalogUITests/testRemovedAssetOffersTheWayBack"
+    "AegisMobileUITests/CatalogUITests/testSearchWithoutMatchClearsItsFilters"
+    "AegisMobileUITests/CheckoutUITests/testAHiddenReturnResumesFromTheLoan"
+    "AegisMobileUITests/CheckoutUITests/testALostConnectionIsNeitherACancellationNorAConfirmation"
+    "AegisMobileUITests/CheckoutUITests/testANoLongerReturnableLoanIsReadAgain"
+    "AegisMobileUITests/CheckoutUITests/testARefusedCodeNeedsANewScan"
+    "AegisMobileUITests/CheckoutUITests/testAnExpiredOperationStartsAgainThroughANewPreparation"
+    "AegisMobileUITests/CheckoutUITests/testAnOfflineLockerOffersANewAttempt"
+    "AegisMobileUITests/CheckoutUITests/testCloseHidesAndResumeReadsAgain"
+    "AegisMobileUITests/CheckoutUITests/testGuidedCheckoutReachesConfirmedOnlyFromTheServer"
+    "AegisMobileUITests/CheckoutUITests/testGuidedReturnReachesConfirmedOnlyFromTheServer"
+    "AegisMobileUITests/ReservationUITests/testAClosedLockerCannotBeConfirmed"
+    "AegisMobileUITests/ReservationUITests/testALoanReadFailureStaysInTheLoanSection"
+    "AegisMobileUITests/ReservationUITests/testALostAnswerIsRetriedAsTheSameIntent"
+    "AegisMobileUITests/ReservationUITests/testARefusedCancelFollowsTheNewRead"
+    "AegisMobileUITests/ReservationUITests/testAnOverdueLoanInBothLanguages"
+    "AegisMobileUITests/ReservationUITests/testLargestTextKeepsConfirmReachable"
+    "AegisMobileUITests/ReservationUITests/testMyOwnReservationReplacesReserveOnTheSheet"
+    "AegisMobileUITests/ReservationUITests/testReserveThenCancelInBothLanguagesAndAppearances"
+    "AegisMobileUITests/ReservationUITests/testTheProductionRefusalReadsAsARefusal"
+    "AegisMobileUITests/SignInUITests/testDarkAppearancePassesTheAccessibilityAudit"
+    "AegisMobileUITests/SignInUITests/testSignInAndSignOutInEnglish"
+    "AegisMobileUITests/SignInUITests/testSignInAndSignOutInFrench"
+)
+
 usage() {
     echo "usage: $0 standalone|pr|extended|live" >&2
     exit 64
@@ -100,6 +137,51 @@ run_tests() {
     return "$status"
 }
 
+# Runs the selection in two phases, the audited UI tests last, then merges both
+# result bundles into $1. $2 is the number of selection arguments that follow;
+# the remaining arguments are the audited UI tests that belong to the selection.
+run_audited_last() {
+    local bundle=$1 count=$2
+    shift 2
+    local selection=("${@:1:count}")
+    local audited=("${@:count+1}")
+    local first="${bundle%.xcresult}-1-other.xcresult" last="${bundle%.xcresult}-2-audited.xcresult"
+    local status=0
+    # macOS ships bash 3.2, where an empty array is unbound under set -u.
+    run_tests "$first" "${selection[@]}" ${audited[@]+"${audited[@]/#/-skip-testing:}"} || status=$?
+    if (( ${#audited[@]} )); then
+        run_tests "$last" "${audited[@]/#/-only-testing:}" || status=$?
+        rm -rf "$bundle"
+        xcrun xcresulttool merge "$first" "$last" --output-path "$bundle"
+        rm -rf "$first" "$last"
+    else
+        rm -rf "$bundle"
+        mv "$first" "$bundle"
+    fi
+    return "$status"
+}
+
+# Audited UI tests that are also (in) or are not (out) in the pull request subset.
+audited_in_pr() {
+    local test pr
+    for test in "${AUDITED_UI_TESTS[@]}"; do
+        for pr in "${PR_UI_TESTS[@]}"; do
+            if [[ "$test" == "$pr" ]]; then echo "$test"; fi
+        done
+    done
+}
+
+audited_outside_pr() {
+    local test pr found
+    for test in "${AUDITED_UI_TESTS[@]}"; do
+        found=no
+        for pr in "${PR_UI_TESTS[@]}"; do
+            if [[ "$test" == "$pr" ]]; then found=yes; fi
+        done
+        if [[ $found == no ]]; then echo "$test"; fi
+    done
+}
+
 # Fails unless every test ran and passed; optionally requires an exact count.
 # Also records <recipe>-summary.json and, under GitHub Actions, a step summary.
 check_results() {
@@ -113,7 +195,8 @@ check_results() {
 
 standalone() {
     local bundle="$RESULTS_DIR/standalone.xcresult" status=0
-    run_tests "$bundle" "${LIVE_TESTS[@]/#/-skip-testing:}" "${JOURNEY_TESTS[@]/#/-skip-testing:}" || status=$?
+    local selection=("${LIVE_TESTS[@]/#/-skip-testing:}" "${JOURNEY_TESTS[@]/#/-skip-testing:}")
+    run_audited_last "$bundle" "${#selection[@]}" "${selection[@]}" "${AUDITED_UI_TESTS[@]}" || status=$?
     check_results "$bundle" standalone
     python3 scripts/check-strings.py "$DERIVED_DATA"
     return "$status"
@@ -121,8 +204,11 @@ standalone() {
 
 pr() {
     local bundle="$RESULTS_DIR/pr.xcresult" status=0
-    run_tests "$bundle" -only-testing:AegisMobileTests "${PR_UI_TESTS[@]/#/-only-testing:}" \
-        "${LIVE_TESTS[@]/#/-skip-testing:}" || status=$?
+    local selection=(-only-testing:AegisMobileTests "${PR_UI_TESTS[@]/#/-only-testing:}"
+        "${LIVE_TESTS[@]/#/-skip-testing:}")
+    local audited=() test
+    while IFS= read -r test; do audited+=("$test"); done < <(audited_in_pr)
+    run_audited_last "$bundle" "${#selection[@]}" "${selection[@]}" ${audited[@]+"${audited[@]}"} || status=$?
     check_results "$bundle" pr
     python3 scripts/check-strings.py "$DERIVED_DATA"
     return "$status"
@@ -130,8 +216,11 @@ pr() {
 
 extended() {
     local bundle="$RESULTS_DIR/extended.xcresult" status=0
-    run_tests "$bundle" -only-testing:AegisMobileUITests "${PR_UI_TESTS[@]/#/-skip-testing:}" \
-        "${LIVE_TESTS[@]/#/-skip-testing:}" "${JOURNEY_TESTS[@]/#/-skip-testing:}" || status=$?
+    local selection=(-only-testing:AegisMobileUITests "${PR_UI_TESTS[@]/#/-skip-testing:}"
+        "${LIVE_TESTS[@]/#/-skip-testing:}" "${JOURNEY_TESTS[@]/#/-skip-testing:}")
+    local audited=() test
+    while IFS= read -r test; do audited+=("$test"); done < <(audited_outside_pr)
+    run_audited_last "$bundle" "${#selection[@]}" "${selection[@]}" ${audited[@]+"${audited[@]}"} || status=$?
     check_results "$bundle" extended
     return "$status"
 }
