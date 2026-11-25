@@ -107,14 +107,15 @@ void HubLink::tryPublishRestarted() {
 void HubLink::publishHeartbeat(uint32_t now) {
   nextHeartbeatMs_ = now + HEARTBEAT_INTERVAL_MS;
 
-  // Only the link is read so far: reader, door and lock stay UNKNOWN rather than guessed (§12.2).
+  // No door sensor is read yet, so doorState stays UNKNOWN rather than guessed (§12.2).
   CompartmentFacts compartments[MAX_COMPARTMENTS];
   size_t count = config_.compartmentCount < MAX_COMPARTMENTS ? config_.compartmentCount : MAX_COMPARTMENTS;
   for (size_t i = 0; i < count; i++) {
     const int address = config_.compartments[i].cellAddress;
-    const char* link = cellStatus_ != nullptr ? cellStatus_(address) : "UNKNOWN";
-    compartments[i] = CompartmentFacts{config_.compartments[i].compartmentId, address, link, "UNKNOWN", "UNKNOWN",
-                                       "UNKNOWN"};
+    const CellObservation cell =
+        cellStatus_ != nullptr ? cellStatus_(address) : CellObservation{"UNKNOWN", "UNKNOWN", "UNKNOWN"};
+    compartments[i] = CompartmentFacts{config_.compartments[i].compartmentId, address, cell.connectionStatus,
+                                       cell.readerStatus, "UNKNOWN", cell.lockState};
   }
 
   EnvelopeBuf buf;

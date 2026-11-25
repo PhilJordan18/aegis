@@ -15,8 +15,14 @@ constexpr size_t MAX_COMPARTMENTS = 4;
 // Acts on an accepted command; true when the actuation was engaged. It runs only after the
 // command is persisted as EXECUTING (doc 10 §9.1, §16.1).
 using CommandHandler = bool (*)(const Command&);
-// connectionStatus of the cell at `cellAddress` for the heartbeat: CONNECTED, DISCONNECTED or UNKNOWN.
-using CellStatusSource = const char* (*)(int cellAddress);
+// What the hub knows of the cell at one address, as doc 10 §14 values. doorState is not here:
+// no cell reads a door sensor yet, so the heartbeat reports it UNKNOWN.
+struct CellObservation {
+  const char* connectionStatus;  // CONNECTED, DISCONNECTED or UNKNOWN
+  const char* readerStatus;      // HEALTHY, FAULTED or UNKNOWN
+  const char* lockState;         // LOCKED, UNLOCKED or UNKNOWN
+};
+using CellStatusSource = CellObservation (*)(int cellAddress);
 
 // Connection lifecycle of the hub toward the broker (doc 10 §7, §13.1, §14, §15, §18):
 // a fresh Last Will and connectionId before every attempt, ONLINE, then DEVICE_RESTARTED
@@ -37,7 +43,7 @@ class HubLink {
   State state() const { return state_; }
   // Without a handler no command is ever acted on: each one is rejected INTERNAL_DEVICE_ERROR.
   void onCommand(CommandHandler handler) { handler_ = handler; }
-  // Without a source every cell is reported with connectionStatus UNKNOWN.
+  // Without a source every cell is reported UNKNOWN in every field.
   void cellStatus(CellStatusSource source) { cellStatus_ = source; }
 
  private:

@@ -1,4 +1,4 @@
-# Hub firmware (FW-00, issue #23)
+# Hub firmware (FW-00 #23, FW-01 #30)
 
 ESP32 hub firmware: it joins Wi-Fi, synchronizes its clock, keeps an MQTT
 connection to the broker with its device identity, publishing what the
@@ -24,8 +24,10 @@ executes authorized commands (not implemented yet) and reports facts.
 - Polls each cell on its own port every 100 ms (frame below). The heartbeat reports each
   compartment's `connectionStatus`: `UNKNOWN` until the first result, `CONNECTED` once the
   expected cell answers, `DISCONNECTED` after 3 polls in a row without a valid answer or as
-  soon as **another** cell answers on that port (a swapped cable). Door, lock and reader stay
-  `UNKNOWN`. A cell restart (new boot id) is logged on the serial monitor only.
+  soon as **another** cell answers on that port (a swapped cable). While the link is `CONNECTED`,
+  `lockState` and `readerStatus` are what the cell put in its last counted answer; otherwise both
+  are `UNKNOWN`, never the last value seen. `doorState` stays `UNKNOWN` (no door sensor yet).
+  A cell restart (new boot id) and each state change are logged on the serial monitor only.
 
 ## Not done yet
 
@@ -38,9 +40,9 @@ executes authorized commands (not implemented yet) and reports facts.
 - Journal limits: the uncertain report is kept in RAM only (a second reboot before it is published
   loses it, a redelivery still gets the known rejection); a message over 1.5 KB is dropped without
   `INBOUND_MESSAGE_INVALID`; a record layout change makes old records read as empty.
-- Cells report only their link: `readerStatus`, `doorState` and `lockState` stay `UNKNOWN`
-  until #30 (door and lock), #42 (lock command) and #32 (RFID).
-- A change of `connectionStatus` waits for the next 10 s heartbeat; no event is published for it.
+- `doorState` stays `UNKNOWN`: no cell has a door sensor yet (#30).
+- A change of `connectionStatus`, `lockState` or `readerStatus` waits for the next 10 s heartbeat;
+  no `LOCK_LOCKED` / `LOCK_UNLOCKED` event is published for it yet (§11.2, with #42).
 - No clean `OFFLINE` `SHUTDOWN` before a deliberate disconnect, no bounded local queue,
   no `DEVICE_ERROR`.
 - Credentials are compiled in from `secrets.h`, not provisioned into NVS as doc 10 §4.3
@@ -67,7 +69,7 @@ The MQTT client is the ESP-IDF `esp-mqtt` bundled with the Arduino ESP32 core: i
 publishes at QoS 1, which `PubSubClient` cannot. Auto-reconnect is off because each
 attempt needs its own Last Will.
 
-## Cell link frame (version 1)
+## Cell link frame (version 2)
 
 The hub ↔ cell protocol of each RS-485 segment, required by doc 12 §5 before
 implementation. It is Aegis's own format, kept from the POC-02 bench (issue #20,
@@ -78,8 +80,9 @@ implementation. It is Aegis's own format, kept from the POC-02 bench (issue #20,
 | Line | 115200 baud, 8N1, half duplex, auto-direction transceivers |
 | Frame | One ASCII line: `<body>,<CRC>\n`. CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF) of `<body>`, 4 uppercase hex. `\r` is ignored. At most 47 characters, longer lines are dropped |
 | PING (hub → cell) | `P,<seq>`: `seq` is 8 uppercase hex, incremented on every poll |
-| REPLY (cell → hub) | `R,<seq>,<cellAddress>,<bootId>,<resetCode>`: echoed `seq`, address 2 hex (A1 = `01`, A2 = `02`), random boot id 8 hex, `esp_reset_reason()` 2 hex |
-| Example | `P,0000001A,` + CRC, answered by `R,0000001A,01,B0071D01,01,` + CRC |
+| REPLY (cell → hub) | `R,<seq>,<cellAddress>,<bootId>,<resetCode>,<lock><reader>`: echoed `seq`, address 2 hex (A1 = `01`, A2 = `02`), random boot id 8 hex, `esp_reset_reason()` 2 hex, then one character each for the latch (`L` locked, `U` unlocked, `?` unknown) and the UHF reader (`H` healthy, `F` faulted, `?` unknown) |
+| Example | `P,0000001A,` + CRC, answered by `R,0000001A,01,B0071D01,01,LH,` + CRC |
+| Version | Version 1 had no `<lock><reader>` field. A version 1 reply no longer parses, so the hub reports such a cell `DISCONNECTED`: flash the hub and the cells together |
 | Timing | Hub polls every 100 ms, waits 30 ms for the reply; the cell answers 2 ms after the PING so the hub's transceiver is back in receive |
 | Counted as an answer | Valid CRC, current `seq`, received before the hub gave up on that PING. A reply to an older PING, the hub's own PING echoed back, a corrupted or oversized frame never counts |
 

@@ -1,11 +1,14 @@
 #pragma once
 
-// Hub <-> cell frame, version 1, on each RS-485 segment (ADR-002). Specified in
+// Hub <-> cell frame, version 2, on each RS-485 segment (ADR-002). Specified in
 // firmware/locker-controller/README.md, "Cell link frame". Aegis's own format, not Modbus.
 //
 // One ASCII line per frame:  <body>,<CRC-16/CCITT-FALSE of body, 4 uppercase hex>\n
 //   PING  hub -> cell : P,<seq 8 hex>
-//   REPLY cell -> hub : R,<seq 8 hex>,<cellAddress 2 hex>,<bootId 8 hex>,<resetCode 2 hex>
+//   REPLY cell -> hub : R,<seq 8 hex>,<cellAddress 2 hex>,<bootId 8 hex>,<resetCode 2 hex>,<lock><reader>
+//     lock   : L locked, U unlocked, ? unknown        (latch status switch)
+//     reader : H healthy, F faulted, ? unknown        (local UHF reader)
+// Version 1 had no state field; a version 1 reply no longer parses, so both ends are flashed together.
 //
 // shortcut: this header is copied byte for byte into firmware/cell-controller/src/ because an
 // Arduino sketch only builds files inside its own folder; tests/host/run.sh fails if the copies
@@ -19,7 +22,7 @@
 namespace aegis {
 namespace cellframe {
 
-constexpr size_t MAX_LINE = 48;  // longest frame (REPLY) is 31 bytes with CRC and newline
+constexpr size_t MAX_LINE = 48;  // longest frame (REPLY) is 34 bytes with CRC and newline
 
 inline uint16_t crc16(const char* data, size_t len) {
   uint16_t crc = 0xFFFF;
@@ -78,29 +81,51 @@ inline bool parsePing(const char* body, uint32_t* seq) {
   return strlen(body) == 10 && body[0] == 'P' && body[1] == ',' && parseHex(body + 2, 8, seq);
 }
 
+constexpr char LOCK_LOCKED = 'L';
+constexpr char LOCK_UNLOCKED = 'U';
+constexpr char READER_HEALTHY = 'H';
+constexpr char READER_FAULTED = 'F';
+constexpr char STATE_UNKNOWN = '?';
+
 struct Reply {
   uint32_t seq;
   uint8_t cellAddress;
   uint32_t bootId;     // random per cell boot: a change means the cell restarted
   uint8_t resetCode;   // esp_reset_reason_t of the cell, for diagnosis only
+  char lock = STATE_UNKNOWN;
+  char reader = STATE_UNKNOWN;
 };
 
+inline bool isLock(char c) { return c == LOCK_LOCKED || c == LOCK_UNLOCKED || c == STATE_UNKNOWN; }
+inline bool isReader(char c) { return c == READER_HEALTHY || c == READER_FAULTED || c == STATE_UNKNOWN; }
+
+// Contract values of doc 10 §14 (lockState, readerStatus).
+inline const char* lockStateName(char c) {
+  return c == LOCK_LOCKED ? "LOCKED" : c == LOCK_UNLOCKED ? "UNLOCKED" : "UNKNOWN";
+}
+inline const char* readerStatusName(char c) {
+  return c == READER_HEALTHY ? "HEALTHY" : c == READER_FAULTED ? "FAULTED" : "UNKNOWN";
+}
+
 inline size_t encodeReply(const Reply& r, char* out, size_t cap) {
+  if (!isLock(r.lock) || !isReader(r.reader)) return 0;
   char body[32];
-  snprintf(body, sizeof(body), "R,%08lX,%02X,%08lX,%02X", static_cast<unsigned long>(r.seq), r.cellAddress,
-           static_cast<unsigned long>(r.bootId), r.resetCode);
+  snprintf(body, sizeof(body), "R,%08lX,%02X,%08lX,%02X,%c%c", static_cast<unsigned long>(r.seq), r.cellAddress,
+           static_cast<unsigned long>(r.bootId), r.resetCode, r.lock, r.reader);
   return seal(body, out, cap);
 }
 
 inline bool parseReply(const char* b, Reply* r) {
   uint32_t address, reset;
-  if (strlen(b) != 25 || b[0] != 'R' || b[1] != ',' || b[10] != ',' || b[13] != ',' || b[22] != ',' ||
-      !parseHex(b + 2, 8, &r->seq) || !parseHex(b + 11, 2, &address) || !parseHex(b + 14, 8, &r->bootId) ||
-      !parseHex(b + 23, 2, &reset)) {
+  if (strlen(b) != 28 || b[0] != 'R' || b[1] != ',' || b[10] != ',' || b[13] != ',' || b[22] != ',' ||
+      b[25] != ',' || !parseHex(b + 2, 8, &r->seq) || !parseHex(b + 11, 2, &address) ||
+      !parseHex(b + 14, 8, &r->bootId) || !parseHex(b + 23, 2, &reset) || !isLock(b[26]) || !isReader(b[27])) {
     return false;
   }
   r->cellAddress = static_cast<uint8_t>(address);
   r->resetCode = static_cast<uint8_t>(reset);
+  r->lock = b[26];
+  r->reader = b[27];
   return true;
 }
 
