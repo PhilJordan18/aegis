@@ -1,11 +1,15 @@
 # Rasterizes Inter (SIL OFL 1.1) glyphs and the Aegis artwork into anti-aliased tables for the display-node sketch.
 # Needs Pillow. Usage: python3 tools/gen_assets.py <Inter[opsz,wght].ttf> assets.h
-import math, sys
+import math, os, sys
 from PIL import Image, ImageDraw, ImageFont
 
 if len(sys.argv) != 3:
     sys.exit('usage: gen_assets.py <Inter.ttf (variable)> <output assets.h>')
-FONT, OUT = sys.argv[1], sys.argv[2]
+FONT = sys.argv[1]
+# The only file this tool writes is the sketch's own assets.h; the second argument must name it.
+OUT = os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'assets.h'))
+if os.path.realpath(sys.argv[2]) != OUT:
+    sys.exit('the output must be ' + OUT)
 CHARS = [chr(c) for c in range(32, 127)] + ['é', 'è', 'à', '’', '·']
 
 # name, px size, weight
