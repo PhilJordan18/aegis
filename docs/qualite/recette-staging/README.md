@@ -108,17 +108,45 @@ complète et ses limites de preuve sont publiées sur #67. Un SHA déployé diff
 un descendant de `dev` dont la CI est verte, sinon la séance est `BLOCKED`. Les preuves
 cloud sont **synthétiques et isolées** : elles ne disent rien de staging.
 
-### Décisions préalables (Philippe)
+### Décisions de Philippe (25 novembre 2026)
 
-Aucune de ces décisions n'est prise par ce guide. Une décision absente rend `BLOCKED` les
-lignes qui en dépendent.
+| ID | Décision | Conséquence pour la séance | Lignes |
+|---|---|---|---|
+| D1 | **Approuvée** : casier simulé dédié sur staging, séparé du hub de Jimmy. | Le responsable Railway fournit le compte MQTT de ce casier ; le simulateur ne tourne pas sur le Mac de Philippe et n'utilise jamais l'identité du hub. | Partie S |
+| D2 | **Approuvée** : saisie du vrai QR dans le champ réservé au build Debug. Le serveur conserve toutes ses vérifications. La caméra est vérifiée séparément sur iPhone (partie C). | Aucun jeton dans un journal, une capture ou un rapport. Le champ n'existe que dans le build Debug, dont l'URL d'API doit pointer vers staging. | S2, S4, S5, S7 |
+| D3 | **Préparée, non exécutée** : rotation du mot de passe d'un compte de recette dédié, faite par le responsable Railway pendant la séance. | Aucun mot de passe n'est changé avant la séance. Le nouveau mot de passe circule hors GitHub. | A5 |
+| D4 | **Approuvée** : l'anomalie de test est celle que produit le retour simulé de S4. Aucun SQL manuel. | A9 s'exécute après S4 ; acquitter ne résout pas ; la reprise S5 va jusqu'à la confirmation physique simulée. | S4, A9, S5 |
 
-| ID | Décision | Lignes concernées |
+## Classement avant la séance
+
+### Prérequis de séance (à réunir, pas des défauts)
+
+| Prérequis | Responsable | Lignes |
 |---|---|---|
-| D1 | Autoriser sur staging un **locker de test simulé**. Le responsable Railway crée son compte MQTT ; le simulateur tourne hors du Mac de Philippe. | Partie S |
-| D2 | Choisir comment le QR d'un hub simulé parvient au mobile. Le simulateur ne journalise jamais le jeton ; seul son accesseur de test l'expose. Il faut donc soit un outil d'affichage local non capturé, soit une saisie de développement dans un build Debug. | S2, S5 |
-| D3 | Planifier, ou non, une rotation du mot de passe d'un compte de test, faite par le responsable Railway, pour la ligne A5. | A5 |
-| D4 | Désigner l'anomalie de test, sans seed SQL : celle de S4, ou une anomalie réelle déjà présente. | A9 |
+| SHA API et Web de `dev` déployés, migrations appliquées, URL HTTPS | Responsable Railway | Toutes |
+| Comptes de recette administrateur et technicien, dont le compte dédié de D3 | Philippe, responsable Railway | Toutes, A5 |
+| Compte MQTT du casier simulé, DNS, port, CA du broker | Responsable Railway | S |
+| `AEGIS_DISPLAY_KEYS` / `AEGIS_DISPLAY_ACTIVE_KEY_ID` provisionnées (jamais leur valeur ici) | Responsable Railway | S, C |
+| Casier, compartiments et actifs de test créés par le Manager, sans SQL | Philippe | S, C |
+| Build Debug du mobile au SHA de la section 0, avec `AEGIS_API_BASE_URL` vers staging, sur appareil | Propriétaire iOS | A, S |
+| **Lecture opérateur du QR simulé.** Le simulateur ne journalise jamais le QR ; seul son accesseur `screen` l'expose. Aucun outil livré ne le montre à l'opérateur. Il faut un affichage local, non journalisé et non capturé, pour la saisie D2. | À désigner par Philippe (outillage de test, pas le produit) | S2, S4, S5, S7 |
+| Firmware avec écran, QR, porte et RFID qualifiés | Jimmy | B, C |
+
+### Tests restant à exécuter (staging)
+
+- A1 à A12 : session, révocation (A5 pendant la séance), réservation, cohérence, audit.
+- S1 à S7 : retrait, retour, anomalie et reprise, cohérence, avec le casier simulé.
+- B1 à B5 et C1 à C6.15 : broker et validations matérielles sur le hub de Jimmy, caméra
+  de l'iPhone comprise.
+
+### Défauts bloquants
+
+Aucun défaut produit bloquant n'est connu au moment de la publication. Le résultat de la CI
+finale de `dev` est publié sur #67. #222 reste au backlog et ne bloque pas la recette. Un
+`FAIL` de séance devient un défaut bloquant s'il touche un invariant de garde.
+
+Ces préparatifs ne maintiennent aucun développement ouvert : un prérequis manquant rend
+ses lignes `BLOCKED`, il ne justifie aucune modification du produit.
 
 ## Gabarit de consignation
 
@@ -162,7 +190,7 @@ Référence : doc 09 §4.1, §10.4 à §10.6 (ADR-016 à ADR-018).
 | A2 | Manager : actualiser la page, suivre un lien direct vers un dossier, ouvrir un nouvel onglet. | La session est restaurée sans nouvelle connexion, dans chaque onglet. Aucune boucle de restauration. | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | Statuts HTTP seulement |
 | A3 | Mobile : se connecter en technicien, fermer l'application (balayage), la rouvrir. Puis couper le réseau et rouvrir un écran. | La session est restaurée depuis le trousseau sans ressaisie. Hors réseau : message d'indisponibilité récupérable, pas de déconnexion. | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | Capture sans jeton |
 | A4 | Manager, deux onglets ouverts : se déconnecter dans l'un. Rafraîchir l'autre. Sur le mobile, rouvrir « Mon activité ». | Le second onglet revient à la connexion. **Le mobile reste connecté** : la déconnexion du Web ne touche pas iOS. | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | |
-| A5 | Seulement si D3 est décidé : le responsable Railway change le mot de passe du technicien de test. Rouvrir le mobile et le Manager connectés avec ce compte. | Les jetons du compte sont refusés (`401`) ; Web et mobile reviennent à la connexion ; le nouveau mot de passe fonctionne. Un audit `PASSWORD_CHANGED` existe. Réservations et prêts sont inchangés. | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | Sans D3 ⇒ `BLOCKED` ; le mot de passe ne circule jamais ici |
+| A5 | Pendant la séance (D3) : le responsable Railway change le mot de passe du compte de recette dédié. Rouvrir le mobile et le Manager connectés avec ce compte. | Les jetons du compte sont refusés (`401`) ; Web et mobile reviennent à la connexion ; le nouveau mot de passe fonctionne. Un audit `PASSWORD_CHANGED` existe. Réservations et prêts sont inchangés. | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | Rotation non faite ⇒ `NOT RUN` ; le mot de passe ne circule jamais ici |
 
 L'échéance d'un jeton mobile (60 minutes) se vérifie seulement si la séance dure : retour à
 la connexion, réservations et prêts inchangés.
@@ -174,7 +202,7 @@ la connexion, réservations et prêts inchangés.
 | A6 | Dans le mobile, ouvrir un actif de test prêt, puis un actif dont la calibration est expirée. | L'actif prêt est réservable. L'actif expiré explique le refus et n'est pas réservable. | #37, #38 | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | Capture des deux états |
 | A7 | Réserver l'actif prêt jusqu'à une heure locale explicite. Ouvrir « Mon activité », puis Manager → Réservations et le dossier de l'actif. | Une seule réservation. Même technicien, même actif et même échéance dans les deux clients, à l'heure du laboratoire. **Aucune commande de déverrouillage, aucun prêt.** | #37, #38, #48 | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | L'observateur confirme l'absence de commande MQTT |
 | A8 | Actualiser, naviguer et rouvrir « Mon activité ». Annuler par l'écran de confirmation. Revenir au Manager **sans recharger**, puis en changeant d'onglet. | Même réservation avant l'annulation. Ensuite : plus de réservation active des deux côtés ; le Manager relit les faits à l'entrée de l'écran (#202). L'actif ne redevient prêt que si la readiness le permet. | #37, #38, #202 | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | **Jimmy consigne son propre résultat** |
-| A9 | Anomalies : ouvrir l'anomalie désignée par D4, puis l'acquitter avec une note (elle seule). Répéter l'acquittement. | Type localisé, preuves bornées, aucun payload brut, tag ou secret. L'acquittement n'est pas une résolution. La répétition et le conflit donnent les erreurs approuvées. | #52 | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | **Sans anomalie désignée ⇒ `BLOCKED`**, jamais PASS |
+| A9 | Après S4 (D4) : ouvrir l'anomalie produite par S4, puis l'acquitter avec une note (elle seule). Répéter l'acquittement. Vérifier qu'elle n'est pas résolue avant S5. | Type localisé, preuves bornées, aucun payload brut, tag ou secret. L'acquittement n'est pas une résolution. La répétition et le conflit donnent les erreurs approuvées. | #52 | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | **S4 non exécutée ⇒ `BLOCKED`**, jamais PASS ; aucun SQL |
 | A10 | Manager : Réservations, Prêts et Opérations ; filtres, pagination, dossiers liés (#188). Changer d'onglet rapidement, puis actualiser. | Données persistées réelles, filtrage et pagination stables. Personne et équipement nommés (#190). Aucune ligne de l'onglet précédent. États vide et indisponible honnêtes. | #48, #188, #190 | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | **Ne pas créer de faux prêts** |
 | A11 | Audit : filtrer autour de A5, A7, A8 et A9 ; ouvrir les détails. | Événements attribuables et ordonnés. Seuls les détails autorisés sont visibles, imbriqués compris (#185). Aucun mot de passe, jeton, tag RFID brut ni payload MQTT brut. | #53 | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | |
 | A12 | Vue d'ensemble : suivre le lien de chaque bloc prioritaire. | Données réelles, comptes cohérents ou explicitement partiels. Un bloc en échec n'affiche jamais « 0 » à la place de « indisponible ». Clavier et affichage étroit utilisables. | #159 | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | |
@@ -183,8 +211,8 @@ la connexion, réservations et prêts inchangés.
 
 **Nature : simulée.** Le simulateur prouve que le backend, le Manager et le mobile traitent
 correctement un hub conforme au contrat. Il ne prouve **ni l'écran, ni la caméra, ni la
-porte, ni le RFID**, qui restent en partie C. Sans D1, chaque ligne est `BLOCKED` ; sans D2,
-S2 à S7 le sont aussi.
+porte, ni le RFID**, qui restent en partie C. D1 est approuvée ; sans
+la lecture opérateur du QR simulé, S2, S4, S5 et S7 sont `BLOCKED`.
 
 **Préalables.** Locker, compartiments et actifs de test créés par le Manager, sans SQL. Le
 compte MQTT du locker simulé est fourni par le responsable Railway. Le simulateur est
@@ -198,7 +226,7 @@ sont scriptées et consignées avec leur scénario.
 | S2 | Mobile, technicien titulaire de la réservation de A7 (refaite si annulée) : préparer le retrait, puis présenter le QR selon D2. | Opération `AWAITING_LOCAL_PROOF`, défi affiché par le simulateur seul. Après le scan : **une** commande corrélée vers le bon compartiment. | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | operationId ; **jeton jamais copié dans la preuve** |
 | S3 | Scénario : porte ouverte puis fermée, absence stable du tag attendu. Suivre le mobile, puis Manager → Opérations, Prêts et le dossier. | **Exactement un prêt confirmé** après la séquence complète. Le mobile affiche la confirmation serveur. Le Manager suit l'opération jusqu'à son état terminal (#186). Audit concordant. | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | |
 | S4 | Retour, cas d'anomalie : préparer et autoriser le retour, puis porte ouverte et fermée **sans** le tag attendu. | `ANOMALY` (`EXPECTED_ASSET_NOT_OBSERVED`), prêt `RETURN_PENDING`. Le mobile n'annonce pas de retour réussi. Le Manager affiche l'anomalie `OPEN`. Un nouveau retour est refusé tant qu'elle est `OPEN` (règle 1). | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | |
-| S5 | Reprise : l'administrateur acquitte l'anomalie avec une note. Le détenteur prépare un nouveau retour, présente le QR, le scénario dépose le tag attendu de façon stable. | Retour proposé de nouveau après l'acquittement. Prêt `COMPLETED`, anomalie `RESOLVED` avec sa preuve, audit `ANOMALY_RESOLVED`. **Aucune impasse.** | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | |
+| S5 | Reprise, après l'acquittement de A9 (l'anomalie reste non résolue) : le détenteur prépare un nouveau retour, présente le QR, le scénario dépose le tag attendu de façon stable. | Retour proposé de nouveau après l'acquittement. Prêt `COMPLETED`, anomalie `RESOLVED` avec sa preuve, audit `ANOMALY_RESOLVED`. **Aucune impasse.** | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | |
 | S6 | Après S5, comparer mobile (« Mon activité ») et Manager (Prêts, Opérations, dossier de l'actif, Audit), puis actualiser les deux. | Mêmes faits des deux côtés : un prêt terminé, aucune opération ouverte, readiness recalculée (l'actif n'est pas forcément `READY`). | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | |
 | S7 | Pendant une préparation `AWAITING_LOCAL_PROOF`, arrêter le simulateur (`Ctrl+C`), puis le redémarrer. | Nouvelle session : l'ancien défi est invalidé et un scan de ce QR ne produit aucune commande (comme C6.6). Le mobile n'annonce aucun succès ; le Manager montre l'état de l'opération sans la déclarer réussie. | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | |
 
@@ -329,11 +357,11 @@ Ils sont décrits dans
 |---|---|---|
 | SHA API/Web déployés, migrations, HTTPS | Responsable Railway | A, S, B, C |
 | Comptes de test administrateur et technicien (mots de passe hors GitHub) | Philippe | A, S, C |
-| Décisions D1 à D4 | Philippe | S, A5, A9 |
+| Lecture opérateur du QR simulé (saisie D2) | À désigner par Philippe | S |
 | Compte MQTT du locker simulé, distinct de celui du hub | Responsable Railway | S |
 | Identifiants MQTT rotés (#24), DNS, port, CA | Responsable Railway | S, B, C |
 | `AEGIS_DISPLAY_KEYS` / `AEGIS_DISPLAY_ACTIVE_KEY_ID` provisionnées | Responsable Railway | S, C |
-| Build mobile du SHA de la section 0 sur appareil réel | Propriétaire iOS | A, S, C |
+| Build Debug du mobile (URL d'API staging) pour A et S ; build sur iPhone avec caméra pour C | Propriétaire iOS | A, S, C |
 | Écran du hub #45 | Jimmy | C1 |
 | QR et caméra #22 | Jimmy | C2, C4, C6 |
 | Porte et serrure #42/#21 | Jimmy | C2 à C6 |
