@@ -149,6 +149,31 @@ struct ReturnPreparationTests {
         #expect(!model.isLoading)
     }
 
+    /// #212 follow-up: the app and the activity view both ask for the first
+    /// reading at launch. The second call shares the read in flight: one
+    /// read, and its answer, a failed loan read here, is the one shown.
+    @Test func bothFirstReadingsAtLaunchShareOneRead() async {
+        let failure = APIError.http(status: 503, problem: SessionFixtures.problem(503, "SERVICE_UNAVAILABLE"),
+                                    retryAfter: nil)
+        let service = loanOnly([.failure(failure), .success(nil)])
+        let model = model(service, operations: ScriptedOperationService(), sleeper: RecordingSleeper())
+        let gate = Gate()
+        service.loanGate = gate
+        let app = Task { await model.loadIfNeeded() }
+        while service.loanReads < 1 { await Task.yield() }
+        service.loanGate = nil
+        let view = Task { await model.loadIfNeeded() }
+        // Lets the second call start while the read is held; bounded, no timed pause.
+        for _ in 0..<1_000 { await Task.yield() }
+
+        await gate.open()
+        await app.value
+        await view.value
+        #expect(service.loanReads == 1)
+        #expect(model.loan.failure != nil, "The answer of the read in flight is the one shown.")
+        #expect(!model.isLoading)
+    }
+
     @Test func aSecondTapWhilePreparingIsIgnored() async {
         let gate = Gate()
         let operations = ScriptedOperationService(returns: [.success(Self.returning())])

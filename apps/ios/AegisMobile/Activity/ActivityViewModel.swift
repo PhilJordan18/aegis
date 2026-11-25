@@ -151,8 +151,16 @@ final class ActivityViewModel {
             && reservation.failure == nil && loan.failure == nil
     }
 
+    /// The first reading of the screen. The app and the view both ask for it
+    /// at launch: a call made while a read is in flight waits for that read
+    /// and keeps its answer. Nothing happened since that read started that a
+    /// newer one must follow, unlike `load()` after an operation (#212).
     func loadIfNeeded() async {
         guard !hasRead else { return }
+        if isLoading {
+            await withCheckedContinuation { readWaiters.append($0) }
+            return
+        }
         await load()
     }
 
