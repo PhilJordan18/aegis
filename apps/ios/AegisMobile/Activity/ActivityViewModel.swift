@@ -53,6 +53,13 @@ final class ActivityViewModel {
     /// decides a button.
     private(set) var offlineAttemptAt: Date?
 
+    /// Reads asked for so far, and the last of them that a read answered.
+    /// A read answers every call made before it started, never a later one.
+    private var readsAsked = 0
+    private var readsAnswered = 0
+    /// Calls waiting for the read in flight to end before they read again.
+    private var readWaiters: [CheckedContinuation<Void, Never>] = []
+
     private var cancelKey: (reservationId: UUID, key: IdempotencyKey)?
     /// The key of the last preparation whose outcome is unknown, for the
     /// reservation or the loan it targeted.
@@ -149,13 +156,31 @@ final class ActivityViewModel {
         await load()
     }
 
-    /// Reads both resources together. A call made while a read is in flight
-    /// is ignored.
+    /// Reads both resources together.
+    ///
+    /// A call made while a read is in flight waits for it, then reads again:
+    /// that read started before the call, so its answer may predate what the
+    /// call follows, such as a return the server just confirmed (#212). Such an
+    /// answer is not applied; only a read started after every call so far is.
+    /// A call returns once a read started after it has answered, or ended the
+    /// session.
     func load() async {
-        guard !isLoading else { return }
+        readsAsked += 1
+        let asked = readsAsked
+        while isLoading {
+            await withCheckedContinuation { readWaiters.append($0) }
+            if readsAnswered >= asked { return }
+        }
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            let waiters = readWaiters
+            readWaiters = []
+            for waiter in waiters { waiter.resume() }
+        }
+        let covered = readsAsked
         guard let token = session?.accessToken() else {
+            readsAnswered = max(readsAnswered, covered)
             session?.handleMissingToken()
             return
         }
@@ -168,11 +193,16 @@ final class ActivityViewModel {
 
         for result in [reservationResult.map { _ in () }, loanResult.map { _ in () }] {
             if case let .failure(.http(401, problem, _)) = result {
+                readsAnswered = max(readsAnswered, covered)
                 session?.handleUnauthorized(code: problem?.code)
                 return
             }
         }
+        // A cancelled read answered nobody: a waiting call reads instead.
         if case .failure(.cancelled) = reservationResult { return }
+        // A later call is waiting for a read started after it.
+        if readsAsked > covered { return }
+        readsAnswered = max(readsAnswered, covered)
         let receivedAt = now()
         Self.apply(reservationResult, to: &reservation, at: receivedAt)
         Self.apply(loanResult, to: &loan, at: receivedAt)
