@@ -281,7 +281,8 @@ final class CatalogUITests: XCTestCase {
     @MainActor
     private func launch(_ language: Language, scenario: String, arguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments += ["-AppleLanguages", "(\(language.code))", "-AppleLocale", language.locale] + arguments
+        app.launchArguments += ["-AppleLanguages", "(\(language.code))", "-AppleLocale", language.locale]
+            + Self.textSize(arguments) + arguments
         app.launchEnvironment["AEGIS_UI_SCENARIO"] = scenario
         app.launch()
         return app

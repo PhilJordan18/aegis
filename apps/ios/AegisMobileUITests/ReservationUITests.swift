@@ -293,7 +293,8 @@ final class ReservationUITests: XCTestCase {
     private func launch(_ language: Language, scenario: String, tab: String? = nil,
                         arguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments += ["-AppleLanguages", "(\(language.code))", "-AppleLocale", language.locale] + arguments
+        app.launchArguments += ["-AppleLanguages", "(\(language.code))", "-AppleLocale", language.locale]
+            + Self.textSize(arguments) + arguments
         app.launchEnvironment["AEGIS_UI_SCENARIO"] = scenario
         if let tab { app.launchEnvironment["AEGIS_START_TAB"] = tab }
         app.launch()
@@ -303,10 +304,15 @@ final class ReservationUITests: XCTestCase {
     /// Height above the floating tab bar covered by its scroll-edge fade.
     private let fadeHeight: CGFloat = 120
 
+    /// Top padding of the reservation sheet's confirm bar above its button
+    /// (`ReservationSheetView.confirmBar`).
+    private let confirmBarTop: CGFloat = 10
+
     /// The catalogue policy: every issue fails, except reports on system
     /// rendering, each limited to where it occurs:
     /// - Dynamic Type of an element only partly visible, cut by the screen
-    ///   edge or under the iOS 26 floating tab bar's fade;
+    ///   edge, under the iOS 26 floating tab bar's fade, or under the
+    ///   sheet's opaque confirm bar, which grows at accessibility sizes;
     /// - the contrast of such an element when nothing of it is visible, or
     ///   its visible part holds no ink. Otherwise its visible part is measured
     ///   on the pixels and fails below 4.5:1 (#211).
@@ -324,6 +330,17 @@ final class ReservationUITests: XCTestCase {
         if tabBar.exists, tabBar.isHittable {
             visible.size.height = max(0, tabBar.frame.minY - fadeHeight - window.minY)
         }
+        // What scrolls under the sheet's confirm bar is hidden by it; the
+        // bar's own elements are judged on the whole visible area.
+        let confirm = app.buttons["reservation.confirm"]
+        let confirmBar = confirm.exists && confirm.isHittable
+            ? CGRect(x: window.minX, y: confirm.frame.minY - confirmBarTop,
+                     width: window.width, height: window.maxY - confirm.frame.minY + confirmBarTop)
+            : .null
+        var content = visible
+        if !confirmBar.isNull {
+            content.size.height = max(0, min(visible.maxY, confirmBar.minY) - visible.minY)
+        }
         let chipFrames = app.descendants(matching: .any).matching(identifier: "asset.status")
             .allElementsBoundByIndex.map(\.frame)
         let sampledChips = ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26
@@ -340,6 +357,7 @@ final class ReservationUITests: XCTestCase {
             let tolerated: Bool
             if let target = issue.element {
                 let center = CGPoint(x: target.frame.midX, y: target.frame.midY)
+                let area = confirmBar.contains(target.frame) ? visible : content
                 let summary = issue.compactDescription
                 let nearlyInChip = sampledChips && summary.contains("nearly")
                     && chipFrames.contains { $0.contains(center) }
@@ -349,12 +367,12 @@ final class ReservationUITests: XCTestCase {
                 case .dynamicType:
                     // System bar items (Close) do not grow by design; UIKit
                     // shows them in the Large Content Viewer instead.
-                    tolerated = !visible.contains(target.frame) || bars.contains { $0.contains(center) }
+                    tolerated = !area.contains(target.frame) || bars.contains { $0.contains(center) }
                 case .contrast:
                     if nearlyInChip {
                         tolerated = true
                     } else {
-                        switch self.visiblePartContrast(of: target, visible: visible, window: window, in: app) {
+                        switch self.visiblePartContrast(of: target, visible: area, window: window, in: app) {
                         case let .nothingToMeasure(reason):
                             tolerated = true
                             note = " (\(reason))"
@@ -383,7 +401,7 @@ final class ReservationUITests: XCTestCase {
         // Every tolerated issue stays visible in the result: a rule that hides
         // an issue must not look like an audit that found nothing.
         if !ignored.isEmpty {
-            let report = XCTAttachment(string: (["visible=\(visible)"] + ignored).joined(separator: "\n"))
+            let report = XCTAttachment(string: (["visible=\(content)", "confirmBar=\(confirmBar)"] + ignored).joined(separator: "\n"))
             report.name = "audit-tolerated"
             report.lifetime = .keepAlways
             add(report)
@@ -395,7 +413,7 @@ final class ReservationUITests: XCTestCase {
             add(report)
         }
         if !unhandled.isEmpty {
-            let report = XCTAttachment(string: (["visible=\(visible)"] + unhandled).joined(separator: "\n"))
+            let report = XCTAttachment(string: (["visible=\(content)", "confirmBar=\(confirmBar)"] + unhandled).joined(separator: "\n"))
             report.name = "audit-issues"
             report.lifetime = .keepAlways
             add(report)
