@@ -380,6 +380,89 @@ secondes depuis le 1er janvier 2001 : on ajoute 978 307 200 pour obtenir l'époq
 - **Aucune différence.** L'hypothèse de démarrage est écartée, et l'échec reste à
   diagnostiquer avec #117.
 
+## 10. Expériences ciblées #210 et cause probable (25 novembre)
+
+La PR #210 était une expérience jetable : un workflow qui ne se déclenchait que sur sa propre PR.
+Elle est fermée sans merge, et sa branche `67-ci-ios-first-audit-experiment` est conservée.
+Ses deux exécutions sont les seules preuves de cette section.
+
+### Exécution 1 (`930feb3`, run 45493019592)
+
+Huit essais :
+- deux blocs, chacun effacement et démarrage, puis 3 essais du test du catalogue,
+  puis un redémarrage et un test de remise ;
+- aucun échec.
+
+Ce que les durées montrent :
+- Le premier audit d'un nouveau processus de test coûte environ 7 s, quel que soit
+  l'âge du simulateur.
+- Les seuls audits lents (14,2 s ; une traîne à 19,2 s) tombent dans les dix minutes
+  qui suivent le premier démarrage.
+- Les essais lancés plus de 600 s après le démarrage restent sous 7,4 s.
+- La charge `load1` ne sépare pas les essais lents des autres.
+
+### Lecture des runs CI complets
+
+Les bundles de cinq runs ont été relus activité par activité :
+#209 (vert), #208 `2e8d0dd`, #208 `5335207`, #204 `03f9a93` et la première tentative de #208 `2e8d0dd`.
+
+- Le premier test UI commence 215 à 535 s après que le simulateur est prêt.
+- Lorsqu'un pas est lent, le tap qui ouvre la fiche bloquée attend 12 à 17,7 s
+  que l'app soit inactive, au lieu d'environ 1 s. L'audit suivant dure 10,7 à 27,9 s,
+  ou s'arrête sur -56 après 15,7 à 18,1 s.
+- Un audit a réussi après 27,9 s : le -56 n'est donc pas un budget fixe de 15 s.
+
+### Exécution 2 (`33f62c5`, run 45516470323)
+
+Protocole :
+- un démarrage après effacement, puis 4 essais du test du catalogue ;
+- le CPU de chaque processus au-dessus de 5 %, relevé chaque seconde ;
+- la pile de l'app, prise quand elle dépasse 50 % pendant 3 s.
+
+Résultats :
+- **Les 4 essais réussissent.** Un seul épisode lent apparaît, dans l'essai 1, de +306 à +341 s
+  après le démarrage : le tap anglais en mode sombre dure 8,0 s et l'audit 8 dure 20,1 s.
+- **L'app n'est pas occupée pendant cet épisode.** Elle est à 5 à 9 % de CPU.
+- **Le simulateur exécute ses tâches de premier démarrage.**
+  `AuthenticationServicesAgent` monte à 86–94 %. Les extensions de fonds d'écran
+  (`*PosterExtension`), les widgets, `provjobd`, `diskimagesiod`, `MessagesBlastDoorService`
+  et `BackgroundShortcutRunner` tournent aussi.
+- **Les essais 2 à 4 (de +353 à +897 s) restent rapides.** Chaque tap dure au plus 2,1 s
+  et chaque audit au plus 9,4 s ; ce maximum est l'audit 1, à froid.
+- **Aucune pile ne montre une boucle de l'app.** Les trois piles prises montrent son fil
+  principal dans `XCTElementQuery` (requêtes de XCTest servies dans l'app) ou en attente
+  `mach_msg`, jamais dans du code d'Aegis.
+
+### Conclusion
+
+**Cause probable : le simulateur, pas l'app.** Le premier test UI d'un run hébergé tombe
+pendant les tâches de premier démarrage du simulateur, sur un runner `macos-26`. Un
+audit ou un tap qui coïncide avec une rafale de ces tâches attend que l'app redevienne
+inactive. Ce n'est pas lié à un écran : la « passe anglaise claire » des runs CI n'était
+que le pas qui coïncidait.
+
+**Ce que ces données ne prouvent pas :**
+- Il n'y a qu'un épisode lent mesuré processus par processus.
+- Le moment des rafales varie : la moyenne du CPU système fluctue jusqu'à +900 s sans
+  palier net.
+
+**Ce que cela exclut :**
+- **Découper le test du catalogue.** Le pas qui coïncide avec une rafale changerait,
+  sans supprimer l'attente.
+- **Attendre une « inactivité » du simulateur avant les tests.** Aucun seuil observé ne
+  sépare un simulateur stabilisé d'un simulateur qui va encore lancer une rafale ; cette
+  attente coûterait du temps sans garantie.
+- **Les mesures interdites** restent exclues : relance, délai d'audit allongé, retrait d'audit.
+
+**Options pour Philippe :**
+1. **Capacité.** Un runner macOS plus grand, payant : il donne plus de cœurs aux mêmes
+   tâches. C'est un changement de capacité, sans changement de test.
+2. **Ordre.** Faire passer les tests UI audités après les tests UI sans audit. Ce changement
+   est du ressort d'iOS (plan de test), sans perte de couverture, mais l'effet n'est pas
+   démontré.
+3. **Limite documentée.** Garder l'état actuel, et qualifier chaque rouge iOS contre la
+   signature de #67 : premier test UI, attente d'inactivité ou -56, tous les autres tests verts.
+
 ## Limites
 
 - La fenêtre d'audit est déduite des activités voisines ; XCTest n'horodate pas l'audit
@@ -387,3 +470,5 @@ secondes depuis le 1er janvier 2001 : on ajoute 978 307 200 pour obtenir l'époq
 - La fin des tests unitaires est estimée à partir de la somme de leurs durées.
 - Six runs, sur des machines hébergées différentes : les écarts entre runs restent
   supérieurs à plusieurs des effets mesurés.
+- Section 10 : un seul épisode lent observé processus par processus ; la cause est probable,
+  non prouvée en général.
