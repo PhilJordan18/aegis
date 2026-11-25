@@ -10,7 +10,7 @@ reader health**. The hub puts the last two in the heartbeat as `lockState` and
 
 | Reported | How the cell decides |
 |---|---|
-| `LOCKED` / `UNLOCKED` | Latch status switch on GPIO 27 with a pull-up, 30 ms debounce. Contact open = striker held = `LOCKED`, closed = striker out = `UNLOCKED` (POC-03 L0, [#21](https://github.com/PhilJordan18/aegis/issues/21)). A cut switch wire also reads open, so it reports `LOCKED`: a 2-wire dry contact cannot tell them apart |
+| `LOCKED` / `UNLOCKED` | Latch status switch on GPIO 27 with a pull-up, 30 ms debounce. `LATCH_CLOSED_LEVEL` in `cell-controller.ino` sets which pin level means contact closed (striker out = `UNLOCKED`). The POC-03 L0 bench unit ([#21](https://github.com/PhilJordan18/aegis/issues/21)) read closed as LOW; the lab unit wired on 2026-11-25 reads the other way round, so the default is HIGH. With HIGH, a cut or unwired switch reads `UNLOCKED`, never a false `LOCKED` |
 | `HEALTHY` / `FAULTED` | One single poll to the reader every second. Any valid reader frame (tag or "no tag") = `HEALTHY`; 3 polls in a row without one = `FAULTED`; `UNKNOWN` before either. Provisional until PHY-02 (#31) |
 
 Not done yet: firing the lock (#42; the gate output is only held low), the door sensor (#30)

@@ -44,7 +44,11 @@ static uint8_t resetCode;
 static char reportedLock = '\0';
 static char reportedReader = '\0';
 
-static bool contactClosed() { return digitalRead(LATCH_SWITCH_PIN) == LOW; }
+// Pin level that means "contact closed" (striker out, UNLOCKED). The POC-03 L0 bench unit read LOW;
+// the lab unit wired on 2026-11-25 reads the other way round. HIGH also makes an unwired or cut switch
+// read UNLOCKED instead of a false LOCKED.
+constexpr int LATCH_CLOSED_LEVEL = HIGH;
+static bool contactClosed() { return digitalRead(LATCH_SWITCH_PIN) == LATCH_CLOSED_LEVEL; }
 
 static void answerHub() {
   while (Serial2.available() > 0) {
