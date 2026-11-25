@@ -1,0 +1,59 @@
+# Throwaway proof of the #67 retry ceiling, on branch 67-ci-ios-retry-probe only; never merged.
+name: iOS retry probe
+on:
+  push:
+    branches: [67-ci-ios-retry-probe]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      IOS_DESTINATION: platform=iOS Simulator,name=iPhone 17,OS=latest
+    defaults:
+      run:
+        working-directory: apps/ios
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Once-failing UI test, standalone (expect exit 0, passed after retry)
+        env:
+          IOS_RESULTS_DIR: build/results/once
+        run: |
+          set +e
+          rm -f "$HOME/aegis-retry-probe-marker"
+          mkdir -p "$IOS_RESULTS_DIR"
+          b="$IOS_RESULTS_DIR/standalone.xcresult"
+          xcodebuild test -project AegisMobile.xcodeproj -scheme AegisMobile -configuration Debug \
+            -destination "$IOS_DESTINATION" -derivedDataPath build/DerivedData -resultBundlePath "$b" \
+            -parallel-testing-enabled NO -quiet \
+            -only-testing:AegisMobileUITests/RetryProbeUITests/testFailsOnlyOnItsFirstAttempt \
+            -only-testing:AegisMobileUITests/HealthScreenUITests/testUnreachableServiceShowsErrorAndRetryInFrench
+          xcrun xcresulttool get test-results summary --path "$b" | RESULTS_DIR="$IOS_RESULTS_DIR" python3 scripts/summarize-results.py standalone
+          python3 ../../.github/scripts/ios-retry.py standalone; code=$?
+          echo "ios-retry exit $code"; test "$code" = 0
+      - name: Always-failing UI test, extended (expect exit 1, persistent failure)
+        if: always()
+        env:
+          IOS_RESULTS_DIR: build/results/always
+        run: |
+          set +e
+          mkdir -p "$IOS_RESULTS_DIR"
+          b="$IOS_RESULTS_DIR/extended.xcresult"
+          xcodebuild test -project AegisMobile.xcodeproj -scheme AegisMobile -configuration Debug \
+            -destination "$IOS_DESTINATION" -derivedDataPath build/DerivedData -resultBundlePath "$b" \
+            -parallel-testing-enabled NO -quiet \
+            -only-testing:AegisMobileUITests/RetryProbeUITests/testFailsOnEveryAttempt
+          xcrun xcresulttool get test-results summary --path "$b" | RESULTS_DIR="$IOS_RESULTS_DIR" python3 scripts/summarize-results.py extended
+          python3 ../../.github/scripts/ios-retry.py extended; code=$?
+          echo "ios-retry exit $code"; test "$code" = 1
+          for f in "$IOS_RESULTS_DIR"/*.xcresult; do echo "== $f"; xcrun xcresulttool get test-results summary --path "$f" --compact; done
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: retry-probe-results
+          path: apps/ios/build/results/
+          retention-days: 7
