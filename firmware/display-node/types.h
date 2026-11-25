@@ -15,4 +15,4 @@ struct AAFont {
   uint16_t n;
 };
 
-enum ScreenResult { RES_OK, RES_EXPIRED, RES_FAILED, RES_ANOMALY };
+enum ScreenResult { RES_OK, RES_EXPIRED, RES_FAILED, RES_ANOMALY, RES_OTHER };
