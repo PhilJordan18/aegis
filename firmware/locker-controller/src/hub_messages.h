@@ -71,6 +71,15 @@ bool buildRfidScanCompleted(Message* out, const Envelope& env, const char* compa
                             const char* windowEndedAt, const char* readerStatus, const ObservedTag* tags,
                             size_t tagCount);
 
+// Doc 10 §27.2, on `events`, QoS 1, not retained: the display acknowledgement, sent only once the QR
+// is drawn, and the display refusal. `challengeId` is null for an instruction that is not a challenge.
+// Neither carries the token.
+bool buildChallengeDisplayed(Message* out, const Envelope& env, const char* operationId, const char* compartmentId,
+                             const char* displayMessageId, const char* challengeId, uint64_t displayRevision);
+bool buildDisplayRejected(Message* out, const Envelope& env, const char* operationId, const char* compartmentId,
+                          const char* displayMessageId, const char* challengeId, uint64_t displayRevision,
+                          const char* reason);
+
 // Doc 10 §14, on `status`, QoS 0, not retained.
 bool buildHeartbeat(Message* out, const Envelope& env, const HeartbeatFacts& facts);
 

@@ -89,6 +89,47 @@ bool EspPlatform::journalWrite(size_t slot, const void* buf, size_t len) {
 
 void EspPlatform::log(const char* line) { Serial.println(line); }
 
+void EspI2cBus::begin() {
+  wire_.setBufferSize(256);  // a challenge frame is up to 253 bytes; must precede begin()
+  wire_.begin(sda_, scl_, hz_);
+  wire_.setTimeOut(50);
+}
+
+bool EspI2cBus::write(uint8_t address, const uint8_t* data, size_t len) {
+  wire_.beginTransmission(address);
+  wire_.write(data, len);
+  return wire_.endTransmission(true) == 0;
+}
+
+size_t EspI2cBus::read(uint8_t address, uint8_t* buf, size_t len) {
+  size_t got = wire_.requestFrom(address, len, true);
+  size_t n = 0;
+  while (n < got && n < len && wire_.available() > 0) buf[n++] = static_cast<uint8_t>(wire_.read());
+  return n;
+}
+
+// A slave stuck mid-byte holds SDA low: clock it out with 9 SCL pulses, then a STOP (about 100 us).
+void EspI2cBus::reset() {
+  wire_.end();
+  pinMode(sda_, INPUT);  // released; the external pull-up holds it high
+  pinMode(scl_, OUTPUT_OPEN_DRAIN);
+  for (int i = 0; i < 9; i++) {
+    digitalWrite(scl_, LOW);
+    delayMicroseconds(5);
+    digitalWrite(scl_, HIGH);
+    delayMicroseconds(5);
+  }
+  digitalWrite(scl_, LOW);
+  pinMode(sda_, OUTPUT_OPEN_DRAIN);
+  digitalWrite(sda_, LOW);
+  delayMicroseconds(5);
+  digitalWrite(scl_, HIGH);
+  delayMicroseconds(5);
+  digitalWrite(sda_, HIGH);  // SDA rising while SCL is high: STOP
+  delayMicroseconds(5);
+  begin();
+}
+
 constexpr UBaseType_t INBOX_DEPTH = 4;
 
 EspMqttTransport::EspMqttTransport(const MqttSettings& settings)

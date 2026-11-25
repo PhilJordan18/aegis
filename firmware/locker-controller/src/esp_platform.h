@@ -1,6 +1,7 @@
 #pragma once
 
 #include <HardwareSerial.h>
+#include <Wire.h>
 #include <mqtt_client.h>
 
 #include <freertos/FreeRTOS.h>
@@ -42,6 +43,22 @@ class EspCellPort : public CellPort {
 
  private:
   HardwareSerial& uart_;
+};
+
+// The I2C master toward the CYD display node (100 kHz, external pull-ups). The sketch owns the pins.
+class EspI2cBus : public I2cBus {
+ public:
+  EspI2cBus(TwoWire& wire, int sdaPin, int sclPin, uint32_t hz) : wire_(wire), sda_(sdaPin), scl_(sclPin), hz_(hz) {}
+  void begin();
+  bool write(uint8_t address, const uint8_t* data, size_t len) override;
+  size_t read(uint8_t address, uint8_t* buf, size_t len) override;
+  void reset() override;
+
+ private:
+  TwoWire& wire_;
+  const int sda_;
+  const int scl_;
+  const uint32_t hz_;
 };
 
 struct MqttSettings {

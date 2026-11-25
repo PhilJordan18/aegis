@@ -114,6 +114,28 @@ bool buildRfidScanCompleted(Message* out, const Envelope& env, const char* compa
   return w.ok;
 }
 
+bool buildChallengeDisplayed(Message* out, const Envelope& env, const char* operationId, const char* compartmentId,
+                             const char* displayMessageId, const char* challengeId, uint64_t displayRevision) {
+  Writer w;
+  if (!start(out, &w, env, "ACCESS_CHALLENGE_DISPLAYED", "events", 1, false)) return false;
+  w.add(",\"operationId\":\"%s\",\"compartmentId\":\"%s\",\"displayMessageId\":\"%s\",\"challengeId\":\"%s\","
+        "\"displayRevision\":%llu}",
+        operationId, compartmentId, displayMessageId, challengeId, static_cast<unsigned long long>(displayRevision));
+  return w.ok;
+}
+
+bool buildDisplayRejected(Message* out, const Envelope& env, const char* operationId, const char* compartmentId,
+                          const char* displayMessageId, const char* challengeId, uint64_t displayRevision,
+                          const char* reason) {
+  Writer w;
+  if (!start(out, &w, env, "DISPLAY_REJECTED", "events", 1, false)) return false;
+  w.add(",\"operationId\":\"%s\",\"compartmentId\":\"%s\",\"displayMessageId\":\"%s\"", operationId,
+        compartmentId, displayMessageId);
+  if (challengeId != nullptr) w.add(",\"challengeId\":\"%s\"", challengeId);
+  w.add(",\"displayRevision\":%llu,\"reason\":\"%s\"}", static_cast<unsigned long long>(displayRevision), reason);
+  return w.ok;
+}
+
 bool buildHeartbeat(Message* out, const Envelope& env, const HeartbeatFacts& facts) {
   Writer w;
   if (!start(out, &w, env, "HEARTBEAT", "status", 0, false)) return false;

@@ -18,6 +18,7 @@ bool due(uint32_t now, uint32_t deadline) { return static_cast<int32_t>(now - de
 HubLink::HubLink(const HubConfig& config, Transport& transport, Platform& platform)
     : config_(config), transport_(transport), platform_(platform), inbox_(config, platform) {
   snprintf(commandsTopic_, sizeof(commandsTopic_), "aegis/v1/lockers/%s/commands", config.lockerId);
+  snprintf(displayTopic_, sizeof(displayTopic_), "aegis/v1/lockers/%s/display", config.lockerId);
 }
 
 bool HubLink::begin() {
@@ -74,8 +75,8 @@ void HubLink::onConnected(uint32_t now) {
     return;
   }
   // Subscribed on every connection: cleanSession=false keeps it, but the broker may have lost it (§7.1).
-  if (!transport_.subscribe(commandsTopic_, 1)) {
-    platform_.log("commands subscription refused, dropping the connection");
+  if (!transport_.subscribe(commandsTopic_, 1) || (display_ != nullptr && !transport_.subscribe(displayTopic_, 1))) {
+    platform_.log("commands or display subscription refused, dropping the connection");
     transport_.abort();
     scheduleReconnect(now);
     return;
@@ -196,7 +197,7 @@ void HubLink::publishKnown(const InboundResult& r) {
 
 // `which`: 0 retained, 1 uncorrelable. At most one report per case and 60 s; the next one
 // counts what was not reported in between (§13.2).
-void HubLink::reportInvalid(size_t which, const char* compartmentId, uint32_t now) {
+void HubLink::reportInvalid(size_t which, const char* compartmentId, uint32_t now, const char* channel) {
   Limiter& l = limiter_[which];
   if (l.reported && !due(now, l.lastMs + INBOUND_REPORT_WINDOW_MS)) {
     l.unreported++;
@@ -204,8 +205,8 @@ void HubLink::reportInvalid(size_t which, const char* compartmentId, uint32_t no
   }
   char detail[200];
   snprintf(detail, sizeof(detail),
-           "A %s commands message was ignored: neither executed, displayed nor journaled.",
-           which == 0 ? "retained" : "uncorrelable");
+           "A %s %s message was ignored: neither executed, displayed nor journaled.",
+           which == 0 ? "retained" : "uncorrelable", channel);
   size_t n = strlen(detail);
   if (l.unreported > 0) snprintf(detail + n, sizeof(detail) - n, " Not reported since the previous report: %lu.", static_cast<unsigned long>(l.unreported));
   EnvelopeBuf buf;
@@ -251,15 +252,60 @@ void HubLink::execute(const Command& c) {
   }
 }
 
+void HubLink::handleDisplay(uint32_t now) {
+  DisplayResult r = display_->accept(inbound_, deviceSessionId_, platform_.unixSeconds(), platform_.clockSynchronized());
+  DisplayResult replaced;
+  while (display_->poll(&replaced)) answerDisplay(replaced, now);  // an instruction this one superseded
+  answerDisplay(r, now);
+}
+
+void HubLink::answerDisplay(const DisplayResult& r, uint32_t now) {
+  const DisplayInstruction& in = r.instruction;
+  const char* cell = r.compartmentKnown ? in.compartmentId : nullptr;
+  EnvelopeBuf buf;
+  Message m;
+  switch (r.kind) {
+    case DisplayInbound::Ignored:
+    case DisplayInbound::Pending:
+    case DisplayInbound::Shown:
+      return;
+    case DisplayInbound::Retained: reportInvalid(0, cell, now, "display"); return;
+    case DisplayInbound::Uncorrelable: reportInvalid(1, cell, now, "display"); return;
+    case DisplayInbound::Displayed:
+      fill(&buf);
+      if (buildChallengeDisplayed(&m, buf.env, in.operationId, in.compartmentId, in.messageId, in.challengeId,
+                                  in.revision)) {
+        transport_.publish(m);
+      }
+      return;
+    case DisplayInbound::Rejected:
+      fill(&buf);
+      if (buildDisplayRejected(&m, buf.env, in.operationId, in.compartmentId, in.messageId,
+                               in.challenge && in.challengeId[0] != '\0' ? in.challengeId : nullptr, in.revision,
+                               displayReasonName(r.reason))) {
+        transport_.publish(m);
+      }
+      return;
+  }
+}
+
+void HubLink::connectionLost() {
+  if (display_ != nullptr) display_->connectionLost();
+}
+
 void HubLink::handleInbound() {
   while (transport_.pollMessage(&inbound_)) {
-    if (strcmp(inbound_.topic, commandsTopic_) != 0) continue;
     const uint32_t now = platform_.nowMs();
+    if (display_ != nullptr && strcmp(inbound_.topic, displayTopic_) == 0) {
+      handleDisplay(now);
+      continue;
+    }
+    if (strcmp(inbound_.topic, commandsTopic_) != 0) continue;
     InboundResult r = inbox_.accept(inbound_, platform_.unixSeconds(), platform_.clockSynchronized());
     const char* cell = r.compartmentKnown ? r.command.compartmentId : nullptr;
     switch (r.kind) {
-      case Inbound::Retained: reportInvalid(0, cell, now); break;
-      case Inbound::Uncorrelable: reportInvalid(1, cell, now); break;
+      case Inbound::Retained: reportInvalid(0, cell, now, "commands"); break;
+      case Inbound::Uncorrelable: reportInvalid(1, cell, now, "commands"); break;
       case Inbound::Rejected:
         publishRejected(r.command.messageId, r.command.operationId, r.command.compartmentId, r.reason);
         break;
@@ -271,6 +317,15 @@ void HubLink::handleInbound() {
 
 void HubLink::loop() {
   const uint32_t now = platform_.nowMs();
+  // The local deadline holds even offline and without any clearing message (§27.1, §27.3).
+  if (display_ != nullptr) {
+    display_->loop(platform_.unixSeconds());
+    // A draw resolved offline publishes nothing: the known answer goes out on redelivery.
+    DisplayResult r;
+    while (display_->poll(&r)) {
+      if (state_ == State::Online) answerDisplay(r, now);
+    }
+  }
 
   switch (state_) {
     case State::NotStarted:
@@ -295,6 +350,7 @@ void HubLink::loop() {
       if (state_ == State::Connecting) onConnected(now);
       break;
     case Transport::Event::Disconnected:
+      connectionLost();
       scheduleReconnect(now);
       return;
     case Transport::Event::None:
