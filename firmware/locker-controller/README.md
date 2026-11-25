@@ -1,4 +1,4 @@
-# Hub firmware (FW-00 #23, FW-01 #30)
+# Hub firmware (FW-00 #23, FW-01 #30, FW-02 #32)
 
 ESP32 hub firmware: it joins Wi-Fi, synchronizes its clock, keeps an MQTT
 connection to the broker with its device identity, publishing what the
@@ -28,6 +28,14 @@ executes authorized commands (not implemented yet) and reports facts.
   `lockState` and `readerStatus` are what the cell put in its last counted answer; otherwise both
   are `UNKNOWN`, never the last value seen. `doorState` stays `UNKNOWN` (no door sensor yet).
   A cell restart (new boot id) and each state change are logged on the serial monitor only.
+- Asks each `CONNECTED` cell for an RFID scan window (3 s, POC-01 thresholds of #19): once the
+  link comes up, each time the latch goes from `UNLOCKED` to `LOCKED`, and every 30 s. When the
+  window is done it fetches every tag, then publishes `RFID_SCAN_COMPLETED` on `events` (QoS 1,
+  §12.1) **without** `operationId`, as a monitoring scan outside an operation (§20):
+  `windowStartedAt` / `windowEndedAt` (to the second), the window's `readerStatus` and each tag's
+  EPC with its `readCount`. An empty list with `HEALTHY` means a complete window saw no tag. The
+  backend decides presence (at least 3 reads, §12.2). A scan interrupted by a lost link, a cell
+  restart or while the hub is offline is dropped, never queued.
 
 ## Not done yet
 
@@ -40,7 +48,13 @@ executes authorized commands (not implemented yet) and reports facts.
 - Journal limits: the uncertain report is kept in RAM only (a second reboot before it is published
   loses it, a redelivery still gets the known rejection); a message over 1.5 KB is dropped without
   `INBOUND_MESSAGE_INVALID`; a record layout change makes old records read as empty.
-- `doorState` stays `UNKNOWN`: no cell has a door sensor yet (#30).
+- `doorState` stays `UNKNOWN`: no cell has a door sensor yet (#30), so the latch closing stands in
+  for the door closing as the scan trigger.
+- Scans never carry an `operationId`: correlating a scan with an operation arrives with the lock
+  command (#42).
+- A reader whose 5 V or ground is cut can still answer through its data wires (seen on the bench,
+  2026-11-11) and so read `HEALTHY` with no working radio. Health from the serial line alone is
+  therefore not proof that tags can be read; to be settled with PHY-02 (#31).
 - A change of `connectionStatus`, `lockState` or `readerStatus` waits for the next 10 s heartbeat;
   no `LOCK_LOCKED` / `LOCK_UNLOCKED` event is published for it yet (§11.2, with #42).
 - No clean `OFFLINE` `SHUTDOWN` before a deliberate disconnect, no bounded local queue,
@@ -48,7 +62,6 @@ executes authorized commands (not implemented yet) and reports facts.
 - Credentials are compiled in from `secrets.h`, not provisioned into NVS as doc 10 §4.3
   asks. Acceptable for a bench; a binary built from it holds the device password, so it
   must never be shared or committed. Provisioning to NVS is a later slice.
-- RFID scans (`RFID_SCAN_COMPLETED`) are issue #32, after the thresholds of #19.
 
 ## Layout
 
@@ -69,7 +82,7 @@ The MQTT client is the ESP-IDF `esp-mqtt` bundled with the Arduino ESP32 core: i
 publishes at QoS 1, which `PubSubClient` cannot. Auto-reconnect is off because each
 attempt needs its own Last Will.
 
-## Cell link frame (version 2)
+## Cell link frame (version 3)
 
 The hub ↔ cell protocol of each RS-485 segment, required by doc 12 §5 before
 implementation. It is Aegis's own format, kept from the POC-02 bench (issue #20,
@@ -78,11 +91,14 @@ implementation. It is Aegis's own format, kept from the POC-02 bench (issue #20,
 | Item | Value |
 |---|---|
 | Line | 115200 baud, 8N1, half duplex, auto-direction transceivers |
-| Frame | One ASCII line: `<body>,<CRC>\n`. CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF) of `<body>`, 4 uppercase hex. `\r` is ignored. At most 47 characters, longer lines are dropped |
+| Frame | One ASCII line: `<body>,<CRC>\n`. CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF) of `<body>`, 4 uppercase hex. `\r` is ignored. At most 63 characters, longer lines are dropped |
 | PING (hub → cell) | `P,<seq>`: `seq` is 8 uppercase hex, incremented on every poll |
-| REPLY (cell → hub) | `R,<seq>,<cellAddress>,<bootId>,<resetCode>,<lock><reader>`: echoed `seq`, address 2 hex (A1 = `01`, A2 = `02`), random boot id 8 hex, `esp_reset_reason()` 2 hex, then one character each for the latch (`L` locked, `U` unlocked, `?` unknown) and the UHF reader (`H` healthy, `F` faulted, `?` unknown) |
-| Example | `P,0000001A,` + CRC, answered by `R,0000001A,01,B0071D01,01,LH,` + CRC |
-| Version | Version 1 had no `<lock><reader>` field. A version 1 reply no longer parses, so the hub reports such a cell `DISCONNECTED`: flash the hub and the cells together |
+| SCAN (hub → cell) | `S,<seq>`: starts a 3 s scan window unless one is running; answered by a REPLY. The hub sends it on each poll until a REPLY shows the window running |
+| TAG? (hub → cell) | `T,<seq>,<index>`: asks for tag `index` (2 hex) of the finished window; answered by a TAG |
+| REPLY (cell → hub) | `R,<seq>,<cellAddress>,<bootId>,<resetCode>,<lock><reader>,<scan><tagCount><scanReader>`: echoed `seq`, address 2 hex (A1 = `01`, A2 = `02`), random boot id 8 hex, `esp_reset_reason()` 2 hex; the latch (`L` locked, `U` unlocked, `?` unknown) and the UHF reader between scans (`H` healthy, `F` faulted, `?` unknown); the scan (`I` no result, `W` window running, `D` done), the finished window's tag count (2 hex, at most 8) and its reader verdict (`H`, `F`, `?`, or `-` when there is no finished window) |
+| TAG (cell → hub) | `E,<seq>,<cellAddress>,<index>,<readCount>,<EPC>`: index 2 hex, read count 4 hex, EPC 2 to 32 uppercase hex |
+| Example | `P,0000001A,` + CRC, answered by `R,0000001A,01,B0071D01,01,LH,D01H,` + CRC; `T,0000001B,00,` + CRC answered by `E,0000001B,01,00,001E,E2004717CCC06422C2B80112,` + CRC |
+| Version | Version 2 added `<lock><reader>`, version 3 the scan fields and the SCAN, TAG? and TAG frames. An older reply no longer parses, so the hub reports such a cell `DISCONNECTED`: flash the hub and the cells together |
 | Timing | Hub polls every 100 ms, waits 30 ms for the reply; the cell answers 2 ms after the PING so the hub's transceiver is back in receive |
 | Counted as an answer | Valid CRC, current `seq`, received before the hub gave up on that PING. A reply to an older PING, the hub's own PING echoed back, a corrupted or oversized frame never counts |
 

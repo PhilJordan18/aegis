@@ -1,8 +1,8 @@
-// Aegis cell firmware (FW-00, FW-01): answers each PING of the hub on its RS-485 segment with its
-// cell address, a boot id, its reset reason, the state of its latch and the health of its UHF
-// reader (frame in firmware/locker-controller/README.md). It never fires the lock yet (#42) and
-// does not publish RFID scans yet (#32). The cell has no network identity and decides nothing
-// (ADR-001, ADR-002).
+// Aegis cell firmware (FW-00, FW-01, FW-02): answers each PING of the hub on its RS-485 segment with
+// its cell address, a boot id, its reset reason, the state of its latch and the health of its UHF
+// reader; on the hub's SCAN it reads tags for a 3 s window and hands them over one TAG at a time
+// (frame in firmware/locker-controller/README.md). It never fires the lock yet (#42). The cell has
+// no network identity and decides nothing: the backend judges presence (ADR-001, ADR-002).
 
 #include <Arduino.h>
 #include <esp_system.h>
@@ -39,6 +39,7 @@ static aegis::cellframe::LineReader linkReader;
 static aegis::cell::UhfFrameReader uhfReader;
 static aegis::cell::ReaderHealth reader;
 static aegis::cell::LatchSwitch latch;
+static aegis::cell::ScanWindow scan;
 static uint32_t bootId;
 static uint8_t resetCode;
 static char reportedLock = '\0';
@@ -57,24 +58,54 @@ static void answerHub() {
       linkReader.clearOverflow();
       continue;
     }
-    uint32_t seq;
     // Corrupted frames, and our own replies echoed back, are dropped without an answer.
-    if (!aegis::cellframe::unseal(linkReader.buf) || !aegis::cellframe::parsePing(linkReader.buf, &seq)) continue;
-
-    delay(REPLY_DELAY_MS);
+    if (!aegis::cellframe::unseal(linkReader.buf)) continue;
+    uint32_t seq;
+    uint8_t index;
     char frame[aegis::cellframe::MAX_LINE];
-    aegis::cellframe::Reply reply{seq, static_cast<uint8_t>(CELL_ADDRESS), bootId, resetCode, latch.state(),
-                                  reader.status()};
-    size_t n = aegis::cellframe::encodeReply(reply, frame, sizeof(frame));
+    size_t n = 0;
+    if (aegis::cellframe::parseTagRequest(linkReader.buf, &seq, &index)) {
+      const aegis::cellframe::Tag* tag = scan.tag(index);
+      if (tag == nullptr) continue;  // no such tag: the hub times out and asks again
+      n = aegis::cellframe::encodeTag(seq, static_cast<uint8_t>(CELL_ADDRESS), index, *tag, frame, sizeof(frame));
+    } else {
+      bool isScan = aegis::cellframe::parseScan(linkReader.buf, &seq);
+      if (!isScan && !aegis::cellframe::parsePing(linkReader.buf, &seq)) continue;
+      // A SCAN while a window runs keeps that window: the hub re-sends SCAN until it sees one running.
+      if (isScan && scan.state() != aegis::cellframe::SCAN_RUNNING) {
+        scan.start(millis());
+        Serial.printf("cell %d: scan window started\n", CELL_ADDRESS);
+      }
+      aegis::cellframe::Reply reply{seq,           static_cast<uint8_t>(CELL_ADDRESS), bootId, resetCode,
+                                    latch.state(), reader.status(),                     scan.state(),
+                                    scan.tagCount(), scan.reader()};
+      n = aegis::cellframe::encodeReply(reply, frame, sizeof(frame));
+    }
+    delay(REPLY_DELAY_MS);
     Serial2.write(reinterpret_cast<const uint8_t*>(frame), n);
   }
 }
 
 static void watchReader(uint32_t now) {
   while (Serial1.available() > 0) {
-    if (uhfReader.push(static_cast<uint8_t>(Serial1.read()))) reader.onValidFrame();
+    if (!uhfReader.push(static_cast<uint8_t>(Serial1.read()))) continue;
+    reader.onValidFrame();
+    scan.onValidFrame();
+    const uint8_t* epc;
+    size_t len;
+    if (aegis::cell::tagEpc(uhfReader, &epc, &len)) scan.onTag(epc, len);
   }
-  if (reader.pollDue(now)) Serial1.write(aegis::cell::UHF_SINGLE_POLL, sizeof(aegis::cell::UHF_SINGLE_POLL));
+  const char before = scan.state();
+  // While a window runs it owns the reader's polls (every 100 ms); otherwise one per second.
+  bool poll = before == aegis::cellframe::SCAN_RUNNING ? scan.pollDue(now) : reader.pollDue(now);
+  if (poll) Serial1.write(aegis::cell::UHF_SINGLE_POLL, sizeof(aegis::cell::UHF_SINGLE_POLL));
+  if (before == aegis::cellframe::SCAN_RUNNING && scan.state() == aegis::cellframe::SCAN_DONE) {
+    Serial.printf("cell %d: scan done, reader %s, %u tag(s)\n", CELL_ADDRESS,
+                  aegis::cellframe::readerStatusName(scan.reader()), scan.tagCount());
+    for (uint8_t i = 0; i < scan.tagCount(); i++) {
+      Serial.printf("  %s x%u\n", scan.tag(i)->epc, scan.tag(i)->readCount);
+    }
+  }
 }
 
 static void logChanges() {

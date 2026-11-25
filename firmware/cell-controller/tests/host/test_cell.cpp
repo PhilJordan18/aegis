@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include <cstdio>
+#include <cstring>
 #include <vector>
 
 #include "../../src/cell_state.h"
@@ -97,16 +98,77 @@ void replyCarriesCellState() {
   h.onValidFrame();
   char frame[cellframe::MAX_LINE];
   size_t n = cellframe::encodeReply(cellframe::Reply{7, 1, 0xB0071D01, 1, s.state(), h.status()}, frame, sizeof(frame));
-  assert(n == 34);
+  assert(n == 39);
   frame[n - 1] = '\0';
   cellframe::Reply r;
   assert(cellframe::unseal(frame) && cellframe::parseReply(frame, &r));
   assert(r.lock == 'L' && r.reader == 'H');
 }
 
+void tagEpcIsExtracted() {
+  UhfFrameReader r;
+  assert(feed(r, withChecksum(kTag)));
+  const uint8_t* epc;
+  size_t len;
+  assert(tagEpc(r, &epc, &len) && len == 12 && epc[0] == 0xE2 && epc[11] == 0x12);
+  assert(feed(r, kNoTag));
+  assert(!tagEpc(r, &epc, &len));  // "no tag" carries no EPC
+}
+
+// Runs a window with the reader answering `answers` of its polls, each answer holding `tag` if set.
+ScanWindow runWindow(uint32_t answers, const std::vector<uint8_t>* tag = nullptr) {
+  ScanWindow w;
+  w.start(1000);
+  uint32_t polls = 0;
+  for (uint32_t now = 1000; now <= 1000 + SCAN_WINDOW_MS; now += 10) {
+    if (w.pollDue(now)) {
+      if (polls++ < answers) {
+        w.onValidFrame();
+        if (tag != nullptr) w.onTag(tag->data(), tag->size());
+      }
+    }
+  }
+  assert(polls == SCAN_WINDOW_MS / SCAN_POLL_MS);
+  return w;
+}
+
+void windowCountsReadsAndJudgesTheReader() {
+  const std::vector<uint8_t> epc = {0xE2, 0x00, 0x47, 0x17, 0xCC, 0xC0, 0x64, 0x22, 0xC2, 0xB8, 0x01, 0x12};
+  ScanWindow w = runWindow(30, &epc);
+  assert(w.state() == cellframe::SCAN_DONE && w.reader() == cellframe::READER_HEALTHY && w.tagCount() == 1);
+  assert(strcmp(w.tag(0)->epc, "E2004717CCC06422C2B80112") == 0 && w.tag(0)->readCount == 30);
+  assert(w.tag(1) == nullptr);
+
+  assert(runWindow(30).reader() == cellframe::READER_HEALTHY);  // healthy and empty: a proof of absence
+  assert(runWindow(SCAN_MIN_ANSWERED).reader() == cellframe::READER_HEALTHY);
+  assert(runWindow(SCAN_MIN_ANSWERED - 1).reader() == cellframe::STATE_UNKNOWN);
+  assert(runWindow(0).reader() == cellframe::READER_FAULTED);
+}
+
+void windowStatesAndOverflow() {
+  ScanWindow w;
+  assert(w.state() == cellframe::SCAN_NONE && w.reader() == cellframe::NO_WINDOW && w.tagCount() == 0);
+  w.start(0);
+  assert(w.state() == cellframe::SCAN_RUNNING && w.reader() == cellframe::NO_WINDOW);
+  for (uint8_t i = 0; i <= cellframe::MAX_SCAN_TAGS; i++) {
+    uint8_t epc[2] = {0xAA, i};
+    w.onTag(epc, 2);
+  }
+  assert(w.tagCount() == 0);  // nothing is handed out before the window ends
+  w.pollDue(SCAN_WINDOW_MS);
+  assert(w.state() == cellframe::SCAN_DONE && w.tagCount() == cellframe::MAX_SCAN_TAGS);
+  assert(w.reader() == cellframe::STATE_UNKNOWN);  // a ninth tag was left out: proves nothing
+  uint8_t late[2] = {0xBB, 0};
+  w.onTag(late, 2);  // after the window: ignored
+  assert(w.tagCount() == cellframe::MAX_SCAN_TAGS);
+}
+
 }  // namespace
 
 int main() {
+  tagEpcIsExtracted();
+  windowCountsReadsAndJudgesTheReader();
+  windowStatesAndOverflow();
   uhfFramesAreRecognised();
   readerIsUnknownThenHealthyThenFaulted();
   readerSilentFromBootIsFaulted();

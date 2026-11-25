@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "cell_link.h"
 #include "command_inbox.h"
 #include "hub_config.h"
 #include "hub_messages.h"
@@ -45,6 +46,10 @@ class HubLink {
   void onCommand(CommandHandler handler) { handler_ = handler; }
   // Without a source every cell is reported UNKNOWN in every field.
   void cellStatus(CellStatusSource source) { cellStatus_ = source; }
+  // Publishes a finished scan of the cell at `cellAddress` as RFID_SCAN_COMPLETED, without
+  // operationId (§20). False when the hub is not online, the cell is not configured or the
+  // payload does not fit; the scan is then dropped, never queued: a missing scan proves nothing (§12.1).
+  bool publishScan(int cellAddress, const ScanResult& scan);
 
  private:
   struct EnvelopeBuf {
@@ -95,6 +100,7 @@ class HubLink {
   CellStatusSource cellStatus_ = nullptr;
   char commandsTopic_[sizeof(Message::topic)] = {};
   Message inbound_;  // member, not a local: it is 1.6 KB and the loop task stack is small
+  Message outbound_;  // the same for a scan, the largest message the hub builds
 };
 
 }  // namespace aegis

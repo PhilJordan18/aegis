@@ -60,6 +60,17 @@ bool buildCommandRejected(Message* out, const Envelope& env, const char* command
 // Doc 10 §13.2 INBOUND_MESSAGE_INVALID: a DEVICE_ERROR WARNING without operationId. `compartmentId` may be null.
 bool buildInboundInvalid(Message* out, const Envelope& env, const char* compartmentId, const char* detail);
 
+// One tag of an RFID_SCAN_COMPLETED: identifierType is always RFID_UHF.
+struct ObservedTag {
+  const char* epc;  // uppercase hex
+  uint32_t readCount;
+};
+
+// Doc 10 §12.1, on `events`, QoS 1, not retained. Outside an operation there is no operationId (§20).
+bool buildRfidScanCompleted(Message* out, const Envelope& env, const char* compartmentId, const char* windowStartedAt,
+                            const char* windowEndedAt, const char* readerStatus, const ObservedTag* tags,
+                            size_t tagCount);
+
 // Doc 10 §14, on `status`, QoS 0, not retained.
 bool buildHeartbeat(Message* out, const Envelope& env, const HeartbeatFacts& facts);
 

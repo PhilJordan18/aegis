@@ -98,6 +98,22 @@ bool buildInboundInvalid(Message* out, const Envelope& env, const char* compartm
   return w.ok;
 }
 
+bool buildRfidScanCompleted(Message* out, const Envelope& env, const char* compartmentId, const char* windowStartedAt,
+                            const char* windowEndedAt, const char* readerStatus, const ObservedTag* tags,
+                            size_t tagCount) {
+  Writer w;
+  if (!start(out, &w, env, "RFID_SCAN_COMPLETED", "events", 1, false)) return false;
+  w.add(",\"compartmentId\":\"%s\",\"windowStartedAt\":\"%s\",\"windowEndedAt\":\"%s\",\"readerStatus\":\"%s\","
+        "\"observedIdentifiers\":[",
+        compartmentId, windowStartedAt, windowEndedAt, readerStatus);
+  for (size_t i = 0; i < tagCount; i++) {
+    w.add("%s{\"identifierType\":\"RFID_UHF\",\"identifierValue\":\"%s\",\"readCount\":%lu}", i == 0 ? "" : ",",
+          tags[i].epc, static_cast<unsigned long>(tags[i].readCount));
+  }
+  w.add("]}");
+  return w.ok;
+}
+
 bool buildHeartbeat(Message* out, const Envelope& env, const HeartbeatFacts& facts) {
   Writer w;
   if (!start(out, &w, env, "HEARTBEAT", "status", 0, false)) return false;

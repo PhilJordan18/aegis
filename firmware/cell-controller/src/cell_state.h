@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 
 #include "cell_frame.h"
 
@@ -53,6 +54,15 @@ struct UhfFrameReader {
   }
 };
 
+// EPC of a tag notification (type 02, command 22): RSSI, PC (2), EPC, CRC (2). False for any other frame.
+inline bool tagEpc(const UhfFrameReader& r, const uint8_t** epc, size_t* len) {
+  size_t params = (static_cast<size_t>(r.buf[3]) << 8) | r.buf[4];
+  if (r.buf[1] != 0x02 || r.buf[2] != 0x22 || params < 6 || params - 5 > cellframe::MAX_EPC_BYTES) return false;
+  *epc = r.buf + 5 + 3;
+  *len = params - 5;
+  return true;
+}
+
 // Reader health from its answers. The cell sends a single poll every READER_POLL_MS; the reader
 // answers every poll with a tag notification or a "no tag" error frame, so any valid frame proves
 // it is alive. HEALTHY after a valid frame, FAULTED after READER_FAULT_AFTER polls in a row with
@@ -84,6 +94,92 @@ class ReaderHealth {
   uint32_t nextPollMs_ = 0;
   uint32_t unanswered_ = 0;  // polls sent since the last valid frame, capped
   bool seen_ = false;
+};
+
+// ---------------------------------------------------------------- scan window (FW-02)
+// POC-01 thresholds (#19): a 3 s window, one single poll every 100 ms. The window is HEALTHY when
+// the reader answered at least SCAN_MIN_ANSWERED of its polls, FAULTED when it answered none,
+// UNKNOWN otherwise; more than MAX_SCAN_TAGS distinct tags also make it UNKNOWN, since a tag
+// left out would read as absent. "Present" (>= 3 reads) is decided by the backend (doc 10 §12.2).
+constexpr uint32_t SCAN_WINDOW_MS = 3000;
+constexpr uint32_t SCAN_POLL_MS = 100;
+constexpr uint32_t SCAN_MIN_ANSWERED = 27;  // of 30 polls; provisional until PHY-02 (#31)
+
+class ScanWindow {
+ public:
+  void start(uint32_t now) {
+    state_ = cellframe::SCAN_RUNNING;
+    startMs_ = now;
+    nextPollMs_ = now;
+    polls_ = answered_ = 0;
+    pollAnswered_ = false;
+    count_ = 0;
+    overflow_ = false;
+  }
+  // True when a poll is due now; the caller then writes UHF_SINGLE_POLL. Also ends the window.
+  bool pollDue(uint32_t now) {
+    if (state_ != cellframe::SCAN_RUNNING) return false;
+    if (static_cast<int32_t>(now - (startMs_ + SCAN_WINDOW_MS)) >= 0) {
+      closePoll();
+      state_ = cellframe::SCAN_DONE;
+      return false;
+    }
+    if (static_cast<int32_t>(now - nextPollMs_) < 0) return false;
+    closePoll();
+    polls_++;
+    nextPollMs_ += SCAN_POLL_MS;
+    return true;
+  }
+  void onValidFrame() {
+    if (state_ == cellframe::SCAN_RUNNING) pollAnswered_ = true;
+  }
+  void onTag(const uint8_t* epc, size_t len) {
+    if (state_ != cellframe::SCAN_RUNNING) return;
+    char hex[cellframe::MAX_EPC_BYTES * 2 + 1];
+    for (size_t i = 0; i < len; i++) snprintf(hex + 2 * i, 3, "%02X", epc[i]);
+    hex[2 * len] = '\0';
+    for (size_t i = 0; i < count_; i++) {
+      if (strcmp(tags_[i].epc, hex) == 0) {
+        if (tags_[i].readCount < 65535) tags_[i].readCount++;
+        return;
+      }
+    }
+    if (count_ == cellframe::MAX_SCAN_TAGS) {
+      overflow_ = true;
+      return;
+    }
+    memcpy(tags_[count_].epc, hex, 2 * len + 1);
+    tags_[count_].readCount = 1;
+    count_++;
+  }
+
+  char state() const { return state_; }
+  uint8_t tagCount() const { return state_ == cellframe::SCAN_DONE ? static_cast<uint8_t>(count_) : 0; }
+  char reader() const {
+    if (state_ != cellframe::SCAN_DONE) return cellframe::NO_WINDOW;
+    if (overflow_) return cellframe::STATE_UNKNOWN;
+    if (answered_ >= SCAN_MIN_ANSWERED) return cellframe::READER_HEALTHY;
+    return answered_ == 0 ? cellframe::READER_FAULTED : cellframe::STATE_UNKNOWN;
+  }
+  const cellframe::Tag* tag(uint8_t index) const {
+    return state_ == cellframe::SCAN_DONE && index < count_ ? &tags_[index] : nullptr;
+  }
+
+ private:
+  void closePoll() {
+    if (polls_ > 0 && pollAnswered_) answered_++;
+    pollAnswered_ = false;
+  }
+
+  char state_ = cellframe::SCAN_NONE;
+  uint32_t startMs_ = 0;
+  uint32_t nextPollMs_ = 0;
+  uint32_t polls_ = 0;
+  uint32_t answered_ = 0;
+  bool pollAnswered_ = false;
+  cellframe::Tag tags_[cellframe::MAX_SCAN_TAGS];
+  size_t count_ = 0;
+  bool overflow_ = false;
 };
 
 // ---------------------------------------------------------------- latch status switch
