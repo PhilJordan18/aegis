@@ -236,6 +236,7 @@ private struct AssetHeading: View {
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(Color.brandText)
                 .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("activity.asset.name")
             Text(verbatim: AssetPresentation.identityLine(code: asset.assetCode, model: asset.model))
                 .font(.body.monospacedDigit())
                 .foregroundStyle(Color.brandMuted)

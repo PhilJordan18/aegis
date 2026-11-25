@@ -100,6 +100,80 @@ struct ReturnPreparationTests {
         #expect(model.isEmpty)
     }
 
+    /// #212: a refresh started before the return is still waiting for its
+    /// answer, read before the return, when « Voir mon activité » asks for
+    /// the read after `CONFIRMED`. That call waits for the earlier read, which
+    /// is not applied, then reads again: the returned loan leaves the card.
+    @Test func theReadAfterTheConfirmedReturnIsNotLostToAnEarlierRead() async {
+        let loan = ActivityDoubles.loan(overdue: false)
+        let service = loanOnly([.success(loan)])
+        let confirmed = Self.returning("CONFIRMED", requiredAction: "NONE", terminalAt: "2026-09-16T14:31:40Z")
+        let operations = ScriptedOperationService(
+            reads: [OperationFixtures.read(confirmed, retryAfter: nil)],
+            returns: [.success(Self.returning("AUTHORIZED", requiredAction: "WAIT"))])
+        let model = model(service, operations: operations, sleeper: RecordingSleeper())
+        await model.load()
+        let beforeTheReturn = model.loan
+
+        let slow = Gate()
+        service.loanGate = slow
+        let earlier = Task { await model.refresh() }
+        while service.loanReads < 2 { await Task.yield() }
+        service.loanGate = nil
+        #expect(model.isLoading)
+
+        await model.prepareReturn()
+        await model.guided?.follower.waitUntilIdle()
+        #expect(model.guided?.step.ending == .confirmed)
+        service.setLoans([.success(nil)])
+        let after = Gate()
+        service.loanGate = after
+        let shown = Task { await model.hideOperation() }
+        // Hiding the tracking and asking for the read happen in one step.
+        while model.guided != nil { await Task.yield() }
+
+        clock.advance(by: 5)
+        await slow.open()
+        await earlier.value
+        // Bounded, so that a read that never comes fails instead of hanging.
+        for _ in 0..<10_000 where service.loanReads < 3 { await Task.yield() }
+        #expect(service.loanReads == 3, "The read after CONFIRMED must reach the server.")
+        #expect(model.isLoading)
+        #expect(model.loan == beforeTheReturn, "The answer read before the return is not applied.")
+
+        await after.open()
+        await shown.value
+        #expect(service.loanReads == 3)
+        #expect(model.loan.value == nil, "An answer read before the return must not be the last word.")
+        #expect(model.loan.receivedAt == clock.now)
+        #expect(!model.isLoading)
+    }
+
+    /// #212 follow-up: the app and the activity view both ask for the first
+    /// reading at launch. The second call shares the read in flight: one
+    /// read, and its answer, a failed loan read here, is the one shown.
+    @Test func bothFirstReadingsAtLaunchShareOneRead() async {
+        let failure = APIError.http(status: 503, problem: SessionFixtures.problem(503, "SERVICE_UNAVAILABLE"),
+                                    retryAfter: nil)
+        let service = loanOnly([.failure(failure), .success(nil)])
+        let model = model(service, operations: ScriptedOperationService(), sleeper: RecordingSleeper())
+        let gate = Gate()
+        service.loanGate = gate
+        let app = Task { await model.loadIfNeeded() }
+        while service.loanReads < 1 { await Task.yield() }
+        service.loanGate = nil
+        let view = Task { await model.loadIfNeeded() }
+        // Lets the second call start while the read is held; bounded, no timed pause.
+        for _ in 0..<1_000 { await Task.yield() }
+
+        await gate.open()
+        await app.value
+        await view.value
+        #expect(service.loanReads == 1)
+        #expect(model.loan.failure != nil, "The answer of the read in flight is the one shown.")
+        #expect(!model.isLoading)
+    }
+
     @Test func aSecondTapWhilePreparingIsIgnored() async {
         let gate = Gate()
         let operations = ScriptedOperationService(returns: [.success(Self.returning())])
