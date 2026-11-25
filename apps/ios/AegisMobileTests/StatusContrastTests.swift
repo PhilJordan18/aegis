@@ -26,6 +26,27 @@ struct StatusContrastTests {
         #expect((1 + 0.05) / (accent + 0.05) >= 4.5)
     }
 
+    /// Every text pair of the guided checkout and return and of the activity
+    /// cards, at every text size. `CheckoutUITests` tolerates a contrast issue
+    /// sampled after scrolling, on iOS 26 at an accessibility size, only on
+    /// elements whose pair is proven here (#207).
+    @Test(arguments: [
+        ("BrandText", "BrandField"),
+        ("BrandText", "BrandPanel"),
+        ("BrandText", "BrandTop"),
+        ("BrandMuted", "BrandField"),
+        ("BrandMuted", "BrandPanel"),
+        ("BrandMuted", "BrandTop"),
+        ("BrandAccent", "BrandField"),
+        ("BrandAccent", "BrandTop"),
+        ("ErrorText", "ErrorFill"),
+        ("StatusProgressText", "StatusProgressFill"),
+    ], [UIUserInterfaceStyle.light, .dark])
+    func operationTextReachesNormalTextContrast(_ pair: (String, String), _ style: UIUserInterfaceStyle) throws {
+        let ratio = try Self.contrast(pair.0, pair.1, style)
+        #expect(ratio >= 4.5, "\(pair.0) on \(pair.1), \(style == .dark ? "dark" : "light"): \(ratio)")
+    }
+
     @Test(arguments: [UIUserInterfaceStyle.light, .dark])
     func neutralIconReachesNonTextContrast(_ style: UIUserInterfaceStyle) throws {
         #expect(try Self.contrast("NeutralIcon", "StatusNeutralFill", style) >= 3)
