@@ -4,8 +4,8 @@ Ce document est le seul point de départ de la recette humaine de Philippe et Ji
 renvoie aux recettes détaillées et ne les recopie pas.
 
 > **Staging (depuis le 11 novembre) :** la recette sur l'environnement déployé suit
-> [`recette-staging/README.md`](recette-staging/README.md) — parties A (logiciel livré),
-> B (broker et ESP32) et C (futur retrait et retour physiques, bloqué à ce jour).
+> [`recette-staging/README.md`](recette-staging/README.md) — parties A (logiciel sans hub),
+> S (hub simulé, après décision), B (broker et ESP32) et C (validations matérielles).
 
 État au **6 novembre 2026, 16 h 45 (Toronto)**. Avant de commencer, relevez le SHA réel :
 
@@ -102,7 +102,7 @@ Ces pages sont arrivées sur `dev` après `49bf5f8` : #163, #164, #165, #170, av
 **Sur `dev`, aucune route ne crée encore de prêt, de retour ni d'anomalie physique** (#175 à #177 non fusionnées). Ces lignes se vérifient donc sur les données **synthétiques** du seed QA. Elles ne valent ni retrait ni retour réel.
 
 - La recette pas à pas est dans [`manager-admin/README.md`](manager-admin/README.md) §5 (étapes 1 à 7). Elle n'est pas recopiée ici.
-- Sur staging, ce sont les lignes S5 à S8 de [`recette-staging/README.md`](recette-staging/README.md).
+- Sur staging, ce sont les lignes A10 à A12 de [`recette-staging/README.md`](recette-staging/README.md).
 - La colonne « Matrice » renvoie aux identifiants de `docs/design/manager-integre/matrice-livre-manquant-recette.md` (PR #183, non fusionnée).
 
 | Parcours | Où | Preuve existante | À vérifier par l'humain | Matrice |
