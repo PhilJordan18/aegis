@@ -380,16 +380,6 @@ final class CheckoutUITests: XCTestCase {
         }
     }
 
-    /// The part of a screenshot of the screen inside `frame`, in points of `window`.
-    private static func crop(_ shot: XCUIScreenshot, to frame: CGRect, window: CGRect) -> UIImage {
-        guard let image = shot.image.cgImage, window.width > 0 else { return UIImage() }
-        let scale = CGFloat(image.width) / window.width
-        let pixels = CGRect(x: (frame.minX - window.minX) * scale, y: (frame.minY - window.minY) * scale,
-                            width: frame.width * scale, height: frame.height * scale).integral
-        guard let part = image.cropping(to: pixels) else { return UIImage() }
-        return UIImage(cgImage: part, scale: scale, orientation: .up)
-    }
-
     /// The running test method, as listed in `SampledContrast.tests`.
     private var testMethod: String {
         String(name.split(separator: " ").last?.dropLast() ?? "")
@@ -424,6 +414,7 @@ final class CheckoutUITests: XCTestCase {
         var accepted: [String] = []
         var ignored: [String] = []
         try app.performMeasuredAccessibilityAudit(for: .all) { issue in
+            var note = ""
             let tolerated: Bool
             if let target = issue.element {
                 let center = CGPoint(x: target.frame.midX, y: target.frame.midY)
@@ -433,38 +424,29 @@ final class CheckoutUITests: XCTestCase {
                 case .dynamicType:
                     tolerated = !visible.contains(target.frame) || bars.contains { $0.contains(center) }
                 case .contrast:
-                    let part = target.frame.intersection(visible)
-                    if part.isNull || part.width < 1 || part.height < 1 {
+                    switch self.visiblePartContrast(of: target, visible: visible, window: window, in: app) {
+                    case let .nothingToMeasure(reason):
                         tolerated = true
-                    } else if !visible.contains(target.frame) {
-                        // Partly visible: the visible part is measured, never
-                        // trusted; a part without any ink has nothing to judge.
-                        let image = Self.crop(app.screenshot(), to: part, window: window)
-                        if let ratio = RenderedContrast.ratio(of: image) {
+                        note = " (\(reason))"
+                    case let .measured(passed, line):
+                        // Partly visible: the visible part is measured, never trusted.
+                        tolerated = passed
+                        if passed { accepted.append(line) } else { unhandled.append("Contrast below 4.5:1 — \(line)") }
+                    case .entirelyVisible:
+                        if let known = Self.sampledElement(target, in: app, among: sampled) {
+                            let shot = target.screenshot()
+                            let ratio = RenderedContrast.ratio(of: shot.image) ?? 0
                             tolerated = ratio >= 4.5
-                            let line = "'\(target.label)' partly visible, \(part) of frame=\(target.frame): "
+                            let line = "'\(target.label)' frame=\(target.frame) in \(known.anchor) (\(known.pair)): "
                                 + String(format: "rendered %.2f:1", ratio)
-                            let evidence = XCTAttachment(image: image)
-                            evidence.name = "audit-visible-part-contrast"
+                            let evidence = XCTAttachment(screenshot: shot)
+                            evidence.name = "audit-sampled-contrast-\(known.anchor)"
                             evidence.lifetime = .keepAlways
                             self.add(evidence)
                             if tolerated { accepted.append(line) } else { unhandled.append("Contrast below 4.5:1 — \(line)") }
                         } else {
-                            tolerated = true
+                            tolerated = false
                         }
-                    } else if let known = Self.sampledElement(target, in: app, among: sampled) {
-                        let shot = target.screenshot()
-                        let ratio = RenderedContrast.ratio(of: shot.image) ?? 0
-                        tolerated = ratio >= 4.5
-                        let line = "'\(target.label)' frame=\(target.frame) in \(known.anchor) (\(known.pair)): "
-                            + String(format: "rendered %.2f:1", ratio)
-                        let evidence = XCTAttachment(screenshot: shot)
-                        evidence.name = "audit-sampled-contrast-\(known.anchor)"
-                        evidence.lifetime = .keepAlways
-                        self.add(evidence)
-                        if tolerated { accepted.append(line) } else { unhandled.append("Contrast below 4.5:1 — \(line)") }
-                    } else {
-                        tolerated = false
                     }
                 default:
                     tolerated = false
@@ -474,7 +456,7 @@ final class CheckoutUITests: XCTestCase {
             }
             let element = issue.element.map { "\($0.elementType) '\($0.label)' id=\($0.identifier) frame=\($0.frame)" } ?? "none"
             if tolerated {
-                ignored.append("\(issue.compactDescription) — \(element)")
+                ignored.append("\(issue.compactDescription) — \(element)\(note)")
             } else {
                 unhandled.append("\(issue.compactDescription) — \(element) — \(issue.detailedDescription)")
             }

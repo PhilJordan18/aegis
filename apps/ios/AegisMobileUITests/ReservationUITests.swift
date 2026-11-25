@@ -305,8 +305,11 @@ final class ReservationUITests: XCTestCase {
 
     /// The catalogue policy: every issue fails, except reports on system
     /// rendering, each limited to where it occurs:
-    /// - contrast and Dynamic Type of an element only partly visible, cut by
-    ///   the screen edge or under the iOS 26 floating tab bar's fade;
+    /// - Dynamic Type of an element only partly visible, cut by the screen
+    ///   edge or under the iOS 26 floating tab bar's fade;
+    /// - the contrast of such an element when nothing of it is visible, or
+    ///   its visible part holds no ink. Otherwise its visible part is measured
+    ///   on the pixels and fails below 4.5:1 (#211).
     /// - the non-wrapping system large title at accessibility sizes;
     /// - Dynamic Type of navigation bar items, which the system caps;
     /// - before iOS 26, "nearly passed" contrast sampled in the status chips,
@@ -330,7 +333,10 @@ final class ReservationUITests: XCTestCase {
         var types = XCUIAccessibilityAuditType.all
         if atLargestSize { types.remove(.dynamicType) }
         var unhandled: [String] = []
+        var accepted: [String] = []
+        var ignored: [String] = []
         try app.performMeasuredAccessibilityAudit(for: types) { issue in
+            var note = ""
             let tolerated: Bool
             if let target = issue.element {
                 let center = CGPoint(x: target.frame.midX, y: target.frame.midY)
@@ -345,18 +351,48 @@ final class ReservationUITests: XCTestCase {
                     // shows them in the Large Content Viewer instead.
                     tolerated = !visible.contains(target.frame) || bars.contains { $0.contains(center) }
                 case .contrast:
-                    tolerated = !visible.contains(target.frame) || nearlyInChip
+                    if nearlyInChip {
+                        tolerated = true
+                    } else {
+                        switch self.visiblePartContrast(of: target, visible: visible, window: window, in: app) {
+                        case let .nothingToMeasure(reason):
+                            tolerated = true
+                            note = " (\(reason))"
+                        case let .measured(passed, line):
+                            // Partly visible: the visible part is measured, never trusted.
+                            tolerated = passed
+                            if passed { accepted.append(line) } else { unhandled.append("Contrast below 4.5:1 — \(line)") }
+                        case .entirelyVisible:
+                            tolerated = false
+                        }
+                    }
                 default:
                     tolerated = false
                 }
             } else {
                 tolerated = false
             }
-            if !tolerated {
-                let element = issue.element.map { "\($0.elementType) '\($0.label)' id=\($0.identifier) frame=\($0.frame)" } ?? "none"
+            let element = issue.element.map { "\($0.elementType) '\($0.label)' id=\($0.identifier) frame=\($0.frame)" } ?? "none"
+            if tolerated {
+                ignored.append("\(issue.compactDescription) — \(element)\(note)")
+            } else {
                 unhandled.append("\(issue.compactDescription) — \(element) — \(issue.detailedDescription)")
             }
             return true
+        }
+        // Every tolerated issue stays visible in the result: a rule that hides
+        // an issue must not look like an audit that found nothing.
+        if !ignored.isEmpty {
+            let report = XCTAttachment(string: (["visible=\(visible)"] + ignored).joined(separator: "\n"))
+            report.name = "audit-tolerated"
+            report.lifetime = .keepAlways
+            add(report)
+        }
+        if !accepted.isEmpty {
+            let report = XCTAttachment(string: accepted.joined(separator: "\n"))
+            report.name = "audit-visible-part-contrast"
+            report.lifetime = .keepAlways
+            add(report)
         }
         if !unhandled.isEmpty {
             let report = XCTAttachment(string: (["visible=\(visible)"] + unhandled).joined(separator: "\n"))

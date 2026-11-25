@@ -294,10 +294,14 @@ final class CatalogUITests: XCTestCase {
     ///   (see the `fr-catalog-ax5-light` capture);
     /// - the contrast of the system search field placeholder;
     /// - the hit region of the search field's own clear button;
-    /// - contrast and Dynamic Type of an element only partly visible: cut by
-    ///   the screen edge (horizontal filter chips) or under the iOS 26
-    ///   floating tab bar, whose scroll-edge fade the audit samples. The same
-    ///   element passes once scrolled into full view.
+    /// - Dynamic Type of an element only partly visible: cut by the screen
+    ///   edge (horizontal filter chips) or under the iOS 26 floating tab bar,
+    ///   whose scroll-edge fade the audit samples. The same element passes
+    ///   once scrolled into full view.
+    /// - the contrast of such an element when nothing of it is visible, or
+    ///   its visible part holds no ink. Otherwise its visible part is measured
+    ///   on the pixels and fails below 4.5:1 (#211).
+    /// Every tolerated issue is attached as `audit-tolerated`.
     /// - Dynamic Type of the filter chips, replaced by a menu at accessibility
     ///   sizes (checked by `testLargestTextUsesTheFilterMenu`).
     /// `atLargestSize` skips the Dynamic Type check when the text already uses
@@ -340,7 +344,10 @@ final class CatalogUITests: XCTestCase {
         // the list at the largest size.
         if ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26 { types.remove(.dynamicType) }
         var unhandled: [String] = []
+        var accepted: [String] = []
+        var ignored: [String] = []
         try app.performMeasuredAccessibilityAudit(for: types) { issue in
+            var note = ""
             let tolerated: Bool
             if let target = issue.element {
                 let center = CGPoint(x: target.frame.midX, y: target.frame.midY)
@@ -359,20 +366,49 @@ final class CatalogUITests: XCTestCase {
                 case .contrast:
                     // By type as well: after a pull the search field may have
                     // moved since its frame was read.
-                    tolerated = !visible.contains(target.frame) || searchFrame.contains(center)
-                        || target.elementType == .searchField || nearlyInChip
+                    if searchFrame.contains(center) || target.elementType == .searchField || nearlyInChip {
+                        tolerated = true
+                    } else {
+                        switch self.visiblePartContrast(of: target, visible: visible, window: window, in: app) {
+                        case let .nothingToMeasure(reason):
+                            tolerated = true
+                            note = " (\(reason))"
+                        case let .measured(passed, line):
+                            // Partly visible: the visible part is measured, never trusted.
+                            tolerated = passed
+                            if passed { accepted.append(line) } else { unhandled.append("Contrast below 4.5:1 — \(line)") }
+                        case .entirelyVisible:
+                            tolerated = false
+                        }
+                    }
                 default:
                     tolerated = false
                 }
             } else {
                 tolerated = false
             }
-            if !tolerated {
-                let element = issue.element.map { "\($0.elementType) '\($0.label)' id=\($0.identifier) frame=\($0.frame)" } ?? "none"
+            let element = issue.element.map { "\($0.elementType) '\($0.label)' id=\($0.identifier) frame=\($0.frame)" } ?? "none"
+            if tolerated {
+                ignored.append("\(issue.compactDescription) — \(element)\(note)")
+            } else {
                 unhandled.append("\(issue.compactDescription) — \(element) — \(issue.detailedDescription)")
             }
             // Every issue is collected, then reported together below.
             return true
+        }
+        // Every tolerated issue stays visible in the result: a rule that hides
+        // an issue must not look like an audit that found nothing.
+        if !ignored.isEmpty {
+            let report = XCTAttachment(string: (["visible=\(visible)"] + ignored).joined(separator: "\n"))
+            report.name = "audit-tolerated"
+            report.lifetime = .keepAlways
+            add(report)
+        }
+        if !accepted.isEmpty {
+            let report = XCTAttachment(string: accepted.joined(separator: "\n"))
+            report.name = "audit-visible-part-contrast"
+            report.lifetime = .keepAlways
+            add(report)
         }
         if !unhandled.isEmpty {
             let report = XCTAttachment(string: (["visible=\(visible)"] + unhandled).joined(separator: "\n"))
