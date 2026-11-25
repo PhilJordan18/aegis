@@ -283,6 +283,10 @@ jobs:
           xcrun simctl bootstatus "$udid"
           ready=$(date +%s)
           echo "Simulator booted in $((booted - start)) s, ready $((ready - booted)) s later" | tee -a "$GITHUB_STEP_SUMMARY"
+          # Diagnosis only (#67): samples the load in the background for the
+          # rest of the job; the tests start at once and never wait for it.
+          echo "ready_epoch=$ready" > build/results/simulator-boot.txt
+          nohup ../../.github/scripts/simulator-load.sh "$udid" build/results/simulator-load.tsv 2700 10 >/dev/null 2>&1 &
       - name: Choose the recipe
         # changed-components.sh selects the fast `pr` recipe only for a pull
         # request into dev that changes non-visual iOS paths; everything else
