@@ -44,12 +44,14 @@ extension XCUIApplication {
     /// its first occurrence: no retry hides it.
     ///
     /// Element detection runs in its own call, after the other types, on the
-    /// same screen and with the same handler. XCTest gives each call about
-    /// 15 s. On the hosted runner, the other types take up to 8 s on the asset
-    /// sheet (their text-size passes), then element detection reads the whole
-    /// screenshot with text recognition, which took 5.8 s and over 7.1 s on
-    /// that sheet: together they passed the limit, and the audit was abandoned
-    /// during element detection (#67). Each type is still checked on every
+    /// same screen and with the same handler. In a hosted run, the other
+    /// types took up to 8 s on the asset sheet (their text-size passes), then
+    /// element detection read the whole screenshot with text recognition for
+    /// 5.8 s and over 7.1 s on that sheet, and that audit was abandoned during
+    /// element detection, 15 s after it began (#67). The limit XCTest applies
+    /// is not established: other audits completed in 27.9 s or were abandoned
+    /// at 32.2 s. Splitting the call shortens each one; the recorded durations
+    /// show whether that is enough. Each type is still checked on every
     /// audited screen; only the call that runs it changes.
     @MainActor
     func performMeasuredAccessibilityAudit(
