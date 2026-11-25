@@ -478,11 +478,14 @@ class SimulatorLoadTests(unittest.TestCase):
     def test_samples_until_its_bound_and_succeeds(self):
         with tempfile.TemporaryDirectory() as folder:
             out = Path(folder) / "load.tsv"
-            result = run(["bash", str(SCRIPTS / "simulator-load.sh"), "NO-SUCH-UDID", str(out), "2", "1"])
+            result = run(["bash", str(SCRIPTS / "simulator-load.sh"), "NO-SUCH-UDID", str(out), "3", "1"])
             self.assertEqual(result.returncode, 0, result.stderr)
             lines = out.read_text(encoding="utf-8").splitlines()
         self.assertEqual(lines[0], "epoch\tload1\tsimulator_processes\tsimulator_cpu_percent")
-        self.assertGreaterEqual(len(lines), 3)
+        # The bound is in whole seconds from a start anywhere within a second, so
+        # 3 s at 1 s gives 2 to 4 samples: it repeats, and it stops at its bound.
+        self.assertGreaterEqual(len(lines) - 1, 2)
+        self.assertLessEqual(len(lines) - 1, 4)
         for line in lines[1:]:
             epoch, load, count, cpu = line.split("\t")
             self.assertTrue(epoch.isdigit())
