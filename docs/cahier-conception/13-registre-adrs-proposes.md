@@ -10,7 +10,8 @@
 **Mise à jour :** 28 octobre 2026 — ADR-014 proposé : recherche `q` comptée en graphèmes, commune à l’API, au Web et à iOS  
 **Mise à jour :** 6 novembre 2026 — ADR-014 accepté par Philippe : recherche `q` comptée en graphèmes
 **Mise à jour :** 18 novembre 2026 — ADR-016 accepté par Philippe : session navigateur révocable du Manager; remplace pour le Web seulement la reconnexion après rechargement de l’ADR-007
-**Mise à jour :** 21 novembre 2026 — ADR-017 accepté par Philippe (révocation au changement de mot de passe, rétention bornée); ADR-018 accepté, options A + B, pour la tranche suivante : révocation des jetons d’accès déjà émis
+**Mise à jour :** 21 novembre 2026 — ADR-017 accepté par Philippe (révocation au changement de mot de passe, rétention bornée); ADR-018 accepté, options A + B, pour la tranche suivante : révocation des jetons d’accès déjà émis  
+**Mise à jour :** 25 novembre 2026 — ADR-019 accepté, consigné à la demande de Jimmy : écran du hub sur un nœud d’affichage ESP32 relié en I2C (proposé le 11 novembre sous le numéro 016)  
 **Références :** [scope](02-scope.md), documents 03–10 et [architecture physique](12-architecture-physique.md).
 
 ## 1. Portée et statuts
@@ -56,6 +57,7 @@ les POC matériels et le seuil numérique de fréquence des préparations QR res
 | 016 | [Session navigateur révocable pour le Manager](../adr/ADR-016-session-navigateur-revocable.md) | `ACCEPTED` — Philippe, 18 novembre 2026 (#178); cookie `HttpOnly` de durée absolue, origine autorisée, révocation serveur; remplace en partie l’ADR-007 | Philippe | IAM-03 (#178) |
 | 017 | [Révocation des sessions navigateur au changement de mot de passe et rétention bornée](../adr/ADR-017-revocation-sessions-changement-mot-de-passe.md) | `ACCEPTED` — Philippe, 21 novembre 2026 (#178); révocation atomique `PASSWORD_CHANGED` au changement réel, point d’écriture unique, révocation définitive, session ouverte jamais supprimée, purge 30 jours après la fin (révocation ou échéance), audit conservé; migration `V011` | Philippe | IAM-03 (#178) |
 | 018 | [Révocation des jetons d’accès déjà émis](../adr/ADR-018-revocation-jetons-acces.md) | `ACCEPTED` — Philippe, 21 novembre 2026, options A + B : version des créances (`cv`) au changement de mot de passe, `sid` par session navigateur à la déconnexion du Manager; anciens jetons sans ces champs refusés; tranche suivante, migration `V012` | Philippe | #179, après #178 |
+| 019 | [Écran du hub : nœud d’affichage ESP32 relié au hub en I2C](../adr/ADR-019-ecran-hub-noeud-cyd-i2c.md) | `ACCEPTED` — consigné à la demande de Jimmy le 25 novembre 2026 (confirmation de Philippe non consignée); hub I2C sur GPIO 21/22, pas 26/27 | Jimmy, avec Philippe pour le cycle d’affichage | FW-04 (#45); doc 12 à mettre à jour (CYD, broches I2C du hub) |
 
 Les pilotes préparent les preuves et recommandations; ils n’approuvent pas seuls un changement de scope. Les cibles pédagogiques sont précisées dans le document 14.
 
