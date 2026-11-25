@@ -281,7 +281,8 @@ final class CatalogUITests: XCTestCase {
     @MainActor
     private func launch(_ language: Language, scenario: String, arguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments += ["-AppleLanguages", "(\(language.code))", "-AppleLocale", language.locale] + arguments
+        app.launchArguments += ["-AppleLanguages", "(\(language.code))", "-AppleLocale", language.locale]
+            + Self.textSize(arguments) + arguments
         app.launchEnvironment["AEGIS_UI_SCENARIO"] = scenario
         app.launch()
         return app
@@ -294,10 +295,14 @@ final class CatalogUITests: XCTestCase {
     ///   (see the `fr-catalog-ax5-light` capture);
     /// - the contrast of the system search field placeholder;
     /// - the hit region of the search field's own clear button;
-    /// - contrast and Dynamic Type of an element only partly visible: cut by
-    ///   the screen edge (horizontal filter chips) or under the iOS 26
-    ///   floating tab bar, whose scroll-edge fade the audit samples. The same
-    ///   element passes once scrolled into full view.
+    /// - Dynamic Type of an element only partly visible: cut by the screen
+    ///   edge (horizontal filter chips) or under the iOS 26 floating tab bar,
+    ///   whose scroll-edge fade the audit samples. The same element passes
+    ///   once scrolled into full view.
+    /// - the contrast of such an element when nothing of it is visible, or
+    ///   its visible part holds no ink. Otherwise its visible part is measured
+    ///   on the pixels and fails below 4.5:1 (#211).
+    /// Every tolerated issue is attached as `audit-tolerated`.
     /// - Dynamic Type of the filter chips, replaced by a menu at accessibility
     ///   sizes (checked by `testLargestTextUsesTheFilterMenu`).
     /// `atLargestSize` skips the Dynamic Type check when the text already uses
@@ -339,8 +344,9 @@ final class CatalogUITests: XCTestCase {
         // the Dynamic Type proof is the AX5 test, which renders and audits
         // the list at the largest size.
         if ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26 { types.remove(.dynamicType) }
-        var unhandled: [String] = []
+        let findings = AuditRecord()
         try app.performMeasuredAccessibilityAudit(for: types) { issue in
+            var note = ""
             let tolerated: Bool
             if let target = issue.element {
                 let center = CGPoint(x: target.frame.midX, y: target.frame.midY)
@@ -359,28 +365,22 @@ final class CatalogUITests: XCTestCase {
                 case .contrast:
                     // By type as well: after a pull the search field may have
                     // moved since its frame was read.
-                    tolerated = !visible.contains(target.frame) || searchFrame.contains(center)
-                        || target.elementType == .searchField || nearlyInChip
+                    if searchFrame.contains(center) || target.elementType == .searchField || nearlyInChip {
+                        tolerated = true
+                    } else {
+                        let partly = self.visiblePartContrast(of: target, visible: visible, window: window, in: app)
+                        tolerated = findings.tolerates(partly, note: &note) ?? false
+                    }
                 default:
                     tolerated = false
                 }
             } else {
                 tolerated = false
             }
-            if !tolerated {
-                let element = issue.element.map { "\($0.elementType) '\($0.label)' id=\($0.identifier) frame=\($0.frame)" } ?? "none"
-                unhandled.append("\(issue.compactDescription) — \(element) — \(issue.detailedDescription)")
-            }
-            // Every issue is collected, then reported together below.
+            findings.record(issue, tolerated: tolerated, note: note)
             return true
         }
-        if !unhandled.isEmpty {
-            let report = XCTAttachment(string: (["visible=\(visible)"] + unhandled).joined(separator: "\n"))
-            report.name = "audit-issues"
-            report.lifetime = .keepAlways
-            add(report)
-            XCTFail("Accessibility audit: \(unhandled.joined(separator: " | "))")
-        }
+        findings.report(to: self, areas: ["visible=\(visible)"], acceptedName: "audit-visible-part-contrast")
     }
 
     @MainActor

@@ -199,35 +199,45 @@ private struct DebugCodeEntry: View {
     let submit: (String) -> Void
     @State private var text = ""
     @FocusState private var focused: Bool
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
+        // Field and button side by side, stacked at accessibility sizes: on a
+        // small screen a stacked button below a refusal notice ended cut at
+        // the bottom of the sheet (#211).
+        let row = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 8))
         VStack(alignment: .leading, spacing: 8) {
             Text(verbatim: "DEBUG · QR")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(Color.brandMuted)
-            // A short placeholder: the field is empty whenever it is shown.
-            TextField(text: $text) { Text(verbatim: "aegis://") }
-                .frame(minHeight: 44)
-                .focused($focused)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .textContentType(.none)
-                .privacySensitive()
-                .font(.footnote.monospaced())
-                .textFieldStyle(.roundedBorder)
-                .accessibilityIdentifier("scan.debugCode")
-            Button {
-                let value = text
-                text = ""
-                // The keyboard would cover the outcome shown below.
-                focused = false
-                submit(value)
-            } label: {
-                Text(verbatim: "Submit")
+            row {
+                // A short placeholder: the field is empty whenever it is shown.
+                TextField(text: $text) { Text(verbatim: "aegis://") }
+                    .frame(minHeight: 44)
+                    .focused($focused)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .textContentType(.none)
+                    .privacySensitive()
+                    .font(.footnote.monospaced())
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityIdentifier("scan.debugCode")
+                Button {
+                    let value = text
+                    text = ""
+                    // The keyboard would cover the outcome shown below.
+                    focused = false
+                    submit(value)
+                } label: {
+                    Text(verbatim: "Submit")
+                }
+                .buttonStyle(CompactButtonStyle())
+                .fixedSize()
+                .disabled(text.isEmpty)
+                .accessibilityIdentifier("scan.debugSubmit")
             }
-            .buttonStyle(CompactButtonStyle())
-            .disabled(text.isEmpty)
-            .accessibilityIdentifier("scan.debugSubmit")
         }
         .padding(12)
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)

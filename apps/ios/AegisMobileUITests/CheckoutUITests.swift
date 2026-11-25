@@ -380,16 +380,6 @@ final class CheckoutUITests: XCTestCase {
         }
     }
 
-    /// The part of a screenshot of the screen inside `frame`, in points of `window`.
-    private static func crop(_ shot: XCUIScreenshot, to frame: CGRect, window: CGRect) -> UIImage {
-        guard let image = shot.image.cgImage, window.width > 0 else { return UIImage() }
-        let scale = CGFloat(image.width) / window.width
-        let pixels = CGRect(x: (frame.minX - window.minX) * scale, y: (frame.minY - window.minY) * scale,
-                            width: frame.width * scale, height: frame.height * scale).integral
-        guard let part = image.cropping(to: pixels) else { return UIImage() }
-        return UIImage(cgImage: part, scale: scale, orientation: .up)
-    }
-
     /// The running test method, as listed in `SampledContrast.tests`.
     private var testMethod: String {
         String(name.split(separator: " ").last?.dropLast() ?? "")
@@ -420,10 +410,9 @@ final class CheckoutUITests: XCTestCase {
         let sampled = ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26
             && UIApplication.shared.preferredContentSizeCategory.isAccessibilityCategory
             ? Self.sampledContrast.filter { $0.tests.contains(testMethod) } : []
-        var unhandled: [String] = []
-        var accepted: [String] = []
-        var ignored: [String] = []
+        let findings = AuditRecord()
         try app.performMeasuredAccessibilityAudit(for: .all) { issue in
+            var note = ""
             let tolerated: Bool
             if let target = issue.element {
                 let center = CGPoint(x: target.frame.midX, y: target.frame.midY)
@@ -433,36 +422,19 @@ final class CheckoutUITests: XCTestCase {
                 case .dynamicType:
                     tolerated = !visible.contains(target.frame) || bars.contains { $0.contains(center) }
                 case .contrast:
-                    let part = target.frame.intersection(visible)
-                    if part.isNull || part.width < 1 || part.height < 1 {
-                        tolerated = true
-                    } else if !visible.contains(target.frame) {
-                        // Partly visible: the visible part is measured, never
-                        // trusted; a part without any ink has nothing to judge.
-                        let image = Self.crop(app.screenshot(), to: part, window: window)
-                        if let ratio = RenderedContrast.ratio(of: image) {
-                            tolerated = ratio >= 4.5
-                            let line = "'\(target.label)' partly visible, \(part) of frame=\(target.frame): "
-                                + String(format: "rendered %.2f:1", ratio)
-                            let evidence = XCTAttachment(image: image)
-                            evidence.name = "audit-visible-part-contrast"
-                            evidence.lifetime = .keepAlways
-                            self.add(evidence)
-                            if tolerated { accepted.append(line) } else { unhandled.append("Contrast below 4.5:1 — \(line)") }
-                        } else {
-                            tolerated = true
-                        }
+                    let partly = self.visiblePartContrast(of: target, visible: visible, window: window, in: app)
+                    if let judged = findings.tolerates(partly, note: &note) {
+                        tolerated = judged
                     } else if let known = Self.sampledElement(target, in: app, among: sampled) {
                         let shot = target.screenshot()
                         let ratio = RenderedContrast.ratio(of: shot.image) ?? 0
-                        tolerated = ratio >= 4.5
                         let line = "'\(target.label)' frame=\(target.frame) in \(known.anchor) (\(known.pair)): "
                             + String(format: "rendered %.2f:1", ratio)
                         let evidence = XCTAttachment(screenshot: shot)
                         evidence.name = "audit-sampled-contrast-\(known.anchor)"
                         evidence.lifetime = .keepAlways
                         self.add(evidence)
-                        if tolerated { accepted.append(line) } else { unhandled.append("Contrast below 4.5:1 — \(line)") }
+                        tolerated = findings.measured(passed: ratio >= 4.5, line)
                     } else {
                         tolerated = false
                     }
@@ -472,35 +444,10 @@ final class CheckoutUITests: XCTestCase {
             } else {
                 tolerated = false
             }
-            let element = issue.element.map { "\($0.elementType) '\($0.label)' id=\($0.identifier) frame=\($0.frame)" } ?? "none"
-            if tolerated {
-                ignored.append("\(issue.compactDescription) — \(element)")
-            } else {
-                unhandled.append("\(issue.compactDescription) — \(element) — \(issue.detailedDescription)")
-            }
+            findings.record(issue, tolerated: tolerated, note: note)
             return true
         }
-        // Every tolerated issue stays visible in the result: a rule that hides
-        // an issue must not look like an audit that found nothing.
-        if !ignored.isEmpty {
-            let report = XCTAttachment(string: (["visible=\(visible)"] + ignored).joined(separator: "\n"))
-            report.name = "audit-tolerated"
-            report.lifetime = .keepAlways
-            add(report)
-        }
-        if !accepted.isEmpty {
-            let report = XCTAttachment(string: accepted.joined(separator: "\n"))
-            report.name = "audit-sampled-contrast"
-            report.lifetime = .keepAlways
-            add(report)
-        }
-        if !unhandled.isEmpty {
-            let report = XCTAttachment(string: (["visible=\(visible)"] + unhandled).joined(separator: "\n"))
-            report.name = "audit-issues"
-            report.lifetime = .keepAlways
-            add(report)
-            XCTFail("Accessibility audit: \(unhandled.joined(separator: " | "))")
-        }
+        findings.report(to: self, areas: ["visible=\(visible)"], acceptedName: "audit-sampled-contrast")
     }
 
     /// `waitForStillScreen` of the other suites, except for the descendants
