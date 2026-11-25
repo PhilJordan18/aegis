@@ -14,6 +14,7 @@
 **Mise à jour ciblée :** 28 octobre 2026 — sous-objets `AssetModelSummary`, `CalibrationView` et `PlacementSummary` de `AssetView` (§8.2); sérialisation existante documentée; code `404 ASSET_NOT_FOUND` de §11.2 ajouté à §21 (#33, #34)  
 **Mise à jour ciblée :** 28 octobre 2026 — décisions de Philippe pour #33 et #34 : ordre stable des raisons et raison principale choisie par la convention de présentation, jamais par `reasons[0]` (§8.1); actif archivé exclu de la liste mais lisible par son identifiant (§11.1, §11.2)  
 **Mise à jour ciblée :** 28 octobre 2026 — réservation (RES-01, #37), décisions de Philippe du 28 octobre 2026 : ordre des contrôles implémenté, `reservedUntil` non postérieur à l’instant courant, locker sans horaire, horaire du placement courant et actif inconnu (§14.1); `availableActions` vide tant que ses actions ne sont pas implémentées (§8.10); codes de refus de l’archivage (§12.2); `ACTIVE_RESERVATION_NOT_FOUND` et `ASSET_OPERATION_IN_PROGRESS` ajoutés à §21  
+**Mise à jour ciblée :** 22 novembre 2026 — vues technicien et administrateur distinguées (§8.3, §8.4) et `details` imbriqués de l’audit précisés (§19.1), sans changement de contrat (#53, #48).  
 **Mise à jour ciblée :** 11 novembre 2026 — lectures administratives des transactions (#48), décisions de Philippe du 11 novembre 2026 (#67) : tri, filtres, vues sans action et résumé du titulaire `user`/`holder` (§17)  
 **Mise à jour ciblée :** 11 novembre 2026 — anomalies administratives (#52), décisions de Philippe du 11 novembre 2026 (#67) : tri et filtres, `summary` de repli, `evidence` bornée à 50 observations (§18.1), reconnaissance et codes `ANOMALY_NOT_ACKNOWLEDGEABLE` et `ANOMALY_ALREADY_RESOLVED` ajoutés à §21 (§18.2)  
 **Mise à jour ciblée :** 11 novembre 2026 — chronologie d’audit (#53), décisions de Philippe du 11 novembre 2026 (#67) : `actor`, liste de champs scalaires de `details`, curseur lié aux filtres et garanties réelles d’un parcours, sans instantané (§19.1, §22.2); code `INVALID_CURSOR` ajouté à §21  
@@ -406,6 +407,8 @@ Sous-objets de `AssetView`, sérialisation existante documentée. Un champ requi
 | currentOperationId | UUID ou null | oui |
 | availableActions | string[] | oui |
 
+Cette vue est celle du technicien titulaire (`/reservations`, `/me/reservation`). La vue administrative `AdminReservationView` (§17) reprend ces champs et ajoute `user`, un `UserSummary` (§8.8) placé après `userId`; son `availableActions` est toujours vide. Un client ne suppose jamais la présence de `user` dans la vue du technicien.
+
 ### 8.4 LoanView
 
 | Champ | Type | Requis |
@@ -423,6 +426,8 @@ Sous-objets de `AssetView`, sérialisation existante documentée. Un champ requi
 | returnOperationId | UUID ou null | oui |
 | currentOperationId | UUID ou null | oui |
 | availableActions | string[] | oui |
+
+Cette vue est celle du technicien titulaire (`/loans`, `/me/loan`). La vue administrative `AdminLoanView` (§17) reprend ces champs et ajoute `holder`, un `UserSummary` (§8.8) placé après `holderUserId`; son `availableActions` est toujours vide. Un client ne suppose jamais la présence de `holder` dans la vue du technicien.
 
 `currentOperationId` est une référence de suivi calculée, pas un nouvel état métier. Pour une réservation `ACTIVE`, elle désigne sa dernière tentative de retrait; pour un prêt `ACTIVE` ou `RETURN_PENDING`, sa dernière tentative de retour. Elle reste renseignée si cette tentative est terminale, afin d’expliquer un échec ou une anomalie. Elle vaut `null` sans tentative ou lorsque la réservation/le prêt est clos. Une opération non terminale liée est prioritaire. La lecture utilise les mêmes contrôles de propriété que la ressource parente.
 
@@ -1504,6 +1509,18 @@ Règles approuvées par Philippe le 11 novembre 2026 (#67, D8 à D10) :
 - tri du plus récent au plus ancien par `occurredAt`, puis `id` décroissant; `from` et `to` bornent `occurredAt`; `limit` vaut 50 par défaut; `eventType` et `subjectType` acceptent chacun une seule valeur de l’ensemble contrôlé, et les erreurs de filtre suivent §17;
 - `actor` est un `UserSummary` (§8.8) pour un acteur humain, sinon `null`, sans attribution inventée;
 - `details` suit une liste explicite de champs scalaires par type d’événement. Un champ n’est exposé que si son chemin complet figure dans la liste et que sa valeur est une chaîne, un nombre, un booléen ou `null`. Les secrets, hashes, notes, textes libres, valeurs d’identifiant brutes et payloads sont exclus. Un type d’événement absent de la liste expose `{}`;
+- `details` conserve l’imbrication de l’événement : la liste nomme des chemins de feuilles, pas une forme aplatie. Un chemin `a.b` désigne le champ `b` de l’objet `a`; `a[]` désigne chaque élément du tableau `a`. Un objet ou un tableau n’apparaît que s’il mène à une feuille autorisée, et seules ses feuilles autorisées y restent; un tableau garde l’ordre de ses éléments. Le client affiche donc les objets et tableaux imbriqués, sans les aplatir ni les ignorer. Les chemins imbriqués en vigueur sont :
+
+  | eventType | Chemins imbriqués |
+  |---|---|
+  | `ASSET_CREATED` | `created.<champ>` du modèle ou de l’équipement |
+  | `ASSET_UPDATED` | `changes.<champ>.from`, `changes.<champ>.to`; `revoked.assetId`, `revoked.type`; `revokedAt` |
+  | `ASSET_IDENTIFIER_ASSIGNED` | `assigned.assetId`, `assigned.type` (jamais la valeur de l’identifiant) |
+  | `ASSET_PLACEMENT_CHANGED` | `from.<champ>`, `to.<champ>` du placement (`placementId`, `lockerId`, `lockerCode`, `compartmentId`, `compartmentCode`, `assignedAt`) |
+  | `SCHEDULE_UPDATED` | `previousScheduleId`; `before.timeZone`, `after.timeZone`; `before.windows[]` et `after.windows[]` avec `dayOfWeek`, `enabled`, `opensAt`, `closesAt` |
+  | `RESERVATION_CANCELLED`, `RESERVATION_EXPIRED` | `endedOperationIds[]` (tableau d’UUID), avec les champs scalaires du type |
+
+  Les autres types n’exposent que des champs scalaires de premier niveau. La liste fait foi dans `AuditDetailsFilter`; un ajout est une modification de ce contrat;
 - `PASSWORD_CHANGED` (ADR-017, sujet `USER`) n’expose que `revokedBrowserSessions`, le nombre de sessions navigateur révoquées par le changement;
 - le curseur est lié aux filtres qui l’ont produit, mais pas à `limit`; réutilisé avec d’autres filtres ou mal formé, il donne `400 INVALID_CURSOR`.
 
