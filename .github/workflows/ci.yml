@@ -138,8 +138,8 @@ jobs:
         run: python3 ../../.github/scripts/test-report.py "Web tests" "$RUNNER_TEMP/web-reports/unit.xml"
       - run: npm run build
 
-  # Simulator tests, the agent setup validator and the accepted ADR guard are in
-  # the `needs` of `CI result` (#67, docs/qualite/ci-02/). iOS tests and CI
+  # Simulator tests, the agent setup validator, the accepted ADR guard and iOS
+  # tests are in the `needs` of `CI result` (#67, docs/qualite/ci-02/). CI
   # script tests stay outside it until they meet the criteria of #67.
   simulator:
     name: Simulator tests
@@ -306,7 +306,11 @@ jobs:
           echo "IOS_RECIPE=$recipe" >> "$GITHUB_ENV"
           echo "iOS recipe: **$recipe**" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: iOS recipe
-        run: scripts/ios-test.sh "$IOS_RECIPE"
+        # Philippe's decision of 25 November (#67): only the UI tests that failed
+        # get one more attempt, two in total, on the same build. A persistent
+        # failure fails this step; the first attempt's bundle is kept, and QA
+        # reviews every first failure before a PASS.
+        run: scripts/ios-test.sh "$IOS_RECIPE" || python3 ../../.github/scripts/ios-retry.py "$IOS_RECIPE"
       - name: Result summary
         if: always()
         run: python3 ../../.github/scripts/xcresult-summary.py
@@ -336,7 +340,7 @@ jobs:
   # the change filter, and a skipped job must neither block nor hide a failure.
   result:
     name: CI result
-    needs: [changes, api, web, simulator, agents, adrs]
+    needs: [changes, api, web, simulator, agents, adrs, ios]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -352,14 +356,15 @@ jobs:
           SIMULATOR: ${{ needs.changes.outputs.simulator }}:${{ needs.simulator.result }}
           AGENTS: ${{ needs.changes.outputs.agents }}:${{ needs.agents.result }}
           ADRS: ${{ needs.changes.outputs.adrs }}:${{ needs.adrs.result }}
+          IOS: ${{ needs.changes.outputs.ios }}:${{ needs.ios.result }}
         run: >-
           python3 .github/scripts/ci-result.py "$CHANGES"
           "API tests=$API" "Web checks=$WEB" "Simulator tests=$SIMULATOR"
-          "Agent setup validator=$AGENTS" "Accepted ADR guard=$ADRS"
+          "Agent setup validator=$AGENTS" "Accepted ADR guard=$ADRS" "iOS tests=$IOS"
       - name: Jobs outside CI result
         if: always()
-        # These jobs are not in `needs` (#67 criteria not met), so CI result
-        # neither waits for nor reflects them: read their own checks.
+        # This job is not in `needs` (#67 criteria not met), so CI result
+        # neither waits for nor reflects it: read its own check.
         run: >-
-          echo "**Not aggregated:** iOS tests, CI script tests. A green CI result
-          says nothing about them; read their own checks." >> "$GITHUB_STEP_SUMMARY"
+          echo "**Not aggregated:** CI script tests. A green CI result
+          says nothing about it; read its own check." >> "$GITHUB_STEP_SUMMARY"
