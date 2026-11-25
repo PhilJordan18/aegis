@@ -1,0 +1,17 @@
+# fraicheur-manager.sh via dix-cycles.sh, branche 67-test-cycles-closing-guard 6e8cd64 (= dev f442a5c + scripts et preuves QA)
+api: services/api/target/aegis-control-0.1.0-SNAPSHOT.jar, repository at 6e8cd64
+ceiling: shipped default preparations per window
+PASS CYCLES 1 checkouts and 1 returns in 22 s: loans/completed/fulfilled reservations/confirmed operations/operations/commands/max commands per operation/anomalies/OPERATION_CONFIRMED/ LOAN_COMPLETED = '1 1 1 2 2 2 1 0 2 1'; ceiling waits 0
+PASS READY the asset is READY again after the last return, without any manual SQL
+row before: 'Aucun empêchement détecté Multimètre Fluke 117 AEG-DEMO-001 Disponible · Présent · En service'  api availability: "AVAILABLE"
+reservation 201 
+PASS [dev-f442a5c] F1 re-entering Équipements 6 s after a reservation re-reads the list (1 GET /admin/assets)
+PASS [dev-f442a5c] F1 the row changed after the reservation: '1 empêchement Non disponible Multimètre Fluke 117 AEG-DEMO-001 Réservé · Présent · En service' (API availability "RESERVED")
+cancel 200
+visibility while the other tab is in front: visible
+visibility after bringToFront: visible; reads so far 0
+reads after closing the other tab: 0; visibility visible
+reads after a bubbling visibilitychange (as a real tab return) on a visible page: 1
+PASS [dev-f442a5c] F2 returning to the tab 6 s after a cancellation re-reads the list (1 GET /admin/assets)
+PASS [dev-f442a5c] F2 the row is back to its first state: 'Aucun empêchement détecté Multimètre Fluke 117 AEG-DEMO-001 Disponible · Présent · En service' (API availability "AVAILABLE")
+QA CYCLES: 0 failed

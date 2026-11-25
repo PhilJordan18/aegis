@@ -1,0 +1,13 @@
+# recuperation-retrait.sh depuis ce dossier, branche 67-test-cycles-closing-guard 15f66c4 (= dev f442a5c + scripts QA)
+api: services/api/target/aegis-control-0.1.0-SNAPSHOT.jar, repository at 15f66c4
+PASS K1 uncertain checkout: 'ANOMALY INCONSISTENT_PHYSICAL_STATE', anomaly 'INCONSISTENT_PHYSICAL_STATE/OPEN/-', loans 0
+PASS K1 the reservation is held: 'ACTIVE -'
+PASS K1 a new checkout while the anomaly is OPEN is refused (422 PHYSICAL_STATE_UNKNOWN)
+PASS K2 the attempt's own closing scan (before detection) resolves nothing after scheduled passes
+PASS K3 a new scan without the asset resolves nothing ('INCONSISTENT_PHYSICAL_STATE/OPEN/-')
+PASS K4 resolved by the new stable presence: 'INCONSISTENT_PHYSICAL_STATE/RESOLVED/ASSET_PRESENT', ANOMALY_RESOLVED 1, loans 0, operation stays 'ANOMALY INCONSISTENT_PHYSICAL_STATE'
+PASS K5 reservation usable again: 'ACTIVE CHECKOUT'
+PASS K6 new checkout 'CONFIRMED -', loans 1, reservation FULFILLED
+PASS K7 at most one command per operation (1)
+anomalies: 1 RESOLVED
+QA CHECKOUT ANOMALY RECOVERY: all checks passed

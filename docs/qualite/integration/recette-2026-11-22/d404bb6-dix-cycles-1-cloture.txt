@@ -1,0 +1,13 @@
+api: services/api/target/aegis-control-0.1.0-SNAPSHOT.jar, repository at d404bb6
+ceiling: shipped default preparations per window
+  C1 done at +18 s
+  C2 done at +40 s
+  C3 done at +62 s
+  ceiling reached, Retry-After 539 s
+  C4 done at +620 s
+FAIL C5 reservation 422 {"type":"https://aegis.local/problems/reservation-end-after-closing","title":"Échéance trop tardive","status":422,"code":"RESERVATION_END_AFTER_CLOSING","detail":"La fin de la réservation dépasse la fermeture de la plage d'exploitation courante.","instance":"/api/v1/reservations","traceId":"3c166493-e922-4ac8-a99a-7de865febac1","timestamp":"2026-11-22T04:23:44Z"}
+FAIL CYCLES 4 of 10 cycles; totals '4 4 4 8 8 8 1 0 8 4', expected '10 10 10 20 20 20 1 0 20 10'
+PASS READY the asset is READY again after the last return, without any manual SQL
+QA CYCLES: 2 failed
+logs: (pile jetable, non conservée)
+exit=2

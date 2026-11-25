@@ -17,12 +17,29 @@
 # QA_CYCLES_MAX_PER_WINDOW to raise the ceiling for a faster run; the report then states it.
 # The script only reads the database (SELECT); it never writes to it. The hub is simulated: no hardware claim.
 # Exit code = number of FAIL lines. Overrides: QA_CYCLES (10), QA_CYC_DB_PORT (58603), QA_CYC_MQTT_PORT (55054),
-# QA_CYC_API_PORT (19451).
+# QA_CYC_API_PORT (19451), QA_CYC_PROJECT (aegis-qa-cycles, also names the API MQTT client), QA_CYC_WEB_ORIGIN (an
+# allowed browser origin, for a Manager probe). QA_CYCLES_BEFORE and QA_CYCLES_AFTER name scripts run against the
+# live stack before the first and after the last cycle (environment exported: SERVER_PORT, the demo passwords); a
+# non-zero exit counts as one failure. Refused before it starts when it could not finish before the 23:59 close.
 set -euo pipefail
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
-project=aegis-qa-cycles
+# Closing-time guard (#67): the schedule below closes at 23:59 America/Toronto and every reservation ends 40 min after
+# it is made, so a run that reaches the close meets 422 RESERVATION_END_AFTER_CLOSING (run 1 of 22 November, C5 at
+# 23:23). Budget: 10 min of setup, about 1 min per cycle, the 40 min reservation and one 10 min wait per full
+# ceiling window of preparations. A run that would not finish in time is refused before anything starts.
+# QA_CYC_CLOCK=HH:MM replaces the Toronto clock, for checking this guard only.
+ceiling=${QA_CYCLES_MAX_PER_WINDOW:-6}
+cycles=${QA_CYCLES:-10}
+needed=$(( 10 + cycles + 40 + ((2 * cycles - 1) / ceiling) * 10 ))
+clock=${QA_CYC_CLOCK:-$(TZ=America/Toronto date +%H:%M)}
+now_minutes=$(( 10#${clock%:*} * 60 + 10#${clock#*:} ))
+if (( now_minutes + needed > 23 * 60 + 59 )); then
+  echo "FAIL BLOCKED clock: $clock America/Toronto + $needed min passes the 23:59 close; start after 00:00"
+  exit 2
+fi
+project=${QA_CYC_PROJECT:-aegis-qa-cycles}
 work=$(mktemp -d "${TMPDIR:-/tmp}/aegis-qa-cycles.XXXXXX")
 scenarios=$(mktemp -d tools/hub-simulator/.qa-cyc.XXXXXX)
 db_port=${QA_CYC_DB_PORT:-58603}
@@ -32,7 +49,6 @@ cycles=${QA_CYCLES:-10}
 locker=d46a74ae-39dc-460b-8af0-38fc791b376a
 tag=E20034120123456789000001
 foreign=E20034120123456789000099
-
 
 sed -e "s/^AEGIS_DB_PORT=.*/AEGIS_DB_PORT=$db_port/" -e "s/^AEGIS_MQTT_PORT=.*/AEGIS_MQTT_PORT=$mqtt_port/" \
   infra/docker/.env.example >"$work/env"
@@ -93,7 +109,7 @@ AEGIS_DEMO_ADMIN_PASSWORD=qa-cyc-admin-$(openssl rand -hex 8)
 AEGIS_DEMO_TECHNICIAN_PASSWORD=qa-cyc-tech-$(openssl rand -hex 8)
 AEGIS_MQTT_ENABLED=true
 AEGIS_MQTT_URL=tcp://127.0.0.1:$mqtt_port
-AEGIS_MQTT_CLIENT_ID=aegis-api-qa-cycles
+AEGIS_MQTT_CLIENT_ID=aegis-api-${project#aegis-}
 AEGIS_DISPLAY_ENABLED=true
 AEGIS_DISPLAY_KEYS=k1:$K1
 AEGIS_DISPLAY_ACTIVE_KEY_ID=k1
@@ -101,6 +117,7 @@ AEGIS_DISPLAY_DISPATCHER_ENABLED=true
 AEGIS_COMMAND_DISPATCHER_ENABLED=true
 SERVER_PORT=$api_port
 AEGIS_API_URL=http://127.0.0.1:$api_port/api/v1
+[[ -z ${QA_CYC_WEB_ORIGIN:-} ]] || AEGIS_WEB_ALLOWED_ORIGINS=$QA_CYC_WEB_ORIGIN
 set +a
 api=$AEGIS_API_URL
 
@@ -273,6 +290,7 @@ api_env=()
 [[ -z ${QA_CYCLES_MAX_PER_WINDOW:-} ]] || api_env=(AEGIS_PREPARATION_MAX_PER_WINDOW="$QA_CYCLES_MAX_PER_WINDOW")
 start_api api.log "${api_env[@]}" || { echo "FAIL BLOCKED api"; exit 1; }
 echo "ceiling: ${QA_CYCLES_MAX_PER_WINDOW:-shipped default} preparations per window"
+[[ -z ${QA_CYCLES_BEFORE:-} ]] || { bash "$QA_CYCLES_BEFORE" || failures=$((failures + 1)); sleep 61; }
 python3 -I services/api/scripts/seed-demo-catalog.py >"$work/seed.log" 2>&1
 admin=$(login admin@aegis.demo "$AEGIS_DEMO_ADMIN_PASSWORD")
 python3 -c 'import json; print(json.dumps({"timeZone": "America/Toronto", "windows": [
@@ -370,5 +388,6 @@ for _ in $(seq 1 30); do [[ $readiness == READY ]] && break; sleep 2
   readiness=$(curl -fs -H "Authorization: Bearer $token" "$api/assets/$asset" | json 'd["readiness"]["result"]'); done
 [[ $readiness == READY ]] && pass "READY the asset is READY again after the last return, without any manual SQL" ||
   obs "READY readiness after the last return: '$readiness'"
+[[ -z ${QA_CYCLES_AFTER:-} ]] || { bash "$QA_CYCLES_AFTER" || failures=$((failures + 1)); }
 echo "QA CYCLES: $failures failed"
 exit "$failures"
