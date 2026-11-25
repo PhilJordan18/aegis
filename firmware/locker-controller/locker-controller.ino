@@ -1,19 +1,21 @@
-// Aegis hub firmware (FW-00, FW-01): the hub joins Wi-Fi, synchronizes its clock, keeps an MQTT
+// Aegis hub firmware (FW-00, FW-01, FW-02, FW-04): the hub joins Wi-Fi, synchronizes its clock, keeps an MQTT
 // connection to the broker with its device identity (doc 10 §4, §7, §14, §15, §18) and polls
 // cells A1 and A2 over two independent RS-485 segments (ADR-002). Each heartbeat carries, per
 // cell, the link, the reader health and the latch state the cell reported, and each finished
-// scan window of a cell is published as RFID_SCAN_COMPLETED. Copy
-// secrets.h.example to secrets.h first.
+// scan window of a cell is published as RFID_SCAN_COMPLETED. It drives the CYD display node
+// over I2C (ADR-019). Copy secrets.h.example to secrets.h first.
 
 #include <WiFi.h>
+#include <Wire.h>
 #include <time.h>
 
 #include "secrets.h"
 #include "src/cell_link.h"
 #include "src/esp_platform.h"
 #include "src/hub_link.h"
+#include "src/i2c_display.h"
 
-constexpr const char* FIRMWARE_VERSION = "0.3.0";
+constexpr const char* FIRMWARE_VERSION = "0.4.0";
 
 // One UART per segment, never a shared bus. Segment 1 keeps the pins of the POC-02 bench; on the
 // Freenove WROVER camera board 16/17 belong to PSRAM and 4/5/18-27/34-39 to the camera, so
@@ -34,7 +36,17 @@ static const aegis::HubConfig kHubConfig = {LOCKER_ID, FIRMWARE_VERSION, kCompar
 static const aegis::MqttSettings kMqtt = {MQTT_HOST, MQTT_PORT, MQTT_CA_PEM, "aegis-locker-" DEVICE_KEY, LOCKER_ID,
                                           MQTT_PASSWORD};
 
+// The CYD display node: I2C slave 0x42 at 100 kHz, 4.7 kOhm pull-ups to 3.3 V on SDA and SCL.
+// 21/22 are free once the camera module is removed; not 26/27 (27 is the latch switch).
+constexpr int DISPLAY_SDA_PIN = 21;
+constexpr int DISPLAY_SCL_PIN = 22;
+constexpr uint32_t DISPLAY_I2C_HZ = 100000;
+constexpr uint8_t DISPLAY_I2C_ADDRESS = 0x42;
+
 static aegis::EspPlatform platform;
+static aegis::EspI2cBus displayBus(Wire, DISPLAY_SDA_PIN, DISPLAY_SCL_PIN, DISPLAY_I2C_HZ);
+static aegis::I2cDisplay screen(displayBus, platform, DISPLAY_I2C_ADDRESS);
+static aegis::DisplayInbox displayInbox(kHubConfig, screen);
 static aegis::EspMqttTransport transport(kMqtt);
 static aegis::HubLink hub(kHubConfig, transport, platform);
 
@@ -61,7 +73,10 @@ void setup() {
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   configTime(0, 0, "pool.ntp.org", "time.google.com");
+  displayBus.begin();
   hub.cellStatus(cellStatus);
+  displayInbox.begin();
+  hub.display(&displayInbox);
   hub.begin();
 }
 
@@ -76,6 +91,7 @@ static void publishScans(aegis::CellLink& cell) {
 void loop() {
   cellA1.loop();
   cellA2.loop();
+  screen.loop();
   hub.loop();
   publishScans(cellA1);
   publishScans(cellA2);

@@ -45,6 +45,17 @@ class CellPort {
   virtual void write(const char* data, size_t len) = 0;
 };
 
+// The I2C bus toward the CYD display node (hub master). Each call is one bus transaction and never
+// waits longer than the bus timeout.
+class I2cBus {
+ public:
+  virtual ~I2cBus() = default;
+  virtual bool write(uint8_t address, const uint8_t* data, size_t len) = 0;  // false on NACK or timeout
+  virtual size_t read(uint8_t address, uint8_t* buf, size_t len) = 0;        // bytes actually read
+  // Frees a slave holding SDA low (9 clock pulses, STOP) and restarts the controller.
+  virtual void reset() = 0;
+};
+
 class Platform {
  public:
   virtual ~Platform() = default;

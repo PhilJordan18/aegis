@@ -5,6 +5,7 @@
 
 #include "cell_link.h"
 #include "command_inbox.h"
+#include "display_inbox.h"
 #include "hub_config.h"
 #include "hub_messages.h"
 #include "platform.h"
@@ -29,7 +30,7 @@ using CellStatusSource = CellObservation (*)(int cellAddress);
 // a fresh Last Will and connectionId before every attempt, ONLINE, then DEVICE_RESTARTED
 // once per boot, then a heartbeat now and every 10 s, and a backoff between attempts.
 // Once online it subscribes to its commands topic and hands each command that passes the
-// inbound checks of CommandInbox to the handler; display arrives with a later slice.
+// inbound checks of CommandInbox to the handler, and each `display` message to its DisplayInbox.
 class HubLink {
  public:
   enum class State { NotStarted, Halted, WaitingForNetwork, Connecting, Online, Backoff };
@@ -50,6 +51,9 @@ class HubLink {
   // operationId (§20). False when the hub is not online, the cell is not configured or the
   // payload does not fit; the scan is then dropped, never queued: a missing scan proves nothing (§12.1).
   bool publishScan(int cellAddress, const ScanResult& scan);
+  // Subscribes to `display` and hands it to `inbox` (doc 10 §27). Without one, `display` is not read.
+  void display(DisplayInbox* inbox) { display_ = inbox; }
+  const char* deviceSessionId() const { return deviceSessionId_; }
 
  private:
   struct EnvelopeBuf {
@@ -65,12 +69,15 @@ class HubLink {
   void tryPublishRestarted();
   void publishHeartbeat(uint32_t now);
   void handleInbound();
+  void handleDisplay(uint32_t now);
+  void answerDisplay(const DisplayResult& r, uint32_t now);
+  void connectionLost();
   void execute(const Command& command);
   void publishAck(const char* commandMessageId, const char* operationId, const char* compartmentId, const char* result);
   void publishRejected(const char* commandMessageId, const char* operationId, const char* compartmentId,
                        Reason reason);
   void publishKnown(const InboundResult& r);
-  void reportInvalid(size_t which, const char* compartmentId, uint32_t now);
+  void reportInvalid(size_t which, const char* compartmentId, uint32_t now, const char* channel);
   void reportUncertain();
   bool ready();
 
@@ -98,7 +105,9 @@ class HubLink {
   } limiter_[2];
   CommandHandler handler_ = nullptr;
   CellStatusSource cellStatus_ = nullptr;
+  DisplayInbox* display_ = nullptr;
   char commandsTopic_[sizeof(Message::topic)] = {};
+  char displayTopic_[sizeof(Message::topic)] = {};
   Message inbound_;  // member, not a local: it is 1.6 KB and the loop task stack is small
   Message outbound_;  // the same for a scan, the largest message the hub builds
 };

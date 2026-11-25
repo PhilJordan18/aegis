@@ -12,7 +12,7 @@ trap 'rm -rf "$work"' EXIT
 cmp "$src/cell_frame.h" "$here/../../../cell-controller/src/cell_frame.h"
 
 "${CXX:-c++}" -std=c++17 -Wall -Wextra -Werror -O0 -fsanitize=address,undefined \
-  "$here/test_hub.cpp" "$src/hub_messages.cpp" "$src/hub_link.cpp" "$src/command_inbox.cpp" "$src/cell_link.cpp" -o "$work/test_hub"
+  "$here/test_hub.cpp" "$src/hub_messages.cpp" "$src/hub_link.cpp" "$src/command_inbox.cpp" "$src/cell_link.cpp" "$src/display_inbox.cpp" "$src/i2c_display.cpp" -o "$work/test_hub"
 "$work/test_hub" "$work/payloads.jsonl"
 
 cell="$here/../../../cell-controller/tests/host"

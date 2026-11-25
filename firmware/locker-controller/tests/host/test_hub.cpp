@@ -11,7 +11,9 @@
 
 #include "../../src/backoff.h"
 #include "../../src/cell_link.h"
+#include "../../src/display_frame.h"
 #include "../../src/hub_link.h"
+#include "../../src/i2c_display.h"
 
 using namespace aegis;
 
@@ -42,6 +44,8 @@ struct FakePlatform : Platform {
     return true;
   }
   const char* resetReason() override { return "POWER_ON"; }
+  std::vector<std::string> logs;
+  void log(const char* line) override { logs.push_back(line); }
   std::vector<std::vector<uint8_t>> journal = std::vector<std::vector<uint8_t>>(64);
   bool journalFails = false;
   bool journalRead(size_t slot, void* buf, size_t len) override {
@@ -1000,6 +1004,836 @@ void fullScanFitsTheMessage() {
   assert(r.hub.publishScan(1, scan));
 }
 
+// ---------------------------------------------------------------- hub screen (doc 10 §27)
+// Every display message below is fictitious: the token is a made-up 43-character value.
+
+const char* FAKE_TOKEN = "FICTITIOUS-test-token-not-a-real-secret-000";
+const char* A1 = "1ae77ae3-8490-4f09-9412-a7816b77bff9";
+const char* OP = "2f38d3b6-c18f-4a74-aa9a-2d574286013f";
+const char* CHALLENGE = "9d65cbae-4610-4e40-a314-3b93af07be9c";
+
+struct FakeDisplay : Display {
+  bool screen = true;
+  bool drawFails = false;
+  int draws = 0;
+  int statuses = 0;
+  int clears = 0;
+  bool qrOnScreen = false;
+  std::string lastUri;
+  std::string lastStatus;
+  bool available() override { return screen; }
+  uint16_t lastTtlMs = 0;
+  DrawState drawState() override { return DrawState::Drawn; }  // draws synchronously
+  bool showChallenge(const char* uri, const char*, const char*, uint16_t ttlMs) override {
+    lastTtlMs = ttlMs;
+    if (drawFails) return false;
+    draws++;
+    lastUri = uri;
+    qrOnScreen = true;
+    return true;
+  }
+  bool showStatus(const char*, const char*, const char* status, uint16_t ttlMs) override {
+    lastTtlMs = ttlMs;
+    statuses++;
+    lastStatus = status;
+    qrOnScreen = false;
+    return true;
+  }
+  void clear() override {
+    clears++;
+    qrOnScreen = false;
+  }
+};
+
+// A fictitious instruction, issued `age` seconds ago and valid for `life` seconds from issue.
+Message challengeMessage(int64_t nowUnix, const std::string& session, const char* messageId, uint64_t revision,
+                       int64_t age, int64_t life, const char* locker = LOCKER, const char* token = FAKE_TOKEN,
+                       const char* compartment = A1) {
+  char issued[INSTANT_LEN], expires[INSTANT_LEN];
+  formatInstant(nowUnix - age, issued);
+  formatInstant(nowUnix - age + life, expires);
+  Message m{};
+  snprintf(m.topic, sizeof(m.topic), "aegis/v1/lockers/%s/display", LOCKER);
+  snprintf(m.payload, sizeof(m.payload),
+           "{\"schemaVersion\":\"3.0\",\"messageId\":\"%s\",\"type\":\"DISPLAY_ACCESS_CHALLENGE\","
+           "\"lockerId\":\"%s\",\"compartmentId\":\"%s\",\"operationId\":\"%s\",\"targetDeviceSessionId\":\"%s\","
+           "\"displayRevision\":%llu,\"issuedAt\":\"%s\",\"expiresAt\":\"%s\",\"payload\":{\"challengeId\":\"%s\","
+           "\"action\":\"CHECKOUT\",\"compartmentCode\":\"A1\",\"token\":\"%s\"}}",
+           messageId, locker, compartment, OP, session.c_str(),
+           static_cast<unsigned long long>(revision), issued, expires, CHALLENGE, token);
+  m.qos = 1;
+  return m;
+}
+Message statusMessage(int64_t nowUnix, const std::string& session, const char* messageId, uint64_t revision,
+                    const char* code) {
+  char issued[INSTANT_LEN], expires[INSTANT_LEN];
+  formatInstant(nowUnix, issued);
+  formatInstant(nowUnix + 30, expires);
+  Message m{};
+  snprintf(m.topic, sizeof(m.topic), "aegis/v1/lockers/%s/display", LOCKER);
+  snprintf(m.payload, sizeof(m.payload),
+           "{\"schemaVersion\":\"3.0\",\"messageId\":\"%s\",\"type\":\"DISPLAY_OPERATION_STATUS\","
+           "\"lockerId\":\"%s\",\"compartmentId\":\"%s\",\"operationId\":\"%s\",\"targetDeviceSessionId\":\"%s\","
+           "\"displayRevision\":%llu,\"issuedAt\":\"%s\",\"expiresAt\":\"%s\",\"payload\":{\"action\":\"CHECKOUT\","
+           "\"compartmentCode\":\"A1\",\"status\":\"%s\",\"reasonCode\":null}}",
+           messageId, LOCKER, A1, OP, session.c_str(), static_cast<unsigned long long>(revision), issued, expires,
+           code);
+  m.qos = 1;
+  return m;
+}
+
+struct DisplayRig {
+  FakePlatform platform;
+  FakeTransport transport;
+  FakeDisplay screen;
+  DisplayInbox inbox{CONFIG, screen};
+  HubLink hub{CONFIG, transport, platform};
+
+  DisplayRig() {
+    platform.network = true;
+    platform.synced = true;
+    inbox.begin();
+    hub.display(&inbox);
+    assert(hub.begin());
+    hub.loop();
+    transport.events.push_back(Transport::Event::Connected);
+    hub.loop();
+    transport.published.clear();
+  }
+  std::string session() const { return hub.deviceSessionId(); }
+
+  Message challenge(const char* messageId, uint64_t revision, int64_t age = 0, int64_t life = 60,
+                    const std::string& target = "", const char* locker = LOCKER, const char* token = FAKE_TOKEN,
+                    const char* compartment = A1) {
+    return challengeMessage(platform.unix, target.empty() ? session() : target, messageId, revision, age, life, locker,
+                            token, compartment);
+  }
+  Message status(const char* messageId, uint64_t revision, const char* code = "EXPIRED") {
+    return statusMessage(platform.unix, session(), messageId, revision, code);
+  }
+  // Delivers one message and returns what the hub published for it.
+  std::vector<Message> deliver(const Message& m) {
+    transport.published.clear();
+    transport.inbound.push_back(m);
+    hub.loop();
+    return transport.published;
+  }
+};
+
+const char* M1 = "fd6c4a94-4ac4-4a91-9249-59347c3b6481";
+const char* M2 = "fd6c4a94-4ac4-4a91-9249-59347c3b6482";
+const char* M3 = "fd6c4a94-4ac4-4a91-9249-59347c3b6483";
+
+void noTokenAnywhere(const DisplayRig& r) {
+  for (const Message& m : r.transport.published) assert(strstr(m.payload, FAKE_TOKEN) == nullptr);
+  for (const std::string& line : r.platform.logs) assert(line.find(FAKE_TOKEN) == std::string::npos);
+}
+
+void displayIsSubscribedOnEveryConnection() {
+  DisplayRig r;
+  bool found = false;
+  for (const std::string& s : r.transport.subscriptions) {
+    found = found || s == "aegis/v1/lockers/d46a74ae-39dc-460b-8af0-38fc791b376a/display@1";
+  }
+  assert(found);
+  Rig plain;  // a hub without a screen inbox never reads `display`
+  plain.connectOnce();
+  for (const std::string& s : plain.transport.subscriptions) assert(s.find("/display") == std::string::npos);
+}
+
+void challengeIsAcknowledgedOnlyAfterItIsDrawn() {
+  DisplayRig r;
+  std::vector<Message> out = r.deliver(r.challenge(M1, 41));
+  assert(r.screen.draws == 1 && r.screen.qrOnScreen);
+  assert(r.screen.lastUri == std::string("aegis://local-access?v=1&challengeId=") + CHALLENGE + "&operationId=" + OP +
+                                 "&lockerId=" + LOCKER + "&token=" + FAKE_TOKEN);
+  assert(out.size() == 1);
+  const Message& ack = out[0];
+  assert(strcmp(ack.topic, "aegis/v1/lockers/d46a74ae-39dc-460b-8af0-38fc791b376a/events") == 0 && ack.qos == 1);
+  assert(field(ack, "type") == "ACCESS_CHALLENGE_DISPLAYED");
+  assert(field(ack, "displayMessageId") == M1 && field(ack, "challengeId") == CHALLENGE);
+  assert(field(ack, "operationId") == OP && field(ack, "compartmentId") == A1);
+  assert(field(ack, "deviceSessionId") == r.session());
+  assert(has(ack, "\"displayRevision\":41}"));
+  assert(r.screen.lastTtlMs == 60000);
+  noTokenAnywhere(r);
+
+  DisplayRig failing;
+  failing.screen.drawFails = true;
+  out = failing.deliver(failing.challenge(M1, 41));
+  assert(out.size() == 1 && field(out[0], "type") == "DISPLAY_REJECTED");
+  assert(field(out[0], "reason") == "SCREEN_UNAVAILABLE" && field(out[0], "challengeId") == CHALLENGE);
+  assert(!failing.screen.qrOnScreen);
+
+  DisplayRig noScreen;
+  noScreen.screen.screen = false;
+  out = noScreen.deliver(noScreen.challenge(M1, 41));
+  assert(field(out[0], "reason") == "SCREEN_UNAVAILABLE" && noScreen.screen.draws == 0);
+}
+
+void deadlineIsKeptLocallyAndNeverExtended() {
+  DisplayRig r;
+  r.deliver(r.challenge(M1, 41, 0, 45));  // backend shortened the window to 45 s
+  r.platform.unix += 44;
+  r.hub.loop();
+  assert(r.screen.qrOnScreen);
+  r.platform.unix += 1;
+  r.hub.loop();
+  assert(!r.screen.qrOnScreen);  // cleared at expiresAt with no clearing message
+
+  DisplayRig capped;
+  capped.deliver(capped.challenge(M1, 41, 0, 600));  // a deadline past the 60 s maximum is capped
+  capped.platform.unix += 60;
+  capped.hub.loop();
+  assert(!capped.screen.qrOnScreen);
+
+  DisplayRig late;
+  std::vector<Message> out = late.deliver(late.challenge(M1, 41, 61, 600));  // issued 61 s ago: no new 60 s
+  assert(field(out[0], "reason") == "DISPLAY_EXPIRED" && late.screen.draws == 0);
+  out = late.deliver(late.challenge(M2, 42, 70, 60));
+  assert(field(out[0], "reason") == "DISPLAY_EXPIRED");
+}
+
+void duplicateReplaysItsAnswerWithoutRedrawing() {
+  DisplayRig r;
+  Message m = r.challenge(M1, 41);
+  std::string first = field(r.deliver(m)[0], "type");
+  r.platform.unix += 70;  // even after the QR expired and was cleared
+  r.hub.loop();
+  std::vector<Message> again = r.deliver(m);
+  assert(first == "ACCESS_CHALLENGE_DISPLAYED" && again.size() == 1);
+  assert(field(again[0], "type") == "ACCESS_CHALLENGE_DISPLAYED" && field(again[0], "displayMessageId") == M1);
+  assert(r.screen.draws == 1 && !r.screen.qrOnScreen);  // not drawn again, validity not extended
+
+  DisplayRig refused;
+  Message other = refused.challenge(M1, 41, 0, 60, "", "00000000-0000-4000-8000-00000000dead");
+  refused.deliver(other);
+  std::vector<Message> replay = refused.deliver(other);
+  assert(field(replay[0], "reason") == "INVALID_DISPLAY_PAYLOAD");
+}
+
+void staleRevisionNeverReplacesTheScreen() {
+  DisplayRig r;
+  r.deliver(r.challenge(M1, 41));
+  int clears = r.screen.clears;
+  std::vector<Message> out = r.deliver(r.challenge(M2, 41));  // same revision, new messageId
+  assert(field(out[0], "type") == "DISPLAY_REJECTED" && field(out[0], "reason") == "STALE_DISPLAY_REVISION");
+  out = r.deliver(r.challenge(M3, 40));
+  assert(field(out[0], "reason") == "STALE_DISPLAY_REVISION");
+  assert(r.screen.draws == 1 && r.screen.qrOnScreen && r.screen.clears == clears);  // the valid QR stays
+
+  out = r.deliver(r.challenge("fd6c4a94-4ac4-4a91-9249-59347c3b6484", 42));  // a newer challenge replaces it
+  assert(field(out[0], "type") == "ACCESS_CHALLENGE_DISPLAYED" && r.screen.draws == 2);
+}
+
+void invalidInstructionsAreRefusedAndKeepTheScreen() {
+  DisplayRig r;
+  r.deliver(r.challenge(M1, 41));
+  std::vector<Message> out =
+      r.deliver(r.challenge(M2, 42, 0, 60, "00000000-0000-4000-8000-0000000000ff"));  // another boot
+  assert(field(out[0], "reason") == "TARGET_SESSION_MISMATCH");
+  out = r.deliver(r.challenge(M3, 43, 0, 60, "", "00000000-0000-4000-8000-00000000dead"));
+  assert(field(out[0], "reason") == "INVALID_DISPLAY_PAYLOAD");
+  out = r.deliver(r.challenge("fd6c4a94-4ac4-4a91-9249-59347c3b6486", 44, 0, 60, "", LOCKER, "too-short"));
+  assert(field(out[0], "reason") == "INVALID_DISPLAY_PAYLOAD");
+  out = r.deliver(r.challenge("fd6c4a94-4ac4-4a91-9249-59347c3b6485", 45, 0, 60, "", LOCKER, FAKE_TOKEN,
+                              "00000000-0000-4000-8000-0000000000a9"));
+  assert(field(out[0], "reason") == "INVALID_DISPLAY_PAYLOAD");
+  assert(r.screen.draws == 1 && r.screen.qrOnScreen);
+
+  DisplayRig unsynced;
+  unsynced.platform.synced = false;
+  out = unsynced.deliver(unsynced.challenge(M1, 41));
+  assert(field(out[0], "reason") == "SCREEN_UNAVAILABLE");
+  noTokenAnywhere(r);
+}
+
+void statusReplacesTheQrWithoutAcknowledgement() {
+  DisplayRig r;
+  r.deliver(r.challenge(M1, 41));
+  std::vector<Message> out = r.deliver(r.status(M2, 42, "EXPIRED"));
+  assert(out.empty());  // no positive acknowledgement (§27.3)
+  assert(r.screen.statuses == 1 && r.screen.lastStatus == "EXPIRED" && !r.screen.qrOnScreen);
+  int clears = r.screen.clears;
+  r.platform.unix += 29;
+  r.hub.loop();
+  assert(r.screen.clears == clears);
+  r.platform.unix += 1;
+  r.hub.loop();
+  assert(r.screen.clears == clears + 1);  // back to the idle screen after 30 s
+  out = r.deliver(r.status(M3, 42));       // a stale status is refused, without challengeId
+  assert(field(out[0], "reason") == "STALE_DISPLAY_REVISION" && !has(out[0], "challengeId"));
+}
+
+void lostConnectionAndRebootClearTheQr() {
+  DisplayRig r;
+  r.deliver(r.challenge(M1, 41));
+  r.transport.events.push_back(Transport::Event::Disconnected);
+  r.hub.loop();
+  assert(!r.screen.qrOnScreen);
+
+  FakeDisplay screen;
+  screen.qrOnScreen = true;
+  DisplayInbox fresh(CONFIG, screen);
+  fresh.begin();
+  assert(!screen.qrOnScreen);
+}
+
+void unreadableDisplayMessagesAreReportedInvalid() {
+  DisplayRig r;
+  Message retained = r.challenge(M1, 41);
+  retained.retain = true;
+  std::vector<Message> out = r.deliver(retained);
+  assert(out.size() == 1 && field(out[0], "errorCode") == "INBOUND_MESSAGE_INVALID");
+  assert(has(out[0], "retained display message"));
+  r.platform.now += INBOUND_REPORT_WINDOW_MS;
+  Message garbled = r.challenge(M2, 42);
+  strcpy(garbled.payload, "{\"messageId\":\"not-a-uuid\"}");
+  out = r.deliver(garbled);  // the clock moved 60 s, so a heartbeat may go out too
+  bool reported = false;
+  for (const Message& m : out) reported = reported || has(m, "uncorrelable display message");
+  assert(reported);
+  assert(r.screen.draws == 0);
+}
+
+// ---------------------------------------------------------------- display node link (I2C, ADR-019)
+
+namespace df = aegis::displayframe;
+
+// A scripted CYD: decodes what the hub writes and answers the status a real node would.
+struct FakeCyd : I2cBus {
+  const uint32_t* clock;
+  uint32_t bootId = 0xB0071D01;
+  uint32_t drawDelayMs = 50;
+  int nackWrites = 0;          // the next writes are NACKed
+  int badCrcShows = 0;         // the next show frames are reported BAD_CRC
+  bool silent = false;         // nobody on the bus: writes NACK, reads return nothing
+  bool readsFF = false;        // an unpowered slave
+  bool corruptStatus = false;
+  bool staleSeq = false;       // reports the frame before the last one
+  bool drawFails = false;
+  int transactions = 0;
+  int draws = 0;
+  std::vector<uint32_t> resets;
+  std::vector<std::vector<uint8_t>> frames;  // writes the CYD acknowledged
+  uint32_t seq = 0;
+  uint8_t state = df::IDLE;
+  uint8_t err = df::NONE;
+  uint32_t drawAt = 0;
+  bool anyShown = false;
+  uint32_t shownSeq = 0;
+
+  explicit FakeCyd(const uint32_t* c) : clock(c) {}
+  bool write(uint8_t address, const uint8_t* d, size_t n) override {
+    transactions++;
+    if (silent || address != 0x42) return false;
+    if (nackWrites > 0) {
+      nackWrites--;
+      return false;
+    }
+    frames.emplace_back(d, d + n);
+    df::Command c;
+    df::Err e = df::decodeCommand(d, n, &c);
+    if (e == df::NONE && df::isShow(c.cmd) && badCrcShows > 0) {
+      badCrcShows--;
+      e = df::BAD_CRC;
+    }
+    seq = n >= 7 ? df::getU32(d + 3) : 0;
+    err = e;
+    if (e != df::NONE) {
+      state = df::FAILED;
+    } else if (c.cmd == df::CLEAR) {
+      state = df::IDLE;
+    } else if (df::isShow(c.cmd) && !(anyShown && c.seq == shownSeq)) {  // the same seq never redraws
+      draws++;
+      state = df::DRAWING;
+      drawAt = *clock + drawDelayMs;
+    }
+    return true;
+  }
+  size_t read(uint8_t address, uint8_t* buf, size_t n) override {
+    transactions++;
+    if (silent || address != 0x42) return 0;
+    if (readsFF) {
+      memset(buf, 0xFF, n);
+      return n;
+    }
+    if (state == df::DRAWING && *clock >= drawAt) {
+      state = drawFails ? df::FAILED : df::SHOWN;
+      err = drawFails ? df::DRAW_FAILED : df::NONE;
+      anyShown = !drawFails;
+      shownSeq = seq;
+    }
+    uint8_t out[df::STATUS_LEN];
+    df::encodeStatus(df::Status{1, 3, bootId, staleSeq ? seq - 1 : seq, state, err}, out);
+    if (corruptStatus) out[15] ^= 1;
+    size_t k = n < sizeof(out) ? n : sizeof(out);
+    memcpy(buf, out, k);
+    return k;
+  }
+  void reset() override { resets.push_back(*clock); }
+  int count(uint8_t cmd) const {
+    int k = 0;
+    for (const auto& f : frames) k += f[2] == cmd;
+    return k;
+  }
+  df::Command last(uint8_t cmd) const {
+    df::Command c = {};
+    for (const auto& f : frames) {
+      if (f[2] == cmd) assert(df::decodeCommand(f.data(), f.size(), &c) == df::NONE);
+    }
+    return c;
+  }
+};
+
+bool holds(const void* object, size_t size, const char* text) {
+  const char* b = static_cast<const char*>(object);
+  const size_t n = strlen(text);
+  for (size_t i = 0; i + n <= size; i++) {
+    if (memcmp(b + i, text, n) == 0) return true;
+  }
+  return false;
+}
+
+// The real chain: HubLink -> DisplayInbox -> I2cDisplay -> scripted CYD.
+struct I2cRig {
+  FakePlatform platform;
+  FakeTransport transport;
+  FakeCyd cyd{&platform.now};
+  I2cDisplay screen{cyd, platform, 0x42};
+  DisplayInbox inbox{CONFIG, screen};
+  HubLink hub{CONFIG, transport, platform};
+
+  I2cRig() {
+    platform.network = true;
+    platform.synced = true;
+    inbox.begin();
+    hub.display(&inbox);
+    assert(hub.begin());
+    hub.loop();
+    transport.events.push_back(Transport::Event::Connected);
+    hub.loop();
+    run(50);
+    assert(screen.available());
+    transport.published.clear();
+  }
+  // One pass of the sketch's loop: never more than one bus transaction.
+  void step(uint32_t ms = 10) {
+    platform.now += ms;
+    const int before = cyd.transactions;
+    screen.loop();
+    assert(cyd.transactions - before <= 1);
+    hub.loop();
+  }
+  void run(uint32_t ms) {
+    for (uint32_t t = 0; t < ms; t += 10) step();
+  }
+  Message challenge(const char* messageId, uint64_t revision, int64_t life = 60) {
+    return challengeMessage(platform.unix, hub.deviceSessionId(), messageId, revision, 0, life);
+  }
+  std::vector<Message> deliver(const Message& m) {
+    transport.published.clear();
+    transport.inbound.push_back(m);
+    hub.loop();
+    return answers();
+  }
+  // The display answers published since the last clear (heartbeats left out).
+  std::vector<Message> answers() const {
+    std::vector<Message> out;
+    for (const Message& m : transport.published) {
+      if (has(m, "ACCESS_CHALLENGE_DISPLAYED") || has(m, "DISPLAY_REJECTED")) out.push_back(m);
+    }
+    return out;
+  }
+  bool logged(const char* fragment) const {
+    for (const std::string& line : platform.logs) {
+      if (line.find(fragment) != std::string::npos) return true;
+    }
+    return false;
+  }
+};
+
+void displayFrameFormat() {
+  assert(df::crc16(reinterpret_cast<const uint8_t*>("123456789"), 9) == 0x29B1);
+  uint8_t f[df::MAX_FRAME];
+  df::Command c = {}, back;
+
+  c.cmd = df::SHOW_CHALLENGE;
+  c.seq = 0xA1B2C3D4;
+  c.ttlMs = 60000;
+  c.action = df::RETURN;
+  strcpy(c.code, "A1");
+  strcpy(c.text, "aegis://x");
+  size_t n = df::encodeCommand(c, f, sizeof(f));
+  assert(n == 8 + 4 + 2 + 1 + 9 + 2);
+  assert(f[0] == 0xAE && f[1] == 1 && f[2] == 1 && f[3] == 0xD4 && f[6] == 0xA1 && f[7] == n - 10);
+  assert(f[8] == 0x60 && f[9] == 0xEA);  // 60000 little endian
+  assert(df::decodeCommand(f, n, &back) == df::NONE && back.cmd == df::SHOW_CHALLENGE && back.seq == 0xA1B2C3D4 &&
+         back.ttlMs == 60000 && back.action == df::RETURN && strcmp(back.code, "A1") == 0 &&
+         strcmp(back.text, "aegis://x") == 0);
+
+  df::Command st = {};
+  st.cmd = df::SHOW_STATUS;
+  st.seq = 7;
+  st.ttlMs = 30000;
+  strcpy(st.code, "B12");
+  strcpy(st.text, "SOME_FUTURE_STATUS");
+  n = df::encodeCommand(st, f, sizeof(f));
+  assert(df::decodeCommand(f, n, &back) == df::NONE && back.cmd == df::SHOW_STATUS && back.ttlMs == 30000 &&
+         back.action == df::CHECKOUT && strcmp(back.code, "B12") == 0 && strcmp(back.text, "SOME_FUTURE_STATUS") == 0);
+  for (uint8_t cmd : {df::CLEAR, df::PING}) {
+    df::Command e = {};
+    e.cmd = cmd;
+    e.seq = 0xFFFFFFFF;
+    n = df::encodeCommand(e, f, sizeof(f));
+    assert(n == 10 && df::decodeCommand(f, n, &back) == df::NONE && back.cmd == cmd && back.seq == 0xFFFFFFFF);
+  }
+
+  // Refused frames: truncated, oversized, wrong version, wrong length, bad CRC, unknown command.
+  n = df::encodeCommand(c, f, sizeof(f));
+  uint8_t g[df::MAX_FRAME + 1] = {};
+  memcpy(g, f, n);
+  assert(df::decodeCommand(g, n - 1, &back) == df::BAD_LEN);
+  assert(df::decodeCommand(g, n + 1, &back) == df::BAD_LEN);
+  assert(df::decodeCommand(g, df::MAX_FRAME + 1, &back) == df::BAD_LEN);
+  assert(df::decodeCommand(g, 5, &back) == df::BAD_LEN);
+  g[1] = 2;
+  assert(df::decodeCommand(g, n, &back) == df::BAD_VERSION);
+  g[1] = 1;
+  g[7]++;
+  assert(df::decodeCommand(g, n, &back) == df::BAD_LEN);
+  g[7]--;
+  g[n - 1] ^= 1;
+  assert(df::decodeCommand(g, n, &back) == df::BAD_CRC);
+  g[n - 1] ^= 1;
+  g[2] = 9;
+  uint16_t crc = df::crc16(g, n - 2);
+  g[n - 2] = static_cast<uint8_t>(crc >> 8);
+  g[n - 1] = static_cast<uint8_t>(crc);
+  assert(df::decodeCommand(g, n, &back) == df::UNKNOWN_CMD);
+  // A 231-byte URI built by hand (the encoder never makes one).
+  uint8_t big[df::MAX_FRAME] = {0xAE, 1, df::SHOW_CHALLENGE, 1, 0, 0, 0, 2 + 1 + 1 + 1 + 1 + 231, 0x60, 0xEA, 0, 1, 'A', 231};
+  memset(big + 14, 'u', 231);
+  crc = df::crc16(big, 245);
+  big[245] = static_cast<uint8_t>(crc >> 8);
+  big[246] = static_cast<uint8_t>(crc);
+  assert(df::decodeCommand(big, 247, &back) == df::URI_TOO_LONG);
+
+  // The encoder refuses what breaks a limit.
+  df::Command bad = c;
+  strcpy(bad.code, "A1234567");
+  assert(df::encodeCommand(bad, f, sizeof(f)) > 0);
+  memcpy(bad.code, "A12345678", 9);  // 9 characters, no terminator inside the field
+  assert(df::encodeCommand(bad, f, sizeof(f)) == 0);
+  bad = c;
+  strcpy(bad.code, "A\x01");
+  assert(df::encodeCommand(bad, f, sizeof(f)) == 0);
+  bad = c;
+  strcpy(bad.code, "A\xC3\xA9");
+  assert(df::encodeCommand(bad, f, sizeof(f)) == 0);
+  bad = c;
+  bad.ttlMs = 0;
+  assert(df::encodeCommand(bad, f, sizeof(f)) == 0);
+  bad.ttlMs = 60001;
+  assert(df::encodeCommand(bad, f, sizeof(f)) == 0);
+  bad = c;
+  memset(bad.text, 'u', df::MAX_URI);
+  bad.text[df::MAX_URI] = '\0';
+  assert(df::encodeCommand(bad, f, sizeof(f)) == 8 + 2 + 1 + 1 + 2 + 1 + 230 + 2);
+  bad = st;
+  strcpy(bad.text, "ABCDEFGHIJKLMNOPQRSTUVWXY");  // 25 characters
+  assert(df::encodeCommand(bad, f, sizeof(f)) == 0);
+
+  // Status: round trip, corrupted CRC, unpowered slave, other version, short read.
+  uint8_t s[df::STATUS_LEN];
+  df::Status status;
+  df::encodeStatus(df::Status{1, 3, 0xB0071D01, 0x01020304, df::SHOWN, df::NONE}, s);
+  assert(s[0] == 0xEA && s[3] == 0x01 && s[7] == 0x04);
+  assert(df::decodeStatus(s, sizeof(s), &status) && status.bootId == 0xB0071D01 && status.seq == 0x01020304 &&
+         status.state == df::SHOWN && status.fwVer == 3);
+  assert(!df::decodeStatus(s, sizeof(s) - 1, &status));
+  s[15] ^= 1;
+  assert(!df::decodeStatus(s, sizeof(s), &status));
+  memset(s, 0xFF, sizeof(s));
+  assert(!df::decodeStatus(s, sizeof(s), &status));
+  df::encodeStatus(df::Status{2, 3, 1, 1, df::IDLE, df::NONE}, s);
+  assert(!df::decodeStatus(s, sizeof(s), &status));
+}
+
+void challengeUriFitsTheFrame() {
+  DisplayInstruction in = {};
+  strcpy(in.challengeId, CHALLENGE);
+  strcpy(in.operationId, OP);
+  strcpy(in.token, FAKE_TOKEN);
+  char uri[256];
+  assert(challengeUri(in, LOCKER, uri, sizeof(uri)) && strlen(uri) == 218);  // 32-byte token, 43 characters
+
+  FakePlatform p;
+  FakeCyd cyd(&p.now);
+  I2cDisplay screen(cyd, p, 0x42);
+  assert(screen.showChallenge(uri, "CHECKOUT", "A1", 60000));
+  screen.loop();
+  assert(cyd.count(df::SHOW_CHALLENGE) == 1 && cyd.frames.back().size() == 8 + 2 + 1 + 1 + 2 + 1 + 218 + 2);
+  // A longer token (here 56 characters) would make a 231-character URI: refused, nothing written.
+  std::string longer = std::string(uri) + "0123456789abc";
+  assert(longer.size() == 231 && !screen.showChallenge(longer.c_str(), "CHECKOUT", "A1", 60000));
+  assert(screen.drawState() == Display::DrawState::Failed);
+  assert(!screen.showChallenge(uri, "LEND", "A1", 60000));      // unknown action
+  assert(!screen.showChallenge(uri, "CHECKOUT", "A1", 60001));  // ttl over 60 s
+}
+
+void displayAvailabilityFollowsTheStatus() {
+  FakePlatform p;
+  FakeCyd cyd(&p.now);
+  I2cDisplay screen(cyd, p, 0x42);
+  assert(!screen.available());  // nothing heard yet
+  p.now += 10;
+  screen.loop();  // PING
+  assert(!screen.available() && cyd.count(df::PING) == 1);
+  p.now += 10;
+  screen.loop();  // status
+  assert(screen.available());
+  const uint32_t heard = p.now;
+  cyd.silent = true;
+  while (p.now < heard + 2990) {
+    p.now += 10;
+    screen.loop();
+  }
+  assert(screen.available());
+  p.now += 10;
+  assert(!screen.available());  // 3 s without a valid status
+
+  for (int mode = 0; mode < 2; mode++) {  // an unpowered slave, a corrupted status: never available
+    FakePlatform q;
+    FakeCyd node(&q.now);
+    (mode == 0 ? node.readsFF : node.corruptStatus) = true;
+    I2cDisplay other(node, q, 0x42);
+    for (int i = 0; i < 300; i++) {
+      q.now += 10;
+      other.loop();
+    }
+    assert(!other.available());
+  }
+}
+
+void challengeIsDisplayedOnlyOnceTheNodeShowsOurSeq() {
+  I2cRig r;
+  r.cyd.drawDelayMs = 200;
+  assert(r.deliver(r.challenge(M1, 41)).empty());  // submitted, not proven
+  r.run(150);
+  assert(r.answers().empty() && r.cyd.count(df::SHOW_CHALLENGE) == 1);
+  df::Command sent = r.cyd.last(df::SHOW_CHALLENGE);
+  assert(sent.ttlMs == 60000 && sent.action == df::CHECKOUT && strcmp(sent.code, "A1") == 0);
+  assert(std::string(sent.text) == std::string("aegis://local-access?v=1&challengeId=") + CHALLENGE +
+                                       "&operationId=" + OP + "&lockerId=" + LOCKER + "&token=" + FAKE_TOKEN);
+  r.run(100);
+  std::vector<Message> out = r.answers();
+  assert(out.size() == 1 && field(out[0], "type") == "ACCESS_CHALLENGE_DISPLAYED" &&
+         field(out[0], "displayMessageId") == M1 && field(out[0], "challengeId") == CHALLENGE);
+
+  I2cRig stale;  // a SHOWN about another seq never counts
+  stale.cyd.staleSeq = true;
+  stale.deliver(stale.challenge(M1, 41));
+  stale.run(990);
+  assert(stale.answers().empty());
+  int clears = stale.cyd.count(df::CLEAR);
+  stale.run(50);
+  out = stale.answers();
+  assert(out.size() == 1 && field(out[0], "type") == "DISPLAY_REJECTED" &&
+         field(out[0], "reason") == "SCREEN_UNAVAILABLE" && field(out[0], "challengeId") == CHALLENGE);
+  stale.run(30);
+  assert(stale.cyd.count(df::CLEAR) == clears + 1 && stale.logged("display draw timed out cmd=1"));
+
+  I2cRig failed;  // the node reports FAILED for our seq
+  failed.cyd.drawFails = true;
+  failed.deliver(failed.challenge(M1, 41));
+  failed.run(100);
+  out = failed.answers();
+  assert(out.size() == 1 && field(out[0], "reason") == "SCREEN_UNAVAILABLE");
+  assert(failed.cyd.state == df::IDLE && failed.logged("display draw failed cmd=1"));  // CLEAR sent
+
+  I2cRig status;  // a status is submitted the same way and never acknowledged
+  status.transport.inbound.push_back(statusMessage(status.platform.unix, status.hub.deviceSessionId(), M1, 41, "CONFIRMED"));
+  status.run(200);
+  df::Command shown = status.cyd.last(df::SHOW_STATUS);
+  assert(status.answers().empty() && shown.ttlMs == 30000 && strcmp(shown.text, "CONFIRMED") == 0);
+}
+
+void redeliveryWhilePendingGivesOneFrameAndOneAnswer() {
+  I2cRig r;
+  r.cyd.drawDelayMs = 300;
+  Message m = r.challenge(M1, 41);
+  assert(r.deliver(m).empty());
+  r.run(100);
+  assert(r.deliver(m).empty());  // still drawing: nothing yet, no new frame
+  r.transport.published.clear();
+  r.run(300);
+  std::vector<Message> out = r.answers();
+  assert(out.size() == 1 && field(out[0], "type") == "ACCESS_CHALLENGE_DISPLAYED");
+  out = r.deliver(m);  // after resolution: the known answer again
+  assert(out.size() == 1 && field(out[0], "type") == "ACCESS_CHALLENGE_DISPLAYED");
+  r.run(100);
+  assert(r.cyd.count(df::SHOW_CHALLENGE) == 1 && r.cyd.draws == 1);
+}
+
+void supersededPendingChallengeIsScreenUnavailable() {
+  I2cRig r;
+  r.cyd.drawDelayMs = 500;
+  Message first = r.challenge(M1, 41);
+  r.deliver(first);
+  r.run(50);
+  std::vector<Message> out = r.deliver(r.challenge(M2, 42));
+  assert(out.size() == 1 && field(out[0], "displayMessageId") == M1 &&
+         field(out[0], "reason") == "SCREEN_UNAVAILABLE");
+  r.transport.published.clear();
+  r.run(600);
+  out = r.answers();
+  assert(out.size() == 1 && field(out[0], "displayMessageId") == M2 &&
+         field(out[0], "type") == "ACCESS_CHALLENGE_DISPLAYED");
+  out = r.deliver(first);
+  assert(out.size() == 1 && field(out[0], "reason") == "SCREEN_UNAVAILABLE");
+}
+
+void writeRetriesAndCorruptedFrameResend() {
+  I2cRig r;
+  r.cyd.nackWrites = 2;
+  r.deliver(r.challenge(M1, 41));
+  r.run(200);
+  std::vector<Message> out = r.answers();
+  assert(out.size() == 1 && field(out[0], "type") == "ACCESS_CHALLENGE_DISPLAYED");
+  assert(r.logged("display write failed cmd=1"));
+
+  I2cRig nack;
+  nack.cyd.nackWrites = 3;
+  nack.deliver(nack.challenge(M1, 41));
+  nack.run(100);
+  out = nack.answers();
+  assert(out.size() == 1 && field(out[0], "reason") == "SCREEN_UNAVAILABLE");
+  assert(nack.cyd.count(df::SHOW_CHALLENGE) == 0 && nack.cyd.count(df::CLEAR) >= 2);  // boot CLEAR, then this one
+
+  I2cRig crc;
+  crc.cyd.badCrcShows = 1;
+  crc.deliver(crc.challenge(M1, 41));
+  crc.run(200);
+  out = crc.answers();
+  assert(out.size() == 1 && field(out[0], "type") == "ACCESS_CHALLENGE_DISPLAYED");
+  std::vector<uint32_t> seqs;
+  for (const auto& f : crc.cyd.frames) {
+    if (f[2] == df::SHOW_CHALLENGE) seqs.push_back(df::getU32(&f[3]));
+  }
+  assert(seqs.size() == 2 && seqs[0] == seqs[1]);  // the same frame, resent once
+
+  I2cRig twice;
+  twice.cyd.badCrcShows = 2;  // one resend only
+  twice.deliver(twice.challenge(M1, 41));
+  twice.run(200);
+  out = twice.answers();
+  assert(out.size() == 1 && field(out[0], "reason") == "SCREEN_UNAVAILABLE" && twice.cyd.count(df::SHOW_CHALLENGE) == 2);
+}
+
+void busResetAfterFiveFailuresIsRateLimited() {
+  FakePlatform p;
+  FakeCyd cyd(&p.now);
+  cyd.silent = true;
+  I2cDisplay screen(cyd, p, 0x42);
+  for (int i = 0; i < 2000; i++) {  // 20 s
+    p.now += 10;
+    const int before = cyd.transactions;
+    screen.loop();
+    assert(cyd.transactions - before <= 1);
+  }
+  assert(cyd.resets.size() >= 2 && cyd.resets.size() <= 4);
+  for (size_t i = 1; i < cyd.resets.size(); i++) assert(cyd.resets[i] - cyd.resets[i - 1] >= 5000);
+}
+
+void deadlineAndConnectionLossSendClear() {
+  I2cRig r;
+  r.deliver(r.challenge(M1, 41, 45));
+  r.run(100);
+  assert(r.answers().size() == 1 && r.cyd.last(df::SHOW_CHALLENGE).ttlMs == 45000);
+  int clears = r.cyd.count(df::CLEAR);
+  r.platform.unix += 44;
+  r.run(30);
+  assert(r.cyd.count(df::CLEAR) == clears);
+  r.platform.unix += 1;
+  r.run(30);
+  assert(r.cyd.count(df::CLEAR) == clears + 1 && r.cyd.state == df::IDLE);
+
+  I2cRig lost;
+  lost.deliver(lost.challenge(M1, 41));
+  lost.run(100);
+  clears = lost.cyd.count(df::CLEAR);
+  lost.transport.events.push_back(Transport::Event::Disconnected);
+  lost.run(30);
+  assert(lost.cyd.count(df::CLEAR) == clears + 1);
+
+  I2cRig offline;  // the draw resolves while offline: nothing published, the answer waits for a redelivery
+  offline.cyd.drawDelayMs = 500;
+  Message m = offline.challenge(M1, 41);
+  offline.deliver(m);
+  offline.run(50);
+  offline.transport.events.push_back(Transport::Event::Disconnected);
+  offline.run(1200);
+  assert(offline.answers().empty());
+  offline.transport.events.push_back(Transport::Event::Connected);
+  offline.run(20);
+  std::vector<Message> out = offline.deliver(m);
+  assert(out.size() == 1 && field(out[0], "reason") == "SCREEN_UNAVAILABLE");
+}
+
+void nodeRestartIsLogged() {
+  I2cRig r;
+  r.cyd.bootId++;
+  r.run(1100);
+  assert(r.logged("display node restarted"));
+}
+
+void compartmentCodeMustFitTheFrame() {
+  DisplayRig r;
+  auto withCode = [&](const char* messageId, uint64_t revision, const char* code) {
+    Message m = r.challenge(messageId, revision);
+    std::string payload = m.payload;
+    const std::string from = "\"compartmentCode\":\"A1\"";
+    payload.replace(payload.find(from), from.size(), std::string("\"compartmentCode\":\"") + code + "\"");
+    snprintf(m.payload, sizeof(m.payload), "%s", payload.c_str());
+    return r.deliver(m);
+  };
+  std::vector<Message> out = withCode(M1, 41, "A12345678");  // 9 characters
+  assert(out.size() == 1 && field(out[0], "type") == "DISPLAY_REJECTED" &&
+         field(out[0], "reason") == "INVALID_DISPLAY_PAYLOAD" && field(out[0], "displayMessageId") == M1);
+  out = withCode(M2, 42, "A\xC3\xA9");  // not ASCII
+  assert(out.size() == 1 && field(out[0], "reason") == "INVALID_DISPLAY_PAYLOAD");
+  out = withCode(M3, 43, std::string(100, 'A').c_str());
+  assert(out.size() == 1 && field(out[0], "reason") == "INVALID_DISPLAY_PAYLOAD");
+  out = withCode("fd6c4a94-4ac4-4a91-9249-59347c3b6487", 44, "A1234567");  // 8 characters fit
+  assert(out.size() == 1 && field(out[0], "type") == "ACCESS_CHALLENGE_DISPLAYED");
+  assert(r.screen.draws == 1);
+}
+
+void tokenLeavesNoTraceInTheDriver() {
+  I2cRig r;
+  r.cyd.drawDelayMs = 100;
+  r.deliver(r.challenge(M1, 41));
+  r.step();
+  assert(holds(&r.screen, sizeof(r.screen), FAKE_TOKEN));  // the scan does see a held token
+  r.run(200);
+  assert(r.answers().size() == 1);
+  assert(!holds(&r.screen, sizeof(r.screen), FAKE_TOKEN) && !holds(&r.inbox, sizeof(r.inbox), FAKE_TOKEN));
+
+  I2cRig failed;
+  failed.cyd.drawFails = true;
+  failed.deliver(failed.challenge(M1, 41));
+  failed.run(100);
+  assert(!holds(&failed.screen, sizeof(failed.screen), FAKE_TOKEN) &&
+         !holds(&failed.inbox, sizeof(failed.inbox), FAKE_TOKEN));
+  for (const I2cRig* rig : {&r, &failed}) {
+    for (const Message& m : rig->transport.published) assert(strstr(m.payload, FAKE_TOKEN) == nullptr);
+    for (const std::string& line : rig->platform.logs) {
+      assert(line.find(FAKE_TOKEN) == std::string::npos && line.find("aegis://") == std::string::npos);
+    }
+  }
+}
+
 // Prints every payload on its own line so run.sh can check that it is strict JSON.
 void dumpPayloads(const char* path) {
   Rig r;
@@ -1014,6 +1848,13 @@ void dumpPayloads(const char* path) {
   assert(f != nullptr);
   fprintf(f, "%s\n", r.transport.wills[0].payload);
   for (const Message& m : r.transport.published) fprintf(f, "%s\n", m.payload);
+  DisplayRig d;
+  d.deliver(d.challenge(M1, 41));
+  for (const Message& m : d.transport.published) fprintf(f, "%s\n", m.payload);
+  d.deliver(d.challenge(M2, 41));
+  for (const Message& m : d.transport.published) fprintf(f, "%s\n", m.payload);
+  d.deliver(d.status(M3, 42));
+  d.deliver(d.status(M3, 42));
   fclose(f);
 }
 
@@ -1060,6 +1901,27 @@ int main(int argc, char** argv) {
   tagFromAnotherCellOrIndexNeverCounts();
   scanIsPublishedAsRfidScanCompleted();
   fullScanFitsTheMessage();
+  displayIsSubscribedOnEveryConnection();
+  challengeIsAcknowledgedOnlyAfterItIsDrawn();
+  deadlineIsKeptLocallyAndNeverExtended();
+  duplicateReplaysItsAnswerWithoutRedrawing();
+  staleRevisionNeverReplacesTheScreen();
+  invalidInstructionsAreRefusedAndKeepTheScreen();
+  statusReplacesTheQrWithoutAcknowledgement();
+  lostConnectionAndRebootClearTheQr();
+  unreadableDisplayMessagesAreReportedInvalid();
+  displayFrameFormat();
+  challengeUriFitsTheFrame();
+  displayAvailabilityFollowsTheStatus();
+  challengeIsDisplayedOnlyOnceTheNodeShowsOurSeq();
+  redeliveryWhilePendingGivesOneFrameAndOneAnswer();
+  supersededPendingChallengeIsScreenUnavailable();
+  writeRetriesAndCorruptedFrameResend();
+  busResetAfterFiveFailuresIsRateLimited();
+  deadlineAndConnectionLossSendClear();
+  nodeRestartIsLogged();
+  compartmentCodeMustFitTheFrame();
+  tokenLeavesNoTraceInTheDriver();
   if (argc > 1) dumpPayloads(argv[1]);
   puts("all host tests passed");
   return 0;
