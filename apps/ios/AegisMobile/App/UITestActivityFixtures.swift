@@ -23,11 +23,46 @@ enum UITestActivityFixtures {
     }
 
     static func reservation(until: String, status: String = "ACTIVE", actions: [String] = ["CHECKOUT", "CANCEL"],
-                            cancelledAt: String? = nil) -> String {
+                            cancelledAt: String? = nil, currentOperationId: String? = nil) -> String {
         let now = instant(.now)
         let list = actions.map { "\"\($0)\"" }.joined(separator: ",")
         let cancelled = cancelledAt.map { "\"\($0)\"" } ?? "null"
-        return #"{"id":"\#(reservationId)","asset":\#(summary(reservable)),"userId":"\#(UITestCatalogFixtures.technicianId)","status":"\#(status)","reservedFrom":"\#(now)","reservedUntil":"\#(until)","createdAt":"\#(now)","cancelledAt":\#(cancelled),"fulfilledAt":null,"expiredAt":null,"currentOperationId":null,"availableActions":[\#(list)]}"#
+        let operation = currentOperationId.map { "\"\($0)\"" } ?? "null"
+        return #"{"id":"\#(reservationId)","asset":\#(summary(reservable)),"userId":"\#(UITestCatalogFixtures.technicianId)","status":"\#(status)","reservedFrom":"\#(now)","reservedUntil":"\#(until)","createdAt":"\#(now)","cancelledAt":\#(cancelled),"fulfilledAt":null,"expiredAt":null,"currentOperationId":\#(operation),"availableActions":[\#(list)]}"#
+    }
+
+    // FICTIONAL checkout operation and hub QR (doc 09 §8.5, doc 10 §27.1).
+    // The token has the right shape and is no secret: it encodes the bytes
+    // 0x00…0x1F, and the UI tests type the same URI into the Debug-only code field.
+    static let operationId = "2f38d3b6-c18f-4a74-aa9a-2d574286013f"
+    static let retryOperationId = "6c2a9e41-5d3b-4f7a-8e0c-1b2d3f4a5c6e"
+    static let lockerId = "d46a74ae-39dc-460b-8af0-38fc791b376a"
+    static let challengeId = "9d65cbae-4610-4e40-a314-3b93af07be9c"
+    static let token = String(Data((0..<32).map(UInt8.init)).base64EncodedString().dropLast())
+
+    /// §8.5. `authorized` stamps `authorizedAt` and the 120 s window.
+    static func operation(id: String = operationId, type: String = "CHECKOUT", status: String,
+                          requiredAction: String, displayed: Bool = true, authorized: Date? = nil,
+                          terminal: Date? = nil) -> String {
+        func text(_ value: String?) -> String { value.map { "\"\($0)\"" } ?? "null" }
+        let created = Date.now - 5
+        let compartmentId = "1ae77ae3-8490-4f09-9412-a7816b77b\(reservable.id.suffix(3))"
+        let isReturn = type == "RETURN"
+        return #"{"id":"\#(id)","type":"\#(type)","status":"\#(status)","userId":"\#(UITestCatalogFixtures.technicianId)","assetId":"\#(reservable.id)","lockerId":"\#(lockerId)","compartmentId":"\#(compartmentId)","reservationId":\#(text(isReturn ? nil : reservationId)),"loanId":\#(text(isReturn ? loanId : nil)),"createdAt":"\#(instant(created))","authorizedAt":\#(text(authorized.map(instant))),"localAccessChallengeId":"\#(challengeId)","localProofExpiresAt":"\#(instant(created + 60))","localProofDisplayedAt":\#(text(displayed ? instant(created + 1) : nil)),"localProofValidatedAt":\#(text(authorized.map(instant))),"requiredAction":"\#(requiredAction)","expiresAt":\#(text(authorized.map { instant($0 + 120) })),"commandSentAt":null,"acknowledgedAt":null,"doorOpenedAt":null,"observationReceivedAt":null,"confirmedAt":null,"terminalAt":\#(text(terminal.map(instant))),"failureReason":null,"anomalyId":null}"#
+    }
+
+    /// The loan opened by the confirmed checkout. `RETURN` is not listed: the
+    /// return route belongs to RET-01 (#50).
+    static func checkedOutLoan() -> String {
+        #"{"id":"\#(loanId)","asset":\#(summary(reservable)),"holderUserId":"\#(UITestCatalogFixtures.technicianId)","status":"ACTIVE","checkedOutAt":"\#(instant(.now))","dueAt":"\#(instant(.now + 2 * 3600))","overdue":false,"returnRequestedAt":null,"returnedAt":null,"checkoutOperationId":"\#(operationId)","returnOperationId":null,"currentOperationId":null,"availableActions":[]}"#
+    }
+
+    /// The loan of the return scenarios, on the same asset and compartment as
+    /// the checkout ones.
+    static func openLoan(status: String = "ACTIVE", actions: [String], currentOperationId: String? = nil) -> String {
+        let list = "[" + actions.map { "\"\($0)\"" }.joined(separator: ",") + "]"
+        let current = currentOperationId.map { "\"\($0)\"" } ?? "null"
+        return #"{"id":"\#(loanId)","asset":\#(summary(reservable)),"holderUserId":"\#(UITestCatalogFixtures.technicianId)","status":"\#(status)","checkedOutAt":"\#(instant(.now - 3600))","dueAt":"\#(instant(.now + 3600))","overdue":false,"returnRequestedAt":null,"returnedAt":null,"checkoutOperationId":"5f0e2b8c-3a4d-4e6f-8a9b-0c1d2e3f4a5b","returnOperationId":null,"currentOperationId":\#(current),"availableActions":\#(list)}"#
     }
 
     /// An overdue loan of the clamp meter: the server sets `overdue`.

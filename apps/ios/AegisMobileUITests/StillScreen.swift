@@ -38,10 +38,21 @@ extension XCUIApplication {
 @MainActor private var accessibilityAuditWarmedUp = false
 
 extension XCUIApplication {
-    /// Runs the accessibility audit once and records how long it took, so that
-    /// slow audits can be measured from the result bundle. An audit that XCTest
+    /// Runs the accessibility audit and records how long it took, so that slow
+    /// audits can be measured from the result bundle. An audit that XCTest
     /// abandons ("Audit failed to complete in time", code -56) fails the test at
     /// its first occurrence: no retry hides it.
+    ///
+    /// Element detection runs in its own call, after the other types, on the
+    /// same screen and with the same handler. In a hosted run, the other
+    /// types took up to 8 s on the asset sheet (their text-size passes), then
+    /// element detection read the whole screenshot with text recognition for
+    /// 5.8 s and over 7.1 s on that sheet, and that audit was abandoned during
+    /// element detection, 15 s after it began (#67). The limit XCTest applies
+    /// is not established: other audits completed in 27.9 s or were abandoned
+    /// at 32.2 s. Splitting the call shortens each one; the recorded durations
+    /// show whether that is enough. Each type is still checked on every
+    /// audited screen; only the call that runs it changes.
     @MainActor
     func performMeasuredAccessibilityAudit(
         for types: XCUIAccessibilityAuditType,
@@ -53,14 +64,45 @@ extension XCUIApplication {
         }
         accessibilityAuditCount += 1
         let number = accessibilityAuditCount
+        let others = types.subtracting(.elementDetection)
+        if !others.isEmpty {
+            try performMeasuredAuditCall(number, others, "all types but element detection", issueHandler)
+        }
+        if types.contains(.elementDetection) {
+            try performMeasuredAuditCall(number, .elementDetection, "element detection", issueHandler)
+        }
+    }
+
+    @MainActor
+    private func performMeasuredAuditCall(
+        _ number: Int,
+        _ types: XCUIAccessibilityAuditType,
+        _ scope: String,
+        _ issueHandler: ((XCUIAccessibilityAuditIssue) throws -> Bool)?
+    ) throws {
         let start = Date.now
+        // The issue handler runs inside the call, so its element queries count
+        // toward the time XCTest allows it.
+        var issues = 0
+        var handling: TimeInterval = 0
         func record(_ outcome: String) {
             let seconds = String(format: "%.1f", Date.now.timeIntervalSince(start))
+            let handler = String(format: "%.1f", handling)
             let cold = number == 1 ? ", cold: first audit of this test process" : ""
-            XCTContext.runActivity(named: "Accessibility audit \(number) \(outcome) in \(seconds) s\(cold)") { _ in }
+            XCTContext.runActivity(
+                named: "Accessibility audit \(number) \(outcome) in \(seconds) s (\(scope)), "
+                    + "\(issues) issues handled in \(handler) s\(cold)"
+            ) { _ in }
+        }
+        let measuredHandler = issueHandler.map { handler in
+            { (issue: XCUIAccessibilityAuditIssue) throws -> Bool in
+                let started = Date.now
+                defer { issues += 1; handling += Date.now.timeIntervalSince(started) }
+                return try handler(issue)
+            }
         }
         do {
-            try performAccessibilityAudit(for: types, issueHandler)
+            try performAccessibilityAudit(for: types, measuredHandler)
             record("completed")
         } catch {
             record("ended with an error")

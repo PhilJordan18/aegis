@@ -6,6 +6,7 @@ Each test builds its own throwaway Git repository or report file under a
 temporary directory; nothing in the checkout is modified.
 """
 
+import json
 import os
 import re
 import subprocess
@@ -167,6 +168,7 @@ class ChangedComponentsTests(unittest.TestCase):
             ".github/scripts/ci-result.py": {"ci"},
             ".github/scripts/test-report.py": {"ci", "api", "web", "simulator"},
             ".github/scripts/xcresult-summary.py": {"ci", "ios"},
+            ".github/scripts/simulator-load.sh": {"ci", "ios"},
             ".github/scripts/check-accepted-adrs.py": {"ci", "adrs"},
             "docs/qualite/ci-02/mesures/xcresult_mesures.py": {"ci"},
         }
@@ -444,6 +446,67 @@ class XcresultSummaryTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("no .xcresult bundle", result.stdout)
 
+    def summary_module(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("xcresult_summary", SCRIPTS / "xcresult-summary.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_load_summary_reports_the_peak_after_ready(self):
+        with tempfile.TemporaryDirectory() as folder:
+            results = Path(folder)
+            (results / "simulator-boot.txt").write_text("ready_epoch=100\n", encoding="utf-8")
+            (results / "simulator-load.tsv").write_text(
+                "epoch\tload1\tsimulator_processes\tsimulator_cpu_percent\n"
+                "101\t3.50\t40\t80.0\n111\t9.25\t55\t300.0\nbroken line\n121\t2.00\t50\t10.0\n",
+                encoding="utf-8")
+            line = self.summary_module().load_summary(results)
+        self.assertEqual(line, "Simulator load: 3 samples over 20 s; load1 3.50 at the first sample, "
+                               "peak 9.25 at +11 s after ready, 2.00 at the last; simulator processes 40 to 55")
+
+    def test_load_summary_is_silent_without_samples(self):
+        with tempfile.TemporaryDirectory() as folder:
+            module = self.summary_module()
+            self.assertIsNone(module.load_summary(Path(folder)))
+            (Path(folder) / "simulator-load.tsv").write_text("epoch\tload1\n", encoding="utf-8")
+            self.assertEqual(module.load_summary(Path(folder)), "Simulator load: no readable sample")
+
+
+class SimulatorLoadTests(unittest.TestCase):
+    """The sampler of #67 measures only: bounded, tolerant, never failing the job."""
+
+    def test_samples_until_its_bound_and_succeeds(self):
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder) / "load.tsv"
+            result = run(["bash", str(SCRIPTS / "simulator-load.sh"), "NO-SUCH-UDID", str(out), "3", "1"])
+            self.assertEqual(result.returncode, 0, result.stderr)
+            lines = out.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(lines[0], "epoch\tload1\tsimulator_processes\tsimulator_cpu_percent")
+        # The bound is in whole seconds from a start anywhere within a second, so
+        # 3 s at 1 s gives 2 to 4 samples: it repeats, and it stops at its bound.
+        self.assertGreaterEqual(len(lines) - 1, 2)
+        self.assertLessEqual(len(lines) - 1, 4)
+        for line in lines[1:]:
+            epoch, load, count, cpu = line.split("\t")
+            self.assertTrue(epoch.isdigit())
+            float(load)
+            self.assertEqual(count, "0")
+            self.assertEqual(cpu, "0.0")
+
+    def test_the_job_starts_it_in_the_background_and_never_waits(self):
+        text = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        ios = text[text.index("  ios:\n"):text.index("  scripts:\n")]
+        boot = ios[ios.index("- name: Boot the simulator"):ios.index("- name: Choose the recipe")]
+        start = boot.index("simulator-load.sh")
+        self.assertGreater(start, boot.index("xcrun simctl bootstatus"))
+        self.assertTrue(boot[start:].split("\n", 1)[0].rstrip().endswith("&"))
+        self.assertNotIn("wait", boot[start:])
+        self.assertNotIn("sleep", boot)
+        recipe_and_after = ios[ios.index("- name: Choose the recipe"):]
+        self.assertNotIn("simulator-load", recipe_and_after)
+        self.assertIn("path: apps/ios/build/results/", ios)
+
 
 class WorkflowWiringTests(unittest.TestCase):
     """Cheap guards on ci.yml that a YAML parser alone would not catch."""
@@ -477,6 +540,26 @@ class WorkflowWiringTests(unittest.TestCase):
         step = ios[boot:ios.index("- name: iOS recipe")]
         self.assertIn("timeout-minutes: 8", step)
         self.assertIn("xcrun simctl bootstatus", step)
+
+    def test_ios_job_is_bounded_at_45_minutes_with_only_the_bounded_retry(self):
+        ios = self.text[self.text.index("  ios:\n"):self.text.index("  scripts:\n")]
+        job = ios[:ios.index("    steps:\n")]
+        # The job limit is a capacity bound (#67): 30 min cancelled complete
+        # green runs of about 312 tests. The only retry is ios-retry.py, once,
+        # for failed UI tests (Philippe, 25 November); no xcodebuild repetition.
+        self.assertIn("    timeout-minutes: 45\n", job)
+        self.assertNotIn("timeout-minutes: 30", ios)
+        self.assertNotIn("continue-on-error", self.text)
+        recipe = (ROOT / "apps/ios/scripts/ios-test.sh").read_text()
+        for forbidden in ("-retry-tests-on-failure", "-test-iterations", "-run-tests-until-failure",
+                          "-test-repetition-relaunch-enabled"):
+            self.assertNotIn(forbidden, ios)
+            self.assertNotIn(forbidden, recipe)
+        self.assertNotIn("retry", recipe)
+        step = ios[ios.index("- name: iOS recipe"):ios.index("- name: Result summary")]
+        self.assertIn('run: scripts/ios-test.sh "$IOS_RECIPE" || '
+                      'python3 ../../.github/scripts/ios-retry.py "$IOS_RECIPE"\n', step)
+        self.assertEqual(self.text.count("ios-retry.py"), 1)
 
     def test_api_tests_start_the_development_broker_first(self):
         api = self.text.split("\n  api:\n", 1)[1].split("\n  web:\n", 1)[0]
@@ -521,14 +604,15 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertIn("REF_NAME: ${{ github.ref_name }}", step)
         self.assertIn("HEAD_SHA: ${{ github.sha }}", step)
 
-    def test_ios_is_gated_by_its_output_and_stays_outside_ci_result(self):
-        # Skipping iOS on a push to dev must not change the required check: iOS is
-        # not in CI result's needs, and its job runs only on the ios output.
+    def test_ios_is_gated_by_its_output_and_counts_in_ci_result(self):
+        # The executed iOS result counts in CI result (Philippe, 25 November);
+        # a skip by the change filter stays legitimate: iOS=false:skipped passes.
         ios = self.text[self.text.index("  ios:\n"):self.text.index("  scripts:\n")]
         self.assertIn("if: needs.changes.outputs.ios == 'true'", ios)
         result = self.text[self.text.index("  result:\n"):]
         needs = {name.strip() for name in re.search(r"needs: \[([^\]]*)\]", result).group(1).split(",")}
-        self.assertNotIn("ios", needs)
+        self.assertIn("ios", needs)
+        self.assertIn('"iOS tests=$IOS"', result)
         self.assertIn("workflow_dispatch:", self.text[:self.text.index("permissions:")])
 
     def test_ios_runs_the_chosen_recipe_and_defaults_to_standalone(self):
@@ -540,6 +624,138 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertIn("recipe=pr\n", choose)
         self.assertIn('scripts/ios-test.sh "$IOS_RECIPE"', ios)
         self.assertNotIn("ios-test.sh standalone", ios)
+
+
+def xcresult_tests(cases):
+    """A `test-results tests` document with (bundle kind, bundle, Class/test(), result) cases."""
+    bundles = {}
+    for kind, bundle, case, result in cases:
+        node = {"nodeType": "Test Case", "nodeIdentifier": case, "name": case.split("/")[-1], "result": result,
+                "children": [{"nodeType": "Failure Message", "name": f"{case} failed"}] if result == "Failed" else []}
+        bundles.setdefault((kind, bundle), []).append(node)
+    return {"testNodes": [{"nodeType": "Test Plan", "children": [
+        {"nodeType": kind, "name": bundle, "children": [{"nodeType": "Test Suite", "children": nodes}]}
+        for (kind, bundle), nodes in bundles.items()]}]}
+
+
+class IosRetryTests(unittest.TestCase):
+    """#67, Philippe 25 November: at most two attempts, failed UI tests only, persistent failure blocks."""
+
+    UI, UNIT = "UI test bundle", "Unit test bundle"
+    FLAKY = ("UI test bundle", "AegisMobileUITests", "CatalogUITests/testOffline()", "Failed")
+
+    def attempt(self, recipe="standalone", first=None, problems=("failures",), retry=None, failed=None):
+        """Run ios-retry.py against stubs; retry is the retry bundle's cases, or None for no bundle."""
+        first = [self.FLAKY] if first is None else first
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            results, stubs, data = folder / "build/results", folder / "bin", folder / "data"
+            for path in (results, stubs, data, folder / "scripts"):
+                path.mkdir(parents=True)
+            (results / f"{recipe}.xcresult").mkdir()
+            failures = sum(case[3] == "Failed" for case in first) if failed is None else failed
+            (results / f"{recipe}-summary.json").write_text(json.dumps(
+                {"problems": list(problems), "total": 335, "passed": 335 - failures, "failed": failures,
+                 "skipped": 0}))
+            (data / f"{recipe}.xcresult.tests").write_text(json.dumps(xcresult_tests(first)))
+            if retry is not None:
+                passed = sum(case[3] == "Passed" for case in retry)
+                (data / f"{recipe}-retry.xcresult.tests").write_text(json.dumps(xcresult_tests(retry)))
+                (data / f"{recipe}-retry.xcresult.summary").write_text(json.dumps(
+                    {"totalTestCount": len(retry), "passedTests": passed, "failedTests": len(retry) - passed,
+                     "skippedTests": 0, "result": "Passed" if passed == len(retry) else "Failed"}))
+            log = folder / "calls.log"
+            (stubs / "xcrun").write_text(
+                "#!/bin/bash\n"
+                f"echo \"xcrun $*\" >> {log}\n"
+                "while (( $# )); do [[ $1 == --path ]] && bundle=$2; [[ $1 == tests || $1 == summary ]] && kind=$1; shift; done\n"
+                f"cat {data}/$(basename \"$bundle\").$kind\n")
+            (stubs / "xcodebuild").write_text(
+                "#!/bin/bash\n"
+                f"echo \"xcodebuild $*\" >> {log}\n"
+                f"[[ -f {data}/{recipe}-retry.xcresult.tests ]] || exit 65\n"
+                "while (( $# )); do [[ $1 == -resultBundlePath ]] && mkdir -p \"$2\"; shift; done\n"
+                "exit 65\n")
+            (folder / "scripts/check-strings.py").write_text(f"open({str(log)!r}, 'a').write('check-strings\\n')\n")
+            for stub in stubs.iterdir():
+                stub.chmod(0o755)
+            env = {"PATH": f"{stubs}:{os.environ['PATH']}", "IOS_RESULTS_DIR": str(results)}
+            result = run([sys.executable, str(SCRIPTS / "ios-retry.py"), recipe], cwd=folder, env=env)
+            calls = log.read_text().splitlines() if log.exists() else []
+            attempts = results / f"{recipe}-attempts.json"
+            record = json.loads(attempts.read_text()) if attempts.exists() else None
+            kept = (results / f"{recipe}.xcresult").is_dir()
+        builds = [call for call in calls if call.startswith("xcodebuild")]
+        return result, builds, record, calls, kept
+
+    def test_a_ui_test_that_passes_on_its_second_attempt_is_reported_apart(self):
+        result, builds, record, calls, kept = self.attempt(retry=[self.FLAKY[:3] + ("Passed",)])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(len(builds), 1)
+        self.assertTrue(builds[0].startswith("xcodebuild test-without-building "))
+        self.assertIn("-only-testing:AegisMobileUITests/CatalogUITests/testOffline", builds[0])
+        self.assertEqual(builds[0].count("-only-testing:"), 1)
+        self.assertNotIn("-retry-tests-on-failure", builds[0])
+        self.assertNotIn("-test-iterations", builds[0])
+        self.assertEqual(record["maxAttempts"], 2)
+        self.assertEqual(record["passedFirstAttempt"], 334)
+        self.assertEqual(record["passedAfterRetry"], ["AegisMobileUITests/CatalogUITests/testOffline"])
+        self.assertEqual(record["persistentFailures"], [])
+        self.assertIn("CatalogUITests/testOffline() failed", str(record["firstFailures"]))
+        self.assertIn("QA must review each first failure", result.stdout)
+        self.assertIn("check-strings", calls)
+        self.assertTrue(kept)
+
+    def test_a_persistent_failure_blocks_after_exactly_two_attempts(self):
+        result, builds, record, calls, kept = self.attempt(retry=[self.FLAKY])
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(len(builds), 1)
+        self.assertEqual(record["persistentFailures"], ["AegisMobileUITests/CatalogUITests/testOffline"])
+        self.assertEqual(record["passedAfterRetry"], [])
+        self.assertIn("::error::", result.stdout)
+        self.assertNotIn("check-strings", calls)
+        self.assertTrue(kept)
+
+    def test_a_retry_that_leaves_no_bundle_blocks(self):
+        result, builds, record, _, _ = self.attempt(retry=None)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(len(builds), 1)
+        self.assertEqual(record["persistentFailures"], ["AegisMobileUITests/CatalogUITests/testOffline"])
+
+    def test_extended_retries_without_the_string_check(self):
+        result, builds, _, calls, _ = self.attempt("extended", retry=[self.FLAKY[:3] + ("Passed",)])
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(len(builds), 1)
+        self.assertNotIn("check-strings", calls)
+
+    def test_nothing_is_retried_outside_the_allowed_cases(self):
+        unit = (self.UNIT, "AegisMobileTests", "ActivityTests/testRead()", "Failed")
+        many = [(self.UI, "AegisMobileUITests", f"CatalogUITests/test{n}()", "Failed") for n in range(4)]
+        unnamed = (self.UI, "AegisMobileUITests", "CatalogUITests/testWith(argument:)", "Failed")
+        cases = {
+            "unit test": dict(first=[self.FLAKY, unit]),
+            "more than three UI tests": dict(first=many),
+            "skipped tests": dict(problems=("failures", "skipped tests are not accepted")),
+            "no failure counted": dict(problems=("no test ran",)),
+            "count mismatch": dict(failed=2),
+            "unnamed case": dict(first=[unnamed]),
+            "live recipe": dict(recipe="live"),
+        }
+        for label, options in cases.items():
+            with self.subTest(label):
+                result, builds, record, _, _ = self.attempt(retry=[self.FLAKY[:3] + ("Passed",)], **options)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertEqual(builds, [])
+                if label != "live recipe":
+                    self.assertTrue(record["refused"])
+
+    def test_the_ci_result_counts_an_executed_ios_job_and_accepts_its_legitimate_skip(self):
+        ci = SCRIPTS / "ci-result.py"
+        self.assertEqual(run([sys.executable, str(ci), "success", "iOS tests=false:skipped"]).returncode, 0)
+        self.assertEqual(run([sys.executable, str(ci), "success", "iOS tests=true:success"]).returncode, 0)
+        for outcome in ("failure", "cancelled", "skipped", ""):
+            with self.subTest(outcome=outcome):
+                self.assertEqual(run([sys.executable, str(ci), "success", f"iOS tests=true:{outcome}"]).returncode, 1)
 
 
 if __name__ == "__main__":

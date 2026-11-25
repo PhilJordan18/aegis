@@ -9,8 +9,9 @@ struct ActivityViewModelTests {
     let session = StubSessionAccess()
     let clock = TestClock()
 
-    private func model(_ service: ScriptedReservationService) -> ActivityViewModel {
-        ActivityViewModel(service: service, session: session, now: { [clock] in clock.now })
+    private func model(_ service: ScriptedReservationService,
+                       operations: ScriptedOperationService = ScriptedOperationService()) -> ActivityViewModel {
+        ActivityViewModel(service: service, operations: operations, session: session, now: { [clock] in clock.now })
     }
 
     @Test func showsTheActiveReservationAndOffersCancelWhenListed() async {

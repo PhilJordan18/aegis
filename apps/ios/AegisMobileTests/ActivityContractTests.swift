@@ -156,13 +156,13 @@ enum ActivityFixtures {
     }
 
     static func reservation(status: String = "ACTIVE", actions: [String] = ["CHECKOUT", "CANCEL"],
-                            assetExtra: String = "") -> String {
-        #"{"id":"\#(reservationId)","asset":\#(asset(extra: assetExtra)),"userId":"\#(CatalogFixtures.technicianId)","status":"\#(status)","reservedFrom":"2026-09-16T18:00:00Z","reservedUntil":"2026-09-16T20:30:00Z","createdAt":"2026-09-16T18:00:00.123456Z","cancelledAt":null,"fulfilledAt":null,"expiredAt":null,"currentOperationId":null,"availableActions":\#(list(actions))}"#
+                            assetExtra: String = "", currentOperationId: String? = nil) -> String {
+        #"{"id":"\#(reservationId)","asset":\#(asset(extra: assetExtra)),"userId":"\#(CatalogFixtures.technicianId)","status":"\#(status)","reservedFrom":"2026-09-16T18:00:00Z","reservedUntil":"2026-09-16T20:30:00Z","createdAt":"2026-09-16T18:00:00.123456Z","cancelledAt":null,"fulfilledAt":null,"expiredAt":null,"currentOperationId":\#(currentOperationId.map { "\"\($0)\"" } ?? "null"),"availableActions":\#(list(actions))}"#
     }
 
     static func loan(status: String = "ACTIVE", overdue: Bool = true, actions: [String] = ["RETURN"],
-                     returnRequestedAt: String = "null") -> String {
-        #"{"id":"\#(loanId)","asset":\#(asset()),"holderUserId":"\#(CatalogFixtures.technicianId)","status":"\#(status)","checkedOutAt":"2026-09-16T18:05:00Z","dueAt":"2026-09-16T20:30:00Z","overdue":\#(overdue),"returnRequestedAt":\#(returnRequestedAt),"returnedAt":null,"checkoutOperationId":"5f0e2b8c-3a4d-4e6f-8a9b-0c1d2e3f4a5b","returnOperationId":null,"currentOperationId":null,"availableActions":\#(list(actions))}"#
+                     returnRequestedAt: String = "null", currentOperationId: String? = nil) -> String {
+        #"{"id":"\#(loanId)","asset":\#(asset()),"holderUserId":"\#(CatalogFixtures.technicianId)","status":"\#(status)","checkedOutAt":"2026-09-16T18:05:00Z","dueAt":"2026-09-16T20:30:00Z","overdue":\#(overdue),"returnRequestedAt":\#(returnRequestedAt),"returnedAt":null,"checkoutOperationId":"5f0e2b8c-3a4d-4e6f-8a9b-0c1d2e3f4a5b","returnOperationId":null,"currentOperationId":\#(currentOperationId.map { "\"\($0)\"" } ?? "null"),"availableActions":\#(list(actions))}"#
     }
 
     private static func list(_ values: [String]) -> String {

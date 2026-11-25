@@ -66,6 +66,15 @@ struct Endpoint<Response: Decodable & Sendable>: Sendable {
     }
 }
 
+/// A decoded success with the delay the server asked before the next request.
+struct Received<Value: Sendable>: Sendable {
+    let value: Value
+    /// A valid `Retry-After`, nil when absent or unusable.
+    let retryAfter: Duration?
+}
+
+extension Received: Equatable where Value: Equatable {}
+
 struct APIClient: Sendable {
     static let requestTimeout: TimeInterval = 15
 
@@ -99,6 +108,13 @@ struct APIClient: Sendable {
     }
 
     func send<Response>(_ endpoint: Endpoint<Response>, bearer token: String? = nil) async throws(APIError) -> Response {
+        try await receive(endpoint, bearer: token).value
+    }
+
+    /// Like `send`, keeping the `Retry-After` of a success: an operation read
+    /// paces the next one with it (doc 09 §15.4, ADR-006).
+    func receive<Response>(_ endpoint: Endpoint<Response>,
+                           bearer token: String? = nil) async throws(APIError) -> Received<Response> {
         let data: Data
         let response: URLResponse
         do {
@@ -120,7 +136,8 @@ struct APIClient: Sendable {
         }
         guard http.mimeType == "application/json" else { throw .invalidResponse }
         do {
-            return try Self.decoder.decode(Response.self, from: data)
+            return Received(value: try Self.decoder.decode(Response.self, from: data),
+                            retryAfter: Self.retryAfter(from: http))
         } catch {
             throw .invalidResponse
         }

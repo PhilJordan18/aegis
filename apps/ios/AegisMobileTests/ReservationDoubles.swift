@@ -16,6 +16,13 @@ final class ScriptedReservationService: ActivityService, ReservationService, @un
     private var _statusCalls = 0
     private var _reads = 0
     var gate: Gate?
+    /// Holds each loan read that starts while it is set, as a slow network would.
+    var loanGate: Gate? {
+        get { lock.withLock { _loanGate } }
+        set { lock.withLock { _loanGate = newValue } }
+    }
+    private var _loanGate: Gate?
+    private var _loanReads = 0
 
     init(reservations: [Result<ReservationView?, APIError>] = [.success(nil)],
          loans: [Result<LoanView?, APIError>] = [.success(nil)],
@@ -47,8 +54,15 @@ final class ScriptedReservationService: ActivityService, ReservationService, @un
     }
 
     func currentLoan(bearer token: String) async throws(APIError) -> LoanView? {
-        try lock.withLock { Self.next(&loans) }.get()
+        let (result, gate) = lock.withLock { () -> (Result<LoanView?, APIError>, Gate?) in
+            _loanReads += 1
+            return (Self.next(&loans), _loanGate)
+        }
+        if let gate { await gate.wait() }
+        return try result.get()
     }
+
+    var loanReads: Int { lock.withLock { _loanReads } }
 
     func createReservation(assetId: UUID, reservedUntil: Date, key: IdempotencyKey,
                            bearer token: String) async throws(APIError) -> ReservationView {
@@ -78,12 +92,16 @@ final class ScriptedReservationService: ActivityService, ReservationService, @un
 enum ActivityDoubles {
     static let routeMissing = APIError.http(status: 404, problem: SessionFixtures.problem(404, "RESOURCE_NOT_FOUND"))
 
-    static func reservation(status: String = "ACTIVE", actions: [String] = ["CHECKOUT", "CANCEL"]) -> ReservationView {
-        CatalogFixtures.decode(ActivityFixtures.reservation(status: status, actions: actions))
+    static func reservation(status: String = "ACTIVE", actions: [String] = ["CHECKOUT", "CANCEL"],
+                            currentOperationId: String? = nil) -> ReservationView {
+        CatalogFixtures.decode(ActivityFixtures.reservation(status: status, actions: actions,
+                                                            currentOperationId: currentOperationId))
     }
 
-    static func loan(overdue: Bool = true) -> LoanView {
-        CatalogFixtures.decode(ActivityFixtures.loan(overdue: overdue))
+    static func loan(status: String = "ACTIVE", overdue: Bool = true, actions: [String] = ["RETURN"],
+                     currentOperationId: String? = nil) -> LoanView {
+        CatalogFixtures.decode(ActivityFixtures.loan(status: status, overdue: overdue, actions: actions,
+                                                     currentOperationId: currentOperationId))
     }
 
     static func refusal(_ status: Int, _ code: String, reasons: [String]? = nil,

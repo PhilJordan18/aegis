@@ -1,9 +1,9 @@
 import SwiftUI
 
 /// « Mon activité » (handoff `mobile-parcours` §6): one state card per active
-/// reservation or loan. Prepare checkout and Return equipment belong to
-/// CHK-01 (#46) and RET-01 (#50): they are not offered yet, whatever
-/// `availableActions` lists. Cancel follows `CANCEL` of the last fresh read.
+/// reservation or loan. Prepare checkout follows `CHECKOUT`, Cancel follows
+/// `CANCEL` and Return equipment follows `RETURN` of the last fresh read.
+/// « Reprendre » is local: it reads the current operation again.
 struct ActivityScreen: View {
     let model: ActivityViewModel
     let browseEquipment: () -> Void
@@ -32,6 +32,11 @@ struct ActivityScreen: View {
                 try? await Task.sleep(until: started + Self.minimumRefresh, clock: .continuous)
             }
             .task { await model.loadIfNeeded() }
+            .fullScreenCover(item: Binding(get: { model.guided }, set: { _ in })) { guided in
+                GuidedOperationScreen(model: guided,
+                                      close: { Task { await model.hideOperation() } },
+                                      restart: { Task { await model.restartOperation() } })
+            }
             .task(id: model.announcement) {
                 guard let announcement = model.announcement else { return }
                 // Posted once the tab is on screen, so VoiceOver does not drop it.
@@ -76,7 +81,7 @@ struct ActivityScreen: View {
             reservationCard(reservation)
         }
         if let loan = model.loan.value {
-            LoanCard(loan: loan, stale: model.loan.isStale)
+            LoanCard(model: model, loan: loan, stale: model.loan.isStale)
         }
         if model.isEmpty {
             empty(String(localized: "Aucune réservation ni prêt en cours."))
@@ -89,8 +94,13 @@ struct ActivityScreen: View {
 
     private func reservationCard(_ reservation: ReservationView) -> some View {
         let stale = model.reservation.isStale
+        let inProgress = model.isInProgress(reservation.currentOperationId)
         return CatalogCard {
-            StatusChip(status: .reservedForYou, stale: stale)
+            if inProgress {
+                OperationChip(kind: .checkout)
+            } else {
+                StatusChip(status: .reservedForYou, stale: stale)
+            }
             AssetHeading(asset: reservation.asset)
             Divider()
             FactRow(label: String(localized: "Cellule"), value: AssetPresentation.compartment(reservation.asset.placement))
@@ -99,6 +109,14 @@ struct ActivityScreen: View {
                 .foregroundStyle(Color.brandText)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("activity.reservation.until")
+            if inProgress {
+                Label("Suivi masqué. L’opération n’est pas annulée.", systemImage: "eye.slash")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.brandText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("activity.operation.hidden")
+            }
+            checkoutSection(reservation, stale: stale)
             if model.isCancelling {
                 HStack(spacing: 8) {
                     ProgressView()
@@ -129,6 +147,54 @@ struct ActivityScreen: View {
             Button("Annuler la réservation", role: .destructive) { Task { await model.cancel() } }
                 .accessibilityIdentifier("activity.cancel.confirm")
             Button("Garder la réservation", role: .cancel) {}
+        }
+    }
+
+    /// §6: the notice that explains the button, then the button. Prepare
+    /// follows `CHECKOUT`; « Reprendre » appears whenever an operation may be
+    /// under way, since it only reads.
+    @ViewBuilder
+    private func checkoutSection(_ reservation: ReservationView, stale: Bool) -> some View {
+        let listed = !stale && reservation.actions.contains(.checkout)
+        let resumable = model.isResumable(reservation.currentOperationId)
+        let explanation = String(localized: "Vous pouvez faire une nouvelle tentative. Aucune porte ne s’ouvre sans le code du casier.")
+        if listed, let finished = model.finishedAttempt {
+            let step = OperationStep(finished, kind: .checkout, compartment: GuidedOperation.Context(reservation.asset).compartment,
+                                     assetName: reservation.asset.model.name)
+            OperationNotice(title: step.title, detail: explanation, symbol: "arrow.counterclockwise")
+                .accessibilityIdentifier("activity.checkout.notice")
+        } else if listed, let attempt = model.offlineAttemptAt {
+            OperationNotice(title: String(localized: "Essai de \(AegisTime.laboratoryTime(attempt)) : le casier était hors ligne."),
+                            detail: explanation, symbol: "wifi.exclamationmark")
+                .accessibilityIdentifier("activity.checkout.notice")
+        } else if !stale, !listed, !resumable, reservation.status == .known(.active) {
+            OperationNotice(title: String(localized: "Retrait indisponible pour le moment. Actualisez pour vérifier à nouveau."),
+                            symbol: "lock.fill")
+                .accessibilityIdentifier("activity.checkout.notice")
+        }
+        if resumable, let id = reservation.currentOperationId {
+            Button("Reprendre") { model.resumeOperation(id) }
+                .buttonStyle(PrimaryButtonStyle())
+                .accessibilityIdentifier("activity.resume")
+        } else if listed {
+            Button { Task { await model.prepareCheckout() } } label: {
+                HStack(spacing: 8) {
+                    if model.preparing == .checkout { ProgressView().tint(.white) }
+                    if model.finishedAttempt != nil || model.offlineAttemptAt != nil {
+                        Text("Nouvelle tentative de retrait")
+                    } else {
+                        Text("Préparer le retrait")
+                    }
+                }
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(!model.canPrepareCheckout)
+            .accessibilityIdentifier("activity.checkout")
+        } else {
+            Button {} label: { Label("Préparer le retrait", systemImage: "lock.fill") }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(true)
+                .accessibilityIdentifier("activity.checkout")
         }
     }
 
@@ -170,6 +236,7 @@ private struct AssetHeading: View {
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(Color.brandText)
                 .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("activity.asset.name")
             Text(verbatim: AssetPresentation.identityLine(code: asset.assetCode, model: asset.model))
                 .font(.body.monospacedDigit())
                 .foregroundStyle(Color.brandMuted)
@@ -178,14 +245,21 @@ private struct AssetHeading: View {
     }
 }
 
-/// An open loan, read only: Return equipment arrives with RET-01 (#50).
+/// An open loan (handoff §6): Return equipment follows `RETURN`; « Reprendre »
+/// appears whenever its return may be under way, since it only reads.
 private struct LoanCard: View {
+    let model: ActivityViewModel
     let loan: LoanView
     let stale: Bool
 
     var body: some View {
+        let inProgress = model.isInProgress(loan.currentOperationId)
         CatalogCard {
-            StatusChip(status: .borrowedByYou, stale: stale)
+            if inProgress {
+                OperationChip(kind: .return)
+            } else {
+                StatusChip(status: .borrowedByYou, stale: stale)
+            }
             AssetHeading(asset: loan.asset)
             Divider()
             FactRow(label: String(localized: "Cellule"), value: AssetPresentation.compartment(loan.asset.placement))
@@ -207,9 +281,57 @@ private struct LoanCard: View {
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("activity.loan.due")
+            if inProgress {
+                Label("Suivi masqué. L’opération n’est pas annulée.", systemImage: "eye.slash")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.brandText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("activity.loan.operation.hidden")
+            }
+            returnSection
+            Button("Actualiser") { Task { await model.refresh() } }
+                .buttonStyle(CompactButtonStyle())
+                .allowsHitTesting(!model.isLoading)
+                .accessibilityIdentifier("activity.loan.refresh")
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("activity.loan")
+    }
+
+    /// §6 « Prêt actif », « Retour indisponible » and « Retour en attente »:
+    /// the notice that explains the button, then the button. A
+    /// `RETURN_PENDING` loan offers a new return only when the server lists
+    /// `RETURN` (Q2, doc 09 §8.10); otherwise only Actualiser.
+    @ViewBuilder
+    private var returnSection: some View {
+        let listed = !stale && loan.actions.contains(.return)
+        let resumable = model.isResumable(loan.currentOperationId)
+        let active = loan.status == .known(.active)
+        if !stale, !listed, !resumable, active {
+            OperationNotice(title: String(localized: "Retour indisponible pour le moment. Actualisez pour vérifier à nouveau."),
+                            symbol: "lock.fill")
+                .accessibilityIdentifier("activity.return.notice")
+        }
+        if resumable, let id = loan.currentOperationId {
+            Button("Reprendre") { model.resumeOperation(id) }
+                .buttonStyle(PrimaryButtonStyle())
+                .accessibilityIdentifier("activity.loan.resume")
+        } else if listed {
+            Button { Task { await model.prepareReturn() } } label: {
+                HStack(spacing: 8) {
+                    if model.preparing == .return { ProgressView().tint(.white) }
+                    Text("Retourner l’équipement")
+                }
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(!model.canPrepareReturn)
+            .accessibilityIdentifier("activity.return")
+        } else if active {
+            Button {} label: { Label("Retourner l’équipement", systemImage: "lock.fill") }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(true)
+                .accessibilityIdentifier("activity.return")
+        }
     }
 }
 
@@ -239,6 +361,28 @@ private struct FeedbackNote: View {
         case let .created(reservation): (ActivityViewModel.confirmation(reservation), false)
         case .cancelled: (String(localized: "Réservation annulée."), false)
         case let .cancelFailed(problem): (problem.message, true)
+        case let .preparationFailed(problem, compartment): (problem.message(compartment: compartment), true)
         }
+    }
+}
+
+/// « Retrait en cours » / « Retour en cours »: the progress tone, symbol and
+/// text (handoff §2, §6).
+private struct OperationChip: View {
+    let kind: OperationStep.Kind
+
+    var body: some View {
+        Label {
+            kind == .checkout ? Text("Retrait en cours") : Text("Retour en cours")
+        } icon: {
+            Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(Color.statusProgressText)
+        }
+        .font(.subheadline.weight(.semibold))
+        .foregroundStyle(Color.statusProgressText)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color.statusProgressFill, in: Capsule())
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("activity.operation.status")
     }
 }
