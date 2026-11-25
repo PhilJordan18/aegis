@@ -344,9 +344,7 @@ final class CatalogUITests: XCTestCase {
         // the Dynamic Type proof is the AX5 test, which renders and audits
         // the list at the largest size.
         if ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26 { types.remove(.dynamicType) }
-        var unhandled: [String] = []
-        var accepted: [String] = []
-        var ignored: [String] = []
+        let findings = AuditRecord()
         try app.performMeasuredAccessibilityAudit(for: types) { issue in
             var note = ""
             let tolerated: Bool
@@ -370,17 +368,8 @@ final class CatalogUITests: XCTestCase {
                     if searchFrame.contains(center) || target.elementType == .searchField || nearlyInChip {
                         tolerated = true
                     } else {
-                        switch self.visiblePartContrast(of: target, visible: visible, window: window, in: app) {
-                        case let .nothingToMeasure(reason):
-                            tolerated = true
-                            note = " (\(reason))"
-                        case let .measured(passed, line):
-                            // Partly visible: the visible part is measured, never trusted.
-                            tolerated = passed
-                            if passed { accepted.append(line) } else { unhandled.append("Contrast below 4.5:1 — \(line)") }
-                        case .entirelyVisible:
-                            tolerated = false
-                        }
+                        let partly = self.visiblePartContrast(of: target, visible: visible, window: window, in: app)
+                        tolerated = findings.tolerates(partly, note: &note) ?? false
                     }
                 default:
                     tolerated = false
@@ -388,36 +377,10 @@ final class CatalogUITests: XCTestCase {
             } else {
                 tolerated = false
             }
-            let element = issue.element.map { "\($0.elementType) '\($0.label)' id=\($0.identifier) frame=\($0.frame)" } ?? "none"
-            if tolerated {
-                ignored.append("\(issue.compactDescription) — \(element)\(note)")
-            } else {
-                unhandled.append("\(issue.compactDescription) — \(element) — \(issue.detailedDescription)")
-            }
-            // Every issue is collected, then reported together below.
+            findings.record(issue, tolerated: tolerated, note: note)
             return true
         }
-        // Every tolerated issue stays visible in the result: a rule that hides
-        // an issue must not look like an audit that found nothing.
-        if !ignored.isEmpty {
-            let report = XCTAttachment(string: (["visible=\(visible)"] + ignored).joined(separator: "\n"))
-            report.name = "audit-tolerated"
-            report.lifetime = .keepAlways
-            add(report)
-        }
-        if !accepted.isEmpty {
-            let report = XCTAttachment(string: accepted.joined(separator: "\n"))
-            report.name = "audit-visible-part-contrast"
-            report.lifetime = .keepAlways
-            add(report)
-        }
-        if !unhandled.isEmpty {
-            let report = XCTAttachment(string: (["visible=\(visible)"] + unhandled).joined(separator: "\n"))
-            report.name = "audit-issues"
-            report.lifetime = .keepAlways
-            add(report)
-            XCTFail("Accessibility audit: \(unhandled.joined(separator: " | "))")
-        }
+        findings.report(to: self, areas: ["visible=\(visible)"], acceptedName: "audit-visible-part-contrast")
     }
 
     @MainActor

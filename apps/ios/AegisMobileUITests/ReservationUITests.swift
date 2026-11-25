@@ -349,9 +349,7 @@ final class ReservationUITests: XCTestCase {
         let bars = app.navigationBars.allElementsBoundByIndex.map(\.frame)
         var types = XCUIAccessibilityAuditType.all
         if atLargestSize { types.remove(.dynamicType) }
-        var unhandled: [String] = []
-        var accepted: [String] = []
-        var ignored: [String] = []
+        let findings = AuditRecord()
         try app.performMeasuredAccessibilityAudit(for: types) { issue in
             var note = ""
             let tolerated: Bool
@@ -372,17 +370,8 @@ final class ReservationUITests: XCTestCase {
                     if nearlyInChip {
                         tolerated = true
                     } else {
-                        switch self.visiblePartContrast(of: target, visible: area, window: window, in: app) {
-                        case let .nothingToMeasure(reason):
-                            tolerated = true
-                            note = " (\(reason))"
-                        case let .measured(passed, line):
-                            // Partly visible: the visible part is measured, never trusted.
-                            tolerated = passed
-                            if passed { accepted.append(line) } else { unhandled.append("Contrast below 4.5:1 — \(line)") }
-                        case .entirelyVisible:
-                            tolerated = false
-                        }
+                        let partly = self.visiblePartContrast(of: target, visible: area, window: window, in: app)
+                        tolerated = findings.tolerates(partly, note: &note) ?? false
                     }
                 default:
                     tolerated = false
@@ -390,35 +379,10 @@ final class ReservationUITests: XCTestCase {
             } else {
                 tolerated = false
             }
-            let element = issue.element.map { "\($0.elementType) '\($0.label)' id=\($0.identifier) frame=\($0.frame)" } ?? "none"
-            if tolerated {
-                ignored.append("\(issue.compactDescription) — \(element)\(note)")
-            } else {
-                unhandled.append("\(issue.compactDescription) — \(element) — \(issue.detailedDescription)")
-            }
+            findings.record(issue, tolerated: tolerated, note: note)
             return true
         }
-        // Every tolerated issue stays visible in the result: a rule that hides
-        // an issue must not look like an audit that found nothing.
-        if !ignored.isEmpty {
-            let report = XCTAttachment(string: (["visible=\(content)", "confirmBar=\(confirmBar)"] + ignored).joined(separator: "\n"))
-            report.name = "audit-tolerated"
-            report.lifetime = .keepAlways
-            add(report)
-        }
-        if !accepted.isEmpty {
-            let report = XCTAttachment(string: accepted.joined(separator: "\n"))
-            report.name = "audit-visible-part-contrast"
-            report.lifetime = .keepAlways
-            add(report)
-        }
-        if !unhandled.isEmpty {
-            let report = XCTAttachment(string: (["visible=\(content)", "confirmBar=\(confirmBar)"] + unhandled).joined(separator: "\n"))
-            report.name = "audit-issues"
-            report.lifetime = .keepAlways
-            add(report)
-            XCTFail("Accessibility audit: \(unhandled.joined(separator: " | "))")
-        }
+        findings.report(to: self, areas: ["visible=\(content)", "confirmBar=\(confirmBar)"], acceptedName: "audit-visible-part-contrast")
     }
 
     @MainActor
