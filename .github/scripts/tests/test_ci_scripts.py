@@ -167,6 +167,7 @@ class ChangedComponentsTests(unittest.TestCase):
             ".github/scripts/ci-result.py": {"ci"},
             ".github/scripts/test-report.py": {"ci", "api", "web", "simulator"},
             ".github/scripts/xcresult-summary.py": {"ci", "ios"},
+            ".github/scripts/simulator-load.sh": {"ci", "ios"},
             ".github/scripts/check-accepted-adrs.py": {"ci", "adrs"},
             "docs/qualite/ci-02/mesures/xcresult_mesures.py": {"ci"},
         }
@@ -443,6 +444,64 @@ class XcresultSummaryTests(unittest.TestCase):
         result = run([sys.executable, str(SCRIPTS / "xcresult-summary.py")])
         self.assertEqual(result.returncode, 1)
         self.assertIn("no .xcresult bundle", result.stdout)
+
+    def summary_module(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("xcresult_summary", SCRIPTS / "xcresult-summary.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_load_summary_reports_the_peak_after_ready(self):
+        with tempfile.TemporaryDirectory() as folder:
+            results = Path(folder)
+            (results / "simulator-boot.txt").write_text("ready_epoch=100\n", encoding="utf-8")
+            (results / "simulator-load.tsv").write_text(
+                "epoch\tload1\tsimulator_processes\tsimulator_cpu_percent\n"
+                "101\t3.50\t40\t80.0\n111\t9.25\t55\t300.0\nbroken line\n121\t2.00\t50\t10.0\n",
+                encoding="utf-8")
+            line = self.summary_module().load_summary(results)
+        self.assertEqual(line, "Simulator load: 3 samples over 20 s; load1 3.50 at the first sample, "
+                               "peak 9.25 at +11 s after ready, 2.00 at the last; simulator processes 40 to 55")
+
+    def test_load_summary_is_silent_without_samples(self):
+        with tempfile.TemporaryDirectory() as folder:
+            module = self.summary_module()
+            self.assertIsNone(module.load_summary(Path(folder)))
+            (Path(folder) / "simulator-load.tsv").write_text("epoch\tload1\n", encoding="utf-8")
+            self.assertEqual(module.load_summary(Path(folder)), "Simulator load: no readable sample")
+
+
+class SimulatorLoadTests(unittest.TestCase):
+    """The sampler of #67 measures only: bounded, tolerant, never failing the job."""
+
+    def test_samples_until_its_bound_and_succeeds(self):
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder) / "load.tsv"
+            result = run(["bash", str(SCRIPTS / "simulator-load.sh"), "NO-SUCH-UDID", str(out), "2", "1"])
+            self.assertEqual(result.returncode, 0, result.stderr)
+            lines = out.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(lines[0], "epoch\tload1\tsimulator_processes\tsimulator_cpu_percent")
+        self.assertGreaterEqual(len(lines), 3)
+        for line in lines[1:]:
+            epoch, load, count, cpu = line.split("\t")
+            self.assertTrue(epoch.isdigit())
+            float(load)
+            self.assertEqual(count, "0")
+            self.assertEqual(cpu, "0.0")
+
+    def test_the_job_starts_it_in_the_background_and_never_waits(self):
+        text = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        ios = text[text.index("  ios:\n"):text.index("  scripts:\n")]
+        boot = ios[ios.index("- name: Boot the simulator"):ios.index("- name: Choose the recipe")]
+        start = boot.index("simulator-load.sh")
+        self.assertGreater(start, boot.index("xcrun simctl bootstatus"))
+        self.assertTrue(boot[start:].split("\n", 1)[0].rstrip().endswith("&"))
+        self.assertNotIn("wait", boot[start:])
+        self.assertNotIn("sleep", boot)
+        recipe_and_after = ios[ios.index("- name: Choose the recipe"):]
+        self.assertNotIn("simulator-load", recipe_and_after)
+        self.assertIn("path: apps/ios/build/results/", ios)
 
 
 class WorkflowWiringTests(unittest.TestCase):
