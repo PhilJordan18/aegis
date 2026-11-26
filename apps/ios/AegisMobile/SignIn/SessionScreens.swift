@@ -161,7 +161,11 @@ struct AccountView: View {
                     NavigationLink {
                         PasswordChangeView(session: session, email: profile.email)
                     } label: {
-                        Label("Changer le mot de passe", systemImage: "key")
+                        Label {
+                            Text("Changer le mot de passe")
+                        } icon: {
+                            Image(systemName: "key").foregroundStyle(Color.brandAccent)
+                        }
                     }
                     .accessibilityIdentifier("account.password")
                 }
