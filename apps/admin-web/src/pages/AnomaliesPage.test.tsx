@@ -80,7 +80,8 @@ describe('Anomalies — list and dossier', () => {
     expect(rows[0]?.getAttribute('aria-current')).toBe('true')
     const dossier = await screen.findByRole('group', { name: 'Équipement attendu non observé' })
     await within(dossier).findByText('Aucune observation n’est référencée par cette anomalie.')
-    expect(within(dossier).getByText('4e5f6071-8293-4aa4-9bb5-d6e7f8091a2b')).toBeDefined()
+    // Labels unavailable here (no catalogue, no lockers): the identifier, read whole by assistive technologies.
+    expect(within(dossier).getAllByText('4e5f6071-8293-4aa4-9bb5-d6e7f8091a2b').length).toBeGreaterThan(0)
     expect(within(dossier).getAllByText('Identifiant seulement').length).toBeGreaterThan(0)
     // The permanent reminder, and never a resolve action.
     expect(screen.getByText(/Une anomalie se résout seulement lorsqu’une nouvelle observation du casier le confirme/)).toBeDefined()
@@ -225,6 +226,14 @@ describe('Anomalies — address, filters and pagination', () => {
     await screen.findByText('1 anomalie')
     expect(gateway.listAnomalies.mock.calls[0]?.[1]).toEqual({ status: 'ACKNOWLEDGED', type: 'DOOR_NOT_CLOSED_BEFORE_EXPIRY', severity: 'MEDIUM', page: 0, size: 20 })
     expect((screen.getByRole('combobox', { name: 'Gravité' }) as HTMLSelectElement).value).toBe('MEDIUM')
+  })
+
+  it('filters by equipment from `?equipement=<uuid>`, the parameter Réservations et prêts uses (§1.3)', async () => {
+    const gateway = fakeAnomalyGateway({ listAnomalies: async () => listOf(MEDIUM_ACK), getAnomaly: detailsOf(MEDIUM_ACK) })
+    renderAnomalies(gateway, { url: '/anomalies?equipement=7C9E6679-7425-40DE-944B-E07FC1F90AE7' })
+    await screen.findByText('1 anomalie')
+    expect(gateway.listAnomalies.mock.calls[0]?.[1]).toEqual({ status: 'OPEN', assetId: '7c9e6679-7425-40de-944b-e07fc1f90ae7', page: 0, size: 20 })
+    expect(screen.getByRole('combobox', { name: 'Équipement' })).toBeDefined()
   })
 
   it('ignores unusable values and lists every status when the address names an anomaly', async () => {
@@ -406,7 +415,8 @@ describe('Anomalies — failure states', () => {
     expect(within(alert).getByText('Le détail (preuves) n’a pas pu être chargé.')).toBeDefined()
     expect(within(alert).getByText('trace-0001')).toBeDefined()
     // The list fields are still there, and the one action stays available.
-    expect(within(dossier).getByText('4e5f6071-8293-4aa4-9bb5-d6e7f8091a2b')).toBeDefined()
+    // Labels unavailable here (no catalogue, no lockers): the identifier, read whole by assistive technologies.
+    expect(within(dossier).getAllByText('4e5f6071-8293-4aa4-9bb5-d6e7f8091a2b').length).toBeGreaterThan(0)
     gateway.getAnomaly.mockImplementation(detailsOf(HIGH_OPEN))
     await user.click(within(alert).getByRole('button', { name: 'Réessayer' }))
     await within(dossier).findByText('Aucune observation n’est référencée par cette anomalie.')

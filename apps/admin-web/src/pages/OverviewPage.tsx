@@ -9,9 +9,10 @@ import { useScrollable } from '../features/lockers/useScrollable'
 import { LockerConnectionBanners, LockersBlock } from '../features/overview/LockersModule'
 import { ModuleAlert } from '../features/overview/OverviewModule'
 import { AnomaliesBlock, LoansBlock, OperationsBlock, ReservationsBlock } from '../features/overview/OverviewBlocks'
-import { labelsOf, NO_LABELS, oldestRead, readOf, summarizeAnomalies, summarizeLoans, summarizeOperations, type BlockRead } from '../features/overview/overviewModel'
+import { oldestRead, readOf, summarizeAnomalies, summarizeLoans, summarizeOperations, type BlockRead } from '../features/overview/overviewModel'
 import { useActiveReservations, useInProgressOperationReads, useLockerStatuses, useOpenAnomalies, useOpenLoanReads, useOverviewLockers, useOverviewRefresh } from '../features/overview/useOverviewQueries'
 import { transactionTimes } from '../features/transactions/transactionPresentation'
+import { useLabelIndex } from '../features/labels/useLabelIndex'
 import { useI18n } from '../i18n/useI18n'
 import { Alert } from '../ui/Alert'
 import { Button } from '../ui/Button'
@@ -56,7 +57,7 @@ export function OverviewPage({ sessionProfile }: { readonly sessionProfile: User
     const query = statusQueries[index]
     if (query !== undefined) statuses.set(locker.id, query)
   })
-  const labels = lockerPage === undefined ? NO_LABELS : labelsOf(lockerPage)
+  const labels = useLabelIndex()
 
   const reads: readonly BlockRead<unknown>[] = [anomalies, loans, operations, reservations, lockers]
   const readAt = oldestRead(reads)

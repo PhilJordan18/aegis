@@ -10,7 +10,11 @@ import { StaleNotice } from '../catalog/StaleNotice'
 import { UNRECOGNIZED } from '../catalog/contract'
 import { AnomalyAlert } from './AnomalyAlert'
 import type { AnomalyReadFailure } from './anomalyFailure'
-import { anomalyTypeLabel, hasUnrecognizedValue, instantLabel, severityChip, statusChip, whereLine } from './anomalyPresentation'
+import { anomalyTypeLabel, hasUnrecognizedValue, instantLabel, severityChip, statusChip } from './anomalyPresentation'
+import { AnomalyWhere } from './AnomalyWhere'
+import { useLabelIndex } from '../labels/useLabelIndex'
+import { AssetName, CellName } from '../labels/Labels'
+import { TechnicalDetails, type TechnicalRow } from '../labels/TechnicalDetails'
 import { EVIDENCE_LIMIT, type AnomalyDetail, type AnomalyEvidence, type AnomalyView } from './contract'
 
 /** What the page tells the dossier happened to this anomaly in this session; never inferred from the data. */
@@ -158,6 +162,16 @@ function DossierBody({ anomaly, detail, loading, failure, retrying, titleId, onR
           : null
   const tone = anomaly.status === 'OPEN' ? 'anomaly' : anomaly.status === 'ACKNOWLEDGED' ? 'info' : 'none'
   const acknowledgedAt = anomaly.acknowledgedAt === null ? null : instantLabel(anomaly.acknowledgedAt, i18n)
+  const labels = useLabelIndex()
+  const technical: TechnicalRow[] = [{ label: t.techAnomaly, value: anomaly.id }]
+  if (anomaly.compartmentId !== null) technical.push({ label: t.techCell, value: anomaly.compartmentId })
+  if (anomaly.assetId !== null) technical.push({ label: t.techAsset, value: anomaly.assetId })
+  if (anomaly.lockerOperationId !== null) technical.push({ label: t.fOperation, value: anomaly.lockerOperationId })
+  if (anomaly.resolutionEvidenceObservationId !== null) technical.push({ label: t.resolutionObservation, value: anomaly.resolutionEvidenceObservationId })
+  for (const [index, item] of (detail?.evidence?.items ?? []).entries()) {
+    technical.push({ label: t.techObservation({ index: index + 1 }), value: item.observationId })
+    if (item.operationId !== null && item.operationId !== anomaly.lockerOperationId) technical.push({ label: t.techObservationOperation({ index: index + 1 }), value: item.operationId })
+  }
 
   return (
     <>
@@ -165,7 +179,9 @@ function DossierBody({ anomaly, detail, loading, failure, retrying, titleId, onR
       <h2 className="ag-dossier__title" id={titleId}>
         {anomalyTypeLabel(anomaly, i18n)}
       </h2>
-      <p className="ag-dossier__sub">{whereLine(anomaly, i18n)}</p>
+      <p className="ag-dossier__sub">
+        <AnomalyWhere anomaly={anomaly} labels={labels} />
+      </p>
 
       <div className={`ag-diag ag-an-diag--${tone}`}>
         <div className="ag-diag__row">
@@ -193,13 +209,11 @@ function DossierBody({ anomaly, detail, loading, failure, retrying, titleId, onR
         <dl className="ag-facts ag-an-grid">
           <div>
             <dt>{t.fCell}</dt>
-            <dd>{anomaly.compartmentId === null ? t.notProvided : <Id id={anomaly.compartmentId} />}</dd>
-            {anomaly.compartmentId !== null && <dd className="ag-help">{t.idOnly}</dd>}
+            <dd>{anomaly.compartmentId === null ? t.notProvided : <CellName compartmentId={anomaly.compartmentId} label={labels.compartment(anomaly.compartmentId)} />}</dd>
           </div>
           <div>
             <dt>{t.fAsset}</dt>
-            <dd>{anomaly.assetId === null ? t.notProvided : <Id id={anomaly.assetId} />}</dd>
-            {anomaly.assetId !== null && <dd className="ag-help">{t.idOnly}</dd>}
+            <dd>{anomaly.assetId === null ? t.notProvided : <AssetName assetId={anomaly.assetId} label={labels.asset(anomaly.assetId)} />}</dd>
           </div>
           <div>
             <dt>{t.fDetected}</dt>
@@ -226,18 +240,7 @@ function DossierBody({ anomaly, detail, loading, failure, retrying, titleId, onR
       </Section>
 
       <Section title={t.secOperation}>
-        {anomaly.lockerOperationId === null ? (
-          <p>{t.noOperation}</p>
-        ) : (
-          <dl className="ag-facts">
-            <div>
-              <dt>{t.fOperation}</dt>
-              <dd>
-                <Id id={anomaly.lockerOperationId} />
-              </dd>
-            </div>
-          </dl>
-        )}
+        {anomaly.lockerOperationId === null && <p>{t.noOperation}</p>}
         {anomaly.lockerOperationId !== null && (
           <ul className="ag-an-links">
             <li>
@@ -274,17 +277,7 @@ function DossierBody({ anomaly, detail, loading, failure, retrying, titleId, onR
         {anomaly.status === 'RESOLVED' || anomaly.resolvedAt !== null ? (
           <>
             {anomaly.resolvedAt !== null && <p>{t.resolvedAt({ time: instantLabel(anomaly.resolvedAt, i18n) })}</p>}
-            {anomaly.resolutionEvidenceObservationId !== null && (
-              <dl className="ag-facts">
-                <div>
-                  <dt>{t.resolutionObservation}</dt>
-                  <dd>
-                    <Id id={anomaly.resolutionEvidenceObservationId} />
-                  </dd>
-                  <dd className="ag-help">{t.idOnly}</dd>
-                </div>
-              </dl>
-            )}
+            {anomaly.resolutionEvidenceObservationId !== null && <p>{t.resolutionByObservation}</p>}
             {anomaly.resolutionNote !== null && (
               <>
                 <p className="ag-an-sec__note">{t.resolutionNote}</p>
@@ -296,6 +289,8 @@ function DossierBody({ anomaly, detail, loading, failure, retrying, titleId, onR
           <p>{t.notResolved}</p>
         )}
       </Section>
+
+      <TechnicalDetails rows={technical} />
     </>
   )
 }
@@ -333,6 +328,7 @@ function EvidenceBody({ detail, loading, failure, retrying, onRetry }: EvidenceB
 
 function EvidenceList({ evidence }: { readonly evidence: AnomalyEvidence }) {
   const i18n = useI18n()
+  const labels = useLabelIndex()
   const t = i18n.m.anomalies
   return (
     <>
@@ -350,30 +346,16 @@ function EvidenceList({ evidence }: { readonly evidence: AnomalyEvidence }) {
                 {t.evidenceObserved({ time: instantLabel(item.observedAt, i18n) })}
                 {item.receivedAt !== null && ` · ${t.evidenceReceived({ time: instantLabel(item.receivedAt, i18n) })}`}
               </span>
-              <dl className="ag-an-evidence__ids">
-                <div>
-                  <dt>{t.evidenceObservation}</dt>
-                  <dd>
-                    <Id id={item.observationId} />
-                  </dd>
-                </div>
-                {item.compartmentId !== null && (
+              {item.compartmentId !== null && (
+                <dl className="ag-an-evidence__ids">
                   <div>
                     <dt>{t.evidenceCell}</dt>
                     <dd>
-                      <Id id={item.compartmentId} />
+                      <CellName compartmentId={item.compartmentId} label={labels.compartment(item.compartmentId)} />
                     </dd>
                   </div>
-                )}
-                {item.operationId !== null && (
-                  <div>
-                    <dt>{t.evidenceOperation}</dt>
-                    <dd>
-                      <Id id={item.operationId} />
-                    </dd>
-                  </div>
-                )}
-              </dl>
+                </dl>
+              )}
             </li>
           ))}
         </ul>

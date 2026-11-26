@@ -19,6 +19,8 @@ import type { UserProfile } from '../features/auth/contract'
 import { useSignOut } from '../features/auth/useSignOut'
 import { useCurrentAdminProfile } from '../features/auth/useCurrentAdminProfile'
 import { useI18n } from '../i18n/useI18n'
+import { LabelIndexNotice } from '../features/labels/LabelIndexNotice'
+import { refreshLabelIndex, useLabelIndex } from '../features/labels/useLabelIndex'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import '../app/page.css'
@@ -57,6 +59,7 @@ export function AnomaliesPage({ sessionProfile }: { readonly sessionProfile: Use
   const client = useQueryClient()
   const { search } = useLocation()
   const currentProfile = useCurrentAdminProfile()
+  const labels = useLabelIndex()
   // The login response already carries the profile; /auth/me refreshes it.
   const profile = currentProfile.data ?? sessionProfile
 
@@ -66,6 +69,7 @@ export function AnomaliesPage({ sessionProfile }: { readonly sessionProfile: Use
     ...(filters.status === null ? {} : { status: filters.status }),
     ...(filters.type === null ? {} : { type: filters.type }),
     ...(filters.severity === null ? {} : { severity: filters.severity }),
+    ...(filters.assetId === null ? {} : { assetId: filters.assetId }),
     page: location.page,
     size: ANOMALY_PAGE_SIZE,
   }
@@ -153,7 +157,7 @@ export function AnomaliesPage({ sessionProfile }: { readonly sessionProfile: Use
   function select(selected: AnomalyView, event: MouseEvent<HTMLAnchorElement>) {
     // A modified click opens another tab: nothing changes here.
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
-    setSelectionNote(t.selectedStatus({ name: anomalyName(selected, i18n) }))
+    setSelectionNote(t.selectedStatus({ name: anomalyName(selected, i18n, labels) }))
     setOutcomeState(null)
     // Side by side, focus stays on the row and the live region says what changed; stacked, the dossier is below the fold.
     if (!isStackedLayout()) return
@@ -163,7 +167,10 @@ export function AnomaliesPage({ sessionProfile }: { readonly sessionProfile: Use
 
   const applyFilters = (next: AnomalyFilters) => router.navigate(anomaliesHref({ filters: next, page: 0, anomalyId: null }))
   const clearFilters = () => router.navigate(anomaliesHref({ filters: NO_FILTERS, page: 0, anomalyId: null }))
-  const refresh = () => void client.invalidateQueries({ queryKey: queryKeys.anomalies.all })
+  const refresh = () => {
+    void client.invalidateQueries({ queryKey: queryKeys.anomalies.all })
+    void refreshLabelIndex(client)
+  }
   // Read and updated times are shown in the laboratory zone, like every other instant of this screen.
   const time = (updatedAt: number) => (updatedAt > 0 ? format.time(new Date(updatedAt), LAB_TIME_ZONE) : null)
   const listReadAt = shownPage === undefined ? null : time(list.dataUpdatedAt)
@@ -204,7 +211,9 @@ export function AnomaliesPage({ sessionProfile }: { readonly sessionProfile: Use
           </p>
         </aside>
 
-        <AnomalyFilterBar key={anomaliesHref({ filters, page: 0, anomalyId: null })} filters={filters} onApply={applyFilters} onClear={clearFilters} />
+        <LabelIndexNotice health={labels.health} onRetry={labels.retry} />
+
+        <AnomalyFilterBar key={anomaliesHref({ filters, page: 0, anomalyId: null })} filters={filters} labels={labels} onApply={applyFilters} onClear={clearFilters} />
 
         <div className={showDossier ? 'ag-eq' : 'ag-eq ag-eq--single'}>
           <AnomalyList
@@ -222,6 +231,7 @@ export function AnomaliesPage({ sessionProfile }: { readonly sessionProfile: Use
             onSelect={select}
             onPage={(next) => router.navigate(anomaliesHref({ filters, page: next, anomalyId: null }))}
             onClearFilters={clearFilters}
+            labels={labels}
           />
           {showDossier && (
             <AnomalyDossier

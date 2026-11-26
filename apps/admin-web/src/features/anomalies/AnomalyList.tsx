@@ -7,7 +7,9 @@ import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
 import { StaleNotice } from '../catalog/StaleNotice'
 import { AnomalyAlert } from './AnomalyAlert'
 import type { AnomalyReadFailure } from './anomalyFailure'
-import { anomalyTypeLabel, instantLabel, severityChip, statusChip, whereLine } from './anomalyPresentation'
+import { anomalyTypeLabel, instantLabel, severityChip, statusChip } from './anomalyPresentation'
+import { AnomalyWhere } from './AnomalyWhere'
+import type { LabelIndex } from '../labels/labelIndex'
 import type { AnomalyPage, AnomalyView } from './contract'
 
 interface AnomalyListProps {
@@ -30,9 +32,10 @@ interface AnomalyListProps {
   readonly onSelect: (anomaly: AnomalyView, event: MouseEvent<HTMLAnchorElement>) => void
   readonly onPage: (page: number) => void
   readonly onClearFilters: () => void
+  readonly labels: LabelIndex
 }
 
-export function AnomalyList({ page, selectedId, loading, refreshing, failure, stale, retrying, readAt, filtered, hrefFor, onRetry, onSelect, onPage, onClearFilters }: AnomalyListProps) {
+export function AnomalyList({ page, selectedId, loading, refreshing, failure, stale, retrying, readAt, filtered, hrefFor, onRetry, onSelect, onPage, onClearFilters, labels }: AnomalyListProps) {
   const { m } = useI18n()
   const titleId = useId()
   const t = m.anomalies
@@ -85,7 +88,7 @@ export function AnomalyList({ page, selectedId, loading, refreshing, failure, st
         <ul className="ag-list__items">
           {items.map((anomaly) => (
             <li key={anomaly.id}>
-              <AnomalyRow anomaly={anomaly} selected={anomaly.id === selectedId} href={hrefFor(anomaly)} onSelect={onSelect} />
+              <AnomalyRow anomaly={anomaly} labels={labels} selected={anomaly.id === selectedId} href={hrefFor(anomaly)} onSelect={onSelect} />
             </li>
           ))}
         </ul>
@@ -102,7 +105,7 @@ export function AnomalyList({ page, selectedId, loading, refreshing, failure, st
   )
 }
 
-function AnomalyRow({ anomaly, selected, href, onSelect }: { readonly anomaly: AnomalyView; readonly selected: boolean; readonly href: string; readonly onSelect: AnomalyListProps['onSelect'] }) {
+function AnomalyRow({ anomaly, labels, selected, href, onSelect }: { readonly anomaly: AnomalyView; readonly labels: LabelIndex; readonly selected: boolean; readonly href: string; readonly onSelect: AnomalyListProps['onSelect'] }) {
   const i18n = useI18n()
   const severity = severityChip(anomaly.severity, i18n)
   const status = statusChip(anomaly.status, i18n)
@@ -117,7 +120,7 @@ function AnomalyRow({ anomaly, selected, href, onSelect }: { readonly anomaly: A
         </StatusChip>
       </span>
       <span className="ag-item__name">{anomalyTypeLabel(anomaly, i18n)}</span>
-      <span className="ag-item__facts ag-an-where">{whereLine(anomaly, i18n)}</span>
+      <span className="ag-item__facts ag-an-where"><AnomalyWhere anomaly={anomaly} labels={labels} /></span>
       <span className="ag-item__facts">{i18n.m.anomalies.detected({ time: instantLabel(anomaly.detectedAt, i18n) })}</span>
     </Link>
   )

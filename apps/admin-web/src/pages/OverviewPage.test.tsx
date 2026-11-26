@@ -133,7 +133,8 @@ describe("Vue d'ensemble: the five blocks", () => {
     expect(loans).toContain('Retour en cours')
     expect(loans).toContain('En retard')
     expect(loans).toContain('En retard depuis')
-    expect(loans).toContain('Titulaire : Technicien Démo')
+    expect(loans).toContain('Technicien Démo')
+    expect(loans).not.toContain('Titulaire')
 
     await waitFor(() => expect(blockText('Casier')).toContain('AEGIS-DEMO-01'))
     const locker = blockText('Casier')

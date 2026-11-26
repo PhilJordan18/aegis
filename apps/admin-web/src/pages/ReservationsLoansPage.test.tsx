@@ -7,7 +7,7 @@ import { unconfiguredAuthGateway, type AuthGateway, type GatewayResult } from '.
 import { createSessionStore } from '../features/auth/session'
 import { adminProfile, problemBody, sessionStubs } from '../features/auth/testFixtures'
 import type { CatalogGateway } from '../features/catalog/catalogGateway'
-import { asset, fakeCatalogGateway, ok as catalogOk } from '../features/catalog/testFixtures'
+import { asset, fakeCatalogGateway, ok as catalogOk, pageOf as assetPageOf } from '../features/catalog/testFixtures'
 import { parseLoanView, parseLockerOperationView, parseReservationView } from '../features/transactions/contractParsers'
 import type { LoanView, LockerOperationView, ReservationView, TransactionPage } from '../features/transactions/contract'
 import { unconfiguredTransactionGateway, type TransactionGateway } from '../features/transactions/transactionGateway'
@@ -213,10 +213,15 @@ describe('Réservations et prêts: filters', () => {
   it('applies the filters to the address and to the request, and clears them', async () => {
     const user = userEvent.setup()
     const gateway = fakeGateway()
-    renderPage(gateway)
+    const unit = asset({ id: ASSET_ID, assetCode: 'MM-001' })
+    const catalog = fakeCatalogGateway({ overrides: { listAssets: async (_token, query) => catalogOk(assetPageOf(query.q === undefined ? [] : [unit])) } })
+    renderPage(gateway, { catalogGateway: catalog })
     await screen.findByRole('heading', { level: 2, name: '2 réservations' })
     await user.selectOptions(screen.getByLabelText('Statut'), 'FULFILLED')
-    await user.type(screen.getByLabelText('Équipement (identifiant)'), ` ${ASSET_ID} `)
+    // Searched by code (§1.3): the address keeps the identifier.
+    await user.type(screen.getByRole('combobox', { name: 'Équipement' }), 'MM')
+    await user.click(await screen.findByRole('option', { name: /MM-001/ }))
+    expect(catalog.listAssets).toHaveBeenCalledWith(expect.anything(), { page: 0, size: 20, sort: 'assetCode,asc', q: 'MM' }, expect.anything())
     await user.click(screen.getByRole('button', { name: 'Filtrer' }))
     expect(window.location.search).toBe(`?statut=FULFILLED&equipement=${ASSET_ID}`)
     await waitFor(() => expect(gateway.listReservations).toHaveBeenCalledTimes(2))
@@ -225,19 +230,17 @@ describe('Réservations et prêts: filters', () => {
     expect(window.location.search).toBe('')
   })
 
-  it('refuses an equipment id that is not a UUID, names the field and sends nothing', async () => {
+  it('reads an old address by identifier, and « Retirer » returns focus to the field', async () => {
     const user = userEvent.setup()
     const gateway = fakeGateway()
-    renderPage(gateway)
-    await screen.findByRole('heading', { level: 2, name: '2 réservations' })
-    const field = screen.getByLabelText('Équipement (identifiant)')
-    await user.type(field, 'MM-001')
+    renderPage(gateway, { url: `/reservations-prets?equipement=${ASSET_ID}` })
+    await screen.findByRole('heading', { level: 2, name: /réservation/ })
+    // No label index here: the abbreviated identifier and « Identifiant seulement ».
+    const chosen = document.querySelector('.ag-picker__chosen') as HTMLElement
+    expect(within(chosen).getByText('Identifiant seulement')).toBeDefined()
+    await user.click(within(chosen).getByRole('button', { name: 'Retirer l’équipement choisi' }))
+    expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Équipement' }))
     await user.click(screen.getByRole('button', { name: 'Filtrer' }))
-    expect(field.getAttribute('aria-invalid')).toBe('true')
-    expect(field.getAttribute('aria-describedby')).toBeTruthy()
-    expect(screen.getByText("L'identifiant d'équipement doit être un UUID complet.")).toBeDefined()
-    expect(document.activeElement).toBe(field)
-    expect(gateway.listReservations).toHaveBeenCalledTimes(1)
     expect(window.location.search).toBe('')
   })
 
@@ -566,7 +569,7 @@ describe('Réservations et prêts: navigation, keyboard and language', () => {
     await waitFor(() => expect(dossier()).not.toBeNull())
     expect(dossier().getAttribute('role')).toBe('group')
     expect(dossier().getAttribute('aria-labelledby')).toBeTruthy()
-    for (const label of ['Statut', 'Équipement (identifiant)', 'Du', 'Au']) expect(screen.getByLabelText(label)).toBeDefined()
+    for (const label of ['Statut', 'Équipement', 'Du', 'Au']) expect(screen.getByLabelText(label)).toBeDefined()
   })
 
   it('is fully translated in English, with the same structure and no French left', async () => {

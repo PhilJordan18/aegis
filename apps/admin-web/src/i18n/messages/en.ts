@@ -458,9 +458,7 @@ export const en: Messages = {
 
     filtersLabel: 'Filters',
     filterStatus: 'Status',
-    filterAsset: 'Equipment (identifier)',
-    filterAssetHelp: 'Full equipment identifier, as a UUID.',
-    filterAssetInvalid: 'The equipment identifier must be a complete UUID.',
+    filterAsset: 'Equipment',
     filterFrom: 'From',
     filterTo: 'To',
     filterPeriodHelp: ({ zone }) => `Dates in the laboratory time zone: ${zone}.`,
@@ -488,6 +486,7 @@ export const en: Messages = {
     userField: 'User',
     factCurrentPlacement: 'Current placement of the equipment',
     currentPlacementHelp: "Where the equipment is placed now: not necessarily this operation's cell.",
+    holderUnnamed: 'Unnamed holder',
     holderLabel: 'Holder:',
     userLabel: 'User:',
     idOnly: 'Identifier only',
@@ -909,6 +908,7 @@ export const en: Messages = {
 
     filtersLabel: 'Anomaly filters',
     filterStatus: 'Status',
+    filterAsset: 'Equipment',
     filterSeverity: 'Severity',
     filterType: 'Type',
     filterAny: 'All',
@@ -936,8 +936,8 @@ export const en: Messages = {
     selectedOverline: 'Selected anomaly',
     selectedStatus: ({ name }: { name: string }) => `Selected anomaly: ${name}.`,
     detected: ({ time }: { time: string }) => `Detected ${time}`,
-    cellId: ({ id }: { id: string }) => `Cell ${id}`,
-    assetId: ({ id }: { id: string }) => `Equipment ${id}`,
+    cellUnlabelled: 'Unnamed cell',
+    assetUnlabelled: 'Unnamed equipment',
     noCell: 'No cell given',
 
     status: { OPEN: 'Open', ACKNOWLEDGED: 'Acknowledged', RESOLVED: 'Resolved' },
@@ -979,6 +979,12 @@ export const en: Messages = {
     notResolved: 'Not resolved: no new observation from the locker has confirmed the expected state.',
     resolvedAt: ({ time }: { time: string }) => `Resolved at ${time} by a new observation from the locker.`,
     resolutionObservation: 'Resolution observation',
+    resolutionByObservation: 'Resolved by a locker observation.',
+    techAnomaly: 'Anomaly identifier',
+    techCell: 'Cell identifier',
+    techAsset: 'Equipment identifier',
+    techObservation: ({ index }: { index: number }) => `Observation ${index}`,
+    techObservationOperation: ({ index }: { index: number }) => `Operation of observation ${index}`,
     resolutionNote: 'Resolution note',
     resolutionNoteSource: 'Note sent by the server, shown as is.',
     leadOpen: 'This anomaly has not been acknowledged yet.',
@@ -1026,8 +1032,7 @@ export const en: Messages = {
 
     dialog: {
       title: 'Acknowledge this anomaly',
-      description:
-        'Acknowledging records that an administrator has taken note of the anomaly and that the check is under way. The anomaly is not resolved: it will be only when a new observation from the locker confirms it, and it stays visible.',
+      description: 'Acknowledging records that you have taken note; it does not resolve the anomaly.',
       /** 06 §13.4: once every anomaly linked to its returns is acknowledged, the loan offers RETURN again. Not a resolution. */
       returnEffect:
         'For a return anomaly, acknowledging it lets the technician try a new return when the other conditions are met. The anomaly stays unresolved until the locker proves that return.',
@@ -1428,6 +1433,16 @@ export const en: Messages = {
     notLoaded: 'Labels not loaded',
     retry: 'Try again',
     partial: 'Partial labels: some units are shown by their identifier.',
+    searchHelp: 'Code or model name.',
+    searchResults: 'Units found',
+    searchMin: 'Type at least 2 characters.',
+    searching: 'Searching…',
+    searchNone: ({ text }: { text: string }) => `No unit for “${text}”.`,
+    searchFailed: 'Search unavailable.',
+    searchCount: ({ count: value }: { count: number }) => plural(value, { one: `${count.format(value)} unit.`, other: `${count.format(value)} units.` }),
+    searchRefine: 'Refine the search to see the others.',
+    remove: 'Remove',
+    removeAsset: 'Remove the chosen equipment',
   },
 
   notFound: {

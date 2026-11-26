@@ -3,8 +3,10 @@ import { Link } from '../../app/Link'
 import { useI18n } from '../../i18n/useI18n'
 import { Button } from '../../ui/Button'
 import { SelectField, TextField } from '../../ui/FormField'
+import { AssetPicker } from '../labels/AssetPicker'
+import { useLabelIndex } from '../labels/useLabelIndex'
 import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
-import { isCalendarDay, isUuidText, NO_FILTERS, STATUSES_OF_VIEW, transactionHref, type TransactionFilterValues, type TransactionView } from './transactionHref'
+import { isCalendarDay, NO_FILTERS, STATUSES_OF_VIEW, transactionHref, type TransactionFilterValues, type TransactionView } from './transactionHref'
 
 interface TransactionFiltersProps {
   readonly view: TransactionView
@@ -13,10 +15,10 @@ interface TransactionFiltersProps {
   readonly onApply: (filters: TransactionFilterValues) => void
 }
 
-type FieldErrors = { readonly assetId: string | null; readonly period: string | null }
+type FieldErrors = { readonly period: string | null }
 
 /**
- * Status, equipment id and period (09 §17). The rules checked here only spare a round trip; the server stays the
+ * Status, equipment (searched by code or name, §1.3) and period (09 §17). The rules checked here only spare a round trip; the server stays the
  * authority. The period is read as laboratory calendar days, never the browser's zone. No sort is offered: the
  * contract defines none.
  */
@@ -25,25 +27,23 @@ export function TransactionFilters({ view, values, onApply }: TransactionFilters
   const t = m.reservations
   const formRef = useRef<HTMLFormElement>(null)
   const [status, setStatus] = useState(values.status ?? '')
-  const [assetId, setAssetId] = useState(values.assetId ?? '')
+  const [assetId, setAssetId] = useState<string | null>(values.assetId)
+  const labels = useLabelIndex()
   const [from, setFrom] = useState(values.from ?? '')
   const [to, setTo] = useState(values.to ?? '')
-  const [errors, setErrors] = useState<FieldErrors>({ assetId: null, period: null })
+  const [errors, setErrors] = useState<FieldErrors>({ period: null })
 
   function submit(event: FormEvent) {
     event.preventDefault()
-    const asset = assetId.trim()
     const next: FieldErrors = {
-      assetId: asset !== '' && !isUuidText(asset) ? t.filterAssetInvalid : null,
       period: (from !== '' && !isCalendarDay(from)) || (to !== '' && !isCalendarDay(to)) || (from !== '' && to !== '' && to < from) ? t.filterPeriodInvalid : null,
     }
     setErrors(next)
-    if (next.assetId !== null || next.period !== null) {
-      const field = next.assetId !== null ? 'equipement' : 'au'
-      ;(formRef.current?.elements.namedItem(field) as HTMLElement | null)?.focus()
+    if (next.period !== null) {
+      ;(formRef.current?.elements.namedItem('au') as HTMLElement | null)?.focus()
       return
     }
-    onApply({ status: status === '' ? null : status, assetId: asset === '' ? null : asset.toLowerCase(), lockerId: values.lockerId, from: from === '' ? null : from, to: to === '' ? null : to })
+    onApply({ status: status === '' ? null : status, assetId, lockerId: values.lockerId, from: from === '' ? null : from, to: to === '' ? null : to })
   }
 
   function clear() {
@@ -61,16 +61,7 @@ export function TransactionFilters({ view, values, onApply }: TransactionFilters
             </option>
           ))}
         </SelectField>
-        <TextField
-          name="equipement"
-          label={t.filterAsset}
-          error={errors.assetId}
-          value={assetId}
-          onChange={(event) => setAssetId(event.target.value)}
-          autoComplete="off"
-          spellCheck={false}
-          inputMode="text"
-        />
+        <AssetPicker label={t.filterAsset} value={assetId} onChange={setAssetId} labels={labels} />
         <TextField name="du" type="date" label={t.filterFrom} value={from} onChange={(event) => setFrom(event.target.value)} />
         <TextField name="au" type="date" label={t.filterTo} error={errors.period} value={to} onChange={(event) => setTo(event.target.value)} />
       </div>
@@ -91,7 +82,7 @@ export function TransactionFilters({ view, values, onApply }: TransactionFilters
         </p>
       )}
       <p className="ag-filters__help">
-        {t.filterAssetHelp} {t.filterPeriodHelp({ zone: LAB_TIME_ZONE })}
+        {t.filterPeriodHelp({ zone: LAB_TIME_ZONE })}
       </p>
     </form>
   )
