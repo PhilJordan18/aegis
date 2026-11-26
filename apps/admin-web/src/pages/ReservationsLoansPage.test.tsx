@@ -272,6 +272,32 @@ describe('Réservations et prêts: filters', () => {
     expect(document.querySelector('.ag-picker__status')?.textContent).toContain('Recherche indisponible.')
   })
 
+  it('keeps « Réessayer » when the keyboard reaches it, and searches again on Enter', async () => {
+    const user = userEvent.setup()
+    let searches = 0
+    const catalog = fakeCatalogGateway({
+      overrides: {
+        listAssets: async () => {
+          searches += 1
+          return { kind: 'network', reason: 'offline' } as never
+        },
+      },
+    })
+    renderPage(fakeGateway(), { catalogGateway: catalog })
+    await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+    await user.type(screen.getByRole('combobox', { name: 'Équipement' }), 'MM')
+    const retry = await screen.findByRole('button', { name: 'Réessayer' })
+    const before = searches
+    await user.tab()
+    expect(document.activeElement).toBe(retry)
+    // The list closes 150 ms after the field loses focus: the button must outlive it.
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    expect(retry.isConnected).toBe(true)
+    expect(document.activeElement).toBe(retry)
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(searches).toBe(before + 1))
+  })
+
   it('refuses an end date before the start date', async () => {
     const user = userEvent.setup()
     const gateway = fakeGateway()

@@ -178,8 +178,9 @@ export function AssetPicker({ label, value, onChange, labels }: AssetPickerProps
       <p className="ag-ff__help ag-picker__status" id={helpId} aria-live="polite">
         {expanded || typed.length > 0 ? status : t.searchHelp}
       </p>
-      {/* Outside the live region: an announcement carries text, never a control. */}
-      {expanded && settled && search.isError && (
+      {/* Outside the live region: an announcement carries text, never a control. It stays while the search is in error,
+          whatever the list does, so moving focus to it (which closes the list) does not remove it (§1.3). */}
+      {typed.length >= SEARCH_MIN_LENGTH && settled && search.isError && (
         <p className="ag-picker__retry">
           <Button variant="secondary" size="sm" onClick={() => void search.refetch()}>
             {t.retry}
