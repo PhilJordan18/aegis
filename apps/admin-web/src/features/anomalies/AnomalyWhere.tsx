@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from 'react'
 import { useI18n } from '../../i18n/useI18n'
+import { StatusChip } from '../../ui/StatusChip'
 import { IdText } from '../labels/IdText'
 import type { LabelIndex } from '../labels/labelIndex'
 import { AssetName } from '../labels/Labels'
@@ -21,6 +22,11 @@ export function AnomalyWhere({ anomaly, labels }: { readonly anomaly: AnomalyVie
       ) : (
         <span className={cell.kind === 'pending' ? 'ag-label ag-label--pending' : 'ag-label'}>
           {m.anomalies.fCell} <IdText id={anomaly.compartmentId} />
+          {cell.kind === 'unknown' && (
+            <StatusChip role="neutral" icon="info">
+              {m.labels.idOnly}
+            </StatusChip>
+          )}
         </span>
       ),
     )

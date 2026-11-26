@@ -120,6 +120,8 @@ export function AssetPicker({ label, value, onChange, labels }: AssetPickerProps
   }
 
   const expanded = open && typed.length > 0
+  // The listbox is hidden without results, so the field does not claim it is expanded (ARIA 1.2 combobox).
+  const listShown = expanded && items.length > 0
   const chosenLabel = value === null ? null : chosen !== null && chosen.id === value ? { kind: 'known' as const, code: chosen.assetCode, modelName: chosen.model.name, archived: chosen.archivedAt !== null } : labels.asset(value)
 
   return (
@@ -133,11 +135,11 @@ export function AssetPicker({ label, value, onChange, labels }: AssetPickerProps
           id={id}
           className="ag-ff__control"
           role="combobox"
-          aria-expanded={expanded}
+          aria-expanded={listShown}
           aria-controls={listId}
           aria-autocomplete="list"
           aria-describedby={helpId}
-          aria-activedescendant={expanded && active >= 0 && active < items.length ? optionId(active) : undefined}
+          aria-activedescendant={listShown && active >= 0 && active < items.length ? optionId(active) : undefined}
           autoComplete="off"
           spellCheck={false}
           value={text}
@@ -150,7 +152,7 @@ export function AssetPicker({ label, value, onChange, labels }: AssetPickerProps
           onBlur={() => window.setTimeout(() => setOpen(false), 150)}
           onKeyDown={keyDown}
         />
-        <ul className="ag-picker__list" id={listId} role="listbox" aria-label={t.searchResults} hidden={!expanded || items.length === 0}>
+        <ul className="ag-picker__list" id={listId} role="listbox" aria-label={t.searchResults} hidden={!listShown}>
           {items.map((unit, index) => (
             <li
               key={unit.id}
@@ -175,15 +177,15 @@ export function AssetPicker({ label, value, onChange, labels }: AssetPickerProps
       </div>
       <p className="ag-ff__help ag-picker__status" id={helpId} aria-live="polite">
         {expanded || typed.length > 0 ? status : t.searchHelp}
-        {expanded && settled && search.isError && (
-          <>
-            {' '}
-            <Button variant="secondary" size="sm" onClick={() => void search.refetch()}>
-              {t.retry}
-            </Button>
-          </>
-        )}
       </p>
+      {/* Outside the live region: an announcement carries text, never a control. */}
+      {expanded && settled && search.isError && (
+        <p className="ag-picker__retry">
+          <Button variant="secondary" size="sm" onClick={() => void search.refetch()}>
+            {t.retry}
+          </Button>
+        </p>
+      )}
       {value !== null && chosenLabel !== null && (
         <p className="ag-picker__chosen">
           <span className="ag-picker__chip">
