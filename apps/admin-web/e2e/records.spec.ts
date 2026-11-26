@@ -399,6 +399,35 @@ test.describe('records: card rows beside the dossier from 1024 to 1279 px', () =
   })
 })
 
+test.describe('records: at 1024 x 768 the list keeps whole rows beside the dossier (QA #246 B3)', () => {
+  test.use({ viewport: { width: 1024, height: 768 } })
+
+  test('Réservations, Prêts, Opérations and Audit each show at least one whole row with a dossier open', async ({ page }) => {
+    const loan = { id: '55555555-0000-4000-8000-000000000001', asset, holderUserId: USER_ID, holder: { id: USER_ID, displayName: 'Technicien Démo' }, status: 'ACTIVE', checkedOutAt: '2026-11-10T14:05:00Z', dueAt: '2026-11-10T20:30:00Z', overdue: true, returnRequestedAt: null, returnedAt: null, checkoutOperationId: OPERATION_ID, returnOperationId: null, currentOperationId: null, availableActions: [] }
+    await routeApi(page)
+    await page.route('**/api/v1/admin/loans**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(new URL(route.request().url()).pathname.endsWith('/loans') ? pageOf([loan, { ...loan, id: '55555555-0000-4000-8000-000000000002', overdue: false }], 20) : loan) }))
+    await signIn(page)
+    for (const [url, rows] of [
+      [`/reservations-prets?dossier=${reservation(1).id}`, 2],
+      ['/reservations-prets?vue=prets', 2],
+      [`/reservations-prets?vue=operations&dossier=${OPERATION_ID}`, 1],
+      ['/audit', 1],
+    ] as const) {
+      await go(page, url)
+      await expect(rowLinks(page)).toHaveCount(rows)
+      await expect(page.locator('.ag-dossier')).toBeVisible()
+      await expect(page.locator('.ag-dossier .ag-skel__bar')).toHaveCount(0)
+      const fit = await page.evaluate(() => {
+        const box = document.querySelector('.ag-list .ag-list__items')!.getBoundingClientRect()
+        const first = document.querySelector('.ag-list .ag-list__items a')!.getBoundingClientRect()
+        return { boxBottom: box.bottom, rowBottom: first.bottom, rowTop: first.top, boxTop: box.top, viewport: window.innerHeight }
+      })
+      expect(fit.rowTop, url).toBeGreaterThanOrEqual(fit.boxTop - 0.5)
+      expect(fit.rowBottom, url).toBeLessThanOrEqual(Math.min(fit.boxBottom, fit.viewport) + 0.5)
+    }
+  })
+})
+
 test.describe('records: below 1024 px the selection moves to the dossier', () => {
   test.use({ viewport: { width: 1000, height: 800 } })
 
@@ -436,11 +465,13 @@ for (const width of [1440, 1280, 1024, 390, 320]) {
 
 /**
  * QA #246 item 16 (Design §8.3): at 390 and 320 px no list page is taller than at 95a29d6. The ceilings are the heights
- * 95a29d6 measured on these same fakes (3 reservations, 3 loans, 3 operations, 5 audit events).
+ * 95a29d6 measures with this same test (3 reservations, 3 loans, 3 operations, 5 audit events, the dossier read and
+ * settled), stable over two runs. Prêts opens the overdue loan's dossier on both sides: 95a29d6 opened the server's
+ * first loan rather than the first row shown (QA #246 N5), so its default page showed a shorter dossier.
  */
 const CEILINGS = {
-  390: { reservations: 1507, loans: 1560, operations: 1507, audit: 2585 },
-  320: { reservations: 1919, loans: 1950, operations: 1837, audit: 2841 },
+  390: { reservations: 2391, loans: 2461, operations: 2965, audit: 2513 },
+  320: { reservations: 2927, loans: 2996, operations: 3386, audit: 2837 },
 } as const
 for (const width of [390, 320] as const) {
   test.describe(`records: page height at ${width} px`, () => {
@@ -454,24 +485,45 @@ for (const width of [390, 320] as const) {
       const operations = (['COMMAND_SENT', 'CONFIRMED', 'ANOMALY'] as const).map((status, index) => ({ ...OPERATION, id: id('44444444', index + 1), status, asset: unit(index + 1), assetId: unit(index + 1).id, terminalAt: status === 'COMMAND_SENT' ? null : '2026-11-10T14:05:00Z' }))
       const events = [1, 2, 3, 4, 5].map((n) => ({ ...EVENT, id: id('eeeeeeee', n), subjectId: id('44444444', 1), operationId: id('44444444', 1), result: n === 2 ? 'REJECTED' : 'ACCEPTED', occurredAt: `2026-11-10T14:0${n}:32Z` }))
       const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+      // Every read the page makes is answered, the dossier of the first row included (QA #246 N3): the height is the
+      // settled nominal page, never an error state or a page caught while its dossier still loads.
+      const byId = (items: readonly { id: string }[], p: string) => items.find((item) => p.endsWith(`/${item.id}`))
       await page.route('**/api/v1/**', (route) => {
         const p = new URL(route.request().url()).pathname.replace('/api/v1', '')
         if (p === '/admin/reservations') return json(route, pageOf(reservations, 20))
         if (p === '/admin/loans') return json(route, pageOf(loans, 20))
         if (p === '/admin/locker-operations') return json(route, pageOf(operations, 20))
         if (p === '/admin/audit-events') return json(route, { items: events, nextCursor: null, hasMore: false })
+        if (p.startsWith('/admin/reservations/')) return json(route, byId(reservations, p))
+        if (p.startsWith('/admin/loans/')) return json(route, byId(loans, p))
+        if (p.startsWith('/admin/locker-operations/')) return json(route, byId(operations, p) ?? operations[0])
+        if (p === '/admin/lockers') return json(route, pageOf([LOCKER], 20))
+        if (p === `/lockers/${LOCKER_ID}/status`) return json(route, STATUS)
         return json(route, pageOf([], 20))
       })
       await signIn(page)
       for (const [key, url, count] of [
         ['reservations', '/reservations-prets', 3],
-        ['loans', '/reservations-prets?vue=prets', 3],
+        ['loans', '/reservations-prets?vue=prets&dossier=55555555-0000-4000-8000-000000000002', 3],
         ['operations', '/reservations-prets?vue=operations', 3],
         ['audit', '/audit', 5],
       ] as const) {
         await go(page, url)
         await expect(rowLinks(page)).toHaveCount(count)
-        expect(await page.evaluate(() => document.documentElement.scrollHeight), key).toBeLessThanOrEqual(CEILINGS[width][key])
+        const dossier = page.locator('.ag-dossier')
+        await expect(dossier).toBeVisible()
+        await expect(dossier.locator('.ag-skel__bar')).toHaveCount(0)
+        await expect(dossier.getByRole('alert')).toHaveCount(0)
+        await expect(page.locator('.ag-list [aria-busy="true"], .ag-list[aria-busy="true"]')).toHaveCount(0)
+        // Two frames apart, the same height: nothing is still arriving.
+        const height = () => page.evaluate(() => document.documentElement.scrollHeight)
+        await expect.poll(async () => {
+          const first = await height()
+          await page.waitForTimeout(250)
+          return (await height()) === first
+        }).toBe(true)
+        const measured = await height()
+        expect(measured, key).toBeLessThanOrEqual(CEILINGS[width][key])
       }
     })
   })
