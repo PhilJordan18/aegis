@@ -56,6 +56,8 @@ enum UITestScenario: String {
     case resumeRecovers = "resume-recovers"
     case resumeExpired = "resume-expired"
     case resumeInvalid = "resume-invalid"
+    /// The launch check is answered by a 503: the service, not the network.
+    case resumeServiceError = "resume-service-error"
     case signedIn = "signed-in"
     /// Signed in on the catalogue fixtures; detail reads succeed.
     case catalog = "catalog"
@@ -108,6 +110,8 @@ enum UITestScenario: String {
     case checkoutExpired = "checkout-expired"
     /// After the authorization every operation read is lost on the network.
     case checkoutNetworkLost = "checkout-network-lost"
+    /// After the authorization every operation read is answered by a 503.
+    case checkoutServiceError = "checkout-service-error"
     /// A relaunch during a checkout: the reservation points to an operation
     /// in COMMAND_SENT, which stays there.
     case checkoutResume = "checkout-resume"
@@ -139,7 +143,7 @@ enum UITestScenario: String {
 
     /// Served by the fake server of the guided operations.
     var isCheckout: Bool {
-        [.checkout, .checkoutRefused, .checkoutOffline, .checkoutExpired, .checkoutNetworkLost, .checkoutResume]
+        [.checkout, .checkoutRefused, .checkoutOffline, .checkoutExpired, .checkoutNetworkLost, .checkoutServiceError, .checkoutResume]
             .contains(self) || isReturn
     }
 
@@ -147,11 +151,11 @@ enum UITestScenario: String {
 
     var storedSession: StoredSession? {
         switch self {
-        case .resumeSlow, .resumeOffline, .resumeRecovers, .resumeInvalid, .signedIn,
+        case .resumeSlow, .resumeOffline, .resumeRecovers, .resumeInvalid, .resumeServiceError, .signedIn,
              .catalog, .catalogEmpty, .catalogPages, .catalogOffline, .catalogDetailOffline, .catalogDetailGone,
              .reservation, .reservationRefused, .reservationOffline, .reservationClosed,
              .activityReserved, .activityNotCancellable, .activityLoan, .activityLoanUnavailable, .checkout,
-             .checkoutRefused, .checkoutOffline, .checkoutExpired, .checkoutNetworkLost, .checkoutResume,
+             .checkoutRefused, .checkoutOffline, .checkoutExpired, .checkoutNetworkLost, .checkoutServiceError, .checkoutResume,
              .returnLoan, .returnRefused, .returnResume, .password, .passwordLost,
              .history, .historyEmpty, .historyOffline:
             StoredSession(accessToken: "scenario-token", expiresAt: .now + 3600, email: Self.technicianEmail)
@@ -279,7 +283,7 @@ struct ScenarioTransport: HTTPTransport {
         case .signedIn, .loginSuccess, .catalog, .catalogEmpty, .catalogPages, .catalogOffline, .catalogDetailOffline,
              .catalogDetailGone, .reservation, .reservationRefused, .reservationOffline, .reservationClosed,
              .activityReserved, .activityNotCancellable, .activityLoan, .activityLoanUnavailable, .checkout,
-             .checkoutRefused, .checkoutOffline, .checkoutExpired, .checkoutNetworkLost, .checkoutResume,
+             .checkoutRefused, .checkoutOffline, .checkoutExpired, .checkoutNetworkLost, .checkoutServiceError, .checkoutResume,
              .returnLoan, .returnRefused, .returnResume, .password, .passwordLost,
              .history, .historyEmpty, .historyOffline:
             return response(request, 200, UITestScenario.technician)
@@ -287,6 +291,8 @@ struct ScenarioTransport: HTTPTransport {
             return response(request, 200, UITestScenario.technician)
         case .resumeInvalid:
             return problem(request, 401, "AUTH_TOKEN_INVALID")
+        case .resumeServiceError:
+            return problem(request, 503, "INTERNAL_ERROR")
         default:
             throw URLError(.notConnectedToInternet)
         }
@@ -523,6 +529,7 @@ struct ScenarioTransport: HTTPTransport {
                                 headers: ["Retry-After": "1"])
             case let .authorized(id, at, step) where path.hasSuffix(id):
                 if scenario == .checkoutNetworkLost { throw URLError(.notConnectedToInternet) }
+                if scenario == .checkoutServiceError { return problem(request, 503, "INTERNAL_ERROR") }
                 if scenario == .checkoutExpired {
                     let end = Date.now
                     server.set(.expired(operationId: id, at: end))

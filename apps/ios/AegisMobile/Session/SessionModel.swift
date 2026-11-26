@@ -83,6 +83,9 @@ final class SessionModel {
     private(set) var passwordError: FieldError?
     private(set) var isSubmitting = false
     private(set) var isResuming = false
+    /// Why the last launch check could not verify the stored session: an
+    /// unreachable service and an answer in error are worded apart (#247).
+    private(set) var resumeFailure: CatalogFailure = .unreachable
     /// While set and in the future, sign-in is locked by a server `Retry-After`.
     private(set) var retryAvailableAt: Date?
     private(set) var expiresAt: Date?
@@ -168,6 +171,7 @@ final class SessionModel {
             discardSession(prefill: stored.email, notice: Self.notice(forUnauthorized: problem?.code))
         } catch {
             guard request == generation else { return }
+            resumeFailure = CatalogFailure(error)
             phase = .resumeOffline
         }
     }

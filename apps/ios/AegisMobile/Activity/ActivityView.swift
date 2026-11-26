@@ -209,6 +209,7 @@ struct ActivityScreen: View {
         if resumable, let id = reservation.currentOperationId {
             Button("Reprendre") { model.resumeOperation(id) }
                 .buttonStyle(PrimaryButtonStyle())
+                .accessibilityLabel(Text("Reprendre le retrait"))
                 .accessibilityIdentifier("activity.resume")
         } else if listed {
             Button { Task { await model.prepareCheckout() } } label: {
@@ -348,6 +349,7 @@ private struct LoanCard: View {
         if resumable, let id = loan.currentOperationId {
             Button("Reprendre") { model.resumeOperation(id) }
                 .buttonStyle(PrimaryButtonStyle())
+                .accessibilityLabel(Text("Reprendre le retour"))
                 .accessibilityIdentifier("activity.loan.resume")
         } else if listed {
             Button { Task { await model.prepareReturn() } } label: {

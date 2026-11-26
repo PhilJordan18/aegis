@@ -401,6 +401,16 @@
         }
       }
     },
+    "Ce n’est ni une annulation ni une confirmation. Le service a répondu par une erreur ; l’état sera relu automatiquement." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is neither a cancellation nor a confirmation. The service returned an error; the state will be read again automatically."
+          }
+        }
+      }
+    },
     "Ce n’est ni une annulation ni une confirmation. L’état sera relu dès le retour du réseau." : {
       "localizations" : {
         "en" : {
@@ -807,6 +817,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Already reserved"
+          }
+        }
+      }
+    },
+    "Délai de l’opération" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Operation time limit"
           }
         }
       }
@@ -1271,6 +1291,26 @@
         }
       }
     },
+    "Le service a confirmé le dépôt de « %@ » dans la cellule %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service confirmed that “%@” was put back in compartment %@."
+          }
+        }
+      }
+    },
+    "Le service a confirmé le retrait de « %@ » de la cellule %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service confirmed that “%@” was taken from compartment %@."
+          }
+        }
+      }
+    },
     "Le service a refusé la demande." : {
       "localizations" : {
         "en" : {
@@ -1297,6 +1337,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The service replied in an unexpected format. Check the configured address."
+          }
+        }
+      }
+    },
+    "Le service ne répond pas correctement" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service isn't responding correctly"
           }
         }
       }
@@ -1708,6 +1758,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Resume"
+          }
+        }
+      }
+    },
+    "Reprendre le retour" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume return"
+          }
+        }
+      }
+    },
+    "Reprendre le retrait" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume checkout"
           }
         }
       }
@@ -2242,6 +2312,16 @@
         }
       }
     },
+    "Suivi interrompu : erreur du service" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tracking interrupted: service error"
+          }
+        }
+      }
+    },
     "Suivi masqué. L’opération n’est pas annulée." : {
       "localizations" : {
         "en" : {
@@ -2258,16 +2338,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Technician"
-          }
-        }
-      }
-    },
-    "Temps restant" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Time remaining"
           }
         }
       }
@@ -2420,6 +2490,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Your session has expired. Your reservations and loans are kept."
+          }
+        }
+      }
+    },
+    "Votre session est conservée, mais elle n’a pas pu être vérifiée : le service a répondu par une erreur. Aucune action n’est possible pour le moment." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your session is kept but couldn't be verified: the service returned an error. No action is available for now."
           }
         }
       }
