@@ -344,10 +344,39 @@ final class ActivityViewModel {
         self.guided = guided
     }
 
-    /// Technician-started refresh: clears the last confirmation or refusal.
+    /// Technician-started refresh, from the cards' control, a notice's Try
+    /// again or a pull: clears the last confirmation or refusal, reads both
+    /// resources, then announces the outcome. A tap while a read is in flight
+    /// shares that read: a second request would only repeat it. It never
+    /// creates, resumes or replays an operation.
     func refresh() async {
         feedback = nil
-        await load()
+        let before = (reservation: reservation.receivedAt, loan: loan.receivedAt)
+        let failedBefore = reservation.failure != nil || loan.failure != nil
+        if isLoading {
+            await withCheckedContinuation { readWaiters.append($0) }
+        } else {
+            await load()
+        }
+        if let message = Self.refreshAnnouncement(reservation: reservation, loan: loan, before: before,
+                                                  failedBefore: failedBefore) {
+            announcement = message
+        }
+    }
+
+    /// What VoiceOver hears after a refresh. A read that succeeded names the
+    /// time of that read, even when nothing changed. A failure is announced
+    /// only if its notice was already on screen: a new notice announces
+    /// itself. Nothing is said when no read answered, such as after a 401
+    /// that ends the session.
+    static func refreshAnnouncement(reservation: ActivityReading<ReservationView>, loan: ActivityReading<LoanView>,
+                                    before: (reservation: Date?, loan: Date?), failedBefore: Bool) -> String? {
+        if reservation.failure != nil || loan.failure != nil {
+            return failedBefore ? String(localized: "Actualisation impossible. Informations non actualisées.") : nil
+        }
+        guard let checked = reservation.receivedAt, let loanChecked = loan.receivedAt,
+              checked != before.reservation, loanChecked != before.loan else { return nil }
+        return String(localized: "Activité vérifiée à \(AegisTime.deviceTime(max(checked, loanChecked))).")
     }
 
     /// A reservation the sheet just created: shown at once, then confirmed by
@@ -359,8 +388,11 @@ final class ActivityViewModel {
     }
 
     /// `POST /reservations/{id}/cancel` (§14.4), then the card is read again.
-    func cancel() async {
+    /// `expected` is the reservation the technician confirmed: if a read
+    /// replaced it while the alert was up, nothing is sent.
+    func cancel(_ expected: UUID? = nil) async {
         guard canCancel, let reservation = actionableReservation else { return }
+        if let expected, expected != reservation.id { return }
         guard let token = session?.accessToken() else {
             session?.handleMissingToken()
             return
