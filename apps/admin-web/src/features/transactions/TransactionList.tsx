@@ -81,7 +81,7 @@ export function TransactionList({ view, page, selectedId, filters, filtered, loa
           {filtered && (
             <div>
               <Button variant="secondary" size="sm" onClick={onClearFilters}>
-                {t.filterClear}
+                {m.pageTools.clearFilters}
               </Button>
             </div>
           )}

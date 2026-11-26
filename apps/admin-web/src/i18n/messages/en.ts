@@ -498,9 +498,9 @@ export const en: Messages = {
     actionsLabel: { reservations: 'Reservation actions', loans: 'Loan actions', operations: 'Operation actions' },
     returnDue: ({ day }) => `Return due ${day}.`,
     selectedOverline: { reservations: 'Selected reservation', loans: 'Selected loan', operations: 'Selected operation' },
-    emptyTitle: { reservations: 'No reservation.', loans: 'No loan.', operations: 'No physical operation.' },
+    emptyTitle: { reservations: 'No reservation recorded.', loans: 'No loan recorded.', operations: 'No physical operation recorded.' },
     emptyBody: { reservations: 'Reservations appear here as soon as they are created.', loans: 'Loans appear here once a checkout is confirmed by the locker.', operations: 'Operations appear here as soon as they are created.' },
-    filteredEmptyTitle: { reservations: 'No reservation matches these filters.', loans: 'No loan matches these filters.', operations: 'No operation matches these filters.' },
+    filteredEmptyTitle: { reservations: 'No reservation for these filters.', loans: 'No loan for these filters.', operations: 'No operation for these filters.' },
     filteredEmptyBody: 'Change the filters or show everything.',
 
     forbiddenTitle: 'Your account cannot access reservations and loans.',
@@ -984,7 +984,7 @@ export const en: Messages = {
     loading: 'Loading anomalies…',
     loaded: ({ count: value, page, pages }: { count: number; page: number; pages: number }) =>
       `List loaded: ${plural(value, { one: `${count.format(value)} anomaly`, other: `${count.format(value)} anomalies` })}, page ${count.format(page)} of ${count.format(pages)}.`,
-    emptyFilteredTitle: 'No anomaly matches these filters.',
+    emptyFilteredTitle: 'No anomaly for these filters.',
     emptyFilteredBody: 'Change the filters, or show all anomalies.',
     emptyTitle: 'No anomaly is recorded.',
     emptyBody: 'An anomaly appears here as soon as the server records one.',
@@ -1281,7 +1281,7 @@ export const en: Messages = {
       plural(value, { one: `${count.format(value)} more event loaded.`, other: `${count.format(value)} more events loaded.` }),
     refreshed: ({ count: value }: { count: number }) =>
       plural(value, { one: `History refreshed: ${count.format(value)} event loaded.`, other: `History refreshed: ${count.format(value)} events loaded.` }),
-    emptyFilteredTitle: 'No event matches these filters.',
+    emptyFilteredTitle: 'No event for these filters.',
     emptyFilteredBody: 'Change the filters, or show the whole history.',
     emptyTitle: 'No event received.',
     emptyBody: 'The service returned no event.',

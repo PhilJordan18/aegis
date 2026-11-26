@@ -94,6 +94,19 @@ describe('Anomalies — list and dossier', () => {
     expect(within(dossier).getByText('Ne résout pas l’anomalie.')).toBeDefined()
   })
 
+  it('opens each dossier with its action zone, then its state block (§3.1, §3.8 criterion 1)', async () => {
+    renderAnomalies(fakeAnomalyGateway({ listAnomalies: async () => listOf(HIGH_OPEN), getAnomaly: detailsOf(HIGH_OPEN) }))
+    let actions = await screen.findByRole('group', { name: 'Actions sur l’anomalie' })
+    expect([...actions.querySelectorAll('a, button')].map((control) => control.textContent)).toEqual(['Reconnaître', "Ouvrir l'opération", 'Audit de cette opération'])
+    expect(actions.compareDocumentPosition(document.querySelector('.ag-callout') as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(document.querySelector('.ag-callout__lead')?.textContent).toBe('Cette anomalie n’a pas encore été reconnue.')
+    cleanup()
+
+    renderAnomalies(fakeAnomalyGateway({ listAnomalies: async () => listOf(MEDIUM_ACK), getAnomaly: detailsOf(MEDIUM_ACK) }), { url: '/anomalies?statut=reconnues' })
+    actions = await screen.findByRole('group', { name: 'Actions sur l’anomalie' })
+    expect([...actions.querySelectorAll('a, button')].map((control) => control.textContent)).toEqual(["Ouvrir l'opération", 'Audit de cette opération'])
+  })
+
   it('labels the offline type with the backend summary wording in both languages', async () => {
     const offline = parsedAnomaly({ type: 'DEVICE_OFFLINE_DURING_OPERATION', summary: 'Texte du serveur, jamais affiché pour un type connu.' })
     const gateway = fakeAnomalyGateway({ listAnomalies: async () => listOf(offline), getAnomaly: detailsOf(offline) })
@@ -266,16 +279,16 @@ describe('Anomalies — address, filters and pagination', () => {
     expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Statut' }))
   })
 
-  it('shows the filtered empty state with « Tout afficher », never « no record » under a filter', async () => {
+  it('shows the filtered empty state with « Effacer les filtres », never « no record » under a filter', async () => {
     const user = userEvent.setup()
     const gateway = fakeAnomalyGateway({
       listAnomalies: async (_token, query) => ok(anomalyPageOf(query.severity === undefined && query.status === undefined ? [HIGH_OPEN] : [])),
       getAnomaly: detailsOf(HIGH_OPEN),
     })
     renderAnomalies(gateway, { url: '/anomalies?gravite=faible' })
-    expect(await screen.findByText('Aucune anomalie ne correspond à ces filtres.')).toBeDefined()
+    expect(await screen.findByText('Aucune anomalie pour ces filtres.')).toBeDefined()
     expect(screen.queryByText('Aucune anomalie n’est enregistrée.')).toBeNull()
-    await user.click(within(document.querySelector('.ag-list__empty') as HTMLElement).getByRole('button', { name: 'Tout afficher' }))
+    await user.click(within(document.querySelector('.ag-list__empty') as HTMLElement).getByRole('button', { name: 'Effacer les filtres' }))
     await screen.findByText('1 anomalie')
     expect(window.location.search).toBe('?statut=toutes')
   })

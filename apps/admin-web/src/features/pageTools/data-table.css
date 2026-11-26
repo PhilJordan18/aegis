@@ -40,3 +40,12 @@
 @media (forced-colors: active) {
   .ag-tbl__row[aria-current='true'] { outline: 2px solid Highlight; outline-offset: -2px; }
 }
+
+/* §3.4: while a filter's read runs, the previous rows stay, dimmed, under aria-busy; never an empty step between. */
+.ag-list[aria-busy='true'] .ag-list__items { opacity: 0.55; transition: opacity 120ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .ag-list[aria-busy='true'] .ag-list__items { transition: none; }
+}
+@media (forced-colors: active) {
+  .ag-list[aria-busy='true'] .ag-list__items { opacity: 1; }
+}

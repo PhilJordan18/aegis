@@ -75,6 +75,13 @@ describe('Casiers — reported device errors (#29, 09 §8.6)', () => {
     expect(second).not.toContain('Première réception')
   })
 
+  it('opens the locker dossier with its two actions, then its state block (§3.6)', async () => {
+    renderLocker(lockerStatus())
+    const actions = await screen.findByRole('group', { name: 'Actions sur le casier' })
+    expect([...actions.querySelectorAll('a, button')].map((control) => control.textContent)).toEqual(['Modifier l’horaire', 'Voir les opérations de ce casier'])
+    expect(plain(document.querySelector('.ag-callout')?.textContent ?? '')).toContain("Cette lecture n'autorise aucune ouverture.")
+  })
+
   it('never changes the connection state, a compartment state or an action because of an error', async () => {
     const gateway = renderLocker(lockerStatus({ deviceErrors: [error({ errorCode: 'LOCK_ACTUATOR_FAULT', compartmentId: A1.id })] }))
     await errorsSection(/^1 erreur signalée/)

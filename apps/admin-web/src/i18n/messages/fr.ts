@@ -566,10 +566,10 @@ export const fr = {
     actionsLabel: { reservations: 'Actions sur la réservation', loans: 'Actions sur le prêt', operations: 'Actions sur l’opération' },
     returnDue: ({ day }: { day: string }) => `Retour prévu le ${day}.`,
     selectedOverline: { reservations: 'Réservation sélectionnée', loans: 'Prêt sélectionné', operations: 'Opération sélectionnée' },
-    emptyTitle: { reservations: 'Aucune réservation.', loans: 'Aucun prêt.', operations: 'Aucune opération physique.' },
+    emptyTitle: { reservations: 'Aucune réservation enregistrée.', loans: 'Aucun prêt enregistré.', operations: 'Aucune opération physique enregistrée.' },
     emptyBody: { reservations: 'Les réservations apparaissent ici dès leur création.', loans: 'Les prêts apparaissent ici dès un retrait confirmé par le casier.', operations: 'Les opérations apparaissent ici dès leur création.' },
-    filteredEmptyTitle: { reservations: 'Aucune réservation ne correspond à ces filtres.', loans: 'Aucun prêt ne correspond à ces filtres.', operations: 'Aucune opération ne correspond à ces filtres.' },
-    filteredEmptyBody: 'Modifiez les filtres ou affichez tout.',
+    filteredEmptyTitle: { reservations: 'Aucune réservation pour ces filtres.', loans: 'Aucun prêt pour ces filtres.', operations: 'Aucune opération pour ces filtres.' },
+    filteredEmptyBody: 'Modifiez ou effacez les filtres.',
 
     forbiddenTitle: "Votre compte n'a pas accès aux réservations et aux prêts.",
     notFoundTitle: 'Dossier introuvable.',
@@ -1070,8 +1070,8 @@ export const fr = {
     loading: 'Chargement des anomalies…',
     loaded: ({ count: value, page, pages }: { count: number; page: number; pages: number }) =>
       `Liste chargée${NBSP}: ${plural(value, { one: `${count.format(value)} anomalie`, other: `${count.format(value)} anomalies` })}, page ${count.format(page)} sur ${count.format(pages)}.`,
-    emptyFilteredTitle: 'Aucune anomalie ne correspond à ces filtres.',
-    emptyFilteredBody: 'Modifiez les filtres, ou affichez toutes les anomalies.',
+    emptyFilteredTitle: 'Aucune anomalie pour ces filtres.',
+    emptyFilteredBody: 'Modifiez ou effacez les filtres.',
     emptyTitle: 'Aucune anomalie n’est enregistrée.',
     emptyBody: 'Une anomalie apparaît ici dès que le serveur en enregistre une.',
 
@@ -1379,8 +1379,8 @@ export const fr = {
       plural(value, { one: `${count.format(value)} événement de plus chargé.`, other: `${count.format(value)} événements de plus chargés.` }),
     refreshed: ({ count: value }: { count: number }) =>
       plural(value, { one: `Historique actualisé : ${count.format(value)} événement chargé.`, other: `Historique actualisé : ${count.format(value)} événements chargés.` }),
-    emptyFilteredTitle: 'Aucun événement ne correspond à ces filtres.',
-    emptyFilteredBody: 'Modifiez les filtres, ou affichez tout l’historique.',
+    emptyFilteredTitle: 'Aucun événement pour ces filtres.',
+    emptyFilteredBody: 'Modifiez ou effacez les filtres.',
     /** [P] Without any filter an empty answer is stated as what it is: nothing came back. */
     emptyTitle: 'Aucun événement reçu.',
     emptyBody: "Le service n'a renvoyé aucun événement.",

@@ -186,7 +186,7 @@ describe('Anomalies — acknowledgement outcomes', () => {
     expect(window.location.search).toBe(`?statut=ouvertes&anomalie=${ANOMALY_ID}`)
     // Read again from the server: the open list no longer holds it, the dossier does.
     await waitFor(() => expect(gateway.getAnomaly.mock.calls.length).toBeGreaterThan(1))
-    await waitFor(() => expect(screen.getByText('Aucune anomalie ne correspond à ces filtres.')).toBeDefined())
+    await waitFor(() => expect(screen.getByText('Aucune anomalie pour ces filtres.')).toBeDefined())
     expect(screen.getByRole('group', { name: 'Équipement attendu non observé' })).toBeDefined()
   })
 

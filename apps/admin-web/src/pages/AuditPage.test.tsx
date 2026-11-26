@@ -387,10 +387,10 @@ describe('Audit — filters', () => {
 
   it('says that no event matches the filters, with a way back, and never claims an empty history', async () => {
     renderAudit([pageOk(auditPage([])), pageOk(auditPage([COMMAND]))], { search: '?type=ANOMALY_RESOLVED' })
-    expect(await screen.findByText('Aucun événement ne correspond à ces filtres.')).toBeTruthy()
+    expect(await screen.findByText('Aucun événement pour ces filtres.')).toBeTruthy()
     expect(screen.queryByText('Aucun événement reçu.')).toBeNull()
     expect(screen.queryByText('Événement sélectionné')).toBeNull()
-    await userEvent.setup().click(screen.getAllByRole('button', { name: 'Tout afficher' }).at(-1) as HTMLElement)
+    await userEvent.setup().click(within(document.querySelector('.ag-list__empty') as HTMLElement).getByRole('button', { name: 'Effacer les filtres' }))
     expect(window.location.search).toBe('')
   })
 
@@ -398,7 +398,7 @@ describe('Audit — filters', () => {
     renderAudit([pageOk(auditPage([]))])
     expect(await screen.findByText('Aucun événement reçu.')).toBeTruthy()
     expect(screen.getByText("Le service n'a renvoyé aucun événement.")).toBeTruthy()
-    expect(screen.queryByText('Aucun événement ne correspond à ces filtres.')).toBeNull()
+    expect(screen.queryByText('Aucun événement pour ces filtres.')).toBeNull()
   })
 
   it('shows a 400 on a filter as a filter error against its field, not as empty data', async () => {

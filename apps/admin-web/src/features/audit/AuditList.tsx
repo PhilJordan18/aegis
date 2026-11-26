@@ -110,7 +110,7 @@ export function AuditList(props: AuditListProps) {
           {filtered && (
             <p className="ag-au-empty-action">
               <Button variant="secondary" size="sm" onClick={props.onClearFilters}>
-                {t.clearAll}
+                {m.pageTools.clearFilters}
               </Button>
             </p>
           )}
