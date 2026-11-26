@@ -251,6 +251,45 @@ test.describe('records: lot 3 tables, filters and dossiers', () => {
     await expect(page).toHaveURL(new RegExp(`du=${edited}`))
   })
 
+  test('a calendar choice after a key that changed nothing applies at once (QA #246, fourth review)', async ({ page }) => {
+    const requests = await openReservations(page, '/reservations-prets?du=2026-11-10')
+    const field = page.getByRole('textbox', { name: 'Du (inclus)' })
+    await field.focus()
+    // Neither a letter nor Alt+ArrowDown changes the day.
+    await page.keyboard.press('x')
+    await page.keyboard.press('Alt+ArrowDown')
+    await expect(field).toHaveValue('2026-11-10')
+    const before = requests.length
+    // Headless Chromium cannot drive the native calendar: its choice is an input event with no key.
+    await field.evaluate((input: HTMLInputElement, day) => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, day)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }, '2026-11-20')
+    await expect(page).toHaveURL(/du=2026-11-20/)
+    await expect.poll(() => requests.slice(before).filter((request) => request.includes('/admin/reservations?') && request.includes('from=2026-11-20')).length).toBe(1)
+  })
+
+  for (const validate of ['Enter', 'blur'] as const) {
+    test(`a year short of four digits is refused with an error on ${validate} (QA #246, fourth review)`, async ({ page }) => {
+      const requests = await openReservations(page, '/reservations-prets?du=2026-11-10')
+      const before = requests.length
+      const field = page.getByRole('textbox', { name: 'Du (inclus)' })
+      await field.focus()
+      // mm/dd/yyyy in the headless browser: two steps right reach the year, then « 2 » makes it 0002.
+      await page.keyboard.press('ArrowRight')
+      await page.keyboard.press('ArrowRight')
+      await page.keyboard.press('2')
+      await expect(page.getByText('Saisissez une date complète')).toHaveCount(0)
+      if (validate === 'Enter') await page.keyboard.press('Enter')
+      else await page.getByLabel('Statut').focus()
+      await expect(field).toHaveAccessibleDescription(/Saisissez une date complète, année sur quatre chiffres/)
+      await expect(field).toHaveAttribute('aria-invalid', 'true')
+      await expect(page).toHaveURL(/du=2026-11-10/)
+      await page.waitForTimeout(300)
+      expect(requests.slice(before).filter((request) => request.includes('/admin/reservations?'))).toHaveLength(0)
+    })
+  }
+
   test('the status list applies at once with the pointer, but only after a pause from the keyboard', async ({ page }) => {
     const requests = await openReservations(page)
     const length = await page.evaluate(() => window.history.length)

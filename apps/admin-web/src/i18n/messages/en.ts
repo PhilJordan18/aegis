@@ -1531,6 +1531,7 @@ export const en: Messages = {
     last30Days: '30 days',
     dateShortcuts: 'Quick periods',
     uuidExpected: 'Identifier expected in UUID format.',
+    dayIncomplete: 'Enter a whole date with a four-digit year, for example 2026-11-10.',
     fromInclusive: 'From (inclusive)',
     toInclusive: 'To (inclusive)',
     fromDay: ({ day }: { day: string }) => `From ${day}`,

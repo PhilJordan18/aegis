@@ -1639,6 +1639,7 @@ export const fr = {
     last30Days: '30 jours',
     dateShortcuts: 'Périodes rapides',
     uuidExpected: 'Identifiant attendu au format UUID.',
+    dayIncomplete: 'Saisissez une date complète, année sur quatre chiffres, par exemple 2026-11-10.',
     fromInclusive: 'Du (inclus)',
     toInclusive: 'Au (inclus)',
     fromDay: ({ day }: { day: string }) => `Du ${day}`,
