@@ -320,6 +320,7 @@ export const en: Messages = {
     listMeta: 'Operational diagnostic',
     listFoot: ({ time }) => `Sorted by code · diagnostic evaluated at ${time}`,
     blockers: ({ count: value }) => plural(value, { one: `${count.format(value)} blocker`, other: `${count.format(value)} blockers` }),
+    moreReasons: ({ count: value }) => plural(value, { one: `+ ${count.format(value)} other`, other: `+ ${count.format(value)} others` }),
     noBlockers: 'No blocker detected',
     archived: 'Archived',
     archivedOn: ({ date }) => `Archived on ${date}`,
@@ -494,6 +495,8 @@ export const en: Messages = {
     filterLocker: 'Locker filter:',
     filterLockerRemove: 'Remove this filter',
 
+    actionsLabel: { reservations: 'Reservation actions', loans: 'Loan actions', operations: 'Operation actions' },
+    returnDue: ({ day }) => `Return due ${day}.`,
     selectedOverline: { reservations: 'Selected reservation', loans: 'Selected loan', operations: 'Selected operation' },
     emptyTitle: { reservations: 'No reservation.', loans: 'No loan.', operations: 'No physical operation.' },
     emptyBody: { reservations: 'Reservations appear here as soon as they are created.', loans: 'Loans appear here once a checkout is confirmed by the locker.', operations: 'Operations appear here as soon as they are created.' },
@@ -768,6 +771,7 @@ export const en: Messages = {
   },
 
   lockers: {
+    actionsLabel: 'Locker actions',
     heading: 'Lockers',
     loadingLockers: 'Looking for lockers…',
     loadingStatus: 'Loading the locker status…',
@@ -1242,7 +1246,7 @@ export const en: Messages = {
     defaultCalibrationYes: 'Calibration required by default',
     defaultCalibrationNo: 'No calibration by default',
     modelActions: ({ name }: { name: string }) => `Actions for model ${name}`,
-    assetActions: 'Unit actions',
+    assetActions: 'Actions on the unit',
   },
 
   audit: {

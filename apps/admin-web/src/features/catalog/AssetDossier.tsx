@@ -2,6 +2,7 @@ import { useId, useLayoutEffect, useRef, type ReactNode, type Ref } from 'react'
 import { Link } from '../../app/Link'
 import { useI18n } from '../../i18n/useI18n'
 import { ReadOnlyMark } from '../../ui/ReadOnlyMark'
+import { Callout, DossierActions } from '../../ui/Callout'
 import { StatusChip } from '../../ui/StatusChip'
 import {
   accessLevelLabel,
@@ -123,6 +124,7 @@ function DossierBody({ asset, titleId, stale, retrying, onRetry, returnFocus, ac
   const evaluated = evaluatedAtLabel(asset, i18n)
   const model = [asset.model.manufacturer, asset.model.modelNumber].filter((part) => part !== null && part !== '').join(' ')
   const archived = archivedDateLabel(asset, i18n)
+  const [first, ...others] = reasons
 
   return (
     <>
@@ -140,35 +142,42 @@ function DossierBody({ asset, titleId, stale, retrying, onRetry, returnFocus, ac
       {asset.archivedAt !== null ? (
         <p className="ag-dossier__sub">{m.catalogEdit.archivedAssetNote}</p>
       ) : (
-        actions !== undefined && (
-          <div className="ag-dossier__actions" role="group" aria-label={m.catalogEdit.assetActions}>
-            {actions}
-          </div>
-        )
+        actions !== undefined && <DossierActions label={m.catalogEdit.assetActions}>{actions}</DossierActions>
       )}
 
-      <div className={`ag-diag ag-diag--${tone}`}>
-        <p className="ag-overline">{t.diagnosticTitle}</p>
-        <div className="ag-diag__row">
-          <StatusChip role={chip.role} icon={chip.icon} size="lg">
-            {chip.label}
-          </StatusChip>
-        </div>
-        {reasons.length > 0 && (
-          <ul className="ag-diag__reasons">
-            {reasons.map((reason, index) => (
-              <li key={`${reason}-${index}`}>{reasonLabel(reason, asset, i18n)}</li>
-            ))}
-          </ul>
+      <Callout
+        role={tone === 'none' ? 'neutral' : tone}
+        chips={
+          <>
+            <StatusChip role={chip.role} icon={chip.icon} size="lg">
+              {chip.label}
+            </StatusChip>
+            <StatusChip role={availabilityRole(asset.availability)} icon="status-info" size="lg">
+              {availabilityLabel(asset.availability, i18n)}
+            </StatusChip>
+          </>
+        }
+      >
+        {first !== undefined && <p className="ag-callout__lead">{reasonLabel(first, asset, i18n)}</p>}
+        {others.length > 0 && (
+          // « + N autres » (sections.md §1.3): the main reason leads, the others stay one click away.
+          <details className="ag-callout__more">
+            <summary>{t.moreReasons({ count: others.length })}</summary>
+            <ul className="ag-diag__reasons">
+              {others.map((reason, index) => (
+                <li key={`${reason}-${index}`}>{reasonLabel(reason, asset, i18n)}</li>
+              ))}
+            </ul>
+          </details>
         )}
         {reasons.includes('UNKNOWN_PHYSICAL_STATE') && <p className="ag-diag__note ag-diag__note--unknown">{t.unknownNote}</p>}
         {hasUnrecognizedValue(asset) && <p className="ag-diag__note ag-diag__note--unknown">{t.unrecognizedNote}</p>}
         <p className="ag-diag__note">{t.diagnosticNote({ time: evaluated })}</p>
-      </div>
+      </Callout>
 
       <div className="ag-cols">
         <div>
-          <h3 className="ag-overline ag-sec-title">
+          <h3 className="ag-sec-title">
             {t.derivedFacts}
             <ReadOnlyMark />
           </h3>
@@ -201,7 +210,7 @@ function DossierBody({ asset, titleId, stale, retrying, onRetry, returnFocus, ac
           </dl>
         </div>
         <div>
-          <h3 className="ag-overline ag-sec-title">
+          <h3 className="ag-sec-title">
             {t.settings}
           </h3>
           <dl className="ag-facts">
@@ -226,7 +235,7 @@ function DossierBody({ asset, titleId, stale, retrying, onRetry, returnFocus, ac
         </div>
       </div>
       <section className="ag-eq-history" aria-labelledby={`${titleId}-history`}>
-        <h3 className="ag-overline ag-sec-title" id={`${titleId}-history`}>
+        <h3 className="ag-sec-title" id={`${titleId}-history`}>
           {t.historyTitle}
         </h3>
         <ul className="ag-eq-history__links">

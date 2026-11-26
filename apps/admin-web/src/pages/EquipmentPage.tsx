@@ -16,7 +16,7 @@ import { readSearchText } from '../features/catalog/searchText'
 import { classifyCatalogFailure } from '../features/catalog/catalogFailure'
 import { LIST_QUERY_BASE, type AdminAssetView, type AssetListQuery, type AssetModelView } from '../features/catalog/contract'
 import { ArchiveDialog } from '../features/catalog/forms/ArchiveDialog'
-import { CustodySection } from '../features/custody/CustodySection'
+import { CustodyDialogs, CustodySection, type CustodyControls } from '../features/custody/CustodySection'
 import { AssetFormDialog } from '../features/catalog/forms/AssetFormDialog'
 import { ModelFormDialog } from '../features/catalog/forms/ModelFormDialog'
 import { ModelList } from '../features/catalog/ModelList'
@@ -188,17 +188,28 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
   }
 
   const t = m.catalogEdit
-  const dossierActions =
-    asset.data !== undefined && asset.data.archivedAt === null ? (
+  // §3.1: the unit's existing commands, primary first, the destructive one last.
+  const dossierActions = (custody: CustodyControls | null) =>
+    asset.data !== undefined && custody !== null ? (
       <>
-        <Button variant="secondary" size="sm" onClick={() => asset.data && open({ kind: 'editAsset', asset: asset.data })}>
+        <Button size="sm" onClick={() => asset.data && open({ kind: 'editAsset', asset: asset.data })}>
           {t.edit}
+        </Button>
+        <Button variant="secondary" size="sm" onClick={custody.place}>
+          {m.custody.changePlacement}
+        </Button>
+        <Button variant="secondary" size="sm" onClick={custody.assign}>
+          {m.custody.assign}
         </Button>
         <Button variant="ghost" size="sm" onClick={() => asset.data && open({ kind: 'archiveAsset', asset: asset.data })}>
           {t.archive}
         </Button>
       </>
     ) : undefined
+  const announce = (message: string) => {
+    setOutcome('')
+    requestAnimationFrame(() => setOutcome(message))
+  }
 
   return (
     <ManagerShell currentPath={pathOf('equipment')} profile={profile} onSignOut={signOut}>
@@ -272,29 +283,22 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
               search={activeSearch}
             />
             {showDossier && (
-              <AssetDossier
-                asset={assetGone ? undefined : asset.data}
-                loading={asset.isPending || list.isPending}
-                failure={assetFailure}
-                stale={asset.isRefetchError && !assetGone}
-                retrying={asset.isFetching}
-                focusRef={dossierRef}
-                onRetry={() => void asset.refetch()}
-                onBack={() => router.navigate(equipmentHref({ page: location.page, assetId: null, search: activeSearch }))}
-                actions={dossierActions}
-                custody={
-                  asset.data !== undefined && !assetGone ? (
-                    <CustodySection
-                      key={asset.data.id}
-                      asset={asset.data}
-                      onOutcome={(message) => {
-                        setOutcome('')
-                        requestAnimationFrame(() => setOutcome(message))
-                      }}
-                    />
-                  ) : undefined
-                }
-              />
+              <CustodyDialogs asset={assetGone ? undefined : asset.data} onOutcome={announce}>
+                {(custody) => (
+                  <AssetDossier
+                    asset={assetGone ? undefined : asset.data}
+                    loading={asset.isPending || list.isPending}
+                    failure={assetFailure}
+                    stale={asset.isRefetchError && !assetGone}
+                    retrying={asset.isFetching}
+                    focusRef={dossierRef}
+                    onRetry={() => void asset.refetch()}
+                    onBack={() => router.navigate(equipmentHref({ page: location.page, assetId: null, search: activeSearch }))}
+                    actions={dossierActions(custody)}
+                    custody={asset.data !== undefined && !assetGone ? <CustodySection key={asset.data.id} asset={asset.data} onRevoke={custody?.revoke ?? null} /> : undefined}
+                  />
+                )}
+              </CustodyDialogs>
             )}
           </div>
         )}

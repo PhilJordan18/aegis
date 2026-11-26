@@ -191,7 +191,7 @@ for (const theme of ['light', 'dark'] as const) {
 
       test('archive confirmation: Cancel first, then the refusal explained by its code', async ({ page }) => {
         await start(page)
-        await page.getByRole('group', { name: 'Actions de l’exemplaire' }).getByRole('button', { name: 'Archiver' }).click()
+        await page.getByRole('group', { name: 'Actions sur l’exemplaire' }).getByRole('button', { name: 'Archiver' }).click()
         const dialog = page.getByRole('alertdialog')
         await expect(dialog.getByRole('button', { name: 'Annuler' })).toBeFocused()
         await page.keyboard.press('Tab')

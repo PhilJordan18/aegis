@@ -99,14 +99,18 @@ describe('Casiers — reported device errors (#29, 09 §8.6)', () => {
 
   it('empty: says no error was reported since the last start, or that no signal was ever received', async () => {
     renderLocker(lockerStatus())
-    let section = await errorsSection(/^0 erreur signalée/)
+    await screen.findByRole('heading', { level: 2, name: /AEGIS-DEMO-01/ })
+    // §3.6: with zero errors the section folds to its title line, still visible and still a heading.
+    let section = screen.getByRole('heading', { level: 3, name: /^0 erreur signalée/ }).closest('details') as HTMLElement
+    expect(section.open).toBe(false)
     expect(plain(section.textContent)).toContain('Aucune erreur signalée depuis le dernier démarrage du casier.')
     expect(within(section).queryByRole('list')).toBeNull()
     expect(plain(section.textContent)).not.toContain("n'est pas en ligne")
     cleanup()
 
     renderLocker(NEVER_SEEN)
-    section = await errorsSection(/^0 erreur signalée/)
+    await screen.findByRole('heading', { level: 2, name: /AEGIS-DEMO-01/ })
+    section = screen.getByRole('heading', { level: 3, name: /^0 erreur signalée/ }).closest('details') as HTMLElement
     expect(plain(section.textContent)).toContain("Aucun signal reçu du casier : aucune erreur signalée à afficher.")
   })
 

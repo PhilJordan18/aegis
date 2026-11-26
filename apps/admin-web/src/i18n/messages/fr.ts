@@ -375,6 +375,8 @@ export const fr = {
     listFoot: ({ time }: { time: string }) => `Triés par code · diagnostic évalué à ${time}`,
     blockers: ({ count: value }: { count: number }) =>
       plural(value, { one: `${count.format(value)} empêchement`, other: `${count.format(value)} empêchements` }),
+    moreReasons: ({ count: value }: { count: number }) =>
+      plural(value, { one: `+ ${count.format(value)} autre`, other: `+ ${count.format(value)} autres` }),
     noBlockers: 'Aucun empêchement détecté',
     archived: 'Archivé',
     archivedOn: ({ date }: { date: string }) => `Archivé le ${date}`,
@@ -561,6 +563,8 @@ export const fr = {
     filterLocker: `Casier filtré${NBSP}:`,
     filterLockerRemove: 'Retirer ce filtre',
 
+    actionsLabel: { reservations: 'Actions sur la réservation', loans: 'Actions sur le prêt', operations: 'Actions sur l’opération' },
+    returnDue: ({ day }: { day: string }) => `Retour prévu le ${day}.`,
     selectedOverline: { reservations: 'Réservation sélectionnée', loans: 'Prêt sélectionné', operations: 'Opération sélectionnée' },
     emptyTitle: { reservations: 'Aucune réservation.', loans: 'Aucun prêt.', operations: 'Aucune opération physique.' },
     emptyBody: { reservations: 'Les réservations apparaissent ici dès leur création.', loans: 'Les prêts apparaissent ici dès un retrait confirmé par le casier.', operations: 'Les opérations apparaissent ici dès leur création.' },
@@ -843,6 +847,7 @@ export const fr = {
   },
 
   lockers: {
+    actionsLabel: 'Actions sur le casier',
     heading: 'Casiers',
     loadingLockers: 'Recherche des casiers…',
     loadingStatus: 'Chargement du statut du casier…',
@@ -1329,7 +1334,7 @@ export const fr = {
     defaultCalibrationYes: 'Calibration exigée par défaut',
     defaultCalibrationNo: 'Sans calibration par défaut',
     modelActions: ({ name }: { name: string }) => `Actions du modèle ${name}`,
-    assetActions: 'Actions de l’exemplaire',
+    assetActions: 'Actions sur l’exemplaire',
   },
 
   /**

@@ -471,10 +471,12 @@ describe('Équipements — commands', () => {
       'Actualiser',
       'Nouvel exemplaire',
       'Modifier',
-      'Archiver',
       'Modifier le placement',
       'Attribuer un identifiant',
+      'Archiver',
     ])
+    // §3.1: one action zone under the title, the destructive command last.
+    expect(within(screen.getByRole('group', { name: 'Actions sur l’exemplaire' })).getAllByRole('button').map((button) => plain(button.textContent))).toEqual(['Modifier', 'Modifier le placement', 'Attribuer un identifiant', 'Archiver'])
     // The only text input is the search, which filters the list and sets nothing.
     expect(within(main).queryAllByRole('textbox')).toEqual([])
     expect(within(main).getAllByRole('searchbox').map((input) => input.getAttribute('id') !== null)).toEqual([true])

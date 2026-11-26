@@ -1,5 +1,4 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
-import { Link } from '../../app/Link'
 import type { PlacementLabel } from '../labels/labelIndex'
 import { useCellPlacements } from '../labels/useLabelIndex'
 import { useI18n } from '../../i18n/useI18n'
@@ -9,7 +8,8 @@ import { classifyCatalogFailure } from '../catalog/catalogFailure'
 import { StaleNotice } from '../catalog/StaleNotice'
 import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
 import { ScheduleDialog } from '../schedule/ScheduleDialog'
-import { Button } from '../../ui/Button'
+import { Button, ButtonLink } from '../../ui/Button'
+import { Callout, DossierActions } from '../../ui/Callout'
 import { DEVICE_ERRORS_LIMIT, type CompartmentStatus, type DeviceError, type LockerStatus } from './contract'
 import { NO_FILTERS, transactionHref } from '../transactions/transactionHref'
 import { LockerAlert } from './LockerAlert'
@@ -130,61 +130,68 @@ function LockerBody({ locker, titleId, stale, retrying, onRetry, returnFocus }: 
         {locker.name !== '' && <>{locker.name} · </>}
         <span className="ag-tnum ag-lk__code">{locker.code}</span>
       </h2>
-      <p className="ag-lk__links">
-        <Link className="ag-link" to={transactionHref({ view: 'operations', filters: { ...NO_FILTERS, lockerId: locker.lockerId } })}>
+      {/* §3.6: the locker's two existing actions, under its title; neither sends anything to the locker. */}
+      <DossierActions label={m.lockers.actionsLabel}>
+        <Button
+          size="sm"
+          onClick={() => {
+            setOutcome('')
+            setEditor({ session: ++sessions.current, open: true })
+          }}
+        >
+          {m.schedule.edit}
+        </Button>
+        <ButtonLink variant="secondary" size="sm" to={transactionHref({ view: 'operations', filters: { ...NO_FILTERS, lockerId: locker.lockerId } })}>
           {m.lockers.operationsOfLocker}
-        </Link>
+        </ButtonLink>
+      </DossierActions>
+      <p className="ag-sr-only" role="status">
+        {outcome}
       </p>
 
-      <div className="ag-lk__top">
-        <div className={`ag-diag ag-diag--${tone}`}>
-          <div className="ag-diag__row">
+      <Callout
+        role={tone === 'none' ? 'neutral' : tone}
+        chips={
+          <>
             <StatusChip role={chip.role} icon={chip.icon} size="lg">
               {chip.label}
             </StatusChip>
-            <span className="ag-lk__signal">{lastSignal === null ? m.lockers.neverSignal : m.lockers.lastSignal({ time: lastSignal })}</span>
-          </div>
-          {note !== null && <p className="ag-diag__note ag-diag__note--unknown">{note}</p>}
-          {hasUnrecognizedValue(locker) && <p className="ag-diag__note ag-diag__note--unknown">{m.equipment.unrecognizedNote}</p>}
-          {evaluated !== null && <p className="ag-diag__note">{m.lockers.evaluatedNote({ time: evaluated })}</p>}
-        </div>
+            <StatusChip role={window.kind === 'open' ? 'progress' : 'neutral'} icon="status-info" size="lg">
+              {window.kind === 'open' ? m.lockers.windowOpen : window.kind === 'closed' ? m.lockers.windowClosed : m.lockers.noSchedule}
+            </StatusChip>
+          </>
+        }
+      >
+        <p className="ag-callout__lead">
+          <span className="ag-lk__signal">{lastSignal === null ? m.lockers.neverSignal : m.lockers.lastSignal({ time: lastSignal })}</span>
+        </p>
+        {note !== null && <p className="ag-diag__note ag-diag__note--unknown">{note}</p>}
+        {hasUnrecognizedValue(locker) && <p className="ag-diag__note ag-diag__note--unknown">{m.equipment.unrecognizedNote}</p>}
+        {evaluated !== null && <p className="ag-diag__note">{m.lockers.evaluatedNote({ time: evaluated })}</p>}
+      </Callout>
 
-        <div className="ag-lk__window">
-          <div className="ag-lk__window-head">
-            <h3 className="ag-overline ag-sec-title">{m.lockers.windowTitle}</h3>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                setOutcome('')
-                setEditor({ session: ++sessions.current, open: true })
-              }}
-            >
-              {m.schedule.edit}
-            </Button>
-          </div>
-          <WindowFacts view={window} />
-          <p className="ag-sr-only" role="status">
-            {outcome}
-          </p>
-        </div>
-        {editor !== null && (
-          <ScheduleDialog
-            key={editor.session}
-            open={editor.open}
-            lockerId={locker.lockerId}
-            lockerCode={locker.code}
-            suggestedZone={locker.currentWindow.timeZone ?? LAB_TIME_ZONE}
-            onClose={() => setEditor({ ...editor, open: false })}
-            onSaved={() => {
-              setEditor({ ...editor, open: false })
-              setOutcome(m.schedule.saved({ code: locker.code }))
-            }}
-          />
-        )}
-      </div>
+      <section className="ag-lk__window ag-edit-card" aria-labelledby={`${titleId}-window`}>
+        <h3 className="ag-sec-title" id={`${titleId}-window`}>
+          {m.lockers.windowTitle}
+        </h3>
+        <WindowFacts view={window} />
+      </section>
+      {editor !== null && (
+        <ScheduleDialog
+          key={editor.session}
+          open={editor.open}
+          lockerId={locker.lockerId}
+          lockerCode={locker.code}
+          suggestedZone={locker.currentWindow.timeZone ?? LAB_TIME_ZONE}
+          onClose={() => setEditor({ ...editor, open: false })}
+          onSaved={() => {
+            setEditor({ ...editor, open: false })
+            setOutcome(m.schedule.saved({ code: locker.code }))
+          }}
+        />
+      )}
 
-      <h3 className="ag-overline ag-sec-title ag-lk__sec">
+      <h3 className="ag-sec-title ag-lk__sec">
         {m.lockers.compartmentsTitle({ count: locker.compartments.length })}
         <ReadOnlyMark />
       </h3>
@@ -343,12 +350,25 @@ function DeviceErrors({ locker }: { readonly locker: LockerStatus }) {
   const t = m.lockers
   const titleId = useId()
   const errors = locker.deviceErrors
+  const title = (
+    <h3 className="ag-sec-title ag-lk__sec" id={titleId}>
+      {t.errorsTitle({ count: errors.length })}
+      <ReadOnlyMark />
+    </h3>
+  )
+  // §3.6: with nothing to report, the section folds to its one-line title (« 0 erreur signalée ») and opens on demand.
+  if (errors.length === 0)
+    return (
+      <details className="ag-lk-errs ag-lk-errs--none">
+        <summary>{title}</summary>
+        <p className="ag-help ag-lk-errs__intro">{t.errorsIntro}</p>
+        {locker.connectionStatus !== 'ONLINE' && locker.lastSeenAt !== null && <p className="ag-lk-errs__offline">{t.errorsNotOnline}</p>}
+        <p className="ag-lk-errs__empty">{locker.lastSeenAt === null ? t.errorsNoSignal : t.errorsNone}</p>
+      </details>
+    )
   return (
     <section className="ag-lk-errs" aria-labelledby={titleId}>
-      <h3 className="ag-overline ag-sec-title ag-lk__sec" id={titleId}>
-        {t.errorsTitle({ count: errors.length })}
-        <ReadOnlyMark />
-      </h3>
+      {title}
       <p className="ag-help ag-lk-errs__intro">{t.errorsIntro}</p>
       {locker.connectionStatus !== 'ONLINE' && locker.lastSeenAt !== null && <p className="ag-lk-errs__offline">{t.errorsNotOnline}</p>}
       {errors.length === 0 ? (
