@@ -198,7 +198,6 @@ export function LoansBlock({ read, retrying, onRetry }: BlockProps & { readonly 
         </PartialNotice>
       )}
       {truncated !== undefined && truncated.kind === 'truncated' && <PartialNotice title={t.partialTitle}>{t.loansTruncatedBody({ read: truncated.read, total: truncated.total })}</PartialNotice>}
-      <p className="ag-ov__note">{t.successiveReadsNote}</p>
     </OverviewModule>
   )
 }
@@ -263,7 +262,6 @@ export function OperationsBlock({ read, labels, retrying, onRetry }: BlockProps 
       )}
       {summary?.truncated === true && <PartialNotice title={t.partialTitle}>{t.operationsTruncatedBody}</PartialNotice>}
       <p className="ag-ov__note">{t.operationsNote}</p>
-      <p className="ag-ov__note">{t.successiveReadsNote}</p>
     </OverviewModule>
   )
 }

@@ -1,5 +1,6 @@
 import { useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
+import { refetchAll } from '../pageTools/refetchAll'
 import { queryKeys } from '../../api/queryKeys'
 import { useAnomalyList } from '../anomalies/useAnomalyQueries'
 import { authorizedRequest } from '../auth/authorizedRequest'
@@ -80,29 +81,20 @@ export function useLockerStatuses(lockerIds: readonly string[]) {
 }
 
 /** Reads every active query of the page again, the locker statuses included; failures stay on their own block. */
-export function refreshOverview(client: QueryClient): Promise<unknown> {
-  return Promise.allSettled([
-    client.refetchQueries({ queryKey: queryKeys.overview.all, type: 'active' }),
-    client.refetchQueries({ queryKey: queryKeys.anomalies.all, type: 'active' }),
-    client.refetchQueries({ queryKey: queryKeys.custody.all, type: 'active' }),
-    client.refetchQueries({ queryKey: [...queryKeys.lockers.all, 'status'], type: 'active' }),
+export function refreshOverview(client: QueryClient): Promise<boolean> {
+  return refetchAll(client, [
+    { queryKey: queryKeys.overview.all, type: 'active' },
+    { queryKey: queryKeys.anomalies.all, type: 'active' },
+    { queryKey: queryKeys.custody.all, type: 'active' },
+    { queryKey: [...queryKeys.lockers.all, 'status'], type: 'active' },
   ])
 }
 
-/** The « Actualiser » button: busy while its own refresh runs, not while a locker status polls. */
-export function useOverviewRefresh() {
+/** « Actualiser »: the blocks, and the unit pages of the label index (the overview already reads its locker page). */
+export function useOverviewRefresh(): () => Promise<boolean> {
   const client = useQueryClient()
-  const [refreshing, setRefreshing] = useState(false)
-  /** Epoch ms at which the last manual refresh ended, for the announcement; null before the first one. */
-  const [refreshedAt, setRefreshedAt] = useState<number | null>(null)
-  const refresh = useCallback(() => {
-    if (refreshing) return
-    setRefreshing(true)
-    // The overview already reads the locker page of the label index; only its unit pages are added (one read per key).
-    void Promise.allSettled([refreshOverview(client), client.refetchQueries({ queryKey: queryKeys.catalog.labelIndexAll })]).finally(() => {
-      setRefreshing(false)
-      setRefreshedAt(Date.now())
-    })
-  }, [client, refreshing])
-  return { refreshing, refreshedAt, refresh }
+  return useCallback(async () => {
+    const [ok] = await Promise.all([refreshOverview(client), client.refetchQueries({ queryKey: queryKeys.catalog.labelIndexAll })])
+    return ok
+  }, [client])
 }

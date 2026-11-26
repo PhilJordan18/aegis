@@ -1456,6 +1456,19 @@ export const en: Messages = {
     removeAsset: 'Remove the chosen equipment',
   },
 
+  pageTools: {
+    refresh: 'Refresh',
+    refreshing: 'Refreshing…',
+    readAt: ({ time }: { time: string }) => `Read at ${time}`,
+    notRefreshed: 'Not refreshed',
+    refreshed: ({ time }: { time: string }) => `Data refreshed at ${time}.`,
+    refreshFailed: ({ time }: { time: string }) => `Refresh failed · data from ${time} kept.`,
+    refreshFailedNoData: 'Refresh failed · no data read.',
+    help: 'Help',
+    helpTitle: 'Page help',
+    labHours: ({ zone }: { zone: string }) => `Laboratory time: ${zone}. Every time is given in this zone.`,
+  },
+
   notFound: {
     heading: 'Page not found',
     body: 'This address does not match any Aegis Manager page.',

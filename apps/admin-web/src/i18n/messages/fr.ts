@@ -1558,6 +1558,19 @@ export const fr = {
     removeAsset: 'Retirer l’équipement choisi',
   },
 
+  pageTools: {
+    refresh: 'Actualiser',
+    refreshing: 'Actualisation…',
+    readAt: ({ time }: { time: string }) => `Lu à ${time}`,
+    notRefreshed: 'Non actualisé',
+    refreshed: ({ time }: { time: string }) => `Données actualisées à ${time}.`,
+    refreshFailed: ({ time }: { time: string }) => `Actualisation échouée · données du ${time} conservées.`,
+    refreshFailedNoData: 'Actualisation échouée · aucune donnée lue.',
+    help: 'Aide',
+    helpTitle: 'Aide de la page',
+    labHours: ({ zone }: { zone: string }) => `Heures du laboratoire${NBSP}: ${zone}. Chaque instant est donné dans ce fuseau.`,
+  },
+
   notFound: {
     /** Not covered by the handoff: the sign-in panel layout, conservatively reused. Copy provisional. */
     heading: 'Page introuvable',

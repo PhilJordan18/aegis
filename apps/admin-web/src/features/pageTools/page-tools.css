@@ -1,0 +1,5 @@
+.ag-refresh { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; }
+.ag-refresh__time { color: var(--ag-text-2); font-size: var(--ag-type-small-size); }
+.ag-help-panel { margin: 0 0 16px; padding: 12px 16px; border: 1px solid var(--ag-border); border-radius: 8px; background: var(--ag-surface-sunken); }
+.ag-help-panel > p { margin: 0 0 6px; }
+.ag-help-panel > p:last-child { margin-bottom: 0; }

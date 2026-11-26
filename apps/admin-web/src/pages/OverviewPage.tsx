@@ -11,12 +11,12 @@ import { ModuleAlert } from '../features/overview/OverviewModule'
 import { AnomaliesBlock, LoansBlock, OperationsBlock, ReservationsBlock } from '../features/overview/OverviewBlocks'
 import { oldestRead, readOf, summarizeAnomalies, summarizeLoans, summarizeOperations, type BlockRead } from '../features/overview/overviewModel'
 import { useActiveReservations, useInProgressOperationReads, useLockerStatuses, useOpenAnomalies, useOpenLoanReads, useOverviewLockers, useOverviewRefresh } from '../features/overview/useOverviewQueries'
-import { transactionTimes } from '../features/transactions/transactionPresentation'
 import { useLabelIndex } from '../features/labels/useLabelIndex'
+import { HelpButton, HelpPanel } from '../features/pageTools/PageHelp'
+import { RefreshControl } from '../features/pageTools/RefreshControl'
+import { usePageHelp } from '../features/pageTools/usePageHelp'
 import { useI18n } from '../i18n/useI18n'
 import { Alert } from '../ui/Alert'
-import { Button } from '../ui/Button'
-import { Icon } from '../ui/Icon'
 import '../app/page.css'
 import '../features/catalog/equipment.css'
 import '../features/overview/overview.css'
@@ -43,6 +43,7 @@ export function OverviewPage({ sessionProfile }: { readonly sessionProfile: User
   const reservationsQuery = useActiveReservations()
   const lockersQuery = useOverviewLockers()
   const refresh = useOverviewRefresh()
+  const help = usePageHelp('overview')
 
   const anomalies = summarizeAnomalies(readOf(anomaliesQuery))
   const loans = summarizeLoans(loanQueries.map(readOf))
@@ -61,7 +62,6 @@ export function OverviewPage({ sessionProfile }: { readonly sessionProfile: User
 
   const reads: readonly BlockRead<unknown>[] = [anomalies, loans, operations, reservations, lockers]
   const readAt = oldestRead(reads)
-  const times = transactionTimes(i18n)
 
   // Every block failed the same way: one alert says it once, instead of five copies of the same sentence (states §2).
   const failures = reads.flatMap((read) => (read.kind === 'failed' ? [read.failure] : []))
@@ -84,20 +84,18 @@ export function OverviewPage({ sessionProfile }: { readonly sessionProfile: User
           <div className="ag-page__titles">
             <PageHeading className="ag-page__title">{t.heading}</PageHeading>
             <p className="ag-page__lead">{t.lead}</p>
-            <p className="ag-page__lead">{t.zoneNote({ zone: LAB_TIME_ZONE })}</p>
           </div>
-          <div className="ag-page__meta">
-            {readAt !== null && <span className="ag-page__time">{t.updatedAt({ time: times.readAt(readAt) })}</span>}
-            <Button variant="secondary" size="sm" busy={refresh.refreshing} onClick={refresh.refresh}>
-              <Icon name="refresh" />
-              {t.refresh}
-            </Button>
+          <div className="ag-page__actions">
+            <HelpButton help={help} />
+            <RefreshControl onRefresh={refresh} readAt={readAt} stale={reads.some((read) => read.kind === 'ready' && read.stale)} />
           </div>
         </header>
 
-        <p className="ag-sr-only" role="status">
-          {refresh.refreshedAt === null || refresh.refreshing ? '' : t.refreshed({ time: times.readAt(refresh.refreshedAt) })}
-        </p>
+        <HelpPanel help={help}>
+          <p>{t.successiveReadsNote}</p>
+          <p>{m.pageTools.labHours({ zone: LAB_TIME_ZONE })}</p>
+          {labels.health === 'partial' && <p>{m.labels.partial}</p>}
+        </HelpPanel>
 
         {sameFailure ? (
           <div className="ag-ov__pageerr">
@@ -106,7 +104,7 @@ export function OverviewPage({ sessionProfile }: { readonly sessionProfile: User
                 <p>{m.equipment.forbiddenBody}</p>
               </Alert>
             ) : (
-              <ModuleAlert failure={firstFailure} onRetry={retryAll} retrying={refresh.refreshing} />
+              <ModuleAlert failure={firstFailure} onRetry={retryAll} retrying={anomaliesQuery.isFetching} />
             )}
           </div>
         ) : (
