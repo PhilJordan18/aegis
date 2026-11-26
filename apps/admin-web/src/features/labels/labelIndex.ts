@@ -23,6 +23,9 @@ export type CompartmentLabel =
   | { readonly kind: 'pending' }
   | { readonly kind: 'unknown' }
 
+/** What a cell holds today (`currentAsset` of `/admin/lockers`): the « Équipement attendu » column, never a past fact. */
+export type PlacementLabel = { readonly kind: 'known'; readonly assetCode: string | null } | { readonly kind: 'pending' } | { readonly kind: 'unknown' }
+
 export type LockerLabel = { readonly kind: 'known'; readonly code: string } | { readonly kind: 'pending' } | { readonly kind: 'unknown' }
 
 /** `failed`: nothing could be read; `partial`: some units are beyond the bounded read or a page failed. */
@@ -32,6 +35,7 @@ export interface LabelIndex {
   readonly asset: (assetId: string) => AssetLabel
   readonly compartment: (compartmentId: string) => CompartmentLabel
   readonly locker: (lockerId: string) => LockerLabel
+  readonly placement: (compartmentId: string) => PlacementLabel
   readonly health: IndexHealth
 }
 
@@ -48,10 +52,12 @@ export function buildLabelIndex({ lockers, assets }: IndexReads): LabelIndex {
   const compartments = new Map<string, { code: string; lockerCode: string }>()
   const lockerCodes = new Map<string, string>()
   const currentCodes = new Map<string, string>()
+  const placements = new Map<string, string | null>()
   for (const locker of lockers.data?.items ?? []) {
     lockerCodes.set(locker.id, locker.code)
     for (const compartment of locker.compartments) {
       compartments.set(compartment.id, { code: compartment.code, lockerCode: locker.code })
+      placements.set(compartment.id, compartment.currentAsset?.assetCode ?? null)
       // Source 3 of §1.1: the unit's own code, keyed by the unit's id; never the cell → unit relation.
       if (compartment.currentAsset !== null) currentCodes.set(compartment.currentAsset.id, compartment.currentAsset.assetCode)
     }
@@ -80,6 +86,11 @@ export function buildLabelIndex({ lockers, assets }: IndexReads): LabelIndex {
     compartment: (compartmentId) => {
       const known = compartments.get(compartmentId)
       if (known !== undefined) return { kind: 'known', ...known }
+      return lockersPending ? { kind: 'pending' } : { kind: 'unknown' }
+    },
+    placement: (compartmentId) => {
+      const assetCode = placements.get(compartmentId)
+      if (assetCode !== undefined) return { kind: 'known', assetCode }
       return lockersPending ? { kind: 'pending' } : { kind: 'unknown' }
     },
     locker: (lockerId) => {

@@ -10,6 +10,8 @@ import { adminProfile, problemBody, sessionStubs } from '../features/auth/testFi
 import type { CatalogGateway } from '../features/catalog/catalogGateway'
 import { asset, fakeCatalogGateway, MM001, MM002, ok as catalogOk, pageOf } from '../features/catalog/testFixtures'
 import { UNRECOGNIZED } from '../features/catalog/contract'
+import type { CustodyGateway } from '../features/custody/custodyGateway'
+import { demoLocker, fakeCustodyGateway, okResult as custodyOk } from '../features/custody/testFixtures'
 import type { LockerGateway } from '../features/lockers/lockerGateway'
 import { A1, A2, compartment, DEMO_LOCKER_ID, fakeLockerGateway, lockerStatus, NEVER_SEEN, OFFLINE, ok } from '../features/lockers/testFixtures'
 import { LOCKER_STATUS_REFRESH_MS } from '../features/lockers/useLockerStatus'
@@ -32,14 +34,19 @@ const placedCatalog = () => fakeCatalogGateway({ pages: [catalogOk(pageOf([PLACE
 
 function renderLockers(
   lockerGateway: LockerGateway,
-  { catalogGateway = placedCatalog(), locale = 'fr', url = '/casiers' }: { catalogGateway?: CatalogGateway; locale?: Locale; url?: string } = {},
+  {
+    catalogGateway = placedCatalog(),
+    custodyGateway,
+    locale = 'fr',
+    url = '/casiers',
+  }: { catalogGateway?: CatalogGateway; custodyGateway?: CustodyGateway; locale?: Locale; url?: string } = {},
 ) {
   const session = createSessionStore()
   session.start({ accessToken: 'token-value', expiresAt: '2026-09-30T15:30:00Z', expiresIn: 3600, profile: adminProfile })
   window.history.replaceState(null, '', url)
   const queryClient = createQueryClient()
   queryClient.setDefaultOptions({ queries: { ...queryClient.getDefaultOptions().queries, retry: false } })
-  return { catalogGateway, ...renderWithProviders(<App />, { gateway: authGateway, catalogGateway, lockerGateway, session, queryClient, locale }) }
+  return { catalogGateway, ...renderWithProviders(<App />, { gateway: authGateway, catalogGateway, lockerGateway, custodyGateway, session, queryClient, locale }) }
 }
 
 const panel = () => screen.getByRole('region', { name: /AEGIS-DEMO-01/ }) as HTMLElement
@@ -91,15 +98,32 @@ describe('Casiers — nominal', () => {
     await screen.findByRole('heading', { level: 2, name: SECTION })
     const table = within(panel()).getByRole('table', { name: 'Cellules du casier AEGIS-DEMO-01' })
     expect(within(table).getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
-      'Cellule', 'Activée', 'Liaison', 'Lecteur RFID', 'Porte', 'Serrure', 'Dernière observation',
+      'Cellule', 'Activée', 'Liaison', 'Lecteur RFID', 'Porte', 'Serrure', 'Équipement attendu', 'Dernière observation',
     ])
     const rows = within(table).getAllByRole('row').slice(1)
     expect(rows).toHaveLength(2)
     expect(within(rows[0] as HTMLElement).getByRole('rowheader').textContent).toBe('A1')
     const cells = within(rows[0] as HTMLElement).getAllByRole('cell').map((cell) => plain(cell.textContent))
     expect(cells.slice(0, 5)).toEqual(['ActivéeOui', 'LiaisonConnectée', 'Lecteur RFIDEn bon état', 'PorteFermée', 'SerrureVerrouillée'])
-    expect(cells[5]).toMatch(/^Dernière observation3 nov\. 2026, \d+ h \d\d/)
+    await waitFor(() => expect(plain(within(rows[0] as HTMLElement).getAllByRole('cell')[5]?.textContent)).toBe('Équipement attenduPlacement non lu'))
+    expect(cells[6]).toMatch(/^Dernière observation3 nov\. 2026, \d+ h \d\d/)
     expect(panel().textContent).toContain('2 cellules')
+  })
+
+  it('shows the unit each cell holds today, from the placement of /admin/lockers, as « Équipement attendu »', async () => {
+    const placed = demoLocker()
+    const locker = { ...placed, compartments: [
+      { id: A1.id, code: 'A1', enabled: true, currentAsset: { id: 'unit-1', assetCode: 'MM-001' } },
+      { id: A2.id, code: 'A2', enabled: true, currentAsset: null },
+    ] }
+    const custodyGateway = fakeCustodyGateway({ listLockers: async () => custodyOk({ items: [locker], page: 0, size: 100, totalItems: 1, totalPages: 1 }) })
+    renderLockers(fakeLockerGateway({ [DEMO_LOCKER_ID]: [ok(lockerStatus())] }), { custodyGateway })
+    await screen.findByRole('heading', { level: 2, name: SECTION })
+    const table = within(panel()).getByRole('table', { name: 'Cellules du casier AEGIS-DEMO-01' })
+    const rows = within(table).getAllByRole('row').slice(1)
+    await waitFor(() => expect(plain(within(rows[0] as HTMLElement).getAllByRole('cell')[5]?.textContent)).toBe('Équipement attenduMM-001'))
+    expect(plain(within(rows[1] as HTMLElement).getAllByRole('cell')[5]?.textContent)).toBe('Équipement attenduAucun équipement placé')
+    expect(custodyGateway.listLockers).toHaveBeenCalledTimes(1)
   })
 
   it('says a locker with no compartment has none', async () => {

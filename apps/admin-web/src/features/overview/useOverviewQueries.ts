@@ -98,7 +98,8 @@ export function useOverviewRefresh() {
   const refresh = useCallback(() => {
     if (refreshing) return
     setRefreshing(true)
-    void refreshOverview(client).finally(() => {
+    // The overview already reads the locker page of the label index; only its unit pages are added (one read per key).
+    void Promise.allSettled([refreshOverview(client), client.refetchQueries({ queryKey: queryKeys.catalog.labelIndexAll })]).finally(() => {
       setRefreshing(false)
       setRefreshedAt(Date.now())
     })

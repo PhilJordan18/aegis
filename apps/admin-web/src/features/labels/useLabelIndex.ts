@@ -40,6 +40,20 @@ export function useLabelIndex(): LabelIndex & { readonly retry: () => void } {
   return { ...index, retry }
 }
 
+/**
+ * The cells' current units only (« Équipement attendu », §1.2), from the one locker page of the index: a page that names
+ * no unit by identifier (Casiers) reads no unit page.
+ */
+export function useCellPlacements(): LabelIndex['placement'] {
+  const custody = useCustodyGateway()
+  const session = useSessionStore()
+  const lockers = useQuery({
+    queryKey: queryKeys.custody.lockers(LOCKER_PAGE),
+    queryFn: ({ signal }) => authorizedRequest(session, (token) => custody.listLockers(token, LOCKER_PAGE, signal)),
+  })
+  return buildLabelIndex({ lockers: { data: lockers.data, failed: lockers.isError && lockers.data === undefined }, assets: [] }).placement
+}
+
 /** « Actualiser » of any page: the unit pages and the locker page of the index are read again. */
 export function refreshLabelIndex(client: QueryClient): Promise<unknown> {
   return Promise.allSettled([
