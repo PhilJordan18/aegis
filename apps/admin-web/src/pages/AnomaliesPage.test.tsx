@@ -61,6 +61,10 @@ function renderAnomalies(anomalyGateway: AnomalyGateway, { locale = 'fr', url = 
 const listEl = () => document.querySelector('.ag-list__items') as HTMLElement
 const listOf = (...views: ReturnType<typeof parsedAnomaly>[]) => ok(anomalyPageOf(views))
 
+/** The page's list reads: the navigation badge reads `status=OPEN&size=100` on its own key (contract §1.6). */
+const listCalls = (gateway: { listAnomalies: { mock: { calls: unknown[][] } } }) =>
+  gateway.listAnomalies.mock.calls.map((call) => call[1]).filter((query) => (query as { size?: number }).size !== 100)
+
 describe('Anomalies — list and dossier', () => {
   it('opens on « Ouvertes », lists the open anomalies newest first and shows the first one in the dossier', async () => {
     const gateway = fakeAnomalyGateway({ listAnomalies: async () => listOf(HIGH_OPEN, LOW_OPEN), getAnomaly: detailsOf(HIGH_OPEN, LOW_OPEN) })
@@ -68,7 +72,7 @@ describe('Anomalies — list and dossier', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Anomalies' })).toBeDefined()
     await screen.findByText('2 anomalies')
     expect(screen.getByText(/Les plus récentes d’abord, selon l’heure de détection · lu à/)).toBeDefined()
-    expect(gateway.listAnomalies.mock.calls[0]?.[1]).toEqual({ status: 'OPEN', page: 0, size: 20 })
+    expect(listCalls(gateway)[0]).toEqual({ status: 'OPEN', page: 0, size: 20 })
     expect((screen.getByRole('combobox', { name: 'Statut' }) as HTMLSelectElement).value).toBe('OPEN')
     const rows = within(listEl()).getAllByRole('link')
     expect(rows).toHaveLength(2)
@@ -224,7 +228,7 @@ describe('Anomalies — address, filters and pagination', () => {
     const gateway = fakeAnomalyGateway({ listAnomalies: async () => listOf(MEDIUM_ACK), getAnomaly: detailsOf(MEDIUM_ACK) })
     renderAnomalies(gateway, { url: '/anomalies?statut=reconnues&gravite=moyenne&type=DOOR_NOT_CLOSED_BEFORE_EXPIRY&page=1' })
     await screen.findByText('1 anomalie')
-    expect(gateway.listAnomalies.mock.calls[0]?.[1]).toEqual({ status: 'ACKNOWLEDGED', type: 'DOOR_NOT_CLOSED_BEFORE_EXPIRY', severity: 'MEDIUM', page: 0, size: 20 })
+    expect(listCalls(gateway)[0]).toEqual({ status: 'ACKNOWLEDGED', type: 'DOOR_NOT_CLOSED_BEFORE_EXPIRY', severity: 'MEDIUM', page: 0, size: 20 })
     expect((screen.getByRole('combobox', { name: 'Gravité' }) as HTMLSelectElement).value).toBe('MEDIUM')
   })
 
@@ -232,7 +236,7 @@ describe('Anomalies — address, filters and pagination', () => {
     const gateway = fakeAnomalyGateway({ listAnomalies: async () => listOf(MEDIUM_ACK), getAnomaly: detailsOf(MEDIUM_ACK) })
     renderAnomalies(gateway, { url: '/anomalies?equipement=7C9E6679-7425-40DE-944B-E07FC1F90AE7' })
     await screen.findByText('1 anomalie')
-    expect(gateway.listAnomalies.mock.calls[0]?.[1]).toEqual({ status: 'OPEN', assetId: '7c9e6679-7425-40de-944b-e07fc1f90ae7', page: 0, size: 20 })
+    expect(listCalls(gateway)[0]).toEqual({ status: 'OPEN', assetId: '7c9e6679-7425-40de-944b-e07fc1f90ae7', page: 0, size: 20 })
     expect(screen.getByRole('combobox', { name: 'Équipement' })).toBeDefined()
   })
 
@@ -240,7 +244,7 @@ describe('Anomalies — address, filters and pagination', () => {
     const gateway = fakeAnomalyGateway({ listAnomalies: async () => listOf(MEDIUM_ACK), getAnomaly: detailsOf(MEDIUM_ACK) })
     renderAnomalies(gateway, { url: `/anomalies?anomalie=${THIRD_ID}&gravite=critique&type=X&page=zéro` })
     await screen.findByText('1 anomalie')
-    expect(gateway.listAnomalies.mock.calls[0]?.[1]).toEqual({ page: 0, size: 20 })
+    expect(listCalls(gateway)[0]).toEqual({ page: 0, size: 20 })
     expect(gateway.getAnomaly.mock.calls[0]?.[1]).toBe(THIRD_ID)
   })
 

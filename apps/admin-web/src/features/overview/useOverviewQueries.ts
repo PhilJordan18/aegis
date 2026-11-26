@@ -35,7 +35,7 @@ export function useActiveReservations() {
  * be found by reading the loans and keeping the ones the server flags. The reads stay separate so one failing status
  * does not hide the other.
  */
-export function useOpenLoanReads() {
+export function useOpenLoanReads(refetchInterval?: number) {
   const gateway = useTransactionGateway()
   const session = useSessionStore()
   return useQueries({
@@ -44,6 +44,7 @@ export function useOpenLoanReads() {
       return {
         queryKey: queryKeys.overview.loans(query),
         queryFn: ({ signal }: { signal: AbortSignal }) => authorizedRequest(session, (accessToken) => gateway.listLoans(accessToken, query, signal)),
+        refetchInterval,
       }
     }),
   })

@@ -589,3 +589,34 @@ describe('Vue d’ensemble — page help and refresh (contract §1.4, §1.5)', (
     expect(plain(screen.getAllByRole('status').map((node) => node.textContent).join(' '))).toMatch(/Actualisation échouée · données du .+ conservées/)
   })
 })
+
+describe('Navigation badges (contract §1.6)', () => {
+  const sideLink = (name: RegExp) => within(screen.getAllByRole('navigation', { name: 'Sections' })[0] as HTMLElement).getByRole('link', { name })
+
+  it('names the open anomalies and the overdue loans in the entries, from the reads of the overview', async () => {
+    const fakes = gateways()
+    renderWith(fakes)
+    await waitFor(() => expect(sideLink(/^Anomalies/).textContent).toContain('1'))
+    expect(plain(sideLink(/^Anomalies/).textContent)).toBe('Anomalies, 1 ouverte1')
+    expect(sideLink(/^Anomalies, 1 ouverte$/)).toBeTruthy()
+    await waitFor(() => expect(sideLink(/^Réservations et prêts, 1 prêt en retard$/)).toBeTruthy())
+    // One read of each key for the badges and the blocks.
+    expect(fakes.anomalyGateway.listAnomalies).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows « N+ » when one loan read is missing, and a neutral dot, never zero, when the anomaly count is unavailable', async () => {
+    renderWith(gateways({ anomalies: offline, loans: { ACTIVE: offline, RETURN_PENDING: NOMINAL.loans.RETURN_PENDING } }))
+    await waitFor(() => expect(sideLink(/^Réservations et prêts, au moins 1 prêt en retard, lecture incomplète$/)).toBeTruthy())
+    expect(sideLink(/^Réservations et prêts/).querySelector('.ag-nav__badge')?.textContent).toBe('1+')
+    await waitFor(() => expect(sideLink(/^Anomalies, nombre d’anomalies indisponible$/)).toBeTruthy())
+    expect(sideLink(/^Anomalies/).querySelector('.ag-nav__badge--dot')).not.toBeNull()
+    expect(sideLink(/^Anomalies/).textContent).not.toMatch(/0/)
+  })
+
+  it('shows nothing when there is nothing open', async () => {
+    renderWith(gateways({ anomalies: ok(anomalyPageOf([])), loans: { ACTIVE: ok(pageOf([])), RETURN_PENDING: ok(pageOf([])) } }))
+    await waitFor(() => expect(blockText('Anomalies ouvertes')).toContain('Aucune'))
+    expect(sideLink(/^Anomalies$/).querySelector('.ag-nav__badge')).toBeNull()
+    expect(sideLink(/^Réservations et prêts$/).querySelector('.ag-nav__badge')).toBeNull()
+  })
+})

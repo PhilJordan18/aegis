@@ -98,6 +98,11 @@ export const fr = {
     signOut: 'Se déconnecter',
     soonLegend: 'Section à venir',
     soonSuffix: ', à venir',
+    anomaliesBadge: ({ count: value }: { count: number }) => plural(value, { one: `, ${count.format(value)} ouverte`, other: `, ${count.format(value)} ouvertes` }),
+    anomaliesBadgeUnavailable: ', nombre d’anomalies indisponible',
+    lateBadge: ({ count: value }: { count: number }) => plural(value, { one: `, ${count.format(value)} prêt en retard`, other: `, ${count.format(value)} prêts en retard` }),
+    lateBadgePartial: ({ count: value }: { count: number }) => `, au moins ${count.format(value)} ${value > 1 ? 'prêts' : 'prêt'} en retard, lecture incomplète`,
+    lateBadgeUnavailable: ', nombre de prêts en retard indisponible',
     /** Order imposed by sections.md §5 and handoff §6 SidebarNav. */
     sections: {
       overview: "Vue d'ensemble",

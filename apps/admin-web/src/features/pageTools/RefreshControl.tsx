@@ -1,4 +1,7 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { queryKeys } from '../../api/queryKeys'
+import { OPEN_ANOMALIES_QUERY } from '../overview/useOverviewQueries'
 import { useI18n } from '../../i18n/useI18n'
 import { Button } from '../../ui/Button'
 import { Icon } from '../../ui/Icon'
@@ -28,6 +31,7 @@ export function RefreshControl({ onRefresh, readAt, stale = false, busy = false,
   const i18n = useI18n()
   const t = i18n.m.pageTools
   const times = transactionTimes(i18n)
+  const client = useQueryClient()
   const [refreshing, setRefreshing] = useState(false)
   const [failed, setFailed] = useState(false)
   const [announcement, setAnnouncement] = useState('')
@@ -36,7 +40,12 @@ export function RefreshControl({ onRefresh, readAt, stale = false, busy = false,
     if (refreshing || busy) return
     setRefreshing(true)
     setAnnouncement('')
-    void onRefresh()
+    const read = onRefresh()
+    // The navigation badges are read again with every page (§1.6). The page's reads have started: a badge read the page
+    // already runs (the Vue d'ensemble, Anomalies) is joined, not started twice.
+    void client.refetchQueries({ queryKey: queryKeys.anomalies.list(OPEN_ANOMALIES_QUERY), type: 'active' }, { cancelRefetch: false })
+    void client.refetchQueries({ queryKey: queryKeys.overview.all, type: 'active' }, { cancelRefetch: false })
+    void read
       .catch(() => false)
       .then((ok) => {
         setRefreshing(false)

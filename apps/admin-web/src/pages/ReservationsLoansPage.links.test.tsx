@@ -156,7 +156,8 @@ describe('R3: the locker filter of the operations', () => {
     const gateway = fakeGateway()
     renderPage(gateway, { url: `/reservations-prets?vue=prets&casier=${LOCKER_ID}` })
     await screen.findByRole('heading', { level: 2, name: '1 prêt' })
-    expect((gateway.listLoans.mock.calls as unknown[][])[0]?.[1]).toEqual({ page: 0, size: 20 })
+    // The navigation badge reads the open loans by status, size 100 (contract §1.6); the page's own read is the other one.
+    expect((gateway.listLoans.mock.calls as unknown[][]).map((call) => call[1]).filter((query) => (query as { size?: number }).size !== 100)[0]).toEqual({ page: 0, size: 20 })
     expect(screen.queryByTestId('locker-filter')).toBeNull()
   })
 })

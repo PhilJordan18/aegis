@@ -81,6 +81,11 @@ export const en: Messages = {
     signOut: 'Sign out',
     soonLegend: 'Section coming soon',
     soonSuffix: ', coming soon',
+    anomaliesBadge: ({ count: value }: { count: number }) => `, ${count.format(value)} open`,
+    anomaliesBadgeUnavailable: ', number of anomalies unavailable',
+    lateBadge: ({ count: value }: { count: number }) => plural(value, { one: `, ${count.format(value)} overdue loan`, other: `, ${count.format(value)} overdue loans` }),
+    lateBadgePartial: ({ count: value }: { count: number }) => `, at least ${count.format(value)} overdue ${value > 1 ? 'loans' : 'loan'}, incomplete read`,
+    lateBadgeUnavailable: ', number of overdue loans unavailable',
     sections: {
       overview: 'Overview',
       equipment: 'Equipment',
