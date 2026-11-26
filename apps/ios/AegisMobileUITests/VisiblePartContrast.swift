@@ -30,7 +30,7 @@ extension XCTestCase {
         }
         if visible.contains(target.frame) { return .entirelyVisible }
         let image = Self.crop(app.screenshot(), to: part, window: window)
-        guard let ratio = RenderedContrast.ratio(of: image) else {
+        guard let ratio = RenderedContrast.ratio(of: image, shade: BarAwareAudit.panelShade) else {
             return .nothingToMeasure("no ink in its visible part \(part)")
         }
         let line = "'\(target.label)' partly visible, \(part) of frame=\(target.frame): "
@@ -61,7 +61,7 @@ extension XCTestCase {
         evidence.name = "audit-entire-contrast"
         evidence.lifetime = .keepAlways
         add(evidence)
-        guard let ratio = RenderedContrast.ratio(of: image) else {
+        guard let ratio = RenderedContrast.ratio(of: image, shade: BarAwareAudit.panelShade) else {
             return .measured(passed: false, line: "'\(target.label)' frame=\(frame): no ink to measure")
         }
         return .measured(passed: ratio >= 4.5,

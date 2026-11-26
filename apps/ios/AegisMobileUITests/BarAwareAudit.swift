@@ -9,8 +9,9 @@ enum BarAwareAudit {
     /// capture of #234 its gradient reached the page colour 20 pt under the
     /// bar, where a strip of black text on white measured 1.00:1.
     static let navigationEdgeHeight: CGFloat = 24
-    /// The dark panel is captured dithered by one unit (#232): see
-    /// `RenderedContrast.ratio(of:shade:)`.
+    /// Panels are captured dithered by one unit, the dark one (#232) and the
+    /// white one too (#234: #FEFEFF, #FEFFFF and #FEFEFE beside black text,
+    /// read as an ink at 1.00:1): see `RenderedContrast.ratio(of:shade:)`.
     static let panelShade: UInt8 = 2
 }
 
@@ -116,15 +117,18 @@ extension XCTestCase {
         }
         guard let root = try? app.snapshot() else { return false }
         let shot = app.screenshot()
-        var elements: [any XCUIElementSnapshot] = []
-        var pending: [any XCUIElementSnapshot] = [root]
-        while let element = pending.popLast() {
-            elements.append(element)
-            pending.append(contentsOf: element.children)
+        // The bars' own items (title, back button, tabs) are left out by
+        // ancestry, not by frame: a row scrolled under a bar intersects it
+        // and is exactly the text sought (#234, « Changer le mot de passe »).
+        var content: [any XCUIElementSnapshot] = []
+        var pending: [(element: any XCUIElementSnapshot, inBar: Bool)] = [(root, false)]
+        while let (element, parentInBar) = pending.popLast() {
+            let inBar = parentInBar || [.navigationBar, .tabBar].contains(element.elementType)
+            if !inBar, [.staticText, .button].contains(element.elementType), !element.frame.isEmpty {
+                content.append(element)
+            }
+            pending.append(contentsOf: element.children.map { ($0, inBar) })
         }
-        let bars = elements.filter { [.navigationBar, .tabBar].contains($0.elementType) }.map(\.frame)
-        let content = elements.filter { [.staticText, .button].contains($0.elementType) && !$0.frame.isEmpty }
-            .filter { element in !bars.contains { $0.intersects(element.frame) } }
         let texts = content.filter { $0.elementType == .staticText }
         // Under the navigation bar's blur or the tab bar's fade. « Se
         // déconnecter » is a button: what lies there may be either.
