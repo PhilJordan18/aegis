@@ -177,17 +177,21 @@ final class PasswordChangeUITests: XCTestCase {
     }
 
     /// Leaving a form with an address and a password, iOS may offer, a few
-    /// seconds later, to save that password, sometimes twice. The user turns
-    /// it down; the system prompt is in the simulator's own language, English
-    /// here. A tap made while the prompt is still leaving lands on it, not on
-    /// the field below (#234, full run on #235): the prompt must be gone.
+    /// seconds later, to save that password, sometimes twice in a row. The
+    /// user turns down each one; the system prompt is in the simulator's own
+    /// language, English here. A tap made while the prompt is still leaving
+    /// lands on it, not on the field below (#234, full run on #235): the last
+    /// prompt must be gone. The second prompt replaced the first in the full
+    /// run on 94a2c82, so a single « Not Now » was not enough.
     @MainActor
     private func declineSavingPassword(_ app: XCUIApplication, timeout: TimeInterval) {
         let notNow = app.buttons["Not Now"]
-        if notNow.waitForExistence(timeout: timeout) {
+        guard notNow.waitForExistence(timeout: timeout) else { return }
+        for _ in 0..<3 where notNow.exists {
             notNow.tap()
-            XCTAssertTrue(notNow.waitForNonExistence(timeout: 5), "The save-password prompt stayed on screen.")
+            _ = notNow.waitForNonExistence(timeout: 5)
         }
+        XCTAssertFalse(notNow.exists, "The save-password prompt stayed on screen.")
     }
 
     /// Second step, typed by hand: the user turns down iOS's strong password
