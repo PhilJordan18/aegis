@@ -97,9 +97,9 @@ final class ReservationUITests: XCTestCase {
     func testHistoryFromMyActivity() throws {
         let words = [
             "fr": ["loans": "Prêts", "pickedUp": "Retirée", "cancelled": "Annulée", "returned": "Rendu",
-                   "readOnly": "Consultation seulement."],
+                   "readOnly": "Consultation seulement.", "reference": "Référence du prêt"],
             "en": ["loans": "Loans", "pickedUp": "Picked up", "cancelled": "Cancelled", "returned": "Returned",
-                   "readOnly": "View only."],
+                   "readOnly": "View only.", "reference": "Loan reference"],
         ]
         for (language, appearance) in [(Language.french, XCUIDevice.Appearance.light), (.english, .dark)] {
             XCUIDevice.shared.appearance = appearance
@@ -128,6 +128,11 @@ final class ReservationUITests: XCTestCase {
             let readOnly = element(app, "history.record.readOnly")
             XCTAssertTrue(readOnly.waitForExistence(timeout: 10))
             XCTAssertTrue(readOnly.label.hasPrefix(text["readOnly"]!))
+            // The id a manager looks up under §17, as the service wrote it.
+            let reference = element(app, "history.record.reference")
+            XCTAssertTrue(reference.exists)
+            XCTAssertTrue(reference.label.hasPrefix(text["reference"]!), reference.label)
+            XCTAssertTrue(reference.label.contains("9b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d02"), reference.label)
             // A finished loan is never `overdue` (doc 03), even when returned late.
             XCTAssertFalse(element(app, "history.record.overdue").exists)
             for action in ["activity.return", "activity.cancel", "activity.checkout", "activity.resume"] {
