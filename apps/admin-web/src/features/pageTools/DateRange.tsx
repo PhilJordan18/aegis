@@ -73,6 +73,10 @@ export function DateRange({ value, onApply, isDay, invalidText, help, fromName =
     <>
       <TextField name={fromName} type="date" lang={dateLang} help={help} label={t.fromInclusive} error={fromError} value={from} onChange={(event) => change(event.target.value, to)} />
       <TextField name={toName} type="date" lang={dateLang} help={help} label={t.toInclusive} error={error ?? toError} value={to} onChange={(event) => change(from, event.target.value)} />
+      {/* Below 560 px the zone help shows once under both fields; each field keeps its own for assistive technology. */}
+      <p className="ag-date-help" aria-hidden="true">
+        {help}
+      </p>
       <div className="ag-date-shortcuts" role="group" aria-label={t.dateShortcuts}>
         <Button variant="ghost" size="sm" onClick={() => shortcut(1)}>
           {t.today}

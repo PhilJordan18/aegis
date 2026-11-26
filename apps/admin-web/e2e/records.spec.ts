@@ -390,3 +390,46 @@ for (const width of [1440, 1280, 1024, 390, 320]) {
     })
   })
 }
+
+/**
+ * QA #246 item 16 (Design §8.3): at 390 and 320 px no list page is taller than at 95a29d6. The ceilings are the heights
+ * 95a29d6 measured on these same fakes (3 reservations, 3 loans, 3 operations, 5 audit events).
+ */
+const CEILINGS = {
+  390: { reservations: 1507, loans: 1560, operations: 1507, audit: 2585 },
+  320: { reservations: 1919, loans: 1950, operations: 1837, audit: 2841 },
+} as const
+for (const width of [390, 320] as const) {
+  test.describe(`records: page height at ${width} px`, () => {
+    test.use({ viewport: { width, height: 844 } })
+
+    test(`no list page is taller than at 95a29d6 at ${width} px`, async ({ page }) => {
+      const id = (prefix: string, n: number) => `${prefix}-0000-4000-8000-${String(n).padStart(12, '0')}`
+      const unit = (n: number) => ({ ...asset, id: `7c9e6679-7425-40de-944b-e07fc1f90a${String(n).padStart(2, '0')}`, assetCode: `MM-00${n}` })
+      const reservations = [1, 2, 3].map((n) => ({ ...reservation(n), asset: unit(n), currentOperationId: n === 1 ? id('44444444', 1) : null }))
+      const loans = [1, 2, 3].map((n) => ({ id: id('55555555', n), asset: unit(n), holderUserId: USER_ID, holder: { id: USER_ID, displayName: 'Technicien Démo' }, status: 'ACTIVE', checkedOutAt: '2026-11-10T14:05:00Z', dueAt: '2026-11-10T20:30:00Z', overdue: n === 2, returnRequestedAt: null, returnedAt: null, checkoutOperationId: id('44444444', n), returnOperationId: null, currentOperationId: null, availableActions: [] }))
+      const operations = (['COMMAND_SENT', 'CONFIRMED', 'ANOMALY'] as const).map((status, index) => ({ ...OPERATION, id: id('44444444', index + 1), status, asset: unit(index + 1), assetId: unit(index + 1).id, terminalAt: status === 'COMMAND_SENT' ? null : '2026-11-10T14:05:00Z' }))
+      const events = [1, 2, 3, 4, 5].map((n) => ({ ...EVENT, id: id('eeeeeeee', n), subjectId: id('44444444', 1), operationId: id('44444444', 1), result: n === 2 ? 'REJECTED' : 'ACCEPTED', occurredAt: `2026-11-10T14:0${n}:32Z` }))
+      const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+      await page.route('**/api/v1/**', (route) => {
+        const p = new URL(route.request().url()).pathname.replace('/api/v1', '')
+        if (p === '/admin/reservations') return json(route, pageOf(reservations, 20))
+        if (p === '/admin/loans') return json(route, pageOf(loans, 20))
+        if (p === '/admin/locker-operations') return json(route, pageOf(operations, 20))
+        if (p === '/admin/audit-events') return json(route, { items: events, nextCursor: null, hasMore: false })
+        return json(route, pageOf([], 20))
+      })
+      await signIn(page)
+      for (const [key, url, count] of [
+        ['reservations', '/reservations-prets', 3],
+        ['loans', '/reservations-prets?vue=prets', 3],
+        ['operations', '/reservations-prets?vue=operations', 3],
+        ['audit', '/audit', 5],
+      ] as const) {
+        await go(page, url)
+        await expect(rowLinks(page)).toHaveCount(count)
+        expect(await page.evaluate(() => document.documentElement.scrollHeight), key).toBeLessThanOrEqual(CEILINGS[width][key])
+      }
+    })
+  })
+}

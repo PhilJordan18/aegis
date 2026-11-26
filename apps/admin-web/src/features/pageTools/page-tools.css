@@ -19,6 +19,14 @@
 .ag-chips__remove:hover { background: var(--ag-separator); color: var(--ag-text); }
 .ag-chips__remove .ag-icon { width: 16px; height: 16px; }
 .ag-date-shortcuts { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.ag-date-help { display: none; }
+/* Below 560 px (QA #246 item 16, a list page no taller than before): the zone help reads once under both dates, the
+   shortcuts take one full line. */
+@media (max-width: 559px) {
+  .ag-ff:has(> input[type='date']) > .ag-ff__help { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .ag-date-help { display: block; grid-column: 1 / -1; margin: -8px 0 8px; font-size: var(--ag-type-small-size); line-height: 1.4; color: var(--ag-text-2); }
+  .ag-date-shortcuts { grid-column: 1 / -1; }
+}
 .ag-filters__busy { opacity: 0.6; transition: opacity 120ms; }
 @media (forced-colors: active) {
   .ag-chips__chip { border-color: CanvasText; }
