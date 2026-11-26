@@ -441,7 +441,7 @@ Le §8.1 fixait une cible sans nommer le jeu de données; la QA mesure 2 709 px 
 - 1 opération en cours (`COMMAND_ACKNOWLEDGED`);
 - 2 réservations `ACTIVE`.
 
-**Cibles restituées** à 390 × 844 px, mode aperçu compris : **≤ 2 500 px** à l'état nominal, **≤ 2 800 px** à l'état périmé (toutes les lectures de rafraîchissement en échec après une première lecture réussie). Les valeurs 2 300 et 2 700 du §8.1 sont retirées.
+**Cibles restituées** à 390 × 844 px, mode aperçu compris : ≤ 2 500 px à l'état nominal, ≤ 2 800 px à l'état périmé (toutes les lectures de rafraîchissement en échec après une première lecture réussie). Les valeurs 2 300 et 2 700 du §8.1 sont retirées. **Ces valeurs 2 500 / 2 800 px sont à leur tour remplacées par le §8.10** (décision de Philippe du 26 novembre 2026).
 
 **Compaction exigée** (pas de contenu retiré) :
 
@@ -474,3 +474,35 @@ Les puces « Gravité moyenne » et « Ouverte » mesurent 225 à 241 px à 390 
 - La ligne de détail devient « Cellule A1 · Multimètre numérique · MM-001 » et tient sur une ligne à 390 px avec le jeu de référence. « Reconnaître » reste **sous** le texte, aligné à gauche.
 - Ordre de lecture (DOM) inchangé : gravité, statut, titre, détail, heure, action.
 - Cibles : rangée ≤ 140 px avec un titre sur une ligne, ≤ 160 px avec un titre sur deux lignes, à 390 px; le jeu de référence comprend au moins une anomalie à titre long sur deux lignes (par exemple `DEVICE_OFFLINE_DURING_OPERATION`) pour que la mesure de page la couvre.
+
+### 8.10 Plafonds définitifs de la Vue d'ensemble et conditions de mesure — décision de Philippe du 26 novembre 2026
+
+Décision de Philippe, transmise par Design : « Je valide l'option 1 pour #245 : conserver la présentation actuelle et relever les plafonds à 2 600 px en nominal et 2 900 px en données non actualisées, à 390 px. Ne fusionne pas les lignes « Lu à » et ne réduis pas la lisibilité ou les cibles tactiles pour gagner de la hauteur. »
+
+**Cette décision remplace les plafonds 2 500 / 2 800 px du §8.6** (eux-mêmes substitués aux 2 300 / 2 700 px du §8.1). Traçabilité : §8.1 (26 novembre, matin) → §8.6 (`4ca79e5`) → §8.10 (présent commit). Web Manager et QA mesurent contre cette seule référence.
+
+**Plafonds** à 390 × 844 px :
+
+| État | Plafond |
+|---|---|
+| Nominal (toutes les lectures réussies) | **≤ 2 600 px** |
+| Données non actualisées (première lecture réussie, puis toutes les lectures de rafraîchissement en échec) | **≤ 2 900 px** |
+
+**Ce qui ne change pas** : la présentation actuelle de la bande et des modules (§8.1, §8.6, §8.7, §8.9); les deux lignes « Lu à » (en-tête de page §1.5 et pied de bande §8.1) restent; aucune réduction du corps de texte, de la hauteur des boutons, des cibles tactiles ni des espacements pour gagner de la hauteur.
+
+**Conditions reproductibles de mesure** (Web Manager dans le test e2e, QA dans sa revue, mêmes conditions) :
+
+- fenêtre complète de 390 × 844 px, facteur d'échelle 1, Chromium, mode aperçu avec son bandeau (comme toutes les mesures de ce §8);
+- langue `fr-CA`, fuseau `America/Toronto`, thème clair, mouvement réduit;
+- polices Geist chargées (`document.fonts.ready` résolu) avant la mesure;
+- jeu de référence **exact** du §8.6 : 3 anomalies `OPEN` (1 `HIGH`, 2 `MEDIUM`) dont une à titre long sur deux lignes (`DEVICE_OFFLINE_DURING_OPERATION`), avec cellule, équipement nommé (« Multimètre numérique », « Thermomètre infrarouge ») et date de détection; 1 prêt `ACTIVE` en retard; 1 casier `ONLINE`, fenêtre ouverte, 2 cellules occupées; 1 opération `COMMAND_ACKNOWLEDGED`; 2 réservations `ACTIVE`; noms d'utilisateur sur une ligne (« Marie Tremblay », « Technicien Démo »);
+- état de chargement terminé : aucun squelette, aucune requête en attente, aucune alerte de page; pour l'état non actualisé, après « Actualiser » et l'affichage de « Non actualisé » dans le pied de bande et des puces « Non actualisé » dans les en-têtes de modules;
+- mesure : `document.documentElement.scrollHeight`, stable à 250 ms d'intervalle.
+
+**Cibles de rangée d'anomalie**, mêmes conditions, à 390 px : ≤ 140 px avec un titre sur une ligne, ≤ 160 px avec un titre sur deux lignes (§8.6, §8.9).
+
+**Libellés courts de gravité et heure de détection sous 560 px** : décision du §8.9 confirmée. Texte visible « Élevée », « Moyenne », « Faible » avec icône et couleur de rôle, nom accessible complet « Gravité élevée / moyenne / faible »; l'heure de détection à droite des puces, précédée de « Détectée » pour les technologies d'assistance, sous les puces à 320 px si la place manque; le sens reste non ambigu : la puce de gravité est toujours accompagnée de la puce de statut et de son icône, et l'heure est toujours lue après le détail de l'anomalie, jamais à côté de l'action.
+
+**§8.8 confirmé** : barre de filtres compacte à partir de 1 024 px, sans limite haute.
+
+**Plafonds et cas de robustesse.** Les plafonds ci-dessus se mesurent uniquement sur le jeu de référence. Les cas de robustesse (noms d'utilisateur ou d'équipement longs, traduction anglaise plus longue, agrandissement du texte à 200 %, zoom) peuvent augmenter la hauteur de page au-delà des plafonds; ils doivent rester lisibles, sans perte d'information (aucune troncature de libellé, de code, d'heure ni de nom accessible) et sans défilement horizontal. Ils se vérifient par ces trois critères, pas par la hauteur.
