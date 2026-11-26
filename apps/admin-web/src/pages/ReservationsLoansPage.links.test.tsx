@@ -224,11 +224,11 @@ describe('R4: the current attempt of a reservation or a loan', () => {
     expect(plain(dossier().textContent)).not.toContain('expiration est différée')
   })
 
-  it('marks a reserved end already past at the read time with the due marker, before the server says it expired (§1.7)', async () => {
+  it('keeps the hollow end marker of an active reservation past its end: the marker follows the server status, not a clock (§1.7)', async () => {
     renderPage(fakeGateway({ reservations: [reservation({ reservedUntil: '2020-01-01T00:00:00Z' })] }), { url: '/reservations-prets' })
     await screen.findByRole('heading', { level: 2, name: '1 réservation' })
-    await waitFor(() => expect(dossier()?.querySelector('.ag-tl__item--marker')).not.toBeNull())
-    expect(dossier().querySelectorAll('.ag-tl__item--absent')).toHaveLength(1)
+    await waitFor(() => expect(dossier()?.querySelector('.ag-tl')).not.toBeNull())
+    expect(dossier().querySelector('.ag-tl__item--marker')).toBeNull()
   })
 
   it('says the expiry is deferred for a physically uncertain attempt (ANOMALY) on an active reservation past due', async () => {
