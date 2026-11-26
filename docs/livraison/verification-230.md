@@ -35,7 +35,13 @@ Le hook exige un bootstrap arrêté, une base propre et des fichiers protégés.
 - Aucun accès Apple Developer/App Store Connect vérifié ; aucun build Release archivé ou envoyé.
 - #228/#229 et iOS restent des dépendances, pas des fonctionnalités déclarées livrées ici.
 - Pas de preuve des SHA flashés ni de la série physique 10+10.
-- Le hook reste non intégré dans l'image broker actuelle ; l'écart ACL live/reprise reste donc un blocage de promotion production.
+- L’image candidate intègre désormais le hook et est testée en TLS isolé ; elle n’est pas déployée. L’écart ACL live/reprise reste donc un blocage de promotion production.
 - Le prêt Jimmy 004 actif est conservé ; aucun nettoyage fictif de la recette.
 
 Assistance IA : inventaire, préparation/exécution des contrôles isolés, rédaction et revue. Philippe et Jimmy restent responsables des actions Apple et des validations physiques.
+
+## Complément : image broker intégrée
+
+Le Dockerfile versionné, son contexte limité, le bootstrap et le listener TLS intègrent le hook avant chaque démarrage. `python3 -B infra/mqtt/railway/test_image.py` vérifie l’image construite avec comptes et certificats synthétiques : démarrage/restart/recréation sur même volume, comptes de base et appareil supplémentaire, permissions accordées/refusées, authentification/TLS, livraison effective et réapplication QR seul. Aucun accès live. La procédure de fenêtre et de retour arrière est dans le README du broker. Résultat final local : test image **1/1 PASS en 23,710 s**, tests du hook **3/3 PASS en 7,670 s**, syntaxe shell et contrôle d’espacement conformes. Le test image inclut aussi le refus d’un UUID non canonique dans l’inventaire des autres appareils, corrigé pendant la revue.
+
+Verdict QA indépendant du complément : **PASS WITH RISKS**. Le reviewer a exécuté le test de l’image finale avec succès (25,095 s), puis contrôlé la syntaxe et le diff. Aucun défaut bloquant restant dans le candidat. L’application nécessite toujours l’inventaire confidentiel complet, les certificats réels vérifiés, une fenêtre coordonnée, le contrôle des commandes en attente et une décision explicite sur le prêt actif. Ce verdict ne vaut pas autorisation de bascule staging ou production.

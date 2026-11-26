@@ -1,46 +1,69 @@
-# Extension de compte de recette persistante — candidat #230
+# Broker Railway reproductible — candidat #230
 
-**Préparée et testée hors staging ; non installée.** Ce composant corrige la construction des fichiers au démarrage. Il ne recharge pas un broker en fonctionnement et ne change pas ses variables Railway.
+**Image intégrée et testée hors staging ; non déployée.** Elle reconstruit les identités et applique le hook de recette avant chaque démarrage. Aucun rechargement à chaud ni accès Railway n'est exécuté par les outils de ce dossier.
 
-## Défaut observé
+## Défaut corrigé dans le candidat
 
-Au 25 novembre, le démarrage du broker régénère deux identités de base et recopie `/opt/aegis/acl`. L'identité supplémentaire `aegis_api_recipe_223` dépend d'une réapplication manuelle. Le suffixe stocké sur volume est ancien (display seul), alors que l'ACL active sur disque autorise les commandes globales. Rejouer aveuglément `reapply.sh` n'est pas une reprise valide.
+Le bootstrap historique régénère deux identités de base et recopie `/opt/aegis/acl`. L'identité `aegis_api_recipe_223` dépendait d'une réapplication manuelle. Son suffixe conservé sur le volume est ancien (display seul), alors que l'ACL active sur disque autorise les commandes globales. Le candidat remplace ce mécanisme divergent par une reconstruction à partir de la base versionnée et d'une politique persistante explicite, à chaque boot.
 
-## Intégration à préparer dans l'image du broker
+## Construction et configuration
 
-L'image Railway actuelle vient d'un bundle opérateur, pas d'un Dockerfile présent dans `dev`. Avant promotion, son propriétaire doit versionner sa construction TLS et y intégrer ce hook. **Ce dépôt ne fournit donc pas encore une image Railway complète et déployable.** Aucun remplacement de l'image courante n'est autorisé par le seul ajout de ce script.
+Depuis la racine du dépôt :
 
-1. Préparer un bundle privé sur le volume persistant avec trois fichiers :
-   - `account.hash` : une ligne Mosquitto `$7$` pour `aegis_api_recipe_223`, sans nouveau mot de passe en clair ;
-   - `locker-id` : l'UUID exact du seul casier autorisé ;
-   - `commands-enabled` : `false` pour QR seul, `true` uniquement pour une séance physique autorisée.
-2. Propriétaire root, dossier `0700`, fichiers `0600`. Copier un hash existant seulement par un canal privé, jamais dans les logs/diff/argv. Le renouvellement du secret reste une opération distincte.
-3. Après génération des identités et de l'ACL de base **propres**, mais avant le `chown` final et avant `exec mosquitto`, appeler :
+```sh
+docker build -f infra/mqtt/railway/Dockerfile -t aegis-broker:230 .
+```
 
-   ```sh
-   sh /opt/aegis/install-recipe-overlay.sh /run/aegis-mqtt /mosquitto/data/recipe-230
-   ```
+L'image Mosquitto 2.1.2 est figée par digest. Le contexte Docker est limité aux seuls fichiers versionnés nécessaires ; aucun certificat, secret ou archive de données n'y entre. Le listener unique est TLS 8883, vérification serveur avec TLS 1.2 minimum, authentification utilisateur/mot de passe, sans mTLS ajouté. Aucun port 1883. Les logs serveur sont limités aux erreurs/avertissements ; le test n'ajoute que des identifiants synthétiques.
 
-4. Garder `set -eu` : un bundle absent, corrompu ou une identité déjà présente arrête le démarrage. Ne pas ignorer le code de sortie et ne pas utiliser ce hook après démarrage.
-5. Appliquer ensuite les propriétaires Mosquitto et droits `0700`/`0600` comme dans le bootstrap TLS existant. Exécuter `mosquitto --test-config` sur le candidat avant `exec`.
-6. Tester l'**image finale** après démarrage à froid et redémarrage, avec TLS, comptes de base et volume persistant. Les tests ci-dessous couvrent le hook, pas encore cette image finale ni la gestion de ses certificats.
+Variables privées requises (jamais dans un Dockerfile, un rapport ou un argument de commande) :
 
-L'ACL générée limite les publications `display` et éventuellement `commands` à un UUID. La lecture `events/status` reste globale pour le backend conformément à son ingestion actuelle. Les patterns globaux des identités matérielles sont conservés ; les droits parasites du compte API via `%u` sont explicitement refusés. Le hook ne supprime ni ne réécrit les règles des comptes de base.
+- `AEGIS_MQTT_API_PASSWORD` pour l'identité de base `aegis_api` ;
+- `AEGIS_MQTT_HUB_PASSWORD` et `AEGIS_MQTT_HUB_ID` pour le hub principal ;
+- `MQTT_CA_B64`, `MQTT_CERT_B64`, `MQTT_KEY_B64` pour le certificat serveur et sa chaîne. Le SAN du certificat doit couvrir le nom utilisé par chaque client ; ne pas désactiver sa vérification.
 
-Le compte historique `aegis_api` de la base peut toujours avoir ses propres droits globaux : ce correctif n'en change pas le rôle. Une politique production explicite (identités, casiers permis, rotation et droits backend) reste nécessaire avant création des secrets production.
+Le secret est écrit uniquement dans un fichier temporaire privé puis haché par `mosquitto_passwd -U`, jamais passé en argv. Les variables secrètes sont retirées avant l'exécution du broker. Le dossier runtime appartient à Mosquitto en 0700, ses fichiers en 0600.
+
+Monter le volume durable en `/mosquitto/data`. Il contient :
+
+| Chemin | Contenu requis |
+|---|---|
+| `device-accounts.hash` | Inventaire explicite des **autres** identités matérielles, dont le simulateur s'il doit rester connecté. Une ligne `UUID:hash Mosquitto $7$` par identité ; un fichier vide est accepté uniquement lorsque l'inventaire confirme qu'il n'existe aucun autre appareil. Pas de doublon ni de répétition du hub principal. |
+| `recipe-230/account.hash` | Une seule ligne hachée pour `aegis_api_recipe_223` ; reprendre le hash connu par canal confidentiel, ne pas changer le mot de passe par inadvertance. |
+| `recipe-230/locker-id` | UUID exact du seul casier de recette autorisé. |
+| `recipe-230/commands-enabled` | `false` pour QR seul ; `true` uniquement pour une séance physique autorisée. |
+
+Dossiers de secrets root 0700, fichiers root 0600. Ne pas copier les mots de passe/QR en chat, logs ou captures. La persistance du broker (`mosquitto.db`) reste indépendante de ces fichiers d'identités. Le volume racine est rendu accessible en écriture au broker, pas le dossier privé de recette.
+
+Le démarrage échoue si une entrée manque ou est malformée. Les identités de base sont reconstruites, les autres appareils préservés via l'inventaire, puis l'overlay est appliqué une seule fois. La configuration est validée avant `exec mosquitto`. Une seconde exécution directe du hook sur une base déjà enrichie est refusée ; **la réapplication se fait par le démarrage normal**, à partir d'une base propre. L'ancien `reapply.sh` ne doit plus être utilisé avec cette image.
+
+L'ACL de base versionnée est conservée : le compte historique `aegis_api` garde son rôle backend global. Le compte de recette ne publie que vers un UUID (`display`, et `commands` si autorisé). Ses lectures `events/status` restent globales pour l'ingestion backend actuelle. Les identités de hubs ne peuvent agir que sous leur UUID ; les expansions parasites de `%u` pour les comptes API sont refusées. Cette séparation ne remplace pas une décision de politique production ni la rotation de ses secrets.
 
 ## Vérification isolée
 
-Depuis la racine :
-
 ```sh
 python3 -B infra/mqtt/railway/test_overlay.py
+python3 -B infra/mqtt/railway/test_image.py
 ```
 
-Docker doit être disponible. L’image Mosquitto 2.1.2 est figée par digest dans le test. Le test crée uniquement un conteneur `aegis-overlay-230-test-<suffixe>`, sans réseau extérieur ni port publié, avec un secret **synthétique**, puis le supprime. Il vérifie l'authentification et les PUBACK MQTT5 après démarrage et redémarrage : publications autorisées au casier ciblé, refus des autres casiers et de l'usurpation d'événements. Il vérifie également le mode QR seul, le refus d'une deuxième application et l'arrêt sur bundle invalide. Sans abonné, `RC:16` est un succès de publication sans destinataire ; `RC:135` est le refus attendu. Ce test ne prétend pas mesurer la livraison d'une commande à un appareil.
+Docker et OpenSSL doivent être disponibles. Le premier test vérifie le hook et ses entrées malformées. Le second construit le **Dockerfile réel**, génère une CA/certificat et des comptes synthétiques, puis vérifie :
 
-## Application et retour arrière
+- démarrage TLS à froid, restart du conteneur et recréation du conteneur avec le même volume ;
+- authentification des comptes backend, hub principal, autre appareil et recette ;
+- publications permises/refusées, absence d'usurpation d'événements, mauvais mot de passe et mauvais nom TLS refusés, port plaintext absent ;
+- réception effective d'un message synthétique par le hub sur TLS ;
+- aucune duplication d'identité, réapplication de la politique QR seul et arrêt si le bundle disparaît.
 
-Avant une application humaine : aucune opération non terminale ni commande en vol, état du prêt connu, SHA/configuration sauvegardés confidentiellement, fenêtre convenue avec Jimmy. Ne pas masquer le prêt actif par SQL. Désactiver la publication pendant le remplacement, installer le bundle et l'image revus, confirmer la reprise et les ACL par tests isolés ; pas de commande vers une serrure pour vérifier une ACL.
+Chaque broker utilise `--network none`, aucun port publié et un volume dédié jetable. Le test supprime uniquement ses propres conteneurs, volume et tag d'image. Les certificats/identifiants sont synthétiques et temporaires. Sans abonné, PUBACK MQTT5 `16` est un succès sans destinataire ; `135` est le refus attendu. Aucun message n'est envoyé à Jimmy.
 
-Un retour arrière restaure l'image et le bundle compatibles ensemble. Ne pas réutiliser l'ancien `block.acl` divergent. En cas d'échec d'authentification, garder les dispatchers désactivés jusqu'à reprise vérifiée ; ne pas revenir silencieusement au compte global. Préserver toutes les outbox, commandes, observations et opérations.
+## Préflight et application future
+
+1. Obtenir une fenêtre explicite sans essais humains ni opération/commande en vol. Le prêt Jimmy `3cba970f-cb38-47c2-b6a3-238c4719e11f` est actif dans le dernier inventaire : prévoir son **retour normal** ou une **décision explicite de le conserver** pendant la bascule. Jamais de SQL, force-close ou effacement d'historique.
+2. Relever les identités réellement provisionnées et préparer `device-accounts.hash` sans en perdre, notamment le SIM. Relever le casier de recette autorisé. Faire contrôler le paquet privé et son empreinte ; un fichier vide par commodité n'est pas une migration valide.
+3. Conserver confidentiellement l'image/configuration/volume précédents et la procédure de reprise cohérente. Vérifier qu'aucune commande en attente ne sera livrée inopinément au redémarrage ; ne pas purger l'outbox.
+4. Coordonner l'arrêt de publication API, puis seulement avec l'autorisation de la fenêtre installer les fichiers privés et déployer l'image figée. Ce lot n'effectue pas cette action.
+5. Vérifier santé TLS, authentification, fichiers/droits et reprise des connexions/heartbeats ; aucun test d'ouverture réelle pour « vérifier une ACL ». Reprendre les dispatchers uniquement selon le périmètre autorisé.
+
+## Retour arrière
+
+Restaurer image et politique compatibles ensemble, en maintenant les publications désactivées tant que la reprise n'est pas vérifiée. Ne pas restaurer aveuglément l'ancien suffixe `block.acl` divergent, ni basculer silencieusement l'API vers le compte global. Préserver le volume broker et tous les historiques/outbox/commandes côté backend. Une restauration de données ancienne sur les opérations récentes n'est pas un rollback applicatif.

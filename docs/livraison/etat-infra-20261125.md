@@ -33,7 +33,7 @@ Le fichier `/run/aegis-mqtt/acl` a l'empreinte `1f8092420263c4fd2a02cb2ea1a68545
 
 La lecture du disque ne prouve pas à elle seule son chargement en mémoire. Aucun test de publication live n'a été fait pour le vérifier. Les preuves historiques d'isolation SIM 18/18 ne décrivent pas cet état actuel.
 
-Le [hook candidat](../../infra/mqtt/railway/README.md) reconstruit l'extension avant démarrage avec le droit de publier limité à un seul casier. Il reste à l'intégrer dans l'image broker finale, tester cette image TLS et planifier l'application. **Aucun correctif runtime n'est prétendu livré.**
+L’[image candidate versionnée](../../infra/mqtt/railway/README.md) intègre maintenant le hook et reconstruit l’extension avant démarrage avec le droit de publier limité à un seul casier. Son test isolé couvre TLS, comptes de base et supplémentaires, redémarrage et recréation avec volume persistant. Il reste à préparer les secrets et l’inventaire réels puis planifier l’application. **Aucun correctif runtime n’est prétendu déployé.**
 
 ## Sauvegarde et restauration exécutées dans ce lot
 
