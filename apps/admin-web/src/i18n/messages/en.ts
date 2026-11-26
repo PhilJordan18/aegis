@@ -1199,6 +1199,10 @@ export const en: Messages = {
     lead: 'Reconstruct who did what, when and with what result. Codes are visible only in the detail.',
     immutable: 'Read-only history: no event can be modified or deleted.',
     refresh: 'Refresh',
+    techActor: 'Actor identifier',
+    techSubjectType: 'Subject type',
+    techSubject: 'Subject identifier',
+    techOperation: 'Operation identifier',
     updatedAt: ({ time }: { time: string }) => `Updated at ${time}`,
     listTitle: ({ count: value }: { count: number }) =>
       plural(value, { one: `${count.format(value)} event loaded`, other: `${count.format(value)} events loaded` }),

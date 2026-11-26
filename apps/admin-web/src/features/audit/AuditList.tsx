@@ -8,7 +8,9 @@ import { StaleNotice } from '../catalog/StaleNotice'
 import { AuditAlert } from './AuditAlert'
 import type { AuditFailure } from './auditFailure'
 import { auditHref, type AuditFilters } from './auditFilters'
-import { actorView, clockOf, eventLabel, groupByDay, resultChip, shortId, stateLabel, subjectLabel } from './auditPresentation'
+import { actorView, clockOf, eventLabel, groupByDay, resultChip, stateLabel } from './auditPresentation'
+import { SubjectName } from './SubjectName'
+import { useLabelIndex } from '../labels/useLabelIndex'
 import type { AuditEventView } from './contract'
 
 interface AuditListProps {
@@ -176,6 +178,7 @@ function EventRow({
 }) {
   const i18n = useI18n()
   const actor = actorView(event.actor, i18n)
+  const labels = useLabelIndex()
   const chip = event.result === 'ACCEPTED' ? null : resultChip(event.result, i18n)
   return (
     <Link
@@ -199,7 +202,7 @@ function EventRow({
           )}
         </span>
         <span className="ag-au-ev__line">
-          {actor.name} · {subjectLabel(event.subjectType, i18n)} {shortId(event.subjectId)}
+          {actor.name} · <SubjectName subjectType={event.subjectType} subjectId={event.subjectId} labels={labels} />
         </span>
         {event.fromState !== null && event.toState !== null && (
           <span className="ag-au-ev__line">

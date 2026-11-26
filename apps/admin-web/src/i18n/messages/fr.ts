@@ -1290,6 +1290,10 @@ export const fr = {
     lead: 'Reconstituer qui a fait quoi, quand et avec quel résultat. Les codes ne sont visibles que dans le détail.',
     immutable: 'Historique non modifiable : aucun événement ne peut être modifié ni supprimé.',
     refresh: 'Actualiser',
+    techActor: 'Identifiant de l’acteur',
+    techSubjectType: 'Type du sujet',
+    techSubject: 'Identifiant du sujet',
+    techOperation: 'Identifiant de l’opération',
     updatedAt: ({ time }: { time: string }) => `Mis à jour à ${time}`,
     listTitle: ({ count: value }: { count: number }) =>
       plural(value, { one: `${count.format(value)} événement chargé`, other: `${count.format(value)} événements chargés` }),
