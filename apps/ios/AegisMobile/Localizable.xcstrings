@@ -2809,6 +2809,246 @@
           }
         }
       }
+    },
+    "Mot de passe modifié. Connectez-vous avec le nouveau mot de passe." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password changed. Sign in with your new password."
+          }
+        }
+      }
+    },
+    "Le changement du mot de passe n’a pas pu être confirmé. Connectez-vous avec le nouveau mot de passe ; s’il est refusé, utilisez l’ancien." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "We couldn’t confirm the password change. Sign in with your new password; if it’s refused, use your old one."
+          }
+        }
+      }
+    },
+    "Mot de passe actuel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current password"
+          }
+        }
+      }
+    },
+    "Nouveau mot de passe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New password"
+          }
+        }
+      }
+    },
+    "Confirmer le nouveau mot de passe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm new password"
+          }
+        }
+      }
+    },
+    "Au moins 12 caractères et au plus 72. Un caractère accentué compte pour deux." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "At least 12 characters and at most 72. An accented character counts as two."
+          }
+        }
+      }
+    },
+    "Modification…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changing…"
+          }
+        }
+      }
+    },
+    "Changer le mot de passe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change password"
+          }
+        }
+      }
+    },
+    "Tous vos appareils seront déconnectés. Vos réservations et prêts sont conservés." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All your devices will be signed out. Your reservations and loans are kept."
+          }
+        }
+      }
+    },
+    "Saisissez votre mot de passe actuel." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter your current password."
+          }
+        }
+      }
+    },
+    "Ce mot de passe est trop long." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This password is too long."
+          }
+        }
+      }
+    },
+    "Mot de passe actuel incorrect." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Incorrect current password."
+          }
+        }
+      }
+    },
+    "Le nouveau mot de passe doit compter au moins 12 caractères." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The new password must have at least 12 characters."
+          }
+        }
+      }
+    },
+    "Le nouveau mot de passe est trop long." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The new password is too long."
+          }
+        }
+      }
+    },
+    "Choisissez un mot de passe différent de l’actuel." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a password different from the current one."
+          }
+        }
+      }
+    },
+    "La confirmation ne correspond pas au nouveau mot de passe." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The confirmation doesn’t match the new password."
+          }
+        }
+      }
+    },
+    "Le mot de passe n’a pas été modifié. Vérifiez les champs." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your password wasn’t changed. Check the fields."
+          }
+        }
+      }
+    },
+    "Le changement de mot de passe est temporairement indisponible. Votre mot de passe n’a pas changé." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changing your password is temporarily unavailable. Your password hasn’t changed."
+          }
+        }
+      }
+    },
+    "Votre compte ne peut pas changer son mot de passe ici." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your account can’t change its password here."
+          }
+        }
+      }
+    },
+    "Connexion au service impossible. Votre mot de passe n’a pas changé." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can’t connect to the service. Your password hasn’t changed."
+          }
+        }
+      }
+    },
+    "Le service n’a pas pu modifier le mot de passe. Identifiant de suivi : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service couldn’t change your password. Trace ID: %@"
+          }
+        }
+      }
+    },
+    "Le service n’a pas pu modifier le mot de passe. Réessayez dans un instant." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service couldn’t change your password. Try again in a moment."
+          }
+        }
+      }
+    },
+    "Sécurité" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Security"
+          }
+        }
+      }
+    },
+    "Continuer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

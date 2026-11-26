@@ -122,6 +122,12 @@ enum UITestScenario: String {
     /// A relaunch during a return: the loan is RETURN_PENDING and points to an
     /// operation in COMMAND_SENT, which stays there.
     case returnResume = "return-resume"
+    /// Signed in. A password change whose current password is the fictional
+    /// `UITestScenario.currentPassword` answers 204; any other is refused
+    /// 400 PASSWORD_CURRENT_INVALID.
+    case password = "password"
+    /// Signed in. The password change is sent and its answer is lost.
+    case passwordLost = "password-lost"
 
     /// Served by the fake server of the guided operations.
     var isCheckout: Bool {
@@ -138,7 +144,7 @@ enum UITestScenario: String {
              .reservation, .reservationRefused, .reservationOffline, .reservationClosed,
              .activityReserved, .activityNotCancellable, .activityLoan, .activityLoanUnavailable, .checkout,
              .checkoutRefused, .checkoutOffline, .checkoutExpired, .checkoutNetworkLost, .checkoutResume,
-             .returnLoan, .returnRefused, .returnResume:
+             .returnLoan, .returnRefused, .returnResume, .password, .passwordLost:
             StoredSession(accessToken: "scenario-token", expiresAt: .now + 3600, email: Self.technicianEmail)
         case .resumeExpired:
             StoredSession(accessToken: "scenario-token", expiresAt: .now - 60, email: Self.technicianEmail)
@@ -148,6 +154,8 @@ enum UITestScenario: String {
     }
 
     static let technicianEmail = "technician@aegis.demo"
+    /// FICTIONAL, for the password scenarios only; no account has it.
+    static let currentPassword = "fictional-current-pass"
     static let technician = #"{"id":"75acc15f-fc23-45d9-857d-b543694e4fc2","displayName":"Technicien Démo","email":"technician@aegis.demo","role":"TECHNICIAN","maximumAccessLevel":"STANDARD"}"#
     static let admin = #"{"id":"0d6f7f6e-2d3c-4a59-9a0b-4b3c2f1e0a11","displayName":"Admin Démo","email":"admin@aegis.demo","role":"ADMIN","maximumAccessLevel":"RESTRICTED"}"#
 }
@@ -204,6 +212,7 @@ struct ScenarioTransport: HTTPTransport {
         let path = request.url?.path() ?? ""
         if path.hasSuffix("/auth/login") { return try await login(request) }
         if path.hasSuffix("/auth/me") { return try await me(request) }
+        if path.hasSuffix("/auth/password") { return try password(request) }
         if path.hasSuffix("/assets") { return try assets(request) }
         if path.contains("/assets/") { return try asset(request) }
         if scenario.isCheckout { return try checkout(request, path: path) }
@@ -258,7 +267,7 @@ struct ScenarioTransport: HTTPTransport {
              .catalogDetailGone, .reservation, .reservationRefused, .reservationOffline, .reservationClosed,
              .activityReserved, .activityNotCancellable, .activityLoan, .activityLoanUnavailable, .checkout,
              .checkoutRefused, .checkoutOffline, .checkoutExpired, .checkoutNetworkLost, .checkoutResume,
-             .returnLoan, .returnRefused, .returnResume:
+             .returnLoan, .returnRefused, .returnResume, .password, .passwordLost:
             return response(request, 200, UITestScenario.technician)
         case .resumeRecovers where profileChecks.next() > 1:
             return response(request, 200, UITestScenario.technician)
@@ -530,6 +539,24 @@ struct ScenarioTransport: HTTPTransport {
         }
         if path.hasSuffix("/status"), path.contains("/lockers/") { return problem(request, 404, "RESOURCE_NOT_FOUND") }
         throw URLError(.cannotConnectToHost)
+    }
+
+    /// §10.7. The body is checked for exactly its two fields.
+    private func password(_ request: URLRequest) throws -> (Data, URLResponse) {
+        guard [.password, .passwordLost].contains(scenario) else { throw URLError(.cannotConnectToHost) }
+        guard request.value(forHTTPHeaderField: "Authorization") == "Bearer scenario-token" else {
+            return problem(request, 401, "AUTH_TOKEN_INVALID")
+        }
+        let body = request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: String] }
+        guard let body, Set(body.keys) == ["currentPassword", "newPassword"],
+              request.value(forHTTPHeaderField: "Idempotency-Key") == nil else {
+            return problem(request, 400, "VALIDATION_ERROR")
+        }
+        if scenario == .passwordLost { throw URLError(.timedOut) }
+        guard body["currentPassword"] == UITestScenario.currentPassword else {
+            return problem(request, 400, "PASSWORD_CURRENT_INVALID")
+        }
+        return response(request, 204, "")
     }
 
     private func problem(_ request: URLRequest, _ status: Int, _ code: String,

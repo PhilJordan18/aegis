@@ -141,6 +141,28 @@ struct AccountView: View {
                 }
                 .listRowBackground(Color.brandPanel)
 
+                // A heading row rather than a section header, whose font does
+                // not follow every Dynamic Type size.
+                Section {
+                    Text("Sécurité")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Color.brandText)
+                        .accessibilityAddTraits(.isHeader)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+                }
+                .listSectionSpacing(.custom(4))
+
+                Section {
+                    NavigationLink {
+                        PasswordChangeView(session: session, email: profile.email)
+                    } label: {
+                        Label("Changer le mot de passe", systemImage: "key")
+                    }
+                    .accessibilityIdentifier("account.password")
+                }
+                .listRowBackground(Color.brandPanel)
+
                 Section {
                     Button("Se déconnecter", role: .destructive) { confirmsSignOut = true }
                         .foregroundStyle(Color.errorText)
