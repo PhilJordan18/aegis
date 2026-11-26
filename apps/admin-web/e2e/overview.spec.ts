@@ -83,6 +83,55 @@ const STATUS = {
   deviceErrors: [],
 }
 
+/**
+ * The reference set of contract §8.6, against which every overview height target is stated: 3 open anomalies (1 HIGH,
+ * 2 MEDIUM) with cell, unit and detection time, 1 overdue active loan, 1 online locker with its window open and 2
+ * occupied cells, 1 operation in progress (command acknowledged), 2 active reservations.
+ */
+const A2_ID = '6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d'
+const ASSET2_ID = '8d9e0f1a-2b3c-4d4e-8f5a-6b7c8d9e0f1a'
+const asset2 = {
+  id: ASSET2_ID,
+  assetCode: 'OSC-002',
+  model: { id: '2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e', name: 'Oscilloscope portable', manufacturer: 'Tektronix', modelNumber: 'TBS1052' },
+  placement: { lockerId: LOCKER_ID, lockerCode: 'AEGIS-DEMO-01', compartmentId: A2_ID, compartmentCode: 'A2' },
+}
+const REFERENCE_ANOMALIES = [
+  { ...anomaly(), severity: 'HIGH' },
+  { ...anomaly(), id: 'aaaaaaaa-0000-4000-8000-000000000002', severity: 'MEDIUM', type: 'UNEXPECTED_ASSET_OBSERVED', assetId: ASSET2_ID, compartmentId: A2_ID, detectedAt: '2026-11-10T18:40:00Z' },
+  { ...anomaly(), id: 'aaaaaaaa-0000-4000-8000-000000000003', severity: 'MEDIUM', type: 'OPERATION_TIMEOUT', detectedAt: '2026-11-10T18:10:00Z' },
+]
+const REFERENCE_RESERVATIONS = [reservation, { ...reservation, id: '33333333-0000-4000-8000-000000000033', asset: asset2, reservedFrom: '2026-11-10T15:00:00Z', reservedUntil: '2026-11-10T22:00:00Z' }]
+const REFERENCE_OPERATION = {
+  id: '55555555-0000-4000-8000-000000000005',
+  type: 'CHECKOUT',
+  status: 'COMMAND_ACKNOWLEDGED',
+  userId: USER_ID,
+  user: { id: USER_ID, displayName: 'Technicien Démo' },
+  assetId: ASSET2_ID,
+  asset: asset2,
+  lockerId: LOCKER_ID,
+  compartmentId: A2_ID,
+  reservationId: '33333333-0000-4000-8000-000000000033',
+  loanId: null,
+  createdAt: '2026-11-10T18:58:00Z',
+  authorizedAt: '2026-11-10T18:58:10Z',
+  localAccessChallengeId: null,
+  localProofExpiresAt: null,
+  localProofDisplayedAt: null,
+  localProofValidatedAt: null,
+  requiredAction: 'NONE',
+  expiresAt: null,
+  commandSentAt: '2026-11-10T18:58:11Z',
+  acknowledgedAt: '2026-11-10T18:58:12Z',
+  doorOpenedAt: null,
+  observationReceivedAt: null,
+  confirmedAt: null,
+  terminalAt: null,
+  failureReason: null,
+  anomalyId: null,
+}
+
 const pageOf = (items: unknown[], size: number, totalItems = items.length) => ({ items, page: 0, size, totalItems, totalPages: Math.max(Math.ceil(totalItems / size), 1) })
 
 interface Fake {
@@ -90,7 +139,9 @@ interface Fake {
   readonly acknowledgements: { key: string | null; body: string | null }[]
 }
 
-async function routeApi(page: Page, { activeLoans = [loan(1, true)], activeLoanTotal }: { activeLoans?: unknown[]; activeLoanTotal?: number } = {}): Promise<Fake> {
+async function routeApi(page: Page, { activeLoans = [loan(1, true)], activeLoanTotal, reference = false }: { activeLoans?: unknown[]; activeLoanTotal?: number; reference?: boolean } = {}): Promise<Fake> {
+  const locker = reference ? { ...LOCKER, compartments: [...LOCKER.compartments, { id: A2_ID, code: 'A2', enabled: true, currentAsset: { id: ASSET2_ID, assetCode: 'OSC-002' } }] } : LOCKER
+  const lockerStatus = reference ? { ...STATUS, compartments: [cell, { ...cell, id: A2_ID, code: 'A2' }] } : STATUS
   const fake: Fake = { requests: [], acknowledgements: [] }
   let acknowledged = false
   const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', headers: { 'X-Request-Id': TRACE_ID }, body: JSON.stringify(body) })
@@ -108,14 +159,14 @@ async function routeApi(page: Page, { activeLoans = [loan(1, true)], activeLoanT
       acknowledged = true
       return json(route, anomaly('ACKNOWLEDGED'))
     }
-    if (p === '/admin/anomalies') return json(route, pageOf(status === 'OPEN' && acknowledged ? [] : [anomaly()], size))
+    if (p === '/admin/anomalies') return json(route, pageOf(status === 'OPEN' && acknowledged ? [] : reference ? REFERENCE_ANOMALIES : [anomaly()], size))
     if (p === `/admin/anomalies/${ANOMALY_ID}`) return json(route, anomaly(acknowledged ? 'ACKNOWLEDGED' : 'OPEN'))
     if (p === '/admin/loans') return json(route, status === 'ACTIVE' ? pageOf(activeLoans, size, activeLoanTotal ?? activeLoans.length) : pageOf([], size))
-    if (p === '/admin/reservations') return json(route, pageOf(status === 'ACTIVE' ? [reservation] : [], size))
-    if (p === '/admin/locker-operations') return json(route, pageOf([], size))
-    if (p === '/admin/lockers') return json(route, pageOf([LOCKER], size))
+    if (p === '/admin/reservations') return json(route, pageOf(status === 'ACTIVE' ? (reference ? REFERENCE_RESERVATIONS : [reservation]) : [], size))
+    if (p === '/admin/locker-operations') return json(route, pageOf(reference && status === 'COMMAND_ACKNOWLEDGED' ? [REFERENCE_OPERATION] : [], size))
+    if (p === '/admin/lockers') return json(route, pageOf([locker], size))
     if (p === '/admin/assets') return json(route, pageOf([], size))
-    if (p === `/lockers/${LOCKER_ID}/status`) return json(route, STATUS)
+    if (p === `/lockers/${LOCKER_ID}/status`) return json(route, lockerStatus)
     return route.fulfill({ status: 404, contentType: 'application/problem+json', body: JSON.stringify({ type: 'https://aegis.local/problems/resource_not_found', title: 'Fictif', status: 404, code: 'RESOURCE_NOT_FOUND', detail: 'Fictif', instance: url.pathname, traceId: TRACE_ID, timestamp: '2026-11-10T14:00:00Z' }) })
   })
   return fake
@@ -244,7 +295,7 @@ test.describe('overview: compact below 560 px (contract §8.1)', () => {
 
   const pageHeight = (page: Page) => page.evaluate(() => document.documentElement.scrollHeight)
 
-  test('previews 3 rows per module, reads the band once, and stays within 2300 px, 2700 px when stale', async ({ page }) => {
+  test('previews 3 rows per module and reads the band once', async ({ page }) => {
     await routeApi(page, { activeLoans: [1, 2, 3, 4, 5, 6].map((index) => loan(index, true)) })
     await openOverview(page)
     const loans = page.getByRole('region', { name: 'Prêts en retard' })
@@ -253,7 +304,30 @@ test.describe('overview: compact below 560 px (contract §8.1)', () => {
     // One read line for the band; no read time inside the tiles.
     await expect(page.locator('.ag-band__read')).toBeVisible()
     await expect(page.locator('.ag-tile__read').first()).toBeHidden()
-    expect(await pageHeight(page)).toBeLessThanOrEqual(2300)
+  })
+
+  test('stays within 2500 px, 2800 px when stale, on the §8.6 reference set', async ({ page }) => {
+    await routeApi(page, { reference: true })
+    await openOverview(page)
+    const anomalies = page.getByRole('region', { name: 'Anomalies ouvertes' })
+    await expect(anomalies.locator('.ag-ov__row')).toHaveCount(3)
+    await expect(page.getByRole('region', { name: 'Réservations actives' }).locator('.ag-ov__row')).toHaveCount(2)
+    await expect(page.locator('.ag-ov__mod--operations .ag-ov__row')).toHaveCount(1)
+    // §8.6: the two chips on one line and « Reconnaître » under the text, a row of at most 140 px.
+    for (const item of await anomalies.locator('li.ag-ov__item').all()) {
+      const chips = await item.locator('.ag-chip').evaluateAll((all) => all.map((chip) => Math.round(chip.getBoundingClientRect().top)))
+      expect(new Set(chips).size).toBe(1)
+      const row = await item.locator('.ag-ov__row').boundingBox()
+      const button = await item.getByRole('button').boundingBox()
+      expect(button?.y ?? 0).toBeGreaterThanOrEqual((row?.y ?? 0) + (row?.height ?? 0) - 8)
+      expect((await item.boundingBox())?.height ?? 999).toBeLessThanOrEqual(140)
+    }
+    // §8.6: « Aide » and « Actualiser » on one line.
+    const help = await page.getByRole('button', { name: 'Aide' }).boundingBox()
+    const refresh = await page.getByRole('button', { name: 'Actualiser' }).boundingBox()
+    const middle = (box: { y: number; height: number } | null) => (box === null ? -99 : box.y + box.height / 2)
+    expect(Math.abs(middle(help) - middle(refresh))).toBeLessThan(2)
+    expect(await pageHeight(page)).toBeLessThanOrEqual(2500)
 
     // A refresh that fails everywhere: one stale notice under the band, a chip in each module heading.
     await page.unroute('**/api/v1/**')
@@ -262,18 +336,35 @@ test.describe('overview: compact below 560 px (contract §8.1)', () => {
     await expect(page.locator('.ag-band__read')).toContainText('Non actualisé')
     await expect(page.locator('.ag-ov__stalechip').first()).toBeVisible()
     await expect(page.locator('.ag-ov__stale:visible')).toHaveCount(0)
-    expect(await pageHeight(page)).toBeLessThanOrEqual(2700)
+    expect(await pageHeight(page)).toBeLessThanOrEqual(2800)
     await expectNoHorizontalScroll(page)
   })
 
-  test('keeps the locker code whole and names the closing time alone', async ({ page }) => {
-    await routeApi(page)
+  for (const width of [390, 320]) {
+    test(`keeps the locker code whole and its detail on one line at ${width} px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 })
+      await routeApi(page)
+      await openOverview(page)
+      const code = page.locator('.ag-tile__code')
+      await expect(code).toHaveText('AEGIS-DEMO-01')
+      // One line: the code never breaks inside.
+      expect((await code.boundingBox())?.height ?? 99).toBeLessThan(24)
+      const detail = band(page).locator('.ag-tile__detail').filter({ hasText: 'fermeture' })
+      await expect(detail).toContainText('fermeture 17 h 00')
+      const fits = await detail.evaluate((node) => node.scrollWidth <= node.clientWidth + 1 && node.getClientRects().length === 1)
+      expect(fits).toBe(true)
+      expect((await detail.boundingBox())?.height ?? 99).toBeLessThan(24)
+    })
+  }
+
+  test('replaces the detail with an accessible « Lecture incomplète » when the loans exceed one page (§8.7)', async ({ page }) => {
+    await routeApi(page, { activeLoans: Array.from({ length: 100 }, (_, index) => loan(index + 1, index === 0)), activeLoanTotal: 150 })
     await openOverview(page)
-    const code = page.locator('.ag-tile__code')
-    await expect(code).toHaveText('AEGIS-DEMO-01')
-    const box = await code.boundingBox()
-    // One line: the code never breaks inside.
-    expect(box?.height ?? 99).toBeLessThan(24)
+    const tile = tiles(page).nth(1)
+    await expect(tile).toContainText('1+')
+    await expect(tile.getByText('Lecture incomplète')).toBeVisible()
+    await expect(tile).toHaveAccessibleName(/Prêts en retard\s*1\+\s*Lecture incomplète/)
+    await expect(tile.locator('.ag-tile__detail')).toHaveCount(1)
   })
 })
 

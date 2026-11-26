@@ -835,6 +835,9 @@ export const fr = {
     lockerUnknownBody: "Aucun signal valide n'a encore été reçu : aucune présence ni aucune absence n'est supposée.",
     lockerStatusTitle: ({ code }: { code: string }) => `Statut du casier ${code} non chargé.`,
     windowOpen: ({ time }: { time: string }) => `Ouvert · fermeture ${time}`,
+    /** §8.6: the tile drops the lead when its width is short, the « En ligne » value already says the state. */
+    windowOpenLead: 'Ouvert · ',
+    windowCloses: ({ time }: { time: string }) => `fermeture ${time}`,
     windowClosed: ({ time }: { time: string }) => `Fermé · prochaine ouverture ${time}`,
     windowClosedNoNext: 'Fermé · aucune prochaine ouverture',
     cell: 'Cellule',

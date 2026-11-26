@@ -213,16 +213,25 @@ test.describe('labels: lot 1 readability', () => {
 test.describe('labels: the « Identifiant seulement » fallback on a narrow screen', () => {
   test.use({ viewport: { width: 390, height: 844 } })
 
-  test('a unit outside the index holds in the full-width picker without horizontal scroll', async ({ page }) => {
-    await routeApi(page)
-    await signIn(page)
-    await go(page, `/reservations-prets?equipement=${UNKNOWN_LOCKER_ID}`)
-    const chosen = page.locator('.ag-picker__chosen')
-    await expect(chosen).toContainText('Identifiant seulement')
-    await expectNoHorizontalScroll(page)
-    // §1.8 responsive: below 560 px the picker takes the whole row of the filter grid.
-    const grid = await page.locator('.ag-filters__grid').boundingBox()
-    const picker = await page.locator('.ag-filters__grid > .ag-picker').boundingBox()
-    expect(Math.round(picker?.width ?? 0)).toBe(Math.round(grid?.width ?? -1))
-  })
+  for (const [screenName, path, grid] of [
+    ['Réservations et prêts', '/reservations-prets', '.ag-filters__grid'],
+    ['Anomalies', '/anomalies', '.ag-an-filters__grid'],
+  ] as const) {
+    test(`a unit outside the index holds in the full-width picker without horizontal scroll (${screenName})`, async ({ page }) => {
+      await routeApi(page)
+      await signIn(page)
+      await go(page, `${path}?equipement=${UNKNOWN_LOCKER_ID}`)
+      const chosen = page.locator('.ag-picker__chosen')
+      await expect(chosen).toContainText('Identifiant seulement')
+      await expectNoHorizontalScroll(page)
+      // §1.8 responsive: below 560 px the picker takes the whole row of every filter grid.
+      const row = await page.locator(grid).boundingBox()
+      const picker = await page.locator(`${grid} > .ag-picker`).boundingBox()
+      expect(Math.round(picker?.width ?? 0)).toBe(Math.round(row?.width ?? -1))
+      // The « Identifiant seulement » chip stays inside the chosen-unit chip.
+      const outer = await page.locator('.ag-picker__chip').boundingBox()
+      const inner = await page.locator('.ag-picker__chip').getByText('Identifiant seulement').boundingBox()
+      expect((inner?.x ?? 0) + (inner?.width ?? 0)).toBeLessThanOrEqual((outer?.x ?? 0) + (outer?.width ?? 0) + 0.5)
+    })
+  }
 })

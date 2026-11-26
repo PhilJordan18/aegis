@@ -34,5 +34,6 @@
 @media (max-width: 559px) {
   .ag-picker__list { position: static; }
   /* §1.8: the picker takes the whole row of the filter grid on a narrow screen. */
-  .ag-filters__grid > .ag-picker { grid-column: 1 / -1; }
+  .ag-filters__grid > .ag-picker,
+  .ag-an-filters__grid > .ag-picker { grid-column: 1 / -1; }
 }
