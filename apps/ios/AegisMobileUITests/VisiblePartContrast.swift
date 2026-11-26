@@ -20,7 +20,7 @@ extension XCTestCase {
     /// `visible`. A measured part is attached with its screenshot as
     /// `audit-visible-part-contrast`. The screenshot is taken now, as the
     /// issue is handled, because the audit may have scrolled the screen
-    /// since it began.
+    /// since it began; its line keeps the conditions of the measure.
     @MainActor
     func visiblePartContrast(of target: XCUIElement, visible: CGRect, window: CGRect,
                              in app: XCUIApplication) -> VisiblePartContrast {
@@ -29,14 +29,17 @@ extension XCTestCase {
             return .nothingToMeasure("nothing visible")
         }
         if visible.contains(target.frame) { return .entirelyVisible }
-        let image = Self.crop(app.screenshot(), to: part, window: window)
+        let shot = app.screenshot()
+        let image = Self.crop(shot, to: part, window: window)
         guard let ratio = RenderedContrast.ratio(of: image, shade: BarAwareAudit.panelShade) else {
             return .nothingToMeasure("no ink in its visible part \(part)")
         }
-        let line = "'\(target.label)' partly visible, \(part) of frame=\(target.frame): "
-            + String(format: "rendered %.2f:1", ratio)
+        let name = "audit-visible-part-contrast '\(target.label)'"
+        let line = "'\(target.label)' id=\(target.identifier) partly visible, \(part) of frame=\(target.frame), "
+            + measureConditions(in: app, window: window, shot: shot)
+            + String(format: ": rendered %.2f:1, threshold 4.5:1", ratio) + ", evidence \(name)"
         let evidence = XCTAttachment(image: image)
-        evidence.name = "audit-visible-part-contrast"
+        evidence.name = name
         evidence.lifetime = .keepAlways
         add(evidence)
         return .measured(passed: ratio >= 4.5, line: line)
@@ -44,11 +47,15 @@ extension XCTestCase {
 
     /// Measures an entirely visible element on the screen as it is once
     /// still, for a suite whose audit scrolls while it runs, so that the
-    /// audit's samples may not be of the screen it reports on. Attached as
-    /// `audit-entire-contrast`; it passes at 4.5:1 or more.
+    /// audit's samples may not be of the screen it reports on. It passes at
+    /// 4.5:1 or more. A passing measure only qualifies the issue the audit
+    /// reported on this element; it is no exception for any other (#222).
+    /// The crop is attached under the name its line gives, and the line
+    /// keeps the conditions of the measure with its result. The capture's
+    /// dithering is folded, as for a visible part (#234).
     @MainActor
-    func entireContrast(of target: XCUIElement, window: CGRect,
-                        in app: XCUIApplication) -> VisiblePartContrast {
+    func entireContrast(of target: XCUIElement, window: CGRect, in app: XCUIApplication,
+                        shade: UInt8 = BarAwareAudit.panelShade) -> VisiblePartContrast {
         guard app.waitForStillScreen() else {
             return .measured(passed: false, line: "'\(target.label)': the screen never stopped moving")
         }
@@ -56,16 +63,34 @@ extension XCTestCase {
         guard window.contains(frame) else {
             return .measured(passed: false, line: "'\(target.label)' frame=\(frame) left the window")
         }
-        let image = Self.crop(app.screenshot(), to: frame, window: window)
+        let shot = app.screenshot()
+        let image = Self.crop(shot, to: frame, window: window)
+        let name = "audit-entire-contrast '\(target.label)'"
         let evidence = XCTAttachment(image: image)
-        evidence.name = "audit-entire-contrast"
+        evidence.name = name
         evidence.lifetime = .keepAlways
         add(evidence)
-        guard let ratio = RenderedContrast.ratio(of: image, shade: BarAwareAudit.panelShade) else {
-            return .measured(passed: false, line: "'\(target.label)' frame=\(frame): no ink to measure")
+        let measure = "'\(target.label)' id=\(target.identifier) entirely visible on a still screen, frame=\(frame), "
+            + measureConditions(in: app, window: window, shot: shot)
+        guard let ratio = RenderedContrast.ratio(of: image, shade: shade) else {
+            return .measured(passed: false, line: measure + ": no ink to measure, evidence \(name)")
         }
         return .measured(passed: ratio >= 4.5,
-                         line: "'\(target.label)' entirely visible, frame=\(frame): " + String(format: "rendered %.2f:1", ratio))
+                         line: measure + String(format: ": rendered %.2f:1, threshold 4.5:1", ratio)
+                            + ", evidence \(name)")
+    }
+
+    /// The conditions of a rendered measure, kept with its result (#222):
+    /// the appearance, the text size the app was launched with, the window
+    /// and the capture it was read from.
+    @MainActor
+    func measureConditions(in app: XCUIApplication, window: CGRect, shot: XCUIScreenshot) -> String {
+        let appearance = XCUIDevice.shared.appearance == .dark ? "dark" : "light"
+        let arguments = app.launchArguments
+        let size = arguments.firstIndex(of: "-UIPreferredContentSizeCategoryName")
+            .flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil } ?? "default text size"
+        let pixels = shot.image.cgImage.map { "\($0.width)x\($0.height) px" } ?? "no pixels"
+        return "\(appearance), \(size), window \(window.width)x\(window.height) pt, captured at \(pixels)"
     }
 
     /// The part of a full-screen screenshot under `frame`, in window points.
