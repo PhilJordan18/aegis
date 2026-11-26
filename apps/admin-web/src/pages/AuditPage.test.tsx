@@ -87,7 +87,8 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
     const main = screen.getByRole('main')
     // « Copier » in « Détails techniques » only reads an identifier to the clipboard.
     const names = within(main).getAllByRole('button').map((button) => button.textContent?.trim()).filter((name) => name !== 'Copier')
-    expect(names).toEqual(['Actualiser', 'Filtrer', 'Tout afficher'])
+    // The label index has no gateway here: its « Réessayer » reads it again.
+    expect(names).toEqual(['Aide', 'Actualiser', 'Réessayer', 'Filtrer', 'Tout afficher'])
   })
 
   it('selects another event in the dossier and announces it', async () => {

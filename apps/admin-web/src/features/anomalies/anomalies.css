@@ -4,8 +4,6 @@
  * and hairlines, no glass, no gradient, no chart. Prefix ag-an-.
  */
 .ag-an-lead { margin-top: 4px; max-width: 80ch; font-size: 0.9375rem; line-height: 1.5; color: var(--ag-text-2); }
-.ag-an-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: var(--ag-type-small-size); color: var(--ag-text-2); }
-.ag-an-meta__time { font-variant-numeric: tabular-nums; }
 
 /* Permanent reminder: acknowledging is not resolving. */
 .ag-an-reminder {

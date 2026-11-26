@@ -15,6 +15,8 @@ interface RefreshControlProps {
   readonly stale?: boolean
   /** A read the page started itself (first load, a filter): the button is busy too. */
   readonly busy?: boolean
+  /** False when the page already announces its own outcome of a successful read (Audit: the count of events). */
+  readonly announceSuccess?: boolean
 }
 
 /**
@@ -22,7 +24,7 @@ interface RefreshControlProps {
  * successful read: a failed refresh never moves it, adds « Non actualisé » and says so in the live region. One read
  * at a time: a second activation while busy does nothing.
  */
-export function RefreshControl({ onRefresh, readAt, stale = false, busy = false }: RefreshControlProps) {
+export function RefreshControl({ onRefresh, readAt, stale = false, busy = false, announceSuccess = true }: RefreshControlProps) {
   const i18n = useI18n()
   const t = i18n.m.pageTools
   const times = transactionTimes(i18n)
@@ -40,7 +42,7 @@ export function RefreshControl({ onRefresh, readAt, stale = false, busy = false 
         setRefreshing(false)
         setFailed(!ok)
         // The instant announced on success is the moment the read ended; on failure, the one of the data kept.
-        if (ok) setAnnouncement(t.refreshed({ time: times.readAt(Date.now()) }))
+        if (ok) setAnnouncement(!announceSuccess ? '' : t.refreshed({ time: times.readAt(Date.now()) }))
         else setAnnouncement(readAt === null ? t.refreshFailedNoData : t.refreshFailed({ time: times.readAt(readAt) }))
       })
   }

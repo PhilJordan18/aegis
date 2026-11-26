@@ -196,8 +196,8 @@ describe('Anomalies — list and dossier', () => {
   })
 
   it.each([
-    ['fr', /Mis à jour à 10 h 30 HNE/, /lu à 10 h 30 HNE/],
-    ['en', /Updated at 10:30 a\.m\. EST/, /read at 10:30 a\.m\. EST/],
+    ['fr', /Lu à 10 h 30 HNE/, /lu à 10 h 30 HNE/],
+    ['en', /Read at 10:30 a\.m\. EST/, /read at 10:30 a\.m\. EST/],
   ] as const)('shows the updated and read times in the laboratory zone, not UTC or the device zone (%s)', async (locale, updated, read) => {
     // 15:30 UTC is 10:30 in America/Toronto in November, whatever the zone of the machine running the test.
     vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-11T15:30:00Z') })

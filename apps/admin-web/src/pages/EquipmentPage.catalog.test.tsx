@@ -45,6 +45,9 @@ afterEach(() => {
   window.history.replaceState(null, '', '/')
 })
 
+/** The page's own live region (the list and the selection), not the one of « Actualiser ». */
+const pageStatus = () => screen.getAllByRole('status').find((node) => !node.closest('.ag-refresh'))
+
 describe('Équipements — list and dossier from the catalog API', () => {
   it('shows the units, selects the first one and reads it from the API with the session token', async () => {
     const gateway = fakeCatalogGateway({ pages: [ok(pageOf([MM001, MM002]))], units: { [MM001.id]: ok(MM001) } })
@@ -104,7 +107,7 @@ describe('Équipements — list and dossier from the catalog API', () => {
     expect(window.location.search).toBe(`?exemplaire=${MM002.id}`)
     expect(second.getAttribute('aria-current')).toBe('true')
     expect(await screen.findByRole('heading', { level: 2, name: /Multimètre 2 · MM-002/ })).toBeDefined()
-    expect(plain(document.querySelectorAll('[role="status"]')[1]?.textContent)).toBe('Exemplaire sélectionné : Multimètre 2, MM-002.')
+    expect(plain(document.querySelectorAll('main > [role="status"], main > .ag-sr-only[role="status"]')[1]?.textContent)).toBe('Exemplaire sélectionné : Multimètre 2, MM-002.')
     expect(gateway.getAsset).toHaveBeenCalledWith('token-value', MM002.id, expect.anything())
   })
 
@@ -127,10 +130,10 @@ describe('Équipements — list and dossier from the catalog API', () => {
     const gate = new Promise<void>((resolve) => (release = resolve))
     const gateway = fakeCatalogGateway({ pages: [async () => (await gate, ok(pageOf([MM001])))], units: { [MM001.id]: ok(MM001) } })
     renderEquipment(gateway)
-    expect(screen.getAllByRole('status')[0]?.textContent).toBe('Chargement des exemplaires…')
+    expect(pageStatus()?.textContent).toBe('Chargement des exemplaires…')
     expect(document.querySelector('.ag-skel')).not.toBeNull()
     act(() => release())
-    await waitFor(() => expect(plain(screen.getAllByRole('status')[0]?.textContent)).toBe('Liste chargée : 1 exemplaire, page 1 sur 1.'))
+    await waitFor(() => expect(plain(pageStatus()?.textContent)).toBe('Liste chargée : 1 exemplaire, page 1 sur 1.'))
     expect(document.querySelector('.ag-skel')).toBeNull()
   })
 

@@ -12,6 +12,7 @@ import { AnomaliesBlock, LoansBlock, OperationsBlock, ReservationsBlock } from '
 import { oldestRead, readOf, summarizeAnomalies, summarizeLoans, summarizeOperations, type BlockRead } from '../features/overview/overviewModel'
 import { useActiveReservations, useInProgressOperationReads, useLockerStatuses, useOpenAnomalies, useOpenLoanReads, useOverviewLockers, useOverviewRefresh } from '../features/overview/useOverviewQueries'
 import { useLabelIndex } from '../features/labels/useLabelIndex'
+import { LabelIndexNotice } from '../features/labels/LabelIndexNotice'
 import { HelpButton, HelpPanel } from '../features/pageTools/PageHelp'
 import { RefreshControl } from '../features/pageTools/RefreshControl'
 import { usePageHelp } from '../features/pageTools/usePageHelp'
@@ -96,6 +97,8 @@ export function OverviewPage({ sessionProfile }: { readonly sessionProfile: User
           <p>{m.pageTools.labHours({ zone: LAB_TIME_ZONE })}</p>
           {labels.health === 'partial' && <p>{m.labels.partial}</p>}
         </HelpPanel>
+
+        {!sameFailure && <LabelIndexNotice health={labels.health} onRetry={labels.retry} />}
 
         {sameFailure ? (
           <div className="ag-ov__pageerr">

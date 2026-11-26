@@ -138,7 +138,7 @@ describe('Casiers — nominal', () => {
     renderLockers(gateway)
     await screen.findByRole('heading', { level: 2, name: SECTION })
     const main = screen.getByRole('main')
-    expect(within(main).getAllByRole('button').map((button) => button.textContent)).toEqual(['Modifier l’horaire'])
+    expect(within(main).getAllByRole('button').map((button) => button.textContent)).toEqual(['Aide', 'Actualiser', 'Modifier l’horaire'])
     expect(main.querySelectorAll('input, select, textarea, form, [contenteditable], [role="switch"], [role="checkbox"]')).toHaveLength(0)
     expect(within(main).queryByText(/ouvrir|forcer|déverrouiller|débloquer|enregistrer/i)).toBeNull()
     expect(Object.keys(gateway)).toEqual(['getStatus'])

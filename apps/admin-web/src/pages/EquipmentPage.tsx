@@ -22,6 +22,7 @@ import { ModelFormDialog } from '../features/catalog/forms/ModelFormDialog'
 import { ModelList } from '../features/catalog/ModelList'
 import { useCatalogMutations } from '../features/catalog/useCatalogMutations'
 import { useAsset, useAssetList, useModelList } from '../features/catalog/useCatalogQueries'
+import { RefreshControl } from '../features/pageTools/RefreshControl'
 import { useI18n } from '../i18n/useI18n'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
@@ -94,7 +95,6 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
   const { archiveAsset, archiveModel } = useCatalogMutations()
   const [editing, setEditing] = useState<Editing | null>(null)
   const [outcome, setOutcome] = useState('')
-  const [refreshing, setRefreshing] = useState(false)
   const sessions = useRef(0)
   const open = (next: EditIntent) => {
     sessions.current += 1
@@ -105,14 +105,11 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
    * « Actualiser »: availability and placement change outside the Manager and the catalogue is never polled (ADR-006),
    * so the administrator can read the list and the open dossier again at once, as on the other screens.
    */
-  const refresh = () => {
-    if (refreshing) return
-    setRefreshing(true)
+  const refresh = async () => {
     setOutcome('')
-    void Promise.all([list.refetch(), selectedId === null ? undefined : asset.refetch()]).then(([read]) => {
-      setRefreshing(false)
-      if (read.isSuccess) setOutcome(m.equipment.loaded({ count: read.data.totalItems, page: read.data.page + 1, pages: Math.max(read.data.totalPages, 1) }))
-    })
+    const [read, detail] = await Promise.all([list.refetch(), selectedId === null ? undefined : asset.refetch()])
+    if (read.isSuccess) setOutcome(m.equipment.loaded({ count: read.data.totalItems, page: read.data.page + 1, pages: Math.max(read.data.totalPages, 1) }))
+    return read.isSuccess && (detail === undefined || detail.isSuccess)
   }
   const close = () => setEditing((current) => (current === null ? null : { ...current, open: false }))
 
@@ -220,10 +217,7 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
           </div>
           <div className="ag-page__actions">
             {!modelsView && (
-              <Button variant="secondary" busy={refreshing} onClick={refresh}>
-                <Icon name="refresh" />
-                {m.equipment.refresh}
-              </Button>
+              <RefreshControl onRefresh={refresh} readAt={page === undefined || list.dataUpdatedAt === 0 ? null : list.dataUpdatedAt} stale={list.isRefetchError} announceSuccess={false} />
             )}
             <Button onClick={() => open({ kind: modelsView ? 'createModel' : 'createAsset' })}>
               <Icon name="plus" />

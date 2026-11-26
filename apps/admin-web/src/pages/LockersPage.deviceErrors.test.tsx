@@ -85,7 +85,7 @@ describe('Casiers — reported device errors (#29, 09 §8.6)', () => {
     expect(within(rows[0] as HTMLElement).getAllByRole('cell').map((cell) => plain(cell.textContent)).slice(0, 5)).toEqual([
       'ActivéeOui', 'LiaisonConnectée', 'Lecteur RFIDEn bon état', 'PorteFermée', 'SerrureVerrouillée',
     ])
-    expect(within(screen.getByRole('main')).getAllByRole('button').map((button) => button.textContent)).toEqual(['Modifier l’horaire'])
+    expect(within(screen.getByRole('main')).getAllByRole('button').map((button) => button.textContent)).toEqual(['Aide', 'Actualiser', 'Modifier l’horaire'])
     expect(Object.keys(gateway)).toEqual(['getStatus'])
   })
 
