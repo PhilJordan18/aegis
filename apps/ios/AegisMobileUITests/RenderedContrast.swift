@@ -46,10 +46,16 @@ enum RenderedContrast {
 
         var counts: [UInt32: Int] = [:]
         var inside = 0
+        // With a tolerance, a row's fill is found with it too: in a dithered
+        // capture many rows hold no pixel of the exact panel colour, and the
+        // text rows of « Role » were all skipped (#234).
+        func isFill(_ pixel: UInt32) -> Bool {
+            let colour = pixel & 0x00FF_FFFF
+            return colour == background || near(colour, background, shade)
+        }
         for row in 0..<height {
             let line = pixels[(row * width)..<((row + 1) * width)]
-            guard let first = line.firstIndex(where: { $0 & 0x00FF_FFFF == background }),
-                  let last = line.lastIndex(where: { $0 & 0x00FF_FFFF == background }) else { continue }
+            guard let first = line.firstIndex(where: isFill), let last = line.lastIndex(where: isFill) else { continue }
             for pixel in line[first...last] where !near(pixel & 0x00FF_FFFF, background, shade) {
                 counts[pixel & 0x00FF_FFFF, default: 0] += 1
             }

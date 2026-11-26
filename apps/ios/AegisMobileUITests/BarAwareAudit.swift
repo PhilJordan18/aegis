@@ -5,6 +5,10 @@ import XCTest
 enum BarAwareAudit {
     /// The tab bar's fade above its top edge, as in the other audited suites.
     static let fadeHeight: CGFloat = 120
+    /// The navigation bar's scroll edge effect below its frame: on the AX5
+    /// capture of #234 its gradient reached the page colour 20 pt under the
+    /// bar, where a strip of black text on white measured 1.00:1.
+    static let navigationEdgeHeight: CGFloat = 24
     /// The dark panel is captured dithered by one unit (#232): see
     /// `RenderedContrast.ratio(of:shade:)`.
     static let panelShade: UInt8 = 2
@@ -16,7 +20,8 @@ extension XCTestCase {
     /// other audited suites: a still screen first; a contrast issue on an
     /// element partly under the navigation bar or the tab bar's fade is
     /// measured on its visible part, never trusted; one without its element
-    /// is judged by `unattributedContrast`; at the largest size the rendered
+    /// is judged by `unattributedContrast`; clipped text is tolerated only
+    /// where a bar cuts it (`cutByABar`); at the largest size the rendered
     /// screens are the Dynamic Type proof. Everything else fails.
     @MainActor
     func auditAccountScreen(_ app: XCUIApplication, atLargestSize: Bool = false) throws {
@@ -31,7 +36,7 @@ extension XCTestCase {
         // scroll edge effect, as what scrolls under the tab bar fades.
         let navigationBar = app.navigationBars.firstMatch
         if navigationBar.exists {
-            let top = navigationBar.frame.maxY
+            let top = navigationBar.frame.maxY + BarAwareAudit.navigationEdgeHeight
             visible = CGRect(x: visible.minX, y: top, width: visible.width, height: max(0, visible.maxY - top))
         }
         var types = XCUIAccessibilityAuditType.all
@@ -40,8 +45,16 @@ extension XCTestCase {
         try app.performMeasuredAccessibilityAudit(for: types) { issue in
             var note = ""
             var tolerated = false
-            if issue.auditType == .contrast {
+            if issue.auditType == .textClipped {
+                tolerated = self.cutByABar(issue.element, in: app, visible: visible, window: window, note: &note)
+            } else if issue.auditType == .contrast {
                 if let target = issue.element {
+                    // The audit scrolls while it runs (#222): its frame and
+                    // the screenshot are only read together on a still screen.
+                    guard app.waitForStillScreen() else {
+                        findings.record(issue, tolerated: false, note: " (the screen never stopped moving)")
+                        return true
+                    }
                     let partly = self.visiblePartContrast(of: target, visible: visible, window: window, in: app)
                     if let judged = findings.tolerates(partly, note: &note) {
                         tolerated = judged
@@ -95,6 +108,12 @@ extension XCTestCase {
     @MainActor
     private func unattributedContrast(in app: XCUIApplication, visible: CGRect, window: CGRect,
                                       findings: AuditRecord, note: inout String) -> Bool {
+        // The snapshot and the screenshot must show the same screen: with
+        // the audit scrolling, « Role » once measured where another row was.
+        guard app.waitForStillScreen() else {
+            note = " (the screen never stopped moving)"
+            return false
+        }
         guard let root = try? app.snapshot() else { return false }
         let shot = app.screenshot()
         var elements: [any XCUIElementSnapshot] = []
@@ -119,10 +138,13 @@ extension XCTestCase {
         }
         var passed = true
         // Each text on its own, not a whole row, whose separator and rounded
-        // corners are no text; with 8 pt of its background around it, so that
-        // the shades of its anti-aliased edges stay rare.
+        // corners are no text; with up to 8 pt of its background around it,
+        // so that the shades of its anti-aliased edges stay rare, but never
+        // beyond the visible area: a dithered dark panel has no dominant
+        // colour, and the even band under the navigation bar became the
+        // background of « Role », leaving its text rows unread.
         for text in texts where visible.contains(text.frame) && text.frame.width < window.width * 0.8 {
-            let frame = text.frame.insetBy(dx: -8, dy: -8)
+            let frame = text.frame.insetBy(dx: -8, dy: -8).intersection(visible)
             let image = Self.crop(shot, to: frame, window: window)
             guard let ratio = RenderedContrast.ratio(of: image, shade: BarAwareAudit.panelShade) else {
                 passed = findings.measured(passed: false, "'\(text.label)' frame=\(text.frame): no ink to measure")
@@ -139,5 +161,44 @@ extension XCTestCase {
         add(evidence)
         note = " (text under a bar; every entirely visible text measured)"
         return passed
+    }
+
+    /// A clipped-text issue is tolerated only where a bar or the window's
+    /// edge cuts the text: at the largest size, the rows the bars overlap
+    /// (« Standard » under the navigation bar, « passe » under the tab bar)
+    /// are reported, sometimes without their element. Named, the element must
+    /// itself be cut; unnamed, a text must be cut on the still screen. A text
+    /// clipped inside the visible area still fails.
+    @MainActor
+    private func cutByABar(_ element: XCUIElement?, in app: XCUIApplication, visible: CGRect, window: CGRect,
+                           note: inout String) -> Bool {
+        guard app.waitForStillScreen() else {
+            note = " (the screen never stopped moving)"
+            return false
+        }
+        // Straddling an edge: partly visible, partly under a bar or off the
+        // window. A bar's own title lies wholly outside the visible area.
+        func cut(_ frame: CGRect) -> Bool {
+            !frame.isEmpty && ((frame.intersects(visible) && !visible.contains(frame))
+                || (frame.intersects(window) && !window.contains(frame)))
+        }
+        if let element {
+            guard cut(element.frame) else { return false }
+            note = " (cut by a bar or the window edge)"
+            return true
+        }
+        guard let root = try? app.snapshot() else { return false }
+        var pending: [any XCUIElementSnapshot] = [root]
+        var cutTexts: [String] = []
+        while let element = pending.popLast() {
+            pending.append(contentsOf: element.children)
+            if element.elementType == .staticText, cut(element.frame) { cutTexts.append(element.label) }
+        }
+        guard !cutTexts.isEmpty else {
+            note = " (no text cut by a bar)"
+            return false
+        }
+        note = " (no element; text cut by a bar: \(cutTexts.joined(separator: ", ")))"
+        return true
     }
 }
