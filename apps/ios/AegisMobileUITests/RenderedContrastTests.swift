@@ -98,6 +98,15 @@ final class RenderedContrastTests: XCTestCase {
         XCTAssertGreaterThan(folded, 15)
     }
 
+    /// As captured under « Role » (#234): the exact panel colour only in the
+    /// rows above the text, every text row dithered. Each row's fill is found
+    /// with the tolerance, so the text rows are read.
+    func testTextRowsWithoutTheExactPanelColourAreRead() throws {
+        let image = Self.ditheredPanelText(.white, exactRowsAbove: 20)
+        let ratio = try XCTUnwrap(RenderedContrast.ratio(of: image, shade: 2))
+        XCTAssertGreaterThan(ratio, 15)
+    }
+
     /// The tolerance folds shades, never a text: one three units away from
     /// the panel is still an ink, and rejected.
     func testTheShadeToleranceKeepsAFaintTextAnInk() throws {
@@ -130,7 +139,9 @@ final class RenderedContrastTests: XCTestCase {
 
     /// The dark panel of the #232 capture, dithered: three shades one unit
     /// from #0D1520 in bands covering about a third of it, under a text.
-    private static func ditheredPanelText(_ color: UIColor) -> UIImage {
+    /// With `exactRowsAbove`, the exact colour only fills that many points at
+    /// the top, the most common colour still, and every row below is shades.
+    private static func ditheredPanelText(_ color: UIColor, exactRowsAbove: CGFloat? = nil) -> UIImage {
         let size = CGSize(width: 360, height: 66)
         let format = UIGraphicsImageRendererFormat()
         format.scale = 3
@@ -142,14 +153,21 @@ final class RenderedContrastTests: XCTestCase {
         return UIGraphicsImageRenderer(size: size, format: format).image { context in
             rgb(0x0D, 0x15, 0x20).setFill()
             context.fill(CGRect(origin: .zero, size: size))
-            for column in stride(from: 0, to: Int(size.width), by: 9) {
-                shades[(column / 9) % 3].setFill()
-                context.fill(CGRect(x: CGFloat(column), y: 0, width: 3, height: size.height))
+            if let top = exactRowsAbove {
+                for column in stride(from: 0, to: Int(size.width), by: 3) {
+                    shades[(column / 3) % 3].setFill()
+                    context.fill(CGRect(x: CGFloat(column), y: top, width: 3, height: size.height - top))
+                }
+            } else {
+                for column in stride(from: 0, to: Int(size.width), by: 9) {
+                    shades[(column / 9) % 3].setFill()
+                    context.fill(CGRect(x: CGFloat(column), y: 0, width: 3, height: size.height))
+                }
             }
             NSAttributedString(string: "Technicien Démo", attributes: [
-                .font: UIFont.systemFont(ofSize: 40, weight: .semibold),
+                .font: UIFont.systemFont(ofSize: exactRowsAbove == nil ? 40 : 30, weight: .semibold),
                 .foregroundColor: color,
-            ]).draw(at: CGPoint(x: 8, y: 8))
+            ]).draw(at: CGPoint(x: 8, y: (exactRowsAbove ?? 0) + 8))
         }
     }
 
