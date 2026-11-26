@@ -32,3 +32,9 @@ CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE
 GCC_WARN_UNUSED_VARIABLE = YES
 GCC_WARN_UNDECLARED_SELECTOR = YES
 STRING_CATALOG_GENERATE_SYMBOLS = YES
+
+// The app's own identifier. Debug keeps the prefix form for local signing; a
+// Release archive needs the exact identifier of the App Store Connect record,
+// set in Local.xcconfig. A com.example value blocks the archive
+// (scripts/check-release-identity.sh).
+AEGIS_APP_BUNDLE_ID = $(AEGIS_BUNDLE_ID_PREFIX).mobile
