@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
-import { PREVIEW_EMAIL, PREVIEW_PASSWORD } from './support.ts'
+import { expectNoHorizontalScroll, PREVIEW_EMAIL, PREVIEW_PASSWORD } from './support.ts'
 
 /**
  * Lot 1 « Lisibilité » (contrat-web-manager §1.8, criteria 1 to 3), offline on routed fakes: the label index reads a
@@ -57,6 +57,38 @@ const anomaly = (index: number) => ({
   summary: 'Équipement attendu non lu.',
   evidence: { items: [], unreadable: 0 },
 })
+/** An operation that names its anomaly and a locker outside the label index (§1.8 criterion 1 on every page). */
+const UNKNOWN_LOCKER_ID = '77777777-0000-4000-8000-000000000077'
+const LINKED_OPERATION = {
+  id: OPERATION_ID,
+  type: 'CHECKOUT',
+  status: 'ANOMALY',
+  userId: '0b1c2d3e-4f50-4a61-8b72-93a4b5c6d7e8',
+  user: { id: '0b1c2d3e-4f50-4a61-8b72-93a4b5c6d7e8', displayName: 'Technicien Démo' },
+  assetId: MM002_ID,
+  asset: { id: MM002_ID, assetCode: 'MM-002', model, placement: null },
+  lockerId: LOCKER_ID,
+  compartmentId: A2_ID,
+  reservationId: null,
+  loanId: null,
+  createdAt: '2026-11-10T14:01:00Z',
+  authorizedAt: '2026-11-10T14:01:30Z',
+  localAccessChallengeId: null,
+  localProofExpiresAt: null,
+  localProofDisplayedAt: null,
+  localProofValidatedAt: null,
+  requiredAction: 'NONE',
+  expiresAt: null,
+  commandSentAt: '2026-11-10T14:01:31Z',
+  acknowledgedAt: '2026-11-10T14:01:32Z',
+  doorOpenedAt: null,
+  observationReceivedAt: null,
+  confirmedAt: null,
+  terminalAt: '2026-11-10T14:05:00Z',
+  failureReason: null,
+  anomalyId: 'aaaaaaaa-0000-4000-8000-000000000001',
+}
+
 const anomalies = (count: number) => Array.from({ length: count }, (_, index) => anomaly(index + 1))
 
 const pageOf = (items: unknown[], size: number, totalItems = items.length) => ({ items, page: 0, size, totalItems, totalPages: Math.max(Math.ceil(totalItems / size), 1) })
@@ -74,7 +106,9 @@ async function routeApi(page: Page, rows = 20): Promise<string[]> {
     if (p === `/anomalies/${ANOMALIES[0]?.id}`) return json(route, ANOMALIES[0])
     if (p === '/lockers') return json(route, pageOf([LOCKER], size))
     if (p === '/assets') return json(route, pageOf([unit(MM002_ID, 'MM-002'), unit(MM099_ID, 'MM-099')], size))
-    if (p === '/loans') return json(route, pageOf([], size))
+    if (p === '/loans' || p === '/reservations') return json(route, pageOf([], size))
+    if (p === '/locker-operations') return json(route, pageOf([LINKED_OPERATION], size))
+    if (p === `/locker-operations/${OPERATION_ID}`) return json(route, LINKED_OPERATION)
     return route.fulfill({ status: 404, contentType: 'application/problem+json', body: JSON.stringify({ type: 'https://aegis.local/problems/resource_not_found', title: 'Fictif', status: 404, code: 'RESOURCE_NOT_FOUND', detail: 'Fictif', instance: url.pathname, traceId: TRACE_ID, timestamp: '2026-11-10T14:00:00Z' }) })
   })
   return requests
@@ -87,6 +121,20 @@ async function signIn(page: Page) {
   await page.getByRole('button', { name: 'Se connecter' }).click()
   await page.waitForURL(/\/apercu\/equipements$/)
 }
+
+/**
+ * What the eye reads in the main region: the rendered text without the screen-reader-only copies, which carry the full
+ * identifier for assistive technologies (§1.2). A closed <details> renders only its summary.
+ */
+const seenText = (page: Page) =>
+  page.evaluate(() => {
+    const main = document.querySelector('main') as HTMLElement
+    const hidden = [...main.querySelectorAll<HTMLElement>('.ag-sr-only')]
+    for (const node of hidden) node.style.display = 'none'
+    const text = main.innerText
+    for (const node of hidden) node.style.display = ''
+    return text
+  })
 
 /** Same document, so the in-memory session survives. */
 const go = (page: Page, url: string) =>
@@ -148,5 +196,33 @@ test.describe('labels: lot 1 readability', () => {
     await expect(dossier.locator('details.ag-tech')).toHaveAttribute('open', '')
     await expect(dossier.locator('details.ag-tech')).toContainText(MM002_ID)
     await expect(dossier.locator('details.ag-tech')).toContainText(A2_ID)
+  })
+
+  test('shows no full identifier in an operation dossier with its linked anomaly, nor in the locker filter', async ({ page }) => {
+    await routeApi(page)
+    await signIn(page)
+    await go(page, `/reservations-prets?vue=operations&casier=${UNKNOWN_LOCKER_ID}`)
+    const dossier = page.locator('.ag-dossier__scroll')
+    await expect(dossier.getByRole('link', { name: "Ouvrir l'anomalie" })).toBeVisible()
+    await expect(page.getByTestId('locker-filter')).toContainText('77777777…')
+    await expect(dossier).toContainText('aaaaaaaa…')
+    expect(await seenText(page)).not.toMatch(UUID)
+  })
+})
+
+test.describe('labels: the « Identifiant seulement » fallback on a narrow screen', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('a unit outside the index holds in the full-width picker without horizontal scroll', async ({ page }) => {
+    await routeApi(page)
+    await signIn(page)
+    await go(page, `/reservations-prets?equipement=${UNKNOWN_LOCKER_ID}`)
+    const chosen = page.locator('.ag-picker__chosen')
+    await expect(chosen).toContainText('Identifiant seulement')
+    await expectNoHorizontalScroll(page)
+    // §1.8 responsive: below 560 px the picker takes the whole row of the filter grid.
+    const grid = await page.locator('.ag-filters__grid').boundingBox()
+    const picker = await page.locator('.ag-filters__grid > .ag-picker').boundingBox()
+    expect(Math.round(picker?.width ?? 0)).toBe(Math.round(grid?.width ?? -1))
   })
 })
