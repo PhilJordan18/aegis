@@ -3,6 +3,7 @@ import { useI18n } from '../../i18n/useI18n'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
 import { StaleNotice } from '../catalog/StaleNotice'
+import { StatusChip } from '../../ui/StatusChip'
 import type { TransactionFailure } from '../transactions/transactionFailure'
 import { transactionTimes } from '../transactions/transactionPresentation'
 import type { BlockRead } from './overviewModel'
@@ -51,6 +52,14 @@ export function OverviewModule({ title, className, read, retrying, onRetry, coun
           {title}
         </h2>
         {ready && count !== undefined && <span className={count.none ? 'ag-ov__count ag-ov__count--none' : 'ag-ov__count'}>{count.text}</span>}
+        {/* §8.1: below 560 px the band holds the one stale notice; the module keeps a chip. */}
+        {ready && read.stale && (
+          <span className="ag-ov__stalechip">
+            <StatusChip role="unknown" icon="status-clock">
+              {m.pageTools.notRefreshed}
+            </StatusChip>
+          </span>
+        )}
       </div>
 
       {read.kind === 'pending' && <ModuleSkeleton title={title} />}
@@ -60,7 +69,7 @@ export function OverviewModule({ title, className, read, retrying, onRetry, coun
         </div>
       )}
       {ready && read.stale && (
-        <div className="ag-ov__alert">
+        <div className="ag-ov__alert ag-ov__stale">
           <StaleNotice
             evaluatedAt={transactionTimes(i18n).readAt(read.readAt)}
             body={(time) => m.overview.staleBody({ time })}

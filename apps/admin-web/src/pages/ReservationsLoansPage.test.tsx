@@ -268,6 +268,20 @@ describe('Réservations et prêts: filters', () => {
     expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Équipement' }))
   })
 
+  it('does not claim an expanded list without results, and keeps « Réessayer » out of the announcement', async () => {
+    const user = userEvent.setup()
+    const catalog = fakeCatalogGateway({ overrides: { listAssets: async () => ({ kind: 'network', reason: 'offline' }) as never } })
+    renderPage(fakeGateway(), { catalogGateway: catalog })
+    await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+    const field = screen.getByRole('combobox', { name: 'Équipement' })
+    await user.type(field, 'MM')
+    const retry = await screen.findByRole('button', { name: 'Réessayer' })
+    expect(field.getAttribute('aria-expanded')).toBe('false')
+    expect(field.getAttribute('aria-activedescendant')).toBeNull()
+    expect(retry.closest('[aria-live]')).toBeNull()
+    expect(document.querySelector('.ag-picker__status')?.textContent).toContain('Recherche indisponible.')
+  })
+
   it('refuses an end date before the start date and sends no request for it', async () => {
     const user = userEvent.setup()
     const gateway = fakeGateway()

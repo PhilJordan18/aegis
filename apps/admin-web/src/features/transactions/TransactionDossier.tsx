@@ -222,7 +222,8 @@ function ReservationBody({ reservation: r, titleId, i18n, times }: BodyProps & {
   const entries: TimelineEntry[] = [
     { key: 'created', instant: r.createdAt, time: times.short(r.createdAt), label: t.timeline.created },
     { key: 'from', instant: r.reservedFrom, time: times.short(r.reservedFrom), label: t.timeline.from },
-    // §1.7: the diamond marks a due date that has passed; a reservation still running shows a hollow marker.
+    // §1.7: the diamond follows the server status only (expired); the client never compares the end to a clock, so an
+    // active reservation past its end keeps the hollow marker until the server expires it.
     { key: 'until', instant: r.reservedUntil, time: times.short(r.reservedUntil), label: t.timeline.until, kind: r.expiredAt !== null ? 'marker' : 'absent' },
   ]
   if (r.fulfilledAt !== null) entries.push({ key: 'fulfilled', instant: r.fulfilledAt, time: times.short(r.fulfilledAt), label: t.timeline.fulfilled, kind: 'ok' })
@@ -415,7 +416,7 @@ function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { rea
               t.none
             )}
           </LinkRow>
-          <LinkRow label={t.linkedAnomaly}>{o.anomalyId !== null ? <LinkedAnomaly anomalyId={o.anomalyId} i18n={i18n} full /> : t.noLinkedAnomaly}</LinkRow>
+          <LinkRow label={t.linkedAnomaly}>{o.anomalyId !== null ? <LinkedAnomaly anomalyId={o.anomalyId} i18n={i18n} /> : t.noLinkedAnomaly}</LinkRow>
         </div>
       </Section>
       <TechnicalDetails

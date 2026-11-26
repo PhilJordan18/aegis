@@ -10,6 +10,7 @@ import { NO_FILTERS, transactionHref } from '../transactions/transactionHref'
 import { transactionTimes } from '../transactions/transactionPresentation'
 import { anomaliesHref, NO_FILTERS as NO_ANOMALY_FILTERS } from '../anomalies/anomalyLocation'
 import { pathOf } from '../../app/routes'
+import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
 import { isComplete, readOf, type AnomalySummary, type BlockRead, type LoanSummary, type OperationSummary } from './overviewModel'
 import type { AnomalyView } from '../anomalies/contract'
 
@@ -19,11 +20,13 @@ import type { AnomalyView } from '../anomalies/contract'
  * a partial one « N+ ». The value stays in the text colour; only the dot and the overline carry the role.
  */
 export type Tile =
-  | { readonly key: string; readonly overline: string; readonly href: string; readonly state: 'pending' }
-  | { readonly key: string; readonly overline: string; readonly href: string; readonly state: 'failed'; readonly unavailable: string }
+  | { readonly key: string; readonly overline: string; readonly code?: string; readonly href: string; readonly state: 'pending' }
+  | { readonly key: string; readonly overline: string; readonly code?: string; readonly href: string; readonly state: 'failed'; readonly unavailable: string }
   | {
       readonly key: string
       readonly overline: string
+      /** A code after the overline that never breaks inside (« AEGIS-DEMO-01 », §8.1). */
+      readonly code?: string
       readonly href: string
       readonly state: 'ready'
       readonly value: string
@@ -47,7 +50,7 @@ export interface BandInputs {
   readonly reservations: BlockRead<TransactionPage<ReservationView>>
 }
 
-type Base = { readonly key: string; readonly overline: string; readonly href: string }
+type Base = { readonly key: string; readonly overline: string; readonly code?: string; readonly href: string }
 
 function fromRead<T>(base: Base, read: BlockRead<T>, unavailable: string, ready: (value: T) => Omit<Extract<Tile, { state: 'ready' }>, keyof Base | 'state' | 'readAt' | 'stale'>): Tile {
   if (read.kind === 'pending') return { ...base, state: 'pending' }
@@ -111,24 +114,25 @@ function lockerTile({ lockers, statuses }: BandInputs, i18n: I18n): Tile {
   if (lockers.kind !== 'ready') return fromRead({ key: 'locker', overline: t.locker, href }, lockers, t.tileLockerUnavailable, () => ({ value: '', role: 'neutral', detail: null, partial: false }))
   const first = lockers.value.items[0]
   if (first === undefined) return { key: 'locker', overline: t.locker, href, state: 'ready', value: t.tileNoLocker, role: 'neutral', detail: null, partial: false, readAt: lockers.readAt, stale: lockers.stale }
-  const base = { key: 'locker', overline: t.tileLocker({ code: first.code }), href }
+  const base = { key: 'locker', overline: t.locker, code: first.code, href }
   const query = statuses.get(first.id)
   const read: BlockRead<LockerStatus> = query === undefined ? { kind: 'pending' } : readOf(query)
   const more = lockers.value.items.length - 1
   return fromRead(base, read, t.tileLockerUnavailable, (live) => {
     const chip = connectionChip(live.connectionStatus, i18n)
     const window = windowView(live.currentWindow, i18n)
+    const { closesAt, nextOpensAt, timeZone } = live.currentWindow
     const state =
       live.connectionStatus === 'OFFLINE'
         ? live.lastSeenAt === null
           ? m.lockers.neverSignal
           : t.tileOfflineSince({ time: times.clock(live.lastSeenAt) })
         : window.kind === 'open'
-          ? t.windowOpen({ time: window.closesAt ?? '' })
+          ? t.windowOpen({ time: closesAt === null ? '' : windowTime(closesAt, live.evaluatedAt, timeZone, i18n) })
           : window.kind === 'closed'
             ? window.nextOpensAt === null
               ? t.windowClosedNoNext
-              : t.windowClosed({ time: window.nextOpensAt })
+              : t.windowClosed({ time: nextOpensAt === null ? window.nextOpensAt : windowTime(nextOpensAt, live.evaluatedAt, timeZone, i18n) })
             : m.lockers.noSchedule
     const detail = more > 0 ? `${state} · ${t.tileMoreLockers({ count: more })}` : state
     return { value: chip.label, role: chip.role, detail, partial: false }
@@ -151,4 +155,17 @@ export function allClearOf(anomalies: BlockRead<AnomalySummary>, loans: BlockRea
   const complete = tiles.every((tile) => tile.state === 'ready' && !tile.stale && !tile.partial)
   if (!complete || anomalies.kind !== 'ready' || loans.kind !== 'ready') return { kind: 'notConfirmed' }
   return { kind: 'clear', readAt: Math.min(...tiles.map((tile) => (tile.state === 'ready' ? tile.readAt : Infinity))) }
+}
+
+/**
+ * §8.1: the tile names a time, never the full date: « 17 h 00 » on the lab day of the evaluation, « lun. 17 h 00 » on
+ * another day. Read in the locker's own zone, as the window is.
+ */
+export function windowTime(instant: string, evaluatedAt: string, zone: string | null, { locale }: Pick<I18n, 'locale'>): string {
+  const timeZone = zone ?? LAB_TIME_ZONE
+  const at = new Date(instant)
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+  const time = new Intl.DateTimeFormat(FORMAT_LOCALE[locale], { timeZone, hour: 'numeric', minute: '2-digit' }).format(at)
+  const text = day.format(at) === day.format(new Date(evaluatedAt)) ? time : `${new Intl.DateTimeFormat(FORMAT_LOCALE[locale], { timeZone, weekday: 'short' }).format(at)} ${time}`
+  return text.replace(/ /g, '\u00A0')
 }

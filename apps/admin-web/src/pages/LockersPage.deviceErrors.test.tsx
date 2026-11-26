@@ -108,7 +108,7 @@ describe('Casiers — reported device errors (#29, 09 §8.6)', () => {
     renderLocker(lockerStatus())
     await screen.findByRole('heading', { level: 2, name: /AEGIS-DEMO-01/ })
     // §3.6: with zero errors the section folds to its title line, still visible and still a heading.
-    let section = screen.getByRole('heading', { level: 3, name: /^0 erreur signalée/ }).closest('details') as HTMLElement
+    let section = screen.getByRole('heading', { level: 3, name: /^0 erreur signalée/ }).closest('details') as HTMLDetailsElement
     expect(section.open).toBe(false)
     expect(plain(section.textContent)).toContain('Aucune erreur signalée depuis le dernier démarrage du casier.')
     expect(within(section).queryByRole('list')).toBeNull()
@@ -117,7 +117,7 @@ describe('Casiers — reported device errors (#29, 09 §8.6)', () => {
 
     renderLocker(NEVER_SEEN)
     await screen.findByRole('heading', { level: 2, name: /AEGIS-DEMO-01/ })
-    section = screen.getByRole('heading', { level: 3, name: /^0 erreur signalée/ }).closest('details') as HTMLElement
+    section = screen.getByRole('heading', { level: 3, name: /^0 erreur signalée/ }).closest('details') as HTMLDetailsElement
     expect(plain(section.textContent)).toContain("Aucun signal reçu du casier : aucune erreur signalée à afficher.")
   })
 

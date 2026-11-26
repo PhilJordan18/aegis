@@ -4,6 +4,8 @@ import { FORMAT_LOCALE } from '../../i18n/locale'
 import { useI18n } from '../../i18n/useI18n'
 import { SelectField } from '../../ui/FormField'
 import { AssetPicker } from '../labels/AssetPicker'
+import { IdText } from '../labels/IdText'
+import type { LockerLabel } from '../labels/labelIndex'
 import { useLabelIndex } from '../labels/useLabelIndex'
 import { abbreviate } from '../labels/labelIndex'
 import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
@@ -67,7 +69,7 @@ export function TransactionFilters({ view, values, onApply }: TransactionFilters
       <FilterChips filters={chips} onClear={() => onApply(NO_FILTERS)} returnFocus={() => statusRef.current?.focus()} />
       {view === 'operations' && values.lockerId !== null && (
         <p className="ag-filters__help" data-testid="locker-filter">
-          {t.filterLocker} <code className="ag-id">{values.lockerId}</code>{' '}
+          {t.filterLocker} <LockerFilterName lockerId={values.lockerId} label={labels.locker(values.lockerId)} />{' '}
           <Link className="ag-link" to={transactionHref({ view, filters: { ...values, lockerId: null } })}>
             {t.filterLockerRemove}
           </Link>
@@ -75,4 +77,9 @@ export function TransactionFilters({ view, values, onApply }: TransactionFilters
       )}
     </div>
   )
+}
+
+/** §1.8 criterion 1: the filtered locker reads by its code, or by its abbreviated identifier until the index knows it. */
+function LockerFilterName({ lockerId, label }: { readonly lockerId: string; readonly label: LockerLabel }) {
+  return label.kind === 'known' ? <span className="ag-label__code">{label.code}</span> : <IdText id={lockerId} />
 }

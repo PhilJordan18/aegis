@@ -81,6 +81,8 @@ describe('Anomalies — list and dossier', () => {
     expect(rows[0]?.textContent).toContain('Équipement attendu non observé')
     // Identifiers only (G3): shortened in the row, whole in the dossier.
     expect(rows[0]?.textContent).toContain('Cellule 4e5f6071…')
+    // §1.3 parity: a cell outside the label index says it is an identifier only, as a unit does.
+    expect(rows[0]?.textContent).toContain('Identifiant seulement')
     expect(rows[0]?.getAttribute('aria-current')).toBe('true')
     const dossier = await screen.findByRole('group', { name: 'Équipement attendu non observé' })
     await within(dossier).findByText('Aucune observation n’est référencée par cette anomalie.')

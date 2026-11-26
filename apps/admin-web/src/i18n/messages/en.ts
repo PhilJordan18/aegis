@@ -714,6 +714,7 @@ export const en: Messages = {
     viewReservationsCount: ({ count: value }: { count: number }) => (value === 1 ? 'View the reservation' : `View the ${count.format(value)} reservations`),
 
     band: 'Summary',
+    bandReadAt: ({ time }: { time: string }) => `Read at ${time} · oldest read`,
     bandLoading: 'Loading the summary',
     tileNone: 'None',
     tileNoLocker: 'No locker',
