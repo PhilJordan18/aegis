@@ -428,3 +428,29 @@ La colonne « Dernière tentative » des réservations est supprimée : « Opér
 ### 8.5 Point non retenu comme défaut (#244, constat 7) — confirmé par Philippe le 26 novembre 2026
 
 Le marqueur de chronologie d'une réservation suit le **statut serveur** : losange seulement quand la réservation est `EXPIRED` (ou le prêt `overdue`). Le client ne compare jamais `reservedUntil` à son horloge (même règle que `dueAt`, §3). Une réservation `ACTIVE` dont la fin est passée garde le marqueur creux jusqu'à ce que le serveur la marque expirée. Décision de Philippe : « garde le marqueur creux, le client ne compare jamais l'horloge ». Le constat 7 de #244 est clos sans correction.
+
+### 8.6 Cibles de hauteur de la vue d'ensemble : jeu de référence et compaction (#245, deuxième revue, constat D3)
+
+Le §8.1 fixait une cible sans nommer le jeu de données; la QA mesure 2 709 px à l'état nominal avec son jeu de revue, le test e2e de `70b5e1d` passe avec un jeu plus léger. Mesure de Design sur `70b5e1d`, même jeu, 390 × 844 px, mode aperçu : **2 740 px**, dont trois rangées d'anomalie de **211 px** chacune contre 100 à 119 px pour les rangées des autres modules, et un en-tête de page de 211 px (« Aide » seul sur une ligne, « Lu à » et « Actualiser » sur la suivante).
+
+**Jeu de référence nommé** (toute mesure du §8.1 et du présent article s'y rapporte; le test e2e l'utilise) :
+
+- 3 anomalies `OPEN` (1 `HIGH`, 2 `MEDIUM`), chacune avec cellule, équipement et date de détection;
+- 1 prêt `ACTIVE` en retard;
+- 1 casier `ONLINE`, fenêtre ouverte, 2 cellules occupées;
+- 1 opération en cours (`COMMAND_ACKNOWLEDGED`);
+- 2 réservations `ACTIVE`.
+
+**Cibles restituées** à 390 × 844 px, mode aperçu compris : **≤ 2 500 px** à l'état nominal, **≤ 2 800 px** à l'état périmé (toutes les lectures de rafraîchissement en échec après une première lecture réussie). Les valeurs 2 300 et 2 700 du §8.1 sont retirées.
+
+**Compaction exigée** (pas de contenu retiré) :
+
+- Rangée d'anomalie sous 560 px : les deux puces (gravité, statut) sur **une seule ligne**, comme la rangée de prêt; le bouton « Reconnaître » passe **sous** le texte, aligné à gauche, au lieu d'une colonne latérale qui fait replier le titre et le détail. Objectif : rangée ≤ 140 px avec un titre sur deux lignes.
+- En-tête de page sous 560 px : « Aide » et « Actualiser » sur **la même ligne**, la ligne « Lu à » en dessous; une seule ligne d'actions.
+- Tuile Casier : « Ouvert · fermeture 17 h 00 » tient sur une ligne; si la largeur manque, le détail se réduit à « fermeture 17 h 00 » (le statut « En ligne » est déjà dans la valeur).
+
+Rien d'autre ne change : 3 rangées par module, un seul avis périmé sous la bande, pieds « Voir les N … » avec le total serveur.
+
+### 8.7 « Lecture incomplète » sous 560 px (#245, deuxième revue, constat D4)
+
+La règle « une seule ligne de détail par tuile » du §8.1 ne supprime jamais l'honnêteté du compteur. Quand une lecture est partielle (`totalItems` au-delà de la page lue), la ligne de détail de la tuile est **remplacée** par « Lecture incomplète » à toutes les largeurs; sous 560 px c'est donc cette mention qui occupe l'unique ligne de détail, et le nom accessible de la tuile la contient (« Prêts en retard, 1+, lecture incomplète »). Masquer `.ag-tile__detail--strong` sous 560 px est un défaut; le test e2e de lecture partielle s'exécute aussi à 390 px.
