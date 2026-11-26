@@ -194,6 +194,46 @@ test.describe('records: lot 3 tables, filters and dossiers', () => {
     await expect(page).toHaveURL(/\/reservations-prets$/)
   })
 
+  test('a date typed digit by digit applies once, with its whole year, never a partial one', async ({ page }) => {
+    const requests = await openReservations(page)
+    const before = requests.length
+    const length = await page.evaluate(() => window.history.length)
+    const field = page.getByLabel('Du (inclus)')
+    await field.focus()
+    // The headless browser orders the segments mm/dd/yyyy: the year comes last and reads 0002, 0020, 0202, then 2026.
+    for (const key of '11102026') await page.keyboard.press(key, { delay: 30 })
+    await expect(page).toHaveURL(/du=2026-11-10/)
+    await page.waitForTimeout(300)
+    const reads = requests.slice(before).filter((request) => request.includes('/admin/reservations?'))
+    expect(reads.every((request) => request.includes('from=2026-11-10'))).toBe(true)
+    expect(reads).toHaveLength(1)
+    expect(await page.evaluate(() => window.history.length)).toBe(length + 1)
+  })
+
+  test('the status list applies at once with the pointer, but only after a pause from the keyboard', async ({ page }) => {
+    const requests = await openReservations(page)
+    const length = await page.evaluate(() => window.history.length)
+    const status = page.getByLabel('Statut')
+    await status.focus()
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('ArrowDown')
+    await expect(page).toHaveURL(/\/reservations-prets$/)
+    await expect(page).toHaveURL(/statut=/, { timeout: 2000 })
+    await page.waitForTimeout(300)
+    expect(await page.evaluate(() => window.history.length)).toBe(length + 1)
+    expect(requests.filter((request) => request.includes('/admin/reservations?') && request.includes('status=')).length).toBe(1)
+  })
+
+  test('the active filters sit on their own line under the filter bar, « Effacer les filtres » last', async ({ page }) => {
+    await openReservations(page, '/reservations-prets?statut=ACTIVE')
+    const bar = await page.locator('.ag-filters__grid').boundingBox()
+    const chips = page.getByRole('group', { name: 'Filtres actifs' })
+    const group = await chips.boundingBox()
+    expect(group!.y).toBeGreaterThanOrEqual(bar!.y + bar!.height)
+    expect(group!.x).toBeCloseTo(bar!.x, 0)
+    await expect(chips.locator('button').last()).toHaveText('Effacer les filtres')
+  })
+
   test('at 1440 px the focus stays on the selected row and the selection is announced', async ({ page }) => {
     await openReservations(page)
     await rowLinks(page).nth(1).click()

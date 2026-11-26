@@ -4,12 +4,13 @@
 .ag-help-panel > p { margin: 0 0 6px; }
 .ag-help-panel > p:last-child { margin-bottom: 0; }
 
-/* Active filters (§3.4): one chip per filter, a 32 px remove button, then « Effacer les filtres ». */
-.ag-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 12px; }
+/* Active filters (§3.4, Design §8.4): their own line under the filter bar, one chip per filter, a 32 px remove
+   button, « Effacer les filtres » at the end. */
+.ag-chips { grid-column: 1 / -1; width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 12px; }
 .ag-chips__chip {
   display: inline-flex; align-items: center; gap: 2px; min-height: 32px; padding: 0 2px 0 12px; max-width: 100%;
   border: 1px solid var(--ag-control-border); border-radius: var(--ag-r-pill); background: var(--ag-field);
-  font-size: 0.875rem; color: var(--ag-text); overflow-wrap: anywhere;
+  font-size: 0.875rem; color: var(--ag-text); overflow-wrap: break-word;
 }
 .ag-chips__remove {
   flex: none; display: inline-grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%;

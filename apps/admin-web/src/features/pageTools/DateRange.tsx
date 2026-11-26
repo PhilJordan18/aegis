@@ -4,6 +4,12 @@ import { Button } from '../../ui/Button'
 import { TextField } from '../../ui/FormField'
 import { lastDays } from './labDays'
 
+/**
+ * While a year is typed, a browser date field already reports « 0002-11-10 », then « 0020-11-10 », « 0202-11-10 »:
+ * syntactically days, but not the one meant. A field applies only once its year has four significant digits.
+ */
+const typingYear = (day: string) => /^0\d{3}-/.test(day)
+
 export interface DayRange {
   readonly from: string | null
   readonly to: string | null
@@ -25,7 +31,7 @@ interface DateRangeProps {
 
 /**
  * « Du (inclus) » and « Au (inclus) » with the laboratory zone in their help and three shortcuts (contrat-web-manager
- * §3.4). A field applies when its value is a whole valid day (`change`); both bounds are inclusive, as the address has
+ * §3.4). A field applies when its value is a whole valid day (`change`), never while its year is still being typed; both bounds are inclusive, as the address has
  * always read them (`au` is the last day shown).
  */
 export function DateRange({ value, onApply, isDay, invalidText, help, fromName = 'du', toName = 'au', fromError = null, toError = null }: DateRangeProps) {
@@ -47,6 +53,10 @@ export function DateRange({ value, onApply, isDay, invalidText, help, fromName =
   function change(nextFrom: string, nextTo: string) {
     setFrom(nextFrom)
     setTo(nextTo)
+    if (typingYear(nextFrom) || typingYear(nextTo)) {
+      setError(null)
+      return
+    }
     const invalid = (nextFrom !== '' && !isDay(nextFrom)) || (nextTo !== '' && !isDay(nextTo)) || (nextFrom !== '' && nextTo !== '' && nextTo < nextFrom)
     setError(invalid ? invalidText : null)
     if (invalid) return

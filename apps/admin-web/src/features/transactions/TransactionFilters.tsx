@@ -11,6 +11,7 @@ import { abbreviate } from '../labels/labelIndex'
 import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
 import { DateRange } from '../pageTools/DateRange'
 import { FilterChips, type ActiveFilter } from '../pageTools/FilterChips'
+import { useSettledSelect } from '../pageTools/useSettledSelect'
 import { shortDay } from '../pageTools/labDays'
 import { isCalendarDay, NO_FILTERS, STATUSES_OF_VIEW, transactionHref, type TransactionFilterValues, type TransactionView } from './transactionHref'
 
@@ -46,10 +47,12 @@ export function TransactionFilters({ view, values, onApply }: TransactionFilters
     ...(values.to === null ? [] : [{ key: 'to', label: m.pageTools.toInclusive, value: day(values.to), text: m.pageTools.toDay({ day: day(values.to) }), onRemove: () => set({ to: null }) }]),
   ]
 
+  const status = useSettledSelect(values.status ?? '', (next) => set({ status: next === '' ? null : next }))
+
   return (
     <div className="ag-filters" role="group" aria-label={t.filtersLabel}>
       <div className="ag-filters__grid">
-        <SelectField ref={statusRef} name="statut" label={t.filterStatus} value={values.status ?? ''} onChange={(event) => set({ status: event.target.value === '' ? null : event.target.value })}>
+        <SelectField ref={statusRef} name="statut" label={t.filterStatus} {...status}>
           <option value="">{t.filterAll}</option>
           {STATUSES_OF_VIEW[view].map((value) => (
             <option key={value} value={value}>

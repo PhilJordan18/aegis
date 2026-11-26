@@ -6,6 +6,7 @@ import type { AnomalyFilters } from './anomalyLocation'
 import { AssetPicker } from '../labels/AssetPicker'
 import { abbreviate, type LabelIndex } from '../labels/labelIndex'
 import { FilterChips, type ActiveFilter } from '../pageTools/FilterChips'
+import { useSettledSelect } from '../pageTools/useSettledSelect'
 
 interface AnomalyFilterBarProps {
   /** The filters of the address, the only source of truth (§3.4): every change navigates, Précédent undoes it. */
@@ -37,10 +38,14 @@ export function AnomalyFilterBar({ filters, labels, onApply, onClear }: AnomalyF
     ...(filters.assetId === null ? [] : [{ key: 'asset', label: t.filterAsset, value: assetText(filters.assetId), onRemove: () => set({ assetId: null }) }]),
   ]
 
+  const status = useSettledSelect(filters.status ?? '', (next) => set({ status: oneOf(next, ANOMALY_STATUSES) }))
+  const severity = useSettledSelect(filters.severity ?? '', (next) => set({ severity: oneOf(next, ANOMALY_SEVERITIES) }))
+  const type = useSettledSelect(filters.type ?? '', (next) => set({ type: oneOf(next, ANOMALY_TYPES) }))
+
   return (
     <div className="ag-an-filters" role="group" aria-label={t.filtersLabel}>
       <div className="ag-an-filters__grid">
-        <SelectField ref={statusRef} label={t.filterStatus} value={filters.status ?? ''} onChange={(event) => set({ status: oneOf(event.target.value, ANOMALY_STATUSES) })}>
+        <SelectField ref={statusRef} label={t.filterStatus} {...status}>
           <option value="">{t.filterAny}</option>
           {ANOMALY_STATUSES.map((value) => (
             <option key={value} value={value}>
@@ -48,7 +53,7 @@ export function AnomalyFilterBar({ filters, labels, onApply, onClear }: AnomalyF
             </option>
           ))}
         </SelectField>
-        <SelectField label={t.filterSeverity} value={filters.severity ?? ''} onChange={(event) => set({ severity: oneOf(event.target.value, ANOMALY_SEVERITIES) })}>
+        <SelectField label={t.filterSeverity} {...severity}>
           <option value="">{t.filterAny}</option>
           {ANOMALY_SEVERITIES.slice()
             .reverse()
@@ -58,7 +63,7 @@ export function AnomalyFilterBar({ filters, labels, onApply, onClear }: AnomalyF
               </option>
             ))}
         </SelectField>
-        <SelectField label={t.filterType} value={filters.type ?? ''} onChange={(event) => set({ type: oneOf(event.target.value, ANOMALY_TYPES) })}>
+        <SelectField label={t.filterType} {...type}>
           <option value="">{t.filterAny}</option>
           {ANOMALY_TYPES.map((value) => (
             <option key={value} value={value}>
