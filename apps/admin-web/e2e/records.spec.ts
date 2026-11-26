@@ -62,6 +62,22 @@ const STATUS = {
   deviceErrors: [],
 }
 
+/** The Casiers page finds its lockers through the placed units. */
+const UNIT = {
+  id: ASSET_ID,
+  assetCode: 'MM-001',
+  serialNumber: null,
+  model: asset.model,
+  requiredAccessLevel: 'STANDARD',
+  operationalStatus: 'SERVICEABLE',
+  calibration: { required: false, dueAt: null, status: 'NOT_REQUIRED' },
+  availability: 'AVAILABLE',
+  presence: 'PRESENT',
+  placement: asset.placement,
+  operationalDiagnostic: { evaluatedAt: '2026-11-10T14:00:00Z', reasons: [] },
+  archivedAt: null,
+}
+
 const pageOf = (items: unknown[], size: number, totalItems = items.length) => ({ items, page: 0, size, totalItems, totalPages: Math.max(Math.ceil(totalItems / size), 1) })
 
 async function routeApi(page: Page): Promise<string[]> {
@@ -78,7 +94,7 @@ async function routeApi(page: Page): Promise<string[]> {
     if (p === '/admin/loans' || p === '/admin/locker-operations' || p === '/admin/anomalies') return json(route, pageOf([], size))
     if (p === '/admin/audit-events') return json(route, { items: [EVENT], nextCursor: null, hasMore: false })
     if (p === '/admin/lockers') return json(route, pageOf([LOCKER], size))
-    if (p === '/admin/assets') return json(route, pageOf([], size))
+    if (p === '/admin/assets') return json(route, pageOf([UNIT], size))
     if (p === `/lockers/${LOCKER_ID}/status`) return json(route, STATUS)
     return route.fulfill({ status: 404, contentType: 'application/problem+json', body: JSON.stringify({ type: 'https://aegis.local/problems/resource_not_found', title: 'Fictif', status: 404, code: 'RESOURCE_NOT_FOUND', detail: 'Fictif', instance: url.pathname, traceId: TRACE_ID, timestamp: '2026-11-10T14:00:00Z' }) })
   })
