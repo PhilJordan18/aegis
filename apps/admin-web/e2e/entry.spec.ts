@@ -310,7 +310,7 @@ test.describe('flow: équipements (production page, routed fakes)', () => {
 
   test('flow: changes go through explicit actions only, and opening the page writes nothing', async ({ page }) => {
     const requests = await openEquipment(page, 'nominal')
-    await expect(page.locator('main').getByRole('button')).toHaveText(['Nouvel exemplaire', 'Rechercher', 'Modifier', 'Archiver', 'Modifier le placement', 'Attribuer un identifiant'])
+    await expect(page.locator('main').getByRole('button')).toHaveText(['Actualiser', 'Nouvel exemplaire', 'Rechercher', 'Modifier', 'Archiver', 'Modifier le placement', 'Attribuer un identifiant'])
     // The search box (#109) is the only field: it filters a read, it never writes.
     await expect(page.locator('main').locator('input, select, textarea')).toHaveCount(1)
     await expect(page.locator('main').getByRole('search').getByRole('searchbox')).toHaveCount(1)
@@ -365,8 +365,8 @@ test.describe('flow: casiers (production page, routed fakes)', () => {
 
   test('flow: the page offers no control that changes a state, forces a readiness, opens a compartment or sends a command', async ({ page }) => {
     await openLockerPage(page, 'nominal')
-    // The only action opens the schedule editor (CFG-02 #28); nothing else writes.
-    await expect(page.locator('main').getByRole('button')).toHaveText(['Modifier l’horaire'])
+    // The only action opens the schedule editor (CFG-02 #28); « Aide » and « Actualiser » (lot 1) only read; nothing else writes.
+    await expect(page.locator('main').getByRole('button')).toHaveText(['Aide', 'Actualiser', 'Modifier l’horaire'])
     await expect(page.locator('main').locator('input, select, textarea, form')).toHaveCount(0)
     await expect(page.locator('main')).toContainText("Aucune commande n'est envoyée au casier depuis cet écran.")
   })
@@ -400,9 +400,14 @@ test.describe('flow: casiers (production page, routed fakes)', () => {
     await expect(panel.getByRole('heading', { level: 2, name: /AEGIS-DEMO-01/ })).toBeVisible()
     await expect(panel.getByRole('table')).toBeVisible()
     const retry = panel.getByRole('button', { name: 'Réessayer' })
-    // From the page heading, the next stops are the controls of the page. The reported-errors section (#29) makes the
-    // list scroll at 1280 × 800, so the named scrolling region comes first, then the retry button, with no empty stop.
+    // From the page heading, the next stops are the controls of the page: « Aide » and « Actualiser » (lot 1), then, as
+    // the reported-errors section (#29) makes the list scroll at 1280 × 800, the named scrolling region, then the retry
+    // button, with no empty stop.
     await page.getByRole('heading', { level: 1, name: 'Casiers' }).focus()
+    await page.keyboard.press('Tab')
+    await expect(page.getByRole('button', { name: 'Aide' })).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(page.getByRole('button', { name: 'Actualiser' })).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(page.getByRole('group', { name: 'Casiers' })).toBeFocused()
     await page.keyboard.press('Tab')
@@ -444,6 +449,8 @@ test.describe('flow: casiers (production page, routed fakes)', () => {
   })
 
   test('flow: the list of panels is a tab stop only while it scrolls', async ({ page }) => {
+    // Tall enough for the nominal panel with the expected-unit column, the page help and the refresh control.
+    await page.setViewportSize({ width: 1280, height: 1400 })
     await openLockerPage(page, 'nominal')
     // Everything fits: no scrolling region, so no stop and no role.
     await expect(page.locator('.ag-lockers')).not.toHaveAttribute('tabindex', /.*/)
@@ -507,7 +514,7 @@ test.describe('flow: casiers (production page, routed fakes)', () => {
   test('flow: at desktop width the compartments are a real table with column headers', async ({ page }) => {
     await openLockerPage(page, 'nominal')
     const headers = page.getByRole('columnheader')
-    await expect(headers).toHaveText(['Cellule', 'Activée', 'Liaison', 'Lecteur RFID', 'Porte', 'Serrure', 'Dernière observation'])
+    await expect(headers).toHaveText(['Cellule', 'Activée', 'Liaison', 'Lecteur RFID', 'Porte', 'Serrure', 'Équipement attendu', 'Dernière observation'])
     await expect(page.locator('.ag-lk-table__label').first()).toBeHidden()
   })
 })
