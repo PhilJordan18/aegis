@@ -224,6 +224,13 @@ test.describe('labels: the « Identifiant seulement » fallback on a narrow scre
       const chosen = page.locator('.ag-picker__chosen')
       await expect(chosen).toContainText('Identifiant seulement')
       await expectNoHorizontalScroll(page)
+      if (grid === '.ag-an-filters__grid') {
+        // §8.6 (third QA review): below 560 px the severity chip reads « Moyenne », its full label stays for assistive technology.
+        const chip = page.locator('.ag-list .ag-chip').first()
+        await expect(chip.locator('.ag-chiplabel__short')).toBeVisible()
+        await expect(chip.locator('.ag-chiplabel__short')).toHaveAttribute('aria-hidden', 'true')
+        await expect(chip.locator('.ag-chiplabel__full')).toHaveText(/^Gravité /)
+      }
       // §1.8 responsive: below 560 px the picker takes the whole row of every filter grid.
       const row = await page.locator(grid).boundingBox()
       const picker = await page.locator(`${grid} > .ag-picker`).boundingBox()

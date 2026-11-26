@@ -977,6 +977,8 @@ export const en: Messages = {
     selectedOverline: 'Selected anomaly',
     selectedStatus: ({ name }: { name: string }) => `Selected anomaly: ${name}.`,
     detected: ({ time }: { time: string }) => `Detected ${time}`,
+    /** The word before a detection time shown on its own (overview anomaly rows below 560 px, §8.6). */
+    detectedLead: 'Detected ',
     cellUnlabelled: 'Unnamed cell',
     assetUnlabelled: 'Unnamed equipment',
     noCell: 'No cell given',

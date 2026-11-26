@@ -145,6 +145,15 @@ a.ag-ov__row:hover { background: var(--ag-field); }
   .ag-ov__item { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .ag-ov__item > .ag-btn { justify-self: start; margin: -8px 0 8px 14px; }
   .ag-ov__item .ag-ov__chips { flex-wrap: nowrap; }
+  /* §8.6 (Design, third QA review): an anomaly's detection time sits right of the chips, so the place line holds one
+     line; when the chips leave no room (320 px) it wraps under them, whole. The DOM keeps it after the place. */
+  .ag-ov__row:has(.ag-ov__when) { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+  .ag-ov__row:has(.ag-ov__when) > .ag-ov__chips { order: 1; }
+  .ag-ov__row:has(.ag-ov__when) > .ag-ov__main { order: 3; flex-basis: 100%; }
+  .ag-ov__row:has(.ag-ov__when) > .ag-ov__meta { display: contents; }
+  .ag-ov__where { order: 4; flex-basis: 100%; }
+  .ag-ov__when { order: 2; margin-left: auto; }
+  .ag-ov__when-lead { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   /* §8.6: the « Non actualisé » chip of a stale module wraps under its title; the wrapped line adds no gap. */
   .ag-ov__head, .ag-band__read { row-gap: 0; }
   .ag-ov__lkline { row-gap: 2px; }
@@ -162,4 +171,6 @@ a.ag-ov__row:hover { background: var(--ag-field); }
 }
 @container (max-width: 210px) {
   .ag-tile__lead { display: none; }
+  /* A window closing on another day (« fermeture jeu. 17 h 00 ») may not fit even reduced: it wraps, never overflows. */
+  .ag-tile__detail:has(.ag-tile__lead) { white-space: normal; }
 }

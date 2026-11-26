@@ -1063,6 +1063,8 @@ export const fr = {
     selectedOverline: 'Anomalie sélectionnée',
     selectedStatus: ({ name }: { name: string }) => `Anomalie sélectionnée${NBSP}: ${name}.`,
     detected: ({ time }: { time: string }) => `Détectée ${time}`,
+    /** The word before a detection time shown on its own (overview anomaly rows below 560 px, §8.6). */
+    detectedLead: 'Détectée ',
     cellUnlabelled: 'Cellule non nommée',
     assetUnlabelled: 'Équipement non nommé',
     noCell: 'Aucune cellule indiquée',
