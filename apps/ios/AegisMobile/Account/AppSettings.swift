@@ -20,6 +20,11 @@ enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
 @MainActor
 @Observable
 final class LanguagePreference {
+    /// The app's preference, kept for the whole process: Account is rebuilt
+    /// after a sign-out, but the language in effect is still the one iOS
+    /// applied at launch, so a pending choice must stay announced.
+    static let shared = LanguagePreference()
+
     static let selectionKey = "AegisAppLanguage"
     /// The key iOS reads at launch to pick the app's localization.
     static let appleLanguagesKey = "AppleLanguages"
