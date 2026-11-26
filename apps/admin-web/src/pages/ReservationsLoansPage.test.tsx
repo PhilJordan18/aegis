@@ -324,6 +324,52 @@ describe('Réservations et prêts: filters', () => {
     await waitFor(() => expect(searches).toBe(before + 1))
   })
 
+  it('keeps the focus through a retry: on « Réessayer » while it fails, back on the field once it succeeds', async () => {
+    const user = userEvent.setup()
+    // Each search waits for the test to release it, so the retry can be observed in flight.
+    const gate: { release: (() => void) | null; succeed: boolean } = { release: null, succeed: false }
+    const unit = asset({ id: ASSET_ID, assetCode: 'MM-001' })
+    const releaseSearch = () => gate.release?.()
+    const catalog = fakeCatalogGateway({
+      overrides: {
+        listAssets: async (_token, query) => {
+          if (query.q === undefined) return catalogOk(assetPageOf([]))
+          await new Promise<void>((resolve) => {
+            gate.release = resolve
+          })
+          return gate.succeed ? catalogOk(assetPageOf([unit])) : ({ kind: 'network', reason: 'offline' } as never)
+        },
+      },
+    })
+    renderPage(fakeGateway(), { catalogGateway: catalog })
+    await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+    const field = screen.getByRole('combobox', { name: 'Équipement' })
+    await user.type(field, 'MM')
+    await waitFor(() => expect(gate.release).not.toBeNull())
+    releaseSearch()
+    const retry = await screen.findByRole('button', { name: 'Réessayer' })
+    await user.tab()
+    expect(document.activeElement).toBe(retry)
+
+    gate.release = null
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(gate.release).not.toBeNull())
+    expect(retry.isConnected).toBe(true)
+    expect(retry.getAttribute('aria-disabled')).toBe('true')
+    expect(document.activeElement).toBe(retry)
+    releaseSearch()
+    await waitFor(() => expect(retry.getAttribute('aria-disabled')).toBeNull())
+    expect(document.activeElement).toBe(retry)
+
+    gate.release = null
+    gate.succeed = true
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(gate.release).not.toBeNull())
+    releaseSearch()
+    await waitFor(() => expect(retry.isConnected).toBe(false))
+    expect(document.activeElement).toBe(field)
+  })
+
   it('refuses an end date before the start date and sends no request for it', async () => {
     const user = userEvent.setup()
     const gateway = fakeGateway()

@@ -96,6 +96,21 @@ const asset2 = {
   model: { id: '2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e', name: 'Oscilloscope portable', manufacturer: 'Tektronix', modelNumber: 'TBS1052' },
   placement: { lockerId: LOCKER_ID, lockerCode: 'AEGIS-DEMO-01', compartmentId: A2_ID, compartmentCode: 'A2' },
 }
+// The catalog page the label index reads (lot 1): the reference set resolves equipment names, as real data does (QA #245).
+const indexed = (unit: { id: string; assetCode: string; model: unknown }) => ({
+  id: unit.id,
+  assetCode: unit.assetCode,
+  serialNumber: null,
+  model: unit.model,
+  requiredAccessLevel: 'STANDARD',
+  operationalStatus: 'SERVICEABLE',
+  calibration: { required: false, dueAt: null, status: 'NOT_REQUIRED' },
+  availability: 'AVAILABLE',
+  presence: 'UNKNOWN',
+  placement: null,
+  operationalDiagnostic: { evaluatedAt: '2026-11-10T14:00:00Z', reasons: [] },
+  archivedAt: null,
+})
 const REFERENCE_ANOMALIES = [
   { ...anomaly(), severity: 'HIGH' },
   { ...anomaly(), id: 'aaaaaaaa-0000-4000-8000-000000000002', severity: 'MEDIUM', type: 'UNEXPECTED_ASSET_OBSERVED', assetId: ASSET2_ID, compartmentId: A2_ID, detectedAt: '2026-11-10T18:40:00Z' },
@@ -165,7 +180,7 @@ async function routeApi(page: Page, { activeLoans = [loan(1, true)], activeLoanT
     if (p === '/admin/reservations') return json(route, pageOf(status === 'ACTIVE' ? (reference ? REFERENCE_RESERVATIONS : [reservation]) : [], size))
     if (p === '/admin/locker-operations') return json(route, pageOf(reference && status === 'COMMAND_ACKNOWLEDGED' ? [REFERENCE_OPERATION] : [], size))
     if (p === '/admin/lockers') return json(route, pageOf([locker], size))
-    if (p === '/admin/assets') return json(route, pageOf([], size))
+    if (p === '/admin/assets') return json(route, pageOf(reference ? [indexed(asset), indexed(asset2)] : [], size))
     if (p === `/lockers/${LOCKER_ID}/status`) return json(route, lockerStatus)
     return route.fulfill({ status: 404, contentType: 'application/problem+json', body: JSON.stringify({ type: 'https://aegis.local/problems/resource_not_found', title: 'Fictif', status: 404, code: 'RESOURCE_NOT_FOUND', detail: 'Fictif', instance: url.pathname, traceId: TRACE_ID, timestamp: '2026-11-10T14:00:00Z' }) })
   })
@@ -313,6 +328,16 @@ test.describe('overview: compact below 560 px (contract §8.1)', () => {
     await expect(anomalies.locator('.ag-ov__row')).toHaveCount(3)
     await expect(page.getByRole('region', { name: 'Réservations actives' }).locator('.ag-ov__row')).toHaveCount(2)
     await expect(page.locator('.ag-ov__mod--operations .ag-ov__row')).toHaveCount(1)
+    // The names are resolved, as on real data: the detail line carries the equipment name.
+    await expect(anomalies.locator('.ag-ov__row').first()).toContainText('Multimètre numérique')
+    // §8.6 (third QA review): the severity chip reads « Élevée » but keeps « Gravité élevée » as its accessible text, and
+    // the detection time sits right of the chips, on their line.
+    const first = anomalies.locator('li.ag-ov__item').first()
+    await expect(first.getByRole('link')).toHaveAccessibleName(/^Gravité élevée Ouverte Équipement attendu non observé Cellule A1 · Multimètre numérique · MM-001 · Détectée 10\snov\.,\s14\sh\s01$/)
+    await expect(first.locator('.ag-chiplabel__short')).toHaveText('Élevée')
+    const chipsBox = await first.locator('.ag-ov__chips').boundingBox()
+    const whenBox = await first.locator('.ag-ov__when').boundingBox()
+    expect(Math.abs((whenBox?.y ?? 0) + (whenBox?.height ?? 0) / 2 - ((chipsBox?.y ?? 99) + (chipsBox?.height ?? 0) / 2))).toBeLessThan(3)
     // §8.6: the two chips on one line and « Reconnaître » under the text, a row of at most 140 px.
     for (const item of await anomalies.locator('li.ag-ov__item').all()) {
       const chips = await item.locator('.ag-chip').evaluateAll((all) => all.map((chip) => Math.round(chip.getBoundingClientRect().top)))
@@ -340,6 +365,22 @@ test.describe('overview: compact below 560 px (contract §8.1)', () => {
     await expectNoHorizontalScroll(page)
   })
 
+  test('at 320 px an anomaly detection time wraps whole under the chips, inside its row (§8.6)', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 844 })
+    await routeApi(page, { reference: true })
+    await openOverview(page)
+    const anomalies = page.getByRole('region', { name: 'Anomalies ouvertes' })
+    await expect(anomalies.locator('.ag-ov__row').first()).toContainText('Multimètre numérique')
+    for (const item of await anomalies.locator('li.ag-ov__item').all()) {
+      const when = item.locator('.ag-ov__when .ag-nowrap')
+      expect(await when.evaluate((node) => node.getClientRects().length)).toBe(1)
+      const row = await item.locator('.ag-ov__row').boundingBox()
+      const box = await when.boundingBox()
+      expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual((row?.x ?? 0) + (row?.width ?? 0) + 0.5)
+    }
+    await expectNoHorizontalScroll(page)
+  })
+
   for (const width of [390, 320]) {
     test(`keeps the locker code whole and its detail on one line at ${width} px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 844 })
@@ -354,6 +395,30 @@ test.describe('overview: compact below 560 px (contract §8.1)', () => {
       const fits = await detail.evaluate((node) => node.scrollWidth <= node.clientWidth + 1 && node.getClientRects().length === 1)
       expect(fits).toBe(true)
       expect((await detail.boundingBox())?.height ?? 99).toBeLessThan(24)
+    })
+  }
+
+  for (const width of [320, 360]) {
+    test(`keeps a window closing on another day inside its tile at ${width} px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 720 })
+      await routeApi(page)
+      // Thursday 12 November, 17 h 00 in the laboratory zone: the detail names the day (QA #245, third review).
+      const later = { ...STATUS, currentWindow: { ...STATUS.currentWindow, closesAt: '2026-11-12T22:00:00Z' } }
+      await page.route(`**/api/v1/lockers/${LOCKER_ID}/status`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(later) }))
+      await openOverview(page)
+      const detail = band(page).locator('.ag-tile__detail').filter({ hasText: 'fermeture' })
+      await expect(detail).toContainText('17 h 00')
+      const box = await detail.evaluate((node) => {
+        const tile = node.closest('.ag-tile')!.getBoundingClientRect()
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        const text = range.getBoundingClientRect()
+        return { overflow: node.scrollWidth - node.clientWidth, textRight: text.right, boxRight: node.getBoundingClientRect().right, tileRight: tile.right }
+      })
+      expect(box.overflow).toBeLessThanOrEqual(1)
+      expect(box.textRight).toBeLessThanOrEqual(box.boxRight + 0.5)
+      expect(box.textRight).toBeLessThanOrEqual(box.tileRight + 0.5)
+      await expectNoHorizontalScroll(page)
     })
   }
 

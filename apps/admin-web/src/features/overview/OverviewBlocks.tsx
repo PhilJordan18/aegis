@@ -5,6 +5,7 @@ import { useI18n, type I18n } from '../../i18n/useI18n'
 import { StatusChip } from '../../ui/StatusChip'
 import { anomaliesHref, NO_FILTERS as NO_ANOMALY_FILTERS } from '../anomalies/anomalyLocation'
 import { anomalyTypeLabel, severityChip, statusChip } from '../anomalies/anomalyPresentation'
+import { ChipLabel } from '../anomalies/ChipLabel'
 import type { LabelIndex } from '../labels/labelIndex'
 import { AssetName, CellName } from '../labels/Labels'
 import { assetLabelOf } from '../labels/labelText'
@@ -142,7 +143,7 @@ function AnomalyRow({ anomaly, labels, onAcknowledge }: { readonly anomaly: Anom
       chips={
         <>
           <StatusChip role={severity.role} icon={severity.icon}>
-            {severity.label}
+            <ChipLabel chip={severity} />
           </StatusChip>
           <StatusChip role={status.role} icon={status.icon}>
             {status.label}
@@ -159,9 +160,17 @@ function AnomalyRow({ anomaly, labels, onAcknowledge }: { readonly anomaly: Anom
         ) : undefined
       }
       // The time never breaks across two lines, and stays in the laboratory zone like every other row of this page.
+      // Below 560 px it is placed on the chips line (§8.6) but stays last in the DOM: the reading order is unchanged.
       meta={
         <>
-          {where} · {i18n.m.anomalies.detected({ time: transactionTimes(i18n).short(anomaly.detectedAt) })}
+          <span className="ag-ov__where">{where}</span>
+          <span className="ag-ov__when">
+            <span className="ag-ov__when-lead">
+              {' · '}
+              {i18n.m.anomalies.detectedLead}
+            </span>
+            <span className="ag-nowrap">{transactionTimes(i18n).short(anomaly.detectedAt)}</span>
+          </span>
         </>
       }
     />

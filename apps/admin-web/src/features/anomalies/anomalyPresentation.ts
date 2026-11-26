@@ -11,6 +11,8 @@ export interface ChipView {
   readonly role: StatusRole
   readonly icon: IconName
   readonly label: string
+  /** Shown instead of the label below 560 px; the label stays the accessible name (§8.6, third QA review). */
+  readonly short?: string
 }
 
 /**
@@ -31,7 +33,7 @@ const STATUS_CHIP: Record<AnomalyStatus, { role: StatusRole; icon: IconName }> =
 
 export function severityChip(severity: AnomalyView['severity'], { m }: I18n): ChipView {
   if (severity === UNRECOGNIZED) return { role: 'unknown', icon: 'status-clock', label: m.anomalies.unrecognizedSeverity }
-  return { ...SEVERITY_CHIP[severity], label: m.anomalies.severity[severity] }
+  return { ...SEVERITY_CHIP[severity], label: m.anomalies.severity[severity], short: m.anomalies.severityFilter[severity] }
 }
 
 export function statusChip(status: AnomalyView['status'], { m }: I18n): ChipView {
