@@ -386,3 +386,45 @@ Aucun endpoint n'est inventé ici. Chaque ligne décrit la donnée manquante, la
 | 3 | §3.4 | « Effacer les filtres » sur Opérations retire aussi le filtre casier | Accepté : c'est un filtre; sa puce reste retirable seule |
 | 3 | §3.3 | La puce de statut de l'Audit est conservée | Accepté |
 | 3 | §3.2 | La première raison est la première dans l'ordre du serveur; le client ne réordonne pas | Accepté : cohérent avec la liste des exemplaires existante |
+
+## 8. Décisions après la revue QA du 26 novembre 2026
+
+Verdicts QA FAIL sur #244, #245 et #246 (règle de Philippe : aucun « pass with risks »). Les constats mécaniques sont corrigés par la session Web. Les décisions de présentation ci-dessous complètent et, en cas de conflit, remplacent §2.4, §3.3 et §3.7.
+
+### 8.1 Vue d'ensemble sous 560 px (#245, constat 1)
+
+Objectif mesurable : à 390 × 844 px, hauteur de page ≤ 2 300 px à l'état nominal (celle de #244) et ≤ 2 700 px à l'état périmé.
+
+- Bande : grille de **2 colonnes**, cinquième tuile pleine largeur; tuile de 88 px de haut minimum; surligné 12 px, valeur 24 px (au lieu de 32), **une seule ligne de détail** (anomalies : « 1 élevée · 1 moyenne »; retards : « depuis 25 nov. »; casier : « fermeture 17 h 00 »; opérations et réservations : aucune); aucun « Lu à » par tuile.
+- Pied de bande, une ligne : « Lu à HH h MM · lecture la plus ancienne », et « Non actualisé » quand une tuile est périmée. L'avis périmé (`StaleNotice`) apparaît **une seule fois**, sous la bande; sous 560 px les modules n'affichent plus le leur et portent seulement une puce `unknown` « Non actualisé » dans leur en-tête.
+- Modules sous 560 px : **3 rangées** au lieu de 5 (`ROW_LIMIT` 3), le pied « Voir les N … » porte le total serveur; table des cellules du casier en **une ligne par cellule** : « A1 · Ouverte · Déverrouillée · MM-001 », retour à la ligne permis, sans blocs étiquetés.
+- À 320 px : les puces de statut ne se coupent pas (`white-space: nowrap`); le détail d'une tuile se tronque par retour à la ligne, jamais par défilement.
+- Surligné de la tuile Casier : le code du casier ne se coupe pas à l'intérieur (`overflow-wrap: normal` sur le code; le surligné passe à la ligne avant le code). Détail « fermeture 17 h 00 » quand la fermeture est le jour même, « fermeture lun. 17 h 00 » sinon; jamais la date complète.
+
+### 8.2 Colonnes des tableaux (#246, constat 4)
+
+Règle : **jamais de défilement horizontal dans un panneau**; le dossier garde 480 px (il porte les actions); les colonnes masquées restent lisibles dans le dossier. `table-layout: fixed`, retour à la ligne par `overflow-wrap: break-word` (jamais `anywhere` : pas de coupure au milieu d'un mot), codes en `word-break: normal`. Minimum de colonne 96 px; Statut 120 px.
+
+| Tableau | ≥ 1440 px | 1280 à 1439 px |
+|---|---|---|
+| Réservations | Statut · Équipement · Titulaire · Période | Statut · Équipement · Période (du et au sur deux lignes) |
+| Prêts | Statut · Équipement · Titulaire · Retrait · Retour prévu ou effectif | Statut · Équipement · Retour prévu ou effectif |
+| Opérations | Statut · Opération (type et équipement sur une ligne) · Utilisateur · Cellule · Créée | Statut · Opération · Créée |
+| Audit | Heure · Événement · Acteur · Sujet · Transition | Heure · Événement · Sujet |
+
+La colonne « Dernière tentative » des réservations est supprimée : « Opération en cours » devient une seconde puce dans la cellule Statut quand `currentOperationId` est non nul. La puce « En retard » des prêts peut passer sous la puce de statut dans sa cellule.
+
+### 8.3 Entre 1024 et 1279 px (#246, constat 3) et sous 1024 px (constats 6, 9, 16)
+
+- **1024 à 1279 px : côte à côte**, comme Équipements : colonne de gauche de 320 à 380 px en **rangées-cartes** (le motif `.ag-item` existant : puces, équipement, une ligne de faits), dossier à droite sur le reste. Le tableau n'existe qu'à partir de 1280 px. Les faits de la rangée-carte sont ceux des colonnes de 1280 à 1439 px.
+- **Sous 1024 px : rangées-cartes** empilées puis dossier dessous (comportement de `EquipmentPage`). Le motif « blocs étiquetés » (`data-label`, `::before`) est **retiré** pour les quatre tableaux : il double les libellés pour le lecteur d'écran et allonge les pages. Il reste réservé à la table des cellules du casier sur la page Casiers.
+- Objectif mesurable : à 390 px, chaque page de liste n'est pas plus haute qu'à `95a29d6` (#245).
+
+### 8.4 Confirmations (#246, constats 10 et 12)
+
+- Puces de filtre actif **sous** la barre de filtres, sur leur propre ligne, « Effacer les filtres » en fin de ligne (§3.4).
+- Sections Réglages, Placement attendu et Identifiants physiques de l'exemplaire rendues en cartes `ag-r-card` avec filet et rembourrage de 16 px (§3.2); le bloc d'édition de la fenêtre du casier reçoit le même rembourrage (constat 11).
+
+### 8.5 Point non retenu comme défaut (#244, constat 7)
+
+Le marqueur de chronologie d'une réservation suit le **statut serveur** : losange seulement quand la réservation est `EXPIRED` (ou le prêt `overdue`). Le client ne compare jamais `reservedUntil` à son horloge (même règle que `dueAt`, §3). Une réservation `ACTIVE` dont la fin est passée garde le marqueur creux jusqu'à ce que le serveur la marque expirée. Décision à confirmer par Philippe si la QA la maintient.
