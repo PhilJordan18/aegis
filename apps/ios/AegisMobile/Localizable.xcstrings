@@ -401,6 +401,16 @@
         }
       }
     },
+    "Ce n’est ni une annulation ni une confirmation. Le service a répondu par une erreur ; l’état sera relu automatiquement." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is neither a cancellation nor a confirmation. The service returned an error; the state will be read again automatically."
+          }
+        }
+      }
+    },
     "Ce n’est ni une annulation ni une confirmation. L’état sera relu dès le retour du réseau." : {
       "localizations" : {
         "en" : {
@@ -807,6 +817,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Already reserved"
+          }
+        }
+      }
+    },
+    "Délai de l’opération" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Operation time limit"
           }
         }
       }
@@ -1271,6 +1291,26 @@
         }
       }
     },
+    "Le service a confirmé le dépôt de « %@ » dans la cellule %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service confirmed that “%@” was put back in compartment %@."
+          }
+        }
+      }
+    },
+    "Le service a confirmé le retrait de « %@ » de la cellule %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service confirmed that “%@” was taken from compartment %@."
+          }
+        }
+      }
+    },
     "Le service a refusé la demande." : {
       "localizations" : {
         "en" : {
@@ -1297,6 +1337,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The service replied in an unexpected format. Check the configured address."
+          }
+        }
+      }
+    },
+    "Le service ne répond pas correctement" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service isn't responding correctly"
           }
         }
       }
@@ -1708,6 +1758,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Resume"
+          }
+        }
+      }
+    },
+    "Reprendre le retour" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume return"
+          }
+        }
+      }
+    },
+    "Reprendre le retrait" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume checkout"
           }
         }
       }
@@ -2242,6 +2312,16 @@
         }
       }
     },
+    "Suivi interrompu : erreur du service" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tracking interrupted: service error"
+          }
+        }
+      }
+    },
     "Suivi masqué. L’opération n’est pas annulée." : {
       "localizations" : {
         "en" : {
@@ -2258,16 +2338,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Technician"
-          }
-        }
-      }
-    },
-    "Temps restant" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Time remaining"
           }
         }
       }
@@ -2420,6 +2490,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Your session has expired. Your reservations and loans are kept."
+          }
+        }
+      }
+    },
+    "Votre session est conservée, mais elle n’a pas pu être vérifiée : le service a répondu par une erreur. Aucune action n’est possible pour le moment." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your session is kept but couldn't be verified: the service returned an error. No action is available for now."
           }
         }
       }
@@ -2806,6 +2886,726 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "pending"
+          }
+        }
+      }
+    },
+    "Mot de passe modifié. Connectez-vous avec le nouveau mot de passe." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password changed. Sign in with your new password."
+          }
+        }
+      }
+    },
+    "Le changement du mot de passe n’a pas pu être confirmé. Connectez-vous avec le nouveau mot de passe ; s’il est refusé, utilisez l’ancien." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "We couldn’t confirm the password change. Sign in with your new password; if it’s refused, use your old one."
+          }
+        }
+      }
+    },
+    "Mot de passe actuel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current password"
+          }
+        }
+      }
+    },
+    "Nouveau mot de passe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New password"
+          }
+        }
+      }
+    },
+    "Confirmer le nouveau mot de passe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm new password"
+          }
+        }
+      }
+    },
+    "Au moins 12 caractères et au plus 72. Un caractère accentué compte pour deux." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "At least 12 characters and at most 72. An accented character counts as two."
+          }
+        }
+      }
+    },
+    "Modification…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changing…"
+          }
+        }
+      }
+    },
+    "Changer le mot de passe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change password"
+          }
+        }
+      }
+    },
+    "Tous vos appareils seront déconnectés. Vos réservations et prêts sont conservés." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All your devices will be signed out. Your reservations and loans are kept."
+          }
+        }
+      }
+    },
+    "Saisissez votre mot de passe actuel." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter your current password."
+          }
+        }
+      }
+    },
+    "Ce mot de passe est trop long." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This password is too long."
+          }
+        }
+      }
+    },
+    "Mot de passe actuel incorrect." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Incorrect current password."
+          }
+        }
+      }
+    },
+    "Le nouveau mot de passe doit compter au moins 12 caractères." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The new password must have at least 12 characters."
+          }
+        }
+      }
+    },
+    "Le nouveau mot de passe est trop long." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The new password is too long."
+          }
+        }
+      }
+    },
+    "Choisissez un mot de passe différent de l’actuel." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a password different from the current one."
+          }
+        }
+      }
+    },
+    "La confirmation ne correspond pas au nouveau mot de passe." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The confirmation doesn’t match the new password."
+          }
+        }
+      }
+    },
+    "Le mot de passe n’a pas été modifié. Vérifiez les champs." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your password wasn’t changed. Check the fields."
+          }
+        }
+      }
+    },
+    "Le changement de mot de passe est temporairement indisponible. Votre mot de passe n’a pas changé." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changing your password is temporarily unavailable. Your password hasn’t changed."
+          }
+        }
+      }
+    },
+    "Votre compte ne peut pas changer son mot de passe ici." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your account can’t change its password here."
+          }
+        }
+      }
+    },
+    "Connexion au service impossible. Votre mot de passe n’a pas changé." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can’t connect to the service. Your password hasn’t changed."
+          }
+        }
+      }
+    },
+    "Le service n’a pas pu modifier le mot de passe. Identifiant de suivi : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service couldn’t change your password. Trace ID: %@"
+          }
+        }
+      }
+    },
+    "Le service n’a pas pu modifier le mot de passe. Réessayez dans un instant." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service couldn’t change your password. Try again in a moment."
+          }
+        }
+      }
+    },
+    "Sécurité" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Security"
+          }
+        }
+      }
+    },
+    "Continuer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue"
+          }
+        }
+      }
+    },
+    "Système" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "System"
+          }
+        }
+      }
+    },
+    "Langue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Language"
+          }
+        }
+      }
+    },
+    "Réglages" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings"
+          }
+        }
+      }
+    },
+    "La langue choisie s’appliquera au prochain lancement de l’app." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The language you chose applies the next time the app opens."
+          }
+        }
+      }
+    },
+    "« Système » suit la langue de l’iPhone." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“System” follows the iPhone’s language."
+          }
+        }
+      }
+    },
+    "Environnement" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Environment"
+          }
+        }
+      }
+    },
+    "À propos" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "About"
+          }
+        }
+      }
+    },
+    "Développement local" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local development"
+          }
+        }
+      }
+    },
+    "Recette (staging)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Staging"
+          }
+        }
+      }
+    },
+    "Production" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Production"
+          }
+        }
+      }
+    },
+    "Serveur distant" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remote server"
+          }
+        }
+      }
+    },
+    "Afficher" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show"
+          }
+        }
+      }
+    },
+    "Réservations" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reservations"
+          }
+        }
+      }
+    },
+    "Prêts" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loans"
+          }
+        }
+      }
+    },
+    "Réservée le %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reserved on %@"
+          }
+        }
+      }
+    },
+    "Emprunté le %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borrowed on %@"
+          }
+        }
+      }
+    },
+    "Historique" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "History"
+          }
+        }
+      }
+    },
+    "Chargement de l’historique" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading history"
+          }
+        }
+      }
+    },
+    "Aucune réservation dans votre historique." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No reservations in your history."
+          }
+        }
+      }
+    },
+    "Aucun prêt dans votre historique." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No loans in your history."
+          }
+        }
+      }
+    },
+    "Réservée le" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reserved on"
+          }
+        }
+      }
+    },
+    "Début" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start"
+          }
+        }
+      }
+    },
+    "Fin" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End"
+          }
+        }
+      }
+    },
+    "Retirée le" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Picked up on"
+          }
+        }
+      }
+    },
+    "Annulée le" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelled on"
+          }
+        }
+      }
+    },
+    "Expirée le" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expired on"
+          }
+        }
+      }
+    },
+    "Emprunté le" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borrowed on"
+          }
+        }
+      }
+    },
+    "Échéance" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Due"
+          }
+        }
+      }
+    },
+    "Retour demandé le" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Return requested on"
+          }
+        }
+      }
+    },
+    "Rendu le" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Returned on"
+          }
+        }
+      }
+    },
+    "En retard" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overdue"
+          }
+        }
+      }
+    },
+    "Cellule actuelle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current compartment"
+          }
+        }
+      }
+    },
+    "Consultation seulement. Les actions restent dans Mon activité." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View only. Actions stay in My activity."
+          }
+        }
+      }
+    },
+    "Historique lu à %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "History read at %@."
+          }
+        }
+      }
+    },
+    "Réservation en cours" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Active reservation"
+          }
+        }
+      }
+    },
+    "Retirée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Picked up"
+          }
+        }
+      }
+    },
+    "Annulée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelled"
+          }
+        }
+      }
+    },
+    "État non reconnu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unrecognized state"
+          }
+        }
+      }
+    },
+    "Prêt en cours" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Active loan"
+          }
+        }
+      }
+    },
+    "Rendu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Returned"
+          }
+        }
+      }
+    },
+    "Le service n’a pas pu charger votre historique." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service couldn’t load your history."
+          }
+        }
+      }
+    },
+    "Votre compte n’a pas accès à cet historique." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your account can’t access this history."
+          }
+        }
+      }
+    },
+    "Vérifié à %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checked at %@"
+          }
+        }
+      }
+    },
+    "Dernière vérification réussie à %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last successful check at %@"
+          }
+        }
+      }
+    },
+    "Actualisation en cours" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refreshing"
+          }
+        }
+      }
+    },
+    "Actualiser l’activité" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh activity"
+          }
+        }
+      }
+    },
+    "Activité vérifiée à %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activity checked at %@."
+          }
+        }
+      }
+    },
+    "Actualisation impossible. Informations non actualisées." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t refresh. Not up to date."
           }
         }
       }

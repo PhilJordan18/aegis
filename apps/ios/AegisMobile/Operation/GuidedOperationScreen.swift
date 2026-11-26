@@ -86,17 +86,29 @@ struct GuidedOperationScreen: View {
         }
     }
 
-    private var isInterrupted: Bool {
-        if case .readFailing = model.follower.interruption { true } else { false }
+    private var readFailure: CatalogFailure? {
+        if case let .readFailing(failure) = model.follower.interruption { failure } else { nil }
     }
 
+    private var isInterrupted: Bool { readFailure != nil }
+
+    /// The network is named only when the service could not be reached; an
+    /// answer in error is the service's, not the user's connection (#247).
     @ViewBuilder
     private var interruption: some View {
-        if isInterrupted {
-            OperationNotice(title: String(localized: "Suivi interrompu : connexion perdue"),
-                            detail: String(localized: "Ce n’est ni une annulation ni une confirmation. L’état sera relu dès le retour du réseau."),
-                            symbol: "wifi.slash")
-                .accessibilityIdentifier("operation.interrupted")
+        if let readFailure {
+            Group {
+                if readFailure == .unreachable {
+                    OperationNotice(title: String(localized: "Suivi interrompu : connexion perdue"),
+                                    detail: String(localized: "Ce n’est ni une annulation ni une confirmation. L’état sera relu dès le retour du réseau."),
+                                    symbol: "wifi.slash")
+                } else {
+                    OperationNotice(title: String(localized: "Suivi interrompu : erreur du service"),
+                                    detail: String(localized: "Ce n’est ni une annulation ni une confirmation. Le service a répondu par une erreur ; l’état sera relu automatiquement."),
+                                    symbol: "exclamationmark.triangle")
+                }
+            }
+            .accessibilityIdentifier("operation.interrupted")
         }
     }
 
@@ -199,7 +211,9 @@ private struct OperationCountdown: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let seconds = max(0, Int(deadline.timeIntervalSince(context.date).rounded(.up)))
             VStack(alignment: .leading, spacing: 4) {
-                Text("Temps restant")
+                // The operation's time limit, not how long the door stays
+                // unlocked: it runs on through the physical steps (#247).
+                Text("Délai de l’opération")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.brandMuted)
                 Label {
@@ -231,7 +245,7 @@ private struct OperationCountdown: View {
         // Outside the timeline: one element whose value changes, never a
         // second element exposing the ticking digits.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("Temps restant"))
+        .accessibilityLabel(Text("Délai de l’opération"))
         .accessibilityValue(spokenValue)
         .accessibilityHint(Text(deadlineText))
         .accessibilityIdentifier("operation.countdown")

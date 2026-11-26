@@ -17,6 +17,10 @@ CODE_SIGN_STYLE = Automatic
 DEVELOPMENT_TEAM =
 AEGIS_BUNDLE_ID_PREFIX = com.example.aegis
 
+// Environment name shown in Account: local, staging or production. Empty
+// shows « remote server »; a loopback API address always shows local.
+AEGIS_ENVIRONMENT =
+
 ALWAYS_SEARCH_USER_PATHS = NO
 ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES
 ENABLE_USER_SCRIPT_SANDBOXING = YES

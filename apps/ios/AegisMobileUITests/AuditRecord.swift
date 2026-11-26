@@ -40,7 +40,7 @@ final class AuditRecord {
         if tolerated {
             ignored.append("\(issue.compactDescription) — \(element)\(note)")
         } else {
-            unhandled.append("\(issue.compactDescription) — \(element) — \(issue.detailedDescription)")
+            unhandled.append("\(issue.compactDescription) — \(element)\(note) — \(issue.detailedDescription)")
         }
     }
 

@@ -30,7 +30,7 @@ extension XCTestCase {
         }
         if visible.contains(target.frame) { return .entirelyVisible }
         let image = Self.crop(app.screenshot(), to: part, window: window)
-        guard let ratio = RenderedContrast.ratio(of: image) else {
+        guard let ratio = RenderedContrast.ratio(of: image, shade: BarAwareAudit.panelShade) else {
             return .nothingToMeasure("no ink in its visible part \(part)")
         }
         let line = "'\(target.label)' partly visible, \(part) of frame=\(target.frame): "
@@ -40,6 +40,32 @@ extension XCTestCase {
         evidence.lifetime = .keepAlways
         add(evidence)
         return .measured(passed: ratio >= 4.5, line: line)
+    }
+
+    /// Measures an entirely visible element on the screen as it is once
+    /// still, for a suite whose audit scrolls while it runs, so that the
+    /// audit's samples may not be of the screen it reports on. Attached as
+    /// `audit-entire-contrast`; it passes at 4.5:1 or more.
+    @MainActor
+    func entireContrast(of target: XCUIElement, window: CGRect,
+                        in app: XCUIApplication) -> VisiblePartContrast {
+        guard app.waitForStillScreen() else {
+            return .measured(passed: false, line: "'\(target.label)': the screen never stopped moving")
+        }
+        let frame = target.frame
+        guard window.contains(frame) else {
+            return .measured(passed: false, line: "'\(target.label)' frame=\(frame) left the window")
+        }
+        let image = Self.crop(app.screenshot(), to: frame, window: window)
+        let evidence = XCTAttachment(image: image)
+        evidence.name = "audit-entire-contrast"
+        evidence.lifetime = .keepAlways
+        add(evidence)
+        guard let ratio = RenderedContrast.ratio(of: image, shade: BarAwareAudit.panelShade) else {
+            return .measured(passed: false, line: "'\(target.label)' frame=\(frame): no ink to measure")
+        }
+        return .measured(passed: ratio >= 4.5,
+                         line: "'\(target.label)' entirely visible, frame=\(frame): " + String(format: "rendered %.2f:1", ratio))
     }
 
     /// The part of a full-screen screenshot under `frame`, in window points.

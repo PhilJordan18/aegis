@@ -35,6 +35,17 @@ struct OperationStepTests {
         #expect(step(OperationFixtures.confirmed, kind: .return).title == String(localized: "Retour confirmé"))
     }
 
+    /// The confirmation names the asset and the cell the server confirmed (#247).
+    @Test func aConfirmationSummarisesWhatTheServiceConfirmed() {
+        let asset = "Multimètre 1", cell = "A1"
+        #expect(step(OperationFixtures.confirmed).instruction
+                == String(localized: "Le service a confirmé le retrait de «\u{00A0}\(asset)\u{00A0}» de la cellule \(cell)."))
+        #expect(step(OperationFixtures.confirmed, kind: .return).instruction
+                == String(localized: "Le service a confirmé le dépôt de «\u{00A0}\(asset)\u{00A0}» dans la cellule \(cell)."))
+        #expect(step(OperationFixtures.confirmed).instruction?.contains(asset) == true)
+        #expect(step(OperationFixtures.confirmed).instruction?.contains(cell) == true)
+    }
+
     @Test(arguments: [("EXPIRED", OperationStep.Ending.expired), ("FAILED", .failed), ("ANOMALY", .anomaly)])
     func otherEndsAreFailuresWithTheirOwnAction(status: String, ending: OperationStep.Ending) {
         let step = step(OperationFixtures.view(status: status, requiredAction: "NONE",

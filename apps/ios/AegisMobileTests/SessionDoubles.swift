@@ -43,6 +43,22 @@ final class StubAuthentication: AuthenticationService, @unchecked Sendable {
         if let profileGate { await profileGate.wait() }
         return try lock.withLock { _profileResult }.get()
     }
+
+    private var _passwordResult: Result<Void, APIError> = .failure(.invalidResponse)
+    private var _passwordCalls: [(current: String, new: String, token: String)] = []
+    var passwordGate: Gate?
+
+    func setPassword(_ result: Result<Void, APIError>) {
+        lock.withLock { _passwordResult = result }
+    }
+
+    var passwordCalls: [(current: String, new: String, token: String)] { lock.withLock { _passwordCalls } }
+
+    func changePassword(current: String, new: String, bearer token: String) async throws(APIError) {
+        lock.withLock { _passwordCalls.append((current, new, token)) }
+        if let passwordGate { await passwordGate.wait() }
+        try lock.withLock { _passwordResult }.get()
+    }
 }
 
 /// One-shot barrier released by the test.
