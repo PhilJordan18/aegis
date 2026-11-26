@@ -7,6 +7,8 @@ import SwiftUI
 struct ActivityScreen: View {
     let model: ActivityViewModel
     let browseEquipment: () -> Void
+    /// Builds the history of a visit to « Historique »; nil hides the link.
+    var makeHistory: (@MainActor () -> HistoryViewModel)?
     @State private var confirmingCancel = false
     private static let minimumRefresh = Duration.milliseconds(800)
 
@@ -18,6 +20,7 @@ struct ActivityScreen: View {
                     reservationNotice
                     content
                     loanNotice
+                    if makeHistory != nil { historyLink }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
@@ -32,6 +35,9 @@ struct ActivityScreen: View {
                 try? await Task.sleep(until: started + Self.minimumRefresh, clock: .continuous)
             }
             .task { await model.loadIfNeeded() }
+            .navigationDestination(for: HistoryRoute.self) { _ in
+                if let makeHistory { HistoryScreen(make: makeHistory) }
+            }
             .fullScreenCover(item: Binding(get: { model.guided }, set: { _ in })) { guided in
                 GuidedOperationScreen(model: guided,
                                       close: { Task { await model.hideOperation() } },
@@ -45,6 +51,32 @@ struct ActivityScreen: View {
                 model.announcement = nil
             }
         }
+    }
+
+    /// Past records, read only: no fourth tab (#233).
+    private var historyLink: some View {
+        NavigationLink(value: HistoryRoute()) {
+            HStack(spacing: 12) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .foregroundStyle(Color.brandAccent)
+                    .accessibilityHidden(true)
+                Text("Historique")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Color.brandText)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(Color.brandMuted)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 18)
+            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+            .background(Color.brandPanel, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.brandBorder))
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 8)
+        .accessibilityIdentifier("activity.history")
     }
 
     @ViewBuilder
