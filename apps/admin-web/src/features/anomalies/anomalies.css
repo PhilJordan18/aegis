@@ -16,7 +16,7 @@
 
 /* Filters: a frameless toolbar like the catalog search, one line from 1100 px. */
 .ag-an-filters { margin-bottom: 12px; display: grid; grid-template-columns: minmax(0, 1fr); }
-.ag-an-filters__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 16px; }
+.ag-an-filters__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 16px; align-items: start; }
 .ag-an-filters .ag-ff { gap: 4px; }
 .ag-an-filters .ag-ff__control { min-height: var(--ag-control-h); font-size: 0.9375rem; }
 .ag-an-filters .ag-ff__slot { display: none; }

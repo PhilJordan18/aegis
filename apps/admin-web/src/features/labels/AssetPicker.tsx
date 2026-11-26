@@ -64,6 +64,18 @@ export function AssetPicker({ label, value, onChange, labels }: AssetPickerProps
     retry: false,
   })
   const settled = q === typed && !search.isFetching
+  // A retry of a search that never had data goes back to « pending », so the retry itself is tracked: « Réessayer » stays
+  // mounted (busy) while it runs and keeps its focus (QA #244 D2b).
+  const [retrying, setRetrying] = useState<string | null>(null)
+  const inRetry = retrying !== null && retrying === q && search.isFetching
+  const failed = typed.length >= SEARCH_MIN_LENGTH && q === typed && (search.isError || inRetry)
+  const retried = useRef(false)
+  useEffect(() => {
+    if (failed || !retried.current) return
+    retried.current = false
+    // The retry succeeded and its button left: focus would fall to the page, so it returns to the field.
+    if (document.activeElement === null || document.activeElement === document.body) inputRef.current?.focus()
+  }, [failed])
   const items = typed.length >= SEARCH_MIN_LENGTH && settled && search.data !== undefined && !search.isError ? search.data.items : []
   const listId = `${id}-list`
   const helpId = `${id}-help`
@@ -180,9 +192,19 @@ export function AssetPicker({ label, value, onChange, labels }: AssetPickerProps
       </p>
       {/* Outside the live region: an announcement carries text, never a control. It stays while the search is in error,
           whatever the list does, so moving focus to it (which closes the list) does not remove it (§1.3). */}
-      {typed.length >= SEARCH_MIN_LENGTH && settled && search.isError && (
+      {failed && (
         <p className="ag-picker__retry">
-          <Button variant="secondary" size="sm" onClick={() => void search.refetch()}>
+          <Button
+            variant="secondary"
+            size="sm"
+            busy={inRetry}
+            onClick={() => {
+              if (search.isFetching) return
+              retried.current = true
+              setRetrying(q)
+              void search.refetch().finally(() => setRetrying(null))
+            }}
+          >
             {t.retry}
           </Button>
         </p>
