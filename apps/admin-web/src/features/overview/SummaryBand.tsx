@@ -28,6 +28,8 @@ export function SummaryBand({ tiles, allClear, onRetryStale, retrying }: Summary
   const stale = tiles.filter((tile) => tile.state === 'ready' && tile.stale)
   const oldestStale = stale.length === 0 ? null : Math.min(...stale.map((tile) => (tile.state === 'ready' ? tile.readAt : Infinity)))
   const loading = tiles.every((tile) => tile.state === 'pending')
+  const readTimes = tiles.flatMap((tile) => (tile.state === 'ready' ? [tile.readAt] : []))
+  const oldestRead = readTimes.length === 0 ? null : Math.min(...readTimes)
 
   return (
     <div className="ag-band-wrap">
@@ -38,6 +40,12 @@ export function SummaryBand({ tiles, allClear, onRetryStale, retrying }: Summary
               <span className="ag-tile__over">
                 <span className="ag-tile__dot" aria-hidden="true" />
                 {tile.overline}
+                {tile.code !== undefined && (
+                  <>
+                    {' '}
+                    <span className="ag-tile__code">{tile.code}</span>
+                  </>
+                )}
               </span>
               {tile.state === 'pending' && (
                 <span className="ag-tile__skel" aria-hidden="true">
@@ -73,6 +81,17 @@ export function SummaryBand({ tiles, allClear, onRetryStale, retrying }: Summary
           </li>
         ))}
       </ul>
+      {/* §8.1: below 560 px one line for the band replaces the read time of each tile. */}
+      {oldestRead !== null && (
+        <p className="ag-band__read">
+          <span className="ag-tnum">{t.bandReadAt({ time: times.readAt(oldestRead) })}</span>
+          {oldestStale !== null && (
+            <StatusChip role="unknown" icon="status-clock">
+              {m.pageTools.notRefreshed}
+            </StatusChip>
+          )}
+        </p>
+      )}
       {loading && (
         <p className="ag-sr-only" role="status">
           {t.bandLoading}

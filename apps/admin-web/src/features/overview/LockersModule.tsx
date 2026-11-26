@@ -110,6 +110,13 @@ function LockerSummary({ locker, status }: { readonly locker: AdminLockerView; r
           <StatusChip role={chip.role} icon={chip.icon}>
             {chip.label}
           </StatusChip>
+          {read.stale && (
+            <span className="ag-ov__stalechip">
+              <StatusChip role="unknown" icon="status-clock">
+                {m.pageTools.notRefreshed}
+              </StatusChip>
+            </span>
+          )}
         </div>
         <p className="ag-ov__sub ag-tnum">{live.lastSeenAt === null ? m.lockers.neverSignal : m.lockers.lastSignal({ time: times.zoned(live.lastSeenAt) })}</p>
         <p className="ag-ov__sub">{windowText}</p>
@@ -175,7 +182,7 @@ function LockerSummary({ locker, status }: { readonly locker: AdminLockerView; r
         <p className="ag-ov__sub">{m.lockers.evaluatedNote({ time: times.zoned(live.evaluatedAt) })}</p>
       </div>
       {read.stale && (
-        <div className="ag-ov__lkstale">
+        <div className="ag-ov__lkstale ag-ov__stale">
           <StaleNotice
             evaluatedAt={times.readAt(read.readAt)}
             body={(time) => t.staleBody({ time })}

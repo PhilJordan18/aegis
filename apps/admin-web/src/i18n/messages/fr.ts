@@ -763,6 +763,7 @@ export const fr = {
     viewReservationsCount: ({ count: value }: { count: number }) => plural(value, { one: 'Voir la réservation', other: `Voir les ${count.format(value)} réservations` }),
 
     band: 'Synthèse',
+    bandReadAt: ({ time }: { time: string }) => `Lu à ${time} · lecture la plus ancienne`,
     bandLoading: 'Chargement de la synthèse',
     tileNone: 'Aucune',
     tileNoLocker: 'Aucun casier',

@@ -14,6 +14,9 @@ import { LOCKER_OPERATION_STATUSES, TERMINAL_OPERATION_STATUSES, type LoanStatus
 
 /** Rows previewed in a block; the page behind the « Voir … » link holds the whole list. */
 export const ROW_LIMIT = 5
+/** Contract §8.1: below 560 px a module previews 3 rows; its foot still carries the server's total. */
+export const NARROW_ROW_LIMIT = 3
+export const NARROW_QUERY = '(max-width: 559px)'
 
 /** 09 §11.1 and PageQuery: `size` is 1 to 100. Anomalies, loans and operations are read as wide as the contract allows. */
 export const WIDE_PAGE_SIZE = 100
