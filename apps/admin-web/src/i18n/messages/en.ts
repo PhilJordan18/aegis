@@ -1269,7 +1269,7 @@ export const en: Messages = {
     noTransition: 'None',
     listTitle: ({ count: value }: { count: number }) =>
       plural(value, { one: `${count.format(value)} event loaded`, other: `${count.format(value)} events loaded` }),
-    listMeta: 'Time, event, actor',
+    listMeta: 'Time, event, subject',
     listOrder: 'Newest first',
     listFoot: ({ time }: { time: string }) => `First page read at ${time}`,
     refreshNote: 'Events recorded after this read appear after “Refresh”.',

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useI18n } from '../../i18n/useI18n'
 import { Button } from '../../ui/Button'
 import { TextField } from '../../ui/FormField'
@@ -9,6 +9,14 @@ import { lastDays } from './labDays'
  * syntactically days, but not the one meant. A field applies only once its year has four significant digits.
  */
 const typingYear = (day: string) => /^0\d{3}-/.test(day)
+
+/**
+ * Editing a day already there passes through other whole days (« 2026-01-10 », « 2026-12-10 », an empty field while
+ * the day is retyped, « 2026-12-05 »): each would be one history entry and one request. A keyboard edit applies when
+ * the field loses focus, on Enter, or after this pause; a day chosen in the calendar or by a shortcut applies at once.
+ */
+export const DATE_KEYBOARD_DELAY_MS = 800
+const editingKey = (key: string) => key.length === 1 || key === 'Backspace' || key === 'Delete' || key === 'ArrowUp' || key === 'ArrowDown'
 
 export interface DayRange {
   readonly from: string | null
@@ -31,7 +39,8 @@ interface DateRangeProps {
 
 /**
  * « Du (inclus) » and « Au (inclus) » with the laboratory zone in their help and three shortcuts (contrat-web-manager
- * §3.4). A field applies when its value is a whole valid day (`change`), never while its year is still being typed; both bounds are inclusive, as the address has
+ * §3.4). A field applies when its value is a whole valid day, never while its year is still being typed nor on each
+ * key of an edit; both bounds are inclusive, as the address has
  * always read them (`au` is the last day shown).
  */
 export function DateRange({ value, onApply, isDay, invalidText, help, fromName = 'du', toName = 'au', fromError = null, toError = null }: DateRangeProps) {
@@ -41,7 +50,10 @@ export function DateRange({ value, onApply, isDay, invalidText, help, fromName =
   const [from, setFrom] = useState(value.from ?? '')
   const [to, setTo] = useState(value.to ?? '')
   const [error, setError] = useState<string | null>(null)
-  // The address is the source of truth: Précédent or a removed chip resets the fields.
+  const keyboard = useRef(false)
+  const timer = useRef<number | undefined>(undefined)
+  const pending = useRef<{ from: string; to: string } | null>(null)
+  // The address is the source of truth: Précédent or a removed chip resets the fields and drops a pending edit.
   const [seen, setSeen] = useState(value)
   if (seen.from !== value.from || seen.to !== value.to) {
     setSeen(value)
@@ -49,10 +61,39 @@ export function DateRange({ value, onApply, isDay, invalidText, help, fromName =
     setTo(value.to ?? '')
     setError(null)
   }
+  useEffect(() => {
+    pending.current = null
+    window.clearTimeout(timer.current)
+  }, [value.from, value.to])
+  useEffect(() => () => window.clearTimeout(timer.current), [])
 
   function change(nextFrom: string, nextTo: string) {
     setFrom(nextFrom)
     setTo(nextTo)
+    window.clearTimeout(timer.current)
+    if (keyboard.current) {
+      keyboard.current = false
+      pending.current = { from: nextFrom, to: nextTo }
+      timer.current = window.setTimeout(flush, DATE_KEYBOARD_DELAY_MS)
+      return
+    }
+    pending.current = null
+    apply(nextFrom, nextTo)
+  }
+
+  function flush() {
+    window.clearTimeout(timer.current)
+    const edit = pending.current
+    pending.current = null
+    if (edit !== null) apply(edit.from, edit.to)
+  }
+
+  const keyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') flush()
+    else if (editingKey(event.key)) keyboard.current = true
+  }
+
+  function apply(nextFrom: string, nextTo: string) {
     if (typingYear(nextFrom) || typingYear(nextTo)) {
       setError(null)
       return
@@ -71,8 +112,8 @@ export function DateRange({ value, onApply, isDay, invalidText, help, fromName =
 
   return (
     <>
-      <TextField name={fromName} type="date" lang={dateLang} help={help} label={t.fromInclusive} error={fromError} value={from} onChange={(event) => change(event.target.value, to)} />
-      <TextField name={toName} type="date" lang={dateLang} help={help} label={t.toInclusive} error={error ?? toError} value={to} onChange={(event) => change(from, event.target.value)} />
+      <TextField name={fromName} type="date" lang={dateLang} help={help} label={t.fromInclusive} error={fromError} value={from} onKeyDown={keyDown} onBlur={flush} onChange={(event) => change(event.target.value, to)} />
+      <TextField name={toName} type="date" lang={dateLang} help={help} label={t.toInclusive} error={error ?? toError} value={to} onKeyDown={keyDown} onBlur={flush} onChange={(event) => change(from, event.target.value)} />
       {/* Below 560 px the zone help shows once under both fields; each field keeps its own for assistive technology. */}
       <p className="ag-date-help" aria-hidden="true">
         {help}

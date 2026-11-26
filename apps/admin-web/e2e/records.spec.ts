@@ -210,6 +210,22 @@ test.describe('records: lot 3 tables, filters and dossiers', () => {
     expect(await page.evaluate(() => window.history.length)).toBe(length + 1)
   })
 
+  test('editing a date already there applies once, when the edit is done (QA #246 N2)', async ({ page }) => {
+    const requests = await openReservations(page, '/reservations-prets?du=2026-11-10')
+    const before = requests.length
+    const length = await page.evaluate(() => window.history.length)
+    const field = page.getByRole('textbox', { name: 'Du (inclus)' })
+    await field.focus()
+    // Month then day: the field passes through 2026-01-10, 2026-12-10, an empty day and 2026-12-05.
+    for (const key of '1205') await page.keyboard.press(key, { delay: 30 })
+    await expect(page).toHaveURL(/du=2026-12-05/)
+    await page.waitForTimeout(300)
+    const reads = requests.slice(before).filter((request) => request.includes('/admin/reservations?'))
+    expect(reads).toHaveLength(1)
+    expect(reads[0]).toContain('from=2026-12-05')
+    expect(await page.evaluate(() => window.history.length)).toBe(length + 1)
+  })
+
   test('the status list applies at once with the pointer, but only after a pause from the keyboard', async ({ page }) => {
     const requests = await openReservations(page)
     const length = await page.evaluate(() => window.history.length)
@@ -332,6 +348,33 @@ for (const [width, headers] of [
       await expectAlignedColumns(page)
       const panels = await page.locator('.ag-eq > .ag-panel').evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().width))
       expect(panels.at(-1)).toBeCloseTo(480, 0)
+    })
+  })
+}
+
+for (const width of [1440, 1280]) {
+  test.describe(`records: a long code at ${width} px`, () => {
+    test.use({ viewport: { width, height: 900 } })
+
+    test(`wraps inside its column and never runs over the next one at ${width} px (QA #246 N1)`, async ({ page }) => {
+      const long = { ...asset, assetCode: 'OSC-LONGCODE-000123' }
+      const loan = { id: '55555555-0000-4000-8000-000000000001', asset: long, holderUserId: USER_ID, holder: { id: USER_ID, displayName: 'Technicien Démo' }, status: 'ACTIVE', checkedOutAt: '2026-11-10T14:05:00Z', dueAt: '2026-11-10T20:30:00Z', overdue: false, returnRequestedAt: null, returnedAt: null, checkoutOperationId: OPERATION_ID, returnOperationId: null, currentOperationId: null, availableActions: [] }
+      await routeApi(page)
+      await page.route('**/api/v1/admin/reservations**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pageOf([{ ...reservation(1), asset: long }], 20)) }))
+      await page.route('**/api/v1/admin/loans**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(new URL(route.request().url()).pathname.endsWith('/loans') ? pageOf([loan], 20) : loan) }))
+      await signIn(page)
+      for (const url of ['/reservations-prets', '/reservations-prets?vue=prets']) {
+        await go(page, url)
+        await expect(table(page).locator('.ag-tbl__code').first()).toContainText('OSC-LONGCODE-000123')
+        const overrun = await table(page).locator('.ag-tbl__code').evaluateAll((codes) =>
+          Math.max(...codes.map((code) => {
+            const cell = code.closest('td') as HTMLElement
+            return code.getBoundingClientRect().right - (cell.getBoundingClientRect().right - parseFloat(getComputedStyle(cell).paddingRight))
+          })),
+        )
+        expect(overrun, url).toBeLessThanOrEqual(0.5)
+        await expectAlignedColumns(page)
+      }
     })
   })
 }

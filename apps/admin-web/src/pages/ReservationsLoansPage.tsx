@@ -8,7 +8,7 @@ import { ManagerShell } from '../app/shell/ManagerShell'
 import type { UserProfile } from '../features/auth/contract'
 import { useSignOut } from '../features/auth/useSignOut'
 import { useCurrentAdminProfile } from '../features/auth/useCurrentAdminProfile'
-import { operationChip, operationTypeLabel, transactionTimes } from '../features/transactions/transactionPresentation'
+import { operationChip, operationTypeLabel, shownOrder, transactionTimes } from '../features/transactions/transactionPresentation'
 import { classifyTransactionFailure } from '../features/transactions/transactionFailure'
 import { hasFilters, NO_FILTERS, readTransactionLocation, transactionHref, type TransactionFilterValues, type TransactionView } from '../features/transactions/transactionHref'
 import { TransactionDossier } from '../features/transactions/TransactionDossier'
@@ -81,7 +81,8 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
   }, [lastPage, location.page, router, view, filters])
 
   const items = page?.items ?? []
-  const selectedId = location.selectedId ?? items[0]?.item.id ?? null
+  // With no dossier in the address, the first row on screen is the one opened (an overdue loan leads the page).
+  const selectedId = location.selectedId ?? shownOrder(view, items)[0]?.item.id ?? null
   const listed = items.find((record) => record.item.id === selectedId)
   const detail = useTransactionDetail(view, selectedId, listed)
 

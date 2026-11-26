@@ -11,7 +11,7 @@ import { CellName } from '../labels/Labels'
 import { useLabelIndex } from '../labels/useLabelIndex'
 import { TransactionAlert } from './TransactionAlert'
 import type { TransactionFailure } from './transactionFailure'
-import { isShownOverdue, lateChip, loanChip, operationChip, operationTypeLabel, reservationChip, transactionTimes, type TransactionTimes } from './transactionPresentation'
+import { isShownOverdue, lateChip, shownOrder, loanChip, operationChip, operationTypeLabel, reservationChip, transactionTimes, type TransactionTimes } from './transactionPresentation'
 import { transactionHref, type TransactionFilterValues, type TransactionView } from './transactionHref'
 import type { TransactionRecord, TransactionRecordPage } from './useTransactionQueries'
 
@@ -47,9 +47,7 @@ export function TransactionList({ view, page, selectedId, filters, filtered, loa
   const items = page?.items ?? []
   const read = times.readAt(readAt)
   const title = page === undefined ? { reservations: t.tabReservations, loans: t.tabLoans, operations: t.tabOperations }[view] : collectionTitle(view, page, i18n)
-  // §3.3: overdue loans lead the page on screen, and the foot says so; the collection keeps the server's order.
-  const late = (record: TransactionRecord) => record.kind === 'loans' && isShownOverdue(record.item)
-  const ordered = view === 'loans' && !refreshing ? [...items.filter(late), ...items.filter((record) => !late(record))] : items
+  const ordered = refreshing ? items : shownOrder(view, items)
   const reordered = ordered.some((record, index) => record !== items[index])
   const shown = ordered
 

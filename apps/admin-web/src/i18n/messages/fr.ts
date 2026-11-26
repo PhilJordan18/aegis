@@ -1366,7 +1366,7 @@ export const fr = {
     noTransition: 'Aucune',
     listTitle: ({ count: value }: { count: number }) =>
       plural(value, { one: `${count.format(value)} événement chargé`, other: `${count.format(value)} événements chargés` }),
-    listMeta: 'Heure, événement, acteur',
+    listMeta: 'Heure, événement, sujet',
     /** D1: the contract orders the list newest first (ties broken by id). */
     listOrder: 'Les plus récents d’abord',
     listFoot: ({ time }: { time: string }) => `Première page lue à ${time}`,

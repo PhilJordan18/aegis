@@ -330,8 +330,11 @@ describe('Réservations et prêts: filters', () => {
     renderPage(gateway)
     await screen.findByRole('heading', { level: 2, name: '2 réservations' })
     await user.type(screen.getByLabelText('Du (inclus)'), '2026-11-10')
+    // A keyboard edit applies when the field is left (QA #246 N2).
+    expect(window.location.search).toBe('')
+    await user.tab()
     expect(window.location.search).toBe('?du=2026-11-10')
-    await user.type(screen.getByLabelText('Au (inclus)'), '2026-11-01')
+    await user.type(screen.getByLabelText('Au (inclus)'), '2026-11-01{Enter}')
     expect(screen.getByText('La date de fin précède la date de début.')).toBeDefined()
     expect(window.location.search).toBe('?du=2026-11-10')
     expect(within(screen.getByRole('group', { name: 'Filtres actifs' })).getByText(/^Du\s/)).toBeDefined()
@@ -453,6 +456,9 @@ describe('Réservations et prêts: tables (contract §3.3)', () => {
     expect(plain(rows()[0]?.textContent)).toContain('En retard')
     expect(plain(rows()[1]?.textContent)).not.toContain('En retard')
     expect(screen.getByText('Retards en tête sur cette page.')).toBeDefined()
+    // With no dossier in the address, the row opened is the first one on screen, not the server's first (QA #246 N5).
+    expect(rows()[0]?.getAttribute('aria-current')).toBe('true')
+    expect(rows()[1]?.getAttribute('aria-current')).toBeNull()
   })
 
   it('keeps the server order, with no note, when the overdue loans already lead', async () => {
