@@ -22,8 +22,9 @@
 .ag-filters__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 2px; }
 .ag-filters__help .ag-link { margin-left: 8px; }
 .ag-filters__help { margin-top: 6px; font-size: var(--ag-type-small-size); line-height: 1.4; color: var(--ag-text-2); }
-@media (min-width: 1024px) and (max-width: 1279px) {
-  /* QA #246 B3: the four filters on one line, the date help and the shortcuts on the next. */
+@media (min-width: 1024px) {
+  /* QA #246 B3 (1024 x 768) and third review (1280 x 720): the four filters on one line, the date help and the
+     shortcuts on the next. */
   .ag-filters__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: 12px; }
   .ag-filters__grid > .ag-date-help { grid-column: 1 / 3; }
   .ag-filters__grid > .ag-date-shortcuts { grid-column: 3 / -1; justify-content: flex-end; }

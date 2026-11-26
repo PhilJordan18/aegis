@@ -12,10 +12,10 @@ const typingYear = (day: string) => /^0\d{3}-/.test(day)
 
 /**
  * Editing a day already there passes through other whole days (« 2026-01-10 », « 2026-12-10 », an empty field while
- * the day is retyped, « 2026-12-05 »): each would be one history entry and one request. A keyboard edit applies when
- * the field loses focus, on Enter, or after this pause; a day chosen in the calendar or by a shortcut applies at once.
+ * the day is retyped, « 2026-12-05 »): each would be one history entry and one request. No pause tells a finished edit
+ * from a slow one (QA #246, third review), so a keyboard edit applies when the field is validated (§3.4): on leaving
+ * it or on Enter. A day chosen in the calendar or by a shortcut applies at once.
  */
-export const DATE_KEYBOARD_DELAY_MS = 800
 const editingKey = (key: string) => key.length === 1 || key === 'Backspace' || key === 'Delete' || key === 'ArrowUp' || key === 'ArrowDown'
 
 export interface DayRange {
@@ -51,7 +51,6 @@ export function DateRange({ value, onApply, isDay, invalidText, help, fromName =
   const [to, setTo] = useState(value.to ?? '')
   const [error, setError] = useState<string | null>(null)
   const keyboard = useRef(false)
-  const timer = useRef<number | undefined>(undefined)
   const pending = useRef<{ from: string; to: string } | null>(null)
   // The address is the source of truth: Précédent or a removed chip resets the fields and drops a pending edit.
   const [seen, setSeen] = useState(value)
@@ -63,18 +62,14 @@ export function DateRange({ value, onApply, isDay, invalidText, help, fromName =
   }
   useEffect(() => {
     pending.current = null
-    window.clearTimeout(timer.current)
   }, [value.from, value.to])
-  useEffect(() => () => window.clearTimeout(timer.current), [])
 
   function change(nextFrom: string, nextTo: string) {
     setFrom(nextFrom)
     setTo(nextTo)
-    window.clearTimeout(timer.current)
     if (keyboard.current) {
       keyboard.current = false
       pending.current = { from: nextFrom, to: nextTo }
-      timer.current = window.setTimeout(flush, DATE_KEYBOARD_DELAY_MS)
       return
     }
     pending.current = null
@@ -82,7 +77,6 @@ export function DateRange({ value, onApply, isDay, invalidText, help, fromName =
   }
 
   function flush() {
-    window.clearTimeout(timer.current)
     const edit = pending.current
     pending.current = null
     if (edit !== null) apply(edit.from, edit.to)

@@ -202,6 +202,10 @@ test.describe('records: lot 3 tables, filters and dossiers', () => {
     await field.focus()
     // The headless browser orders the segments mm/dd/yyyy: the year comes last and reads 0002, 0020, 0202, then 2026.
     for (const key of '11102026') await page.keyboard.press(key, { delay: 30 })
+    // Nothing applies while the field is being typed; Enter validates it (§3.4).
+    await page.waitForTimeout(1000)
+    await expect(page).toHaveURL(/\/reservations-prets$/)
+    await page.keyboard.press('Enter')
     await expect(page).toHaveURL(/du=2026-11-10/)
     await page.waitForTimeout(300)
     const reads = requests.slice(before).filter((request) => request.includes('/admin/reservations?'))
@@ -216,14 +220,35 @@ test.describe('records: lot 3 tables, filters and dossiers', () => {
     const length = await page.evaluate(() => window.history.length)
     const field = page.getByRole('textbox', { name: 'Du (inclus)' })
     await field.focus()
-    // Month then day: the field passes through 2026-01-10, 2026-12-10, an empty day and 2026-12-05.
-    for (const key of '1205') await page.keyboard.press(key, { delay: 30 })
+    // Month then day, one key a second (QA #246, third review): the field passes through 2026-01-10, 2026-12-10, an
+    // empty day and 2026-12-05, and none of them applies while the field is being edited.
+    for (const key of '1205') {
+      await page.keyboard.press(key)
+      await page.waitForTimeout(1000)
+    }
+    await expect(page).toHaveURL(/du=2026-11-10/)
+    expect(requests.slice(before).filter((request) => request.includes('/admin/reservations?'))).toHaveLength(0)
+    // Enter validates the field (§3.4): one read, one history entry. (Tab first walks the field's own segments.)
+    await page.keyboard.press('Enter')
     await expect(page).toHaveURL(/du=2026-12-05/)
     await page.waitForTimeout(300)
     const reads = requests.slice(before).filter((request) => request.includes('/admin/reservations?'))
     expect(reads).toHaveLength(1)
     expect(reads[0]).toContain('from=2026-12-05')
     expect(await page.evaluate(() => window.history.length)).toBe(length + 1)
+    // Précédent restores the day the edit started from.
+    await page.goBack()
+    await expect(page).toHaveURL(/du=2026-11-10/)
+    await expect(field).toHaveValue('2026-11-10')
+    // Leaving the field validates it too.
+    await field.focus()
+    await page.keyboard.press('ArrowUp')
+    await page.waitForTimeout(1000)
+    await expect(page).toHaveURL(/du=2026-11-10/)
+    const edited = await field.inputValue()
+    expect(edited).not.toBe('2026-11-10')
+    await page.getByLabel('Statut').focus()
+    await expect(page).toHaveURL(new RegExp(`du=${edited}`))
   })
 
   test('the status list applies at once with the pointer, but only after a pause from the keyboard', async ({ page }) => {
@@ -399,8 +424,8 @@ test.describe('records: card rows beside the dossier from 1024 to 1279 px', () =
   })
 })
 
-test.describe('records: at 1024 x 768 the list keeps whole rows beside the dossier (QA #246 B3)', () => {
-  test.use({ viewport: { width: 1024, height: 768 } })
+for (const [width, height] of [[1024, 768], [1280, 720]] as const) test.describe(`records: at ${width} x ${height} the list keeps whole rows beside the dossier (QA #246 B3)`, () => {
+  test.use({ viewport: { width, height } })
 
   test('Réservations, Prêts, Opérations and Audit each show at least one whole row with a dossier open', async ({ page }) => {
     const loan = { id: '55555555-0000-4000-8000-000000000001', asset, holderUserId: USER_ID, holder: { id: USER_ID, displayName: 'Technicien Démo' }, status: 'ACTIVE', checkedOutAt: '2026-11-10T14:05:00Z', dueAt: '2026-11-10T20:30:00Z', overdue: true, returnRequestedAt: null, returnedAt: null, checkoutOperationId: OPERATION_ID, returnOperationId: null, currentOperationId: null, availableActions: [] }

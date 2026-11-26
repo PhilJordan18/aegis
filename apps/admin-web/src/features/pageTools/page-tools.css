@@ -38,9 +38,10 @@
   .ag-page__actions::after { content: ''; order: 1; flex-basis: 100%; height: 0; }
   .ag-page__actions > .ag-refresh > .ag-refresh__time, .ag-page__actions > .ag-refresh > .ag-chip { order: 2; }
 }
-@media (min-width: 1024px) and (max-width: 1279px) {
-  /* QA #246 B3 (§3.7): card rows beside the dossier need the height. The zone help reads once under both dates (each
-     field keeps its own for assistive technology), and the shortcuts follow on the same line. */
+@media (min-width: 1024px) {
+  /* QA #246 B3 (§3.7), and from 1280 px its third review: the rows beside the dossier need the height. The zone help
+     reads once under both dates (each field keeps its own for assistive technology), and the shortcuts follow on the
+     same line. */
   .ag-ff:has(> input[type='date']) > .ag-ff__help { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .ag-date-help { display: block; grid-column: 1 / -1; margin: 0; align-self: center; font-size: var(--ag-type-small-size); line-height: 1.4; color: var(--ag-text-2); }
   .ag-page > .ag-page__head { flex-wrap: nowrap; }
