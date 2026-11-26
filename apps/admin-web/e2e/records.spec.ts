@@ -34,6 +34,36 @@ const reservation = (index: number) => ({
   currentOperationId: null,
   availableActions: [],
 })
+/** An operation whose long status label (« Commande transmise ») once spilled out of its cell (QA #246 item 7). */
+const OPERATION = {
+  id: OPERATION_ID,
+  type: 'CHECKOUT',
+  status: 'COMMAND_SENT',
+  userId: USER_ID,
+  user: { id: USER_ID, displayName: 'Technicien Démo' },
+  assetId: ASSET_ID,
+  asset,
+  lockerId: LOCKER_ID,
+  compartmentId: A1_ID,
+  reservationId: null,
+  loanId: null,
+  createdAt: '2026-11-10T14:01:00Z',
+  authorizedAt: '2026-11-10T14:01:30Z',
+  localAccessChallengeId: null,
+  localProofExpiresAt: null,
+  localProofDisplayedAt: null,
+  localProofValidatedAt: null,
+  requiredAction: 'NONE',
+  expiresAt: null,
+  commandSentAt: '2026-11-10T14:01:31Z',
+  acknowledgedAt: null,
+  doorOpenedAt: null,
+  observationReceivedAt: null,
+  confirmedAt: null,
+  terminalAt: null,
+  failureReason: null,
+  anomalyId: null,
+}
 const EVENT = {
   id: 'eeeeeeee-0000-4000-8000-000000000001',
   eventType: 'COMMAND_ACKNOWLEDGED',
@@ -91,7 +121,9 @@ async function routeApi(page: Page): Promise<string[]> {
     // Two rows of a collection of 143 (§3.8 criterion 3); an active filter narrows it to the two.
     if (p === '/admin/reservations') return json(route, pageOf([reservation(1), reservation(2)], size, url.searchParams.get('status') === null ? 143 : 2))
     if (p.startsWith('/admin/reservations/')) return json(route, reservation(Number(p.slice(-1))))
-    if (p === '/admin/loans' || p === '/admin/locker-operations' || p === '/admin/anomalies') return json(route, pageOf([], size))
+    if (p === '/admin/locker-operations') return json(route, pageOf([OPERATION], size))
+    if (p.startsWith('/admin/locker-operations/')) return json(route, OPERATION)
+    if (p === '/admin/loans' || p === '/admin/anomalies') return json(route, pageOf([], size))
     if (p === '/admin/audit-events') return json(route, { items: [EVENT], nextCursor: null, hasMore: false })
     if (p === '/admin/lockers') return json(route, pageOf([LOCKER], size))
     if (p === '/admin/assets') return json(route, pageOf([UNIT], size))
@@ -116,8 +148,9 @@ const go = (page: Page, url: string) =>
     window.dispatchEvent(new PopStateEvent('popstate'))
   }, url)
 
-const table = (page: Page) => page.locator('table.ag-list__items')
-const rowLinks = (page: Page) => table(page).locator('tbody a')
+const table = (page: Page) => page.locator('table.ag-tbl')
+/** One link per record: in the table from 1280 px, the card row itself below. */
+const rowLinks = (page: Page) => page.locator('.ag-list .ag-list__items a')
 
 async function openReservations(page: Page, url = '/reservations-prets') {
   const requests = await routeApi(page)
@@ -173,7 +206,7 @@ test.describe('records: lot 3 tables, filters and dossiers', () => {
     const requests = await routeApi(page)
     await signIn(page)
     await go(page, '/audit')
-    await expect(table(page).locator('tbody a')).toHaveCount(1)
+    await expect(rowLinks(page)).toHaveCount(1)
     await page.locator('summary', { hasText: 'Filtres' }).click()
     const before = requests.length
     await page.getByLabel("Identifiant d'opération").fill('not-a-uuid')
@@ -190,6 +223,70 @@ test.describe('records: lot 3 tables, filters and dossiers', () => {
     await expect(actions.locator('a, button')).toHaveText(['Modifier l’horaire', 'Voir les opérations de ce casier'])
     await expect(page.locator('.ag-callout')).toContainText("Cette lecture n'autorise aucune ouverture.")
     await expect(page.getByRole('heading', { level: 3, name: /^0 erreur signalée/ })).toBeVisible()
+  })
+})
+
+/** Each header sits over its column, and no column is narrower than Design §8.2 allows. */
+async function expectAlignedColumns(page: Page) {
+  const geometry = await table(page).evaluate((element) => {
+    const box = (cell: Element) => cell.getBoundingClientRect()
+    const heads = [...element.querySelectorAll('thead th')].map((cell) => ({ key: cell.className, left: box(cell).left, width: box(cell).width, content: box(cell).width - parseFloat(getComputedStyle(cell).paddingLeft) - parseFloat(getComputedStyle(cell).paddingRight) }))
+    const row = element.querySelector('tbody tr.ag-tbl__row')
+    const cells = [...(row?.querySelectorAll('td') ?? [])].map((cell) => ({ left: box(cell).left, width: box(cell).width }))
+    const wrap = element.parentElement as HTMLElement
+    // A chip never spills out of its cell (QA #246 item 7).
+    const spill = [...element.querySelectorAll('td .ag-chip')].map((chip) => box(chip).right - box(chip.closest('td') as Element).right)
+    return { heads, cells, overflow: wrap.scrollWidth - wrap.clientWidth, spill: Math.max(0, ...spill) }
+  })
+  expect(geometry.cells).toHaveLength(geometry.heads.length)
+  geometry.heads.forEach((head, index) => {
+    expect(Math.abs(head.left - geometry.cells[index]!.left)).toBeLessThan(1)
+    expect(Math.abs(head.width - geometry.cells[index]!.width)).toBeLessThan(1)
+    // Design §8.2: no column under 96 px, Statut with 120 px for its chips.
+    if (head.key.includes('status')) expect(head.content).toBeGreaterThanOrEqual(120)
+    else expect(head.width).toBeGreaterThanOrEqual(96)
+  })
+  expect(geometry.overflow).toBeLessThanOrEqual(0)
+  expect(geometry.spill).toBeLessThanOrEqual(0)
+}
+
+for (const [width, headers] of [
+  [1440, ['Statut', 'Équipement', 'Titulaire', 'Période']],
+  [1280, ['Statut', 'Équipement', 'Période']],
+] as const) {
+  test.describe(`records: the table at ${width} px`, () => {
+    test.use({ viewport: { width, height: 900 } })
+
+    test(`headers line up with their cells and keep their minimum width at ${width} px`, async ({ page }) => {
+      await openReservations(page, `/reservations-prets?dossier=${reservation(1).id}`)
+      await expect(table(page).locator('thead th')).toHaveText([...headers])
+      await expectAlignedColumns(page)
+      await go(page, '/audit')
+      await expect(rowLinks(page)).toHaveCount(1)
+      await expectAlignedColumns(page)
+      const panels = await page.locator('.ag-eq > .ag-panel').evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().width))
+      expect(panels.at(-1)).toBeCloseTo(480, 0)
+    })
+  })
+}
+
+test.describe('records: card rows beside the dossier from 1024 to 1279 px', () => {
+  test.use({ viewport: { width: 1100, height: 800 } })
+
+  test('the list is card rows on the left, the dossier on the right, and no table', async ({ page }) => {
+    await openReservations(page, `/reservations-prets?dossier=${reservation(1).id}`)
+    await expect(page.locator('table')).toHaveCount(0)
+    await expect(rowLinks(page).first()).toHaveClass(/ag-item/)
+    const [list, dossier] = await page.locator('.ag-eq > .ag-panel').evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().toJSON() as DOMRect))
+    expect(list!.width).toBeGreaterThanOrEqual(320)
+    expect(list!.width).toBeLessThanOrEqual(380)
+    expect(dossier!.left).toBeGreaterThan(list!.right)
+    expect(dossier!.top).toBeCloseTo(list!.top, 0)
+    await rowLinks(page).nth(1).click()
+    await expect(rowLinks(page).nth(1)).toBeFocused()
+    await go(page, '/audit')
+    await expect(page.locator('table')).toHaveCount(0)
+    await expect(rowLinks(page)).toHaveCount(1)
   })
 })
 
@@ -211,8 +308,13 @@ for (const width of [1440, 1280, 1024, 390, 320]) {
       await openReservations(page)
       await expectNoHorizontalScroll(page)
       await expectNoAxeViolations(page)
+      await go(page, '/reservations-prets?vue=operations')
+      await expect(rowLinks(page)).toHaveCount(1)
+      await expectNoHorizontalScroll(page)
+      const spill = await page.locator('.ag-list .ag-chip').evaluateAll((chips) => Math.max(0, ...chips.map((chip) => chip.getBoundingClientRect().right - (chip.closest('td, a') as Element).getBoundingClientRect().right)))
+      expect(spill).toBeLessThanOrEqual(0)
       await go(page, '/audit')
-      await expect(table(page).locator('tbody a')).toHaveCount(1)
+      await expect(rowLinks(page)).toHaveCount(1)
       await expectNoHorizontalScroll(page)
       await expectNoAxeViolations(page)
       await go(page, '/casiers')

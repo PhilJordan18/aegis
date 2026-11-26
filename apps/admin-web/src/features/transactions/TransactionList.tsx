@@ -6,6 +6,7 @@ import { StatusChip } from '../../ui/StatusChip'
 import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
 import { StaleNotice } from '../catalog/StaleNotice'
 import '../pageTools/data-table.css'
+import { useRecordsLayout, type RecordsLayout } from '../pageTools/useRecordsLayout'
 import { CellName } from '../labels/Labels'
 import { useLabelIndex } from '../labels/useLabelIndex'
 import { TransactionAlert } from './TransactionAlert'
@@ -41,6 +42,7 @@ export function TransactionList({ view, page, selectedId, filters, filtered, loa
   const { m } = i18n
   const t = m.reservations
   const titleId = useId()
+  const layout = useRecordsLayout()
   const times = transactionTimes(i18n)
   const items = page?.items ?? []
   const read = times.readAt(readAt)
@@ -88,7 +90,12 @@ export function TransactionList({ view, page, selectedId, filters, filtered, loa
         </div>
       )}
 
-      {items.length > 0 && <Table view={view} records={shown} selectedId={selectedId} page={page?.page ?? 0} filters={filters} times={times} i18n={i18n} onSelect={onSelect} />}
+      {items.length > 0 &&
+        (layout === 'cards' ? (
+          <Cards records={shown} selectedId={selectedId} page={page?.page ?? 0} filters={filters} times={times} i18n={i18n} onSelect={onSelect} />
+        ) : (
+          <Table view={view} layout={layout} records={shown} selectedId={selectedId} page={page?.page ?? 0} filters={filters} times={times} i18n={i18n} onSelect={onSelect} />
+        ))}
 
       {page !== undefined && page.totalPages > 1 && <Pager page={page} onPage={onPage} />}
       {page !== undefined && items.length > 0 && (
@@ -111,6 +118,7 @@ function collectionTitle(view: TransactionView, page: TransactionRecordPage, i18
 
 interface TableProps {
   readonly view: TransactionView
+  readonly layout: Exclude<RecordsLayout, 'cards'>
   readonly records: readonly TransactionRecord[]
   readonly selectedId: string | null
   readonly page: number
@@ -120,90 +128,114 @@ interface TableProps {
   readonly onSelect: TransactionListProps['onSelect']
 }
 
-type Column = { readonly key: string; readonly label: string; readonly secondary?: boolean }
+type ColumnKey = 'status' | 'asset' | 'person' | 'period' | 'checkout' | 'due' | 'operation' | 'cell' | 'created'
+
+/** Design §8.2: the columns per tab, full from 1440 px, reduced from 1280 px; below, card rows carry the reduced set. */
+const COLUMNS: Record<TransactionView, Record<Exclude<RecordsLayout, 'cards'>, readonly ColumnKey[]>> = {
+  reservations: { wide: ['status', 'asset', 'person', 'period'], table: ['status', 'asset', 'period'] },
+  loans: { wide: ['status', 'asset', 'person', 'checkout', 'due'], table: ['status', 'asset', 'due'] },
+  operations: { wide: ['status', 'operation', 'person', 'cell', 'created'], table: ['status', 'operation', 'created'] },
+}
+
+function columnLabel(key: ColumnKey, i18n: I18n): string {
+  const t = i18n.m.reservations
+  return { status: t.colStatus, asset: t.colAsset, person: t.colHolder, period: t.colPeriod, checkout: t.colCheckout, due: t.colDue, operation: t.colOperation, cell: t.colCell, created: t.colCreated }[key]
+}
 
 /**
- * Réservations, Prêts and Opérations as one table each (contrat-web-manager §3.3), fixed columns and no column sort:
- * the server orders the rows. The equipment cell holds the row's link; the rest of the row follows it on click. Under
- * 1024 px the CSS turns each row into a labelled block (`data-label`).
+ * Réservations, Prêts and Opérations as one table each (Design §8.2), fixed layout and no column sort: the server
+ * orders the rows. The equipment or operation cell holds the row's link; the rest of the row follows it on click.
  */
-function Table({ view, records, selectedId, page, filters, times, i18n, onSelect }: TableProps) {
+function Table({ view, layout, records, selectedId, page, filters, times, i18n, onSelect }: TableProps) {
   const t = i18n.m.reservations
   const labels = useLabelIndex()
-  const columns: readonly Column[] = {
-    reservations: [
-      { key: 'status', label: t.colStatus },
-      { key: 'asset', label: t.colAsset },
-      { key: 'person', label: t.colHolder },
-      { key: 'period', label: t.colPeriod },
-      { key: 'attempt', label: t.colAttempt, secondary: true },
-    ],
-    loans: [
-      { key: 'status', label: t.colStatus },
-      { key: 'asset', label: t.colAsset },
-      { key: 'person', label: t.colHolder },
-      { key: 'checkout', label: t.colCheckout },
-      { key: 'due', label: t.colDue },
-    ],
-    operations: [
-      { key: 'status', label: t.colStatus },
-      { key: 'type', label: t.colType },
-      { key: 'asset', label: t.colAsset },
-      { key: 'person', label: t.colUser },
-      { key: 'cell', label: t.colCell },
-      { key: 'created', label: t.colCreated, secondary: true },
-    ],
-  }[view]
+  const columns = COLUMNS[view][layout]
+  const label = (key: ColumnKey) => (key === 'person' && view === 'operations' ? t.colUser : columnLabel(key, i18n))
   const caption = { reservations: t.tabReservations, loans: t.tabLoans, operations: t.tabOperations }[view]
 
   return (
-    <table className="ag-list__items ag-tbl">
-      <caption className="ag-sr-only">{caption}</caption>
-      <thead>
-        <tr>
-          {columns.map((column) => (
-            <th key={column.key} scope="col" className={column.secondary ? 'ag-tbl__secondary' : undefined}>
-              {column.label}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {records.map((record) => {
-          const selected = record.item.id === selectedId
-          const href = transactionHref({ view: record.kind, page, selectedId: record.item.id, filters })
-          const cells = cellsOf(record, { href, selected, times, i18n, onSelect, cell: (id) => <CellName compartmentId={id} label={labels.compartment(id)} /> })
-          return (
-            <tr
-              key={record.item.id}
-              className="ag-tbl__row"
-              aria-current={selected ? 'true' : undefined}
-              onClick={(event) => {
-                // The link answers its own clicks; elsewhere the row follows it, a modified click opening a new tab.
-                if ((event.target as HTMLElement).closest('a') !== null) return
-                const link = event.currentTarget.querySelector<HTMLAnchorElement>('a.ag-tbl__link')
-                if (link === null) return
-                if (event.metaKey || event.ctrlKey || event.shiftKey) window.open(link.href, '_blank', 'noopener')
-                else {
-                  link.focus()
-                  link.click()
-                }
-              }}
-            >
-              {columns.map((column) => (
-                <td key={column.key} data-label={column.label} className={column.secondary ? 'ag-tbl__secondary' : undefined}>
-                  {cells[column.key]}
-                </td>
-              ))}
-            </tr>
+    <div className="ag-list__items ag-tbl-wrap">
+      <table className="ag-tbl">
+        <caption className="ag-sr-only">{caption}</caption>
+        <thead>
+          <tr>
+            {columns.map((key) => (
+              <th key={key} scope="col" className={`ag-tbl__col--${key}`}>
+                {label(key)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {records.map((record) => {
+            const selected = record.item.id === selectedId
+            const href = transactionHref({ view: record.kind, page, selectedId: record.item.id, filters })
+            const cells = cellsOf(record, { layout, href, selected, times, i18n, onSelect, cell: (id) => <CellName compartmentId={id} label={labels.compartment(id)} /> })
+            return (
+              <tr
+                key={record.item.id}
+                className="ag-tbl__row"
+                aria-current={selected ? 'true' : undefined}
+                onClick={(event) => {
+                  // The link answers its own clicks; elsewhere the row follows it, a modified click opening a new tab.
+                  if ((event.target as HTMLElement).closest('a') !== null) return
+                  const link = event.currentTarget.querySelector<HTMLAnchorElement>('a.ag-tbl__link')
+                  if (link === null) return
+                  if (event.metaKey || event.ctrlKey || event.shiftKey) window.open(link.href, '_blank', 'noopener')
+                  else {
+                    link.focus()
+                    link.click()
+                  }
+                }}
+              >
+                {columns.map((key) => (
+                  <td key={key}>{cells[key]}</td>
+                ))}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/** Below 1280 px (Design §8.3): one card row per record, the reduced column set as chips, name and one facts line. */
+function Cards({ records, selectedId, page, filters, times, i18n, onSelect }: Omit<TableProps, 'layout' | 'view'>) {
+  return (
+    <ul className="ag-list__items">
+      {records.map((record) => {
+        const selected = record.item.id === selectedId
+        const href = transactionHref({ view: record.kind, page, selectedId: record.item.id, filters })
+        const asset = record.item.asset
+        const name =
+          record.kind === 'operations' ? (
+            <span className="ag-item__name">
+              <span>{operationTypeLabel(record.item.type, i18n)}</span>
+              <span className="ag-item__code">{asset.assetCode}</span>
+            </span>
+          ) : (
+            <span className="ag-item__name">
+              <span>{asset.model.name}</span>
+              <span className="ag-item__code">{asset.assetCode}</span>
+            </span>
           )
-        })}
-      </tbody>
-    </table>
+        return (
+          <li key={record.item.id}>
+            <Link className="ag-item" to={href} aria-current={selected ? 'true' : undefined} onClick={(event) => onSelect(record, event)}>
+              {chipList(statusChips(record, i18n))}
+              {name}
+              <span className="ag-item__facts">{factsOf(record, times, i18n)}</span>
+            </Link>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 
 interface CellContext {
+  readonly layout: Exclude<RecordsLayout, 'cards'>
   readonly href: string
   readonly selected: boolean
   readonly times: TransactionTimes
@@ -212,7 +244,9 @@ interface CellContext {
   readonly cell: (compartmentId: string) => ReactNode
 }
 
-function chipList(chips: readonly { role: Parameters<typeof StatusChip>[0]['role']; icon: Parameters<typeof StatusChip>[0]['icon']; label: string }[]) {
+type Chip = { role: Parameters<typeof StatusChip>[0]['role']; icon: Parameters<typeof StatusChip>[0]['icon']; label: string }
+
+function chipList(chips: readonly Chip[]) {
   return (
     <span className="ag-item__chips">
       {chips.map((chip) => (
@@ -224,7 +258,37 @@ function chipList(chips: readonly { role: Parameters<typeof StatusChip>[0]['role
   )
 }
 
-function cellsOf(record: TransactionRecord, { href, selected, times, i18n, onSelect, cell }: CellContext): Record<string, ReactNode> {
+/** The status chips; Design §8.2 puts « Opération en cours » as a second chip, and « En retard » under the status. */
+function statusChips(record: TransactionRecord, i18n: I18n): Chip[] {
+  switch (record.kind) {
+    case 'reservations':
+      return record.item.currentOperationId === null ? [reservationChip(record.item.status, i18n)] : [reservationChip(record.item.status, i18n), { role: 'progress', icon: 'status-clock', label: i18n.m.reservations.attemptCurrent }]
+    case 'loans':
+      return isShownOverdue(record.item) ? [loanChip(record.item.status, i18n), lateChip(i18n)] : [loanChip(record.item.status, i18n)]
+    case 'operations':
+      return [operationChip(record.item.status, i18n)]
+  }
+}
+
+function dueText(item: Extract<TransactionRecord, { kind: 'loans' }>['item'], times: TransactionTimes, i18n: I18n): ReactNode {
+  const t = i18n.m.reservations
+  const overdue = isShownOverdue(item)
+  return <span className={overdue ? 'ag-item__facts--late' : undefined}>{item.returnedAt !== null ? t.returnedOn({ time: times.short(item.returnedAt) }) : overdue ? t.lateSince({ time: times.short(item.dueAt) }) : t.dueAt({ time: times.short(item.dueAt) })}</span>
+}
+
+function factsOf(record: TransactionRecord, times: TransactionTimes, i18n: I18n): ReactNode {
+  const t = i18n.m.reservations
+  switch (record.kind) {
+    case 'reservations':
+      return t.fromTo({ from: times.short(record.item.reservedFrom), to: times.clock(record.item.reservedUntil) })
+    case 'loans':
+      return dueText(record.item, times, i18n)
+    case 'operations':
+      return `${t.colCreated} ${times.short(record.item.createdAt)}`
+  }
+}
+
+function cellsOf(record: TransactionRecord, { layout, href, selected, times, i18n, onSelect, cell }: CellContext): Partial<Record<ColumnKey, ReactNode>> {
   const t = i18n.m.reservations
   const asset = record.item.asset
   const link = (
@@ -235,34 +299,41 @@ function cellsOf(record: TransactionRecord, { href, selected, times, i18n, onSel
   )
   const person = record.kind === 'loans' ? record.item.holder : record.item.user
   const personText = person === null ? t.holderUnnamed : person.displayName
+  const status = <span className="ag-tbl__status">{chipList(statusChips(record, i18n))}</span>
   switch (record.kind) {
     case 'reservations': {
       const { item } = record
       return {
-        status: chipList([reservationChip(item.status, i18n)]),
+        status,
         asset: link,
         person: personText,
-        period: t.fromTo({ from: times.short(item.reservedFrom), to: times.clock(item.reservedUntil) }),
-        attempt: item.currentOperationId === null ? t.attemptNone : t.attemptCurrent,
+        period:
+          layout === 'wide' ? (
+            t.fromTo({ from: times.short(item.reservedFrom), to: times.clock(item.reservedUntil) })
+          ) : (
+            <span className="ag-tbl__lines">
+              <span>{t.periodFrom({ time: times.short(item.reservedFrom) })}</span>
+              <span>{t.periodTo({ time: times.clock(item.reservedUntil) })}</span>
+            </span>
+          ),
       }
     }
     case 'loans': {
       const { item } = record
-      const overdue = isShownOverdue(item)
-      return {
-        status: chipList(overdue ? [loanChip(item.status, i18n), lateChip(i18n)] : [loanChip(item.status, i18n)]),
-        asset: link,
-        person: personText,
-        checkout: times.short(item.checkedOutAt),
-        due: <span className={overdue ? 'ag-item__facts--late' : undefined}>{item.returnedAt !== null ? t.returnedOn({ time: times.short(item.returnedAt) }) : overdue ? t.lateSince({ time: times.short(item.dueAt) }) : t.dueAt({ time: times.short(item.dueAt) })}</span>,
-      }
+      return { status, asset: link, person: personText, checkout: times.short(item.checkedOutAt), due: dueText(item, times, i18n) }
     }
     case 'operations': {
       const { item } = record
       return {
-        status: chipList([operationChip(item.status, i18n)]),
-        type: operationTypeLabel(item.type, i18n),
-        asset: link,
+        status,
+        // Design §8.2: type and equipment on one line, the link of the row.
+        operation: (
+          <Link className="ag-tbl__link ag-tbl__link--line" to={href} aria-current={selected ? 'true' : undefined} onClick={(event) => onSelect(record, event)}>
+            <span>{operationTypeLabel(item.type, i18n)}</span>
+            {' · '}
+            <span className="ag-tbl__code">{asset.assetCode}</span>
+          </Link>
+        ),
         person: personText,
         cell: cell(item.compartmentId),
         created: times.short(item.createdAt),

@@ -25,11 +25,12 @@ import { refreshLabelIndex, useLabelIndex } from '../features/labels/useLabelInd
 import { useI18n } from '../i18n/useI18n'
 import '../app/page.css'
 import '../features/catalog/equipment.css'
+import { useRecordsLayout } from '../features/pageTools/useRecordsLayout'
 import '../features/transactions/transactions.css'
 
-/** The dossier sits under the table below 1280 px, out of sight after a selection (contrat-web-manager §3.3). */
+/** The dossier sits under the card rows below 1024 px, out of sight after a selection (Design §8.3). */
 function isStackedLayout(): boolean {
-  return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1279px)').matches
+  return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches
 }
 
 function revealDossier(target: HTMLElement | null) {
@@ -55,6 +56,8 @@ function recordName(record: TransactionRecord, i18n: ReturnType<typeof useI18n>)
  */
 export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProfile: UserProfile }) {
   const i18n = useI18n()
+  // Design §8.3: card rows beside the dossier from 1024 px, the table beside a 480 px dossier from 1280 px.
+  const layout = useRecordsLayout()
   const { m } = i18n
   const t = m.reservations
   const labels = useLabelIndex()
@@ -193,7 +196,7 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
           onApply={apply}
         />
 
-        <div className={showDossier ? 'ag-eq ag-eq--table' : 'ag-eq ag-eq--table ag-eq--single'}>
+        <div className={`ag-eq${layout === 'cards' ? '' : ' ag-eq--table'}${showDossier ? '' : ' ag-eq--single'}`}>
           <TransactionList
             view={view}
             page={shownPage}

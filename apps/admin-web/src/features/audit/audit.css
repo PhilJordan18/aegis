@@ -81,7 +81,10 @@
 .ag-au-table .ag-au-ev__time { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ag-au-table .ag-au-ev__name { font-weight: 600; }
 .ag-au-table td .ag-chip { margin-top: 4px; }
-@media (max-width: 1023px) {
-  .ag-au-table .ag-au-dayrow { padding: 12px 16px 0; border-bottom: 0; }
-  .ag-au-table .ag-au-dayrow th { display: block; padding: 0; }
-}
+
+/* Design §8.3: below 1280 px, card rows under each laboratory day. */
+.ag-au-cards { gap: 0; }
+.ag-au-cards > section:first-child .ag-au-day { margin-top: 4px; }
+.ag-au-cards__list { display: grid; gap: 6px; }
+.ag-au-card .ag-item__name { margin-top: 0; }
+.ag-au-card .ag-item__chips + .ag-item__name { margin-top: 8px; }

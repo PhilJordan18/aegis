@@ -1,42 +1,36 @@
 /*
- * Tables of the custody pages and Audit (contrat-web-manager §3.3, §3.7). Fixed columns, no sort, codes and names
- * wrap rather than truncate. Secondary columns move into the dossier below 1440 px; below 1024 px each row becomes a
- * labelled block (`data-label`), the headers stay for assistive technology only.
+ * Tables of the custody pages and Audit (Design §8.2), shown from 1280 px only; below, card rows take over (§8.3).
+ * Fixed layout inside the panel, never a horizontal scroll: names wrap at word boundaries, codes never break inside.
+ * The table sits in its own scrolling box (`.ag-tbl-wrap`) and never carries the grid of `.ag-list__items`.
  */
-.ag-tbl { display: table; width: 100%; border-collapse: collapse; font-size: 0.875rem; padding: 0; }
-.ag-tbl th, .ag-tbl td { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--ag-separator); overflow-wrap: anywhere; min-width: 96px; }
-.ag-tbl thead th { font-size: var(--ag-type-caption-size); font-weight: 500; color: var(--ag-text-2); white-space: nowrap; }
+.ag-list__items.ag-tbl-wrap { display: block; padding: 0 0 10px; }
+.ag-tbl { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 0.875rem; }
+.ag-tbl th, .ag-tbl td { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--ag-separator); overflow-wrap: break-word; }
+.ag-tbl thead th { font-size: var(--ag-type-caption-size); font-weight: 500; color: var(--ag-text-2); }
 .ag-tbl th:first-child, .ag-tbl td:first-child { padding-left: 20px; }
 .ag-tbl th:last-child, .ag-tbl td:last-child { padding-right: 20px; }
+/* Statut keeps 120 px of content; Heure and the other columns at least 96 px wide (Design §8.2). */
+.ag-tbl .ag-tbl__col--status { width: 152px; }
+.ag-tbl .ag-tbl__col--time { width: 128px; }
 .ag-tbl__row { cursor: pointer; }
 .ag-tbl__row:hover { background: var(--ag-field); }
 .ag-tbl__row[aria-current='true'] { background: var(--ag-surface-selected); box-shadow: inset 3px 0 0 var(--ag-accent, currentColor); }
 .ag-tbl__link { display: grid; gap: 2px; color: inherit; text-decoration: none; }
+.ag-tbl__link--line { display: inline; }
 .ag-tbl__link:hover .ag-tbl__code, .ag-tbl__link:focus-visible .ag-tbl__code { text-decoration: underline; }
-.ag-tbl__code { font-weight: 600; font-variant-numeric: tabular-nums; }
+.ag-tbl__code { font-weight: 600; font-variant-numeric: tabular-nums; word-break: normal; overflow-wrap: normal; white-space: nowrap; }
 .ag-tbl__sub { color: var(--ag-text-2); }
-.ag-tbl .ag-item__chips { flex-wrap: wrap; }
+.ag-tbl__lines { display: grid; }
+/* A second chip (« Opération en cours », « En retard ») goes under the status chip. */
+.ag-tbl .ag-item__chips { flex-direction: column; align-items: flex-start; }
+.ag-tbl .ag-item__chips .ag-chip { max-width: 100%; }
 .ag-tbl .ag-item__facts--late { color: var(--ag-unknown-fg, inherit); font-weight: 600; }
-.ag-panel.ag-list:has(.ag-tbl) { overflow: auto; }
+.ag-item__facts .ag-item__facts--late { color: var(--ag-unknown-fg, inherit); font-weight: 600; }
 
-/* The list and its dossier: dossier at 480 px on the right from 1280 px, under the table below. */
+/* The list and its dossier: dossier at 480 px on the right of the table from 1280 px. */
 .ag-eq.ag-eq--table { grid-template-columns: minmax(0, 1fr) 480px; }
 .ag-eq.ag-eq--table.ag-eq--single { grid-template-columns: minmax(0, 1fr); }
 
-@media (max-width: 1439px) {
-  .ag-tbl .ag-tbl__secondary { display: none; }
-}
-@media (max-width: 1279px) {
-  .ag-eq.ag-eq--table { grid-template-columns: minmax(0, 1fr); }
-}
-@media (max-width: 1023px) {
-  .ag-tbl, .ag-tbl tbody, .ag-tbl tr, .ag-tbl td { display: block; }
-  .ag-tbl thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .ag-tbl tr { padding: 12px 16px; border-bottom: 1px solid var(--ag-separator); }
-  .ag-tbl td, .ag-tbl td:first-child, .ag-tbl td:last-child { display: grid; grid-template-columns: minmax(96px, 34%) minmax(0, 1fr); gap: 12px; padding: 4px 0; border: 0; min-width: 0; }
-  .ag-tbl td::before { content: attr(data-label); color: var(--ag-text-2); font-size: var(--ag-type-caption-size); font-weight: 500; }
-  .ag-tbl .ag-tbl__secondary { display: grid; }
-}
 @media (forced-colors: active) {
   .ag-tbl__row[aria-current='true'] { outline: 2px solid Highlight; outline-offset: -2px; }
 }
@@ -49,3 +43,6 @@
 @media (forced-colors: active) {
   .ag-list[aria-busy='true'] .ag-list__items { opacity: 1; }
 }
+
+/* In a 120 px Statut column a long label (« Commande transmise ») wraps inside its chip rather than spill out. */
+.ag-tbl td .ag-chip { white-space: normal; border-radius: 12px; }

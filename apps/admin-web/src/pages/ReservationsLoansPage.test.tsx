@@ -105,7 +105,23 @@ function renderPage(transactionGateway: TransactionGateway, { url = '/reservatio
   return renderWithProviders(<App />, { gateway: authGateway, transactionGateway, catalogGateway: catalog, custodyGateway: lockersWithOperationCell(), session, queryClient, locale })
 }
 
-const rows = () => [...(document.querySelector('.ag-list__items tbody') as HTMLElement).querySelectorAll<HTMLElement>('tr')]
+/** Table rows from 1280 px; card rows (their links) below, under a stubbed `matchMedia`. */
+const rows = (): HTMLElement[] => {
+  const body = document.querySelector<HTMLElement>('.ag-list__items tbody')
+  return body !== null ? [...body.querySelectorAll<HTMLElement>('tr')] : [...document.querySelectorAll<HTMLElement>('ul.ag-list__items > li > a')]
+}
+
+/** `matchMedia` answering each query by its max-width against a given viewport width. */
+function installViewport(width: number) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (query: string) => {
+      const max = /max-width:\s*(\d+)px/.exec(query)
+      return { matches: max !== null && width <= Number(max[1]), media: query, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, onchange: null, dispatchEvent: () => true }
+    },
+  })
+}
 const rowLink = (index: number) => (rows()[index] as HTMLElement).querySelector('a') as HTMLAnchorElement
 const dossier = () => document.querySelector('.ag-dossier__scroll') as HTMLElement
 
@@ -335,13 +351,16 @@ describe('Réservations et prêts: filters', () => {
 describe('Réservations et prêts: tables (contract §3.3)', () => {
   const headers = () => [...document.querySelectorAll('.ag-list__items thead th')].map((cell) => cell.textContent)
 
-  it('gives each tab its fixed columns, a hidden caption and no sort control', async () => {
+  it('gives each tab its full columns from 1440 px, a hidden caption, no sort control and no labelled cell', async () => {
     renderPage(fakeGateway())
     await screen.findByRole('heading', { level: 2, name: '2 réservations' })
-    expect(headers()).toEqual(['Statut', 'Équipement', 'Titulaire', 'Période', 'Dernière tentative'])
+    expect(headers()).toEqual(['Statut', 'Équipement', 'Titulaire', 'Période'])
     expect(document.querySelector('.ag-list__items caption')?.className).toBe('ag-sr-only')
     expect([...document.querySelectorAll('.ag-list__items th')].every((cell) => cell.getAttribute('scope') === 'col')).toBe(true)
     expect(document.querySelector('.ag-list__items [aria-sort], .ag-list__items thead button')).toBeNull()
+    // Design §8.3: the labelled blocks are withdrawn; the table never carries the list grid class.
+    expect(document.querySelector('.ag-list__items [data-label]')).toBeNull()
+    expect(document.querySelector('table.ag-list__items')).toBeNull()
     cleanup()
     renderPage(fakeGateway(), { url: '/reservations-prets?vue=prets' })
     await screen.findByRole('heading', { level: 2, name: '2 prêts' })
@@ -349,9 +368,47 @@ describe('Réservations et prêts: tables (contract §3.3)', () => {
     cleanup()
     renderPage(fakeGateway({ operations: ok(pageOf([operation()])) }), { url: '/reservations-prets?vue=operations' })
     await screen.findByRole('heading', { level: 2, name: '1 opération' })
-    expect(headers()).toEqual(['Statut', 'Type', 'Équipement', 'Utilisateur', 'Cellule', 'Créée'])
-    // Each cell carries its header for the labelled blocks under 1024 px.
-    expect([...rows()[0]!.querySelectorAll('td')].map((cell) => cell.getAttribute('data-label'))).toEqual(headers())
+    expect(headers()).toEqual(['Statut', 'Opération', 'Utilisateur', 'Cellule', 'Créée'])
+  })
+
+  it('keeps the reduced columns from 1280 to 1439 px, the period on two lines', async () => {
+    installViewport(1300)
+    try {
+      renderPage(fakeGateway())
+      await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+      expect(headers()).toEqual(['Statut', 'Équipement', 'Période'])
+      expect([...(rows()[0]!.querySelector('.ag-tbl__lines')?.children ?? [])].map((line) => plain(line.textContent))).toEqual([expect.stringMatching(/^du /), expect.stringMatching(/^au /)])
+      cleanup()
+      renderPage(fakeGateway(), { url: '/reservations-prets?vue=prets' })
+      await screen.findByRole('heading', { level: 2, name: '2 prêts' })
+      expect(headers()).toEqual(['Statut', 'Équipement', 'Retour prévu ou effectif'])
+      cleanup()
+      renderPage(fakeGateway({ operations: ok(pageOf([operation()])) }), { url: '/reservations-prets?vue=operations' })
+      await screen.findByRole('heading', { level: 2, name: '1 opération' })
+      expect(headers()).toEqual(['Statut', 'Opération', 'Créée'])
+    } finally {
+      Reflect.deleteProperty(window, 'matchMedia')
+    }
+  })
+
+  it('shows card rows below 1280 px, with no table', async () => {
+    installViewport(1100)
+    try {
+      renderPage(fakeGateway())
+      await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+      expect(document.querySelector('table')).toBeNull()
+      expect(rows()).toHaveLength(2)
+      expect(rows()[0]?.className).toBe('ag-item')
+      expect(plain(rows()[0]?.textContent)).toContain('MM-001')
+    } finally {
+      Reflect.deleteProperty(window, 'matchMedia')
+    }
+  })
+
+  it('puts « Opération en cours » as a second chip of the status cell when an operation is current', async () => {
+    renderPage(fakeGateway({ reservations: ok(pageOf([reservation({ currentOperationId: OPERATION_ID })])) }))
+    await screen.findByRole('heading', { level: 2, name: '1 réservation' })
+    expect([...rows()[0]!.querySelectorAll('td:first-child .ag-chip')].map((chip) => plain(chip.textContent))).toEqual([expect.any(String), 'Opération en cours'])
   })
 
   it('tells the page from the collection in the count (3 against 143)', async () => {
@@ -500,9 +557,8 @@ describe('Réservations et prêts: locker operations', () => {
     const gateway = fakeGateway()
     renderPage(gateway, { url: '/reservations-prets?vue=operations', catalogGateway: catalog })
     await screen.findByRole('heading', { level: 2, name: '1 opération' })
-    // The row: the equipment (name and code) and the user by name only.
-    expect(plain(rows()[0]?.textContent)).toContain('Multimètre numérique')
-    expect(plain(rows()[0]?.textContent)).toContain('MM-001')
+    // The row: the operation on one line (type and equipment code) and the user by name only.
+    expect(plain(rows()[0]?.textContent)).toContain('Retrait · MM-001')
     expect(plain(rows()[0]?.textContent)).toContain('Technicien Démo')
     expect(plain(rows()[0]?.textContent)).not.toContain('identifiant seulement')
     await waitFor(() => expect(plain(dossier().textContent)).toContain('Cellule de l’opérationCellule A1 · AEGIS-DEMO-01'))
