@@ -44,6 +44,6 @@ class AccessPolicyTests {
     }
 
     private static CurrentAccount account(AccessLevel level) {
-        return new CurrentAccount(UUID.randomUUID(), "Technicien", "technician@aegis.test", Role.TECHNICIAN, level);
+        return new CurrentAccount(UUID.randomUUID(), "Technicien", "technician@aegis.test", Role.TECHNICIAN, level, 0);
     }
 }
