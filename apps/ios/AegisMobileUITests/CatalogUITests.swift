@@ -150,6 +150,7 @@ final class CatalogUITests: XCTestCase {
                 let theme = appearance == .dark ? "dark" : "light"
                 let app = launch(language, scenario: "catalog-offline")
                 XCTAssertTrue(card(app, "MM-001").waitForExistence(timeout: 30))
+                let restingTop = element(app, "catalog.filter.all").frame.minY
 
                 pullToRefresh(app)
 
@@ -162,11 +163,15 @@ final class CatalogUITests: XCTestCase {
                 // The refresh indicator must collapse before the audit, the
                 // capture and the tap: a tap on a moving list only stops it.
                 let retry = app.buttons["catalog.retry"]
+                XCTAssertTrue(returnToRest(app, restingTop: restingTop, inert: notice))
                 XCTAssertTrue(waitUntilSettled(retry))
                 try audit(app)
                 attach(app, "\(language.code)-catalog-offline-\(theme)")
 
-                // One tap: the list must be at rest after the refresh.
+                // Still and at rest again after the audit, which scrolls and
+                // resizes the text: a tap on a held list only releases it (#220).
+                XCTAssertTrue(returnToRest(app, restingTop: restingTop, inert: notice))
+                XCTAssertTrue(waitUntilSettled(retry), "Try again is still moving after the audit")
                 retry.tap()
                 XCTAssertTrue(notice.waitForNonExistence(timeout: 15))
                 XCTAssertFalse(card(app, "MM-001").label.contains(language["lastKnown"]))
@@ -262,6 +267,34 @@ final class CatalogUITests: XCTestCase {
         // the refresh ended leaves UIKit's list offset where the finger was.
         start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 420)),
                     withVelocity: XCUIGestureVelocity(1500), thenHoldForDuration: 0)
+    }
+
+    /// Brings the list back to where it rests, with the filter row at
+    /// `restingTop`. The synthesized pull sometimes leaves the list held
+    /// below that place, perfectly still, until the next touch: the next tap
+    /// then only releases the list, and its button never acts (#220, seen in
+    /// the screen recording; the same pull leaves the list at rest in other
+    /// iterations). A frame that stopped moving does not tell the two apart.
+    /// The list is released by a tap on `inert`, a text without action, and
+    /// the held state is attached as `list-held-after-pull` for review.
+    @MainActor
+    private func returnToRest(_ app: XCUIApplication, restingTop: CGFloat, inert: XCUIElement) -> Bool {
+        let filter = element(app, "catalog.filter.all")
+        func atRest(within timeout: TimeInterval) -> Bool {
+            let deadline = Date.now + timeout
+            repeat {
+                if filter.exists, abs(filter.frame.minY - restingTop) < 1 { return true }
+                Thread.sleep(forTimeInterval: 0.3)
+            } while Date.now < deadline
+            return false
+        }
+        if atRest(within: 3) { return true }
+        let held = XCTAttachment(screenshot: app.screenshot())
+        held.name = "list-held-after-pull"
+        held.lifetime = .keepAlways
+        add(held)
+        inert.tap()
+        return atRest(within: 5)
     }
 
     /// Waits until the element is hittable and its frame stops moving.
