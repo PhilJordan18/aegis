@@ -235,3 +235,20 @@ test.describe('labels: the « Identifiant seulement » fallback on a narrow scre
     })
   }
 })
+
+// QA #244 D5: a select sharing a row with the taller picker (here holding a unit outside the index) keeps its own height.
+for (const width of [560, 768, 960, 1023, 1280]) {
+  test.describe(`labels: Anomalies filter selects keep their height at ${width} px`, () => {
+    test.use({ viewport: { width, height: 900 } })
+
+    test('no select is stretched to the picker row', async ({ page }) => {
+      await routeApi(page)
+      await signIn(page)
+      await go(page, `/anomalies?equipement=${UNKNOWN_LOCKER_ID}`)
+      await expect(page.locator('.ag-picker__chosen')).toContainText('Identifiant seulement')
+      const heights = await page.locator('.ag-an-filters__grid select').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height))
+      expect(heights.length).toBeGreaterThan(0)
+      for (const height of heights) expect(height).toBeLessThan(60)
+    })
+  })
+}
