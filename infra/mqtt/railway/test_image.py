@@ -38,7 +38,7 @@ class ImageTests(unittest.TestCase):
             run([DOCKER,'volume','create',volume])
             try:
                 run([DOCKER,'run','--rm','--network','none','-v',volume+':/mosquitto/data','--entrypoint','sh',BASE_IMAGE,'-c',
-                     'umask 077; mkdir /mosquitto/data/recipe-230; mosquitto_passwd -b -c /mosquitto/data/recipe-230/account.hash aegis_api_recipe_223 synthetic-recipe; printf "%s\\n" '+LOCKER+' > /mosquitto/data/recipe-230/locker-id; printf "true\\n" > /mosquitto/data/recipe-230/commands-enabled; mosquitto_passwd -b -c /mosquitto/data/device-accounts.hash '+OTHER+' synthetic-other'])
+                     'umask 077; mkdir /mosquitto/data/recipe-230; mosquitto_passwd -b -c /mosquitto/data/recipe-230/account.hash aegis_api_recipe_223 synthetic-recipe; printf "%s\\n" '+LOCKER+' > /mosquitto/data/recipe-230/locker-id; printf "true\\n" > /mosquitto/data/recipe-230/commands-enabled; mosquitto_passwd -b -c /mosquitto/data/device-accounts.hash '+OTHER+' synthetic-other; chown -R mosquitto:mosquitto /mosquitto/data'])
                 def start():
                     run([DOCKER,'run','-d','--name',name,'--network','none','--env-file',str(p/'env'),'-v',volume+':/mosquitto/data',image])
                 def pub(user,password,topic,host='localhost',port='8883',tls=True):
@@ -83,6 +83,9 @@ class ImageTests(unittest.TestCase):
                     if sub.poll() is None:sub.kill();sub.wait()
                 info=json.loads(run([DOCKER,'inspect',name]).stdout)[0]
                 self.assertEqual('none',info['HostConfig']['NetworkMode']);self.assertFalse(info['HostConfig']['PortBindings'])
+                self.assertEqual('mosquitto',info['Config']['User'])
+                self.assertNotEqual('0',run([DOCKER,'exec',name,'id','-u']).stdout.strip())
+                self.assertIn('Uid:\t1883\t1883\t1883\t1883',run([DOCKER,'exec',name,'cat','/proc/1/status']).stdout)
                 # Reapply from persisted policy in QR-only mode, without a hot reload path.
                 run([DOCKER,'exec',name,'sh','-c',"printf 'false\\n' > /mosquitto/data/recipe-230/commands-enabled"])
                 run([DOCKER,'restart',name]);ready()

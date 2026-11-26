@@ -39,8 +39,6 @@ for file in passwords acl ca.crt server.crt server.key; do
 done
 rmdir "$work"
 trap - EXIT INT TERM
-chown -R mosquitto:mosquitto /run/aegis-mqtt
-chown mosquitto:mosquitto /mosquitto/data
 chmod 0600 /run/aegis-mqtt/*
 unset AEGIS_MQTT_API_PASSWORD AEGIS_MQTT_HUB_PASSWORD MQTT_CA_B64 MQTT_CERT_B64 MQTT_KEY_B64
 mosquitto --test-config -c /opt/aegis/mosquitto.conf

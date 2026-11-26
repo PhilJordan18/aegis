@@ -33,7 +33,7 @@ Monter le volume durable en `/mosquitto/data`. Il contient :
 | `recipe-230/locker-id` | UUID exact du seul casier de recette autorisé. |
 | `recipe-230/commands-enabled` | `false` pour QR seul ; `true` uniquement pour une séance physique autorisée. |
 
-Dossiers de secrets root 0700, fichiers root 0600. Ne pas copier les mots de passe/QR en chat, logs ou captures. La persistance du broker (`mosquitto.db`) reste indépendante de ces fichiers d'identités. Le volume racine est rendu accessible en écriture au broker, pas le dossier privé de recette.
+Dossiers privés 0700 et fichiers 0600 appartenant à `mosquitto` (UID/GID 1883 dans l’image figée). Le volume existant doit être préparé hors exécution avant la bascule ; le conteneur ne corrige pas ses propriétaires avec des privilèges root. Ne pas copier les mots de passe/QR en chat, logs ou captures. La persistance du broker (`mosquitto.db`) reste indépendante de ces fichiers d'identités. Le volume doit être accessible au broker non privilégié. Le bootstrap et le broker s’exécutent tous deux sous `USER mosquitto` ; seuls les répertoires de l’image sont préparés pendant sa construction.
 
 Le démarrage échoue si une entrée manque ou est malformée. Les identités de base sont reconstruites, les autres appareils préservés via l'inventaire, puis l'overlay est appliqué une seule fois. La configuration est validée avant `exec mosquitto`. Une seconde exécution directe du hook sur une base déjà enrichie est refusée ; **la réapplication se fait par le démarrage normal**, à partir d'une base propre. L'ancien `reapply.sh` ne doit plus être utilisé avec cette image.
 
