@@ -114,7 +114,7 @@ const indexed = (unit: { id: string; assetCode: string; model: unknown }) => ({
 const REFERENCE_ANOMALIES = [
   { ...anomaly(), severity: 'HIGH' },
   { ...anomaly(), id: 'aaaaaaaa-0000-4000-8000-000000000002', severity: 'MEDIUM', type: 'UNEXPECTED_ASSET_OBSERVED', assetId: ASSET2_ID, compartmentId: A2_ID, detectedAt: '2026-11-10T18:40:00Z' },
-  { ...anomaly(), id: 'aaaaaaaa-0000-4000-8000-000000000003', severity: 'MEDIUM', type: 'OPERATION_TIMEOUT', detectedAt: '2026-11-10T18:10:00Z' },
+  { ...anomaly(), id: 'aaaaaaaa-0000-4000-8000-000000000003', severity: 'MEDIUM', type: 'DEVICE_OFFLINE_DURING_OPERATION', detectedAt: '2026-11-10T18:10:00Z' },
 ]
 const REFERENCE_RESERVATIONS = [reservation, { ...reservation, id: '33333333-0000-4000-8000-000000000033', asset: asset2, reservedFrom: '2026-11-10T15:00:00Z', reservedUntil: '2026-11-10T22:00:00Z' }]
 const REFERENCE_OPERATION = {
@@ -338,15 +338,20 @@ test.describe('overview: compact below 560 px (contract §8.1)', () => {
     const chipsBox = await first.locator('.ag-ov__chips').boundingBox()
     const whenBox = await first.locator('.ag-ov__when').boundingBox()
     expect(Math.abs((whenBox?.y ?? 0) + (whenBox?.height ?? 0) / 2 - ((chipsBox?.y ?? 99) + (chipsBox?.height ?? 0) / 2))).toBeLessThan(3)
-    // §8.6: the two chips on one line and « Reconnaître » under the text, a row of at most 140 px.
+    // §8.6, §8.9: the two chips on one line and « Reconnaître » under the text; a row of at most 140 px with a one-line
+    // title, 160 px with a two-line one. The set holds one long title (DEVICE_OFFLINE_DURING_OPERATION) on two lines.
+    const titleLines: number[] = []
     for (const item of await anomalies.locator('li.ag-ov__item').all()) {
+      const lines = await item.locator('.ag-ov__main').evaluate((main) => Math.round(main.getBoundingClientRect().height / parseFloat(getComputedStyle(main).lineHeight)))
+      titleLines.push(lines)
       const chips = await item.locator('.ag-chip').evaluateAll((all) => all.map((chip) => Math.round(chip.getBoundingClientRect().top)))
       expect(new Set(chips).size).toBe(1)
       const row = await item.locator('.ag-ov__row').boundingBox()
       const button = await item.getByRole('button').boundingBox()
       expect(button?.y ?? 0).toBeGreaterThanOrEqual((row?.y ?? 0) + (row?.height ?? 0) - 8)
-      expect((await item.boundingBox())?.height ?? 999).toBeLessThanOrEqual(140)
+      expect((await item.boundingBox())?.height ?? 999).toBeLessThanOrEqual(lines === 1 ? 140 : 160)
     }
+    expect(titleLines).toEqual([1, 1, 2])
     // §8.6: « Aide » and « Actualiser » on one line.
     const help = await page.getByRole('button', { name: 'Aide' }).boundingBox()
     const refresh = await page.getByRole('button', { name: 'Actualiser' }).boundingBox()
