@@ -201,7 +201,8 @@ function ReservationBody({ reservation: r, titleId, i18n, times }: BodyProps & {
   const entries: TimelineEntry[] = [
     { key: 'created', instant: r.createdAt, time: times.short(r.createdAt), label: t.timeline.created },
     { key: 'from', instant: r.reservedFrom, time: times.short(r.reservedFrom), label: t.timeline.from },
-    { key: 'until', instant: r.reservedUntil, time: times.short(r.reservedUntil), label: t.timeline.until, kind: 'marker' },
+    // §1.7: the diamond marks a due date that has passed; a reservation still running shows a hollow marker.
+    { key: 'until', instant: r.reservedUntil, time: times.short(r.reservedUntil), label: t.timeline.until, kind: r.expiredAt !== null ? 'marker' : 'absent' },
   ]
   if (r.fulfilledAt !== null) entries.push({ key: 'fulfilled', instant: r.fulfilledAt, time: times.short(r.fulfilledAt), label: t.timeline.fulfilled, kind: 'ok' })
   if (r.cancelledAt !== null) entries.push({ key: 'cancelled', instant: r.cancelledAt, time: times.short(r.cancelledAt), label: t.timeline.cancelled })

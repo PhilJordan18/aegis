@@ -465,6 +465,7 @@ export const en: Messages = {
     filterStatus: 'Status',
     filterAsset: 'Equipment',
     filterFrom: 'From',
+    dateHelp: 'Format YYYY-MM-DD, laboratory time.',
     filterTo: 'To',
     filterPeriodHelp: ({ zone }) => `Dates in the laboratory time zone: ${zone}.`,
     filterPeriodInvalid: 'The end date is before the start date.',

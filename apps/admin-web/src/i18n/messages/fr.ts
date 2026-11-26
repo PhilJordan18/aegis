@@ -532,6 +532,7 @@ export const fr = {
     filterStatus: 'Statut',
     filterAsset: 'Équipement',
     filterFrom: 'Du',
+    dateHelp: 'Format AAAA-MM-JJ, heures du laboratoire.',
     filterTo: 'Au',
     filterPeriodHelp: ({ zone }: { zone: string }) => `Dates au fuseau du laboratoire${NBSP}: ${zone}.`,
     filterPeriodInvalid: 'La date de fin précède la date de début.',

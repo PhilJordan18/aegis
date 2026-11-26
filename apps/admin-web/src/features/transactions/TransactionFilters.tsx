@@ -23,7 +23,9 @@ type FieldErrors = { readonly period: string | null }
  * contract defines none.
  */
 export function TransactionFilters({ view, values, onApply }: TransactionFiltersProps) {
-  const { m } = useI18n()
+  const { m, locale } = useI18n()
+  // §1.7: the date field follows the interface language; the help says the format where the browser does not.
+  const dateLang = locale === 'fr' ? 'fr-CA' : 'en-CA'
   const t = m.reservations
   const formRef = useRef<HTMLFormElement>(null)
   const [status, setStatus] = useState(values.status ?? '')
@@ -62,8 +64,8 @@ export function TransactionFilters({ view, values, onApply }: TransactionFilters
           ))}
         </SelectField>
         <AssetPicker label={t.filterAsset} value={assetId} onChange={setAssetId} labels={labels} />
-        <TextField name="du" type="date" label={t.filterFrom} value={from} onChange={(event) => setFrom(event.target.value)} />
-        <TextField name="au" type="date" label={t.filterTo} error={errors.period} value={to} onChange={(event) => setTo(event.target.value)} />
+        <TextField name="du" type="date" lang={dateLang} help={t.dateHelp} label={t.filterFrom} value={from} onChange={(event) => setFrom(event.target.value)} />
+        <TextField name="au" type="date" lang={dateLang} help={t.dateHelp} label={t.filterTo} error={errors.period} value={to} onChange={(event) => setTo(event.target.value)} />
       </div>
       <div className="ag-filters__actions">
         <Button type="submit" variant="primary" size="sm">
