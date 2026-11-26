@@ -109,7 +109,7 @@ struct AccountView: View {
     var identity = AppIdentity.read()
 
     @State private var confirmsSignOut = false
-    @State private var language = LanguagePreference()
+    private let language = LanguagePreference.shared
 
     var body: some View {
         NavigationStack {
