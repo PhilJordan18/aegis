@@ -2,8 +2,8 @@
 
 Ce guide est une **recette planifiée**, pas un compte rendu d'exécution. Il transforme la
 liste de contrôle du 11 novembre (#67, commentaires 6804889493 et 6804913140) en fiche à
-remplir. Il a été mis à jour le 25 novembre 2026 pour le logiciel de `dev` `8d4f2d1` :
-Manager, application mobile, API et broker. Rien n'est réputé réussi tant que Philippe ou
+remplir. Il a été mis à jour le 26 novembre 2026 pour le logiciel de `dev` `fe205ee` :
+Manager, application mobile, API et image du broker (#236, #237, #238 comprises). Rien n'est réputé réussi tant que Philippe ou
 Jimmy ne l'a pas exécuté et consigné.
 
 Il y a quatre parties :
@@ -17,9 +17,11 @@ Il y a quatre parties :
 
 **Le logiciel du retrait et du retour est fusionné dans `dev`.** Cela comprend l'API
 (#172, #173, #175, #176, #177, #200), le Manager (#186, #188, #189, #190, #202) et l'application
-mobile (#198, #199). Ces lots ne sont prouvés qu'avec un hub simulé, dans des piles cloud
-isolées (voir « Preuves déjà acquises »). Une ligne S ou C ne passe à `PASS` que sur staging
-et avec la nature de preuve qu'elle exige.
+mobile (#198, #199). Ils sont prouvés avec un hub simulé dans des piles cloud isolées, et
+un premier essai réel a eu lieu sur staging le 25 novembre avec le hub de Jimmy (voir
+« Preuves déjà acquises »). Cet essai n'est pas consigné dans le format de ce guide : une
+ligne S ou C ne passe à `PASS` que consignée pendant une séance, avec la nature de preuve
+qu'elle exige.
 
 ### Preuves déjà acquises hors staging (nature simulée)
 
@@ -32,7 +34,22 @@ niveau logiciel.
 | Récupération d'un retrait incertain (#200) | Même dossier, `7c896fd` | Anomalie, absence de résolution parasite, reprise par une nouvelle présence |
 | Règles 1 à 7 (défi, garde, tags étrangers, lecteur non sain) | [`../integration/matrice-retrait-retour.md`](../integration/matrice-retrait-retour.md) | Cas négatifs, chiffrement, doublons et réordonnancements MQTT |
 | Sessions navigateur et révocation des JWT (#180, #192) | [`../session-navigateur/`](../session-navigateur/README.md) | Restauration, déconnexion, changement de mot de passe |
-| CI complète de `dev` (API, Web, simulateur, iOS) | #67, bilan du 25 novembre | Tests automatisés ; UI iOS sur simulateur Apple |
+| CI complète de `dev` (API, Web, simulateur, iOS) | #67, bilan du 25 novembre (`8d4f2d1`) ; CI verte sur `fe205ee`, iOS sauté faute de changement iOS | Tests automatisés ; UI iOS sur simulateur Apple |
+
+### Essai réel sur staging du 25 novembre (non consigné)
+
+Rapporté par Philippe et relevé en base dans
+[`../../livraison/etat-infra-20261125.md`](../../livraison/etat-infra-20261125.md), pour
+AEG-DEMO-004 avec le hub de Jimmy : une tentative de retour en `ANOMALY`
+(`f85bf3e2`), puis un retrait (`616cb5ef`) et un retour (`2286d781`) `CONFIRMED`. Un
+retrait ultérieur (`4ab854ba`) a laissé le prêt `3cba970f` **`ACTIVE`** : il se clôture
+par un retour normal ou se conserve par décision explicite, jamais par SQL.
+
+Cet essai montre que la chaîne réelle fonctionne, mais il **ne remplace aucune ligne C** :
+il n'a ni testeur et heure consignés par ligne, ni preuve désinfectée au format de ce guide,
+et la tension, les capteurs et le firmware flashé n'en sont pas déduits. L'ACL du broker
+relevée ce jour-là autorisait les commandes vers tous les casiers ; l'isolation du
+simulateur mesurée auparavant ne décrit donc pas cet état.
 
 ## Règles de sécurité (à relire avant chaque séance)
 
@@ -103,8 +120,10 @@ responsable Railway ou du dépôt.
 leur combinaison doit être explicitement validée. Les contrats REST et MQTT doivent
 correspondre à ceux de ce SHA. En cas de doute, la séance est `BLOCKED`.
 
-Référence logicielle au moment de la rédaction : `dev` `8d4f2d1` (25 novembre 2026). Sa CI
-complète et ses limites de preuve sont publiées sur #67. Un SHA déployé différent doit être
+Référence logicielle au moment de la rédaction : `dev` `fe205ee` (26 novembre 2026), CI
+verte. Le bilan complet, iOS compris, porte sur son ancêtre `8d4f2d1` et est publié sur
+#67 ; aucun fichier iOS n'a changé depuis. Le staging tournait sur `feefd76` à la dernière
+lecture : sans #237 ni #238, A5 n'y est pas exécutable comme écrit. Un SHA déployé différent doit être
 un descendant de `dev` dont la CI est verte, sinon la séance est `BLOCKED`. Les preuves
 cloud sont **synthétiques et isolées** : elles ne disent rien de staging.
 
@@ -112,9 +131,9 @@ cloud sont **synthétiques et isolées** : elles ne disent rien de staging.
 
 | ID | Décision | Conséquence pour la séance | Lignes |
 |---|---|---|---|
-| D1 | **Approuvée** : casier simulé dédié sur staging, séparé du hub de Jimmy. | Le responsable Railway fournit le compte MQTT de ce casier ; le simulateur ne tourne pas sur le Mac de Philippe et n'utilise jamais l'identité du hub. | Partie S |
+| D1 | **Approuvée** : casier simulé dédié sur staging, séparé du hub de Jimmy. | Le responsable Railway fournit le compte MQTT de ce casier ; le simulateur ne tourne pas sur le Mac de Philippe et n'utilise jamais l'identité du hub. Avec l'image du broker de #236, l'API ne publie vers **un seul casier** à la fois : S et C exigent un changement de casier autorisé entre les deux (voir « Bascule du casier autorisé »). | Partie S |
 | D2 | **Approuvée** : saisie du vrai QR dans le champ réservé au build Debug. Le serveur conserve toutes ses vérifications. La caméra est vérifiée séparément sur iPhone (partie C). | Aucun jeton dans un journal, une capture ou un rapport. Le champ n'existe que dans le build Debug, dont l'URL d'API doit pointer vers staging. | S2, S4, S5, S7 |
-| D3 | **Préparée, non exécutée** : rotation du mot de passe d'un compte de recette dédié, faite par le responsable Railway pendant la séance. | Aucun mot de passe n'est changé avant la séance. Le nouveau mot de passe circule hors GitHub. | A5 |
+| D3 | **Préparée, non exécutée** : rotation du mot de passe d'un compte de recette dédié pendant la séance. | Aucun mot de passe n'est changé avant la séance. Le nouveau mot de passe circule hors GitHub. Depuis #238, changer la seule variable `AEGIS_DEMO_*_PASSWORD` **ne révoque rien** : A5 nomme les deux mécanismes valides. | A5 |
 | D4 | **Approuvée** : l'anomalie de test est celle que produit le retour simulé de S4. Aucun SQL manuel. | A9 s'exécute après S4 ; acquitter ne résout pas ; la reprise S5 va jusqu'à la confirmation physique simulée. | S4, A9, S5 |
 
 ## Classement avant la séance
@@ -126,6 +145,8 @@ cloud sont **synthétiques et isolées** : elles ne disent rien de staging.
 | SHA API et Web de `dev` déployés, migrations appliquées, URL HTTPS | Responsable Railway | Toutes |
 | Comptes de recette administrateur et technicien, dont le compte dédié de D3 | Philippe, responsable Railway | Toutes, A5 |
 | Compte MQTT du casier simulé, DNS, port, CA du broker | Responsable Railway | S |
+| Image du broker de #236 déployée, ou état de l'ACL live relevé ; casier autorisé (`recipe-230/locker-id`) et `commands-enabled` connus avant S, puis avant C ; simulateur présent dans `device-accounts.hash` | Responsable Railway, Jimmy pour la fenêtre | S, C |
+| Sort du prêt réel `3cba970f` (`ACTIVE`) décidé : retour normal ou conservation explicite | Philippe, Jimmy | C |
 | `AEGIS_DISPLAY_KEYS` / `AEGIS_DISPLAY_ACTIVE_KEY_ID` provisionnées (jamais leur valeur ici) | Responsable Railway | S, C |
 | Casier, compartiments et actifs de test créés par le Manager, sans SQL | Philippe | S, C |
 | Build Debug du mobile au SHA de la section 0, avec `AEGIS_API_BASE_URL` vers staging, sur appareil | Propriétaire iOS | A, S |
@@ -190,7 +211,7 @@ Référence : doc 09 §4.1, §10.4 à §10.6 (ADR-016 à ADR-018).
 | A2 | Manager : actualiser la page, suivre un lien direct vers un dossier, ouvrir un nouvel onglet. | La session est restaurée sans nouvelle connexion, dans chaque onglet. Aucune boucle de restauration. | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | Statuts HTTP seulement |
 | A3 | Mobile : se connecter en technicien, fermer l'application (balayage), la rouvrir. Puis couper le réseau et rouvrir un écran. | La session est restaurée depuis le trousseau sans ressaisie. Hors réseau : message d'indisponibilité récupérable, pas de déconnexion. | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | Capture sans jeton |
 | A4 | Manager, deux onglets ouverts : se déconnecter dans l'un. Rafraîchir l'autre. Sur le mobile, rouvrir « Mon activité ». | Le second onglet revient à la connexion. **Le mobile reste connecté** : la déconnexion du Web ne touche pas iOS. | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | |
-| A5 | Pendant la séance (D3) : le responsable Railway change le mot de passe du compte de recette dédié. Rouvrir le mobile et le Manager connectés avec ce compte. | Les jetons du compte sont refusés (`401`) ; Web et mobile reviennent à la connexion ; le nouveau mot de passe fonctionne. Un audit `PASSWORD_CHANGED` existe. Réservations et prêts sont inchangés. | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | Rotation non faite ⇒ `NOT RUN` ; le mot de passe ne circule jamais ici |
+| A5 | Pendant la séance (D3), avec le mobile et le Manager connectés au compte de recette dédié, changer son mot de passe par **l'un** de ces mécanismes : (a) le testeur, depuis une session de ce compte, appelle `POST /api/v1/auth/password` (mot de passe actuel requis, doc 09 §10.7 ; réponse `204`) ; (b) pour un compte de démonstration seulement, le responsable Railway règle `AEGIS_DEMO_ROTATE_PASSWORDS=true`, change le secret, redémarre l'API, puis remet le drapeau à `false` et redémarre (entre-temps, (a) répond `503`). Changer la seule variable de mot de passe ne suffit pas. Puis rouvrir le mobile et le Manager. | Les jetons du compte sont refusés (`401`) ; Web et mobile reviennent à la connexion ; le nouveau mot de passe fonctionne. Un audit `PASSWORD_CHANGED` existe. Réservations et prêts sont inchangés. | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | Rotation non faite ⇒ `NOT RUN` ; le mot de passe ne circule jamais ici |
 
 L'échéance d'un jeton mobile (60 minutes) se vérifie seulement si la séance dure : retour à
 la connexion, réservations et prêts inchangés.
@@ -220,6 +241,27 @@ configuré avec `AEGIS_MQTT_URL` en `mqtts:`, la CA fournie, `AEGIS_SIM_LOCKER_I
 `AEGIS_SIM_COMPARTMENTS` du locker de test. Les observations physiques (porte, scans RFID)
 sont scriptées et consignées avec leur scénario.
 
+### Bascule du casier autorisé (image du broker de #236)
+
+Avec l'image de #236, le compte MQTT de l'API (`aegis_api_recipe_223`) ne publie
+`display`, et `commands` si `commands-enabled` vaut `true`, que vers **le** casier nommé
+par `recipe-230/locker-id`. Un seul casier est donc testable à la fois :
+
+1. **Avant S** : le responsable Railway confirme que `locker-id` désigne le casier simulé
+   de D1 et que `commands-enabled` vaut `true`. Sinon S2 échoue faute d'affichage (refus
+   du broker, puis expiration) : ce n'est pas un défaut du produit ; consigner `BLOCKED`.
+2. **Isolation, avant S2** : le responsable Railway confirme, par l'inventaire et l'ACL
+   chargée, que l'API ne peut publier ni `display` ni `commands` vers le casier de Jimmy
+   pendant la partie S. L'ACL relevée le 25 novembre autorisait tous les casiers ; tant
+   que cette confirmation manque, S est `BLOCKED`. Ne jamais « vérifier une ACL » par une
+   commande d'ouverture réelle.
+3. **Entre S et C** : fenêtre sans opération ni commande en vol ; le responsable Railway
+   remplace `locker-id` par le casier de Jimmy et redémarre le broker (la politique n'est
+   réappliquée qu'au démarrage). Vérifier ensuite les reconnexions et heartbeats avant C1.
+
+Si l'image de #236 n'est pas déployée, consigner l'état réel de l'ACL dans la section 0 et
+appliquer les mêmes conditions d'isolation.
+
 | ID | Action humaine | Résultat attendu (référence normative) | Statut | Observé / preuve |
 |---|---|---|---|---|
 | S1 | Démarrer le simulateur. Ouvrir Manager → Casiers. | Locker de test `ONLINE`, heartbeats réguliers. Le hub de Jimmy n'est ni déconnecté ni modifié. | ☐ PASS ☐ FAIL ☐ BLOCKED ☐ NOT RUN | `clientId` `aegis-locker-sim-…` |
@@ -247,8 +289,9 @@ l'affichage QR, ni le déverrouillage, ni la porte, ni le RFID.**
 
 ## C — Validations matérielles restantes (hub de Jimmy)
 
-Cartes : #43, #44, #46, #47, #50, #51 et leurs prérequis matériels : écran #45, QR et
-caméra #22, porte et serrure #42/#21, RFID #19, bus #20. Les seuils QR, porte, RFID et
+Cartes : #43, #44, #46, #47, #50, #51 et leurs prérequis matériels : écran #45, porte et
+serrure #42/#21, RFID #19, bus #20. Le QR est affiché par l'écran du hub et lu par la
+caméra de l'iPhone (ADR-019 a retiré le module caméra du hub). Les seuils QR, porte, RFID et
 caméra et leur ordre viennent des contrats approuvés et du POC (docs 05, 06 et 10) :
 **ne pas les improviser pendant la recette.**
 
@@ -261,6 +304,8 @@ caméra et leur ordre viennent des contrats approuvés et du POC (docs 05, 06 et
   `AEGIS_DISPLAY_KEYS` / `AEGIS_DISPLAY_ACTIVE_KEY_ID` provisionnées par le responsable
   Railway (jamais leur valeur ici).
 - [ ] Partie B réussie avec le hub de Jimmy.
+- [ ] Casier autorisé du broker basculé sur celui de Jimmy, avec reconnexion vérifiée
+  (« Bascule du casier autorisé », étape 3).
 - [ ] Build mobile du SHA de la section 0 installé sur un appareil réel, caméra comprise
   (le simulateur Apple de la CI ne prouve pas la caméra).
 - [ ] Firmware du hub avec affichage du défi, lecture QR, porte et RFID qualifiés par Jimmy.
@@ -362,7 +407,8 @@ Ils sont décrits dans
 | Identifiants MQTT rotés (#24), DNS, port, CA | Responsable Railway | S, B, C |
 | `AEGIS_DISPLAY_KEYS` / `AEGIS_DISPLAY_ACTIVE_KEY_ID` provisionnées | Responsable Railway | S, C |
 | Build Debug du mobile (URL d'API staging) pour A et S ; build sur iPhone avec caméra pour C | Propriétaire iOS | A, S, C |
-| Écran du hub #45 | Jimmy | C1 |
-| QR et caméra #22 | Jimmy | C2, C4, C6 |
+| Bascule du casier autorisé entre S et C, isolation confirmée avant S | Responsable Railway | S, C |
+| Écran du hub #45 (affichage du QR) | Jimmy | C1 |
+| Lecture du QR par la caméra de l'iPhone | Propriétaire iOS | C2, C4, C6 |
 | Porte et serrure #42/#21 | Jimmy | C2 à C6 |
 | RFID #19, bus #20 | Jimmy | C3 à C6 |
