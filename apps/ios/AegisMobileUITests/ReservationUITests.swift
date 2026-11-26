@@ -237,7 +237,81 @@ final class ReservationUITests: XCTestCase {
         }
     }
 
+    /// « Mon activité » at the largest text size (#222): the reservation,
+    /// the overdue loan and the empty state, in light and dark. Each state is
+    /// audited at the top, then again with its last control scrolled into
+    /// view. « Voir les équipements » is also measured on its own pixels.
+    @MainActor
+    func testActivityAtTheLargestTextSize() throws {
+        let largest = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        let states = [("activity-reserved", "reserved", "activity.cancel"),
+                      ("activity-loan", "loan", "activity.return"),
+                      ("reservation", "empty", "activity.browse")]
+        for appearance in [XCUIDevice.Appearance.light, .dark] {
+            XCUIDevice.shared.appearance = appearance
+            let theme = appearance == .dark ? "dark" : "light"
+            for (scenario, name, last) in states {
+                let app = launch(.french, scenario: scenario, tab: "activity", arguments: largest)
+                let target = element(app, last)
+                XCTAssertTrue(target.waitForExistence(timeout: 30), "\(name): \(last) missing")
+                attach(app, "fr-activity-\(name)-ax5-\(theme)")
+                try audit(app, atLargestSize: true)
+
+                XCTAssertTrue(scrollIntoView(target, in: app), "\(name): \(last) never became reachable")
+                // Captured before the audit, so a failing audit keeps its screen.
+                attach(app, "fr-activity-\(name)-ax5-\(theme)-end")
+                try audit(app, atLargestSize: true)
+                if name == "empty" { assertRenderedContrast(of: target, in: app) }
+                app.terminate()
+            }
+        }
+    }
+
     // MARK: Helpers
+
+    /// Swipes up until `target` is hittable and clear of the floating tab
+    /// bar's fade, so the audit and the pixels see all of it.
+    @MainActor
+    private func scrollIntoView(_ target: XCUIElement, in app: XCUIApplication) -> Bool {
+        for _ in 0..<12 {
+            if target.isHittable, visibleArea(app).contains(target.frame) { return app.waitForStillScreen() }
+            app.swipeUp(velocity: .slow)
+        }
+        return target.isHittable && visibleArea(app).contains(target.frame) && app.waitForStillScreen()
+    }
+
+    /// The window above the floating tab bar and its scroll-edge fade.
+    @MainActor
+    private func visibleArea(_ app: XCUIApplication) -> CGRect {
+        var visible = app.windows.firstMatch.frame
+        let tabBar = app.tabBars.firstMatch
+        if tabBar.exists, tabBar.isHittable {
+            visible.size.height = max(0, tabBar.frame.minY - fadeHeight - visible.minY)
+        }
+        return visible
+    }
+
+    /// The control's weakest ink against its own fill, read from the screen
+    /// (#222): kept as evidence, and failed below 4.5:1.
+    @MainActor
+    private func assertRenderedContrast(of target: XCUIElement, in app: XCUIApplication,
+                                        file: StaticString = #filePath, line: UInt = #line) {
+        let window = app.windows.firstMatch.frame
+        let image = Self.crop(app.screenshot(), to: target.frame, window: window)
+        let evidence = XCTAttachment(image: image)
+        evidence.name = "rendered-contrast-\(target.identifier)"
+        evidence.lifetime = .keepAlways
+        add(evidence)
+        guard let ratio = RenderedContrast.ratio(of: image) else {
+            return XCTFail("No ink measured in \(target.identifier) at \(target.frame)", file: file, line: line)
+        }
+        let measure = XCTAttachment(string: "\(target.identifier) rendered "
+            + String(format: "%.2f:1", ratio) + " at \(target.frame)")
+        measure.name = "rendered-contrast-\(target.identifier)-ratio"
+        measure.lifetime = .keepAlways
+        add(measure)
+        XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(target.identifier) contrast", file: file, line: line)
+    }
 
     /// The loan read failure, found by its words so the order is checked
     /// wherever the notice sits.
@@ -371,7 +445,15 @@ final class ReservationUITests: XCTestCase {
                         tolerated = true
                     } else {
                         let partly = self.visiblePartContrast(of: target, visible: area, window: window, in: app)
-                        tolerated = findings.tolerates(partly, note: &note) ?? false
+                        // The audit scrolls the screen while it runs (#222): an
+                        // entirely visible element is measured on the still
+                        // screen, never trusted.
+                        if let judged = findings.tolerates(partly, note: &note) {
+                            tolerated = judged
+                        } else {
+                            let entire = self.entireContrast(of: target, window: window, in: app)
+                            tolerated = findings.tolerates(entire, note: &note) ?? false
+                        }
                     }
                 default:
                     tolerated = false
