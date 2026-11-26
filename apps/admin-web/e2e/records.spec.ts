@@ -290,6 +290,29 @@ test.describe('records: lot 3 tables, filters and dossiers', () => {
     })
   }
 
+  test('a calendar choice in « Au » keeps the short-year error of « Du » and applies nothing (QA #246, fifth review)', async ({ page }) => {
+    const requests = await openReservations(page, '/reservations-prets?du=2026-11-10')
+    const from = page.getByRole('textbox', { name: 'Du (inclus)' })
+    await from.focus()
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    for (const key of '202') await page.keyboard.press(key)
+    await page.getByLabel('Statut').focus()
+    await expect(from).toHaveAttribute('aria-invalid', 'true')
+    const before = requests.length
+    const to = page.getByRole('textbox', { name: 'Au (inclus)' })
+    await to.evaluate((input: HTMLInputElement, day) => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, day)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }, '2026-11-25')
+    await expect(to).toHaveValue('2026-11-25')
+    await expect(from).toHaveAttribute('aria-invalid', 'true')
+    await expect(from).toHaveAccessibleDescription(/Saisissez une date complète/)
+    await expect(page).toHaveURL(/\?du=2026-11-10$/)
+    await page.waitForTimeout(300)
+    expect(requests.slice(before).filter((request) => request.includes('/admin/reservations?'))).toHaveLength(0)
+  })
+
   test('the status list applies at once with the pointer, but only after a pause from the keyboard', async ({ page }) => {
     const requests = await openReservations(page)
     const length = await page.evaluate(() => window.history.length)

@@ -73,7 +73,8 @@ export function DateRange({ value, onApply, isDay, invalidText, help, fromName =
       return
     }
     pending.current = null
-    apply(nextFrom, nextTo)
+    // A calendar choice or a shortcut is a validated edit: the other field, if it still holds a short year, is reported.
+    apply(nextFrom, nextTo, true)
   }
 
   function flush() {
