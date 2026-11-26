@@ -92,8 +92,8 @@ const A2_ID = '6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d'
 const ASSET2_ID = '8d9e0f1a-2b3c-4d4e-8f5a-6b7c8d9e0f1a'
 const asset2 = {
   id: ASSET2_ID,
-  assetCode: 'OSC-002',
-  model: { id: '2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e', name: 'Oscilloscope portable', manufacturer: 'Tektronix', modelNumber: 'TBS1052' },
+  assetCode: 'IRT-002',
+  model: { id: '2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e', name: 'Thermomètre infrarouge', manufacturer: 'Fluke', modelNumber: '62 MAX' },
   placement: { lockerId: LOCKER_ID, lockerCode: 'AEGIS-DEMO-01', compartmentId: A2_ID, compartmentCode: 'A2' },
 }
 // The catalog page the label index reads (lot 1): the reference set resolves equipment names, as real data does (QA #245).
@@ -116,7 +116,7 @@ const REFERENCE_ANOMALIES = [
   { ...anomaly(), id: 'aaaaaaaa-0000-4000-8000-000000000002', severity: 'MEDIUM', type: 'UNEXPECTED_ASSET_OBSERVED', assetId: ASSET2_ID, compartmentId: A2_ID, detectedAt: '2026-11-10T18:40:00Z' },
   { ...anomaly(), id: 'aaaaaaaa-0000-4000-8000-000000000003', severity: 'MEDIUM', type: 'DEVICE_OFFLINE_DURING_OPERATION', detectedAt: '2026-11-10T18:10:00Z' },
 ]
-const REFERENCE_RESERVATIONS = [reservation, { ...reservation, id: '33333333-0000-4000-8000-000000000033', asset: asset2, reservedFrom: '2026-11-10T15:00:00Z', reservedUntil: '2026-11-10T22:00:00Z' }]
+const REFERENCE_RESERVATIONS = [reservation, { ...reservation, id: '33333333-0000-4000-8000-000000000033', asset: asset2, userId: '0b1c2d3e-4f50-4a61-8b72-93a4b5c6d7e9', user: { id: '0b1c2d3e-4f50-4a61-8b72-93a4b5c6d7e9', displayName: 'Marie Tremblay' }, reservedFrom: '2026-11-10T15:00:00Z', reservedUntil: '2026-11-10T22:00:00Z' }]
 const REFERENCE_OPERATION = {
   id: '55555555-0000-4000-8000-000000000005',
   type: 'CHECKOUT',
@@ -155,7 +155,7 @@ interface Fake {
 }
 
 async function routeApi(page: Page, { activeLoans = [loan(1, true)], activeLoanTotal, reference = false }: { activeLoans?: unknown[]; activeLoanTotal?: number; reference?: boolean } = {}): Promise<Fake> {
-  const locker = reference ? { ...LOCKER, compartments: [...LOCKER.compartments, { id: A2_ID, code: 'A2', enabled: true, currentAsset: { id: ASSET2_ID, assetCode: 'OSC-002' } }] } : LOCKER
+  const locker = reference ? { ...LOCKER, compartments: [...LOCKER.compartments, { id: A2_ID, code: 'A2', enabled: true, currentAsset: { id: ASSET2_ID, assetCode: 'IRT-002' } }] } : LOCKER
   const lockerStatus = reference ? { ...STATUS, compartments: [cell, { ...cell, id: A2_ID, code: 'A2' }] } : STATUS
   const fake: Fake = { requests: [], acknowledgements: [] }
   let acknowledged = false
@@ -309,6 +309,18 @@ test.describe('overview: compact below 560 px (contract §8.1)', () => {
   test.use({ viewport: { width: 390, height: 844 } })
 
   const pageHeight = (page: Page) => page.evaluate(() => document.documentElement.scrollHeight)
+  /** §8.10: fonts loaded, nothing loading, then `scrollHeight` unchanged across 250 ms. */
+  async function settledHeight(page: Page) {
+    await page.evaluate(() => document.fonts.ready)
+    await expect(page.locator('.ag-skel')).toHaveCount(0)
+    let previous = -1
+    for (;;) {
+      const height = await pageHeight(page)
+      if (height === previous) return height
+      previous = height
+      await page.waitForTimeout(250)
+    }
+  }
 
   test('previews 3 rows per module and reads the band once', async ({ page }) => {
     await routeApi(page, { activeLoans: [1, 2, 3, 4, 5, 6].map((index) => loan(index, true)) })
@@ -321,7 +333,7 @@ test.describe('overview: compact below 560 px (contract §8.1)', () => {
     await expect(page.locator('.ag-tile__read').first()).toBeHidden()
   })
 
-  test('stays within 2500 px, 2800 px when stale, on the §8.6 reference set', async ({ page }) => {
+  test('stays within 2600 px, 2900 px when stale, on the §8.6 reference set (§8.10)', async ({ page }) => {
     await routeApi(page, { reference: true })
     await openOverview(page)
     const anomalies = page.getByRole('region', { name: 'Anomalies ouvertes' })
@@ -357,7 +369,12 @@ test.describe('overview: compact below 560 px (contract §8.1)', () => {
     const refresh = await page.getByRole('button', { name: 'Actualiser' }).boundingBox()
     const middle = (box: { y: number; height: number } | null) => (box === null ? -99 : box.y + box.height / 2)
     expect(Math.abs(middle(help) - middle(refresh))).toBeLessThan(2)
-    expect(await pageHeight(page)).toBeLessThanOrEqual(2500)
+    // §8.10 measurement conditions: Chromium, scale 1, preview banner, fr-CA, America/Toronto, light theme, reduced motion.
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+    await expect(page.getByRole('region', { name: 'Réservations actives' })).toContainText('Marie Tremblay')
+    await expect(page.getByRole('region', { name: 'Réservations actives' })).toContainText('Thermomètre infrarouge')
+    expect(await page.evaluate(() => window.devicePixelRatio)).toBe(1)
+    expect(await settledHeight(page)).toBeLessThanOrEqual(2600)
 
     // A refresh that fails everywhere: one stale notice under the band, a chip in each module heading.
     await page.unroute('**/api/v1/**')
@@ -366,7 +383,7 @@ test.describe('overview: compact below 560 px (contract §8.1)', () => {
     await expect(page.locator('.ag-band__read')).toContainText('Non actualisé')
     await expect(page.locator('.ag-ov__stalechip').first()).toBeVisible()
     await expect(page.locator('.ag-ov__stale:visible')).toHaveCount(0)
-    expect(await pageHeight(page)).toBeLessThanOrEqual(2800)
+    expect(await settledHeight(page)).toBeLessThanOrEqual(2900)
     await expectNoHorizontalScroll(page)
   })
 
