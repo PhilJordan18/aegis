@@ -1,25 +1,9 @@
 import { useI18n } from '../../i18n/useI18n'
 import { StatusChip } from '../../ui/StatusChip'
 import { IdText } from './IdText'
-import type { AssetLabel, CompartmentLabel, LabelIndex } from './labelIndex'
+import type { AssetLabel, CompartmentLabel } from './labelIndex'
+import { cellText } from './labelText'
 import './labels.css'
-
-/** What a view already carries about a unit (09 §8.2 summary): it wins over the index. */
-export interface KnownAsset {
-  readonly assetCode: string
-  readonly model: { readonly name: string }
-}
-
-export function assetLabelOf(index: Pick<LabelIndex, 'asset'>, assetId: string, known?: KnownAsset | null): AssetLabel {
-  if (known) return { kind: 'known', code: known.assetCode, modelName: known.model.name, archived: false }
-  return index.asset(assetId)
-}
-
-/** Plain text of a unit for a sentence or an accessible name: « Multimètre numérique · MM-002 », or null when unknown. */
-export function assetText(label: AssetLabel, { withModel = true }: { readonly withModel?: boolean } = {}): string | null {
-  if (label.kind !== 'known') return null
-  return withModel && label.modelName ? `${label.modelName} · ${label.code}` : label.code
-}
 
 /**
  * A unit, label first (§1.2): « Multimètre numérique · MM-002 », the code alone when only the code is known. While the
@@ -56,11 +40,6 @@ export function AssetName({ assetId, label, withModel = true }: { readonly asset
       ) : null}
     </span>
   )
-}
-
-/** « Cellule A2 · AEGIS-DEMO-01 », or null when the cell is unknown. */
-export function cellText(label: CompartmentLabel, cellWord: (code: string) => string): string | null {
-  return label.kind === 'known' ? `${cellWord(label.code)} · ${label.lockerCode}` : null
 }
 
 export function CellName({ compartmentId, label }: { readonly compartmentId: string; readonly label: CompartmentLabel }) {

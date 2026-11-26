@@ -2,15 +2,13 @@ import { useState } from 'react'
 import { useLocation } from '../../app/router'
 import { useI18n } from '../../i18n/useI18n'
 import { Button } from '../../ui/Button'
+import { readTechnicalOpen } from './labelText'
 import './labels.css'
 
 export interface TechnicalRow {
   readonly label: string
   readonly value: string
 }
-
-/** `?technique=1` opens every « Détails techniques » block of the page (support, contract §1.2). */
-export const readTechnicalOpen = (search: string): boolean => new URLSearchParams(search).get('technique') === '1'
 
 /**
  * The only place a dossier shows full identifiers (contract §1.2, §4 decision 2): a native `<details>`, closed by
