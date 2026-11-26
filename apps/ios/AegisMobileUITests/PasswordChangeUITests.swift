@@ -177,12 +177,17 @@ final class PasswordChangeUITests: XCTestCase {
     }
 
     /// Leaving a form with an address and a password, iOS may offer, a few
-    /// seconds later, to save that password. The user turns it down; the
-    /// system prompt is in the simulator's own language, English here.
+    /// seconds later, to save that password, sometimes twice. The user turns
+    /// it down; the system prompt is in the simulator's own language, English
+    /// here. A tap made while the prompt is still leaving lands on it, not on
+    /// the field below (#234, full run on #235): the prompt must be gone.
     @MainActor
     private func declineSavingPassword(_ app: XCUIApplication, timeout: TimeInterval) {
         let notNow = app.buttons["Not Now"]
-        if notNow.waitForExistence(timeout: timeout) { notNow.tap() }
+        if notNow.waitForExistence(timeout: timeout) {
+            notNow.tap()
+            XCTAssertTrue(notNow.waitForNonExistence(timeout: 5), "The save-password prompt stayed on screen.")
+        }
     }
 
     /// Second step, typed by hand: the user turns down iOS's strong password
@@ -192,6 +197,9 @@ final class PasswordChangeUITests: XCTestCase {
         for (identifier, value) in [("password.new", new), ("password.confirmation", confirmation)] {
             let field = app.secureTextFields[identifier]
             XCTAssertTrue(field.waitForExistence(timeout: 10))
+            // A prompt over the form makes the field unhittable: decline it
+            // rather than scrolling under it.
+            declineSavingPassword(app, timeout: 0)
             for _ in 0..<6 where !field.isHittable { app.swipeDown() }
             focusNew(app, field)
             field.typeText(value)
@@ -209,6 +217,8 @@ final class PasswordChangeUITests: XCTestCase {
             app.buttons["xmark"].tap()
             field.tap()
         }
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5),
+                      "The field did not take the keyboard focus.")
     }
 
     /// Xcode's accessibility audit, with the one exception documented in
