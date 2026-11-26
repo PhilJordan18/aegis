@@ -190,6 +190,7 @@ private struct ReservationRecordScreen: View {
 
     var body: some View {
         RecordScreen(status: HistoryStatus.name(reservation.status), asset: reservation.asset,
+                     reference: Reference(label: String(localized: "Référence de la réservation"), id: reservation.id),
                      receivedAt: receivedAt) {
             FactRow(label: String(localized: "Réservée le"),
                     value: AegisTime.laboratoryDateTime(reservation.createdAt))
@@ -214,7 +215,9 @@ private struct LoanRecordScreen: View {
     let receivedAt: Date?
 
     var body: some View {
-        RecordScreen(status: HistoryStatus.name(loan.status), asset: loan.asset, receivedAt: receivedAt) {
+        RecordScreen(status: HistoryStatus.name(loan.status), asset: loan.asset,
+                     reference: Reference(label: String(localized: "Référence du prêt"), id: loan.id),
+                     receivedAt: receivedAt) {
             FactRow(label: String(localized: "Emprunté le"), value: AegisTime.laboratoryDateTime(loan.checkedOutAt))
             FactRow(label: String(localized: "Échéance"), value: AegisTime.laboratoryDateTime(loan.dueAt))
             if let returnRequestedAt = loan.returnRequestedAt {
@@ -234,9 +237,20 @@ private struct LoanRecordScreen: View {
     }
 }
 
+/// The record's id, the one a manager looks up under §17
+/// (`/admin/reservations/{id}` or `/admin/loans/{id}`).
+private struct Reference {
+    let label: String
+    let id: UUID
+
+    /// As the service writes it, so it can be compared character by character.
+    var text: String { id.uuidString.lowercased() }
+}
+
 private struct RecordScreen<Facts: View>: View {
     let status: String
     let asset: AssetSummary
+    let reference: Reference
     let receivedAt: Date?
     @ViewBuilder let facts: Facts
 
@@ -264,6 +278,22 @@ private struct RecordScreen<Facts: View>: View {
                     // §29: the placement is the asset's current one.
                     FactRow(label: String(localized: "Cellule actuelle"),
                             value: AssetPresentation.compartment(asset.placement))
+                    Divider()
+                    // Always stacked: 36 characters never fit beside a label.
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(reference.label)
+                            .foregroundStyle(Color.brandText)
+                        Text(verbatim: reference.text)
+                            .font(.body.monospaced())
+                            .foregroundStyle(Color.brandMuted)
+                            .textSelection(.enabled)
+                        Text("À communiquer à un gestionnaire pour retrouver ce dossier.")
+                            .font(.footnote)
+                            .foregroundStyle(Color.brandMuted)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("history.record.reference")
                 }
                 Text("Consultation seulement. Les actions restent dans Mon activité.")
                     .font(.footnote)

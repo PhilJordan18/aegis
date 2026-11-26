@@ -3040,6 +3040,36 @@
         }
       }
     },
+    "Référence de la réservation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reservation reference"
+          }
+        }
+      }
+    },
+    "Référence du prêt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loan reference"
+          }
+        }
+      }
+    },
+    "À communiquer à un gestionnaire pour retrouver ce dossier." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Give this to a manager to find this record."
+          }
+        }
+      }
+    },
     "Réservation en cours" : {
       "localizations" : {
         "en" : {
