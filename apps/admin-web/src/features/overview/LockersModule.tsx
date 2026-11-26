@@ -1,5 +1,5 @@
 import type { UseQueryResult } from '@tanstack/react-query'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from '../../app/Link'
 import { pathOf } from '../../app/routes'
 import { useI18n } from '../../i18n/useI18n'
@@ -11,6 +11,9 @@ import type { AdminLockerPage, AdminLockerView } from '../custody/contract'
 import type { LockerStatus } from '../lockers/contract'
 import { connectionChip, doorState, lockState, windowView } from '../lockers/lockerPresentation'
 import { transactionTimes } from '../transactions/transactionPresentation'
+import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
+import { ScheduleDialog } from '../schedule/ScheduleDialog'
+import { Button } from '../../ui/Button'
 import { ModuleAlert, OverviewModule } from './OverviewModule'
 import { readOf, type BlockRead } from './overviewModel'
 
@@ -57,6 +60,9 @@ function LockerSummary({ locker, status }: { readonly locker: AdminLockerView; r
   const t = m.overview
   const read = status === undefined ? ({ kind: 'pending' } as const) : readOf(status)
   const codeRef = useRef<HTMLSpanElement>(null)
+  const sessions = useRef(0)
+  const [editor, setEditor] = useState<{ readonly session: number; readonly open: boolean } | null>(null)
+  const [outcome, setOutcome] = useState('')
 
   if (read.kind === 'pending') {
     return (
@@ -90,6 +96,8 @@ function LockerSummary({ locker, status }: { readonly locker: AdminLockerView; r
           ? t.windowClosedNoNext
           : t.windowClosed({ time: window.nextOpensAt })
         : m.lockers.noSchedule
+  // §2.3: the one case where an administrator is expected to act here: no zone, or the window is closed.
+  const scheduleExpected = live.currentWindow.timeZone === null || !live.currentWindow.open
   const placed = new Map(locker.compartments.map((compartment) => [compartment.id, compartment.currentAsset?.assetCode ?? null]))
 
   return (
@@ -106,6 +114,38 @@ function LockerSummary({ locker, status }: { readonly locker: AdminLockerView; r
         <p className="ag-ov__sub ag-tnum">{live.lastSeenAt === null ? m.lockers.neverSignal : m.lockers.lastSignal({ time: times.zoned(live.lastSeenAt) })}</p>
         <p className="ag-ov__sub">{windowText}</p>
         {!online && <p className="ag-ov__sub">{t.lastKnown}</p>}
+        {scheduleExpected && (
+          <div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setOutcome('')
+                sessions.current += 1
+                setEditor({ session: sessions.current, open: true })
+              }}
+            >
+              {m.schedule.edit}
+            </Button>
+          </div>
+        )}
+        <p className="ag-sr-only" role="status">
+          {outcome}
+        </p>
+        {editor !== null && (
+          <ScheduleDialog
+            key={editor.session}
+            open={editor.open}
+            lockerId={live.lockerId}
+            lockerCode={locker.code}
+            suggestedZone={live.currentWindow.timeZone ?? LAB_TIME_ZONE}
+            onClose={() => setEditor({ ...editor, open: false })}
+            onSaved={() => {
+              setEditor({ ...editor, open: false })
+              setOutcome(m.schedule.saved({ code: locker.code }))
+            }}
+          />
+        )}
       </div>
       <div className="ag-ov__lkcells">
         <table className="ag-ov__cells">

@@ -653,7 +653,7 @@ export const en: Messages = {
 
   overview: {
     heading: 'Overview',
-    lead: 'What needs attention, most urgent first. Read only: no corrective action is possible here.',
+    lead: 'What needs attention, most urgent first.',
     zoneNote: ({ zone }: { zone: string }) => `Laboratory time: ${zone}`,
     updatedAt: ({ time }: { time: string }) => `Updated at ${time}`,
     refresh: 'Refresh',
@@ -687,6 +687,31 @@ export const en: Messages = {
     viewOperations: 'View operations',
     viewReservations: 'View reservations',
     viewLocker: 'View lockers',
+    viewAnomaliesCount: ({ count: value }: { count: number }) => (value === 1 ? 'View the anomaly' : `View the ${count.format(value)} anomalies`),
+    viewOperationsCount: ({ count: value }: { count: number }) => (value === 1 ? 'View the operation' : `View the ${count.format(value)} operations`),
+    viewReservationsCount: ({ count: value }: { count: number }) => (value === 1 ? 'View the reservation' : `View the ${count.format(value)} reservations`),
+
+    band: 'Summary',
+    bandLoading: 'Loading the summary',
+    tileNone: 'None',
+    tileNoLocker: 'No locker',
+    tileUnavailable: 'Unavailable',
+    tileLockerUnavailable: 'Status unavailable',
+    tilePartial: 'Incomplete read',
+    tileAtLeast: ({ count: value }: { count: number }) => `${count.format(value)}+`,
+    tileLocker: ({ code }: { code: string }) => `Locker ${code}`,
+    tileMoreLockers: ({ count: value }: { count: number }) => (value === 1 ? `+${count.format(value)} locker` : `+${count.format(value)} lockers`),
+    tileOfflineSince: ({ time }: { time: string }) => `Last signal ${time}`,
+    tileLateSince: ({ day }: { day: string }) => `since ${day}`,
+    tileSeverity: ({ high, medium, low }: { high: number; medium: number; low: number }) =>
+      [high > 0 ? `${count.format(high)} high` : null, medium > 0 ? `${count.format(medium)} medium` : null, low > 0 ? `${count.format(low)} low` : null]
+        .filter((part) => part !== null)
+        .join(' · '),
+    allClear: ({ time }: { time: string }) => `Nothing awaiting action · read at ${time}`,
+    notConfirmed: 'Incomplete read: the absence of anything to do is not confirmed.',
+    acknowledgeRow: ({ what }: { what: string }) => `Acknowledge: ${what}`,
+    acknowledgedAnnounce: 'Anomaly acknowledged; it stays open until a new observation.',
+    openLoan: 'Open the loan',
 
     untilTime: ({ time }: { time: string }) => `Until ${time}`,
     expiresAt: ({ time }: { time: string }) => `Expires at ${time}`,

@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import type { ReactNode, RefObject } from 'react'
+import { Button } from '../../ui/Button'
 import { Link } from '../../app/Link'
 import { useI18n, type I18n } from '../../i18n/useI18n'
 import { StatusChip } from '../../ui/StatusChip'
@@ -23,14 +24,15 @@ function Rows({ children }: { readonly children: ReactNode }) {
   return <ul className="ag-ov__body">{children}</ul>
 }
 
-function Row({ to, chips, main, meta }: { readonly to: string; readonly chips: ReactNode; readonly main: ReactNode; readonly meta: ReactNode }) {
+function Row({ to, chips, main, meta, action }: { readonly to: string; readonly chips: ReactNode; readonly main: ReactNode; readonly meta: ReactNode; readonly action?: ReactNode }) {
   return (
-    <li>
+    <li className={action === undefined ? undefined : 'ag-ov__item'}>
       <Link className="ag-ov__row" to={to}>
         <span className="ag-ov__chips">{chips}</span>
         <span className="ag-ov__main">{main}</span>
         <span className="ag-ov__meta">{meta}</span>
       </Link>
+      {action}
     </li>
   )
 }
@@ -74,7 +76,15 @@ function cellPart(compartmentId: string | null, labels: LabelIndex, { m }: I18n)
 
 // ---------------------------------------------------------------- 1. anomalies
 
-export function AnomaliesBlock({ read, labels, retrying, onRetry }: BlockProps & { readonly read: BlockRead<AnomalySummary>; readonly labels: LabelIndex }) {
+interface AnomaliesBlockProps extends BlockProps {
+  readonly read: BlockRead<AnomalySummary>
+  readonly labels: LabelIndex
+  /** Opens the acknowledgement dialog in place (§2.3); the row stays a link to the dossier. */
+  readonly onAcknowledge: (anomaly: AnomalyView) => void
+  readonly headingRef: RefObject<HTMLHeadingElement | null>
+}
+
+export function AnomaliesBlock({ read, labels, retrying, onRetry, onAcknowledge, headingRef }: AnomaliesBlockProps) {
   const i18n = useI18n()
   const { m } = i18n
   const t = m.overview
@@ -83,17 +93,18 @@ export function AnomaliesBlock({ read, labels, retrying, onRetry }: BlockProps &
     <OverviewModule
       title={t.anomalies}
       className="ag-ov__mod--anomalies"
+      headingRef={headingRef}
       primary
       read={read}
       retrying={retrying}
       onRetry={onRetry}
       count={summary === null ? undefined : summary.total > 0 ? { text: t.anomaliesCount({ count: summary.total }) } : { text: t.noneAnomalies, none: true }}
-      foot={summary === null ? undefined : <Foot to={anomaliesHref({ filters: { ...NO_ANOMALY_FILTERS, status: 'OPEN' }, page: 0, anomalyId: null })} label={t.viewAnomalies} shown={summary.rows.length} total={summary.total} />}
+      foot={summary === null ? undefined : <Foot to={anomaliesHref({ filters: { ...NO_ANOMALY_FILTERS, status: 'OPEN' }, page: 0, anomalyId: null })} label={summary.total > 0 ? t.viewAnomaliesCount({ count: summary.total }) : t.viewAnomalies} shown={summary.rows.length} total={summary.total} />}
     >
       {summary !== null && summary.rows.length > 0 && (
         <Rows>
           {summary.rows.map((anomaly) => (
-            <AnomalyRow key={anomaly.id} anomaly={anomaly} labels={labels} />
+            <AnomalyRow key={anomaly.id} anomaly={anomaly} labels={labels} onAcknowledge={onAcknowledge} />
           ))}
         </Rows>
       )}
@@ -101,7 +112,7 @@ export function AnomaliesBlock({ read, labels, retrying, onRetry }: BlockProps &
   )
 }
 
-function AnomalyRow({ anomaly, labels }: { readonly anomaly: AnomalyView; readonly labels: LabelIndex }) {
+function AnomalyRow({ anomaly, labels, onAcknowledge }: { readonly anomaly: AnomalyView; readonly labels: LabelIndex; readonly onAcknowledge: (anomaly: AnomalyView) => void }) {
   const i18n = useI18n()
   const severity = severityChip(anomaly.severity, i18n)
   const status = statusChip(anomaly.status, i18n)
@@ -131,6 +142,14 @@ function AnomalyRow({ anomaly, labels }: { readonly anomaly: AnomalyView; readon
         </>
       }
       main={anomalyTypeLabel(anomaly, i18n)}
+      action={
+        // The server's status decides: only an open anomaly is acknowledged, and acknowledging never resolves it.
+        anomaly.status === 'OPEN' ? (
+          <Button variant="secondary" size="sm" aria-label={i18n.m.overview.acknowledgeRow({ what: anomalyTypeLabel(anomaly, i18n) })} onClick={() => onAcknowledge(anomaly)}>
+            {i18n.m.anomalies.acknowledge}
+          </Button>
+        ) : undefined
+      }
       // The time never breaks across two lines, and stays in the laboratory zone like every other row of this page.
       meta={
         <>
@@ -185,7 +204,7 @@ export function LoansBlock({ read, retrying, onRetry }: BlockProps & { readonly 
               main={assetName(loan.asset)}
               meta={
                 <>
-                  <strong>{m.reservations.lateSince({ time: times.short(loan.dueAt) })}</strong> · {holderText(loan.holder, i18n)}
+                  <strong>{m.reservations.lateSince({ time: times.short(loan.dueAt) })}</strong> · {holderText(loan.holder, i18n)} · <span className="ag-ov__open">{t.openLoan}</span>
                 </>
               }
             />
@@ -246,7 +265,7 @@ export function OperationsBlock({ read, labels, retrying, onRetry }: BlockProps 
       retrying={retrying}
       onRetry={onRetry}
       count={count}
-      foot={summary === null ? undefined : <Foot to={transactionHref({ view: 'operations' })} label={t.viewOperations} shown={summary.rows.length} total={summary.count.n} />}
+      foot={summary === null ? undefined : <Foot to={transactionHref({ view: 'operations' })} label={summary.count.complete && summary.count.n > 0 ? t.viewOperationsCount({ count: summary.count.n }) : t.viewOperations} shown={summary.rows.length} total={summary.count.n} />}
     >
       {summary !== null && summary.rows.length > 0 && (
         <Rows>
@@ -311,7 +330,7 @@ export function ReservationsBlock({ read, retrying, onRetry }: BlockProps & { re
       retrying={retrying}
       onRetry={onRetry}
       count={page === null ? undefined : page.totalItems > 0 ? { text: t.reservationsCount({ count: page.totalItems }) } : { text: t.noneReservations, none: true }}
-      foot={page === null ? undefined : <Foot to={transactionHref({ view: 'reservations', filters: active })} label={t.viewReservations} shown={page.items.length} total={page.totalItems} />}
+      foot={page === null ? undefined : <Foot to={transactionHref({ view: 'reservations', filters: active })} label={page.totalItems > 0 ? t.viewReservationsCount({ count: page.totalItems }) : t.viewReservations} shown={page.items.length} total={page.totalItems} />}
     >
       {page !== null && page.items.length > 0 && (
         <Rows>

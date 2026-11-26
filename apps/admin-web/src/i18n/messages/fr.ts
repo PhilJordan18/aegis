@@ -724,7 +724,7 @@ export const fr = {
    */
   overview: {
     heading: "Vue d'ensemble",
-    lead: "Ce qui demande une intervention, du plus urgent au moins urgent. Lecture seule : aucune action corrective n'est possible ici.",
+    lead: 'Ce qui demande une intervention, du plus urgent au moins urgent.',
     zoneNote: ({ zone }: { zone: string }) => `Heures du laboratoire${NBSP}: ${zone}`,
     updatedAt: ({ time }: { time: string }) => `Mis à jour à ${time}`,
     refresh: 'Actualiser',
@@ -758,6 +758,35 @@ export const fr = {
     viewOperations: 'Voir les opérations',
     viewReservations: 'Voir les réservations',
     viewLocker: 'Voir les casiers',
+    viewAnomaliesCount: ({ count: value }: { count: number }) => plural(value, { one: "Voir l'anomalie", other: `Voir les ${count.format(value)} anomalies` }),
+    viewOperationsCount: ({ count: value }: { count: number }) => plural(value, { one: "Voir l'opération", other: `Voir les ${count.format(value)} opérations` }),
+    viewReservationsCount: ({ count: value }: { count: number }) => plural(value, { one: 'Voir la réservation', other: `Voir les ${count.format(value)} réservations` }),
+
+    band: 'Synthèse',
+    bandLoading: 'Chargement de la synthèse',
+    tileNone: 'Aucune',
+    tileNoLocker: 'Aucun casier',
+    tileUnavailable: 'Indisponible',
+    tileLockerUnavailable: 'État indisponible',
+    tilePartial: 'Lecture incomplète',
+    tileAtLeast: ({ count: value }: { count: number }) => `${count.format(value)}+`,
+    tileLocker: ({ code }: { code: string }) => `Casier ${code}`,
+    tileMoreLockers: ({ count: value }: { count: number }) => plural(value, { one: `+${count.format(value)} casier`, other: `+${count.format(value)} casiers` }),
+    tileOfflineSince: ({ time }: { time: string }) => `Dernier signal ${time}`,
+    tileLateSince: ({ day }: { day: string }) => `depuis ${day}`,
+    tileSeverity: ({ high, medium, low }: { high: number; medium: number; low: number }) =>
+      [
+        high > 0 ? plural(high, { one: `${count.format(high)} élevée`, other: `${count.format(high)} élevées` }) : null,
+        medium > 0 ? plural(medium, { one: `${count.format(medium)} moyenne`, other: `${count.format(medium)} moyennes` }) : null,
+        low > 0 ? plural(low, { one: `${count.format(low)} faible`, other: `${count.format(low)} faibles` }) : null,
+      ]
+        .filter((part) => part !== null)
+        .join(' · '),
+    allClear: ({ time }: { time: string }) => `Aucune intervention en attente · lu à ${time}`,
+    notConfirmed: "Lecture incomplète : l'absence d'intervention n'est pas confirmée.",
+    acknowledgeRow: ({ what }: { what: string }) => `Reconnaître${NBSP}: ${what}`,
+    acknowledgedAnnounce: "Anomalie reconnue; elle reste ouverte jusqu'à une nouvelle observation.",
+    openLoan: 'Ouvrir le prêt',
 
     untilTime: ({ time }: { time: string }) => `Jusqu’à ${time}`,
     expiresAt: ({ time }: { time: string }) => `Expire à ${time}`,

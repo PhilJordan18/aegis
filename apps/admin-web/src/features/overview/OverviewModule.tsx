@@ -1,4 +1,4 @@
-import { useId, useRef, type ReactNode } from 'react'
+import { useId, useRef, type ReactNode, type RefObject } from 'react'
 import { useI18n } from '../../i18n/useI18n'
 import { Alert } from '../../ui/Alert'
 import { Button } from '../../ui/Button'
@@ -28,17 +28,20 @@ interface OverviewModuleProps {
   readonly foot?: ReactNode
   readonly children?: ReactNode
   readonly primary?: boolean
+  /** The title, to take focus when the element that had it is gone (a row acknowledged in place). */
+  readonly headingRef?: RefObject<HTMLHeadingElement | null>
 }
 
 /**
  * Frame of one block (docs/design/manager-console/handoff.md §4.1): title and count, then the block's own states. A
  * block that could not be read shows its error, never a zero; a block whose refresh failed keeps its data and says so.
  */
-export function OverviewModule({ title, className, read, retrying, onRetry, count, foot, children, primary = false }: OverviewModuleProps) {
+export function OverviewModule({ title, className, read, retrying, onRetry, count, foot, children, primary = false, headingRef }: OverviewModuleProps) {
   const i18n = useI18n()
   const { m } = i18n
   const titleId = useId()
-  const titleRef = useRef<HTMLHeadingElement>(null)
+  const ownTitleRef = useRef<HTMLHeadingElement>(null)
+  const titleRef = headingRef ?? ownTitleRef
   const ready = read.kind === 'ready'
 
   return (
