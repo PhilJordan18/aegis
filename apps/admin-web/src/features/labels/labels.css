@@ -1,0 +1,20 @@
+/* Labels before identifiers (contrat-web-manager §1.1–1.2). */
+.ag-id { font-family: var(--ag-font-mono); font-size: 0.8125rem; font-weight: 450; color: var(--ag-text-2); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.ag-label { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.ag-label__code { font-family: var(--ag-font-mono); font-variant-numeric: tabular-nums; }
+.ag-label--pending .ag-id { display: inline-block; min-width: 9ch; border-radius: 4px; background: var(--ag-surface-sunken); color: transparent; }
+@media (prefers-reduced-motion: no-preference) {
+  .ag-label--pending .ag-id { animation: ag-label-pulse 1.4s ease-in-out infinite; }
+}
+@keyframes ag-label-pulse { 50% { opacity: 0.55; } }
+
+.ag-tech { margin-top: 24px; border-top: 1px solid var(--ag-border); padding-top: 12px; }
+.ag-tech > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 8px; color: var(--ag-text-2); font-size: var(--ag-type-small-size); font-weight: 560; }
+.ag-tech__list { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto; gap: 8px 16px; align-items: center; margin: 8px 0 0; }
+.ag-tech__list dt { color: var(--ag-text-2); font-size: var(--ag-type-small-size); }
+.ag-tech__list dd { margin: 0; font-family: var(--ag-font-mono); font-size: 0.8125rem; overflow-wrap: anywhere; user-select: all; }
+.ag-tech__status { min-height: 1.4em; margin-top: 8px; font-size: var(--ag-type-small-size); color: var(--ag-text-2); }
+@media (max-width: 559px) {
+  .ag-tech__list { grid-template-columns: minmax(0, 1fr) auto; }
+  .ag-tech__list dt { grid-column: 1 / -1; }
+}

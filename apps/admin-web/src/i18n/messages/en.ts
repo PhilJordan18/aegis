@@ -1415,6 +1415,21 @@ export const en: Messages = {
     },
   },
 
+  labels: {
+    cell: (code: string) => `Cell ${code}`,
+    idOnly: 'Identifier only',
+    archived: 'Archived',
+    technicalDetails: 'Technical details',
+    traceId: 'Trace identifier',
+    copy: 'Copy',
+    copyLabel: ({ label }: { label: string }) => `Copy ${label.toLowerCase()}`,
+    copied: 'Identifier copied',
+    copyFailed: 'Copy unavailable: select the identifier and copy it.',
+    notLoaded: 'Labels not loaded',
+    retry: 'Try again',
+    partial: 'Partial labels: some units are shown by their identifier.',
+  },
+
   notFound: {
     heading: 'Page not found',
     body: 'This address does not match any Aegis Manager page.',

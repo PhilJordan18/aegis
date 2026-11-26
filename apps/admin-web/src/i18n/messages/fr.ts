@@ -1516,6 +1516,22 @@ export const fr = {
     } as Readonly<Record<string, string>>,
   },
 
+  /** Labels before identifiers (contrat-web-manager §1.1–1.2). */
+  labels: {
+    cell: (code: string) => `Cellule ${code}`,
+    idOnly: 'Identifiant seulement',
+    archived: 'Archivé',
+    technicalDetails: 'Détails techniques',
+    traceId: 'Identifiant de trace',
+    copy: 'Copier',
+    copyLabel: ({ label }: { label: string }) => `Copier ${label.toLowerCase()}`,
+    copied: 'Identifiant copié',
+    copyFailed: `Copie impossible${NBSP}: sélectionnez l’identifiant et copiez-le.`,
+    notLoaded: 'Libellés non chargés',
+    retry: 'Réessayer',
+    partial: `Libellés partiels${NBSP}: certains exemplaires sont affichés par leur identifiant.`,
+  },
+
   notFound: {
     /** Not covered by the handoff: the sign-in panel layout, conservatively reused. Copy provisional. */
     heading: 'Page introuvable',
