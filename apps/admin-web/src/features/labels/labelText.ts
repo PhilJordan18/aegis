@@ -18,8 +18,8 @@ export function assetText(label: AssetLabel, { withModel = true }: { readonly wi
 }
 
 /** « Cellule A2 · AEGIS-DEMO-01 », or null when the cell is unknown. */
-export function cellText(label: CompartmentLabel, cellWord: (code: string) => string): string | null {
-  return label.kind === 'known' ? `${cellWord(label.code)} · ${label.lockerCode}` : null
+export function cellText(label: CompartmentLabel, cellWord: (value: { code: string }) => string): string | null {
+  return label.kind === 'known' ? `${cellWord({ code: label.code })} · ${label.lockerCode}` : null
 }
 
 

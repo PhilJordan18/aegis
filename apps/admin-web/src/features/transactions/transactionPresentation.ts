@@ -126,5 +126,3 @@ export function isTerminalOperation(operation: Pick<LockerOperationView, 'status
   return operation.terminalAt !== null || (operation.status !== UNRECOGNIZED && TERMINAL_OPERATION_STATUSES.includes(operation.status))
 }
 
-/** A UUID shortened for a list row (8 characters and an ellipsis); the dossier shows it whole and selectable. */
-export const shortId = (id: string): string => `${id.slice(0, 8)}…`

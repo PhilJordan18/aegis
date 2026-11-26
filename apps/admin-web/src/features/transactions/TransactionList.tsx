@@ -7,7 +7,7 @@ import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
 import { StaleNotice } from '../catalog/StaleNotice'
 import { TransactionAlert } from './TransactionAlert'
 import type { TransactionFailure } from './transactionFailure'
-import { isShownOverdue, lateChip, loanChip, operationChip, operationTypeLabel, reservationChip, shortId, transactionTimes, type TransactionTimes } from './transactionPresentation'
+import { isShownOverdue, lateChip, loanChip, operationChip, operationTypeLabel, reservationChip, transactionTimes, type TransactionTimes } from './transactionPresentation'
 import { transactionHref, type TransactionFilterValues, type TransactionView } from './transactionHref'
 import type { TransactionRecord, TransactionRecordPage } from './useTransactionQueries'
 
@@ -117,7 +117,6 @@ function Row({ record, selected, page, filters, times, i18n, onSelect }: RowProp
   let title: string
   let code: string | null = null
   let facts: string | null = null
-  let holder: string
   switch (record.kind) {
     case 'reservations': {
       const { item } = record
@@ -125,7 +124,6 @@ function Row({ record, selected, page, filters, times, i18n, onSelect }: RowProp
       title = item.asset.model.name
       code = item.asset.assetCode
       facts = t.fromTo({ from: times.short(item.reservedFrom), to: times.clock(item.reservedUntil) })
-      holder = t.holderLine
       break
     }
     case 'loans': {
@@ -136,7 +134,6 @@ function Row({ record, selected, page, filters, times, i18n, onSelect }: RowProp
       title = item.asset.model.name
       code = item.asset.assetCode
       facts = `${overdue ? t.lateSince({ time: times.short(item.dueAt) }) : t.dueAt({ time: times.short(item.dueAt) })} · ${t.checkout({ time: times.short(item.checkedOutAt) })}`
-      holder = t.holderLine
       break
     }
     case 'operations': {
@@ -145,11 +142,9 @@ function Row({ record, selected, page, filters, times, i18n, onSelect }: RowProp
       title = operationTypeLabel(item.type, i18n)
       code = item.asset.assetCode
       facts = `${times.short(item.createdAt)} · ${item.asset.model.name}`
-      holder = t.userLine
       break
     }
   }
-  const holderId = record.kind === 'loans' ? record.item.holderUserId : record.item.userId
   const person = record.kind === 'loans' ? record.item.holder : record.item.user
   const late = record.kind === 'loans' && isShownOverdue(record.item)
   return (
@@ -172,7 +167,7 @@ function Row({ record, selected, page, filters, times, i18n, onSelect }: RowProp
       </span>
       <span className={late ? 'ag-item__facts ag-item__facts--late' : 'ag-item__facts'}>{facts}</span>
       <span className="ag-item__facts">
-        {person === null ? holder : `${record.kind === 'operations' ? t.userLabel : t.holderLabel} ${person.displayName}`} <code className="ag-id">{shortId(holderId)}</code>
+        {person === null ? t.holderUnnamed : person.displayName}
       </span>
     </Link>
   )

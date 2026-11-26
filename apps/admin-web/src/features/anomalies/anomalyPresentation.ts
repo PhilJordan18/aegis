@@ -67,7 +67,7 @@ export function whereLine(anomaly: AnomalyView, { m }: I18n, labels: Pick<LabelI
   if (anomaly.compartmentId === null) parts.push(m.anomalies.noCell)
   else {
     const cell = labels.compartment(anomaly.compartmentId)
-    parts.push(cell.kind === 'known' ? m.labels.cell(cell.code) : m.anomalies.cellUnlabelled)
+    parts.push(cell.kind === 'known' ? m.labels.cell({ code: cell.code }) : m.anomalies.cellUnlabelled)
   }
   if (anomaly.assetId !== null) parts.push(assetText(labels.asset(anomaly.assetId)) ?? m.anomalies.assetUnlabelled)
   return parts.join(' · ')

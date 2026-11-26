@@ -17,7 +17,7 @@ export function AnomalyWhere({ anomaly, labels }: { readonly anomaly: AnomalyVie
     const cell = labels.compartment(anomaly.compartmentId)
     parts.push(
       cell.kind === 'known' ? (
-        m.labels.cell(cell.code)
+        m.labels.cell({ code: cell.code })
       ) : (
         <span className={cell.kind === 'pending' ? 'ag-label ag-label--pending' : 'ag-label'}>
           {m.anomalies.fCell} <IdText id={anomaly.compartmentId} />

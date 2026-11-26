@@ -11,6 +11,8 @@ import { asset, fakeCatalogGateway, ok as catalogOk, pageOf as assetPageOf } fro
 import { parseLoanView, parseLockerOperationView, parseReservationView } from '../features/transactions/contractParsers'
 import type { LoanView, LockerOperationView, ReservationView, TransactionPage } from '../features/transactions/contract'
 import { unconfiguredTransactionGateway, type TransactionGateway } from '../features/transactions/transactionGateway'
+import { COMPARTMENT_ID as TX_COMPARTMENT_ID, LOCKER_ID as TX_LOCKER_ID } from '../features/transactions/testFixtures'
+import { fakeCustodyGateway, okResult } from '../features/custody/testFixtures'
 import { ASSET_ID, LOAN_ID, OPERATION_ID, RESERVATION_ID, USER_ID, assetSummary, loanView, lockerOperationView, reservationView } from '../features/transactions/testFixtures'
 import type { Locale } from '../i18n/locale'
 import { installMatchMedia } from '../test/matchMedia'
@@ -86,6 +88,13 @@ function fakeGateway({
   return gateway as unknown as TransactionGateway & typeof gateway
 }
 
+/** The lockers of the label index (§1.1): the cell of the operation fixtures is A1 of AEGIS-DEMO-01. */
+const lockersWithOperationCell = () =>
+  fakeCustodyGateway({
+    listLockers: async () =>
+      okResult({ items: [{ id: TX_LOCKER_ID, code: 'AEGIS-DEMO-01', name: 'Démo', topology: 'HUB_CELL', compartments: [{ id: TX_COMPARTMENT_ID, code: 'A1', enabled: true, currentAsset: null }] }], page: 0, size: 100, totalItems: 1, totalPages: 1 }),
+  })
+
 function renderPage(transactionGateway: TransactionGateway, { url = '/reservations-prets', locale = 'fr', catalogGateway }: { url?: string; locale?: Locale; catalogGateway?: CatalogGateway } = {}) {
   const session = createSessionStore()
   session.start({ accessToken: 'token-value', expiresAt: '2026-09-30T15:30:00Z', expiresIn: 3600, profile: adminProfile })
@@ -93,7 +102,7 @@ function renderPage(transactionGateway: TransactionGateway, { url = '/reservatio
   const queryClient = createQueryClient()
   queryClient.setDefaultOptions({ queries: { ...queryClient.getDefaultOptions().queries, retry: false } })
   const catalog = catalogGateway ?? fakeCatalogGateway({ units: { [ASSET_ID]: catalogOk(asset({ id: ASSET_ID, assetCode: 'MM-001', placement: { lockerId: '3d4e5f60-7182-4a93-8ba4-c5d6e7f80912', lockerCode: 'AEGIS-DEMO-01', compartmentId: '4e5f6071-8293-4aa4-9bb5-d6e7f8091a2b', compartmentCode: 'A1' } })) } })
-  return renderWithProviders(<App />, { gateway: authGateway, transactionGateway, catalogGateway: catalog, session, queryClient, locale })
+  return renderWithProviders(<App />, { gateway: authGateway, transactionGateway, catalogGateway: catalog, custodyGateway: lockersWithOperationCell(), session, queryClient, locale })
 }
 
 const rows = () => within(document.querySelector('.ag-list__items') as HTMLElement).getAllByRole('link')
@@ -108,7 +117,7 @@ afterEach(() => {
 })
 
 describe('Réservations et prêts: reservations', () => {
-  it('lists the reservations, reads the first one by its id and names the holder beside the id (G1)', async () => {
+  it('lists the reservations, reads the first one by its id and names the holder (G1), the id in technical details', async () => {
     const gateway = fakeGateway()
     renderPage(gateway)
     expect(await screen.findByRole('heading', { level: 2, name: '2 réservations' })).toBeDefined()
@@ -121,8 +130,13 @@ describe('Réservations et prêts: reservations', () => {
     const text = plain(dossier().textContent)
     expect(text).toContain('TitulaireTechnicien Démo')
     expect(text).not.toContain('Identifiant seulement')
-    expect(text).toContain(USER_ID)
-    expect(plain(rows()[0]?.textContent)).toContain('Titulaire : Technicien Démo')
+    // §1.2: the name alone; the identifier waits in the closed « Détails techniques ».
+    const technical = dossier().querySelector('details.ag-tech') as HTMLDetailsElement
+    expect(technical.open).toBe(false)
+    expect(plain(technical.textContent)).toContain(USER_ID)
+    expect(plain(rows()[0]?.textContent)).toContain('Technicien Démo')
+    expect(plain(rows()[0]?.textContent)).not.toContain('Titulaire')
+    expect(plain(rows()[0]?.textContent)).not.toContain(USER_ID.slice(0, 8))
     expect(text).toContain("Une réservation n'ouvre aucune porte et ne crée aucun prêt.")
     // The server's order is not promised, and no sort is ever sent.
     expect(plain(document.querySelector('.ag-list__foot')?.textContent)).toContain("Les plus récents d'abord")
@@ -282,12 +296,12 @@ describe('Réservations et prêts: filters', () => {
 })
 
 describe('Réservations et prêts: loans', () => {
-  it('falls back to the id alone when the server sends no holder summary', async () => {
+  it('says « Titulaire non nommé » when the server sends no holder summary', async () => {
     const plainLoan = { ...L1, holder: null }
     renderPage(fakeGateway({ loans: ok(pageOf([plainLoan])) }), { url: '/reservations-prets?vue=prets' })
     expect(await screen.findByRole('heading', { level: 2, name: '1 prêt' })).toBeDefined()
-    await waitFor(() => expect(plain(dossier().textContent)).toContain('Identifiant seulement'))
-    expect(plain(rows()[0]?.textContent)).toContain('Titulaire : identifiant seulement')
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Titulaire non nommé'))
+    expect(plain(rows()[0]?.textContent)).toContain('Titulaire non nommé')
   })
 
   it('keeps an overdue loan borrowed: status, overdue mention, never available', async () => {
@@ -393,13 +407,12 @@ describe('Réservations et prêts: locker operations', () => {
     const gateway = fakeGateway()
     renderPage(gateway, { url: '/reservations-prets?vue=operations', catalogGateway: catalog })
     await screen.findByRole('heading', { level: 2, name: '1 opération' })
-    // The row: the equipment (name and code) and the user by name, with the identifier beside it.
+    // The row: the equipment (name and code) and the user by name only.
     expect(plain(rows()[0]?.textContent)).toContain('Multimètre numérique')
     expect(plain(rows()[0]?.textContent)).toContain('MM-001')
-    expect(plain(rows()[0]?.textContent)).toContain('Utilisateur : Technicien Démo')
+    expect(plain(rows()[0]?.textContent)).toContain('Technicien Démo')
     expect(plain(rows()[0]?.textContent)).not.toContain('identifiant seulement')
-    await waitFor(() => expect(plain(dossier().textContent)).toContain('AEGIS-DEMO-01'))
-    expect(plain(dossier().textContent)).toContain('A1')
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Cellule de l’opérationCellule A1 · AEGIS-DEMO-01'))
     expect(plain(dossier().textContent)).toContain('Technicien Démo')
     expect(plain(dossier().textContent)).not.toContain('Libellés non résolus')
     expect(catalog.getAsset).not.toHaveBeenCalled()
@@ -411,14 +424,15 @@ describe('Réservations et prêts: locker operations', () => {
     await screen.findByRole('heading', { level: 2, name: '1 opération' })
     await waitFor(() => expect(plain(dossier().textContent)).toContain("Placement actuel de l'équipement"))
     expect(plain(dossier().textContent)).toContain('AEGIS-DEMO-01 · Cellule A2')
-    expect(plain(dossier().textContent)).toContain('Cellule : identifiant seulement')
+    // The operation's own cell comes from its compartmentId, never from where the asset is now.
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Cellule de l’opérationCellule A1 · AEGIS-DEMO-01'))
   })
 
   it('shows an asset with no placement without inventing one', async () => {
     renderPage(fakeGateway({ operations: ok(pageOf([operation({ asset: { ...assetSummary, placement: null } })])) }), { url: '/reservations-prets?vue=operations' })
     await screen.findByRole('heading', { level: 2, name: '1 opération' })
     await waitFor(() => expect(plain(dossier().textContent)).toContain('Aucun placement connu'))
-    expect(plain(dossier().textContent)).toContain('Cellule : identifiant seulement')
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Cellule A1 · AEGIS-DEMO-01'))
   })
 
   it('shows an unknown status as not recognized, never as a known state', async () => {

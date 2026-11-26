@@ -597,6 +597,13 @@ export const fr = {
     secOperations: 'Opérations liées',
     secSequence: 'Séquence physique',
     secTechnical: 'Détails techniques',
+    operationCell: 'Cellule de l’opération',
+    techAsset: 'Identifiant de l’équipement',
+    techUser: 'Identifiant de l’utilisateur',
+    techHolder: 'Identifiant du titulaire',
+    techCell: 'Identifiant de la cellule',
+    techLocker: 'Identifiant du casier',
+    failureReasonCode: 'Code de la cause',
     timeline: {
       created: 'Réservation créée',
       from: 'Début de la période réservée',
@@ -1523,13 +1530,13 @@ export const fr = {
 
   /** Labels before identifiers (contrat-web-manager §1.1–1.2). */
   labels: {
-    cell: (code: string) => `Cellule ${code}`,
+    cell: ({ code }: { code: string }) => `Cellule ${code}`,
     idOnly: 'Identifiant seulement',
     archived: 'Archivé',
     technicalDetails: 'Détails techniques',
     traceId: 'Identifiant de trace',
     copy: 'Copier',
-    copyLabel: ({ label }: { label: string }) => `Copier ${label.toLowerCase()}`,
+    copyLabel: ({ label }: { label: string }) => `Copier · ${label}`,
     copied: 'Identifiant copié',
     copyFailed: `Copie impossible${NBSP}: sélectionnez l’identifiant et copiez-le.`,
     notLoaded: 'Libellés non chargés',

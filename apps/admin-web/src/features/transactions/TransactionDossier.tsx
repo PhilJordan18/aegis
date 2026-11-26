@@ -1,7 +1,6 @@
 import { useId, useLayoutEffect, useRef, type ReactNode, type Ref } from 'react'
 import { Link } from '../../app/Link'
 import { useI18n, type I18n } from '../../i18n/useI18n'
-import { ReadOnlyMark } from '../../ui/ReadOnlyMark'
 import { StatusChip } from '../../ui/StatusChip'
 import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
 import { UNRECOGNIZED } from '../catalog/contract'
@@ -17,6 +16,9 @@ import { NO_FILTERS, transactionHref, type TransactionView } from './transaction
 import { isShownOverdue, isTerminalOperation, lateChip, loanChip, operationChip, operationTypeLabel, reservationChip, transactionTimes, type TransactionTimes } from './transactionPresentation'
 import type { TransactionRecord } from './useTransactionQueries'
 import { CurrentAttempt } from './CurrentAttempt'
+import { CellName } from '../labels/Labels'
+import { TechnicalDetails } from '../labels/TechnicalDetails'
+import { useLabelIndex } from '../labels/useLabelIndex'
 
 interface TransactionDossierProps {
   readonly view: TransactionView
@@ -102,9 +104,6 @@ function Header({ overline, titleId, title, sub }: { readonly overline: string; 
         {title}
       </h2>
       {sub !== '' && <p className="ag-dossier__sub">{sub}</p>}
-      <p className="ag-sec-title ag-dossier__readonly">
-        <ReadOnlyMark />
-      </p>
     </>
   )
 }
@@ -130,8 +129,6 @@ function Fact({ label, children, help }: { readonly label: string; readonly chil
     </div>
   )
 }
-
-const IdText = ({ id }: { readonly id: string }) => <code className="ag-id ag-id--full">{id}</code>
 
 function LinkRow({ label, children }: { readonly label: string; readonly children: ReactNode }) {
   return (
@@ -180,29 +177,15 @@ function OperationLink({ label, id, empty, i18n }: { readonly label: string; rea
     <LinkRow label={label}>
       <Link className="ag-link" to={opHref(id)}>
         {t.openOperation}
-      </Link>{' '}
-      <code className="ag-id">{id.slice(0, 8)}…</code>
+      </Link>
     </LinkRow>
   )
 }
 
-function HolderFact({ label, id, person, i18n }: { readonly label: string; readonly id: string; readonly person: UserSummary | null; readonly i18n: I18n }) {
+/** The holder by name (§1.2); the identifier is in « Détails techniques ». */
+function HolderFact({ label, person, i18n }: { readonly label: string; readonly person: UserSummary | null; readonly i18n: I18n }) {
   const t = i18n.m.reservations
-  if (person !== null)
-    return (
-      <Fact label={label}>
-        {person.displayName}
-        <br />
-        <IdText id={id} />
-      </Fact>
-    )
-  return (
-    <Fact label={label} help={t.idOnlyHelp}>
-      {t.idOnly}
-      <br />
-      <IdText id={id} />
-    </Fact>
-  )
+  return person !== null ? <Fact label={label}>{person.displayName}</Fact> : <Fact label={label} help={t.idOnlyHelp}>{t.holderUnnamed}</Fact>
 }
 
 /* ---------- reservation ---------- */
@@ -235,10 +218,7 @@ function ReservationBody({ reservation: r, titleId, i18n, times }: BodyProps & {
         <dl className="ag-facts ag-facts--grid">
           <Fact label={t.factAsset}>{assetTitle(r.asset)}</Fact>
           <Fact label={t.factPlacement}>{placementText(r.asset, i18n)}</Fact>
-          <HolderFact label={t.holderField} id={r.userId} person={r.user} i18n={i18n} />
-          <Fact label={t.factReservationId}>
-            <IdText id={r.id} />
-          </Fact>
+          <HolderFact label={t.holderField} person={r.user} i18n={i18n} />
         </dl>
       </Section>
       <Section title={t.secOperations}>
@@ -259,6 +239,14 @@ function ReservationBody({ reservation: r, titleId, i18n, times }: BodyProps & {
           )}
         </div>
       </Section>
+      <TechnicalDetails
+        rows={[
+          { label: t.factReservationId, value: r.id },
+          { label: t.techAsset, value: r.asset.id },
+          { label: t.techUser, value: r.userId },
+          ...(r.currentOperationId === null ? [] : [{ label: t.factCurrentOperation, value: r.currentOperationId }]),
+        ]}
+      />
     </>
   )
 }
@@ -295,11 +283,8 @@ function LoanBody({ loan: l, titleId, i18n, times }: BodyProps & { readonly loan
         <dl className="ag-facts ag-facts--grid">
           <Fact label={t.factAsset}>{assetTitle(l.asset)}</Fact>
           <Fact label={t.factPlacement}>{placementText(l.asset, i18n)}</Fact>
-          <HolderFact label={t.holderField} id={l.holderUserId} person={l.holder} i18n={i18n} />
+          <HolderFact label={t.holderField} person={l.holder} i18n={i18n} />
           <Fact label={t.factLate}>{l.overdue ? t.yes : t.no}</Fact>
-          <Fact label={t.factLoanId}>
-            <IdText id={l.id} />
-          </Fact>
         </dl>
       </Section>
       <Section title={t.secOperations}>
@@ -310,6 +295,16 @@ function LoanBody({ loan: l, titleId, i18n, times }: BodyProps & { readonly loan
           <CurrentAttempt operationId={l.currentOperationId} activeReservedUntil={null} i18n={i18n} times={times} />
         </div>
       </Section>
+      <TechnicalDetails
+        rows={[
+          { label: t.factLoanId, value: l.id },
+          { label: t.techAsset, value: l.asset.id },
+          { label: t.techHolder, value: l.holderUserId },
+          { label: t.factCheckoutOperation, value: l.checkoutOperationId },
+          ...(l.returnOperationId === null ? [] : [{ label: t.factReturnOperation, value: l.returnOperationId }]),
+          ...(l.currentOperationId === null || l.currentOperationId === l.returnOperationId ? [] : [{ label: t.factCurrentOperation, value: l.currentOperationId }]),
+        ]}
+      />
     </>
   )
 }
@@ -318,11 +313,9 @@ function LoanBody({ loan: l, titleId, i18n, times }: BodyProps & { readonly loan
 
 function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { readonly operation: LockerOperationView }) {
   const t = i18n.m.reservations
-  // R7: the administrative operation names its user and its asset, so no catalog read is joined. The asset's placement
-  // is where it is NOW: it names the cell of this operation only when it is the same compartment, otherwise that cell
-  // stays an identifier and nothing is guessed.
-  const cellCode = o.asset.placement !== null && o.asset.placement.compartmentId === o.compartmentId ? o.asset.placement.compartmentCode : null
-  const lockerCode = o.asset.placement !== null && o.asset.placement.lockerId === o.lockerId ? o.asset.placement.lockerCode : null
+  // R7: the operation names its user and its asset. Its own cell is named by the label index from `compartmentId`
+  // (§1.1); the asset's placement is where it is NOW and is shown apart, as « Placement actuel ».
+  const labels = useLabelIndex()
   const terminal = isTerminalOperation(o)
   const absent = terminal ? t.sequence.notReceived : t.sequence.notYetReceived
   const step = (key: string, instant: string | null, label: string, applicable = true): TimelineEntry => {
@@ -368,27 +361,15 @@ function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { rea
       </Section>
       <Section title={t.secFacts}>
         <dl className="ag-facts ag-facts--grid">
-          <Fact label={t.factAsset}>
-            {assetTitle(o.asset)}
-            <br />
-            <IdText id={o.assetId} />
+          <Fact label={t.factAsset}>{assetTitle(o.asset)}</Fact>
+          <Fact label={t.operationCell}>
+            <CellName compartmentId={o.compartmentId} label={labels.compartment(o.compartmentId)} />
           </Fact>
           <Fact label={t.factCurrentPlacement} help={t.currentPlacementHelp}>
             {placementText(o.asset, i18n)}
           </Fact>
-          <Fact label={t.cell}>
-            {cellCode !== null ? (
-              cellCode
-            ) : (
-              <>
-                {t.cellIdOnly}
-                <br />
-                <IdText id={o.compartmentId} />
-              </>
-            )}
-          </Fact>
-          <Fact label={t.locker}>{lockerCode ?? <IdText id={o.lockerId} />}</Fact>
-          <HolderFact label={t.userField} id={o.userId} person={o.user} i18n={i18n} />
+          <HolderFact label={t.userField} person={o.user} i18n={i18n} />
+          {o.failureReason !== null && <Fact label={t.failureReason}>{reasonLabel ?? o.failureReason}</Fact>}
           <Fact label={t.requiredActionField}>{requiredAction}</Fact>
           {o.expiresAt !== null && <Fact label={t.expiresAt}>{times.zoned(o.expiresAt)}</Fact>}
         </dl>
@@ -423,33 +404,17 @@ function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { rea
           </LinkRow>
         </div>
       </Section>
-      <Section title={t.secTechnical}>
-        <dl className="ag-kvs">
-          <div>
-            <dt>{t.factOperationId}</dt>
-            <dd>{o.id}</dd>
-          </div>
-          {o.localAccessChallengeId !== null && (
-            <div>
-              <dt>{t.challenge}</dt>
-              <dd>{o.localAccessChallengeId}</dd>
-            </div>
-          )}
-          <div>
-            <dt>{t.failureReason}</dt>
-            <dd>
-              {o.failureReason === null ? (
-                t.none
-              ) : (
-                <>
-                  {reasonLabel !== null && <span className="ag-kvs__label">{reasonLabel}</span>}
-                  {o.failureReason}
-                </>
-              )}
-            </dd>
-          </div>
-        </dl>
-      </Section>
+      <TechnicalDetails
+        rows={[
+          { label: t.factOperationId, value: o.id },
+          { label: t.techAsset, value: o.assetId },
+          { label: t.techCell, value: o.compartmentId },
+          { label: t.techLocker, value: o.lockerId },
+          { label: t.techUser, value: o.userId },
+          ...(o.localAccessChallengeId === null ? [] : [{ label: t.challenge, value: o.localAccessChallengeId }]),
+          ...(o.failureReason === null ? [] : [{ label: t.failureReasonCode, value: o.failureReason }]),
+        ]}
+      />
     </>
   )
 }
