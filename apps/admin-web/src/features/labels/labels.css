@@ -28,7 +28,11 @@
 .ag-picker__opt.is-active, .ag-picker__opt:hover { background: var(--ag-surface-selected); }
 .ag-picker__status { min-height: 1.4em; }
 .ag-picker__chosen { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 0; }
-.ag-picker__chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 10px; border: 1px solid var(--ag-border); border-radius: 999px; }
+.ag-picker__chip { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; max-width: 100%; min-height: 32px; padding: 4px 10px; border: 1px solid var(--ag-border); border-radius: 16px; overflow-wrap: break-word; }
+.ag-picker__chip .ag-label { flex-wrap: wrap; min-width: 0; }
+.ag-picker__retry { margin: 4px 0 0; }
 @media (max-width: 559px) {
   .ag-picker__list { position: static; }
+  /* §1.8: the picker takes the whole row of the filter grid on a narrow screen. */
+  .ag-filters__grid > .ag-picker { grid-column: 1 / -1; }
 }

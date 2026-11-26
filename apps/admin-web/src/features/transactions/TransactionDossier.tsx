@@ -86,7 +86,7 @@ export function TransactionDossier({ view, record, loading, failure, stale, retr
             <StaleNotice evaluatedAt={read} retrying={retrying} onRetry={onRetry} returnFocus={() => (focusLost.current = true)} />
           </div>
         )}
-        {record.kind === 'reservations' && <ReservationBody reservation={record.item} titleId={titleId} i18n={i18n} times={times} />}
+        {record.kind === 'reservations' && <ReservationBody reservation={record.item} titleId={titleId} i18n={i18n} times={times} readAt={readAt} />}
         {record.kind === 'loans' && <LoanBody loan={record.item} titleId={titleId} i18n={i18n} times={times} />}
         {record.kind === 'operations' && <OperationBody operation={record.item} titleId={titleId} i18n={i18n} times={times} />}
       </div>
@@ -196,13 +196,14 @@ interface BodyProps {
   readonly times: TransactionTimes
 }
 
-function ReservationBody({ reservation: r, titleId, i18n, times }: BodyProps & { readonly reservation: ReservationView }) {
+function ReservationBody({ reservation: r, titleId, i18n, times, readAt }: BodyProps & { readonly reservation: ReservationView; readonly readAt: number }) {
   const t = i18n.m.reservations
   const entries: TimelineEntry[] = [
     { key: 'created', instant: r.createdAt, time: times.short(r.createdAt), label: t.timeline.created },
     { key: 'from', instant: r.reservedFrom, time: times.short(r.reservedFrom), label: t.timeline.from },
-    // §1.7: the diamond marks a due date that has passed; a reservation still running shows a hollow marker.
-    { key: 'until', instant: r.reservedUntil, time: times.short(r.reservedUntil), label: t.timeline.until, kind: r.expiredAt !== null ? 'marker' : 'absent' },
+    // §1.7: the diamond marks a due date that has passed, by the read time even before the server marks the reservation
+    // expired; a reservation still running shows a hollow marker.
+    { key: 'until', instant: r.reservedUntil, time: times.short(r.reservedUntil), label: t.timeline.until, kind: r.expiredAt !== null || Date.parse(r.reservedUntil) <= readAt ? 'marker' : 'absent' },
   ]
   if (r.fulfilledAt !== null) entries.push({ key: 'fulfilled', instant: r.fulfilledAt, time: times.short(r.fulfilledAt), label: t.timeline.fulfilled, kind: 'ok' })
   if (r.cancelledAt !== null) entries.push({ key: 'cancelled', instant: r.cancelledAt, time: times.short(r.cancelledAt), label: t.timeline.cancelled })
@@ -397,7 +398,7 @@ function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { rea
               t.none
             )}
           </LinkRow>
-          <LinkRow label={t.linkedAnomaly}>{o.anomalyId !== null ? <LinkedAnomaly anomalyId={o.anomalyId} i18n={i18n} full /> : t.noLinkedAnomaly}</LinkRow>
+          <LinkRow label={t.linkedAnomaly}>{o.anomalyId !== null ? <LinkedAnomaly anomalyId={o.anomalyId} i18n={i18n} /> : t.noLinkedAnomaly}</LinkRow>
           <LinkRow label={t.linkedAudit}>
             <Link className="ag-link" to={operationAuditHref(o.id)}>
               {t.auditOfOperation}
