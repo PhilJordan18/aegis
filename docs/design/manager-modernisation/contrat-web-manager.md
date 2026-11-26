@@ -425,6 +425,6 @@ La colonne « Dernière tentative » des réservations est supprimée : « Opér
 - Puces de filtre actif **sous** la barre de filtres, sur leur propre ligne, « Effacer les filtres » en fin de ligne (§3.4).
 - Sections Réglages, Placement attendu et Identifiants physiques de l'exemplaire rendues en cartes `ag-r-card` avec filet et rembourrage de 16 px (§3.2); le bloc d'édition de la fenêtre du casier reçoit le même rembourrage (constat 11).
 
-### 8.5 Point non retenu comme défaut (#244, constat 7)
+### 8.5 Point non retenu comme défaut (#244, constat 7) — confirmé par Philippe le 26 novembre 2026
 
-Le marqueur de chronologie d'une réservation suit le **statut serveur** : losange seulement quand la réservation est `EXPIRED` (ou le prêt `overdue`). Le client ne compare jamais `reservedUntil` à son horloge (même règle que `dueAt`, §3). Une réservation `ACTIVE` dont la fin est passée garde le marqueur creux jusqu'à ce que le serveur la marque expirée. Décision à confirmer par Philippe si la QA la maintient.
+Le marqueur de chronologie d'une réservation suit le **statut serveur** : losange seulement quand la réservation est `EXPIRED` (ou le prêt `overdue`). Le client ne compare jamais `reservedUntil` à son horloge (même règle que `dueAt`, §3). Une réservation `ACTIVE` dont la fin est passée garde le marqueur creux jusqu'à ce que le serveur la marque expirée. Décision de Philippe : « garde le marqueur creux, le client ne compare jamais l'horloge ». Le constat 7 de #244 est clos sans correction.
