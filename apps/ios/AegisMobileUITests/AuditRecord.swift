@@ -26,7 +26,9 @@ final class AuditRecord {
             note = " (\(reason))"
             return true
         case let .measured(passed, line):
-            // Partly visible: the visible part is measured, never trusted.
+            // Measured, never trusted. The note pairs the tolerated issue
+            // with its measure, kept as evidence (#222).
+            note = " (measured: \(line))"
             return measured(passed: passed, line)
         case .entirelyVisible:
             return nil
