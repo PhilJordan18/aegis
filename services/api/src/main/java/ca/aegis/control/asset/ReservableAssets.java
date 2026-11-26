@@ -108,7 +108,7 @@ public class ReservableAssets {
     /** Summaries of the given assets, for reservation views; an unknown identifier is left out. */
     @Transactional(propagation = Propagation.MANDATORY)
     public Map<UUID, AssetSummary> summaries(Collection<UUID> assetIds) {
-        return assetIds.stream().distinct().map(assets::find).flatMap(Optional::stream).map(AssetSummary::of)
+        return assets.findAll(assetIds).stream().map(AssetSummary::of)
                 .collect(Collectors.toMap(AssetSummary::id, Function.identity()));
     }
 }
