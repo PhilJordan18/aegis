@@ -338,7 +338,6 @@ export const en: Messages = {
 
     searchLabel: 'Search units',
     searchHelp: 'Code or model name, case-insensitive.',
-    searchSubmit: 'Search',
     searchClear: 'Show all',
     searchTooLong: ({ max }: { max: number }) => `A search has at most ${max} characters.`,
     searchInvalid: 'The search contains a character that is not allowed (tab, line break or control character).',

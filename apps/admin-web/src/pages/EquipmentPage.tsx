@@ -238,7 +238,6 @@ export function EquipmentPage({ sessionProfile }: { readonly sessionProfile: Use
 
         {!modelsView && (
           <AssetSearch
-            key={location.search ?? ''}
             value={location.search}
             onSearch={(next) => router.navigate(equipmentHref({ page: 0, assetId: null, search: next }))}
           />

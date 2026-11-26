@@ -394,7 +394,6 @@ export const fr = {
 
     searchLabel: 'Rechercher un exemplaire',
     searchHelp: 'Code ou nom du modèle, sans tenir compte de la casse.',
-    searchSubmit: 'Rechercher',
     searchClear: 'Tout afficher',
     searchTooLong: ({ max }: { max: number }) => `La recherche compte au plus ${max} caractères.`,
     searchInvalid: 'La recherche contient un caractère non autorisé (tabulation, saut de ligne ou caractère de contrôle).',
