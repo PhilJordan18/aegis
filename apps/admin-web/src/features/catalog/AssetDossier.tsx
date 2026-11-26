@@ -3,6 +3,7 @@ import { Link } from '../../app/Link'
 import { useI18n } from '../../i18n/useI18n'
 import { ReadOnlyMark } from '../../ui/ReadOnlyMark'
 import { Callout, DossierActions } from '../../ui/Callout'
+import { Icon } from '../../ui/Icon'
 import { StatusChip } from '../../ui/StatusChip'
 import {
   accessLevelLabel,
@@ -162,7 +163,10 @@ function DossierBody({ asset, titleId, stale, retrying, onRetry, returnFocus, ac
         {others.length > 0 && (
           // « + N autres » (sections.md §1.3): the main reason leads, the others stay one click away.
           <details className="ag-callout__more">
-            <summary>{t.moreReasons({ count: others.length })}</summary>
+            <summary>
+              <span>{t.moreReasons({ count: others.length })}</span>
+              <Icon name="chevron" />
+            </summary>
             <ul className="ag-diag__reasons">
               {others.map((reason, index) => (
                 <li key={`${reason}-${index}`}>{reasonLabel(reason, asset, i18n)}</li>
@@ -209,7 +213,7 @@ function DossierBody({ asset, titleId, stale, retrying, onRetry, returnFocus, ac
             </div>
           </dl>
         </div>
-        <div>
+        <div className="ag-r-card">
           <h3 className="ag-sec-title">
             {t.settings}
           </h3>

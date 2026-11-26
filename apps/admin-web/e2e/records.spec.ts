@@ -255,6 +255,32 @@ test.describe('records: lot 3 tables, filters and dossiers', () => {
     expect(requests.slice(before).filter((request) => request.includes('/admin/audit-events'))).toEqual([])
   })
 
+  test('dossier sections read as cards with 16 px inside, and « + N autres » shows a disclosure marker', async ({ page }) => {
+    await routeApi(page)
+    const blocked = { ...UNIT, operationalStatus: 'MAINTENANCE', operationalDiagnostic: { evaluatedAt: '2026-11-10T14:00:00Z', reasons: ['MAINTENANCE', 'CALIBRATION_EXPIRED', 'NOT_AVAILABLE'] } }
+    const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+    await page.route('**/api/v1/admin/assets**', (route) => {
+      const path = new URL(route.request().url()).pathname
+      if (path.endsWith('/identifiers')) return json(route, [])
+      if (path.endsWith(`/assets/${ASSET_ID}`)) return json(route, blocked)
+      return json(route, pageOf([blocked], 20))
+    })
+    await signIn(page)
+    await go(page, `/equipements?exemplaire=${ASSET_ID}`)
+    const cards = page.locator('.ag-dossier__scroll .ag-r-card')
+    await expect(cards.locator('h3')).toHaveText(['Réglages', 'Placement attendu', 'Identifiants physiques'])
+    for (const padding of await cards.evaluateAll((elements) => elements.map((element) => getComputedStyle(element).padding))) expect(padding).toBe('16px')
+    const summary = page.locator('.ag-callout__more > summary')
+    await expect(summary).toContainText('+ 2 autres')
+    await expect(summary.locator('.ag-icon')).toBeVisible()
+    await summary.click()
+    await expect(page.locator('.ag-callout__more')).toHaveAttribute('open', '')
+    await go(page, '/casiers')
+    const window = page.locator('.ag-lk__window.ag-edit-card')
+    await expect(window).toBeVisible()
+    expect(await window.evaluate((element) => getComputedStyle(element).padding)).toBe('16px')
+  })
+
   test('the locker dossier opens with its two actions, then its state block', async ({ page }) => {
     await routeApi(page)
     await signIn(page)

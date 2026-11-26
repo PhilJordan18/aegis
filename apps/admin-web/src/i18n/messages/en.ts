@@ -499,7 +499,7 @@ export const en: Messages = {
     emptyTitle: { reservations: 'No reservation recorded.', loans: 'No loan recorded.', operations: 'No physical operation recorded.' },
     emptyBody: { reservations: 'Reservations appear here as soon as they are created.', loans: 'Loans appear here once a checkout is confirmed by the locker.', operations: 'Operations appear here as soon as they are created.' },
     filteredEmptyTitle: { reservations: 'No reservation for these filters.', loans: 'No loan for these filters.', operations: 'No operation for these filters.' },
-    filteredEmptyBody: 'Change the filters or show everything.',
+    filteredEmptyBody: 'Change or clear the filters.',
 
     forbiddenTitle: 'Your account cannot access reservations and loans.',
     notFoundTitle: 'File not found.',
@@ -986,7 +986,7 @@ export const en: Messages = {
     loaded: ({ count: value, page, pages }: { count: number; page: number; pages: number }) =>
       `List loaded: ${plural(value, { one: `${count.format(value)} anomaly`, other: `${count.format(value)} anomalies` })}, page ${count.format(page)} of ${count.format(pages)}.`,
     emptyFilteredTitle: 'No anomaly for these filters.',
-    emptyFilteredBody: 'Change the filters, or show all anomalies.',
+    emptyFilteredBody: 'Change or clear the filters.',
     emptyTitle: 'No anomaly is recorded.',
     emptyBody: 'An anomaly appears here as soon as the server records one.',
 
@@ -1034,8 +1034,8 @@ export const en: Messages = {
     auditOfOperation: 'Audit of this operation',
     secAck: 'Acknowledgement',
     notAcknowledged: 'This anomaly has not been acknowledged yet.',
-    acknowledgedBy: ({ name, time }: { name: string; time: string }) => `Acknowledged by ${name} at ${time}.`,
-    acknowledgedAtOnly: ({ time }: { time: string }) => `Acknowledged at ${time}.`,
+    acknowledgedBy: ({ name, time }: { name: string; time: string }) => `Acknowledged on ${time} by ${name}.`,
+    acknowledgedAtOnly: ({ time }: { time: string }) => `Acknowledged on ${time}.`,
     ackNote: 'Acknowledgement note',
     secResolution: 'Resolution',
     notResolved: 'Not resolved: no new observation from the locker has confirmed the expected state.',
@@ -1283,7 +1283,7 @@ export const en: Messages = {
     refreshed: ({ count: value }: { count: number }) =>
       plural(value, { one: `History refreshed: ${count.format(value)} event loaded.`, other: `History refreshed: ${count.format(value)} events loaded.` }),
     emptyFilteredTitle: 'No event for these filters.',
-    emptyFilteredBody: 'Change the filters, or show the whole history.',
+    emptyFilteredBody: 'Change or clear the filters.',
     emptyTitle: 'No event received.',
     emptyBody: 'The service returned no event.',
     requestedMissingTitle: 'The requested event is not among the loaded results.',

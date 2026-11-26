@@ -117,14 +117,14 @@ export function CustodySection({ asset, onRevoke }: { readonly asset: AdminAsset
 
   return (
     <div className="ag-custody">
-      <section className="ag-custody__block" aria-labelledby={`custody-place-${asset.id}`}>
+      <section className="ag-custody__block ag-r-card" aria-labelledby={`custody-place-${asset.id}`}>
         <h3 className="ag-sec-title" id={`custody-place-${asset.id}`}>
           {t.placementTitle}
         </h3>
         <p className="ag-tnum">{asset.placement ? `${asset.placement.lockerCode} · ${asset.placement.compartmentCode}` : i18n.m.equipment.noPlacement}</p>
       </section>
 
-      <section className="ag-custody__block" aria-labelledby={`custody-ids-${asset.id}`}>
+      <section className="ag-custody__block ag-r-card" aria-labelledby={`custody-ids-${asset.id}`}>
         <h3 className="ag-sec-title" id={`custody-ids-${asset.id}`}>
           {t.identifiersTitle}
         </h3>

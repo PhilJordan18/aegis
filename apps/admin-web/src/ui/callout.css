@@ -8,7 +8,14 @@
 .ag-diag.ag-callout--ready { background: var(--ag-ready-bg); }
 .ag-callout__lead { margin-top: 10px; font-size: var(--ag-eq-diag-reason-size, 1rem); font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
 .ag-callout__more { margin-top: 6px; }
-.ag-callout__more > summary { cursor: pointer; min-height: 24px; display: inline-flex; align-items: center; font-weight: 500; }
+.ag-callout__more > summary { cursor: pointer; min-height: 24px; display: inline-flex; align-items: center; gap: 4px; font-weight: 500; list-style: none; }
+.ag-callout__more > summary::-webkit-details-marker { display: none; }
+/* The disclosure marker of « + N autres »: a chevron that turns when the list opens. */
+.ag-callout__more > summary .ag-icon { width: 16px; height: 16px; transition: transform var(--ag-motion-fast) var(--ag-ease-out); }
+.ag-callout__more[open] > summary .ag-icon { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) {
+  .ag-callout__more > summary .ag-icon { transition: none; }
+}
 .ag-callout__more > ul { margin-top: 6px; display: grid; gap: 4px; }
 .ag-dossier__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
 @media (forced-colors: active) {
@@ -17,4 +24,7 @@
 /* §3.2: two levels only inside a dossier, the section title (title-md) and the field labels. */
 .ag-sec-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: var(--ag-type-title-md-size); line-height: var(--ag-type-title-md-lh); font-weight: var(--ag-type-title-md-weight); letter-spacing: var(--ag-type-title-md-track); color: var(--ag-text); }
 /* Groups the administrator can change are cards; derived groups are not. */
+/* Design §8.4: a dossier section as a card, hairline and 16 px inside (Réglages, Placement, Identifiants). */
+.ag-r-card { padding: 16px; border: 1px solid var(--ag-border); border-radius: var(--ag-r-card); background: var(--ag-surface); }
+.ag-r-card > .ag-sec-title:first-child { margin-top: 0; }
 .ag-edit-card { margin-top: 16px; padding: 16px 20px; border: 1px solid var(--ag-border); border-radius: var(--ag-r-card); background: var(--ag-surface); }

@@ -162,8 +162,8 @@ describe('Anomalies — list and dossier', () => {
     const dossier = await screen.findByRole('group', { name: 'Porte non refermée avant l’échéance' })
     expect(within(dossier).getAllByText('Reconnue').length).toBeGreaterThan(0)
     // §3.2: the state block says who acknowledged and when; the acknowledgement section says it again with the note.
-    expect(within(dossier).getAllByText(/Reconnue par Administrateur de démonstration à/)).toHaveLength(2)
-    expect(dossier.querySelector('.ag-callout__lead')?.textContent).toMatch(/^Reconnue par Administrateur de démonstration à/)
+    expect(within(dossier).getAllByText(/Reconnue le .+ par Administrateur de démonstration\./)).toHaveLength(2)
+    expect(dossier.querySelector('.ag-callout__lead')?.textContent).toMatch(/^Reconnue le .+ par Administrateur de démonstration\./)
     expect(within(dossier).getByText('Inspection planifiée.')).toBeDefined()
     expect(within(dossier).queryByRole('button', { name: 'Reconnaître' })).toBeNull()
     expect(within(dossier).getByText(/Non résolue/)).toBeDefined()
