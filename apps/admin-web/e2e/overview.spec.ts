@@ -238,3 +238,42 @@ test.describe('overview: lot 2 summary band', () => {
     })
   }
 })
+
+test.describe('overview: compact below 560 px (contract §8.1)', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  const pageHeight = (page: Page) => page.evaluate(() => document.documentElement.scrollHeight)
+
+  test('previews 3 rows per module, reads the band once, and stays within 2300 px, 2700 px when stale', async ({ page }) => {
+    await routeApi(page, { activeLoans: [1, 2, 3, 4, 5, 6].map((index) => loan(index, true)) })
+    await openOverview(page)
+    const loans = page.getByRole('region', { name: 'Prêts en retard' })
+    await expect(loans.locator('.ag-ov__row')).toHaveCount(3)
+    await expect(loans).toContainText('Affichage de 3 sur 6.')
+    // One read line for the band; no read time inside the tiles.
+    await expect(page.locator('.ag-band__read')).toBeVisible()
+    await expect(page.locator('.ag-tile__read').first()).toBeHidden()
+    expect(await pageHeight(page)).toBeLessThanOrEqual(2300)
+
+    // A refresh that fails everywhere: one stale notice under the band, a chip in each module heading.
+    await page.unroute('**/api/v1/**')
+    await page.route('**/api/v1/**', (route) => route.fulfill({ status: 503, contentType: 'application/problem+json', body: JSON.stringify({ type: 'https://aegis.local/problems/service_unavailable', title: 'Fictif', status: 503, code: 'SERVICE_UNAVAILABLE', detail: 'Fictif', instance: '/', traceId: TRACE_ID, timestamp: '2026-11-10T14:00:00Z' }) }))
+    await page.getByRole('button', { name: 'Actualiser' }).click()
+    await expect(page.locator('.ag-band__read')).toContainText('Non actualisé')
+    await expect(page.locator('.ag-ov__stalechip').first()).toBeVisible()
+    await expect(page.locator('.ag-ov__stale:visible')).toHaveCount(0)
+    expect(await pageHeight(page)).toBeLessThanOrEqual(2700)
+    await expectNoHorizontalScroll(page)
+  })
+
+  test('keeps the locker code whole and names the closing time alone', async ({ page }) => {
+    await routeApi(page)
+    await openOverview(page)
+    const code = page.locator('.ag-tile__code')
+    await expect(code).toHaveText('AEGIS-DEMO-01')
+    const box = await code.boundingBox()
+    // One line: the code never breaks inside.
+    expect(box?.height ?? 99).toBeLessThan(24)
+  })
+})
+

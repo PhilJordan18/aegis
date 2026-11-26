@@ -643,7 +643,8 @@ describe('Summary band and acknowledgement in place (contract §2)', () => {
     expect(tiles().map((tile) => tile.getAttribute('href'))).toEqual(['/anomalies', '/reservations-prets?vue=prets&statut=ACTIVE', '/casiers', '/reservations-prets?vue=operations', '/reservations-prets?statut=ACTIVE'])
     expect(tileText(0)).toMatch(/^Anomalies ouvertes11 élevéeLu à /)
     expect(tileText(1)).toMatch(/^Prêts en retard1depuis 10 nov\.Lu à /)
-    expect(tileText(2)).toMatch(/^Casier AEGIS-DEMO-01En ligneOuvert · fermeture .+Lu à /)
+    // §8.1: the closing time alone on the day of the evaluation, never the full date.
+    expect(tileText(2)).toMatch(/^Casier AEGIS-DEMO-01En ligneOuvert · fermeture 17 h 00Lu à /)
     expect(tileText(3)).toMatch(/^Opération en cours1Lu à /)
     expect(tileText(4)).toMatch(/^Réservations actives1Lu à /)
     expect(tiles()[0]?.className).toContain('ag-tile--anomaly')
