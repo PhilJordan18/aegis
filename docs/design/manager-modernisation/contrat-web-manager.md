@@ -433,7 +433,7 @@ Le marqueur de chronologie d'une réservation suit le **statut serveur** : losan
 
 Le §8.1 fixait une cible sans nommer le jeu de données; la QA mesure 2 709 px à l'état nominal avec son jeu de revue, le test e2e de `70b5e1d` passe avec un jeu plus léger. Mesure de Design sur `70b5e1d`, même jeu, 390 × 844 px, mode aperçu : **2 740 px**, dont trois rangées d'anomalie de **211 px** chacune contre 100 à 119 px pour les rangées des autres modules, et un en-tête de page de 211 px (« Aide » seul sur une ligne, « Lu à » et « Actualiser » sur la suivante).
 
-**Jeu de référence nommé** (toute mesure du §8.1 et du présent article s'y rapporte; le test e2e l'utilise) :
+**Jeu de référence nommé** (toute mesure du §8.1 et du présent article s'y rapporte; le test e2e l'utilise tel quel, **avec les résumés d'utilisateur et d'équipement et leurs noms**, car le lot 1 existe pour afficher ces libellés; une mesure sans noms décrit une page que personne ne verra). Les noms du jeu tiennent sur une ligne à 390 px (« Marie Tremblay », « Multimètre numérique »); un nom long sur deux lignes est un cas de robustesse (aucun débordement, aucune troncature), pas un cas de mesure :
 
 - 3 anomalies `OPEN` (1 `HIGH`, 2 `MEDIUM`), chacune avec cellule, équipement et date de détection;
 - 1 prêt `ACTIVE` en retard;
@@ -445,7 +445,7 @@ Le §8.1 fixait une cible sans nommer le jeu de données; la QA mesure 2 709 px 
 
 **Compaction exigée** (pas de contenu retiré) :
 
-- Rangée d'anomalie sous 560 px : les deux puces (gravité, statut) sur **une seule ligne**, comme la rangée de prêt; le bouton « Reconnaître » passe **sous** le texte, aligné à gauche, au lieu d'une colonne latérale qui fait replier le titre et le détail. Objectif : rangée ≤ 140 px avec un titre sur deux lignes.
+- Rangée d'anomalie sous 560 px : les deux puces (gravité, statut) sur **une seule ligne**, comme la rangée de prêt; le bouton « Reconnaître » passe **sous** le texte, aligné à gauche, au lieu d'une colonne latérale qui fait replier le titre et le détail. Objectif : rangée ≤ 140 px avec un titre sur une ligne, ≤ 160 px avec un titre sur deux lignes (le « 140 px avec un titre sur deux lignes » de la première rédaction était une estimation faite avec le bouton en colonne latérale; elle tombe). Détail du placement au §8.9.
 - En-tête de page sous 560 px : « Aide » et « Actualiser » sur **la même ligne**, la ligne « Lu à » en dessous; une seule ligne d'actions.
 - Tuile Casier : « Ouvert · fermeture 17 h 00 » tient sur une ligne; si la largeur manque, le détail se réduit à « fermeture 17 h 00 » (le statut « En ligne » est déjà dans la valeur).
 
@@ -455,11 +455,22 @@ Rien d'autre ne change : 3 rangées par module, un seul avis périmé sous la ba
 
 La règle « une seule ligne de détail par tuile » du §8.1 ne supprime jamais l'honnêteté du compteur. Quand une lecture est partielle (`totalItems` au-delà de la page lue), la ligne de détail de la tuile est **remplacée** par « Lecture incomplète » à toutes les largeurs; sous 560 px c'est donc cette mention qui occupe l'unique ligne de détail, et le nom accessible de la tuile la contient (« Prêts en retard, 1+, lecture incomplète »). Masquer `.ag-tile__detail--strong` sous 560 px est un défaut; le test e2e de lecture partielle s'exécute aussi à 390 px.
 
-### 8.8 Barre de filtres entre 1024 et 1279 px et détails ratifiés (#246, deuxième revue, constats B3, N1, N3)
+### 8.8 Barre de filtres compacte à partir de 1024 px et détails ratifiés (#246, deuxième revue, constats B3, N1, N3)
 
 La QA mesure à 1024 × 768 px, dossier ouvert, une barre de filtres de 283 px qui ne laisse que 71 px à la liste. Design ratifie les choix de `d8ba877` :
 
-- Entre 1024 et 1279 px, l'aide des dates s'affiche **une seule fois** sous les deux champs « Du (inclus) » et « Au (inclus) »; chaque champ garde sa propre description pour les technologies d'assistance. Les quatre filtres tiennent sur une ligne; les actions de page se placent à côté des onglets. Objectif mesurable : à 1024 × 768 px, dossier ouvert, la première rangée de la liste est entièrement visible dans la fenêtre sur Réservations, Prêts, Opérations et Audit.
+- À partir de 1024 px, **sans borne haute** (la borne 1279 px de la première rédaction laissait une barre de 217 px à 1280 × 720), l'aide des dates s'affiche **une seule fois** sous les deux champs « Du (inclus) » et « Au (inclus) »; chaque champ garde sa propre description pour les technologies d'assistance. Les quatre filtres tiennent sur une ligne; les actions de page se placent à côté des onglets. Objectif mesurable : à 1024 × 768 px, dossier ouvert, la première rangée de la liste est entièrement visible dans la fenêtre sur Réservations, Prêts, Opérations et Audit; même critère à 1280 × 720 px. Hauteurs de fenêtre prises en charge par Design : 768 px à 1024 px de large, 720 px à partir de 1280 px (Philippe peut restituer ce seuil).
+- Une date saisie **au clavier** s'applique seulement à la validation du champ, sur Entrée ou à la sortie du champ, **sans minuterie** (§3.4, une seule requête et une seule entrée d'historique par valeur confirmée); le calendrier natif et les raccourcis s'appliquent immédiatement.
 - Sous 560 px, l'emplacement du message d'erreur d'un filtre **ne réserve pas de ligne** quand il est vide; l'erreur de date n'apparaît qu'à la sortie du champ ou sur Entrée, donc le décalage suit une action de la personne. La réservation de largeur du §1.1 (libellés) reste inchangée.
 - Dans les tableaux, un code d'équipement long **passe à la ligne au tiret**, jamais au milieu d'un mot, et ne déborde jamais sur la colonne voisine (les codes peuvent compter 64 caractères). Le code du casier dans le surligné de la tuile Vue d'ensemble reste entier (§8.1).
 - Le test e2e de hauteur de page attend un dossier stable (lectures de dossier servies, aucun squelette ni alerte) avant de mesurer; les plafonds du §8.3 se rapportent à cette mesure.
+
+### 8.9 Rangée d'anomalie sous 560 px : puce de gravité courte et place de l'heure (#245, troisième et quatrième revues)
+
+Les puces « Gravité moyenne » et « Ouverte » mesurent 225 à 241 px à 390 px : l'heure de détection ne tient pas à leur droite, et placée sous elles la rangée atteint 158 px. Placer l'heure sur la ligne du bouton « Reconnaître » est refusé : elle se lirait comme l'heure de l'action. Décision :
+
+- Sous 560 px, sur la bande Vue d'ensemble **et** sur la liste Anomalies, la puce de gravité garde son icône et sa couleur de rôle; son texte visible devient « Élevée », « Moyenne », « Faible »; son **nom accessible reste** « Gravité élevée », « Gravité moyenne », « Gravité faible » (texte `sr-only` ou `aria-label`). La puce de statut ne change pas. À 560 px et plus, le libellé complet revient partout. Raccourcir un libellé visible en gardant le nom accessible complet **n'est pas un retrait de contenu** au sens du §8.6.
+- L'heure de détection se place **à droite des deux puces, sur leur ligne**, alignée à droite; le mot « Détectée » reste présent pour les technologies d'assistance (`sr-only`) devant l'heure. À 320 px, si la place manque, l'heure passe sous les puces, entière, jamais tronquée.
+- La ligne de détail devient « Cellule A1 · Multimètre numérique · MM-001 » et tient sur une ligne à 390 px avec le jeu de référence. « Reconnaître » reste **sous** le texte, aligné à gauche.
+- Ordre de lecture (DOM) inchangé : gravité, statut, titre, détail, heure, action.
+- Cibles : rangée ≤ 140 px avec un titre sur une ligne, ≤ 160 px avec un titre sur deux lignes, à 390 px; le jeu de référence comprend au moins une anomalie à titre long sur deux lignes (par exemple `DEVICE_OFFLINE_DURING_OPERATION`) pour que la mesure de page la couvre.
