@@ -65,8 +65,17 @@ export function SummaryBand({ tiles, allClear, onRetryStale, retrying }: Summary
               {tile.state === 'ready' && (
                 <>
                   <span className="ag-tile__value">{tile.value}</span>
-                  {tile.partial && <span className="ag-tile__detail ag-tile__detail--strong">{t.tilePartial}</span>}
-                  {tile.detail !== null && <span className="ag-tile__detail">{tile.detail}</span>}
+                  {/* §8.7: a partial read replaces the detail line at every width; the count never reads as complete. */}
+                  {tile.partial ? (
+                    <span className="ag-tile__detail ag-tile__detail--strong">{t.tilePartial}</span>
+                  ) : (
+                    tile.detail !== null && (
+                      <span className="ag-tile__detail">
+                        {tile.detailLead !== undefined && <span className="ag-tile__lead">{tile.detailLead}</span>}
+                        {tile.detail}
+                      </span>
+                    )
+                  )}
                   <span className="ag-tile__read">
                     {tile.stale ? (
                       <StatusChip role="unknown" icon="status-clock">

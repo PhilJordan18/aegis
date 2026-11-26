@@ -737,6 +737,8 @@ export const en: Messages = {
     lockerUnknownBody: 'No valid signal has been received yet: neither presence nor absence is assumed.',
     lockerStatusTitle: ({ code }: { code: string }) => `Status of locker ${code} not loaded.`,
     windowOpen: ({ time }: { time: string }) => `Open · closes ${time}`,
+    windowOpenLead: 'Open · ',
+    windowCloses: ({ time }: { time: string }) => `closes ${time}`,
     windowClosed: ({ time }: { time: string }) => `Closed · next opening ${time}`,
     windowClosedNoNext: 'Closed · no next opening',
     cell: 'Cell',

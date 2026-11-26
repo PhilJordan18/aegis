@@ -33,6 +33,8 @@ export type Tile =
       /** `neutral` at zero: nothing to do, nothing coloured. */
       readonly role: StatusRole
       readonly detail: string | null
+      /** Said before `detail`, dropped by a tile too narrow to hold both on one line (§8.6). */
+      readonly detailLead?: string
       /** « Lecture incomplète »: the value is a count among the rows read. */
       readonly partial: boolean
       readonly readAt: number
@@ -122,20 +124,21 @@ function lockerTile({ lockers, statuses }: BandInputs, i18n: I18n): Tile {
     const chip = connectionChip(live.connectionStatus, i18n)
     const window = windowView(live.currentWindow, i18n)
     const { closesAt, nextOpensAt, timeZone } = live.currentWindow
+    const open = live.connectionStatus !== 'OFFLINE' && window.kind === 'open'
     const state =
       live.connectionStatus === 'OFFLINE'
         ? live.lastSeenAt === null
           ? m.lockers.neverSignal
           : t.tileOfflineSince({ time: times.clock(live.lastSeenAt) })
         : window.kind === 'open'
-          ? t.windowOpen({ time: closesAt === null ? '' : windowTime(closesAt, live.evaluatedAt, timeZone, i18n) })
+          ? t.windowCloses({ time: closesAt === null ? '' : windowTime(closesAt, live.evaluatedAt, timeZone, i18n) })
           : window.kind === 'closed'
             ? window.nextOpensAt === null
               ? t.windowClosedNoNext
               : t.windowClosed({ time: nextOpensAt === null ? window.nextOpensAt : windowTime(nextOpensAt, live.evaluatedAt, timeZone, i18n) })
             : m.lockers.noSchedule
     const detail = more > 0 ? `${state} · ${t.tileMoreLockers({ count: more })}` : state
-    return { value: chip.label, role: chip.role, detail, partial: false }
+    return { value: chip.label, role: chip.role, detail, ...(open ? { detailLead: t.windowOpenLead } : {}), partial: false }
   })
 }
 

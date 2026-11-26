@@ -133,14 +133,33 @@ a.ag-ov__row:hover { background: var(--ag-field); }
   .ag-band { gap: 8px; }
   .ag-tile { min-height: 88px; gap: 2px; padding: 10px 12px; }
   .ag-tile__value { font-size: 1.5rem; line-height: 1.25; }
-  .ag-tile__read, .ag-tile__detail--strong { display: none; }
+  .ag-tile__read { display: none; }
+  /* §8.6: the locker detail holds one line; a tile too narrow for « Ouvert · fermeture 17 h 00 » drops « Ouvert · ». */
+  .ag-tile { container-type: inline-size; }
+  .ag-tile__detail:has(.ag-tile__lead) { white-space: nowrap; }
   .ag-ov__stale { display: none; }
   .ag-ov__stalechip { display: inline-flex; }
   .ag-band__read { display: flex; }
+
+  /* §8.6: the two chips on one line and « Reconnaître » under the text, so the title keeps the row's width. */
+  .ag-ov__item { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .ag-ov__item > .ag-btn { justify-self: start; margin: -8px 0 8px 14px; }
+  .ag-ov__item .ag-ov__chips { flex-wrap: nowrap; }
+  /* §8.6: the « Non actualisé » chip of a stale module wraps under its title; the wrapped line adds no gap. */
+  .ag-ov__head, .ag-band__read { row-gap: 0; }
+  .ag-ov__lkline { row-gap: 2px; }
 }
 @media (max-width: 479px) {
   .ag-ov__row { padding: 12px 10px; }
+  .ag-ov__item > .ag-btn { margin-left: 10px; }
+}
+@media (max-width: 359px) {
+  /* §8.6: 320 px tiles keep « fermeture 17 h 00 » on one line. */
+  .ag-tile { padding-inline: 10px; }
 }
 @media (forced-colors: active) {
   .ag-ov__mod--primary { border-color: CanvasText; }
+}
+@container (max-width: 210px) {
+  .ag-tile__lead { display: none; }
 }
