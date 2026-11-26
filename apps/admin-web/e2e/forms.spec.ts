@@ -146,7 +146,7 @@ for (const theme of ['light', 'dark'] as const) {
         await start(page)
         const search = page.getByRole('search', { name: 'Rechercher un exemplaire' })
         await search.getByRole('searchbox').fill('a'.repeat(101))
-        await search.getByRole('button', { name: 'Rechercher' }).click()
+        await search.getByRole('searchbox').press('Enter')
         await expect(search.getByRole('searchbox')).toBeFocused()
         await expect(search.getByRole('searchbox')).toHaveAttribute('aria-invalid', 'true')
         expect(searched).toEqual([])
