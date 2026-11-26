@@ -180,10 +180,10 @@ Cinq tuiles en tête de page, sous le titre, au-dessus des modules existants. Ch
 | Tuile | Valeur | Définition et source | Lien | Partiel | Erreur |
 |---|---|---|---|---|---|
 | Anomalies ouvertes | `totalItems` | `GET /admin/anomalies?status=OPEN` (lecture existante) | `/anomalies` (défaut « Ouvertes ») | Sans objet | « — » et « Indisponible », puce `unknown` |
-| Prêts en retard | Nombre d'`overdue` observés | `useOpenLoanReads` (existant) | `/reservations-prets?vue=prets&statut=actifs` (filtre statut `ACTIVE`; le filtre « en retard » n'existe pas côté serveur, §5 B3; la liste trie les retards en tête, §3.3) | « N+ » et « Lecture incomplète » | Idem |
+| Prêts en retard | Nombre d'`overdue` observés | `useOpenLoanReads` (existant) | `/reservations-prets?vue=prets&statut=ACTIVE` (paramètre existant; le filtre « en retard » n'existe pas côté serveur, §5 B3; la liste met les retards en tête de la page chargée, §3.3) | « N+ » et « Lecture incomplète » | Idem |
 | Casier | État : « En ligne », « Hors ligne », « Inconnu » et « Ouvert jusqu'à HH h » ou « Fermé · ouvre à … » | `GET /lockers/{id}/status` (existant), un casier en P0; plusieurs casiers → une tuile par casier, puis « +N » vers Casiers | `/casiers` | Sans objet | « État indisponible », puce `unknown` |
 | Opérations en cours | Nombre d'opérations distinctes non terminales | `useInProgressOperationReads` (existant, 7 lectures) | `/reservations-prets?vue=operations` | « N+ » quand un statut manque | Idem |
-| Réservations actives | `totalItems` | `GET /admin/reservations?status=ACTIVE` (existant) | `/reservations-prets?statut=actives` | Sans objet | Idem |
+| Réservations actives | `totalItems` | `GET /admin/reservations?status=ACTIVE` (existant) | `/reservations-prets?statut=ACTIVE` (paramètre existant) | Sans objet | Idem |
 
 Rendu : tuile `ag-panel` de 120 px de haut minimum; surligné 12 px (« ANOMALIES OUVERTES »), valeur en `title-xl` (32 px) chiffres tabulaires, ligne de détail 14 px (« 1 élevée · 1 moyenne » pour les anomalies, « depuis 25 nov. » pour le retard le plus ancien, « fermeture 17 h 00 » pour le casier), instant « lu à HH h MM » en 12 px. Couleur : la **valeur** reste en `--ag-text`; seule une puce de 8 px et le surligné portent le rôle (`anomaly` si > 0 anomalies, `unknown` si > 0 retards, `ready`/`blocked`/`unknown` pour le casier, `progress` pour les opérations, `info` pour les réservations). À zéro, la tuile est neutre avec « Aucune ». Jamais la couleur seule.
 
@@ -301,7 +301,7 @@ Un seul composant `FilterBar` pour Réservations et prêts, Anomalies et Audit (
 - L'adresse reste la source de vérité (paramètres existants); le bouton Précédent du navigateur annule le dernier filtre.
 - Pendant la lecture déclenchée par un filtre : le tableau garde les lignes précédentes atténuées (`aria-busy="true"`), jamais un vide intermédiaire; une lecture annulée par un filtre plus récent n'affiche rien.
 - Vide **par filtre** : « Aucune réservation pour ces filtres · Effacer les filtres »; vide **sans filtre** : « Aucune réservation enregistrée »; erreur : alerte existante, jamais le texte « Aucune ».
-- Champs date : libellé « Du (inclus) » et « Au (exclu) » avec le fuseau du laboratoire en aide; raccourcis `ghost sm` « Aujourd'hui », « 7 jours », « 30 jours » qui remplissent les deux champs.
+- Champs date : libellés « Du (inclus) » et « Au (inclus) » avec le fuseau du laboratoire en aide. Les deux champs nomment des **jours** du laboratoire, tous deux inclus; le client en dérive les instants de l'API, `from` inclusif et `to` exclusif (`09` §17, §18.1, §19.1), en envoyant pour `to` le début du jour suivant (`transactionQuery.ts`, `auditFilters.ts`). Aucun changement du contrat REST. Raccourcis `ghost sm` « Aujourd'hui », « 7 jours », « 30 jours » qui remplissent les deux champs.
 - Équipements : la recherche existante (`q`) adopte la même temporisation de 300 ms et perd son bouton « Rechercher »; le champ garde son libellé.
 
 ### 3.5 Équipements
@@ -361,3 +361,28 @@ Aucun endpoint n'est inventé ici. Chaque ligne décrit la donnée manquante, la
 - Toute action d'écriture nouvelle : fin de prêt, confirmation d'opération, ouverture à distance, résolution d'anomalie.
 - Graphiques, statistiques, historique enrichi (P1).
 - Refonte de l'identité, nouvelle police, nouveaux jetons de couleur.
+
+## 7. Écarts acceptés à la livraison (26 novembre 2026)
+
+Écarts signalés par la session Web Manager (PR #244, #245 et le lot 3) et tranchés par la session Design. Ils font partie du contrat; le texte des sections concernées n'est pas réécrit, cette liste prévaut.
+
+| Lot | Section | Écart livré | Décision |
+|---|---|---|---|
+| 1 | §1.6 | Le badge Anomalies réutilise la lecture `status=OPEN&size=100` de la Vue d'ensemble au lieu d'une lecture `size=1` | Accepté : une seule requête partagée, c'était l'intention |
+| 1 | §1.4, §1.5 | « Lu à … » est placé à côté du bouton « Actualiser », pas sur une ligne de pied séparée | Accepté : conforme à §1.5 |
+| 1 | §1.4 | La plupart des notes « évalué à » par panneau sont conservées | Accepté quand l'instant est un fait serveur distinct (`evaluatedAt` du casier, du diagnostic); les doublons de l'instant de page seront retirés après les tests de Philippe |
+| 1 | §1.2 | `IdText` nomme l'identifiant complet par un texte masqué (`sr-only`) plutôt que par `aria-label` | Accepté : équivalent pour le lecteur d'écran |
+| 1 | §1.4 | Le texte `returnEffect` du dialogue Reconnaître est conservé | Accepté : il protège une décision (nouvelle tentative de retour) |
+| 1 | §1.6 | Le badge Prêts affiche « indisponible » quand la lecture est incomplète et qu'aucun retard n'a été observé | Accepté : jamais un zéro non confirmé |
+| 2 | §2.1 | Liens des tuiles avec `statut=ACTIVE` (paramètre existant) | Accepté; le contrat est corrigé |
+| 2 | §2.1 | Une tuile pour le casier du P0, « +N casiers » au-delà | Accepté : conforme |
+| 2 | §2.5 | Les modules gardent leur propre avis « périmé » en plus de celui de la bande | Accepté pour les tests; à consolider si Philippe le juge bruyant |
+| 2 | §2.2 | La ligne « Aucune intervention » exige aussi des lectures complètes et fraîches des opérations, des réservations et du casier | Accepté : plus strict que le texte, dans le sens du critère 3 de §2.6 |
+| 2 | §2.1 | « 0+ » possible pour les retards quand la lecture est tronquée sans retard observé | Accepté : « au moins 0, lecture incomplète » est la vérité |
+| 3 | §3.4 | « Au (inclus) » au lieu de « Au (exclu) » | Accepté : erreur du contrat, corrigée; aucun changement REST |
+| 3 | §3.3 | Colonne « Dernière tentative » des réservations réduite à « Opération en cours » ou « Aucune en cours » | Accepté : nommer la tentative demanderait une lecture par ligne (§1.1); le détail reste dans le dossier |
+| 3 | §3.1 | Le dossier de prêt n'a pas de zone d'actions; ses liens (opérations de retrait, de retour, en cours) restent dans leur section | Accepté : un prêt est en lecture seule |
+| 3 | §3.1 | La zone d'actions d'une réservation n'apparaît que pour une réservation honorée (seul cas où des liens croisés existent) | Accepté |
+| 3 | §3.4 | « Effacer les filtres » sur Opérations retire aussi le filtre casier | Accepté : c'est un filtre; sa puce reste retirable seule |
+| 3 | §3.3 | La puce de statut de l'Audit est conservée | Accepté |
+| 3 | §3.2 | La première raison est la première dans l'ordre du serveur; le client ne réordonne pas | Accepté : cohérent avec la liste des exemplaires existante |
