@@ -1349,6 +1349,12 @@ export const fr = {
     techSubject: 'Identifiant du sujet',
     techOperation: 'Identifiant de l’opération',
     updatedAt: ({ time }: { time: string }) => `Mis à jour à ${time}`,
+    colTime: 'Heure',
+    colEvent: 'Événement',
+    colActor: 'Acteur',
+    colSubject: 'Sujet',
+    colTransition: 'Transition',
+    noTransition: 'Aucune',
     listTitle: ({ count: value }: { count: number }) =>
       plural(value, { one: `${count.format(value)} événement chargé`, other: `${count.format(value)} événements chargés` }),
     listMeta: 'Heure, événement, acteur',

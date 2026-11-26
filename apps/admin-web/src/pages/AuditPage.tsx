@@ -30,9 +30,9 @@ import '../features/audit/audit.css'
 
 const LIST_TITLE_ID = 'audit-liste'
 
-/** The dossier sits under the list below 1024 px, out of sight after a selection (handoff §5). */
+/** The dossier sits under the list below 1280 px, out of sight after a selection (handoff §5). */
 function isStackedLayout(): boolean {
-  return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches
+  return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1279px)').matches
 }
 
 /**
@@ -212,7 +212,7 @@ export function AuditPage({ sessionProfile }: { readonly sessionProfile: UserPro
           onClear={() => apply(NO_FILTERS)}
         />
 
-        <div className={showDossier ? 'ag-eq' : 'ag-eq ag-eq--single'}>
+        <div className={showDossier ? 'ag-eq ag-eq--table' : 'ag-eq ag-eq--table ag-eq--single'}>
           <div className="ag-au-listwrap" ref={listRef}>
             <AuditList
               titleId={LIST_TITLE_ID}

@@ -1254,6 +1254,12 @@ export const en: Messages = {
     techSubject: 'Subject identifier',
     techOperation: 'Operation identifier',
     updatedAt: ({ time }: { time: string }) => `Updated at ${time}`,
+    colTime: 'Time',
+    colEvent: 'Event',
+    colActor: 'Actor',
+    colSubject: 'Subject',
+    colTransition: 'State change',
+    noTransition: 'None',
     listTitle: ({ count: value }: { count: number }) =>
       plural(value, { one: `${count.format(value)} event loaded`, other: `${count.format(value)} events loaded` }),
     listMeta: 'Time, event, actor',

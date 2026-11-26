@@ -75,3 +75,13 @@
   .ag-au-disclosure { border-color: CanvasText; }
 }
 .ag-au-missing-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+
+/* §3.3: the day heads a group of rows of the audit table. */
+.ag-au-table .ag-au-dayrow th { margin: 0; padding-top: 16px; padding-bottom: 6px; background: transparent; font-size: 0.8125rem; font-weight: 600; color: var(--ag-text-2); letter-spacing: 0.02em; }
+.ag-au-table .ag-au-ev__time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ag-au-table .ag-au-ev__name { font-weight: 600; }
+.ag-au-table td .ag-chip { margin-top: 4px; }
+@media (max-width: 1023px) {
+  .ag-au-table .ag-au-dayrow { padding: 12px 16px 0; border-bottom: 0; }
+  .ag-au-table .ag-au-dayrow th { display: block; padding: 0; }
+}
