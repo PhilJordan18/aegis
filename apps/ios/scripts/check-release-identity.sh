@@ -1,8 +1,8 @@
 #!/bin/sh
-# Blocks a Release archive whose identity or API address is missing or still a
-# placeholder. Run by the "Check Release Identity" build phase of the app
-# target; Debug builds, tests and simulator runs are never affected, so a
-# local Debug signing stays possible.
+# Blocks a Release archive whose identity, API address or environment name is
+# missing or still a placeholder. Run by the "Check Release Identity" build
+# phase of the app target; Debug builds, tests and simulator runs are never
+# affected, so a local Debug signing stays possible.
 #
 # The values are the effective build settings, after Shared.xcconfig,
 # Release.xcconfig and the untracked Local.xcconfig. Passing this check does
@@ -51,9 +51,16 @@ case "$url" in
     *) fail "AEGIS_API_BASE_URL must start with https:// (found \"$url\")." ;;
 esac
 
+environment="${AEGIS_ENVIRONMENT:-}"
+case "$environment" in
+    staging | production) ;;
+    "") fail "AEGIS_ENVIRONMENT is empty; Account would show an unnamed server. Set staging or production." ;;
+    *) fail "AEGIS_ENVIRONMENT must be staging or production (found \"$environment\")." ;;
+esac
+
 if [ "$failed" -ne 0 ]; then
     exit 1
 fi
 
-echo "note: Release archive identity: bundle $bundle, team $team, API $url," \
+echo "note: Release archive identity: bundle $bundle, team $team, API $url, environment $environment," \
      "version ${MARKETING_VERSION:-?} (${CURRENT_PROJECT_VERSION:-?}). Confirm the App Store Connect record before upload."

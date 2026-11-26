@@ -1,8 +1,11 @@
 #include "Shared.xcconfig"
 
-// No demonstration host is fixed yet. Set an HTTPS address in Local.xcconfig;
-// an empty value makes the app report a configuration error instead of guessing.
-AEGIS_API_BASE_URL =
+// TestFlight staging (#230, #235): the public staging API, a fixed address
+// rather than one inherited from a developer's Local.xcconfig. The "/$()/" is
+// required because "//" starts a comment in an xcconfig file. A production
+// build will need its own configuration; Bundle ID and Team stay local.
+AEGIS_API_BASE_URL = https:/$()/aegis-api-staging-239f.up.railway.app/api/v1
+AEGIS_ENVIRONMENT = staging
 
 // Coverage instrumentation belongs to Debug test runs only.
 ENABLE_CODE_COVERAGE = NO
