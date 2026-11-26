@@ -454,3 +454,12 @@ Rien d'autre ne change : 3 rangées par module, un seul avis périmé sous la ba
 ### 8.7 « Lecture incomplète » sous 560 px (#245, deuxième revue, constat D4)
 
 La règle « une seule ligne de détail par tuile » du §8.1 ne supprime jamais l'honnêteté du compteur. Quand une lecture est partielle (`totalItems` au-delà de la page lue), la ligne de détail de la tuile est **remplacée** par « Lecture incomplète » à toutes les largeurs; sous 560 px c'est donc cette mention qui occupe l'unique ligne de détail, et le nom accessible de la tuile la contient (« Prêts en retard, 1+, lecture incomplète »). Masquer `.ag-tile__detail--strong` sous 560 px est un défaut; le test e2e de lecture partielle s'exécute aussi à 390 px.
+
+### 8.8 Barre de filtres entre 1024 et 1279 px et détails ratifiés (#246, deuxième revue, constats B3, N1, N3)
+
+La QA mesure à 1024 × 768 px, dossier ouvert, une barre de filtres de 283 px qui ne laisse que 71 px à la liste. Design ratifie les choix de `d8ba877` :
+
+- Entre 1024 et 1279 px, l'aide des dates s'affiche **une seule fois** sous les deux champs « Du (inclus) » et « Au (inclus) »; chaque champ garde sa propre description pour les technologies d'assistance. Les quatre filtres tiennent sur une ligne; les actions de page se placent à côté des onglets. Objectif mesurable : à 1024 × 768 px, dossier ouvert, la première rangée de la liste est entièrement visible dans la fenêtre sur Réservations, Prêts, Opérations et Audit.
+- Sous 560 px, l'emplacement du message d'erreur d'un filtre **ne réserve pas de ligne** quand il est vide; l'erreur de date n'apparaît qu'à la sortie du champ ou sur Entrée, donc le décalage suit une action de la personne. La réservation de largeur du §1.1 (libellés) reste inchangée.
+- Dans les tableaux, un code d'équipement long **passe à la ligne au tiret**, jamais au milieu d'un mot, et ne déborde jamais sur la colonne voisine (les codes peuvent compter 64 caractères). Le code du casier dans le surligné de la tuile Vue d'ensemble reste entier (§8.1).
+- Le test e2e de hauteur de page attend un dossier stable (lectures de dossier servies, aucun squelette ni alerte) avant de mesurer; les plafonds du §8.3 se rapportent à cette mesure.
