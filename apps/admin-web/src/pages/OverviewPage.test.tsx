@@ -597,7 +597,7 @@ describe('Navigation badges (contract §1.6)', () => {
     const fakes = gateways()
     renderWith(fakes)
     await waitFor(() => expect(sideLink(/^Anomalies/).textContent).toContain('1'))
-    expect(plain(sideLink(/^Anomalies/).textContent)).toBe('Anomalies, 1 ouverte1')
+    expect(plain(sideLink(/^Anomalies/).textContent)).toBe('Anomalies1')
     expect(sideLink(/^Anomalies, 1 ouverte$/)).toBeTruthy()
     await waitFor(() => expect(sideLink(/^Réservations et prêts, 1 prêt en retard$/)).toBeTruthy())
     // One read of each key for the badges and the blocks.

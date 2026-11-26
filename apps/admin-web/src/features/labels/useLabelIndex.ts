@@ -8,6 +8,9 @@ import { useCustodyGateway } from '../custody/CustodyGatewayContext'
 import { LOCKER_PAGE } from '../custody/useCustody'
 import { ASSET_INDEX_PAGE_SIZE, assetPagesToRead, buildLabelIndex, type LabelIndex } from './labelIndex'
 
+/** Placement changes invalidate the key; « Actualiser » reads it again. */
+const LOCKER_INDEX_STALE_MS = 30_000
+
 const assetPageQuery = (page: number) => ({ page, size: ASSET_INDEX_PAGE_SIZE, sort: 'assetCode,asc' as const })
 
 /**
@@ -24,6 +27,8 @@ export function useLabelIndex(): LabelIndex & { readonly retry: () => void } {
   const lockers = useQuery({
     queryKey: queryKeys.custody.lockers(LOCKER_PAGE),
     queryFn: ({ signal }) => authorizedRequest(session, (token) => custody.listLockers(token, LOCKER_PAGE, signal)),
+    // Each component of a page that names a cell mounts this read: it is fresh for the page, not one read per component.
+    staleTime: LOCKER_INDEX_STALE_MS,
   })
   const pageQuery = (page: number) => ({
     queryKey: queryKeys.catalog.labelIndex(page),
@@ -50,6 +55,8 @@ export function useCellPlacements(): LabelIndex['placement'] {
   const lockers = useQuery({
     queryKey: queryKeys.custody.lockers(LOCKER_PAGE),
     queryFn: ({ signal }) => authorizedRequest(session, (token) => custody.listLockers(token, LOCKER_PAGE, signal)),
+    // Each component of a page that names a cell mounts this read: it is fresh for the page, not one read per component.
+    staleTime: LOCKER_INDEX_STALE_MS,
   })
   return buildLabelIndex({ lockers: { data: lockers.data, failed: lockers.isError && lockers.data === undefined }, assets: [] }).placement
 }
