@@ -48,7 +48,7 @@ const loan = (index: number, overdue: boolean) => ({
   overdue,
   returnRequestedAt: null,
   returnedAt: null,
-  checkoutOperationId: null,
+  checkoutOperationId: '44444444-0000-4000-8000-000000000004',
   returnOperationId: null,
   currentOperationId: null,
   availableActions: [],
@@ -195,7 +195,7 @@ test.describe('overview: lot 2 summary band', () => {
     await expect(nav.getByRole('link', { name: /^Anomalies/ })).not.toContainText('1')
     await expect(page.getByRole('heading', { level: 2, name: 'Anomalies ouvertes' })).toBeFocused()
     // No reload: the document that signed in is still the one shown.
-    expect(fake.requests.filter((request) => request.startsWith('GET /admin/anomalies?')).length).toBeGreaterThan(1)
+    expect(fake.requests.filter((request) => request.startsWith('GET /api/v1/admin/anomalies?')).length).toBeGreaterThan(1)
   })
 
   test('shows « N+ » and an accessible « Lecture incomplète » when the loans exceed one page', async ({ page }) => {
@@ -214,9 +214,18 @@ test.describe('overview: lot 2 summary band', () => {
     const order: string[] = []
     for (let step = 0; step < 8; step += 1) {
       await page.keyboard.press('Tab')
-      order.push(await page.evaluate(() => (document.activeElement?.closest('.ag-band') ? 'tile' : (document.activeElement?.textContent ?? '').trim().slice(0, 20))))
+      order.push(
+        await page.evaluate(() => {
+          const active = document.activeElement
+          if (active?.closest('.ag-band')) return 'tile'
+          // The page body is a keyboard-scrollable region when it overflows: one stop, before what it holds.
+          if (active?.classList.contains('ag-ov__scroll')) return 'scroll'
+          return (active?.textContent ?? '').trim().slice(0, 20)
+        }),
+      )
     }
-    expect(order.slice(0, 7)).toEqual(['Aide', 'Actualiser', 'tile', 'tile', 'tile', 'tile', 'tile'])
+    expect(order.filter((stop) => stop !== 'scroll').slice(0, 7)).toEqual(['Aide', 'Actualiser', 'tile', 'tile', 'tile', 'tile', 'tile'])
+    expect(order.indexOf('tile')).toBeLessThanOrEqual(3)
   })
 
   for (const width of [1440, 1024, 390, 320]) {
