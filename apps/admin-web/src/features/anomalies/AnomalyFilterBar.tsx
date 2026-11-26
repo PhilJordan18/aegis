@@ -1,14 +1,14 @@
-import { useState, type FormEvent } from 'react'
+import { useRef } from 'react'
 import { useI18n } from '../../i18n/useI18n'
-import { Button } from '../../ui/Button'
 import { SelectField } from '../../ui/FormField'
-import { ANOMALY_SEVERITIES, ANOMALY_STATUSES, ANOMALY_TYPES, type AnomalySeverity, type AnomalyStatus, type AnomalyType } from './contract'
+import { ANOMALY_SEVERITIES, ANOMALY_STATUSES, ANOMALY_TYPES } from './contract'
 import type { AnomalyFilters } from './anomalyLocation'
 import { AssetPicker } from '../labels/AssetPicker'
-import type { LabelIndex } from '../labels/labelIndex'
+import { abbreviate, type LabelIndex } from '../labels/labelIndex'
+import { FilterChips, type ActiveFilter } from '../pageTools/FilterChips'
 
 interface AnomalyFilterBarProps {
-  /** The filters of the address. The page remounts the bar when they change, so the fields start from them. */
+  /** The filters of the address, the only source of truth (§3.4): every change navigates, Précédent undoes it. */
   readonly filters: AnomalyFilters
   readonly onApply: (filters: AnomalyFilters) => void
   readonly onClear: () => void
@@ -17,24 +17,30 @@ interface AnomalyFilterBarProps {
 
 const oneOf = <T extends string>(value: string, allowed: readonly T[]): T | null => ((allowed as readonly string[]).includes(value) ? (value as T) : null)
 
-/** Status, severity and type as native selects, the unit searched by code or name (§1.3), and one explicit « Filtrer ». */
+/**
+ * Status, severity and type as native selects and the unit searched by code or name (§1.3), each applied as soon as
+ * it is chosen, with one chip per active filter (contrat-web-manager §3.4).
+ */
 export function AnomalyFilterBar({ filters, labels, onApply, onClear }: AnomalyFilterBarProps) {
   const { m } = useI18n()
   const t = m.anomalies
-  const [status, setStatus] = useState<AnomalyStatus | ''>(filters.status ?? '')
-  const [severity, setSeverity] = useState<AnomalySeverity | ''>(filters.severity ?? '')
-  const [type, setType] = useState<AnomalyType | ''>(filters.type ?? '')
-  const [assetId, setAssetId] = useState<string | null>(filters.assetId)
-
-  function submit(event: FormEvent) {
-    event.preventDefault()
-    onApply({ status: oneOf(status, ANOMALY_STATUSES), severity: oneOf(severity, ANOMALY_SEVERITIES), type: oneOf(type, ANOMALY_TYPES), assetId })
+  const statusRef = useRef<HTMLSelectElement>(null)
+  const set = (patch: Partial<AnomalyFilters>) => onApply({ ...filters, ...patch })
+  const assetText = (assetId: string) => {
+    const label = labels.asset(assetId)
+    return label.kind === 'known' ? label.code : abbreviate(assetId)
   }
+  const chips: ActiveFilter[] = [
+    ...(filters.status === null ? [] : [{ key: 'status', label: t.filterStatus, value: t.statusFilter[filters.status], onRemove: () => set({ status: null }) }]),
+    ...(filters.severity === null ? [] : [{ key: 'severity', label: t.filterSeverity, value: t.severityFilter[filters.severity], onRemove: () => set({ severity: null }) }]),
+    ...(filters.type === null ? [] : [{ key: 'type', label: t.filterType, value: t.type[filters.type], onRemove: () => set({ type: null }) }]),
+    ...(filters.assetId === null ? [] : [{ key: 'asset', label: t.filterAsset, value: assetText(filters.assetId), onRemove: () => set({ assetId: null }) }]),
+  ]
 
   return (
-    <form className="ag-an-filters" aria-label={t.filtersLabel} onSubmit={submit}>
+    <div className="ag-an-filters" role="group" aria-label={t.filtersLabel}>
       <div className="ag-an-filters__grid">
-        <SelectField label={t.filterStatus} value={status} onChange={(event) => setStatus(event.target.value as AnomalyStatus | '')}>
+        <SelectField ref={statusRef} label={t.filterStatus} value={filters.status ?? ''} onChange={(event) => set({ status: oneOf(event.target.value, ANOMALY_STATUSES) })}>
           <option value="">{t.filterAny}</option>
           {ANOMALY_STATUSES.map((value) => (
             <option key={value} value={value}>
@@ -42,7 +48,7 @@ export function AnomalyFilterBar({ filters, labels, onApply, onClear }: AnomalyF
             </option>
           ))}
         </SelectField>
-        <SelectField label={t.filterSeverity} value={severity} onChange={(event) => setSeverity(event.target.value as AnomalySeverity | '')}>
+        <SelectField label={t.filterSeverity} value={filters.severity ?? ''} onChange={(event) => set({ severity: oneOf(event.target.value, ANOMALY_SEVERITIES) })}>
           <option value="">{t.filterAny}</option>
           {ANOMALY_SEVERITIES.slice()
             .reverse()
@@ -52,7 +58,7 @@ export function AnomalyFilterBar({ filters, labels, onApply, onClear }: AnomalyF
               </option>
             ))}
         </SelectField>
-        <SelectField label={t.filterType} value={type} onChange={(event) => setType(event.target.value as AnomalyType | '')}>
+        <SelectField label={t.filterType} value={filters.type ?? ''} onChange={(event) => set({ type: oneOf(event.target.value, ANOMALY_TYPES) })}>
           <option value="">{t.filterAny}</option>
           {ANOMALY_TYPES.map((value) => (
             <option key={value} value={value}>
@@ -60,16 +66,9 @@ export function AnomalyFilterBar({ filters, labels, onApply, onClear }: AnomalyF
             </option>
           ))}
         </SelectField>
-        <AssetPicker label={t.filterAsset} value={assetId} onChange={setAssetId} labels={labels} />
+        <AssetPicker label={t.filterAsset} value={filters.assetId} onChange={(assetId) => set({ assetId })} labels={labels} />
       </div>
-      <div className="ag-an-filters__actions">
-        <Button type="submit" size="sm">
-          {t.filterApply}
-        </Button>
-        <Button variant="secondary" size="sm" onClick={onClear}>
-          {t.filterClear}
-        </Button>
-      </div>
-    </form>
+      <FilterChips filters={chips} onClear={onClear} returnFocus={() => statusRef.current?.focus()} />
+    </div>
   )
 }

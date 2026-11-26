@@ -1,4 +1,4 @@
-import { useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
+import { useId, type InputHTMLAttributes, type Ref, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
 import { Icon } from './Icon'
 import './form.css'
 
@@ -73,7 +73,7 @@ export function TextAreaField({ label, help, error, optional, counter, ...textar
   )
 }
 
-export function SelectField({ label, help, error, optional, children, ...select }: Common & Omit<SelectHTMLAttributes<HTMLSelectElement>, 'id'>) {
+export function SelectField({ label, help, error, optional, children, ...select }: Common & Omit<SelectHTMLAttributes<HTMLSelectElement>, 'id'> & { readonly ref?: Ref<HTMLSelectElement> }) {
   return (
     <FieldFrame label={label} help={help} error={error} optional={optional}>
       {({ id, describedBy, invalid }) => (

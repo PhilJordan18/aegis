@@ -140,14 +140,13 @@ describe('R3: the locker filter of the operations', () => {
     expect(within(chip).getByRole('link', { name: 'Retirer ce filtre' }).getAttribute('href')).toBe('/reservations-prets?vue=operations')
   })
 
-  it('keeps the locker when the other filters are applied, and drops it with « Tout afficher »', async () => {
+  it('keeps the locker when the other filters are applied, and drops it with « Effacer les filtres »', async () => {
     const gateway = fakeGateway()
     renderPage(gateway, { url: `/reservations-prets?vue=operations&casier=${LOCKER_ID}` })
     await screen.findByRole('heading', { level: 2, name: '1 opération' })
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Statut' }), 'CONFIRMED')
-    await userEvent.click(screen.getByRole('button', { name: 'Filtrer' }))
     await waitFor(() => expect(window.location.search).toBe(`?vue=operations&statut=CONFIRMED&casier=${LOCKER_ID}`))
-    await userEvent.click(screen.getByRole('button', { name: 'Tout afficher' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Effacer les filtres' }))
     await waitFor(() => expect(window.location.search).toBe('?vue=operations'))
     expect(screen.queryByTestId('locker-filter')).toBeNull()
   })

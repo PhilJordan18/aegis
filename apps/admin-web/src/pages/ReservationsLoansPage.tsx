@@ -187,7 +187,7 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
         </div>
 
         <TransactionFilters
-          key={`${view}|${search}`}
+          key={view}
           view={view}
           values={filters}
           onApply={apply}

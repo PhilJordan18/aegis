@@ -248,16 +248,21 @@ describe('Anomalies — address, filters and pagination', () => {
     expect(gateway.getAnomaly.mock.calls[0]?.[1]).toBe(THIRD_ID)
   })
 
-  it('applies the filters with « Filtrer », resets the page and writes the address', async () => {
+  it('applies each filter on selection, resets the page and writes the address (§3.4)', async () => {
     const user = userEvent.setup()
     const gateway = fakeAnomalyGateway({ listAnomalies: async () => listOf(HIGH_OPEN), getAnomaly: detailsOf(HIGH_OPEN) })
     renderAnomalies(gateway, { url: '/anomalies?page=3' })
     await screen.findByText('1 anomalie')
+    expect(screen.queryByRole('button', { name: 'Filtrer' })).toBeNull()
     await user.selectOptions(screen.getByRole('combobox', { name: 'Gravité' }), 'HIGH')
+    expect(window.location.search).toBe('?gravite=elevee')
     await user.selectOptions(screen.getByRole('combobox', { name: 'Statut' }), '')
-    await user.click(screen.getByRole('button', { name: 'Filtrer' }))
     expect(window.location.search).toBe('?statut=toutes&gravite=elevee')
     await waitFor(() => expect(gateway.listAnomalies.mock.calls.at(-1)?.[1]).toEqual({ severity: 'HIGH', page: 0, size: 20 }))
+    const chips = screen.getByRole('group', { name: 'Filtres actifs' })
+    await user.click(within(chips).getByRole('button', { name: 'Retirer le filtre Gravité' }))
+    expect(window.location.search).toBe('?statut=toutes')
+    expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Statut' }))
   })
 
   it('shows the filtered empty state with « Tout afficher », never « no record » under a filter', async () => {
@@ -377,7 +382,7 @@ describe('Anomalies — failure states', () => {
     const alert = await screen.findByRole('alert')
     expect(within(alert).getByText('Votre compte n’a pas accès aux anomalies.')).toBeDefined()
     expect(within(alert).queryByRole('button')).toBeNull()
-    expect(screen.queryByRole('group', { name: /./ })).toBeNull()
+    expect(screen.queryAllByRole('group', { name: /./ }).filter((group) => group.closest('.ag-an-filters') === null)).toEqual([])
   })
 
   it('leaves the session to the store on a 401: no data, no alert', async () => {

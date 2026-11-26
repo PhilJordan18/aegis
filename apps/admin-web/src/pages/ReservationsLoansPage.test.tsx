@@ -224,27 +224,37 @@ describe('Réservations et prêts: reservations', () => {
 })
 
 describe('Réservations et prêts: filters', () => {
-  it('applies the filters to the address and to the request, and clears them', async () => {
+  it('applies each filter as soon as it changes, shows one chip per filter, and clears them (§3.4)', async () => {
     const user = userEvent.setup()
     const gateway = fakeGateway()
     const unit = asset({ id: ASSET_ID, assetCode: 'MM-001' })
-    const catalog = fakeCatalogGateway({ overrides: { listAssets: async (_token, query) => catalogOk(assetPageOf(query.q === undefined ? [] : [unit])) } })
-    renderPage(gateway, { catalogGateway: catalog })
-    await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+    const catalog = fakeCatalogGateway({ overrides: { listAssets: async (_token, query) => catalogOk(assetPageOf(query.q === undefined ? [unit] : [unit])) } })
+    renderPage(gateway, { catalogGateway: catalog, url: '/reservations-prets?page=2' })
+    await screen.findByRole('heading', { level: 2, name: /réservation/ })
+    expect(screen.queryByRole('button', { name: 'Filtrer' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Effacer les filtres' })).toBeNull()
     await user.selectOptions(screen.getByLabelText('Statut'), 'FULFILLED')
+    // Applied on selection, back to page 1.
+    expect(window.location.search).toBe('?statut=FULFILLED')
     // Searched by code (§1.3): the address keeps the identifier.
     await user.type(screen.getByRole('combobox', { name: 'Équipement' }), 'MM')
     await user.click(await screen.findByRole('option', { name: /MM-001/ }))
     expect(catalog.listAssets).toHaveBeenCalledWith(expect.anything(), { page: 0, size: 20, sort: 'assetCode,asc', q: 'MM' }, expect.anything())
-    await user.click(screen.getByRole('button', { name: 'Filtrer' }))
     expect(window.location.search).toBe(`?statut=FULFILLED&equipement=${ASSET_ID}`)
-    await waitFor(() => expect(gateway.listReservations).toHaveBeenCalledTimes(2))
-    expect((gateway.listReservations.mock.calls[1] as unknown as [string, Record<string, unknown>])[1]).toMatchObject({ status: 'FULFILLED', assetId: ASSET_ID })
-    await user.click(screen.getByRole('button', { name: 'Tout afficher' }))
+    await waitFor(() => expect(gateway.listReservations.mock.calls.some((call) => (call as unknown as [string, Record<string, unknown>])[1].assetId === ASSET_ID)).toBe(true))
+    const chips = screen.getByRole('group', { name: 'Filtres actifs' })
+    await waitFor(() => expect(within(chips).getByText(/Équipement\s:\sMM-001/)).toBeDefined())
+    expect(within(chips).getByText(/^Statut\s:\s\S/)).toBeDefined()
+    // One chip removes its filter only; the focus stays in the group.
+    await user.click(within(chips).getByRole('button', { name: 'Retirer le filtre Statut' }))
+    expect(window.location.search).toBe(`?equipement=${ASSET_ID}`)
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Effacer les filtres' }))
+    await user.click(screen.getByRole('button', { name: 'Effacer les filtres' }))
     expect(window.location.search).toBe('')
+    expect(document.activeElement).toBe(screen.getByLabelText('Statut'))
   })
 
-  it('reads an old address by identifier, and « Retirer » returns focus to the field', async () => {
+  it('reads an old address by identifier, and « Retirer » clears the equipment at once', async () => {
     const user = userEvent.setup()
     const gateway = fakeGateway()
     renderPage(gateway, { url: `/reservations-prets?equipement=${ASSET_ID}` })
@@ -253,21 +263,33 @@ describe('Réservations et prêts: filters', () => {
     const chosen = document.querySelector('.ag-picker__chosen') as HTMLElement
     expect(within(chosen).getByText('Identifiant seulement')).toBeDefined()
     await user.click(within(chosen).getByRole('button', { name: 'Retirer l’équipement choisi' }))
-    expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Équipement' }))
-    await user.click(screen.getByRole('button', { name: 'Filtrer' }))
     expect(window.location.search).toBe('')
+    expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Équipement' }))
   })
 
-  it('refuses an end date before the start date', async () => {
+  it('refuses an end date before the start date and sends no request for it', async () => {
     const user = userEvent.setup()
     const gateway = fakeGateway()
     renderPage(gateway)
     await screen.findByRole('heading', { level: 2, name: '2 réservations' })
-    await user.type(screen.getByLabelText('Du'), '2026-11-10')
-    await user.type(screen.getByLabelText('Au'), '2026-11-01')
-    await user.click(screen.getByRole('button', { name: 'Filtrer' }))
+    await user.type(screen.getByLabelText('Du (inclus)'), '2026-11-10')
+    expect(window.location.search).toBe('?du=2026-11-10')
+    await user.type(screen.getByLabelText('Au (inclus)'), '2026-11-01')
     expect(screen.getByText('La date de fin précède la date de début.')).toBeDefined()
-    expect(gateway.listReservations).toHaveBeenCalledTimes(1)
+    expect(window.location.search).toBe('?du=2026-11-10')
+    expect(within(screen.getByRole('group', { name: 'Filtres actifs' })).getByText(/^Du\s/)).toBeDefined()
+  })
+
+  it('fills both dates from a shortcut, in the laboratory zone', async () => {
+    const user = userEvent.setup()
+    renderPage(fakeGateway())
+    await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+    await user.click(within(screen.getByRole('group', { name: 'Périodes rapides' })).getByRole('button', { name: '7 jours' }))
+    const params = new URLSearchParams(window.location.search)
+    const to = params.get('au') as string
+    expect(to).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    const span = (Date.parse(`${to}T12:00:00Z`) - Date.parse(`${params.get('du') as string}T12:00:00Z`)) / 86_400_000
+    expect(span).toBe(6)
   })
 
   it('offers the statuses of the active view only', async () => {
@@ -583,7 +605,7 @@ describe('Réservations et prêts: navigation, keyboard and language', () => {
     await waitFor(() => expect(dossier()).not.toBeNull())
     expect(dossier().getAttribute('role')).toBe('group')
     expect(dossier().getAttribute('aria-labelledby')).toBeTruthy()
-    for (const label of ['Statut', 'Équipement', 'Du', 'Au']) expect(screen.getByLabelText(label)).toBeDefined()
+    for (const label of ['Statut', 'Équipement', 'Du (inclus)', 'Au (inclus)']) expect(screen.getByLabelText(label)).toBeDefined()
   })
 
   it('is fully translated in English, with the same structure and no French left', async () => {
