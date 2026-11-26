@@ -3119,6 +3119,66 @@
           }
         }
       }
+    },
+    "Vérifié à %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checked at %@"
+          }
+        }
+      }
+    },
+    "Dernière vérification réussie à %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last successful check at %@"
+          }
+        }
+      }
+    },
+    "Actualisation en cours" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refreshing"
+          }
+        }
+      }
+    },
+    "Actualiser l’activité" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh activity"
+          }
+        }
+      }
+    },
+    "Activité vérifiée à %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activity checked at %@."
+          }
+        }
+      }
+    },
+    "Actualisation impossible. Informations non actualisées." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t refresh. Not up to date."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

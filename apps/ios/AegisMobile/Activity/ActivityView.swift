@@ -9,7 +9,8 @@ struct ActivityScreen: View {
     let browseEquipment: () -> Void
     /// Builds the history of a visit to « Historique »; nil hides the link.
     var makeHistory: (@MainActor () -> HistoryViewModel)?
-    @State private var confirmingCancel = false
+    /// The reservation the cancel alert asks about; nil when no alert is up.
+    @State private var cancelTarget: ReservationView?
     private static let minimumRefresh = Duration.milliseconds(800)
 
     var body: some View {
@@ -37,6 +38,16 @@ struct ActivityScreen: View {
             .task { await model.loadIfNeeded() }
             .navigationDestination(for: HistoryRoute.self) { _ in
                 if let makeHistory { HistoryScreen(make: makeHistory) }
+            }
+            // A native alert, centred whatever the card's place on screen: the
+            // card's confirmation dialog appeared near the tab bar on iPhone.
+            .alert(cancelTarget.map { String(localized: "Annuler la réservation de \($0.asset.model.name) ?") } ?? "",
+                   isPresented: Binding(get: { cancelTarget != nil }, set: { if !$0 { cancelTarget = nil } }),
+                   presenting: cancelTarget) { target in
+                Button("Annuler la réservation", role: .destructive) { Task { await model.cancel(target.id) } }
+                    .accessibilityIdentifier("activity.cancel.confirm")
+                Button("Garder la réservation", role: .cancel) {}
+                    .accessibilityIdentifier("activity.cancel.keep")
             }
             .fullScreenCover(item: Binding(get: { model.guided }, set: { _ in })) { guided in
                 GuidedOperationScreen(model: guided,
@@ -128,10 +139,13 @@ struct ActivityScreen: View {
         let stale = model.reservation.isStale
         let inProgress = model.isInProgress(reservation.currentOperationId)
         return CatalogCard {
-            if inProgress {
-                OperationChip(kind: .checkout)
-            } else {
-                StatusChip(status: .reservedForYou, stale: stale)
+            CardHeader(model: model, reading: model.reservation.receivedAt, stale: stale,
+                       identifier: "activity.refresh") {
+                if inProgress {
+                    OperationChip(kind: .checkout)
+                } else {
+                    StatusChip(status: .reservedForYou, stale: stale)
+                }
             }
             AssetHeading(asset: reservation.asset)
             Divider()
@@ -157,29 +171,17 @@ struct ActivityScreen: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("activity.cancelling")
             } else if model.canCancel {
-                Button { confirmingCancel = true } label: {
+                Button { cancelTarget = reservation } label: {
                     Text("Annuler la réservation").frame(minHeight: 44)
                 }
                 .font(.body.weight(.semibold))
                 .foregroundStyle(Color.brandAccent)
                 .accessibilityIdentifier("activity.cancel")
             }
-            Button("Actualiser") { Task { await model.refresh() } }
-                .buttonStyle(CompactButtonStyle())
-                .allowsHitTesting(!model.isLoading)
-                .accessibilityIdentifier("activity.refresh")
         }
         // A container, so the identifier does not replace its children's.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("activity.reservation")
-        .confirmationDialog(
-            String(localized: "Annuler la réservation de \(reservation.asset.model.name) ?"),
-            isPresented: $confirmingCancel, titleVisibility: .visible
-        ) {
-            Button("Annuler la réservation", role: .destructive) { Task { await model.cancel() } }
-                .accessibilityIdentifier("activity.cancel.confirm")
-            Button("Garder la réservation", role: .cancel) {}
-        }
     }
 
     /// §6: the notice that explains the button, then the button. Prepare
@@ -287,10 +289,13 @@ private struct LoanCard: View {
     var body: some View {
         let inProgress = model.isInProgress(loan.currentOperationId)
         CatalogCard {
-            if inProgress {
-                OperationChip(kind: .return)
-            } else {
-                StatusChip(status: .borrowedByYou, stale: stale)
+            CardHeader(model: model, reading: model.loan.receivedAt, stale: stale,
+                       identifier: "activity.loan.refresh") {
+                if inProgress {
+                    OperationChip(kind: .return)
+                } else {
+                    StatusChip(status: .borrowedByYou, stale: stale)
+                }
             }
             AssetHeading(asset: loan.asset)
             Divider()
@@ -321,10 +326,6 @@ private struct LoanCard: View {
                     .accessibilityIdentifier("activity.loan.operation.hidden")
             }
             returnSection
-            Button("Actualiser") { Task { await model.refresh() } }
-                .buttonStyle(CompactButtonStyle())
-                .allowsHitTesting(!model.isLoading)
-                .accessibilityIdentifier("activity.loan.refresh")
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("activity.loan")
@@ -333,7 +334,7 @@ private struct LoanCard: View {
     /// §6 « Prêt actif », « Retour indisponible » and « Retour en attente »:
     /// the notice that explains the button, then the button. A
     /// `RETURN_PENDING` loan offers a new return only when the server lists
-    /// `RETURN` (Q2, doc 09 §8.10); otherwise only Actualiser.
+    /// `RETURN` (Q2, doc 09 §8.10); otherwise only the refresh control.
     @ViewBuilder
     private var returnSection: some View {
         let listed = !stale && loan.actions.contains(.return)
@@ -363,6 +364,72 @@ private struct LoanCard: View {
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(true)
                 .accessibilityIdentifier("activity.return")
+        }
+    }
+}
+
+/// The top of a card: its status, the refresh control at the trailing edge,
+/// and the time of the last successful read below them. A read that just
+/// failed keeps that time as the last check: the card never says it is
+/// current when it is not.
+private struct CardHeader<Status: View>: View {
+    let model: ActivityViewModel
+    /// Reception time of the last successful read of this card's resource.
+    let reading: Date?
+    let stale: Bool
+    let identifier: String
+    @ViewBuilder let status: Status
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top, spacing: 8) {
+                status
+                Spacer(minLength: 0)
+                RefreshControl(isLoading: model.isLoading) { Task { await model.refresh() } }
+                    .accessibilityIdentifier(identifier)
+            }
+            if let reading {
+                Group {
+                    if stale {
+                        Text("Dernière vérification réussie à \(AegisTime.deviceTime(reading))")
+                    } else {
+                        Text("Vérifié à \(AegisTime.deviceTime(reading))")
+                    }
+                }
+                .font(.footnote)
+                .foregroundStyle(Color.brandMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("\(identifier).checkedAt")
+            }
+        }
+    }
+}
+
+/// A 44 pt icon button. While a read is in flight it shows its progress in
+/// place and ignores taps; the model shares that read with a second call.
+private struct RefreshControl: View {
+    let isLoading: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                if isLoading {
+                    ProgressView()
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.body.weight(.semibold))
+                        .imageScale(.large)
+                }
+            }
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .foregroundStyle(Color.brandAccent)
+        .allowsHitTesting(!isLoading)
+        .accessibilityLabel(isLoading ? Text("Actualisation en cours") : Text("Actualiser l’activité"))
+        .accessibilityShowsLargeContentViewer {
+            Label("Actualiser l’activité", systemImage: "arrow.clockwise")
         }
     }
 }
