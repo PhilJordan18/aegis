@@ -21,8 +21,12 @@ enum RenderedContrast {
     static let minimumShare = 0.005
 
     /// The lowest ratio between the background and an ink, or nil when the
-    /// image holds no ink.
-    static func ratio(of image: UIImage) -> Double? {
+    /// image holds no ink. `shade` folds into the background the colours
+    /// within that many units of it on every channel: a dark panel is
+    /// captured dithered (#0D1520 beside #0D1420, #0D151F and #0C1520),
+    /// shades that would count as an ink at 1.00:1. Such a shade is no text;
+    /// a text drawn in one would leave no ink, and a missing ink fails.
+    static func ratio(of image: UIImage, shade: UInt8 = 0) -> Double? {
         guard let cgImage = image.cgImage, cgImage.width > 0, cgImage.height > 0,
               let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
         let width = cgImage.width, height = cgImage.height
@@ -46,7 +50,9 @@ enum RenderedContrast {
             let line = pixels[(row * width)..<((row + 1) * width)]
             guard let first = line.firstIndex(where: { $0 & 0x00FF_FFFF == background }),
                   let last = line.lastIndex(where: { $0 & 0x00FF_FFFF == background }) else { continue }
-            for pixel in line[first...last] { counts[pixel & 0x00FF_FFFF, default: 0] += 1 }
+            for pixel in line[first...last] where !near(pixel & 0x00FF_FFFF, background, shade) {
+                counts[pixel & 0x00FF_FFFF, default: 0] += 1
+            }
             inside += last - first + 1
         }
         let threshold = max(1, Int(Double(inside) * minimumShare))
@@ -55,6 +61,14 @@ enum RenderedContrast {
             .filter { $0.key != background && $0.value >= threshold }
             .map { contrast(luminance($0.key), backgroundLuminance) }
             .min()
+    }
+
+    private static func near(_ a: UInt32, _ b: UInt32, _ shade: UInt8) -> Bool {
+        guard shade > 0 else { return false }
+        return (0..<3).allSatisfy { channel in
+            let shift = UInt32(channel * 8)
+            return abs(Int((a >> shift) & 0xFF) - Int((b >> shift) & 0xFF)) <= Int(shade)
+        }
     }
 
     private static func contrast(_ a: Double, _ b: Double) -> Double {

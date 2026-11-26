@@ -187,6 +187,125 @@ struct ActivityViewModelTests {
         #expect(model.canCancel)
     }
 
+    // MARK: Refresh (#231)
+
+    /// The control and the pull read both resources once per refresh, even
+    /// when nothing changed, and the time of that read is what is announced.
+    @Test func aRefreshWithNoChangeStillReadsAndAnnouncesTheCheck() async {
+        let reservation = ActivityDoubles.reservation()
+        let service = ScriptedReservationService(reservations: [.success(reservation)])
+        let operations = ScriptedOperationService()
+        let model = model(service, operations: operations)
+        await model.load()
+        clock.advance(by: 90)
+
+        await model.refresh()
+
+        #expect(service.reads == 2)
+        #expect(service.loanReads == 2)
+        #expect(model.reservation.value == reservation)
+        #expect(model.reservation.receivedAt == clock.now)
+        #expect(model.loan.receivedAt == clock.now)
+        #expect(model.announcement == String(localized: "Activité vérifiée à \(AegisTime.deviceTime(clock.now))."))
+        // A refresh only reads: no operation is prepared, resumed or replayed.
+        #expect(operations.prepareKeys.isEmpty)
+        #expect(operations.returnKeys.isEmpty)
+        #expect(service.cancelKeys.isEmpty)
+    }
+
+    /// A second tap, or a pull, while a read is in flight shares that read.
+    @Test func aRefreshDuringARefreshSendsNoSecondRead() async {
+        let service = ScriptedReservationService(reservations: [.success(ActivityDoubles.reservation())])
+        let model = model(service)
+        await model.load()
+        clock.advance(by: 30)
+        let slow = Gate()
+        service.loanGate = slow
+
+        let first = Task { await model.refresh() }
+        while service.loanReads < 2 { await Task.yield() }
+        #expect(model.isLoading)
+        let second = Task { await model.refresh() }
+        for _ in 0..<1_000 { await Task.yield() }
+        await slow.open()
+        await first.value
+        await second.value
+
+        #expect(service.reads == 2)
+        #expect(service.loanReads == 2)
+        #expect(!model.isLoading)
+        #expect(model.loan.receivedAt == clock.now)
+    }
+
+    /// A failed refresh keeps the last state, marked stale with its time, and
+    /// never announces a check. The notice already on screen is announced
+    /// again, since it does not reappear.
+    @Test func aFailedRefreshKeepsTheOldStateAndNeverClaimsACheck() async {
+        let reservation = ActivityDoubles.reservation()
+        let offline = APIError.unreachable(.notConnectedToInternet)
+        let service = ScriptedReservationService(reservations: [.success(reservation), .failure(offline)])
+        let model = model(service)
+        await model.load()
+        let received = clock.now
+        clock.advance(by: 60)
+
+        await model.refresh()
+        #expect(model.reservation.isStale)
+        #expect(model.reservation.receivedAt == received)
+        // The new notice announces itself when it appears.
+        #expect(model.announcement == nil)
+
+        clock.advance(by: 60)
+        await model.refresh()
+        #expect(model.reservation.receivedAt == received)
+        #expect(model.announcement == String(localized: "Actualisation impossible. Informations non actualisées."))
+    }
+
+    @Test func anExpiredSessionDuringARefreshAnnouncesNothing() async {
+        let service = ScriptedReservationService(
+            reservations: [.success(ActivityDoubles.reservation()), .failure(ActivityDoubles.refusal(401, "AUTH_TOKEN_EXPIRED"))])
+        let model = model(service)
+        await model.load()
+        clock.advance(by: 60)
+
+        await model.refresh()
+
+        #expect(session.unauthorizedCodes == ["AUTH_TOKEN_EXPIRED"])
+        #expect(model.announcement == nil)
+    }
+
+    // MARK: Cancel alert (#231)
+
+    /// The alert names the reservation it asks about: if a read replaced it
+    /// while the alert was up, confirming sends nothing.
+    @Test func confirmingAnAlertForAnotherReservationSendsNothing() async {
+        let service = ScriptedReservationService(
+            reservations: [.success(ActivityDoubles.reservation())],
+            cancellations: [.success(ActivityDoubles.reservation(status: "CANCELLED", actions: []))])
+        let model = model(service)
+        await model.load()
+
+        await model.cancel(UUID())
+
+        #expect(service.cancelKeys.isEmpty)
+        #expect(model.feedback == nil)
+        #expect(model.announcement == nil)
+    }
+
+    @Test func confirmingTheAlertCancelsTheNamedReservationOnce() async {
+        let reservation = ActivityDoubles.reservation()
+        let service = ScriptedReservationService(
+            reservations: [.success(reservation), .success(nil)],
+            cancellations: [.success(ActivityDoubles.reservation(status: "CANCELLED", actions: []))])
+        let model = model(service)
+        await model.load()
+
+        await model.cancel(reservation.id)
+
+        #expect(service.cancelKeys.count == 1)
+        #expect(model.feedback == .cancelled)
+    }
+
     @Test func showsAnOverdueLoanFromTheServer() async {
         let loan = ActivityDoubles.loan()
         let model = model(ScriptedReservationService(loans: [.success(loan)]))

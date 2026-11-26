@@ -73,6 +73,44 @@ enum UITestActivityFixtures {
         return #"{"id":"\#(loanId)","asset":\#(summary(item)),"holderUserId":"\#(UITestCatalogFixtures.technicianId)","status":"ACTIVE","checkedOutAt":"\#(checkedOut)","dueAt":"\#(due)","overdue":true,"returnRequestedAt":null,"returnedAt":null,"checkoutOperationId":"5f0e2b8c-3a4d-4e6f-8a9b-0c1d2e3f4a5b","returnOperationId":null,"currentOperationId":null,"availableActions":["RETURN"]}"#
     }
 
+    /// §29: past records, newest first, with no action and no current
+    /// operation. FICTIONAL identifiers.
+    static func reservationHistory() -> [String] {
+        let items = UITestCatalogFixtures.items
+        func record(_ index: Int, _ item: UITestCatalogFixtures.Item, status: String, hoursAgo: Double,
+                    closing: String) -> String {
+            let created = Date.now - hoursAgo * 3600
+            let closed = #""\#(instant(created + 1800))""#
+            func at(_ field: String) -> String { field == closing ? closed : "null" }
+            return #"{"id":"8a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c\#(String(format: "%02d", index))","asset":\#(summary(item)),"userId":"\#(UITestCatalogFixtures.technicianId)","status":"\#(status)","reservedFrom":"\#(instant(created))","reservedUntil":"\#(instant(created + 7200))","createdAt":"\#(instant(created))","cancelledAt":\#(at("cancelledAt")),"fulfilledAt":\#(at("fulfilledAt")),"expiredAt":\#(at("expiredAt")),"currentOperationId":null,"availableActions":[]}"#
+        }
+        return [record(1, items[0], status: "FULFILLED", hoursAgo: 5, closing: "fulfilledAt"),
+                record(2, items[1], status: "CANCELLED", hoursAgo: 30, closing: "cancelledAt"),
+                record(3, items[2], status: "EXPIRED", hoursAgo: 52, closing: "expiredAt")]
+    }
+
+    static func loanHistory() -> [String] {
+        let items = UITestCatalogFixtures.items
+        func record(_ index: Int, _ item: UITestCatalogFixtures.Item, hoursAgo: Double, late: Bool) -> String {
+            let out = Date.now - hoursAgo * 3600
+            let returned = out + (late ? 3 : 1) * 3600
+            return #"{"id":"9b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d\#(String(format: "%02d", index))","asset":\#(summary(item)),"holderUserId":"\#(UITestCatalogFixtures.technicianId)","status":"COMPLETED","checkedOutAt":"\#(instant(out))","dueAt":"\#(instant(out + 7200))","overdue":false,"returnRequestedAt":"\#(instant(returned - 120))","returnedAt":"\#(instant(returned))","checkoutOperationId":"5f0e2b8c-3a4d-4e6f-8a9b-0c1d2e3f4a\#(String(format: "%02d", index))","returnOperationId":"6a1f3c9d-4b5e-4f70-9bac-1d2e3f4a5b\#(String(format: "%02d", index))","currentOperationId":null,"availableActions":[]}"#
+        }
+        // The second was returned an hour after its due time, yet neither is
+        // `overdue`: doc 03 sets it only on a loan not yet finished.
+        return [record(1, items[0], hoursAgo: 4.5, late: false), record(2, items[3], hoursAgo: 75, late: true)]
+    }
+
+    /// One §29 page of the given records.
+    static func historyPage(_ records: [String], for url: URL) -> String {
+        let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        let page = query.first { $0.name == "page" }.flatMap { $0.value.flatMap(Int.init) } ?? 0
+        let size = query.first { $0.name == "size" }.flatMap { $0.value.flatMap(Int.init) } ?? 20
+        let slice = records.dropFirst(page * size).prefix(size)
+        let totalPages = (records.count + size - 1) / size
+        return #"{"items":[\#(slice.joined(separator: ","))],"page":\#(page),"size":\#(size),"totalItems":\#(records.count),"totalPages":\#(totalPages)}"#
+    }
+
     /// §8.6, closed until the given instant.
     static func closedLocker(nextOpensAt: Date) -> String {
         #"{"lockerId":"d46a74ae-39dc-460b-8af0-38fc791b376a","code":"AEGIS-DEMO-01","name":"Casier démo","topology":"HUB_CELL","connectionStatus":"ONLINE","lastSeenAt":"\#(instant(.now))","evaluatedAt":"\#(instant(.now))","currentWindow":{"timeZone":"America/Toronto","open":false,"closesAt":null,"nextOpensAt":"\#(instant(nextOpensAt))"},"compartments":[]}"#

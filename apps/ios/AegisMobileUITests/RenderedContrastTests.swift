@@ -87,6 +87,32 @@ final class RenderedContrastTests: XCTestCase {
         XCTAssertGreaterThan(ratio, 15)
     }
 
+    /// The dark panel as captured: #0D1520 dithered with shades one unit
+    /// away (#232). Without a shade tolerance they are taken for an ink at
+    /// 1.00:1; folded into the background, the white text is measured.
+    func testADitheredPanelNeedsTheShadeTolerance() throws {
+        let image = Self.ditheredPanelText(.white)
+        let exact = try XCTUnwrap(RenderedContrast.ratio(of: image))
+        XCTAssertLessThan(exact, 1.1)
+        let folded = try XCTUnwrap(RenderedContrast.ratio(of: image, shade: 2))
+        XCTAssertGreaterThan(folded, 15)
+    }
+
+    /// The tolerance folds shades, never a text: one three units away from
+    /// the panel is still an ink, and rejected.
+    func testTheShadeToleranceKeepsAFaintTextAnInk() throws {
+        let faint = UIColor(red: 0x10 / 255, green: 0x18 / 255, blue: 0x23 / 255, alpha: 1)
+        let ratio = try XCTUnwrap(RenderedContrast.ratio(of: Self.ditheredPanelText(faint), shade: 2))
+        XCTAssertLessThan(ratio, 4.5)
+    }
+
+    /// A text drawn within the tolerance leaves no ink, which the callers
+    /// fail as nothing to measure on an element they must measure.
+    func testATextWithinTheToleranceLeavesNoInk() {
+        let shade = UIColor(red: 0x0D / 255, green: 0x14 / 255, blue: 0x20 / 255, alpha: 1)
+        XCTAssertNil(RenderedContrast.ratio(of: Self.ditheredPanelText(shade), shade: 2))
+    }
+
     func testAPlainImageHasNoText() {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 3
@@ -101,6 +127,31 @@ final class RenderedContrastTests: XCTestCase {
     /// indigo text and symbol on a lavender capsule.
     private static let chipText = UIColor(red: 0x37 / 255, green: 0x26 / 255, blue: 0xB8 / 255, alpha: 1)
     private static let chipFill = UIColor(red: 0xEC / 255, green: 0xEA / 255, blue: 0xFF / 255, alpha: 1)
+
+    /// The dark panel of the #232 capture, dithered: three shades one unit
+    /// from #0D1520 in bands covering about a third of it, under a text.
+    private static func ditheredPanelText(_ color: UIColor) -> UIImage {
+        let size = CGSize(width: 360, height: 66)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 3
+        format.preferredRange = .standard
+        func rgb(_ r: Int, _ g: Int, _ b: Int) -> UIColor {
+            UIColor(red: CGFloat(r) / 255, green: CGFloat(g) / 255, blue: CGFloat(b) / 255, alpha: 1)
+        }
+        let shades = [rgb(0x0D, 0x14, 0x20), rgb(0x0D, 0x15, 0x1F), rgb(0x0C, 0x15, 0x20)]
+        return UIGraphicsImageRenderer(size: size, format: format).image { context in
+            rgb(0x0D, 0x15, 0x20).setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            for column in stride(from: 0, to: Int(size.width), by: 9) {
+                shades[(column / 9) % 3].setFill()
+                context.fill(CGRect(x: CGFloat(column), y: 0, width: 3, height: size.height))
+            }
+            NSAttributedString(string: "Technicien Démo", attributes: [
+                .font: UIFont.systemFont(ofSize: 40, weight: .semibold),
+                .foregroundColor: color,
+            ]).draw(at: CGPoint(x: 8, y: 8))
+        }
+    }
 
     /// A title-sized semibold text, at the scale of an iPhone screenshot,
     /// after an optional filled symbol like the timer of the countdown. With a

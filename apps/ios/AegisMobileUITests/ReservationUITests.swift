@@ -27,6 +27,7 @@ final class ReservationUITests: XCTestCase {
             "notPresent": "Réservation impossible : présence non confirmée par le casier.",
             "unreachable": "Connexion au service impossible.", "closed": "Le casier est fermé. Réouverture à",
             "notCancellable": "Cette réservation ne peut plus être annulée.", "overdue": "En retard depuis",
+            "refresh": "Actualiser l’activité", "checkedAt": "Vérifié à", "keep": "Garder la réservation",
         ])
         static let english = Language(code: "en", locale: "en_CA", texts: [
             "activity": "My activity", "reservedForYou": "Reserved for you",
@@ -36,6 +37,7 @@ final class ReservationUITests: XCTestCase {
             "notPresent": "Can’t reserve: presence not confirmed by the locker.",
             "unreachable": "Can’t connect to the service.", "closed": "The locker is closed. Reopens at",
             "notCancellable": "This reservation can no longer be cancelled.", "overdue": "Overdue since",
+            "refresh": "Refresh activity", "checkedAt": "Checked at", "keep": "Keep reservation",
         ])
     }
 
@@ -84,6 +86,104 @@ final class ReservationUITests: XCTestCase {
             attach(app, "\(language.code)-activity-cancelled-\(theme)")
             app.terminate()
         }
+    }
+
+    // MARK: History (#233)
+
+    /// « Historique », reached from Mon activité: both lists, a loan record
+    /// and its read-only detail, in French light and English dark, then the
+    /// list at the largest text size. No record offers an action.
+    @MainActor
+    func testHistoryFromMyActivity() throws {
+        let words = [
+            "fr": ["loans": "Prêts", "pickedUp": "Retirée", "cancelled": "Annulée", "returned": "Rendu",
+                   "readOnly": "Consultation seulement."],
+            "en": ["loans": "Loans", "pickedUp": "Picked up", "cancelled": "Cancelled", "returned": "Returned",
+                   "readOnly": "View only."],
+        ]
+        for (language, appearance) in [(Language.french, XCUIDevice.Appearance.light), (.english, .dark)] {
+            XCUIDevice.shared.appearance = appearance
+            let theme = appearance == .dark ? "dark" : "light"
+            let text = words[language.code]!
+            let app = launch(language, scenario: "history", tab: "activity")
+            openHistory(app)
+
+            let fulfilled = element(app, "history.row.MM-001")
+            XCTAssertTrue(fulfilled.waitForExistence(timeout: 15))
+            XCTAssertTrue(fulfilled.label.hasPrefix(text["pickedUp"]!), fulfilled.label)
+            XCTAssertTrue(element(app, "history.row.MM-002").label.hasPrefix(text["cancelled"]!))
+            XCTAssertTrue(element(app, "history.row.PA-004").exists)
+            try audit(app)
+            attach(app, "\(language.code)-history-reservations-\(theme)")
+
+            app.segmentedControls.buttons[text["loans"]!].tap()
+            let returned = element(app, "history.row.TI-002")
+            XCTAssertTrue(returned.waitForExistence(timeout: 15))
+            XCTAssertTrue(returned.label.hasPrefix(text["returned"]!), returned.label)
+            XCTAssertFalse(element(app, "history.row.PA-004").exists)
+            try audit(app)
+            attach(app, "\(language.code)-history-loans-\(theme)")
+
+            returned.tap()
+            let readOnly = element(app, "history.record.readOnly")
+            XCTAssertTrue(readOnly.waitForExistence(timeout: 10))
+            XCTAssertTrue(readOnly.label.hasPrefix(text["readOnly"]!))
+            // A finished loan is never `overdue` (doc 03), even when returned late.
+            XCTAssertFalse(element(app, "history.record.overdue").exists)
+            for action in ["activity.return", "activity.cancel", "activity.checkout", "activity.resume"] {
+                XCTAssertFalse(element(app, action).exists, "\(action) offered on a history record")
+            }
+            try audit(app)
+            attach(app, "\(language.code)-history-loan-record-\(theme)")
+            app.terminate()
+        }
+
+        XCUIDevice.shared.appearance = .light
+        let app = launch(.french, scenario: "history", tab: "activity",
+                         arguments: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        openHistory(app)
+        XCTAssertTrue(element(app, "history.row.MM-001").waitForExistence(timeout: 15))
+        try audit(app, atLargestSize: true)
+        attach(app, "fr-history-reservations-ax5-light")
+        app.terminate()
+    }
+
+    /// An empty history, then a first read offline whose Try again recovers.
+    @MainActor
+    func testHistoryEmptyAndOffline() throws {
+        let empty = launch(.french, scenario: "history-empty", tab: "activity")
+        openHistory(empty)
+        XCTAssertTrue(element(empty, "history.empty").waitForExistence(timeout: 15))
+        try audit(empty)
+        attach(empty, "fr-history-empty-light")
+        empty.terminate()
+
+        let offline = launch(.english, scenario: "history-offline", tab: "activity")
+        openHistory(offline)
+        let notice = element(offline, "history.notice")
+        XCTAssertTrue(notice.waitForExistence(timeout: 15))
+        // The shared failure notice of the catalogue, not the reservation sheet's wording.
+        XCTAssertTrue(notice.label.hasPrefix("Can't reach the service. Check your network."), notice.label)
+        XCTAssertFalse(element(offline, "history.empty").exists, "An unread history is not an empty one")
+        try audit(offline)
+        attach(offline, "en-history-offline-light")
+        element(offline, "history.retry").tap()
+        XCTAssertTrue(element(offline, "history.row.MM-001").waitForExistence(timeout: 15))
+        XCTAssertTrue(notice.waitForNonExistence(timeout: 5))
+        offline.terminate()
+    }
+
+    /// The link sits below the activity; at large sizes it is scrolled to.
+    @MainActor
+    private func openHistory(_ app: XCUIApplication) {
+        let link = element(app, "activity.history")
+        XCTAssertTrue(link.waitForExistence(timeout: 30))
+        var swipes = 0
+        while !link.isHittable, swipes < 8 {
+            app.swipeUp(velocity: .slow)
+            swipes += 1
+        }
+        link.tap()
     }
 
     /// A loan read that fails while the reservation is read: the reservation
@@ -237,7 +337,130 @@ final class ReservationUITests: XCTestCase {
         }
     }
 
+    /// « Mon activité » at the largest text size (#222): the reservation,
+    /// the overdue loan and the empty state, in light and dark. Each state is
+    /// audited at the top, then again with its last control scrolled into
+    /// view. « Voir les équipements » is also measured on its own pixels.
+    @MainActor
+    func testActivityAtTheLargestTextSize() throws {
+        let largest = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        let states = [("activity-reserved", "reserved", "activity.cancel"),
+                      ("activity-loan", "loan", "activity.return"),
+                      ("reservation", "empty", "activity.browse")]
+        for appearance in [XCUIDevice.Appearance.light, .dark] {
+            XCUIDevice.shared.appearance = appearance
+            let theme = appearance == .dark ? "dark" : "light"
+            for (scenario, name, last) in states {
+                let app = launch(.french, scenario: scenario, tab: "activity", arguments: largest)
+                let target = element(app, last)
+                XCTAssertTrue(target.waitForExistence(timeout: 30), "\(name): \(last) missing")
+                attach(app, "fr-activity-\(name)-ax5-\(theme)")
+                try audit(app, atLargestSize: true)
+
+                XCTAssertTrue(scrollIntoView(target, in: app), "\(name): \(last) never became reachable")
+                // Captured before the audit, so a failing audit keeps its screen.
+                attach(app, "fr-activity-\(name)-ax5-\(theme)-end")
+                try audit(app, atLargestSize: true)
+                if name == "empty" { assertRenderedContrast(of: target, in: app) }
+                app.terminate()
+            }
+        }
+    }
+
+    // MARK: Card controls (#231)
+
+    /// The refresh control sits at the top of the card, 44 pt or more, named
+    /// for VoiceOver, and the card states the time of its last read. The
+    /// cancel confirmation is a native alert naming the asset; keeping the
+    /// reservation sends nothing and says nothing.
+    @MainActor
+    func testTheCardRefreshControlAndTheCancelAlert() throws {
+        for (language, appearance) in [(Language.french, XCUIDevice.Appearance.light), (.english, .dark)] {
+            XCUIDevice.shared.appearance = appearance
+            let theme = appearance == .dark ? "dark" : "light"
+            let app = launch(language, scenario: "activity-reserved", tab: "activity")
+            let refresh = app.buttons["activity.refresh"]
+            XCTAssertTrue(refresh.waitForExistence(timeout: 30))
+            XCTAssertEqual(refresh.label, language["refresh"])
+            XCTAssertGreaterThanOrEqual(refresh.frame.width, 44)
+            XCTAssertGreaterThanOrEqual(refresh.frame.height, 44)
+            let card = element(app, "activity.reservation")
+            XCTAssertLessThan(refresh.frame.midY, element(app, "activity.asset.name").frame.minY,
+                              "The control sits above the asset name, at the top of the card")
+            XCTAssertGreaterThan(refresh.frame.midX, card.frame.midX, "The control sits at the trailing edge")
+            let checked = element(app, "activity.refresh.checkedAt")
+            XCTAssertTrue(checked.waitForExistence(timeout: 10))
+            XCTAssertTrue(checked.label.hasPrefix(language["checkedAt"]), checked.label)
+            XCTAssertEqual(app.buttons.matching(identifier: "activity.refresh").count, 1)
+
+            XCTAssertTrue(app.waitForStillScreen())
+            refresh.tap()
+            XCTAssertTrue(checked.waitForExistence(timeout: 15))
+            XCTAssertTrue(card.exists)
+            try audit(app)
+            attach(app, "\(language.code)-activity-card-controls-\(theme)")
+
+            let name = element(app, "activity.asset.name").label
+            app.buttons["activity.cancel"].tap()
+            let alert = app.alerts.firstMatch
+            XCTAssertTrue(alert.waitForExistence(timeout: 5))
+            XCTAssertTrue(alert.label.contains(name), "The alert names \(name): \(alert.label)")
+            XCTAssertTrue(alert.buttons["activity.cancel.confirm"].exists)
+            attach(app, "\(language.code)-activity-cancel-alert-\(theme)")
+            alert.buttons["activity.cancel.keep"].firstMatch.tap()
+            XCTAssertTrue(alert.waitForNonExistence(timeout: 5))
+            XCTAssertTrue(card.exists)
+            XCTAssertTrue(app.buttons["activity.cancel"].exists)
+            XCTAssertFalse(element(app, "activity.feedback").exists, "Keeping the reservation announces nothing")
+            app.terminate()
+        }
+    }
+
     // MARK: Helpers
+
+    /// Swipes up until `target` is hittable and clear of the floating tab
+    /// bar's fade, so the audit and the pixels see all of it.
+    @MainActor
+    private func scrollIntoView(_ target: XCUIElement, in app: XCUIApplication) -> Bool {
+        for _ in 0..<12 {
+            if target.isHittable, visibleArea(app).contains(target.frame) { return app.waitForStillScreen() }
+            app.swipeUp(velocity: .slow)
+        }
+        return target.isHittable && visibleArea(app).contains(target.frame) && app.waitForStillScreen()
+    }
+
+    /// The window above the floating tab bar and its scroll-edge fade.
+    @MainActor
+    private func visibleArea(_ app: XCUIApplication) -> CGRect {
+        var visible = app.windows.firstMatch.frame
+        let tabBar = app.tabBars.firstMatch
+        if tabBar.exists, tabBar.isHittable {
+            visible.size.height = max(0, tabBar.frame.minY - fadeHeight - visible.minY)
+        }
+        return visible
+    }
+
+    /// The control's weakest ink against its own fill, read from the screen
+    /// (#222): kept as evidence, and failed below 4.5:1.
+    @MainActor
+    private func assertRenderedContrast(of target: XCUIElement, in app: XCUIApplication,
+                                        file: StaticString = #filePath, line: UInt = #line) {
+        let window = app.windows.firstMatch.frame
+        let image = Self.crop(app.screenshot(), to: target.frame, window: window)
+        let evidence = XCTAttachment(image: image)
+        evidence.name = "rendered-contrast-\(target.identifier)"
+        evidence.lifetime = .keepAlways
+        add(evidence)
+        guard let ratio = RenderedContrast.ratio(of: image) else {
+            return XCTFail("No ink measured in \(target.identifier) at \(target.frame)", file: file, line: line)
+        }
+        let measure = XCTAttachment(string: "\(target.identifier) rendered "
+            + String(format: "%.2f:1", ratio) + " at \(target.frame)")
+        measure.name = "rendered-contrast-\(target.identifier)-ratio"
+        measure.lifetime = .keepAlways
+        add(measure)
+        XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(target.identifier) contrast", file: file, line: line)
+    }
 
     /// The loan read failure, found by its words so the order is checked
     /// wherever the notice sits.
@@ -371,7 +594,15 @@ final class ReservationUITests: XCTestCase {
                         tolerated = true
                     } else {
                         let partly = self.visiblePartContrast(of: target, visible: area, window: window, in: app)
-                        tolerated = findings.tolerates(partly, note: &note) ?? false
+                        // The audit scrolls the screen while it runs (#222): an
+                        // entirely visible element is measured on the still
+                        // screen, never trusted.
+                        if let judged = findings.tolerates(partly, note: &note) {
+                            tolerated = judged
+                        } else {
+                            let entire = self.entireContrast(of: target, window: window, in: app)
+                            tolerated = findings.tolerates(entire, note: &note) ?? false
+                        }
                     }
                 default:
                     tolerated = false

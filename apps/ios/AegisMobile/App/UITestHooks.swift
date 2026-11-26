@@ -128,6 +128,14 @@ enum UITestScenario: String {
     case password = "password"
     /// Signed in. The password change is sent and its answer is lost.
     case passwordLost = "password-lost"
+    /// No current activity; past reservations and loans in the history (§29).
+    case history = "history"
+    /// No current activity and an empty history.
+    case historyEmpty = "history-empty"
+    /// As `history`, but the first history read of each list is offline.
+    case historyOffline = "history-offline"
+
+    var isHistory: Bool { [.history, .historyEmpty, .historyOffline].contains(self) }
 
     /// Served by the fake server of the guided operations.
     var isCheckout: Bool {
@@ -144,7 +152,8 @@ enum UITestScenario: String {
              .reservation, .reservationRefused, .reservationOffline, .reservationClosed,
              .activityReserved, .activityNotCancellable, .activityLoan, .activityLoanUnavailable, .checkout,
              .checkoutRefused, .checkoutOffline, .checkoutExpired, .checkoutNetworkLost, .checkoutResume,
-             .returnLoan, .returnRefused, .returnResume, .password, .passwordLost:
+             .returnLoan, .returnRefused, .returnResume, .password, .passwordLost,
+             .history, .historyEmpty, .historyOffline:
             StoredSession(accessToken: "scenario-token", expiresAt: .now + 3600, email: Self.technicianEmail)
         case .resumeExpired:
             StoredSession(accessToken: "scenario-token", expiresAt: .now - 60, email: Self.technicianEmail)
@@ -166,6 +175,8 @@ struct ScenarioTransport: HTTPTransport {
     private let profileChecks = Counter()
     private let listReads = Counter()
     private let loanReads = Counter()
+    private let reservationHistoryReads = Counter()
+    private let loanHistoryReads = Counter()
     private let activity: ActivityState
     private let checkoutServer = CheckoutServer()
 
@@ -215,10 +226,12 @@ struct ScenarioTransport: HTTPTransport {
         if path.hasSuffix("/auth/password") { return try password(request) }
         if path.hasSuffix("/assets") { return try assets(request) }
         if path.contains("/assets/") { return try asset(request) }
+        if path.hasSuffix("/me/reservations") || path.hasSuffix("/me/loans") { return try history(request, path: path) }
         if scenario.isCheckout { return try checkout(request, path: path) }
         guard [.reservation, .reservationRefused, .reservationOffline, .reservationClosed, .activityReserved,
                .activityNotCancellable, .activityLoan, .activityLoanUnavailable, .catalog, .catalogEmpty,
-               .catalogPages, .catalogOffline, .catalogDetailOffline, .catalogDetailGone].contains(scenario) else {
+               .catalogPages, .catalogOffline, .catalogDetailOffline, .catalogDetailGone].contains(scenario)
+                || scenario.isHistory else {
             throw URLError(.cannotConnectToHost)
         }
         guard request.value(forHTTPHeaderField: "Authorization") == "Bearer scenario-token" else {
@@ -267,7 +280,8 @@ struct ScenarioTransport: HTTPTransport {
              .catalogDetailGone, .reservation, .reservationRefused, .reservationOffline, .reservationClosed,
              .activityReserved, .activityNotCancellable, .activityLoan, .activityLoanUnavailable, .checkout,
              .checkoutRefused, .checkoutOffline, .checkoutExpired, .checkoutNetworkLost, .checkoutResume,
-             .returnLoan, .returnRefused, .returnResume, .password, .passwordLost:
+             .returnLoan, .returnRefused, .returnResume, .password, .passwordLost,
+             .history, .historyEmpty, .historyOffline:
             return response(request, 200, UITestScenario.technician)
         case .resumeRecovers where profileChecks.next() > 1:
             return response(request, 200, UITestScenario.technician)
@@ -320,7 +334,8 @@ struct ScenarioTransport: HTTPTransport {
         case .activityLoan: response(request, 200, UITestActivityFixtures.overdueLoan())
         case .activityLoanUnavailable where loanReads.next() == 1: problem(request, 503, "INTERNAL_ERROR")
         case .activityLoanUnavailable: problem(request, 404, "ACTIVE_LOAN_NOT_FOUND")
-        case .activityReserved, .activityNotCancellable: problem(request, 404, "ACTIVE_LOAN_NOT_FOUND")
+        case .activityReserved, .activityNotCancellable, .history, .historyEmpty, .historyOffline:
+            problem(request, 404, "ACTIVE_LOAN_NOT_FOUND")
         default: problem(request, 404, "RESOURCE_NOT_FOUND")
         }
     }
@@ -557,6 +572,25 @@ struct ScenarioTransport: HTTPTransport {
             return problem(request, 400, "PASSWORD_CURRENT_INVALID")
         }
         return response(request, 204, "")
+    }
+
+    /// §29. Scenarios other than the history ones answer an empty history.
+    /// The history scenarios have no current reservation or loan.
+    private func history(_ request: URLRequest, path: String) throws -> (Data, URLResponse) {
+        guard request.value(forHTTPHeaderField: "Authorization") == "Bearer scenario-token" else {
+            return problem(request, 401, "AUTH_TOKEN_INVALID")
+        }
+        let loans = path.hasSuffix("/me/loans")
+        if scenario == .historyOffline, (loans ? loanHistoryReads : reservationHistoryReads).next() == 1 {
+            throw URLError(.notConnectedToInternet)
+        }
+        let records = switch scenario {
+        case .history, .historyOffline:
+            loans ? UITestActivityFixtures.loanHistory() : UITestActivityFixtures.reservationHistory()
+        default:
+            [String]()
+        }
+        return response(request, 200, UITestActivityFixtures.historyPage(records, for: request.url!))
     }
 
     private func problem(_ request: URLRequest, _ status: Int, _ code: String,
