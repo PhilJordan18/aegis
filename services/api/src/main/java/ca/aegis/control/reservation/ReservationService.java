@@ -194,6 +194,19 @@ class ReservationService {
         return view(reservations.find(reservationId).orElseThrow(), now);
     }
 
+    /** Personal history uses one read-only snapshot and batched asset summaries; actions require a detail read. */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    PageResponse<ReservationView> historyOf(UUID technicianId, ReservationStatus status, PageQuery page) {
+        AdminFilter filter = new AdminFilter(status, null, technicianId, null, null);
+        long total = reservations.count(filter);
+        List<ReservationRow> rows = total == 0 ? List.of() : reservations.page(filter, page);
+        Map<UUID, AssetSummary> summaries = assets.summaries(rows.stream().map(ReservationRow::assetId).toList());
+        return PageResponse.of(rows.stream().map(row -> new ReservationView(
+                        row.id(), summaries.get(row.assetId()), row.userId(), row.status(),
+                        row.reservedFrom(), row.reservedUntil(), row.createdAt(), row.cancelledAt(), row.fulfilledAt(),
+                        row.expiredAt(), null, List.of())).toList(), page, total);
+    }
+
     /** Document 09, section 14.2. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     ReservationView activeOf(UUID technicianId) {
