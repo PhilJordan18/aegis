@@ -105,7 +105,8 @@ function renderPage(transactionGateway: TransactionGateway, { url = '/reservatio
   return renderWithProviders(<App />, { gateway: authGateway, transactionGateway, catalogGateway: catalog, custodyGateway: lockersWithOperationCell(), session, queryClient, locale })
 }
 
-const rows = () => within(document.querySelector('.ag-list__items') as HTMLElement).getAllByRole('link')
+const rows = () => [...(document.querySelector('.ag-list__items tbody') as HTMLElement).querySelectorAll<HTMLElement>('tr')]
+const rowLink = (index: number) => (rows()[index] as HTMLElement).querySelector('a') as HTMLAnchorElement
 const dossier = () => document.querySelector('.ag-dossier__scroll') as HTMLElement
 
 beforeEach(() => {
@@ -165,7 +166,7 @@ describe('Réservations et prêts: reservations', () => {
     await waitFor(() => expect(gateway.getReservation.mock.calls.map((call) => call[1])).toContain(R2.id))
     expect(rows()[1]?.getAttribute('aria-current')).toBe('true')
     // Side by side, focus stays on the row and a live region says what changed.
-    expect(document.activeElement).toBe(rows()[1])
+    expect(document.activeElement).toBe(rowLink(1))
     expect([...document.querySelectorAll('[role="status"]')].map((region) => region.textContent).join('|')).toContain('Dossier sélectionné')
   })
 
@@ -192,7 +193,7 @@ describe('Réservations et prêts: reservations', () => {
   it('reads a direct address (view, filters, page, file) and sends exactly those filters', async () => {
     const gateway = fakeGateway({ reservations: ok(pageOf([R1, R2], { page: 1, totalItems: 22, totalPages: 2 })) })
     renderPage(gateway, { url: `/reservations-prets?statut=ACTIVE&equipement=${ASSET_ID.toUpperCase()}&du=2026-11-01&au=2026-11-10&page=2&dossier=${R2.id}` })
-    await screen.findByRole('heading', { level: 2, name: '22 réservations' })
+    await screen.findByRole('heading', { level: 2, name: '2 sur 22 réservations · page 2 de 2' })
     const sent = (gateway.listReservations.mock.calls[0] as unknown as [string, Record<string, unknown>])[1]
     // « Du » starts at midnight of the laboratory day (still EDT on 1 November); « Au » is inclusive, so the bound sent
     // is the start of the next laboratory day (EST on 11 November). `to` is exclusive in the API.
@@ -213,7 +214,7 @@ describe('Réservations et prêts: reservations', () => {
     const user = userEvent.setup()
     const gateway = fakeGateway({ reservations: ok(pageOf([R1, R2], { totalItems: 30, totalPages: 2 })) })
     renderPage(gateway, { url: '/reservations-prets?statut=ACTIVE' })
-    await screen.findByRole('heading', { level: 2, name: '30 réservations' })
+    await screen.findByRole('heading', { level: 2, name: '2 sur 30 réservations · page 1 de 2' })
     const pager = screen.getByRole('navigation', { name: 'Pagination' })
     expect(within(pager).getByRole('button', { name: 'Précédent' }).getAttribute('aria-disabled')).toBe('true')
     await user.click(within(pager).getByRole('button', { name: 'Suivant' }))
@@ -314,6 +315,62 @@ describe('Réservations et prêts: filters', () => {
     renderPage(fakeGateway({ reservations: ok(pageOf([])) }))
     expect(await screen.findByText('Aucune réservation.')).toBeDefined()
     expect(screen.getByText('Les réservations apparaissent ici dès leur création.')).toBeDefined()
+  })
+})
+
+describe('Réservations et prêts: tables (contract §3.3)', () => {
+  const headers = () => [...document.querySelectorAll('.ag-list__items thead th')].map((cell) => cell.textContent)
+
+  it('gives each tab its fixed columns, a hidden caption and no sort control', async () => {
+    renderPage(fakeGateway())
+    await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+    expect(headers()).toEqual(['Statut', 'Équipement', 'Titulaire', 'Période', 'Dernière tentative'])
+    expect(document.querySelector('.ag-list__items caption')?.className).toBe('ag-sr-only')
+    expect([...document.querySelectorAll('.ag-list__items th')].every((cell) => cell.getAttribute('scope') === 'col')).toBe(true)
+    expect(document.querySelector('.ag-list__items [aria-sort], .ag-list__items thead button')).toBeNull()
+    cleanup()
+    renderPage(fakeGateway(), { url: '/reservations-prets?vue=prets' })
+    await screen.findByRole('heading', { level: 2, name: '2 prêts' })
+    expect(headers()).toEqual(['Statut', 'Équipement', 'Titulaire', 'Retrait', 'Retour prévu ou effectif'])
+    cleanup()
+    renderPage(fakeGateway({ operations: ok(pageOf([operation()])) }), { url: '/reservations-prets?vue=operations' })
+    await screen.findByRole('heading', { level: 2, name: '1 opération' })
+    expect(headers()).toEqual(['Statut', 'Type', 'Équipement', 'Utilisateur', 'Cellule', 'Créée'])
+    // Each cell carries its header for the labelled blocks under 1024 px.
+    expect([...rows()[0]!.querySelectorAll('td')].map((cell) => cell.getAttribute('data-label'))).toEqual(headers())
+  })
+
+  it('tells the page from the collection in the count (3 against 143)', async () => {
+    renderPage(fakeGateway({ reservations: ok(pageOf([R1, R2, reservation({ id: 'cccccccc-3333-4333-8333-333333333333' })])) }))
+    expect(await screen.findByRole('heading', { level: 2, name: '3 réservations' })).toBeDefined()
+    cleanup()
+    renderPage(fakeGateway({ reservations: ok(pageOf([R1, R2], { page: 1, size: 20, totalItems: 143, totalPages: 8 })) }), { url: '/reservations-prets?page=2' })
+    expect(await screen.findByRole('heading', { level: 2, name: '2 sur 143 réservations · page 2 de 8' })).toBeDefined()
+  })
+
+  it('puts the overdue loans first on the page shown, and says so', async () => {
+    const onTime = loan({ id: 'dddddddd-4444-4444-8444-444444444444', status: 'ACTIVE', overdue: false })
+    const late = loan({ id: 'eeeeeeee-5555-4555-8555-555555555555', status: 'ACTIVE', overdue: true })
+    renderPage(fakeGateway({ loans: ok(pageOf([onTime, late])) }), { url: '/reservations-prets?vue=prets' })
+    await screen.findByRole('heading', { level: 2, name: '2 prêts' })
+    expect(plain(rows()[0]?.textContent)).toContain('En retard')
+    expect(plain(rows()[1]?.textContent)).not.toContain('En retard')
+    expect(screen.getByText('Retards en tête sur cette page.')).toBeDefined()
+  })
+
+  it('keeps the server order, with no note, when the overdue loans already lead', async () => {
+    renderPage(fakeGateway(), { url: '/reservations-prets?vue=prets' })
+    await screen.findByRole('heading', { level: 2, name: '2 prêts' })
+    expect(screen.queryByText('Retards en tête sur cette page.')).toBeNull()
+  })
+
+  it('follows the row link from any cell of the row', async () => {
+    const user = userEvent.setup()
+    renderPage(fakeGateway())
+    await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+    await user.click(rows()[1]!.querySelector('td') as HTMLElement)
+    expect(window.location.search).toBe(`?dossier=${R2.id}`)
+    expect(document.activeElement).toBe(rowLink(1))
   })
 })
 

@@ -27,9 +27,9 @@ import '../app/page.css'
 import '../features/catalog/equipment.css'
 import '../features/transactions/transactions.css'
 
-/** The dossier sits under the list below 1024 px, out of sight after a selection (handoff §5). */
+/** The dossier sits under the table below 1280 px, out of sight after a selection (contrat-web-manager §3.3). */
 function isStackedLayout(): boolean {
-  return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches
+  return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1279px)').matches
 }
 
 function revealDossier(target: HTMLElement | null) {
@@ -193,7 +193,7 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
           onApply={apply}
         />
 
-        <div className={showDossier ? 'ag-eq' : 'ag-eq ag-eq--single'}>
+        <div className={showDossier ? 'ag-eq ag-eq--table' : 'ag-eq ag-eq--table ag-eq--single'}>
           <TransactionList
             view={view}
             page={shownPage}
