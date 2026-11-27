@@ -8,7 +8,7 @@ import { ManagerShell } from '../app/shell/ManagerShell'
 import type { UserProfile } from '../features/auth/contract'
 import { useSignOut } from '../features/auth/useSignOut'
 import { useCurrentAdminProfile } from '../features/auth/useCurrentAdminProfile'
-import { operationChip, operationTypeLabel, transactionTimes } from '../features/transactions/transactionPresentation'
+import { operationChip, operationTypeLabel, shownOrder, transactionTimes } from '../features/transactions/transactionPresentation'
 import { classifyTransactionFailure } from '../features/transactions/transactionFailure'
 import { hasFilters, NO_FILTERS, readTransactionLocation, transactionHref, type TransactionFilterValues, type TransactionView } from '../features/transactions/transactionHref'
 import { TransactionDossier } from '../features/transactions/TransactionDossier'
@@ -16,14 +16,19 @@ import { TransactionFilters } from '../features/transactions/TransactionFilters'
 import { TransactionList } from '../features/transactions/TransactionList'
 import { useTransactionDetail, useTransactionList, type TransactionRecord } from '../features/transactions/useTransactionQueries'
 import { queryKeys } from '../api/queryKeys'
+import { LabelIndexNotice } from '../features/labels/LabelIndexNotice'
+import { HelpButton, HelpPanel } from '../features/pageTools/PageHelp'
+import { RefreshControl } from '../features/pageTools/RefreshControl'
+import { usePageHelp } from '../features/pageTools/usePageHelp'
+import { LAB_TIME_ZONE } from '../features/catalog/assetPresentation'
+import { refreshLabelIndex, useLabelIndex } from '../features/labels/useLabelIndex'
 import { useI18n } from '../i18n/useI18n'
-import { Button } from '../ui/Button'
-import { Icon } from '../ui/Icon'
 import '../app/page.css'
 import '../features/catalog/equipment.css'
+import { useRecordsLayout } from '../features/pageTools/useRecordsLayout'
 import '../features/transactions/transactions.css'
 
-/** The dossier sits under the list below 1024 px, out of sight after a selection (handoff §5). */
+/** The dossier sits under the card rows below 1024 px, out of sight after a selection (Design §8.3). */
 function isStackedLayout(): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches
 }
@@ -51,8 +56,12 @@ function recordName(record: TransactionRecord, i18n: ReturnType<typeof useI18n>)
  */
 export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProfile: UserProfile }) {
   const i18n = useI18n()
+  // Design §8.3: card rows beside the dossier from 1024 px, the table beside a 480 px dossier from 1280 px.
+  const layout = useRecordsLayout()
   const { m } = i18n
   const t = m.reservations
+  const labels = useLabelIndex()
+  const help = usePageHelp('reservations-loans')
   const router = useRouter()
   const client = useQueryClient()
   const { search } = useLocation()
@@ -72,7 +81,8 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
   }, [lastPage, location.page, router, view, filters])
 
   const items = page?.items ?? []
-  const selectedId = location.selectedId ?? items[0]?.item.id ?? null
+  // With no dossier in the address, the first row on screen is the one opened (an overdue loan leads the page).
+  const selectedId = location.selectedId ?? shownOrder(view, items)[0]?.item.id ?? null
   const listed = items.find((record) => record.item.id === selectedId)
   const detail = useTransactionDetail(view, selectedId, listed)
 
@@ -145,26 +155,30 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
               ))}
             </nav>
           </div>
-          <div className="ag-page__meta">
-            {shownPage !== undefined && <span className="ag-page__time">{t.updatedAt({ time: transactionTimes(i18n).readAt(readAt) })}</span>}
-            <Button
-              variant="secondary"
-              size="sm"
-              busy={refreshing && !list.isPending}
-              onClick={() => {
-                if (refreshing) return
-                void list.refetch()
-                if (selectedId !== null) void detail.refetch()
+          <div className="ag-page__actions">
+            <HelpButton help={help} />
+            <RefreshControl
+              busy={refreshing}
+              readAt={shownPage === undefined || readAt === 0 ? null : readAt}
+              stale={list.isRefetchError}
+              announceSuccess={false}
+              onRefresh={async () => {
                 // The attempt shown inline is its own read: it is read again with the dossier, never followed.
                 const attempt = detail.data?.kind === 'operations' ? null : (detail.data?.item.currentOperationId ?? null)
                 if (attempt !== null) void client.invalidateQueries({ queryKey: queryKeys.transactions.operation(attempt) })
+                const [read, file] = await Promise.all([list.refetch(), selectedId === null ? undefined : detail.refetch(), refreshLabelIndex(client)])
+                return read.isSuccess && (file === undefined || file.isSuccess)
               }}
-            >
-              <Icon name="refresh" />
-              {t.refresh}
-            </Button>
+            />
           </div>
         </header>
+
+        <HelpPanel help={help}>
+          <p>{m.pageTools.labHours({ zone: LAB_TIME_ZONE })}</p>
+          {labels.health === 'partial' && <p>{m.labels.partial}</p>}
+        </HelpPanel>
+
+        <LabelIndexNotice health={labels.health} onRetry={labels.retry} />
 
         <div className="ag-sr-only" role="status">
           {announcement}
@@ -177,13 +191,13 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
         </div>
 
         <TransactionFilters
-          key={`${view}|${search}`}
+          key={view}
           view={view}
           values={filters}
           onApply={apply}
         />
 
-        <div className={showDossier ? 'ag-eq' : 'ag-eq ag-eq--single'}>
+        <div className={`ag-eq${layout === 'cards' ? '' : ' ag-eq--table'}${showDossier ? '' : ' ag-eq--single'}`}>
           <TransactionList
             view={view}
             page={shownPage}

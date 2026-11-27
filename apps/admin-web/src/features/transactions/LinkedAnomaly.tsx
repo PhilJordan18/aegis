@@ -3,6 +3,7 @@ import type { I18n } from '../../i18n/useI18n'
 import { StatusChip } from '../../ui/StatusChip'
 import { anomaliesHref, NO_FILTERS as NO_ANOMALY_FILTERS } from '../anomalies/anomalyLocation'
 import { statusChip as anomalyStatusChip, instantLabel } from '../anomalies/anomalyPresentation'
+import { IdText } from '../labels/IdText'
 import { useLinkedAnomaly } from './useLinkedAnomaly'
 
 /**
@@ -10,7 +11,7 @@ import { useLinkedAnomaly } from './useLinkedAnomaly'
  * acknowledged, an anomaly that was acknowledged and one that was resolved are three different facts: each has its own
  * words and none implies a physical confirmation. A failed read leaves the link alone.
  */
-export function LinkedAnomaly({ anomalyId, i18n, full = false }: { readonly anomalyId: string; readonly i18n: I18n; readonly full?: boolean }) {
+export function LinkedAnomaly({ anomalyId, i18n }: { readonly anomalyId: string; readonly i18n: I18n }) {
   const t = i18n.m.reservations
   const a = i18n.m.anomalies
   const read = useLinkedAnomaly(anomalyId)
@@ -31,7 +32,7 @@ export function LinkedAnomaly({ anomalyId, i18n, full = false }: { readonly anom
       <Link className="ag-link" to={anomaliesHref({ filters: NO_ANOMALY_FILTERS, page: 0, anomalyId })}>
         {t.openAnomaly}
       </Link>{' '}
-      <code className={full ? 'ag-id ag-id--full' : 'ag-id'}>{full ? anomalyId : `${anomalyId.slice(0, 8)}…`}</code>
+      <IdText id={anomalyId} />
       {chip !== null && (
         <span className="ag-help ag-help--block">
           <StatusChip role={chip.role} icon={chip.icon}>

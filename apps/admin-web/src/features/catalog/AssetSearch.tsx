@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useI18n } from '../../i18n/useI18n'
 import { Button } from '../../ui/Button'
 import { Icon } from '../../ui/Icon'
@@ -11,10 +11,14 @@ interface AssetSearchProps {
   readonly onSearch: (q: string | null) => void
 }
 
+/** §3.4: the search applies 300 ms after the last keystroke, like every free-text filter. */
+export const ASSET_SEARCH_DELAY_MS = 300
+
 /**
- * Search on code and model name (09 §22.3). The rule is checked on submit, on the composed text: no maximum length on
- * the field, so neither an input method nor an emoji is cut short, and nothing is truncated. The server stays the
- * authority. Mount one per address value (a `key`), so the field follows the address.
+ * Search on code and model name (09 §22.3), applied 300 ms after the last keystroke or at once with Enter
+ * (contrat-web-manager §3.4). The rule is checked on the composed text: no maximum length on the field, so neither an
+ * input method nor an emoji is cut short, and nothing is truncated. The server stays the authority. The field follows
+ * the address (Précédent, « Effacer »), never the other way round while typing.
  */
 export function AssetSearch({ value, onSearch }: AssetSearchProps) {
   const { m } = useI18n()
@@ -30,17 +34,42 @@ export function AssetSearch({ value, onSearch }: AssetSearchProps) {
   }
   // An unusable value in the address filters nothing and says why.
   const [error, setError] = useState<string | null>(() => (value === null ? null : errorOf(value)))
+  const [seen, setSeen] = useState(value)
+  if (seen !== value) {
+    setSeen(value)
+    if ((value ?? '') !== draft) {
+      setDraft(value ?? '')
+      setError(value === null ? null : errorOf(value))
+    }
+  }
+
+  // The address value this draft would write: null for no filter, undefined while the text cannot be sent.
+  const target = (text: string): string | null | undefined => {
+    const read = readSearchText(text)
+    return read.kind === 'valid' ? read.q : read.kind === 'empty' ? null : undefined
+  }
+  const pending = target(draft)
+  const current = value === null ? null : target(value) === undefined ? value : target(value)
+  useEffect(() => {
+    if (pending === undefined || pending === current) return
+    const timer = window.setTimeout(() => onSearch(pending), ASSET_SEARCH_DELAY_MS)
+    return () => window.clearTimeout(timer)
+    // `pending` and `current` name every value the timer reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending, current])
+
+  function change(text: string) {
+    setDraft(text)
+    setError(errorOf(text))
+  }
 
   function submit(event: FormEvent) {
     event.preventDefault()
-    const read = readSearchText(draft)
-    if (read.kind === 'size' || read.kind === 'invalid') {
-      setError(errorOf(draft))
+    if (pending === undefined) {
       inputRef.current?.focus()
       return
     }
-    setError(null)
-    onSearch(read.kind === 'valid' ? read.q : null)
+    if (pending !== current) onSearch(pending)
   }
 
   return (
@@ -59,7 +88,7 @@ export function AssetSearch({ value, onSearch }: AssetSearchProps) {
             type="search"
             className="ag-ff__control"
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => change(event.target.value)}
             aria-describedby={error ? `${helpId} ${errorId}` : helpId}
             aria-invalid={error ? true : undefined}
             autoComplete="off"
@@ -67,9 +96,6 @@ export function AssetSearch({ value, onSearch }: AssetSearchProps) {
             enterKeyHint="search"
           />
           <div className="ag-search__actions">
-            <Button type="submit" variant="secondary">
-              {t.searchSubmit}
-            </Button>
             {value !== null && (
               <Button variant="ghost" onClick={() => onSearch(null)}>
                 {t.searchClear}

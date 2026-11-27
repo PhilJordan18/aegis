@@ -24,7 +24,10 @@ const operation = (id: string, overrides: Record<string, unknown> = {}) => ({
   type: 'CHECKOUT',
   status: 'ANOMALY',
   userId: USER_ID,
+  // R7: an operation carries its user and equipment summaries; the parser refuses one without them.
+  user: { id: USER_ID, displayName: 'Technicien Démo' },
   assetId: ASSET_ID,
+  asset: { id: ASSET_ID, assetCode: 'MM-001', model: { id: '8f1f3c52-5f2a-4c43-9b6b-0d2f6c1f3a01', name: 'Multimètre 1', manufacturer: 'Fluke', modelNumber: '117' }, placement: { lockerId: LOCKER_ID, lockerCode: 'AEGIS-DEMO-01', compartmentId: COMPARTMENT_ID, compartmentCode: 'A1' } },
   lockerId: LOCKER_ID,
   compartmentId: COMPARTMENT_ID,
   reservationId: RESERVATION_ID,

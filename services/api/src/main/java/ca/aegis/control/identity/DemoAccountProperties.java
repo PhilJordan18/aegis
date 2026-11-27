@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * {@code AEGIS_DEMO_ACCOUNTS_ENABLED=true}.
  */
 @ConfigurationProperties("aegis.identity.demo-accounts")
-public record DemoAccountProperties(boolean enabled, DemoAccount admin, DemoAccount technician) {
+public record DemoAccountProperties(boolean enabled, boolean rotatePasswords, DemoAccount admin, DemoAccount technician) {
 
     public record DemoAccount(String email, String displayName, String password, AccessLevel maximumAccessLevel) {
 

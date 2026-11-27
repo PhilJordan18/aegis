@@ -14,8 +14,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Creates the prepared demonstration accounts when explicitly enabled. Re-running is idempotent: a missing account
- * is created and a changed password is re-hashed through {@link PasswordChanges}, which revokes the account's browser
- * sessions (ADR-017); an unchanged password changes nothing. The role, access level and status of an existing
+ * is created; existing passwords are preserved unless explicit operator rotation is enabled (ADR-020).
+ * Rotation uses {@link PasswordChanges} and its atomic revocation (ADR-017/018). The role, access level and status of an existing
  * account are never altered, so an administrator's decision to disable an account survives a restart.
  */
 @Component
@@ -86,7 +86,7 @@ class DemoAccountProvisioner implements ApplicationRunner {
             return;
         }
         Account existing = accounts.findByEmail(demo.email()).orElseThrow();
-        if (passwordChanges.change(existing.id(), demo.password(), null)) {
+        if (properties.rotatePasswords() && passwordChanges.change(existing.id(), demo.password(), null)) {
             log.info("Updated the password of demo account {}; its browser sessions were revoked", demo.email());
         }
         if (existing.role() != demo.role() || existing.maximumAccessLevel() != demo.maximumAccessLevel()
