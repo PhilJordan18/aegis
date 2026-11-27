@@ -14,14 +14,14 @@
 .ag-eq { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(340px, 440px) minmax(0, 1fr); gap: 20px; }
 .ag-eq--single { grid-template-columns: minmax(0, 1fr); }
 .ag-panel {
-  min-height: 0; min-width: 0; display: flex; flex-direction: column; overflow: hidden;
+  position: relative; min-height: 0; min-width: 0; display: flex; flex-direction: column; overflow: hidden;
   background: var(--ag-surface); border: 1px solid var(--ag-border); border-radius: var(--ag-r-panel);
 }
 .ag-list__head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; padding: 18px 20px 10px; }
 .ag-list__title { font-size: 0.9375rem; font-weight: 600; }
 .ag-list__meta { font-size: var(--ag-type-small-size); color: var(--ag-text-2); }
 /* The 4 px of top padding keep the focus ring of the first row inside the scrolling box. */
-.ag-list__items { flex: 1; display: grid; align-content: start; gap: 6px; padding: 4px 10px 10px; overflow: auto; }
+.ag-list__items { position: relative; flex: 1; display: grid; align-content: start; gap: 6px; padding: 4px 10px 10px; overflow: auto; }
 .ag-item { display: grid; padding: 14px 16px; border-radius: var(--ag-r-item); border: 1px solid transparent; }
 a.ag-item { color: inherit; text-decoration: none; }
 a.ag-item:hover { background: var(--ag-field); }
@@ -58,7 +58,7 @@ a.ag-item:hover { background: var(--ag-field); }
 .ag-dossier__alert { padding: 24px 32px; display: grid; gap: 12px; align-content: start; }
 
 .ag-dossier__scroll {
-  flex: 1; min-height: 0; overflow: auto; padding: 24px 32px 20px; border-radius: var(--ag-r-panel);
+  position: relative; flex: 1; min-height: 0; overflow: auto; padding: 24px 32px 20px; border-radius: var(--ag-r-panel);
   /* Scroll shadows (review R3): the only gradient allowed in production, a functional cue that content continues
      above or below. Neutral tint to transparent; identity.test.ts allows exactly these four layers. */
   background:

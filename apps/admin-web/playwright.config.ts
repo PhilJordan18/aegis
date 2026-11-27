@@ -84,6 +84,7 @@ export default defineConfig({
     { name: 'labels', testMatch: 'labels.spec.ts' },
     { name: 'overview', testMatch: 'overview.spec.ts' },
     { name: 'records', testMatch: 'records.spec.ts' },
+    { name: 'shell', testMatch: 'shell.spec.ts' },
   ],
   webServer: REAL_API
     ? undefined
