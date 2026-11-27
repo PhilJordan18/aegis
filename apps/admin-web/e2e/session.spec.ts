@@ -475,7 +475,7 @@ test.describe('errors keep the session', () => {
 
     api.rejectNextCommand = true
     const refreshes = refreshCounter(api)
-    await page.getByRole('group', { name: 'Actions de l’exemplaire' }).getByRole('button', { name: 'Archiver' }).click()
+    await page.getByRole('group', { name: 'Actions sur l’exemplaire' }).getByRole('button', { name: 'Archiver' }).click()
     const dialog = page.getByRole('alertdialog')
     await dialog.getByRole('button', { name: 'Archiver' }).click()
 

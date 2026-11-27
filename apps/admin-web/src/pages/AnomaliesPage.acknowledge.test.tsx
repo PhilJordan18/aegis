@@ -72,7 +72,7 @@ describe('Anomalies — acknowledgement dialog', () => {
     const { opener, dialog, note } = await openDialog(user)
     expect(document.activeElement).toBe(note)
     expect(within(dialog).getByRole('heading', { name: 'Reconnaître cette anomalie' })).toBeDefined()
-    expect(within(dialog).getByText(/L’anomalie n’est pas résolue/)).toBeDefined()
+    expect(within(dialog).getByText(/cela ne résout pas l’anomalie/)).toBeDefined()
     // 06 §13.4: said as a fact about the return, never as a resolution.
     expect(within(dialog).getByText(/permet au technicien de tenter un nouveau retour/)).toBeDefined()
     expect(within(dialog).getByText(/reste non résolue tant que ce retour n’est pas prouvé/)).toBeDefined()
@@ -174,7 +174,9 @@ describe('Anomalies — acknowledgement outcomes', () => {
     const dossier = screen.getByRole('group', { name: 'Équipement attendu non observé' })
     expect(await within(dossier).findByText('Anomalie reconnue. Elle n’est pas résolue.')).toBeDefined()
     expect(within(dossier).getAllByText('Reconnue').length).toBeGreaterThan(0)
-    expect(within(dossier).getByText(/Reconnue par Administrateur de démonstration à/)).toBeDefined()
+    // §3.2: the state block says who acknowledged and when; the acknowledgement section says it again with the note.
+    expect(within(dossier).getAllByText(/Reconnue le .+ par Administrateur de démonstration\./)).toHaveLength(2)
+    expect(dossier.querySelector('.ag-callout__lead')?.textContent).toMatch(/^Reconnue le .+ par Administrateur de démonstration\./)
     expect(within(dossier).getByText('Inspection planifiée.')).toBeDefined()
     expect(within(dossier).queryByRole('button', { name: 'Reconnaître' })).toBeNull()
     expect(within(dossier).getByText(/Non résolue/)).toBeDefined()
@@ -184,7 +186,7 @@ describe('Anomalies — acknowledgement outcomes', () => {
     expect(window.location.search).toBe(`?statut=ouvertes&anomalie=${ANOMALY_ID}`)
     // Read again from the server: the open list no longer holds it, the dossier does.
     await waitFor(() => expect(gateway.getAnomaly.mock.calls.length).toBeGreaterThan(1))
-    await waitFor(() => expect(screen.getByText('Aucune anomalie ne correspond à ces filtres.')).toBeDefined())
+    await waitFor(() => expect(screen.getByText('Aucune anomalie pour ces filtres.')).toBeDefined())
     expect(screen.getByRole('group', { name: 'Équipement attendu non observé' })).toBeDefined()
   })
 

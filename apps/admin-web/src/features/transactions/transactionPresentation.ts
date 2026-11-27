@@ -5,6 +5,8 @@ import type { StatusRole } from '../../ui/StatusChip'
 import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
 import { UNRECOGNIZED, type Unrecognized } from '../catalog/contract'
 import { TERMINAL_OPERATION_STATUSES, type LoanStatus, type LoanView, type LockerOperationStatus, type LockerOperationView, type ReservationStatus } from './contract'
+import type { TransactionView } from './transactionHref'
+import type { TransactionRecord } from './useTransactionQueries'
 
 type Chip = { readonly role: StatusRole; readonly icon: IconName; readonly label: string }
 
@@ -26,6 +28,8 @@ function formatter(locale: I18n['locale'], key: string, options: Intl.DateTimeFo
 export interface TransactionTimes {
   /** « 10 nov., 20 h 30 »: a list row. */
   readonly short: (instant: string) => string
+  /** « 25 nov. »: a day, as in « since 25 Nov ». */
+  readonly day: (instant: string) => string
   /** « 20 h 30 »: the end of a period that starts on the same day. */
   readonly clock: (instant: string) => string
   /** « 20 h 30 min 05 s »: a step of a physical sequence, where seconds matter. */
@@ -47,6 +51,7 @@ export function transactionTimes({ locale }: Pick<I18n, 'locale'>): TransactionT
   }
   return {
     short: unbroken('short', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
+    day: unbroken('day', { month: 'short', day: 'numeric' }),
     clock: unbroken('clock', { hour: 'numeric', minute: '2-digit' }),
     clockSeconds: unbroken('clockSeconds', { hour: 'numeric', minute: '2-digit', second: '2-digit' }),
     full: format('full', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', timeZoneName: 'short' }),
@@ -126,5 +131,9 @@ export function isTerminalOperation(operation: Pick<LockerOperationView, 'status
   return operation.terminalAt !== null || (operation.status !== UNRECOGNIZED && TERMINAL_OPERATION_STATUSES.includes(operation.status))
 }
 
-/** A UUID shortened for a list row (8 characters and an ellipsis); the dossier shows it whole and selectable. */
-export const shortId = (id: string): string => `${id.slice(0, 8)}…`
+
+/** §3.3: overdue loans lead the page on screen, and the foot says so; the collection keeps the server's order. */
+export function shownOrder(view: TransactionView, items: readonly TransactionRecord[]): readonly TransactionRecord[] {
+  const late = (record: TransactionRecord) => record.kind === 'loans' && isShownOverdue(record.item)
+  return view === 'loans' ? [...items.filter(late), ...items.filter((record) => !late(record))] : items
+}

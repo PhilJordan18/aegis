@@ -49,6 +49,21 @@ class LoanService {
         this.clock = clock;
     }
 
+    /** Personal history uses one read-only snapshot and batched asset summaries; actions require a detail read. */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    PageResponse<LoanView> historyOf(UUID technicianId, LoanStatus status, PageQuery page) {
+        AdminFilter filter = new AdminFilter(status, null, technicianId, null, null);
+        long total = loans.count(filter);
+        List<LoanRow> rows = total == 0 ? List.of() : loans.page(filter, page);
+        Map<UUID, AssetSummary> summaries = assets.summaries(rows.stream().map(LoanRow::assetId).toList());
+        Instant now = clock.instant();
+        return PageResponse.of(rows.stream().map(row -> new LoanView(
+                        row.id(), summaries.get(row.assetId()), row.holderUserId(), row.status(),
+                        row.checkedOutAt(), row.dueAt(), row.status() != LoanStatus.COMPLETED && now.isAfter(row.dueAt()),
+                        row.returnRequestedAt(), row.returnedAt(), row.checkoutOperationId(), row.returnOperationId(),
+                        null, List.of())).toList(), page, total);
+    }
+
     /** The open loan of the technician, or {@code 404 ACTIVE_LOAN_NOT_FOUND} when there is none. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     LoanView currentOf(UUID technicianId) {

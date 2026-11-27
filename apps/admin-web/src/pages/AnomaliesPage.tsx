@@ -18,8 +18,13 @@ import { useAnomaly, useAnomalyList } from '../features/anomalies/useAnomalyQuer
 import type { UserProfile } from '../features/auth/contract'
 import { useSignOut } from '../features/auth/useSignOut'
 import { useCurrentAdminProfile } from '../features/auth/useCurrentAdminProfile'
+import { HelpButton, HelpPanel } from '../features/pageTools/PageHelp'
+import { RefreshControl } from '../features/pageTools/RefreshControl'
+import { refetchAll } from '../features/pageTools/refetchAll'
+import { usePageHelp } from '../features/pageTools/usePageHelp'
 import { useI18n } from '../i18n/useI18n'
-import { Button } from '../ui/Button'
+import { LabelIndexNotice } from '../features/labels/LabelIndexNotice'
+import { refreshLabelIndex, useLabelIndex } from '../features/labels/useLabelIndex'
 import { Icon } from '../ui/Icon'
 import '../app/page.css'
 import '../features/catalog/equipment.css'
@@ -57,6 +62,8 @@ export function AnomaliesPage({ sessionProfile }: { readonly sessionProfile: Use
   const client = useQueryClient()
   const { search } = useLocation()
   const currentProfile = useCurrentAdminProfile()
+  const labels = useLabelIndex()
+  const help = usePageHelp('anomalies')
   // The login response already carries the profile; /auth/me refreshes it.
   const profile = currentProfile.data ?? sessionProfile
 
@@ -66,6 +73,7 @@ export function AnomaliesPage({ sessionProfile }: { readonly sessionProfile: Use
     ...(filters.status === null ? {} : { status: filters.status }),
     ...(filters.type === null ? {} : { type: filters.type }),
     ...(filters.severity === null ? {} : { severity: filters.severity }),
+    ...(filters.assetId === null ? {} : { assetId: filters.assetId }),
     page: location.page,
     size: ANOMALY_PAGE_SIZE,
   }
@@ -153,7 +161,7 @@ export function AnomaliesPage({ sessionProfile }: { readonly sessionProfile: Use
   function select(selected: AnomalyView, event: MouseEvent<HTMLAnchorElement>) {
     // A modified click opens another tab: nothing changes here.
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
-    setSelectionNote(t.selectedStatus({ name: anomalyName(selected, i18n) }))
+    setSelectionNote(t.selectedStatus({ name: anomalyName(selected, i18n, labels) }))
     setOutcomeState(null)
     // Side by side, focus stays on the row and the live region says what changed; stacked, the dossier is below the fold.
     if (!isStackedLayout()) return
@@ -163,7 +171,10 @@ export function AnomaliesPage({ sessionProfile }: { readonly sessionProfile: Use
 
   const applyFilters = (next: AnomalyFilters) => router.navigate(anomaliesHref({ filters: next, page: 0, anomalyId: null }))
   const clearFilters = () => router.navigate(anomaliesHref({ filters: NO_FILTERS, page: 0, anomalyId: null }))
-  const refresh = () => void client.invalidateQueries({ queryKey: queryKeys.anomalies.all })
+  const refresh = async () => {
+    const [ok] = await Promise.all([refetchAll(client, [{ queryKey: queryKeys.anomalies.all, type: 'active' }]), refreshLabelIndex(client)])
+    return ok
+  }
   // Read and updated times are shown in the laboratory zone, like every other instant of this screen.
   const time = (updatedAt: number) => (updatedAt > 0 ? format.time(new Date(updatedAt), LAB_TIME_ZONE) : null)
   const listReadAt = shownPage === undefined ? null : time(list.dataUpdatedAt)
@@ -182,13 +193,16 @@ export function AnomaliesPage({ sessionProfile }: { readonly sessionProfile: Use
             <PageHeading className="ag-page__title">{t.heading}</PageHeading>
             <p className="ag-an-lead">{t.lead}</p>
           </div>
-          <div className="ag-an-meta">
-            {listReadAt !== null && <span className="ag-an-meta__time">{t.updatedAt({ time: listReadAt })}</span>}
-            <Button variant="secondary" size="sm" busy={list.isFetching} onClick={() => !list.isFetching && refresh()}>
-              {t.refresh}
-            </Button>
+          <div className="ag-page__actions">
+            <HelpButton help={help} />
+            <RefreshControl onRefresh={refresh} readAt={shownPage === undefined || list.dataUpdatedAt === 0 ? null : list.dataUpdatedAt} stale={list.isRefetchError} busy={list.isFetching} />
           </div>
         </header>
+
+        <HelpPanel help={help}>
+          <p>{m.pageTools.labHours({ zone: LAB_TIME_ZONE })}</p>
+          {labels.health === 'partial' && <p>{m.labels.partial}</p>}
+        </HelpPanel>
 
         <div className="ag-sr-only" role="status">
           {listAnnouncement}
@@ -204,7 +218,9 @@ export function AnomaliesPage({ sessionProfile }: { readonly sessionProfile: Use
           </p>
         </aside>
 
-        <AnomalyFilterBar key={anomaliesHref({ filters, page: 0, anomalyId: null })} filters={filters} onApply={applyFilters} onClear={clearFilters} />
+        <LabelIndexNotice health={labels.health} onRetry={labels.retry} />
+
+        <AnomalyFilterBar filters={filters} labels={labels} onApply={applyFilters} onClear={clearFilters} />
 
         <div className={showDossier ? 'ag-eq' : 'ag-eq ag-eq--single'}>
           <AnomalyList
@@ -222,6 +238,7 @@ export function AnomaliesPage({ sessionProfile }: { readonly sessionProfile: Use
             onSelect={select}
             onPage={(next) => router.navigate(anomaliesHref({ filters, page: next, anomalyId: null }))}
             onClearFilters={clearFilters}
+            labels={labels}
           />
           {showDossier && (
             <AnomalyDossier

@@ -26,6 +26,12 @@ const REAL_API = process.env.AEGIS_E2E_REAL_API === '1'
  *   request count, pause while hidden, stop at a terminal status; writes no image.
  * - `links` (npm run test:links): the links between custody dossiers (R2, R3) and the inline attempt (R4) on a routed fake:
  *   each link is clicked, its address and the request it sends are checked; writes no image.
+ * - `labels` (npm run test:labels): lot 1 readability on a routed fake: bounded label reads for 20 rows, a unit named
+ *   from its own identifier against a contradictory placement, no UUID outside « Détails techniques »; writes no image.
+ * - `records` (npm run test:records): lot 3 tables, immediate filters, dossier action zones and widths on a routed fake.
+ * - `overview` (npm run test:overview): lot 2 Vue d'ensemble on a routed fake: each tile's filtered address, the
+ *   acknowledgement in place (one request for two clicks), « N+ » on a partial read, tab order, and 1440/1024/390/320
+ *   without horizontal scroll or axe violation; writes no image.
  * All start their own Vite dev server, where the design-review preview is enabled.
  *
  * `realapi` (npm run test:realapi) is the exception, and opt-in: it exists only when AEGIS_E2E_REAL_API=1, so
@@ -75,6 +81,9 @@ export default defineConfig({
     { name: 'forms', testMatch: 'forms.spec.ts' },
     { name: 'follow', testMatch: 'follow.spec.ts' },
     { name: 'links', testMatch: 'links.spec.ts' },
+    { name: 'labels', testMatch: 'labels.spec.ts' },
+    { name: 'overview', testMatch: 'overview.spec.ts' },
+    { name: 'records', testMatch: 'records.spec.ts' },
   ],
   webServer: REAL_API
     ? undefined

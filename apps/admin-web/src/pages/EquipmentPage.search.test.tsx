@@ -46,6 +46,20 @@ const queries = (gateway: ReturnType<typeof fakeCatalogGateway>) => gateway.list
 const box = () => screen.getByRole('searchbox', { name: 'Rechercher un exemplaire' })
 
 describe('Équipements — search (09 §22.3, #109)', () => {
+  it('applies the search 300 ms after the last keystroke, with no « Rechercher » button (§3.4)', async () => {
+    const user = userEvent.setup()
+    const gateway = searchGateway()
+    renderEquipment(gateway)
+    await screen.findByRole('heading', { level: 2, name: '2 exemplaires' })
+    expect(screen.queryByRole('button', { name: 'Rechercher' })).toBeNull()
+    await user.type(box(), 'MM')
+    await waitFor(() => expect(new URLSearchParams(window.location.search).get('recherche')).toBe('MM'))
+    expect(document.activeElement).toBe(box())
+    await waitFor(() => expect(queries(gateway).some((query) => query.q === 'MM')).toBe(true))
+    // Typing does not send each keystroke.
+    expect(queries(gateway).some((query) => query.q === 'M')).toBe(false)
+  })
+
   it('sends the trimmed text as q from the first page, keeps it in the address, and lists what matches', async () => {
     const user = userEvent.setup()
     const gateway = searchGateway()
@@ -54,7 +68,7 @@ describe('Équipements — search (09 §22.3, #109)', () => {
     expect(queries(gateway)[0]).not.toHaveProperty('q')
 
     await user.type(box(), '\u00A0 clé  à molette ')
-    await user.click(screen.getByRole('button', { name: 'Rechercher' }))
+    await user.keyboard('{Enter}')
     await screen.findByRole('heading', { level: 2, name: '1 exemplaire' })
     expect(queries(gateway).at(-1)).toEqual({ page: 0, size: 20, sort: 'assetCode,asc', q: 'clé  à molette' })
     expect(new URLSearchParams(window.location.search).get('recherche')).toBe('clé  à molette')
@@ -70,9 +84,10 @@ describe('Équipements — search (09 §22.3, #109)', () => {
     await screen.findByRole('heading', { level: 2, name: '2 exemplaires' })
     const zwj = '\u{1F469}‍\u{1F527}'
 
+    box().focus()
     fireEvent.change(box(), { target: { value: zwj.repeat(101) } })
     const before = gateway.listAssets.mock.calls.length
-    await user.click(screen.getByRole('button', { name: 'Rechercher' }))
+    await user.keyboard('{Enter}')
     expect(await screen.findByText('La recherche compte au plus 100 caractères.')).toBeDefined()
     expect(box().getAttribute('aria-invalid')).toBe('true')
     expect(document.activeElement).toBe(box())
@@ -81,7 +96,7 @@ describe('Équipements — search (09 §22.3, #109)', () => {
     expect(gateway.listAssets.mock.calls.length).toBe(before)
 
     fireEvent.change(box(), { target: { value: zwj.repeat(100) } })
-    await user.click(screen.getByRole('button', { name: 'Rechercher' }))
+    await user.keyboard('{Enter}')
     await waitFor(() => expect(queries(gateway).at(-1)?.q).toBe(zwj.repeat(100)))
     expect(screen.queryByText('La recherche compte au plus 100 caractères.')).toBeNull()
   })
@@ -94,12 +109,12 @@ describe('Équipements — search (09 §22.3, #109)', () => {
 
     fireEvent.change(box(), { target: { value: 'a\tb' } })
     const before = gateway.listAssets.mock.calls.length
-    await user.click(screen.getByRole('button', { name: 'Rechercher' }))
+    await user.keyboard('{Enter}')
     expect(await screen.findByText(/La recherche contient un caractère non autorisé/)).toBeDefined()
     expect(gateway.listAssets.mock.calls.length).toBe(before)
 
     fireEvent.change(box(), { target: { value: ' \u00A0\u202F\u3000' } })
-    await user.click(screen.getByRole('button', { name: 'Rechercher' }))
+    await user.keyboard('{Enter}')
     await screen.findByRole('heading', { level: 2, name: '2 exemplaires' })
     expect(queries(gateway).at(-1)).not.toHaveProperty('q')
     expect(window.location.search).toBe('')
@@ -144,7 +159,7 @@ describe('Équipements — search (09 §22.3, #109)', () => {
     expect(await screen.findByText('No unit matches “absent”.')).toBeDefined()
     const field = screen.getByRole('searchbox', { name: 'Search units' })
     fireEvent.change(field, { target: { value: 'x'.repeat(101) } })
-    await user.click(screen.getByRole('button', { name: 'Search' }))
+    await user.keyboard('{Enter}')
     expect(await screen.findByText('A search has at most 100 characters.')).toBeDefined()
     expect(screen.getByRole('button', { name: 'Show all' })).toBeDefined()
   })

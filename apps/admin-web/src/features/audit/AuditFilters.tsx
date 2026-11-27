@@ -1,15 +1,23 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '../../i18n/useI18n'
-import { Button } from '../../ui/Button'
 import { TextField } from '../../ui/FormField'
 import { Icon } from '../../ui/Icon'
 import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
-import { activeFilterFields, FILTER_FIELDS, type AuditFilters as Filters, type FilterField } from './auditFilters'
+import { DateRange } from '../pageTools/DateRange'
+import { FilterChips } from '../pageTools/FilterChips'
+import { activeFilterFields, type AuditFilters as Filters, type FilterField } from './auditFilters'
 
-const NBSP = '\u00A0'
+/** §3.4: a free-text filter applies 300 ms after the last keystroke. */
+export const AUDIT_TEXT_DELAY_MS = 300
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const ID_FIELDS: readonly FilterField[] = ['subjectId', 'operationId', 'actorUserId']
+const TEXT_FIELDS = ['eventType', 'subjectType', 'subjectId', 'operationId', 'actorUserId'] as const
+type TextFieldName = (typeof TEXT_FIELDS)[number]
 
 interface AuditFiltersProps {
-  /** The filters of the address. */
+  /** The filters of the address, the only source of truth: every change navigates, Précédent undoes it. */
   readonly filters: Filters
   /** Fields whose value in the address was not a day. */
   readonly unreadable: readonly FilterField[]
@@ -21,18 +29,19 @@ interface AuditFiltersProps {
 }
 
 /**
- * « Filtres (n actifs) » as a disclosure, closed by default (handoff §4.4): the active filters stay visible as chips
- * that remove themselves. The form is the draft; the address holds what is applied, so a filter is bookmarkable.
+ * « Filtres (n actifs) » as a disclosure, closed by default (handoff §4.4), with the shared filter bar inside
+ * (contrat-web-manager §3.4): dates apply on `change`, text fields 300 ms after the last keystroke, and an identifier
+ * field only once it holds a UUID. The active filters stay visible as chips below, even with the disclosure closed.
  */
 export function AuditFilters({ filters, unreadable, refused, onApply, onRemove, onClear }: AuditFiltersProps) {
   const { m } = useI18n()
   const t = m.audit
-  const formRef = useRef<HTMLFormElement>(null)
+  const groupRef = useRef<HTMLDivElement>(null)
   const summaryRef = useRef<HTMLElement>(null)
   const [opened, setOpened] = useState(false)
   const [draft, setDraft] = useState<Filters>(filters)
   const [applied, setApplied] = useState(filters)
-  // The draft follows the address (back button, « Tout afficher », a chip), never the other way round while typing.
+  // The draft follows the address (back button, « Effacer les filtres », a chip), never the other way round while typing.
   if (applied !== filters && JSON.stringify(applied) !== JSON.stringify(filters)) {
     setApplied(filters)
     setDraft(filters)
@@ -47,9 +56,11 @@ export function AuditFilters({ filters, unreadable, refused, onApply, onRemove, 
     operationId: t.fieldOperationId,
     actorUserId: t.fieldActorUserId,
   }
+  const notId = (field: FilterField, value: string) => ID_FIELDS.includes(field) && value.trim() !== '' && !UUID.test(value.trim())
   const errorOf = (field: FilterField): string | null => {
     if (unreadable.includes(field)) return t.dateUnreadable
-    if (refused?.includes(field)) return field === 'from' || field === 'to' ? t.periodInvalid : t.fieldInvalid
+    if (refused?.includes(field) && draft[field] === filters[field]) return field === 'from' || field === 'to' ? t.periodInvalid : t.fieldInvalid
+    if (notId(field, draft[field])) return m.pageTools.uuidExpected
     return null
   }
   const active = activeFilterFields(filters)
@@ -60,25 +71,37 @@ export function AuditFilters({ filters, unreadable, refused, onApply, onRemove, 
   const refusal = refused?.join() ?? null
   useEffect(() => {
     if (refusal === null) return
-    formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+    groupRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
   }, [refusal])
 
-  function submit(event: FormEvent) {
-    event.preventDefault()
-    const next = Object.fromEntries(FILTER_FIELDS.map((field) => [field, draft[field].trim()])) as Filters
-    onApply(next)
-  }
+  // One timer for the text fields: the last keystroke wins, and an identifier that is not a UUID sends nothing.
+  const pending = TEXT_FIELDS.filter((field) => draft[field].trim() !== filters[field] && !notId(field, draft[field]))
+  const pendingKey = pending.map((field) => `${field}=${draft[field].trim()}`).join('&')
+  useEffect(() => {
+    if (pendingKey === '') return
+    const timer = window.setTimeout(() => {
+      const next = { ...filters }
+      for (const field of TEXT_FIELDS) if (!notId(field, draft[field])) next[field as TextFieldName] = draft[field].trim()
+      onApply(next)
+    }, AUDIT_TEXT_DELAY_MS)
+    return () => window.clearTimeout(timer)
+    // `pendingKey` names every value the timer reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingKey])
 
-  const set = (field: FilterField) => (value: string) => setDraft((current) => ({ ...current, [field]: value }))
-  const field = (name: FilterField, type: 'date' | 'text') => (
+  const text = (name: TextFieldName) => (
     <TextField
       key={name}
       label={labels[name]}
-      type={type}
+      type="text"
       value={draft[name]}
       error={errorOf(name)}
-      onChange={(event) => set(name)(event.target.value)}
-      {...(type === 'text' ? { autoComplete: 'off', spellCheck: false } : {})}
+      onChange={(event) => {
+        const value = event.target.value
+        setDraft((current) => ({ ...current, [name]: value }))
+      }}
+      autoComplete="off"
+      spellCheck={false}
     />
   )
 
@@ -90,44 +113,26 @@ export function AuditFilters({ filters, unreadable, refused, onApply, onRemove, 
           <span>{t.filtersLegend}</span>
           <span className="ag-au-disclosure__count">({t.filterCount({ count: active.length })})</span>
         </summary>
-        <form className="ag-au-filters" ref={formRef} aria-label={t.filtersLegend} noValidate onSubmit={submit}>
+        <div className="ag-au-filters" ref={groupRef} role="group" aria-label={t.filtersLegend}>
           <div className="ag-au-filters__grid">
-            {field('from', 'date')}
-            {field('to', 'date')}
-            {field('eventType', 'text')}
-            {field('subjectType', 'text')}
-            {field('subjectId', 'text')}
-            {field('operationId', 'text')}
-            {field('actorUserId', 'text')}
+            <DateRange
+              value={{ from: filters.from === '' ? null : filters.from, to: filters.to === '' ? null : filters.to }}
+              onApply={(range) => onApply({ ...filters, from: range.from ?? '', to: range.to ?? '' })}
+              isDay={(value) => DAY.test(value)}
+              invalidText={t.periodInvalid}
+              help={t.periodHelp({ zone: LAB_TIME_ZONE })}
+              fromError={errorOf('from')}
+              toError={errorOf('to')}
+            />
+            {TEXT_FIELDS.map(text)}
           </div>
-          <div className="ag-au-filters__actions">
-            <Button type="submit" size="sm">
-              {t.filter}
-            </Button>
-            <Button variant="secondary" size="sm" onClick={onClear}>
-              {t.clearAll}
-            </Button>
-          </div>
-          <p className="ag-au-filters__help">
-            {t.periodHelp({ zone: LAB_TIME_ZONE })}
-          </p>
-        </form>
-      </details>
-      {active.length > 0 && (
-        <div className="ag-au-chips" role="group" aria-label={t.activeFilters}>
-          {active.map((name) => (
-            <Button key={name} variant="secondary" size="sm" aria-label={t.removeFilter({ label: `${labels[name]} ${filters[name]}` })} onClick={() => {
-                onRemove(name)
-                // The chip is about to leave: focus goes to the disclosure, never to the page body (WCAG 2.4.3).
-                summaryRef.current?.focus()
-              }}
-            >
-              <span>{`${labels[name]}${NBSP}: ${filters[name]}`}</span>
-              <Icon name="close" />
-            </Button>
-          ))}
         </div>
-      )}
+      </details>
+      <FilterChips
+        filters={active.map((name) => ({ key: name, label: labels[name], value: filters[name], onRemove: () => onRemove(name) }))}
+        onClear={onClear}
+        returnFocus={() => summaryRef.current?.focus()}
+      />
     </>
   )
 }

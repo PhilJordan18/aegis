@@ -6,11 +6,11 @@ import java.util.UUID;
  * The authenticated account as read from the database for the current request. Authorization decisions use
  * these values, never the role or access-level claims of the token (ADR-007).
  */
-public record CurrentAccount(UUID id, String displayName, String email, Role role, AccessLevel maximumAccessLevel) {
+public record CurrentAccount(UUID id, String displayName, String email, Role role, AccessLevel maximumAccessLevel, int credentialVersion) {
 
     static CurrentAccount of(Account account) {
         return new CurrentAccount(account.id(), account.displayName(), account.email(), account.role(),
-                account.maximumAccessLevel());
+                account.maximumAccessLevel(), account.credentialVersion());
     }
 
     /** Asset access policy: a {@code STANDARD} account may not use a {@code RESTRICTED} asset. */
