@@ -88,7 +88,6 @@ a.ag-item:hover { background: var(--ag-field); }
 .ag-eq-history__links { margin-top: 10px; display: grid; gap: 6px; font-size: 0.9375rem; }
 .ag-eq-history__links .ag-link { min-height: 24px; display: inline-flex; align-items: center; }
 .ag-eq-history > .ag-help { margin-top: 8px; display: block; }
-.ag-sec-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .ag-readonly {
   display: inline-flex; gap: 4px; align-items: center; font-family: var(--ag-font-sans); font-size: var(--ag-type-small-size);
   text-transform: none; letter-spacing: 0; color: var(--ag-text-2);
@@ -134,7 +133,6 @@ a.ag-item:hover { background: var(--ag-field); }
 .ag-model__description { font-size: var(--ag-type-small-size); color: var(--ag-text-2); overflow-wrap: anywhere; }
 .ag-model__actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .ag-models .ag-list__items { max-width: 880px; }
-.ag-dossier__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 @media (max-width: 559px) {
   .ag-model { grid-template-columns: minmax(0, 1fr); }
   .ag-model__actions { justify-content: flex-start; }

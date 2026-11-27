@@ -73,6 +73,12 @@ function renderPage(transactionGateway: TransactionGateway, { url, locale = 'fr'
 }
 
 const dossier = () => document.querySelector('.ag-dossier__scroll') as HTMLElement
+/** What the eye reads: the screen-reader-only full identifiers left out (§1.8 criterion 1). */
+const visible = (element: Element): string => {
+  const copy = element.cloneNode(true) as Element
+  copy.querySelectorAll('.ag-sr-only').forEach((node) => node.remove())
+  return plain(copy.textContent)
+}
 const hrefOf = (name: string | RegExp) => within(dossier()).getByRole('link', { name }).getAttribute('href')
 
 beforeEach(() => installMatchMedia(window, false))
@@ -92,6 +98,9 @@ describe('R2: links between dossiers', () => {
     // The anomaly's own status, in its own words: never « Commande acquittée », never « résolue ».
     await waitFor(() => expect(plain(dossier().textContent)).toContain('Reconnue : la vérification est engagée'))
     expect(plain(dossier().textContent)).not.toContain('Résolue')
+    // §1.8 criterion 1: the linked anomaly shows its abbreviated identifier, never the full one.
+    expect(visible(dossier())).toContain(`${ANOMALY.slice(0, 8)}…`)
+    expect(visible(dossier())).not.toContain(ANOMALY)
   })
 
   it('says an anomaly is resolved only when the anomaly itself says so', async () => {
@@ -136,18 +145,20 @@ describe('R3: the locker filter of the operations', () => {
     await screen.findByRole('heading', { level: 2, name: '1 opération' })
     expect(gateway.listLockerOperations.mock.calls[0]).toEqual(['token-value', { lockerId: LOCKER_ID, page: 0, size: 20 }, expect.anything()])
     const chip = screen.getByTestId('locker-filter')
-    expect(plain(chip.textContent)).toContain(`Casier filtré : ${LOCKER_ID}`)
+    // The locker is not in the label index here: its abbreviated identifier, the full one for assistive technologies only.
+    expect(visible(chip)).toContain(`Casier filtré : ${LOCKER_ID.slice(0, 8)}…`)
+    expect(visible(chip)).not.toContain(LOCKER_ID)
+    expect(plain(chip.textContent)).toContain(LOCKER_ID)
     expect(within(chip).getByRole('link', { name: 'Retirer ce filtre' }).getAttribute('href')).toBe('/reservations-prets?vue=operations')
   })
 
-  it('keeps the locker when the other filters are applied, and drops it with « Tout afficher »', async () => {
+  it('keeps the locker when the other filters are applied, and drops it with « Effacer les filtres »', async () => {
     const gateway = fakeGateway()
     renderPage(gateway, { url: `/reservations-prets?vue=operations&casier=${LOCKER_ID}` })
     await screen.findByRole('heading', { level: 2, name: '1 opération' })
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Statut' }), 'CONFIRMED')
-    await userEvent.click(screen.getByRole('button', { name: 'Filtrer' }))
     await waitFor(() => expect(window.location.search).toBe(`?vue=operations&statut=CONFIRMED&casier=${LOCKER_ID}`))
-    await userEvent.click(screen.getByRole('button', { name: 'Tout afficher' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Effacer les filtres' }))
     await waitFor(() => expect(window.location.search).toBe('?vue=operations'))
     expect(screen.queryByTestId('locker-filter')).toBeNull()
   })
@@ -156,7 +167,8 @@ describe('R3: the locker filter of the operations', () => {
     const gateway = fakeGateway()
     renderPage(gateway, { url: `/reservations-prets?vue=prets&casier=${LOCKER_ID}` })
     await screen.findByRole('heading', { level: 2, name: '1 prêt' })
-    expect((gateway.listLoans.mock.calls as unknown[][])[0]?.[1]).toEqual({ page: 0, size: 20 })
+    // The navigation badge reads the open loans by status, size 100 (contract §1.6); the page's own read is the other one.
+    expect((gateway.listLoans.mock.calls as unknown[][]).map((call) => call[1]).filter((query) => (query as { size?: number }).size !== 100)[0]).toEqual({ page: 0, size: 20 })
     expect(screen.queryByTestId('locker-filter')).toBeNull()
   })
 })
@@ -209,6 +221,13 @@ describe('R4: the current attempt of a reservation or a loan', () => {
     renderPage(fakeGateway({ reservations: [reservation({ reservedUntil: '2999-01-01T00:00:00Z', currentOperationId: ATTEMPT_ID })], operations: [authorized] }), { url: '/reservations-prets' })
     await waitFor(() => expect(plain(dossier().textContent)).toContain('Accès autorisé'))
     expect(plain(dossier().textContent)).not.toContain('expiration est différée')
+  })
+
+  it('keeps the hollow end marker of an active reservation past its end: the marker follows the server status, not a clock (§1.7)', async () => {
+    renderPage(fakeGateway({ reservations: [reservation({ reservedUntil: '2020-01-01T00:00:00Z' })] }), { url: '/reservations-prets' })
+    await screen.findByRole('heading', { level: 2, name: '1 réservation' })
+    await waitFor(() => expect(dossier()?.querySelector('.ag-tl')).not.toBeNull())
+    expect(dossier().querySelector('.ag-tl__item--marker')).toBeNull()
   })
 
   it('says the expiry is deferred for a physically uncertain attempt (ANOMALY) on an active reservation past due', async () => {

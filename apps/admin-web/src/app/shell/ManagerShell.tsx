@@ -6,6 +6,7 @@ import { AppearanceSwitch } from '../../features/appearance/AppearanceSwitch'
 import type { UserProfile } from '../../features/auth/contract'
 import { LanguageSwitch } from '../../features/language/LanguageSwitch'
 import type { Messages } from '../../i18n/messages'
+import { useNavBadges, type NavBadge } from '../../features/overview/navBadges'
 import { useI18n } from '../../i18n/useI18n'
 import { Brand } from '../../ui/Brand'
 import { Icon, type IconName } from '../../ui/Icon'
@@ -87,17 +88,53 @@ export function ManagerShell({ currentPath, profile, onSignOut, children }: Shel
   )
 }
 
+/**
+ * The badge is hidden from assistive technologies; the entry's name carries it (« Anomalies, 2 ouvertes »). An
+ * unavailable count is a neutral dot, never a red zero (§1.6).
+ */
+function badgeSpeech(badge: NavBadge, tone: 'anomaly' | 'unknown', m: Messages): string {
+  if (badge.kind === 'none') return ''
+  const anomalies = tone === 'anomaly'
+  if (badge.kind === 'unavailable') return anomalies ? m.shell.anomaliesBadgeUnavailable : m.shell.lateBadgeUnavailable
+  if (anomalies) return m.shell.anomaliesBadge({ count: badge.n })
+  return badge.partial ? m.shell.lateBadgePartial({ count: badge.n }) : m.shell.lateBadge({ count: badge.n })
+}
+
+function NavBadgeMark({ badge, tone }: { readonly badge: NavBadge; readonly tone: 'anomaly' | 'unknown' }) {
+  if (badge.kind === 'none') return null
+  if (badge.kind === 'unavailable') return <span className="ag-nav__badge ag-nav__badge--dot" aria-hidden="true" />
+  return (
+    <span className={`ag-nav__badge ag-nav__badge--${tone}`} aria-hidden="true">
+      {badge.n}
+      {badge.partial ? '+' : ''}
+    </span>
+  )
+}
+
 function SectionList({ currentPath }: { readonly currentPath: string }) {
   const { m } = useI18n()
+  const badges = useNavBadges()
+  // The badge is hidden from assistive technologies; the entry's name carries it (« Anomalies, 2 ouvertes », §1.6).
+  const entryLabel = (id: (typeof SECTIONS)[number]['id']): string | undefined => {
+    const speech = id === 'anomalies' ? badgeSpeech(badges.anomalies, 'anomaly', m) : id === 'reservationsLoans' ? badgeSpeech(badges.late, 'unknown', m) : ''
+    return speech === '' ? undefined : `${m.shell.sections[id]}${speech}`
+  }
   return (
     <>
       <ul className="ag-nav">
         {SECTIONS.map((section) => (
           <li key={section.id}>
             {section.path !== null ? (
-              <Link className="ag-nav__item" to={section.path} aria-current={section.path === currentPath ? 'page' : undefined}>
+              <Link
+                className="ag-nav__item"
+                to={section.path}
+                aria-current={section.path === currentPath ? 'page' : undefined}
+                aria-label={entryLabel(section.id)}
+              >
                 <Icon name={section.icon} />
                 {m.shell.sections[section.id]}
+                {section.id === 'anomalies' && <NavBadgeMark badge={badges.anomalies} tone="anomaly" />}
+                {section.id === 'reservationsLoans' && <NavBadgeMark badge={badges.late} tone="unknown" />}
               </Link>
             ) : (
               <span className="ag-nav__item ag-nav__item--soon" aria-disabled="true">

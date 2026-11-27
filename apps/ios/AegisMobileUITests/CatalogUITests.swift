@@ -97,6 +97,124 @@ final class CatalogUITests: XCTestCase {
 
     // MARK: Pages
 
+    /// The search field and the status chips on screen, measured on their
+    /// render in light and dark (2026-11-26): an automatic exclusion is no
+    /// proof. Each measure keeps its crop, its conditions and its result,
+    /// and fails below 4.5:1, a chip's symbol included. The chips are read
+    /// at the top of the list and again after one swipe, and the five of the
+    /// scenario must all be measured. The magnifier is measured on its own
+    /// crop, where it is not a minor share of the pixels, and the prompt and
+    /// magnifier again after the asset sheet and after a search was typed,
+    /// deleted and closed, since SwiftUI may redraw the field. `TEST_RUNNER_AEGIS_CONTRAST`
+    /// names a contrast setting applied to the simulator for the record.
+    @MainActor
+    func testSearchFieldAndStatusChipsReachContrastOnTheirRender() throws {
+        var below: [String] = []
+        for appearance in [XCUIDevice.Appearance.light, .dark] {
+            XCUIDevice.shared.appearance = appearance
+            let theme = appearance == .dark ? "dark" : "light"
+            let app = launch(.french, scenario: "catalog")
+            XCTAssertTrue(card(app, "MM-001").waitForExistence(timeout: 30))
+            XCTAssertTrue(app.waitForStillScreen(), "The screen kept changing; the measure needs a still screen.")
+            let window = app.windows.firstMatch.frame
+            let search = app.searchFields.firstMatch
+            XCTAssertTrue(search.exists, "\(theme): no search field to measure")
+            // Every measure is taken before any verdict, so that one failure
+            // does not hide the others.
+            var lines: [String] = []
+            func measure(_ target: XCUIElement, _ moment: String = "") {
+                guard case let .measured(passed, measured) = entireContrast(of: target, window: window, in: app) else {
+                    return below.append("\(theme): '\(target.label)' was not measured")
+                }
+                let line = moment.isEmpty ? measured : "\(moment): \(measured)"
+                lines.append(line)
+                if !passed { below.append("\(theme): \(line)") }
+            }
+            // The magnifier sits at the leading end of the field: three
+            // quarters of the field's height hold it without the prompt or the
+            // caret, which would be measured in its place.
+            func measureSearch(_ moment: String) {
+                guard app.waitForStillScreen() else { return below.append("\(theme) \(moment): the screen kept changing") }
+                let field = search.frame
+                measure(search, moment)
+                let glyph = CGRect(x: field.minX, y: field.minY, width: field.height * 0.75, height: field.height)
+                let shot = app.screenshot()
+                let image = Self.crop(shot, to: glyph, window: window)
+                let name = "rendered-contrast-search-magnifier-\(theme)-\(moment)"
+                let evidence = XCTAttachment(image: image)
+                evidence.name = name
+                evidence.lifetime = .keepAlways
+                add(evidence)
+                let conditions = "search magnifier \(moment) at \(glyph), " + measureConditions(in: app, window: window, shot: shot)
+                guard let ratio = RenderedContrast.ratio(of: image) else {
+                    return below.append("\(theme): \(conditions): no ink to measure, evidence \(name)")
+                }
+                let line = conditions + String(format: ": rendered %.2f:1, threshold 4.5:1", ratio) + ", evidence \(name)"
+                lines.append(line)
+                if ratio < 4.5 { below.append("\(theme): \(line)") }
+            }
+            measureSearch("at launch")
+            var labels = Set<String>()
+            for pass in 0..<2 {
+                if pass == 1 {
+                    app.swipeUp()
+                    XCTAssertTrue(app.waitForStillScreen(), "The screen kept changing after the swipe.")
+                }
+                var visible = window
+                let tabBar = app.tabBars.firstMatch
+                if tabBar.exists { visible.size.height = max(0, tabBar.frame.minY - fadeHeight - window.minY) }
+                let chips = app.descendants(matching: .any).matching(identifier: "asset.status").allElementsBoundByIndex
+                for chip in chips where visible.contains(chip.frame) && !labels.contains(chip.label) {
+                    labels.insert(chip.label)
+                    measure(chip)
+                }
+            }
+            let expected: Set = ["Prêt", "Bloqué", "Emprunté", "À vérifier", "Indisponible"]
+            if labels != expected { below.append("\(theme): chips measured \(labels.sorted()), expected \(expected.sorted())") }
+
+            // After the asset sheet, then after a search typed and deleted.
+            app.swipeDown()
+            XCTAssertTrue(app.waitForStillScreen(), "The screen kept changing after the swipe back.")
+            card(app, "MM-001").tap()
+            XCTAssertTrue(element(app, "asset.name").waitForExistence(timeout: 10))
+            app.navigationBars.buttons.firstMatch.tap()
+            XCTAssertTrue(card(app, "MM-001").waitForExistence(timeout: 10))
+            measureSearch("after the asset sheet")
+            search.tap()
+            search.typeText("MM")
+            search.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 2) + "\n")
+            XCTAssertTrue(card(app, "MM-001").waitForExistence(timeout: 10))
+            // While the search is active, iOS 26 draws the field as a glass
+            // gradient whose shades `RenderedContrast` takes for inks
+            // (1.01:1): there that state is kept as evidence, not measured
+            // (measured by hand on its pixels, 2026-11-27; the measuring
+            // tool's rework is a separate task). Before iOS 26 it is measured.
+            // The prompt is measured again once the search is closed.
+            if ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26 {
+                measureSearch("while the search is active")
+            } else {
+                XCTAssertTrue(app.waitForStillScreen())
+                let active = XCTAttachment(image: Self.crop(app.screenshot(), to: search.frame, window: window))
+                active.name = "search-active-\(theme)-not-measured-glass-gradient"
+                active.lifetime = .keepAlways
+                add(active)
+            }
+            let close = app.buttons.matching(NSPredicate(format: "label IN %@", ["Annuler", "Fermer", "Cancel", "Close"])).firstMatch
+            XCTAssertTrue(close.exists, "\(theme): no button closes the search")
+            close.tap()
+            XCTAssertTrue(card(app, "MM-001").waitForExistence(timeout: 10))
+            measureSearch("after a deleted search")
+
+            let setting = ProcessInfo.processInfo.environment["AEGIS_CONTRAST"].map { ", contrast \($0)" } ?? ""
+            let record = XCTAttachment(string: lines.joined(separator: "\n"))
+            record.name = "rendered-contrast-search-and-chips-\(theme)\(setting)"
+            record.lifetime = .keepAlways
+            add(record)
+            app.terminate()
+        }
+        XCTAssertTrue(below.isEmpty, below.joined(separator: "\n"))
+    }
+
     /// Twenty cards per page: the second page is read only once the last
     /// card of the first one is scrolled into view, not as soon as it exists.
     @MainActor
@@ -150,6 +268,7 @@ final class CatalogUITests: XCTestCase {
                 let theme = appearance == .dark ? "dark" : "light"
                 let app = launch(language, scenario: "catalog-offline")
                 XCTAssertTrue(card(app, "MM-001").waitForExistence(timeout: 30))
+                let restingTop = element(app, "catalog.filter.all").frame.minY
 
                 pullToRefresh(app)
 
@@ -162,11 +281,15 @@ final class CatalogUITests: XCTestCase {
                 // The refresh indicator must collapse before the audit, the
                 // capture and the tap: a tap on a moving list only stops it.
                 let retry = app.buttons["catalog.retry"]
+                XCTAssertTrue(returnToRest(app, restingTop: restingTop, inert: notice))
                 XCTAssertTrue(waitUntilSettled(retry))
                 try audit(app)
                 attach(app, "\(language.code)-catalog-offline-\(theme)")
 
-                // One tap: the list must be at rest after the refresh.
+                // Still and at rest again after the audit, which scrolls and
+                // resizes the text: a tap on a held list only releases it (#220).
+                XCTAssertTrue(returnToRest(app, restingTop: restingTop, inert: notice))
+                XCTAssertTrue(waitUntilSettled(retry), "Try again is still moving after the audit")
                 retry.tap()
                 XCTAssertTrue(notice.waitForNonExistence(timeout: 15))
                 XCTAssertFalse(card(app, "MM-001").label.contains(language["lastKnown"]))
@@ -264,6 +387,34 @@ final class CatalogUITests: XCTestCase {
                     withVelocity: XCUIGestureVelocity(1500), thenHoldForDuration: 0)
     }
 
+    /// Brings the list back to where it rests, with the filter row at
+    /// `restingTop`. The synthesized pull sometimes leaves the list held
+    /// below that place, perfectly still, until the next touch: the next tap
+    /// then only releases the list, and its button never acts (#220, seen in
+    /// the screen recording; the same pull leaves the list at rest in other
+    /// iterations). A frame that stopped moving does not tell the two apart.
+    /// The list is released by a tap on `inert`, a text without action, and
+    /// the held state is attached as `list-held-after-pull` for review.
+    @MainActor
+    private func returnToRest(_ app: XCUIApplication, restingTop: CGFloat, inert: XCUIElement) -> Bool {
+        let filter = element(app, "catalog.filter.all")
+        func atRest(within timeout: TimeInterval) -> Bool {
+            let deadline = Date.now + timeout
+            repeat {
+                if filter.exists, abs(filter.frame.minY - restingTop) < 1 { return true }
+                Thread.sleep(forTimeInterval: 0.3)
+            } while Date.now < deadline
+            return false
+        }
+        if atRest(within: 3) { return true }
+        let held = XCTAttachment(screenshot: app.screenshot())
+        held.name = "list-held-after-pull"
+        held.lifetime = .keepAlways
+        add(held)
+        inert.tap()
+        return atRest(within: 5)
+    }
+
     /// Waits until the element is hittable and its frame stops moving.
     @MainActor
     private func waitUntilSettled(_ element: XCUIElement, timeout: TimeInterval = 10) -> Bool {
@@ -293,7 +444,9 @@ final class CatalogUITests: XCTestCase {
     /// - clipped text in the native single-line search field, and in the
     ///   native filter menu label at the largest size, which wraps in full
     ///   (see the `fr-catalog-ax5-light` capture);
-    /// - the contrast of the system search field placeholder;
+    /// - the contrast of the search field, or of a status chip the sampling
+    ///   reports as nearly passed, when its render measures 4.5:1 or more on
+    ///   the still screen; the measure is kept with its conditions;
     /// - the hit region of the search field's own clear button;
     /// - Dynamic Type of an element only partly visible: cut by the screen
     ///   edge (horizontal filter chips) or under the iOS 26 floating tab bar,
@@ -332,7 +485,8 @@ final class CatalogUITests: XCTestCase {
         // The pixel sampling of the status chips reports "nearly passed" for
         // pairs above 5:1 (Prêt, light: 5.75:1), before iOS 26 and, since the
         // cards are no longer lazy, on iOS 26 too. Their ratios are computed
-        // from the asset catalogue by `StatusContrastTests`.
+        // from the asset catalogue by `StatusContrastTests`; a reported chip
+        // is also measured on its render.
         let chipFrames = app.descendants(matching: .any).matching(identifier: "asset.status")
             .allElementsBoundByIndex.map(\.frame)
         let bar = app.navigationBars.firstMatch
@@ -363,13 +517,19 @@ final class CatalogUITests: XCTestCase {
                 case .dynamicType:
                     tolerated = !visible.contains(target.frame) || chips.contains(center)
                 case .contrast:
-                    // By type as well: after a pull the search field may have
-                    // moved since its frame was read.
-                    if searchFrame.contains(center) || target.elementType == .searchField || nearlyInChip {
-                        tolerated = true
+                    // The search field and the chips are measured on the still
+                    // screen, never excluded (2026-11-26): a passing measure
+                    // qualifies this issue alone. By type as well: after a
+                    // pull the search field may have moved since its frame
+                    // was read.
+                    let partly = self.visiblePartContrast(of: target, visible: visible, window: window, in: app)
+                    if let judged = findings.tolerates(partly, note: &note) {
+                        tolerated = judged
+                    } else if searchFrame.contains(center) || target.elementType == .searchField || nearlyInChip {
+                        let entire = self.entireContrast(of: target, window: window, in: app)
+                        tolerated = findings.tolerates(entire, note: &note) ?? false
                     } else {
-                        let partly = self.visiblePartContrast(of: target, visible: visible, window: window, in: app)
-                        tolerated = findings.tolerates(partly, note: &note) ?? false
+                        tolerated = false
                     }
                 default:
                     tolerated = false

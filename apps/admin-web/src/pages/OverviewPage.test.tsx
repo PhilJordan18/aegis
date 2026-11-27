@@ -1,6 +1,6 @@
 import { cleanup, configure, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClient, READ_STALE_MS } from '../api/serverState'
 import { App } from '../app/App'
 import { parseAnomalyView } from '../features/anomalies/contractParsers'
@@ -20,6 +20,7 @@ import type { LoanStatus, LoanView, LockerOperationStatus, LockerOperationView, 
 import { ASSET_ID, loanView, lockerOperationView, reservationView } from '../features/transactions/testFixtures'
 import type { TransactionGateway } from '../features/transactions/transactionGateway'
 import type { Locale } from '../i18n/locale'
+import { installDialogPolyfill } from '../test/dialog'
 import { installMatchMedia } from '../test/matchMedia'
 import { renderWithProviders } from '../test/renderApp'
 
@@ -105,6 +106,7 @@ function renderWith(fakes = gateways(), options: { locale?: Locale; url?: string
 const block = (name: string) => screen.getByRole('region', { name })
 const blockText = (name: string) => plain(block(name).textContent)
 
+beforeAll(installDialogPolyfill)
 beforeEach(() => {
   installMatchMedia(window, false)
 })
@@ -133,7 +135,8 @@ describe("Vue d'ensemble: the five blocks", () => {
     expect(loans).toContain('Retour en cours')
     expect(loans).toContain('En retard')
     expect(loans).toContain('En retard depuis')
-    expect(loans).toContain('Titulaire : Technicien Démo')
+    expect(loans).toContain('Technicien Démo')
+    expect(loans).not.toContain('Titulaire')
 
     await waitFor(() => expect(blockText('Casier')).toContain('AEGIS-DEMO-01'))
     const locker = blockText('Casier')
@@ -155,12 +158,14 @@ describe("Vue d'ensemble: the five blocks", () => {
     expect(blockText('Réservations actives')).toContain('Jusqu’à')
   })
 
-  it('links every row and every foot into the page that owns the dossier, and offers no corrective action', async () => {
+  it('links every row and every foot into the page that owns the dossier, and offers only the acknowledgement of an open anomaly', async () => {
     renderWith()
     await waitFor(() => expect(blockText('Réservations actives')).toContain('1 active'))
     await waitFor(() => expect(blockText('Opération en cours')).toContain('1 observée en cours'))
     const hrefs = (name: string) => within(block(name)).getAllByRole('link').map((link) => link.getAttribute('href'))
     expect(hrefs('Anomalies ouvertes')).toEqual([`/anomalies?anomalie=8a9b0c1d-2e3f-4a5b-9c6d-7e8f9a0b1c2d`, '/anomalies'])
+    expect(within(block('Anomalies ouvertes')).getByRole('link', { name: "Voir l'anomalie" })).toBeDefined()
+    expect(within(block('Prêts en retard')).getAllByRole('link')[0]?.textContent).toContain('Ouvrir le prêt')
     expect(hrefs('Prêts en retard')).toEqual([`/reservations-prets?vue=prets&dossier=${id(1)}`, '/reservations-prets?vue=prets'])
     expect(hrefs('Casier')).toEqual(['/casiers'])
     expect(hrefs('Opération en cours')).toEqual([`/reservations-prets?vue=operations&dossier=${id(2)}`, '/reservations-prets?vue=operations'])
@@ -168,8 +173,9 @@ describe("Vue d'ensemble: the five blocks", () => {
 
     const main = document.querySelector('main') as HTMLElement
     const buttons = within(main).queryAllByRole('button').map((button) => plain(button.textContent))
-    expect(buttons).toEqual(['Actualiser'])
-    expect(plain(main.textContent)).not.toMatch(/terminer|confirmer le|forcer|ouvrir la|résoudre|reconnaître|annuler|supprimer|CANCEL_RESERVATION/i)
+    expect(buttons).toEqual(['Aide', 'Actualiser', 'Reconnaître'])
+    expect(within(block('Anomalies ouvertes')).getByRole('button', { name: /^Reconnaître\s:\sÉquipement attendu non observé$/ })).toBeDefined()
+    expect(plain(main.textContent)).not.toMatch(/terminer|confirmer le|forcer|ouvrir la|résoudre|annuler|supprimer|CANCEL_RESERVATION/i)
   })
 
   it('tabs through the links in the priority order of the blocks', async () => {
@@ -178,7 +184,9 @@ describe("Vue d'ensemble: the five blocks", () => {
     await waitFor(() => expect(blockText('Réservations actives')).toContain('1 active'))
     await waitFor(() => expect(blockText('Opération en cours')).toContain('1 observée en cours'))
     const links = [...document.querySelectorAll<HTMLAnchorElement>('main a[href]')].map((link) => link.getAttribute('href'))
-    expect(links.map((href) => href?.split('?')[0])).toEqual(['/anomalies', '/anomalies', '/reservations-prets', '/reservations-prets', '/casiers', '/reservations-prets', '/reservations-prets', '/reservations-prets', '/reservations-prets'])
+    // The five tiles of the band first, then the blocks in their order.
+    expect(links.slice(0, 5)).toEqual(['/anomalies', '/reservations-prets?vue=prets&statut=ACTIVE', '/casiers', '/reservations-prets?vue=operations', '/reservations-prets?statut=ACTIVE'])
+    expect(links.slice(5).map((href) => href?.split('?')[0])).toEqual(['/anomalies', '/anomalies', '/reservations-prets', '/reservations-prets', '/casiers', '/reservations-prets', '/reservations-prets', '/reservations-prets', '/reservations-prets'])
     await user.tab()
     expect(document.activeElement?.textContent).toBe('Aller au contenu principal')
   })
@@ -207,8 +215,8 @@ describe("Vue d'ensemble: the five blocks", () => {
 
   it('says when it was updated in the laboratory zone, and which zone that is', async () => {
     renderWith()
-    await waitFor(() => expect(document.querySelector('.ag-page__time')?.textContent).toMatch(/^Mis à jour à /))
-    expect(plain(document.querySelector('.ag-page__time')?.textContent)).toMatch(/\b(HNE|HAE)\b/)
+    await waitFor(() => expect(document.querySelector('.ag-refresh__time')?.textContent).toMatch(/^Lu à /))
+    expect(plain(document.querySelector('.ag-refresh__time')?.textContent)).toMatch(/\b(HNE|HAE)\b/)
     expect(plain(document.querySelector('main')?.textContent)).toContain('Heures du laboratoire : America/Toronto')
   })
 })
@@ -238,7 +246,9 @@ describe("Vue d'ensemble: authoritative counts", () => {
     await waitFor(() => expect(blockText('Réservations actives')).toContain('14 actives'))
     await waitFor(() => expect(blockText('Opération en cours')).toContain('2 observées en cours'))
     expect(blockText('Opération en cours')).toContain('Porte ouverte')
-    expect(blockText('Opération en cours')).toContain("Chaque statut est lu par une requête distincte, pas au même instant : un élément qui change de statut entre deux lectures n'est compté qu'une fois, et peut manquer.")
+    // The caveat of successive reads is said once, in the page help, not in each module (contract §1.4).
+    expect(blockText('Opération en cours')).not.toContain('Chaque statut est lu par une requête distincte')
+    expect(plain(document.querySelector('.ag-help-panel')?.textContent)).toContain("Chaque statut est lu par une requête distincte, pas au même instant : un élément qui change de statut entre deux lectures n'est compté qu'une fois, et peut manquer.")
   })
 
   it('shows one operation, not an exact 2, when it changed status between the two reads that saw it', async () => {
@@ -543,7 +553,7 @@ describe("Vue d'ensemble: language and access", () => {
     await waitFor(() => expect(blockText('Operation in progress')).toContain('1 observed in progress'))
     await waitFor(() => expect(blockText('Active reservations')).toContain('1 active'))
     expect(plain(document.querySelector('main')?.textContent)).toContain('Laboratory time: America/Toronto')
-    expect(within(block('Open anomalies')).getByRole('link', { name: 'View anomalies' })).toBeDefined()
+    expect(within(block('Open anomalies')).getByRole('link', { name: 'View the anomaly' })).toBeDefined()
   })
 
   it('redirects to the sign-in page without an administrator session', async () => {
@@ -559,5 +569,180 @@ describe("Vue d'ensemble: language and access", () => {
     const current = within(sidebar).getAllByRole('link').find((link) => link.getAttribute('aria-current') === 'page')
     expect(current?.textContent).toBe("Vue d'ensemble")
     expect(current?.getAttribute('href')).toBe('/vue-d-ensemble')
+  })
+})
+
+describe('Vue d’ensemble — page help and refresh (contract §1.4, §1.5)', () => {
+  afterEach(() => window.sessionStorage.clear())
+
+  it('opens the help with the keyboard, keeps it open for the tab, and keeps the last good instant after a failed refresh', async () => {
+    const user = userEvent.setup()
+    const fakes = gateways()
+    renderWith(fakes)
+    await waitFor(() => expect(blockText('Réservations actives')).toContain('1 active'))
+    const help = screen.getByRole('button', { name: 'Aide' })
+    expect(help.getAttribute('aria-expanded')).toBe('false')
+    help.focus()
+    await user.keyboard('{Enter}')
+    expect(help.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('region', { name: 'Aide de la page' })).toBeTruthy()
+    expect(window.sessionStorage.getItem('aegis.pageHelp.overview')).toBe('1')
+
+    const before = document.querySelector('.ag-refresh__time')?.textContent
+    fakes.transactionGateway.listReservations.mockRejectedValue(new Error('network'))
+    await user.click(screen.getByRole('button', { name: 'Actualiser' }))
+    await waitFor(() => expect(within(document.querySelector('.ag-refresh') as HTMLElement).getByText('Non actualisé')).toBeTruthy())
+    expect(document.querySelector('.ag-refresh__time')?.textContent).toBe(before)
+    expect(plain(screen.getAllByRole('status').map((node) => node.textContent).join(' '))).toMatch(/Actualisation échouée · données du .+ conservées/)
+  })
+})
+
+describe('Navigation badges (contract §1.6)', () => {
+  const sideLink = (name: RegExp) => within(screen.getAllByRole('navigation', { name: 'Sections' })[0] as HTMLElement).getByRole('link', { name })
+
+  it('names the open anomalies and the overdue loans in the entries, from the reads of the overview', async () => {
+    const fakes = gateways()
+    renderWith(fakes)
+    await waitFor(() => expect(sideLink(/^Anomalies/).textContent).toContain('1'))
+    expect(plain(sideLink(/^Anomalies/).textContent)).toBe('Anomalies1')
+    expect(sideLink(/^Anomalies, 1 ouverte$/)).toBeTruthy()
+    await waitFor(() => expect(sideLink(/^Réservations et prêts, 1 prêt en retard$/)).toBeTruthy())
+    // One read of each key for the badges and the blocks.
+    expect(fakes.anomalyGateway.listAnomalies).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows « N+ » when one loan read is missing, and a neutral dot, never zero, when the anomaly count is unavailable', async () => {
+    renderWith(gateways({ anomalies: offline, loans: { ACTIVE: offline, RETURN_PENDING: NOMINAL.loans.RETURN_PENDING } }))
+    await waitFor(() => expect(sideLink(/^Réservations et prêts, au moins 1 prêt en retard, lecture incomplète$/)).toBeTruthy())
+    expect(sideLink(/^Réservations et prêts/).querySelector('.ag-nav__badge')?.textContent).toBe('1+')
+    await waitFor(() => expect(sideLink(/^Anomalies, nombre d’anomalies indisponible$/)).toBeTruthy())
+    expect(sideLink(/^Anomalies/).querySelector('.ag-nav__badge--dot')).not.toBeNull()
+    expect(sideLink(/^Anomalies/).textContent).not.toMatch(/0/)
+  })
+
+  it('shows nothing when there is nothing open', async () => {
+    renderWith(gateways({ anomalies: ok(anomalyPageOf([])), loans: { ACTIVE: ok(pageOf([])), RETURN_PENDING: ok(pageOf([])) } }))
+    await waitFor(() => expect(blockText('Anomalies ouvertes')).toContain('Aucune'))
+    expect(sideLink(/^Anomalies$/).querySelector('.ag-nav__badge')).toBeNull()
+    expect(sideLink(/^Réservations et prêts$/).querySelector('.ag-nav__badge')).toBeNull()
+  })
+})
+
+describe('Summary band and acknowledgement in place (contract §2)', () => {
+  const band = () => screen.getByRole('list', { name: 'Synthèse' })
+  const tiles = () => within(band()).getAllByRole('link')
+  const tileText = (index: number) => plain(tiles()[index]?.textContent)
+  const settled = async () => {
+    await waitFor(() => expect(band().getAttribute('aria-busy')).toBeNull())
+    await waitFor(() => expect(tiles().every((tile) => !tile.querySelector('.ag-skel__bar'))).toBe(true))
+  }
+
+  it('links five tiles to their filtered pages, each with its own value, detail and read instant', async () => {
+    renderWith()
+    await settled()
+    expect(tiles().map((tile) => tile.getAttribute('href'))).toEqual(['/anomalies', '/reservations-prets?vue=prets&statut=ACTIVE', '/casiers', '/reservations-prets?vue=operations', '/reservations-prets?statut=ACTIVE'])
+    expect(tileText(0)).toMatch(/^Anomalies ouvertes11 élevéeLu à /)
+    expect(tileText(1)).toMatch(/^Prêts en retard1depuis 10 nov\.Lu à /)
+    // §8.1: the closing time alone on the day of the evaluation, never the full date.
+    expect(tileText(2)).toMatch(/^Casier AEGIS-DEMO-01En ligneOuvert · fermeture 17 h 00Lu à /)
+    expect(tileText(3)).toMatch(/^Opération en cours1Lu à /)
+    expect(tileText(4)).toMatch(/^Réservations actives1Lu à /)
+    expect(tiles()[0]?.className).toContain('ag-tile--anomaly')
+    expect(tiles()[1]?.className).toContain('ag-tile--unknown')
+    // Something to do: no « nothing to do » line, and no « not confirmed » either.
+    expect(screen.queryByText(/Aucune intervention en attente/)).toBeNull()
+    expect(screen.queryByText(/l'absence d'intervention n'est pas confirmée/)).toBeNull()
+  })
+
+  it('says « nothing awaiting action » only when both reads are complete and empty', async () => {
+    renderWith(gateways({ anomalies: ok(anomalyPageOf([])), loans: { ACTIVE: ok(pageOf([])), RETURN_PENDING: ok(pageOf([])) } }))
+    await settled()
+    expect(tileText(0)).toMatch(/^Anomalies ouvertesAucuneLu à /)
+    expect(tileText(1)).toMatch(/^Prêts en retardAucuneLu à /)
+    expect(tiles()[0]?.className).toContain('ag-tile--neutral')
+    expect(plain(screen.getByText(/Aucune intervention en attente/).textContent)).toMatch(/^Aucune intervention en attente · lu à /)
+  })
+
+  it('shows « N+ » and « Lecture incomplète » on a partial loan read, and never confirms the absence', async () => {
+    renderWith(gateways({ anomalies: ok(anomalyPageOf([])), loans: { ACTIVE: ok(pageOf([loan({ id: id(7) })], 150)), RETURN_PENDING: ok(pageOf([])) } }))
+    await settled()
+    expect(tileText(1)).toMatch(/^Prêts en retard0\+Lecture incomplèteLu à /)
+    expect(screen.queryByText(/Aucune intervention en attente/)).toBeNull()
+    expect(screen.getByText("Lecture incomplète : l'absence d'intervention n'est pas confirmée.")).toBeDefined()
+  })
+
+  const failing: readonly [string, number, Script][] = [
+    ['anomalies', 0, { anomalies: problem(500, 'INTERNAL_ERROR') }],
+    ['loans', 1, { loans: { ACTIVE: problem(500, 'INTERNAL_ERROR'), RETURN_PENDING: problem(500, 'INTERNAL_ERROR') } }],
+    ['locker status', 2, { status: problem(500, 'INTERNAL_ERROR') }],
+    ['operations', 3, { operations: Object.fromEntries(IN_PROGRESS_OPERATION_STATUSES.map((status) => [status, problem(500, 'INTERNAL_ERROR')])) }],
+    ['reservations', 4, { reservations: problem(500, 'INTERNAL_ERROR') }],
+  ]
+  it.each(failing)('shows « — Indisponible », never 0, when the %s read fails', async (_name, index, script) => {
+    renderWith(gateways({ anomalies: ok(anomalyPageOf([])), loans: { ACTIVE: ok(pageOf([])), RETURN_PENDING: ok(pageOf([])) }, ...script }))
+    await waitFor(() => expect(tileText(index)).toMatch(/ndisponible$/))
+    const tile = tiles()[index] as HTMLElement
+    expect(tile.querySelector('.ag-tile__value')?.textContent).toBe('—')
+    expect(plain(tile.textContent).replace(plain(tile.querySelector('.ag-tile__over')?.textContent), '')).not.toMatch(/\d/)
+    expect(screen.queryByText(/Aucune intervention en attente/)).toBeNull()
+    expect(screen.getByText("Lecture incomplète : l'absence d'intervention n'est pas confirmée.")).toBeDefined()
+  })
+
+  it('keeps a stale tile with its last instant, marks it « Non actualisé », and shows one stale notice under the band', async () => {
+    const user = userEvent.setup()
+    const fakes = gateways()
+    renderWith(fakes)
+    await settled()
+    const before = tiles()[4]?.querySelector('.ag-tile__read .ag-tnum')?.textContent
+    fakes.transactionGateway.listReservations.mockRejectedValue(new Error('network'))
+    await user.click(screen.getByRole('button', { name: 'Actualiser' }))
+    await waitFor(() => expect(tileText(4)).toContain('Non actualisé'))
+    expect(tileText(4)).toMatch(/^Réservations actives1/)
+    expect(tiles()[4]?.querySelector('.ag-tile__read .ag-tnum')?.textContent).toBe(before)
+    expect(document.querySelectorAll('.ag-band__stale')).toHaveLength(1)
+    expect(tileText(0)).not.toContain('Non actualisé')
+  })
+
+  it('shows an offline locker as « Hors ligne » with its last signal, and no « nothing to do » line', async () => {
+    renderWith(gateways({ anomalies: ok(anomalyPageOf([])), loans: { ACTIVE: ok(pageOf([])), RETURN_PENDING: ok(pageOf([])) }, status: ok(OFFLINE) }))
+    await waitFor(() => expect(tileText(2)).toContain('Hors ligne'))
+    expect(tileText(2)).toMatch(/Dernier signal \d+ h \d+/)
+    expect(tiles()[2]?.className).toContain('ag-tile--blocked')
+    expect(screen.queryByText(/Aucune intervention en attente/)).toBeNull()
+  })
+
+  it('offers « Modifier l’horaire » in the locker block only when the window is closed or has no zone', async () => {
+    renderWith(gateways({ status: ok(lockerStatus({ currentWindow: { timeZone: null, open: false, closesAt: null, nextOpensAt: null } })) }))
+    await waitFor(() => expect(within(block('Casier')).getByRole('button', { name: 'Modifier l’horaire' })).toBeDefined())
+  })
+
+  it('acknowledges in place with one key per dialog, announces it, and updates the tile and the badge', async () => {
+    const user = userEvent.setup()
+    let acknowledged = false
+    const fakes = gateways({ anomalies: async () => ok(anomalyPageOf(acknowledged ? [] : [anomaly()])) })
+    fakes.anomalyGateway.acknowledge.mockImplementation(async () => {
+      acknowledged = true
+      return ok(must(parseAnomalyView(anomalyView({ compartmentId: A1.id, status: 'ACKNOWLEDGED', acknowledgedAt: '2026-11-10T20:00:00Z', acknowledgementNote: 'Vu sur place' }))))
+    })
+    renderWith(fakes)
+    await settled()
+    expect(tileText(0)).toMatch(/^Anomalies ouvertes1/)
+
+    await user.click(within(block('Anomalies ouvertes')).getByRole('button', { name: /^Reconnaître/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Reconnaître cette anomalie' })
+    expect(plain(dialog.textContent)).toContain('cela ne résout pas l’anomalie')
+    await user.type(within(dialog).getByLabelText('Note de reconnaissance'), 'Vu sur place')
+    await user.click(within(dialog).getByRole('button', { name: 'Reconnaître l’anomalie' }))
+
+    await waitFor(() => expect(screen.getByText("Anomalie reconnue; elle reste ouverte jusqu'à une nouvelle observation.")).toBeDefined())
+    expect(fakes.anomalyGateway.acknowledge).toHaveBeenCalledTimes(1)
+    const call = fakes.anomalyGateway.acknowledge.mock.calls[0] as unknown[]
+    expect(call[2]).toEqual({ note: 'Vu sur place' })
+    expect(typeof call[3]).toBe('string')
+    await waitFor(() => expect(tileText(0)).toMatch(/^Anomalies ouvertesAucune/))
+    expect(blockText('Anomalies ouvertes')).toContain('Aucune anomalie ouverte.')
+    await waitFor(() => expect(document.activeElement?.textContent).toBe('Anomalies ouvertes'))
+    const sideLink = within(screen.getAllByRole('navigation', { name: 'Sections' })[0] as HTMLElement).getByRole('link', { name: /^Anomalies/ })
+    expect(plain(sideLink.textContent)).toBe('Anomalies')
   })
 })
