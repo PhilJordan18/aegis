@@ -345,15 +345,20 @@ final class ReservationUITests: XCTestCase {
     /// « Mon activité » at the largest text size (#222): the reservation,
     /// the overdue loan and the empty state, in light and dark. Each state is
     /// audited at the top, then again with its last control scrolled into
-    /// view. Each listed control, down to the last one of the state
-    /// (« Actualiser », or the loan notice's retry below « Voir les
-    /// équipements »), is scrolled into view and measured on its own pixels.
+    /// view. Each listed control, from the refresh icon at the top of the
+    /// card (#231) down to the last one of the state (« Annuler », « Rendre »,
+    /// or the loan notice's retry below « Voir les équipements »), is scrolled
+    /// into view and measured on its own pixels.
     @MainActor
     func testActivityAtTheLargestTextSize() throws {
         let largest = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        // Drawn with a border: « Voir les équipements » (SecondaryButtonStyle)
+        // and the notice's retry (CompactButtonStyle). The refresh control is
+        // a borderless icon in the card header, measured as an ink.
+        let bordered: Set = ["activity.browse", "activity.loan.retry"]
         // Top to bottom; the last one ends each state's content.
-        let states = [("activity-reserved", "reserved", ["activity.cancel", "activity.refresh"]),
-                      ("activity-loan", "loan", ["activity.return", "activity.loan.refresh"]),
+        let states = [("activity-reserved", "reserved", ["activity.refresh", "activity.cancel"]),
+                      ("activity-loan", "loan", ["activity.loan.refresh", "activity.return"]),
                       ("reservation", "empty", ["activity.browse", "activity.loan.retry"])]
         for appearance in [XCUIDevice.Appearance.light, .dark] {
             XCUIDevice.shared.appearance = appearance
@@ -372,9 +377,7 @@ final class ReservationUITests: XCTestCase {
                     let target = element(app, control)
                     XCTAssertTrue(target.exists, "\(name): \(control) missing")
                     XCTAssertTrue(scrollIntoView(target, in: app), "\(name): \(control) never became reachable")
-                    // « Actualiser » and the notice's retry are compact,
-                    // bordered capsules.
-                    assertRenderedContrast(of: target, in: app, bordered: control != controls[0])
+                    assertRenderedContrast(of: target, in: app, bordered: bordered.contains(control))
                 }
                 // Captured before the audit, so a failing audit keeps its screen.
                 attach(app, "fr-activity-\(name)-ax5-\(theme)-end")
@@ -476,43 +479,62 @@ final class ReservationUITests: XCTestCase {
     }
 
     /// The control's weakest ink against its own fill, read from the screen
-    /// (#222): kept as evidence, and failed below 4.5:1. A control drawn in a
-    /// bordered capsule (`CompactButtonStyle`) is measured twice
-    /// (2026-11-27): its text on a crop inside the border, at 4.5:1, and the
-    /// whole control, border included, at 3:1, the WCAG 1.4.11 minimum for a
-    /// component's boundary. Neither ink is left out.
+    /// (#222): kept as evidence, and failed below 4.5:1. A bordered control
+    /// is measured twice (2026-11-27): its text on a crop inside the border,
+    /// at 4.5:1, and its border on a strip across its bottom edge, against
+    /// the fill inside and the background outside, at 3:1, the WCAG 1.4.11
+    /// minimum for a component's boundary (`BoundaryContrast`).
     @MainActor
     private func assertRenderedContrast(of target: XCUIElement, in app: XCUIApplication, bordered: Bool = false,
                                         file: StaticString = #filePath, line: UInt = #line) {
         let window = app.windows.firstMatch.frame
         let shot = app.screenshot()
         let frame = target.frame
-        // The capsule's ends curve within its radius: on the middle 40 % of
-        // its height the 1 pt border stays within 6 pt of each side.
-        let inner = CGRect(x: frame.minX + 6, y: frame.minY + frame.height * 0.3,
-                           width: max(0, frame.width - 12), height: frame.height * 0.4)
-        let measures = bordered
-            ? [("text", inner, 4.5), ("boundary", frame, 3.0)]
-            : [("", frame, 4.5)]
-        for (part, area, threshold) in measures {
-            let name = "rendered-contrast-\(target.identifier)" + (part.isEmpty ? "" : "-\(part)")
-            let image = Self.crop(shot, to: area, window: window)
+        let conditions = measureConditions(in: app, window: window, shot: shot)
+        func keep(_ image: UIImage, _ name: String, _ text: String) {
             let evidence = XCTAttachment(image: image)
             evidence.name = name
             evidence.lifetime = .keepAlways
             add(evidence)
-            guard let ratio = RenderedContrast.ratio(of: image) else {
-                XCTFail("No ink measured in \(name) at \(area)", file: file, line: line)
-                continue
-            }
-            let measure = XCTAttachment(string: "\(target.identifier)" + (part.isEmpty ? "" : " \(part)")
-                + " at \(area), " + measureConditions(in: app, window: window, shot: shot)
-                + String(format: ": rendered %.2f:1, threshold %.1f:1", ratio, threshold))
+            let measure = XCTAttachment(string: text)
             measure.name = "\(name)-ratio"
             measure.lifetime = .keepAlways
             add(measure)
-            XCTAssertGreaterThanOrEqual(ratio, threshold, "\(name) contrast", file: file, line: line)
         }
+        // A capsule's ends curve within its radius: on the middle 40 % of its
+        // height the 1 pt border stays within 6 pt of each side.
+        let area = bordered
+            ? CGRect(x: frame.minX + 6, y: frame.minY + frame.height * 0.3,
+                     width: max(0, frame.width - 12), height: frame.height * 0.4)
+            : frame
+        let name = "rendered-contrast-\(target.identifier)" + (bordered ? "-text" : "")
+        let image = Self.crop(shot, to: area, window: window)
+        if let ratio = RenderedContrast.ratio(of: image) {
+            keep(image, name, "\(target.identifier)" + (bordered ? " text" : "") + " at \(area), " + conditions
+                 + String(format: ": rendered %.2f:1, threshold 4.5:1", ratio))
+            XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(name) contrast", file: file, line: line)
+        } else {
+            keep(image, name, "\(target.identifier) at \(area): no ink")
+            XCTFail("No ink measured in \(name) at \(area)", file: file, line: line)
+        }
+        guard bordered else { return }
+
+        let strip = CGRect(x: frame.midX - 4, y: frame.maxY - 4, width: 8, height: 8)
+        let edge = Self.crop(shot, to: strip, window: window)
+        let boundary = "rendered-contrast-\(target.identifier)-boundary"
+        guard let border = BoundaryContrast.measure(edge) else {
+            keep(edge, boundary, "\(target.identifier) boundary at \(strip): no border found")
+            return XCTFail("No border found across \(strip) for \(target.identifier)", file: file, line: line)
+        }
+        keep(edge, boundary, "\(target.identifier) boundary at \(strip), " + conditions
+             + String(format: ": border #%06X, %.2f:1 inside, %.2f:1 outside, threshold 3.0:1",
+                      Self.rgb(border.border), border.inside, border.outside))
+        XCTAssertGreaterThanOrEqual(border.weakest, 3.0, "\(boundary) contrast", file: file, line: line)
+    }
+
+    /// A colour read little-endian, red in the low byte, as written #RRGGBB.
+    private static func rgb(_ pixel: UInt32) -> UInt32 {
+        ((pixel & 0xFF) << 16) | (pixel & 0xFF00) | ((pixel >> 16) & 0xFF)
     }
 
     /// The loan read failure, found by its words so the order is checked
