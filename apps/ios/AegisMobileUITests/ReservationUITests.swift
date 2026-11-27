@@ -27,6 +27,7 @@ final class ReservationUITests: XCTestCase {
             "notPresent": "Réservation impossible : présence non confirmée par le casier.",
             "unreachable": "Connexion au service impossible.", "closed": "Le casier est fermé. Réouverture à",
             "notCancellable": "Cette réservation ne peut plus être annulée.", "overdue": "En retard depuis",
+            "refresh": "Actualiser l’activité", "checkedAt": "Vérifié à", "keep": "Garder la réservation",
         ])
         static let english = Language(code: "en", locale: "en_CA", texts: [
             "activity": "My activity", "reservedForYou": "Reserved for you",
@@ -36,6 +37,7 @@ final class ReservationUITests: XCTestCase {
             "notPresent": "Can’t reserve: presence not confirmed by the locker.",
             "unreachable": "Can’t connect to the service.", "closed": "The locker is closed. Reopens at",
             "notCancellable": "This reservation can no longer be cancelled.", "overdue": "Overdue since",
+            "refresh": "Refresh activity", "checkedAt": "Checked at", "keep": "Keep reservation",
         ])
     }
 
@@ -240,18 +242,20 @@ final class ReservationUITests: XCTestCase {
     /// « Mon activité » at the largest text size (#222): the reservation,
     /// the overdue loan and the empty state, in light and dark. Each state is
     /// audited at the top, then again with its last control scrolled into
-    /// view. Each listed control, down to the last one of the state
-    /// (« Actualiser », or the loan notice's retry below « Voir les
-    /// équipements »), is scrolled into view and measured on its own pixels.
+    /// view. Each listed control, from the refresh icon at the top of the
+    /// card (#231) down to the last one of the state (« Annuler », « Rendre »,
+    /// or the loan notice's retry below « Voir les équipements »), is scrolled
+    /// into view and measured on its own pixels.
     @MainActor
     func testActivityAtTheLargestTextSize() throws {
         let largest = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
-        // Drawn with a border: « Voir les équipements » (SecondaryButtonStyle),
-        // « Actualiser » and the notice's retry (CompactButtonStyle).
-        let bordered: Set = ["activity.browse", "activity.refresh", "activity.loan.refresh", "activity.loan.retry"]
+        // Drawn with a border: « Voir les équipements » (SecondaryButtonStyle)
+        // and the notice's retry (CompactButtonStyle). The refresh control is
+        // a borderless icon in the card header, measured as an ink.
+        let bordered: Set = ["activity.browse", "activity.loan.retry"]
         // Top to bottom; the last one ends each state's content.
-        let states = [("activity-reserved", "reserved", ["activity.cancel", "activity.refresh"]),
-                      ("activity-loan", "loan", ["activity.return", "activity.loan.refresh"]),
+        let states = [("activity-reserved", "reserved", ["activity.refresh", "activity.cancel"]),
+                      ("activity-loan", "loan", ["activity.loan.refresh", "activity.return"]),
                       ("reservation", "empty", ["activity.browse", "activity.loan.retry"])]
         for appearance in [XCUIDevice.Appearance.light, .dark] {
             XCUIDevice.shared.appearance = appearance
@@ -277,6 +281,55 @@ final class ReservationUITests: XCTestCase {
                 try audit(app, atLargestSize: true)
                 app.terminate()
             }
+        }
+    }
+
+    // MARK: Card controls (#231)
+
+    /// The refresh control sits at the top of the card, 44 pt or more, named
+    /// for VoiceOver, and the card states the time of its last read. The
+    /// cancel confirmation is a native alert naming the asset; keeping the
+    /// reservation sends nothing and says nothing.
+    @MainActor
+    func testTheCardRefreshControlAndTheCancelAlert() throws {
+        for (language, appearance) in [(Language.french, XCUIDevice.Appearance.light), (.english, .dark)] {
+            XCUIDevice.shared.appearance = appearance
+            let theme = appearance == .dark ? "dark" : "light"
+            let app = launch(language, scenario: "activity-reserved", tab: "activity")
+            let refresh = app.buttons["activity.refresh"]
+            XCTAssertTrue(refresh.waitForExistence(timeout: 30))
+            XCTAssertEqual(refresh.label, language["refresh"])
+            XCTAssertGreaterThanOrEqual(refresh.frame.width, 44)
+            XCTAssertGreaterThanOrEqual(refresh.frame.height, 44)
+            let card = element(app, "activity.reservation")
+            XCTAssertLessThan(refresh.frame.midY, element(app, "activity.asset.name").frame.minY,
+                              "The control sits above the asset name, at the top of the card")
+            XCTAssertGreaterThan(refresh.frame.midX, card.frame.midX, "The control sits at the trailing edge")
+            let checked = element(app, "activity.refresh.checkedAt")
+            XCTAssertTrue(checked.waitForExistence(timeout: 10))
+            XCTAssertTrue(checked.label.hasPrefix(language["checkedAt"]), checked.label)
+            XCTAssertEqual(app.buttons.matching(identifier: "activity.refresh").count, 1)
+
+            XCTAssertTrue(app.waitForStillScreen())
+            refresh.tap()
+            XCTAssertTrue(checked.waitForExistence(timeout: 15))
+            XCTAssertTrue(card.exists)
+            try audit(app)
+            attach(app, "\(language.code)-activity-card-controls-\(theme)")
+
+            let name = element(app, "activity.asset.name").label
+            app.buttons["activity.cancel"].tap()
+            let alert = app.alerts.firstMatch
+            XCTAssertTrue(alert.waitForExistence(timeout: 5))
+            XCTAssertTrue(alert.label.contains(name), "The alert names \(name): \(alert.label)")
+            XCTAssertTrue(alert.buttons["activity.cancel.confirm"].exists)
+            attach(app, "\(language.code)-activity-cancel-alert-\(theme)")
+            alert.buttons["activity.cancel.keep"].firstMatch.tap()
+            XCTAssertTrue(alert.waitForNonExistence(timeout: 5))
+            XCTAssertTrue(card.exists)
+            XCTAssertTrue(app.buttons["activity.cancel"].exists)
+            XCTAssertFalse(element(app, "activity.feedback").exists, "Keeping the reservation announces nothing")
+            app.terminate()
         }
     }
 
