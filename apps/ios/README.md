@@ -358,9 +358,16 @@ puis ajouter sa traduction anglaise au catalogue, dans Xcode ou dans le JSON.
 |---|---|---|
 | `Config/Shared.xcconfig` | Cible iOS, Swift, version, préfixe d'identifiant | oui |
 | `Config/Debug.xcconfig` | `AEGIS_API_BASE_URL = http://localhost:8080/api/v1` | oui |
-| `Config/Release.xcconfig` | Adresse vide : à fournir en HTTPS | oui |
-| `Config/Local.xcconfig` | Équipe de signature, préfixe d'identifiant, adresse locale | **non** (`Local.xcconfig.example`) |
-| `Config/AegisMobile-Info.plist` | Expose `AegisAPIBaseURL` au code | oui |
+| `Config/Release.xcconfig` | API staging et environnement `staging` (#235) | oui |
+| `Config/Local.xcconfig` | Équipe de signature, identifiant, adresse locale limitée à Debug | **non** (`Local.xcconfig.example`) |
+| `Config/AegisMobile-Info.plist` | Expose `AegisAPIBaseURL` et `AegisEnvironment` au code | oui |
+
+- Une archive Release s'arrête si l'Info.plist produit ne porte pas
+  l'environnement `staging` et l'adresse staging attendue, si l'identifiant
+  est un substitut ou si l'équipe manque (`scripts/check-release-identity.sh`).
+  Une adresse de `Local.xcconfig` sans `[config=Debug]` bloque donc l'archive.
+  Le contrôle ne voit pas App Store Connect : l'équipe et l'identifiant y
+  sont à confirmer avant l'envoi.
 
 - L'adresse est validée au lancement (`APIConfiguration`) : HTTPS obligatoire,
   sauf HTTP vers `localhost`, `127.0.0.1` ou `::1`. Une adresse absente ou en

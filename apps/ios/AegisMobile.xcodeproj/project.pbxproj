@@ -120,6 +120,7 @@
 				AE0000000000000000000050 /* Sources */,
 				AE0000000000000000000051 /* Frameworks */,
 				AE0000000000000000000052 /* Resources */,
+				AE0000000000000000000059 /* Check Release Identity */,
 			);
 			buildRules = (
 			);
@@ -250,6 +251,30 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		AE0000000000000000000059 /* Check Release Identity */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/scripts/check-release-identity.sh",
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
+			);
+			name = "Check Release Identity";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/check-release-identity.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		AE0000000000000000000050 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -319,7 +344,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "$(AEGIS_BUNDLE_ID_PREFIX).mobile";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(AEGIS_APP_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
@@ -342,7 +367,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "$(AEGIS_BUNDLE_ID_PREFIX).mobile";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(AEGIS_APP_BUNDLE_ID)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};

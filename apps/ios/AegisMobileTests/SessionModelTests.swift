@@ -80,6 +80,22 @@ struct SessionModelTests {
         #expect(try store.load() != nil)
     }
 
+    /// The launch screen names the network only when no answer came (#247).
+    @Test(arguments: [
+        (APIError.unreachable(.notConnectedToInternet), CatalogFailure.unreachable),
+        (.http(status: 503, problem: nil), .service(traceId: nil)),
+        (.invalidResponse, .service(traceId: nil)),
+    ])
+    func anUnverifiedResumeKeepsWhyItFailed(_ error: APIError, _ failure: CatalogFailure) async {
+        let model = makeModel(auth: StubAuthentication(profile: .failure(error)),
+                              store: InMemorySessionStore(stored(expiringIn: 600)))
+
+        await model.start()
+
+        #expect(model.phase == .resumeOffline)
+        #expect(model.resumeFailure == failure)
+    }
+
     @Test func offlineResumeCanBeRetried() async {
         let auth = StubAuthentication(profile: .failure(.unreachable(.timedOut)))
         let model = makeModel(auth: auth, store: InMemorySessionStore(stored(expiringIn: 600)))

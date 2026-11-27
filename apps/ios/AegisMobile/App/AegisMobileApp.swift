@@ -13,6 +13,7 @@ struct AegisMobileApp: App {
 
 /// Everything the signed-in technician reads or changes; `APIClient` conforms.
 typealias TechnicianService = AssetCatalogService & ActivityService & ReservationService & LockerOperationService
+    & HistoryService
 
 /// Composition root: the real network and Keychain, replaced only by the
 /// Debug-only UI-test hooks of `UITestHooks`.
@@ -126,7 +127,8 @@ struct SignedInView: View {
             CatalogScreen(model: catalog, makeSheet: makeSheet, reservations: reservations)
                 .tabItem { Label("Équipements", systemImage: "shippingbox") }
                 .tag(Tab.equipment)
-            ActivityScreen(model: activity, browseEquipment: { tab = .equipment })
+            ActivityScreen(model: activity, browseEquipment: { tab = .equipment },
+                           makeHistory: { HistoryViewModel(service: catalogService, session: session) })
                 .tabItem { Label("Mon activité", systemImage: "checklist") }
                 .tag(Tab.activity)
             AccountView(session: session, profile: profile, health: health)

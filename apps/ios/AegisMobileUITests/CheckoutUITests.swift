@@ -40,6 +40,9 @@ final class CheckoutUITests: XCTestCase {
             "returnConfirmed": "Retour confirmé", "returnInProgress": "Retour en cours",
             "noLongerPossible": "Cette action n’est plus possible.",
             "returnUnavailable": "Retour indisponible pour le moment. Actualisez pour vérifier à nouveau.",
+            "timeLimit": "Délai de l’opération", "confirmedSummary": "Le service a confirmé le retrait de «\u{00A0}",
+            "serviceError": "Suivi interrompu : erreur du service", "networkLost": "Suivi interrompu : connexion perdue",
+            "resumeCheckout": "Reprendre le retrait", "resumeReturn": "Reprendre le retour",
         ])
         static let english = Language(code: "en", locale: "en_CA", texts: [
             "scan": "Scan the locker code", "confirmed": "Checkout confirmed",
@@ -51,6 +54,9 @@ final class CheckoutUITests: XCTestCase {
             "returnConfirmed": "Return confirmed", "returnInProgress": "Return in progress",
             "noLongerPossible": "This action is no longer possible.",
             "returnUnavailable": "Return isn’t available right now. Refresh to check again.",
+            "timeLimit": "Operation time limit", "confirmedSummary": "The service confirmed that “",
+            "serviceError": "Tracking interrupted: service error", "networkLost": "Tracking interrupted: connection lost",
+            "resumeCheckout": "Resume checkout", "resumeReturn": "Resume return",
         ])
     }
 
@@ -75,8 +81,11 @@ final class CheckoutUITests: XCTestCase {
             XCTAssertFalse(app.staticTexts[language["confirmed"]].exists)
             XCTAssertFalse(element(app, "operation.done").exists)
             XCTAssertTrue(element(app, "operation.countdown").waitForExistence(timeout: 5))
+            XCTAssertEqual(element(app, "operation.countdown").label, language["timeLimit"])
 
             XCTAssertTrue(waitForLabel(title(app), language["confirmed"], timeout: 30))
+            XCTAssertTrue(element(app, "operation.instruction").label.hasPrefix(language["confirmedSummary"]),
+                          "The confirmation names what the service confirmed.")
             XCTAssertFalse(element(app, "operation.closeNote").exists)
             attach(app, "\(language.code)-checkout-confirmed-\(theme)")
             try audit(app)
@@ -165,10 +174,64 @@ final class CheckoutUITests: XCTestCase {
         submit(app, Self.code)
 
         XCTAssertTrue(element(app, "operation.interrupted").waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts[Language.french["networkLost"]].exists)
         XCTAssertTrue(title(app).label.hasPrefix(Language.french["lastReceived"]))
         XCTAssertFalse(element(app, "operation.done").exists)
         attach(app, "fr-checkout-network-lost-light")
         try audit(app)
+    }
+
+    /// A read answered in error names the service, never the network (#247).
+    @MainActor
+    func testAServiceErrorDoesNotBlameTheNetwork() throws {
+        for (language, appearance) in [(Language.french, XCUIDevice.Appearance.dark), (.english, .light)] {
+            XCUIDevice.shared.appearance = appearance
+            let app = launch(language, scenario: "checkout-service-error")
+            prepare(app)
+            XCTAssertTrue(element(app, "scan.debugCode").waitForExistence(timeout: 10))
+            submit(app, Self.code)
+
+            XCTAssertTrue(element(app, "operation.interrupted").waitForExistence(timeout: 15))
+            XCTAssertTrue(app.staticTexts[language["serviceError"]].exists)
+            XCTAssertFalse(app.staticTexts[language["networkLost"]].exists)
+            XCTAssertTrue(title(app).label.hasPrefix(language["lastReceived"]))
+            XCTAssertFalse(element(app, "operation.done").exists)
+            attach(app, "\(language.code)-checkout-service-error-\(appearance == .dark ? "dark" : "light")")
+            try audit(app)
+            app.terminate()
+        }
+    }
+
+    /// The texts of #247 at the largest size: the service notice, the time
+    /// limit and the confirmed summary stay whole and pass the audit.
+    @MainActor
+    func testTheOperationTextsHoldAtTheLargestTextSize() throws {
+        let largest = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        var app = launch(.french, scenario: "checkout-service-error", arguments: largest)
+        prepare(app)
+        submit(app, Self.code)
+        XCTAssertTrue(element(app, "operation.interrupted").waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts[Language.french["serviceError"]].exists)
+        attach(app, "fr-ax5-checkout-service-error-light")
+        try audit(app)
+        // At this size the notice follows the step, below the first screen.
+        let notice = app.staticTexts[Language.french["serviceError"]]
+        for _ in 0..<4 where !notice.isHittable { app.swipeUp() }
+        XCTAssertTrue(notice.isHittable)
+        attach(app, "fr-ax5-checkout-service-error-notice-light")
+        try audit(app)
+        app.terminate()
+
+        app = launch(.english, scenario: "checkout", arguments: largest)
+        prepare(app)
+        submit(app, Self.code)
+        XCTAssertTrue(element(app, "operation.countdown").waitForExistence(timeout: 15))
+        XCTAssertEqual(element(app, "operation.countdown").label, Language.english["timeLimit"])
+        XCTAssertTrue(waitForLabel(title(app), Language.english["confirmed"], timeout: 30))
+        XCTAssertTrue(element(app, "operation.instruction").label.hasPrefix(Language.english["confirmedSummary"]))
+        attach(app, "en-ax5-checkout-confirmed-light")
+        try audit(app)
+        app.terminate()
     }
 
     /// After a relaunch, the reservation points to an operation in progress:
@@ -186,6 +249,7 @@ final class CheckoutUITests: XCTestCase {
             attach(app, "\(language.code)-activity-operation-hidden-light")
             try audit(app)
 
+            XCTAssertEqual(element(app, "activity.resume").label, language["resumeCheckout"])
             element(app, "activity.resume").tap()
             XCTAssertTrue(waitForLabel(title(app), language["commandSent"]))
             XCTAssertTrue(element(app, "operation.closeNote").exists)
@@ -269,6 +333,7 @@ final class CheckoutUITests: XCTestCase {
             attach(app, "\(language.code)-activity-return-hidden-light")
             try audit(app)
 
+            XCTAssertEqual(element(app, "activity.loan.resume").label, language["resumeReturn"])
             element(app, "activity.loan.resume").tap()
             XCTAssertTrue(waitForLabel(title(app), language["commandSent"]))
             attach(app, "\(language.code)-return-command-sent-light")
@@ -323,9 +388,9 @@ final class CheckoutUITests: XCTestCase {
     }
 
     @MainActor
-    private func launch(_ language: Language, scenario: String) -> XCUIApplication {
+    private func launch(_ language: Language, scenario: String, arguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments += ["-AppleLanguages", "(\(language.code))", "-AppleLocale", language.locale]
+        app.launchArguments += ["-AppleLanguages", "(\(language.code))", "-AppleLocale", language.locale] + arguments
         app.launchEnvironment["AEGIS_UI_SCENARIO"] = scenario
         app.launchEnvironment["AEGIS_START_TAB"] = "activity"
         app.launch()
@@ -452,7 +517,7 @@ final class CheckoutUITests: XCTestCase {
 
     /// `waitForStillScreen` of the other suites, except for the descendants
     /// of the guided countdown: its digits are meant to tick every second.
-    /// The countdown element itself (label « Temps restant », frame) is still
+    /// The countdown element itself (label « Délai de l’opération », frame) is still
     /// compared, and the audit still covers it.
     @MainActor
     private func waitForStillScreen(_ app: XCUIApplication, timeout: TimeInterval = 10) -> Bool {

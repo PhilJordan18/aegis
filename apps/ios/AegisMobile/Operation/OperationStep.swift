@@ -91,8 +91,13 @@ struct OperationStep: Equatable, Sendable {
                       instruction: String(localized: "Gardez la porte fermée."), phase: 6, interrupted: interrupted,
                       deadline: deadline)
         case .confirmed:
+            // Only on the server's CONFIRMED, with the asset and cell the
+            // server gave for this reservation or loan, as in the door step (#247).
+            let summary = kind == .checkout
+                ? String(localized: "Le service a confirmé le retrait de «\u{00A0}\(assetName)\u{00A0}» de la cellule \(compartment).")
+                : String(localized: "Le service a confirmé le dépôt de «\u{00A0}\(assetName)\u{00A0}» dans la cellule \(compartment).")
             self.init(title: kind == .checkout ? String(localized: "Retrait confirmé") : String(localized: "Retour confirmé"),
-                      instruction: nil, phase: 7, tone: .success, ending: .confirmed)
+                      instruction: summary, phase: 7, tone: .success, ending: .confirmed)
         case .expired:
             // One French text for both kinds; English names the operation, so
             // the return needs its own key.
