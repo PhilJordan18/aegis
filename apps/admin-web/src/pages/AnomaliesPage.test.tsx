@@ -61,6 +61,10 @@ function renderAnomalies(anomalyGateway: AnomalyGateway, { locale = 'fr', url = 
 const listEl = () => document.querySelector('.ag-list__items') as HTMLElement
 const listOf = (...views: ReturnType<typeof parsedAnomaly>[]) => ok(anomalyPageOf(views))
 
+/** The page's list reads: the navigation badge reads `status=OPEN&size=100` on its own key (contract §1.6). */
+const listCalls = (gateway: { listAnomalies: { mock: { calls: unknown[][] } } }) =>
+  gateway.listAnomalies.mock.calls.map((call) => call[1]).filter((query) => (query as { size?: number }).size !== 100)
+
 describe('Anomalies — list and dossier', () => {
   it('opens on « Ouvertes », lists the open anomalies newest first and shows the first one in the dossier', async () => {
     const gateway = fakeAnomalyGateway({ listAnomalies: async () => listOf(HIGH_OPEN, LOW_OPEN), getAnomaly: detailsOf(HIGH_OPEN, LOW_OPEN) })
@@ -68,7 +72,7 @@ describe('Anomalies — list and dossier', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Anomalies' })).toBeDefined()
     await screen.findByText('2 anomalies')
     expect(screen.getByText(/Les plus récentes d’abord, selon l’heure de détection · lu à/)).toBeDefined()
-    expect(gateway.listAnomalies.mock.calls[0]?.[1]).toEqual({ status: 'OPEN', page: 0, size: 20 })
+    expect(listCalls(gateway)[0]).toEqual({ status: 'OPEN', page: 0, size: 20 })
     expect((screen.getByRole('combobox', { name: 'Statut' }) as HTMLSelectElement).value).toBe('OPEN')
     const rows = within(listEl()).getAllByRole('link')
     expect(rows).toHaveLength(2)
@@ -77,10 +81,13 @@ describe('Anomalies — list and dossier', () => {
     expect(rows[0]?.textContent).toContain('Équipement attendu non observé')
     // Identifiers only (G3): shortened in the row, whole in the dossier.
     expect(rows[0]?.textContent).toContain('Cellule 4e5f6071…')
+    // §1.3 parity: a cell outside the label index says it is an identifier only, as a unit does.
+    expect(rows[0]?.textContent).toContain('Identifiant seulement')
     expect(rows[0]?.getAttribute('aria-current')).toBe('true')
     const dossier = await screen.findByRole('group', { name: 'Équipement attendu non observé' })
     await within(dossier).findByText('Aucune observation n’est référencée par cette anomalie.')
-    expect(within(dossier).getByText('4e5f6071-8293-4aa4-9bb5-d6e7f8091a2b')).toBeDefined()
+    // Labels unavailable here (no catalogue, no lockers): the identifier, read whole by assistive technologies.
+    expect(within(dossier).getAllByText('4e5f6071-8293-4aa4-9bb5-d6e7f8091a2b').length).toBeGreaterThan(0)
     expect(within(dossier).getAllByText('Identifiant seulement').length).toBeGreaterThan(0)
     // The permanent reminder, and never a resolve action.
     expect(screen.getByText(/Une anomalie se résout seulement lorsqu’une nouvelle observation du casier le confirme/)).toBeDefined()
@@ -195,8 +202,8 @@ describe('Anomalies — list and dossier', () => {
   })
 
   it.each([
-    ['fr', /Mis à jour à 10 h 30 HNE/, /lu à 10 h 30 HNE/],
-    ['en', /Updated at 10:30 a\.m\. EST/, /read at 10:30 a\.m\. EST/],
+    ['fr', /Lu à 10 h 30 HNE/, /lu à 10 h 30 HNE/],
+    ['en', /Read at 10:30 a\.m\. EST/, /read at 10:30 a\.m\. EST/],
   ] as const)('shows the updated and read times in the laboratory zone, not UTC or the device zone (%s)', async (locale, updated, read) => {
     // 15:30 UTC is 10:30 in America/Toronto in November, whatever the zone of the machine running the test.
     vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-11T15:30:00Z') })
@@ -223,15 +230,23 @@ describe('Anomalies — address, filters and pagination', () => {
     const gateway = fakeAnomalyGateway({ listAnomalies: async () => listOf(MEDIUM_ACK), getAnomaly: detailsOf(MEDIUM_ACK) })
     renderAnomalies(gateway, { url: '/anomalies?statut=reconnues&gravite=moyenne&type=DOOR_NOT_CLOSED_BEFORE_EXPIRY&page=1' })
     await screen.findByText('1 anomalie')
-    expect(gateway.listAnomalies.mock.calls[0]?.[1]).toEqual({ status: 'ACKNOWLEDGED', type: 'DOOR_NOT_CLOSED_BEFORE_EXPIRY', severity: 'MEDIUM', page: 0, size: 20 })
+    expect(listCalls(gateway)[0]).toEqual({ status: 'ACKNOWLEDGED', type: 'DOOR_NOT_CLOSED_BEFORE_EXPIRY', severity: 'MEDIUM', page: 0, size: 20 })
     expect((screen.getByRole('combobox', { name: 'Gravité' }) as HTMLSelectElement).value).toBe('MEDIUM')
+  })
+
+  it('filters by equipment from `?equipement=<uuid>`, the parameter Réservations et prêts uses (§1.3)', async () => {
+    const gateway = fakeAnomalyGateway({ listAnomalies: async () => listOf(MEDIUM_ACK), getAnomaly: detailsOf(MEDIUM_ACK) })
+    renderAnomalies(gateway, { url: '/anomalies?equipement=7C9E6679-7425-40DE-944B-E07FC1F90AE7' })
+    await screen.findByText('1 anomalie')
+    expect(listCalls(gateway)[0]).toEqual({ status: 'OPEN', assetId: '7c9e6679-7425-40de-944b-e07fc1f90ae7', page: 0, size: 20 })
+    expect(screen.getByRole('combobox', { name: 'Équipement' })).toBeDefined()
   })
 
   it('ignores unusable values and lists every status when the address names an anomaly', async () => {
     const gateway = fakeAnomalyGateway({ listAnomalies: async () => listOf(MEDIUM_ACK), getAnomaly: detailsOf(MEDIUM_ACK) })
     renderAnomalies(gateway, { url: `/anomalies?anomalie=${THIRD_ID}&gravite=critique&type=X&page=zéro` })
     await screen.findByText('1 anomalie')
-    expect(gateway.listAnomalies.mock.calls[0]?.[1]).toEqual({ page: 0, size: 20 })
+    expect(listCalls(gateway)[0]).toEqual({ page: 0, size: 20 })
     expect(gateway.getAnomaly.mock.calls[0]?.[1]).toBe(THIRD_ID)
   })
 
@@ -406,7 +421,8 @@ describe('Anomalies — failure states', () => {
     expect(within(alert).getByText('Le détail (preuves) n’a pas pu être chargé.')).toBeDefined()
     expect(within(alert).getByText('trace-0001')).toBeDefined()
     // The list fields are still there, and the one action stays available.
-    expect(within(dossier).getByText('4e5f6071-8293-4aa4-9bb5-d6e7f8091a2b')).toBeDefined()
+    // Labels unavailable here (no catalogue, no lockers): the identifier, read whole by assistive technologies.
+    expect(within(dossier).getAllByText('4e5f6071-8293-4aa4-9bb5-d6e7f8091a2b').length).toBeGreaterThan(0)
     gateway.getAnomaly.mockImplementation(detailsOf(HIGH_OPEN))
     await user.click(within(alert).getByRole('button', { name: 'Réessayer' }))
     await within(dossier).findByText('Aucune observation n’est référencée par cette anomalie.')

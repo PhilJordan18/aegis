@@ -98,6 +98,11 @@ export const fr = {
     signOut: 'Se déconnecter',
     soonLegend: 'Section à venir',
     soonSuffix: ', à venir',
+    anomaliesBadge: ({ count: value }: { count: number }) => plural(value, { one: `, ${count.format(value)} ouverte`, other: `, ${count.format(value)} ouvertes` }),
+    anomaliesBadgeUnavailable: ', nombre d’anomalies indisponible',
+    lateBadge: ({ count: value }: { count: number }) => plural(value, { one: `, ${count.format(value)} prêt en retard`, other: `, ${count.format(value)} prêts en retard` }),
+    lateBadgePartial: ({ count: value }: { count: number }) => `, au moins ${count.format(value)} ${value > 1 ? 'prêts' : 'prêt'} en retard, lecture incomplète`,
+    lateBadgeUnavailable: ', nombre de prêts en retard indisponible',
     /** Order imposed by sections.md §5 and handoff §6 SidebarNav. */
     sections: {
       overview: "Vue d'ensemble",
@@ -525,10 +530,9 @@ export const fr = {
 
     filtersLabel: 'Filtres',
     filterStatus: 'Statut',
-    filterAsset: 'Équipement (identifiant)',
-    filterAssetHelp: "Identifiant complet de l'équipement, au format UUID.",
-    filterAssetInvalid: "L'identifiant d'équipement doit être un UUID complet.",
+    filterAsset: 'Équipement',
     filterFrom: 'Du',
+    dateHelp: 'Format AAAA-MM-JJ, heures du laboratoire.',
     filterTo: 'Au',
     filterPeriodHelp: ({ zone }: { zone: string }) => `Dates au fuseau du laboratoire${NBSP}: ${zone}.`,
     filterPeriodInvalid: 'La date de fin précède la date de début.',
@@ -555,6 +559,7 @@ export const fr = {
     userField: 'Utilisateur',
     factCurrentPlacement: "Placement actuel de l'équipement",
     currentPlacementHelp: "Là où l'équipement est placé maintenant : pas forcément la cellule de cette opération.",
+    holderUnnamed: 'Titulaire non nommé',
     holderLabel: 'Titulaire :',
     userLabel: 'Utilisateur :',
     idOnly: 'Identifiant seulement',
@@ -598,6 +603,13 @@ export const fr = {
     secOperations: 'Opérations liées',
     secSequence: 'Séquence physique',
     secTechnical: 'Détails techniques',
+    operationCell: 'Cellule de l’opération',
+    techAsset: 'Identifiant de l’équipement',
+    techUser: 'Identifiant de l’utilisateur',
+    techHolder: 'Identifiant du titulaire',
+    techCell: 'Identifiant de la cellule',
+    techLocker: 'Identifiant du casier',
+    failureReasonCode: 'Code de la cause',
     timeline: {
       created: 'Réservation créée',
       from: 'Début de la période réservée',
@@ -990,6 +1002,7 @@ export const fr = {
 
     filtersLabel: 'Filtres des anomalies',
     filterStatus: 'Statut',
+    filterAsset: 'Équipement',
     filterSeverity: 'Gravité',
     filterType: 'Type',
     filterAny: 'Toutes',
@@ -1017,8 +1030,8 @@ export const fr = {
     selectedOverline: 'Anomalie sélectionnée',
     selectedStatus: ({ name }: { name: string }) => `Anomalie sélectionnée${NBSP}: ${name}.`,
     detected: ({ time }: { time: string }) => `Détectée ${time}`,
-    cellId: ({ id }: { id: string }) => `Cellule ${id}`,
-    assetId: ({ id }: { id: string }) => `Équipement ${id}`,
+    cellUnlabelled: 'Cellule non nommée',
+    assetUnlabelled: 'Équipement non nommé',
     noCell: 'Aucune cellule indiquée',
 
     status: { OPEN: 'Ouverte', ACKNOWLEDGED: 'Reconnue', RESOLVED: 'Résolue' } satisfies Record<AnomalyStatus, string>,
@@ -1061,6 +1074,12 @@ export const fr = {
     notResolved: 'Non résolue : aucune nouvelle observation du casier n’a confirmé l’état attendu.',
     resolvedAt: ({ time }: { time: string }) => `Résolue à ${time} par une nouvelle observation du casier.`,
     resolutionObservation: 'Observation de résolution',
+    resolutionByObservation: 'Résolue par une observation du casier.',
+    techAnomaly: 'Identifiant de l’anomalie',
+    techCell: 'Identifiant de la cellule',
+    techAsset: 'Identifiant de l’équipement',
+    techObservation: ({ index }: { index: number }) => `Observation ${index}`,
+    techObservationOperation: ({ index }: { index: number }) => `Opération de l’observation ${index}`,
     resolutionNote: 'Note de résolution',
     resolutionNoteSource: 'Note transmise par le serveur, affichée telle quelle.',
     leadOpen: 'Cette anomalie n’a pas encore été reconnue.',
@@ -1108,8 +1127,7 @@ export const fr = {
 
     dialog: {
       title: 'Reconnaître cette anomalie',
-      description:
-        'Reconnaître indique qu’un administrateur a pris connaissance de l’anomalie et que la vérification est engagée. L’anomalie n’est pas résolue : elle ne le sera que lorsqu’une nouvelle observation du casier le confirmera, et elle reste visible.',
+      description: 'Reconnaître documente la prise de connaissance; cela ne résout pas l’anomalie.',
       /** 06 §13.4: once every anomaly linked to its returns is acknowledged, the loan offers RETURN again. Not a resolution. */
       returnEffect:
         'Pour une anomalie de retour, la reconnaître permet au technicien de tenter un nouveau retour lorsque les autres conditions sont réunies. L’anomalie reste non résolue tant que ce retour n’est pas prouvé par le casier.',
@@ -1278,6 +1296,10 @@ export const fr = {
     lead: 'Reconstituer qui a fait quoi, quand et avec quel résultat. Les codes ne sont visibles que dans le détail.',
     immutable: 'Historique non modifiable : aucun événement ne peut être modifié ni supprimé.',
     refresh: 'Actualiser',
+    techActor: 'Identifiant de l’acteur',
+    techSubjectType: 'Type du sujet',
+    techSubject: 'Identifiant du sujet',
+    techOperation: 'Identifiant de l’opération',
     updatedAt: ({ time }: { time: string }) => `Mis à jour à ${time}`,
     listTitle: ({ count: value }: { count: number }) =>
       plural(value, { one: `${count.format(value)} événement chargé`, other: `${count.format(value)} événements chargés` }),
@@ -1514,6 +1536,45 @@ export const fr = {
       CONSUMED: 'Utilisé',
       INVALIDATED: 'Invalidé',
     } as Readonly<Record<string, string>>,
+  },
+
+  /** Labels before identifiers (contrat-web-manager §1.1–1.2). */
+  labels: {
+    cell: ({ code }: { code: string }) => `Cellule ${code}`,
+    idOnly: 'Identifiant seulement',
+    archived: 'Archivé',
+    technicalDetails: 'Détails techniques',
+    traceId: 'Identifiant de trace',
+    copy: 'Copier',
+    copyLabel: ({ label }: { label: string }) => `Copier · ${label}`,
+    copied: 'Identifiant copié',
+    copyFailed: `Copie impossible${NBSP}: sélectionnez l’identifiant et copiez-le.`,
+    notLoaded: 'Libellés non chargés',
+    retry: 'Réessayer',
+    partial: `Libellés partiels${NBSP}: certains exemplaires sont affichés par leur identifiant.`,
+    searchHelp: 'Code ou nom du modèle.',
+    searchResults: 'Exemplaires trouvés',
+    searchMin: 'Tapez au moins 2 caractères.',
+    searching: 'Recherche…',
+    searchNone: ({ text }: { text: string }) => `Aucun exemplaire pour «${NBSP}${text}${NBSP}».`,
+    searchFailed: 'Recherche indisponible.',
+    searchCount: ({ count: value }: { count: number }) => plural(value, { one: `${count.format(value)} exemplaire.`, other: `${count.format(value)} exemplaires.` }),
+    searchRefine: 'Affinez la recherche pour voir les autres.',
+    remove: 'Retirer',
+    removeAsset: 'Retirer l’équipement choisi',
+  },
+
+  pageTools: {
+    refresh: 'Actualiser',
+    refreshing: 'Actualisation…',
+    readAt: ({ time }: { time: string }) => `Lu à ${time}`,
+    notRefreshed: 'Non actualisé',
+    refreshed: ({ time }: { time: string }) => `Données actualisées à ${time}.`,
+    refreshFailed: ({ time }: { time: string }) => `Actualisation échouée · données du ${time} conservées.`,
+    refreshFailedNoData: 'Actualisation échouée · aucune donnée lue.',
+    help: 'Aide',
+    helpTitle: 'Aide de la page',
+    labHours: ({ zone }: { zone: string }) => `Heures du laboratoire${NBSP}: ${zone}. Chaque instant est donné dans ce fuseau.`,
   },
 
   notFound: {

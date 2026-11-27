@@ -23,11 +23,6 @@ export function stateLabel(state: string, { m }: I18n): string {
   return lookup(m.audit.state, state) ?? `${m.audit.unknownState} · ${state}`
 }
 
-/** A UUID shortened for a list row; the dossier shows it whole. */
-export function shortId(id: string): string {
-  return `${id.slice(0, 8)}…`
-}
-
 export type ActorView =
   | { readonly kind: 'user'; readonly name: string; readonly id: string }
   /** `actor: null`: the server associates no user with the event. */

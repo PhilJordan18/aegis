@@ -3,6 +3,8 @@ import type { IconName } from '../../ui/Icon'
 import type { StatusRole } from '../../ui/StatusChip'
 import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
 import { UNRECOGNIZED, type Unrecognized } from '../catalog/contract'
+import type { LabelIndex } from '../labels/labelIndex'
+import { assetText } from '../labels/labelText'
 import type { AnomalySeverity, AnomalyStatus, AnomalyType, AnomalyView } from './contract'
 
 export interface ChipView {
@@ -56,15 +58,18 @@ export function anomalyTypeLabel(anomaly: Pick<AnomalyView, 'type' | 'typeCode' 
   return typeLabel(anomaly.type, i18n, anomaly.typeCode, anomaly.summary)
 }
 
-/** The server gives identifiers only (G3): shown as such, shortened in a row and in full in the dossier. */
-export function shortId(id: string): string {
-  return `${id.slice(0, 8)}…`
-}
-
-/** « Cellule 4e5f6071… · Équipement 7c9e6679… »: only what the server sent, no label invented from an identifier. */
-export function whereLine(anomaly: AnomalyView, { m }: I18n): string {
-  const parts = [anomaly.compartmentId === null ? m.anomalies.noCell : m.anomalies.cellId({ id: shortId(anomaly.compartmentId) })]
-  if (anomaly.assetId !== null) parts.push(m.anomalies.assetId({ id: shortId(anomaly.assetId) }))
+/**
+ * « Cellule A2 · Multimètre numérique · MM-002 » (contract §1.2): the anomaly's own cell and unit, named through the
+ * label index. A part the index cannot name says so in words; this text never carries an identifier.
+ */
+export function whereLine(anomaly: AnomalyView, { m }: I18n, labels: Pick<LabelIndex, 'asset' | 'compartment'>): string {
+  const parts: string[] = []
+  if (anomaly.compartmentId === null) parts.push(m.anomalies.noCell)
+  else {
+    const cell = labels.compartment(anomaly.compartmentId)
+    parts.push(cell.kind === 'known' ? m.labels.cell({ code: cell.code }) : m.anomalies.cellUnlabelled)
+  }
+  if (anomaly.assetId !== null) parts.push(assetText(labels.asset(anomaly.assetId)) ?? m.anomalies.assetUnlabelled)
   return parts.join(' · ')
 }
 
@@ -78,7 +83,7 @@ export function hasUnrecognizedValue(anomaly: AnomalyView): boolean {
 }
 
 /** Accessible name of an anomaly: used by the selection announcement and the dossier. */
-export function anomalyName(anomaly: AnomalyView, i18n: I18n): string {
-  return `${anomalyTypeLabel(anomaly, i18n)}, ${whereLine(anomaly, i18n)}`
+export function anomalyName(anomaly: AnomalyView, i18n: I18n, labels: Pick<LabelIndex, 'asset' | 'compartment'>): string {
+  return `${anomalyTypeLabel(anomaly, i18n)}, ${whereLine(anomaly, i18n, labels)}`
 }
 

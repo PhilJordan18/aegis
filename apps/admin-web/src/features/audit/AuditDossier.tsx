@@ -5,7 +5,10 @@ import { useI18n } from '../../i18n/useI18n'
 import { ReadOnlyMark } from '../../ui/ReadOnlyMark'
 import { StatusChip } from '../../ui/StatusChip'
 import { detailItems, type DetailValueView } from './auditDetailItems'
-import { actorView, eventLabel, fullTimeOf, resultChip, stateLabel, subjectLabel } from './auditPresentation'
+import { actorView, eventLabel, fullTimeOf, resultChip, stateLabel } from './auditPresentation'
+import { SubjectName } from './SubjectName'
+import { TechnicalDetails, type TechnicalRow } from '../labels/TechnicalDetails'
+import { useLabelIndex } from '../labels/useLabelIndex'
 import { failureReasonLabel } from '../transactions/failureReason'
 import { auditHref, type AuditFilters } from './auditFilters'
 import type { AuditEventView } from './contract'
@@ -29,6 +32,7 @@ export function AuditDossier({ event, filters, focusRef }: AuditDossierProps) {
   const { m } = i18n
   const t = m.audit
   const titleId = useId()
+  const labels = useLabelIndex()
 
   if (event === undefined) {
     return (
@@ -43,6 +47,13 @@ export function AuditDossier({ event, filters, focusRef }: AuditDossierProps) {
   }
 
   const actor = actorView(event.actor, i18n)
+  const technical: TechnicalRow[] = [
+    { label: t.factId, value: event.id },
+    ...(actor.kind === 'user' ? [{ label: t.techActor, value: actor.id }] : []),
+    { label: t.techSubjectType, value: event.subjectType },
+    { label: t.techSubject, value: event.subjectId },
+    ...(event.operationId === null ? [] : [{ label: t.techOperation, value: event.operationId }]),
+  ]
   const chip = resultChip(event.result, i18n)
   const rows = detailItems(event.details, i18n)
   const transition = event.fromState !== null && event.toState !== null ? { from: event.fromState, to: event.toState } : null
@@ -104,26 +115,18 @@ export function AuditDossier({ event, filters, focusRef }: AuditDossierProps) {
             <div>
               <dt>{t.factActor}</dt>
               <dd>{actor.name}</dd>
-              {actor.kind === 'user' && (
-                <dd>
-                  <code className="ag-au-id">{actor.id}</code>
-                </dd>
-              )}
               {actor.kind === 'system' && <dd className="ag-help">{t.actorSystemHelp}</dd>}
               {actor.kind === 'unreadable' && <dd className="ag-help">{t.actorUnreadableHelp}</dd>}
             </div>
             <div>
               <dt>{t.factSubject}</dt>
               <dd>
-                {subjectLabel(event.subjectType, i18n)} <code className="ag-au-id">{event.subjectType}</code>
-              </dd>
-              <dd>
-                <code className="ag-au-id">{event.subjectId}</code>
+                <SubjectName subjectType={event.subjectType} subjectId={event.subjectId} labels={labels} />
               </dd>
             </div>
             <div>
               <dt>{t.factOperation}</dt>
-              <dd>{event.operationId === null ? t.noOperation : <code className="ag-au-id">{event.operationId}</code>}</dd>
+              <dd>{event.operationId === null ? t.noOperation : <SubjectName subjectType="LOCKER_OPERATION" subjectId={event.operationId} labels={labels} />}</dd>
             </div>
             <div>
               <dt>{t.factResult}</dt>
@@ -140,12 +143,6 @@ export function AuditDossier({ event, filters, focusRef }: AuditDossierProps) {
                     <code className="ag-au-id">{event.reason}</code>
                   </>
                 )}
-              </dd>
-            </div>
-            <div>
-              <dt>{t.factId}</dt>
-              <dd>
-                <code className="ag-au-id">{event.id}</code>
               </dd>
             </div>
           </dl>
@@ -221,6 +218,8 @@ export function AuditDossier({ event, filters, focusRef }: AuditDossierProps) {
           </h3>
           <p className="ag-au-note">{t.evidenceNote}</p>
         </section>
+
+        <TechnicalDetails rows={technical} />
       </div>
     </section>
   )

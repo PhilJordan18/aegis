@@ -7,10 +7,12 @@ import { unconfiguredAuthGateway, type AuthGateway, type GatewayResult } from '.
 import { createSessionStore } from '../features/auth/session'
 import { adminProfile, problemBody, sessionStubs } from '../features/auth/testFixtures'
 import type { CatalogGateway } from '../features/catalog/catalogGateway'
-import { asset, fakeCatalogGateway, ok as catalogOk } from '../features/catalog/testFixtures'
+import { asset, fakeCatalogGateway, ok as catalogOk, pageOf as assetPageOf } from '../features/catalog/testFixtures'
 import { parseLoanView, parseLockerOperationView, parseReservationView } from '../features/transactions/contractParsers'
 import type { LoanView, LockerOperationView, ReservationView, TransactionPage } from '../features/transactions/contract'
 import { unconfiguredTransactionGateway, type TransactionGateway } from '../features/transactions/transactionGateway'
+import { COMPARTMENT_ID as TX_COMPARTMENT_ID, LOCKER_ID as TX_LOCKER_ID } from '../features/transactions/testFixtures'
+import { fakeCustodyGateway, okResult } from '../features/custody/testFixtures'
 import { ASSET_ID, LOAN_ID, OPERATION_ID, RESERVATION_ID, USER_ID, assetSummary, loanView, lockerOperationView, reservationView } from '../features/transactions/testFixtures'
 import type { Locale } from '../i18n/locale'
 import { installMatchMedia } from '../test/matchMedia'
@@ -86,6 +88,13 @@ function fakeGateway({
   return gateway as unknown as TransactionGateway & typeof gateway
 }
 
+/** The lockers of the label index (§1.1): the cell of the operation fixtures is A1 of AEGIS-DEMO-01. */
+const lockersWithOperationCell = () =>
+  fakeCustodyGateway({
+    listLockers: async () =>
+      okResult({ items: [{ id: TX_LOCKER_ID, code: 'AEGIS-DEMO-01', name: 'Démo', topology: 'HUB_CELL', compartments: [{ id: TX_COMPARTMENT_ID, code: 'A1', enabled: true, currentAsset: null }] }], page: 0, size: 100, totalItems: 1, totalPages: 1 }),
+  })
+
 function renderPage(transactionGateway: TransactionGateway, { url = '/reservations-prets', locale = 'fr', catalogGateway }: { url?: string; locale?: Locale; catalogGateway?: CatalogGateway } = {}) {
   const session = createSessionStore()
   session.start({ accessToken: 'token-value', expiresAt: '2026-09-30T15:30:00Z', expiresIn: 3600, profile: adminProfile })
@@ -93,7 +102,7 @@ function renderPage(transactionGateway: TransactionGateway, { url = '/reservatio
   const queryClient = createQueryClient()
   queryClient.setDefaultOptions({ queries: { ...queryClient.getDefaultOptions().queries, retry: false } })
   const catalog = catalogGateway ?? fakeCatalogGateway({ units: { [ASSET_ID]: catalogOk(asset({ id: ASSET_ID, assetCode: 'MM-001', placement: { lockerId: '3d4e5f60-7182-4a93-8ba4-c5d6e7f80912', lockerCode: 'AEGIS-DEMO-01', compartmentId: '4e5f6071-8293-4aa4-9bb5-d6e7f8091a2b', compartmentCode: 'A1' } })) } })
-  return renderWithProviders(<App />, { gateway: authGateway, transactionGateway, catalogGateway: catalog, session, queryClient, locale })
+  return renderWithProviders(<App />, { gateway: authGateway, transactionGateway, catalogGateway: catalog, custodyGateway: lockersWithOperationCell(), session, queryClient, locale })
 }
 
 const rows = () => within(document.querySelector('.ag-list__items') as HTMLElement).getAllByRole('link')
@@ -108,7 +117,7 @@ afterEach(() => {
 })
 
 describe('Réservations et prêts: reservations', () => {
-  it('lists the reservations, reads the first one by its id and names the holder beside the id (G1)', async () => {
+  it('lists the reservations, reads the first one by its id and names the holder (G1), the id in technical details', async () => {
     const gateway = fakeGateway()
     renderPage(gateway)
     expect(await screen.findByRole('heading', { level: 2, name: '2 réservations' })).toBeDefined()
@@ -121,8 +130,13 @@ describe('Réservations et prêts: reservations', () => {
     const text = plain(dossier().textContent)
     expect(text).toContain('TitulaireTechnicien Démo')
     expect(text).not.toContain('Identifiant seulement')
-    expect(text).toContain(USER_ID)
-    expect(plain(rows()[0]?.textContent)).toContain('Titulaire : Technicien Démo')
+    // §1.2: the name alone; the identifier waits in the closed « Détails techniques ».
+    const technical = dossier().querySelector('details.ag-tech') as HTMLDetailsElement
+    expect(technical.open).toBe(false)
+    expect(plain(technical.textContent)).toContain(USER_ID)
+    expect(plain(rows()[0]?.textContent)).toContain('Technicien Démo')
+    expect(plain(rows()[0]?.textContent)).not.toContain('Titulaire')
+    expect(plain(rows()[0]?.textContent)).not.toContain(USER_ID.slice(0, 8))
     expect(text).toContain("Une réservation n'ouvre aucune porte et ne crée aucun prêt.")
     // The server's order is not promised, and no sort is ever sent.
     expect(plain(document.querySelector('.ag-list__foot')?.textContent)).toContain("Les plus récents d'abord")
@@ -213,10 +227,15 @@ describe('Réservations et prêts: filters', () => {
   it('applies the filters to the address and to the request, and clears them', async () => {
     const user = userEvent.setup()
     const gateway = fakeGateway()
-    renderPage(gateway)
+    const unit = asset({ id: ASSET_ID, assetCode: 'MM-001' })
+    const catalog = fakeCatalogGateway({ overrides: { listAssets: async (_token, query) => catalogOk(assetPageOf(query.q === undefined ? [] : [unit])) } })
+    renderPage(gateway, { catalogGateway: catalog })
     await screen.findByRole('heading', { level: 2, name: '2 réservations' })
     await user.selectOptions(screen.getByLabelText('Statut'), 'FULFILLED')
-    await user.type(screen.getByLabelText('Équipement (identifiant)'), ` ${ASSET_ID} `)
+    // Searched by code (§1.3): the address keeps the identifier.
+    await user.type(screen.getByRole('combobox', { name: 'Équipement' }), 'MM')
+    await user.click(await screen.findByRole('option', { name: /MM-001/ }))
+    expect(catalog.listAssets).toHaveBeenCalledWith(expect.anything(), { page: 0, size: 20, sort: 'assetCode,asc', q: 'MM' }, expect.anything())
     await user.click(screen.getByRole('button', { name: 'Filtrer' }))
     expect(window.location.search).toBe(`?statut=FULFILLED&equipement=${ASSET_ID}`)
     await waitFor(() => expect(gateway.listReservations).toHaveBeenCalledTimes(2))
@@ -225,20 +244,104 @@ describe('Réservations et prêts: filters', () => {
     expect(window.location.search).toBe('')
   })
 
-  it('refuses an equipment id that is not a UUID, names the field and sends nothing', async () => {
+  it('reads an old address by identifier, and « Retirer » returns focus to the field', async () => {
     const user = userEvent.setup()
     const gateway = fakeGateway()
-    renderPage(gateway)
-    await screen.findByRole('heading', { level: 2, name: '2 réservations' })
-    const field = screen.getByLabelText('Équipement (identifiant)')
-    await user.type(field, 'MM-001')
+    renderPage(gateway, { url: `/reservations-prets?equipement=${ASSET_ID}` })
+    await screen.findByRole('heading', { level: 2, name: /réservation/ })
+    // No label index here: the abbreviated identifier and « Identifiant seulement ».
+    const chosen = document.querySelector('.ag-picker__chosen') as HTMLElement
+    expect(within(chosen).getByText('Identifiant seulement')).toBeDefined()
+    await user.click(within(chosen).getByRole('button', { name: 'Retirer l’équipement choisi' }))
+    expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Équipement' }))
     await user.click(screen.getByRole('button', { name: 'Filtrer' }))
-    expect(field.getAttribute('aria-invalid')).toBe('true')
-    expect(field.getAttribute('aria-describedby')).toBeTruthy()
-    expect(screen.getByText("L'identifiant d'équipement doit être un UUID complet.")).toBeDefined()
-    expect(document.activeElement).toBe(field)
-    expect(gateway.listReservations).toHaveBeenCalledTimes(1)
     expect(window.location.search).toBe('')
+  })
+
+  it('does not claim an expanded list without results, and keeps « Réessayer » out of the announcement', async () => {
+    const user = userEvent.setup()
+    const catalog = fakeCatalogGateway({ overrides: { listAssets: async () => ({ kind: 'network', reason: 'offline' }) as never } })
+    renderPage(fakeGateway(), { catalogGateway: catalog })
+    await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+    const field = screen.getByRole('combobox', { name: 'Équipement' })
+    await user.type(field, 'MM')
+    const retry = await screen.findByRole('button', { name: 'Réessayer' })
+    expect(field.getAttribute('aria-expanded')).toBe('false')
+    expect(field.getAttribute('aria-activedescendant')).toBeNull()
+    expect(retry.closest('[aria-live]')).toBeNull()
+    expect(document.querySelector('.ag-picker__status')?.textContent).toContain('Recherche indisponible.')
+  })
+
+  it('keeps « Réessayer » when the keyboard reaches it, and searches again on Enter', async () => {
+    const user = userEvent.setup()
+    let searches = 0
+    const catalog = fakeCatalogGateway({
+      overrides: {
+        listAssets: async () => {
+          searches += 1
+          return { kind: 'network', reason: 'offline' } as never
+        },
+      },
+    })
+    renderPage(fakeGateway(), { catalogGateway: catalog })
+    await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+    await user.type(screen.getByRole('combobox', { name: 'Équipement' }), 'MM')
+    const retry = await screen.findByRole('button', { name: 'Réessayer' })
+    const before = searches
+    await user.tab()
+    expect(document.activeElement).toBe(retry)
+    // The list closes 150 ms after the field loses focus: the button must outlive it.
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    expect(retry.isConnected).toBe(true)
+    expect(document.activeElement).toBe(retry)
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(searches).toBe(before + 1))
+  })
+
+  it('keeps the focus through a retry: on « Réessayer » while it fails, back on the field once it succeeds', async () => {
+    const user = userEvent.setup()
+    // Each search waits for the test to release it, so the retry can be observed in flight.
+    const gate: { release: (() => void) | null; succeed: boolean } = { release: null, succeed: false }
+    const unit = asset({ id: ASSET_ID, assetCode: 'MM-001' })
+    const releaseSearch = () => gate.release?.()
+    const catalog = fakeCatalogGateway({
+      overrides: {
+        listAssets: async (_token, query) => {
+          if (query.q === undefined) return catalogOk(assetPageOf([]))
+          await new Promise<void>((resolve) => {
+            gate.release = resolve
+          })
+          return gate.succeed ? catalogOk(assetPageOf([unit])) : ({ kind: 'network', reason: 'offline' } as never)
+        },
+      },
+    })
+    renderPage(fakeGateway(), { catalogGateway: catalog })
+    await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+    const field = screen.getByRole('combobox', { name: 'Équipement' })
+    await user.type(field, 'MM')
+    await waitFor(() => expect(gate.release).not.toBeNull())
+    releaseSearch()
+    const retry = await screen.findByRole('button', { name: 'Réessayer' })
+    await user.tab()
+    expect(document.activeElement).toBe(retry)
+
+    gate.release = null
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(gate.release).not.toBeNull())
+    expect(retry.isConnected).toBe(true)
+    expect(retry.getAttribute('aria-disabled')).toBe('true')
+    expect(document.activeElement).toBe(retry)
+    releaseSearch()
+    await waitFor(() => expect(retry.getAttribute('aria-disabled')).toBeNull())
+    expect(document.activeElement).toBe(retry)
+
+    gate.release = null
+    gate.succeed = true
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(gate.release).not.toBeNull())
+    releaseSearch()
+    await waitFor(() => expect(retry.isConnected).toBe(false))
+    expect(document.activeElement).toBe(field)
   })
 
   it('refuses an end date before the start date', async () => {
@@ -279,12 +382,12 @@ describe('Réservations et prêts: filters', () => {
 })
 
 describe('Réservations et prêts: loans', () => {
-  it('falls back to the id alone when the server sends no holder summary', async () => {
+  it('says « Titulaire non nommé » when the server sends no holder summary', async () => {
     const plainLoan = { ...L1, holder: null }
     renderPage(fakeGateway({ loans: ok(pageOf([plainLoan])) }), { url: '/reservations-prets?vue=prets' })
     expect(await screen.findByRole('heading', { level: 2, name: '1 prêt' })).toBeDefined()
-    await waitFor(() => expect(plain(dossier().textContent)).toContain('Identifiant seulement'))
-    expect(plain(rows()[0]?.textContent)).toContain('Titulaire : identifiant seulement')
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Titulaire non nommé'))
+    expect(plain(rows()[0]?.textContent)).toContain('Titulaire non nommé')
   })
 
   it('keeps an overdue loan borrowed: status, overdue mention, never available', async () => {
@@ -390,13 +493,12 @@ describe('Réservations et prêts: locker operations', () => {
     const gateway = fakeGateway()
     renderPage(gateway, { url: '/reservations-prets?vue=operations', catalogGateway: catalog })
     await screen.findByRole('heading', { level: 2, name: '1 opération' })
-    // The row: the equipment (name and code) and the user by name, with the identifier beside it.
+    // The row: the equipment (name and code) and the user by name only.
     expect(plain(rows()[0]?.textContent)).toContain('Multimètre numérique')
     expect(plain(rows()[0]?.textContent)).toContain('MM-001')
-    expect(plain(rows()[0]?.textContent)).toContain('Utilisateur : Technicien Démo')
+    expect(plain(rows()[0]?.textContent)).toContain('Technicien Démo')
     expect(plain(rows()[0]?.textContent)).not.toContain('identifiant seulement')
-    await waitFor(() => expect(plain(dossier().textContent)).toContain('AEGIS-DEMO-01'))
-    expect(plain(dossier().textContent)).toContain('A1')
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Cellule de l’opérationCellule A1 · AEGIS-DEMO-01'))
     expect(plain(dossier().textContent)).toContain('Technicien Démo')
     expect(plain(dossier().textContent)).not.toContain('Libellés non résolus')
     expect(catalog.getAsset).not.toHaveBeenCalled()
@@ -408,14 +510,15 @@ describe('Réservations et prêts: locker operations', () => {
     await screen.findByRole('heading', { level: 2, name: '1 opération' })
     await waitFor(() => expect(plain(dossier().textContent)).toContain("Placement actuel de l'équipement"))
     expect(plain(dossier().textContent)).toContain('AEGIS-DEMO-01 · Cellule A2')
-    expect(plain(dossier().textContent)).toContain('Cellule : identifiant seulement')
+    // The operation's own cell comes from its compartmentId, never from where the asset is now.
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Cellule de l’opérationCellule A1 · AEGIS-DEMO-01'))
   })
 
   it('shows an asset with no placement without inventing one', async () => {
     renderPage(fakeGateway({ operations: ok(pageOf([operation({ asset: { ...assetSummary, placement: null } })])) }), { url: '/reservations-prets?vue=operations' })
     await screen.findByRole('heading', { level: 2, name: '1 opération' })
     await waitFor(() => expect(plain(dossier().textContent)).toContain('Aucun placement connu'))
-    expect(plain(dossier().textContent)).toContain('Cellule : identifiant seulement')
+    await waitFor(() => expect(plain(dossier().textContent)).toContain('Cellule A1 · AEGIS-DEMO-01'))
   })
 
   it('shows an unknown status as not recognized, never as a known state', async () => {
@@ -566,7 +669,7 @@ describe('Réservations et prêts: navigation, keyboard and language', () => {
     await waitFor(() => expect(dossier()).not.toBeNull())
     expect(dossier().getAttribute('role')).toBe('group')
     expect(dossier().getAttribute('aria-labelledby')).toBeTruthy()
-    for (const label of ['Statut', 'Équipement (identifiant)', 'Du', 'Au']) expect(screen.getByLabelText(label)).toBeDefined()
+    for (const label of ['Statut', 'Équipement', 'Du', 'Au']) expect(screen.getByLabelText(label)).toBeDefined()
   })
 
   it('is fully translated in English, with the same structure and no French left', async () => {

@@ -62,7 +62,7 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
     expect(rows).toHaveLength(3)
     expect(plain(rows[0]?.textContent)).toContain('Commande acquittée par la cellule')
     expect(plain(rows[0]?.textContent)).toContain('Système')
-    expect(plain(rows[0]?.textContent)).toContain('Opération 7c9e6679…')
+    expect(plain(rows[0]?.textContent)).toMatch(/Opération · 7c9e6679…/)
     expect(plain(rows[0]?.textContent)).toMatch(/Commande transmise\s*→\s*vers Commande acquittée/)
     expect(plain(rows[1]?.textContent)).toContain('Code du casier refusé')
     expect(plain(rows[1]?.textContent)).toContain('Refusé')
@@ -72,7 +72,7 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
     const dossier = screen.getByRole('group', { name: 'Commande acquittée par la cellule' })
     // The event type and the state it moved to share one code: both are shown, as sent.
     expect(within(dossier).getAllByText('COMMAND_ACKNOWLEDGED', { selector: 'code' })).toHaveLength(2)
-    expect(within(dossier).getByText('LOCKER_OPERATION', { selector: 'code' })).toBeTruthy()
+    expect(within(dossier).getByText('LOCKER_OPERATION', { selector: '.ag-tech dd' })).toBeTruthy()
     expect(within(dossier).getByText('COMMAND_SENT', { selector: 'code' })).toBeTruthy()
     expect(within(dossier).getByText("Aucun utilisateur n'est associé à cet événement.")).toBeTruthy()
     expect(within(dossier).getByText('lecture seule')).toBeTruthy()
@@ -85,8 +85,10 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
     renderAudit([pageOk(auditPage([COMMAND, REFUSED]))])
     await timeline()
     const main = screen.getByRole('main')
-    const names = within(main).getAllByRole('button').map((button) => button.textContent?.trim())
-    expect(names).toEqual(['Actualiser', 'Filtrer', 'Tout afficher'])
+    // « Copier » in « Détails techniques » only reads an identifier to the clipboard.
+    const names = within(main).getAllByRole('button').map((button) => button.textContent?.trim()).filter((name) => name !== 'Copier')
+    // The label index has no gateway here: its « Réessayer » reads it again.
+    expect(names).toEqual(['Aide', 'Actualiser', 'Réessayer', 'Filtrer', 'Tout afficher'])
   })
 
   it('selects another event in the dossier and announces it', async () => {
@@ -482,7 +484,7 @@ describe('Audit — requested event (#191)', () => {
     await waitFor(() => expect(screen.queryByText("L'événement demandé ne fait pas partie des résultats chargés.")).toBeNull())
     const rows = list.getAllByRole('link')
     expect(rows.filter((row) => row.getAttribute('aria-current') === 'true')).toEqual([rows[3]])
-    expect(within(screen.getByRole('group', { name: /./ })).getByText(OLDER.id, { selector: 'code' })).toBeTruthy()
+    expect(within(screen.getByRole('group', { name: /./ })).getByText(OLDER.id, { selector: '.ag-tech dd' })).toBeTruthy()
     await waitFor(() => expect(document.activeElement).toBe(rows[3]))
   })
 

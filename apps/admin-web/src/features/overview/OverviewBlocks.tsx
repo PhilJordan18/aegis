@@ -3,13 +3,16 @@ import { Link } from '../../app/Link'
 import { useI18n, type I18n } from '../../i18n/useI18n'
 import { StatusChip } from '../../ui/StatusChip'
 import { anomaliesHref, NO_FILTERS as NO_ANOMALY_FILTERS } from '../anomalies/anomalyLocation'
-import { anomalyTypeLabel, severityChip, shortId, statusChip } from '../anomalies/anomalyPresentation'
+import { anomalyTypeLabel, severityChip, statusChip } from '../anomalies/anomalyPresentation'
+import type { LabelIndex } from '../labels/labelIndex'
+import { AssetName, CellName } from '../labels/Labels'
+import { assetLabelOf } from '../labels/labelText'
 import type { AnomalyView } from '../anomalies/contract'
 import type { LoanView, LockerOperationView, ReservationView, TransactionPage } from '../transactions/contract'
 import { NO_FILTERS, transactionHref } from '../transactions/transactionHref'
 import { lateChip, loanChip, operationChip, operationTypeLabel, reservationChip, transactionTimes } from '../transactions/transactionPresentation'
 import { OverviewModule, PartialNotice } from './OverviewModule'
-import { ROW_LIMIT, IN_PROGRESS_OPERATION_STATUSES, type AnomalySummary, type BlockRead, type Labels, type LoanSummary, type OperationSummary } from './overviewModel'
+import { ROW_LIMIT, IN_PROGRESS_OPERATION_STATUSES, type AnomalySummary, type BlockRead, type LoanSummary, type OperationSummary } from './overviewModel'
 
 interface BlockProps {
   readonly retrying: boolean
@@ -49,17 +52,9 @@ function Foot({ to, label, shown, total }: { readonly to: string; readonly label
   )
 }
 
-/** The holder as the contract gives it: the name when the admin view sends one (G1), the identifier otherwise. */
-function holderText(person: { readonly displayName: string } | null, id: string, { m }: I18n): ReactNode {
-  return person === null ? (
-    <>
-      {m.reservations.holderLine} <code className="ag-id">{shortId(id)}</code>
-    </>
-  ) : (
-    <>
-      {m.reservations.holderLabel} {person.displayName} <code className="ag-id">{shortId(id)}</code>
-    </>
-  )
+/** The holder by name (§1.2); the identifier stays in the dossier's technical details. */
+function holderText(person: { readonly displayName: string } | null, { m }: I18n): string {
+  return person === null ? m.reservations.holderUnnamed : person.displayName
 }
 
 function assetName(asset: LoanView['asset']): ReactNode {
@@ -70,21 +65,16 @@ function assetName(asset: LoanView['asset']): ReactNode {
   )
 }
 
-/** « Cellule A1 » from the locker list, or the identifier alone when the list does not name it (G3). */
-function cellText(compartmentId: string | null, labels: Labels, { m }: I18n): string {
+/** « Cellule A1 » from the label index; its abbreviated identifier while the index loads or does not name it. */
+function cellPart(compartmentId: string | null, labels: LabelIndex, { m }: I18n): ReactNode {
   if (compartmentId === null) return m.anomalies.noCell
-  const code = labels.compartmentCode(compartmentId)
-  return code === null ? m.anomalies.cellId({ id: shortId(compartmentId) }) : m.overview.cellCode({ code })
-}
-
-function assetText(assetId: string | null, labels: Labels, { m }: I18n): string | null {
-  if (assetId === null) return null
-  return labels.assetCode(assetId) ?? m.anomalies.assetId({ id: shortId(assetId) })
+  const label = labels.compartment(compartmentId)
+  return label.kind === 'known' ? m.overview.cellCode({ code: label.code }) : <CellName compartmentId={compartmentId} label={label} />
 }
 
 // ---------------------------------------------------------------- 1. anomalies
 
-export function AnomaliesBlock({ read, labels, retrying, onRetry }: BlockProps & { readonly read: BlockRead<AnomalySummary>; readonly labels: Labels }) {
+export function AnomaliesBlock({ read, labels, retrying, onRetry }: BlockProps & { readonly read: BlockRead<AnomalySummary>; readonly labels: LabelIndex }) {
   const i18n = useI18n()
   const { m } = i18n
   const t = m.overview
@@ -111,11 +101,21 @@ export function AnomaliesBlock({ read, labels, retrying, onRetry }: BlockProps &
   )
 }
 
-function AnomalyRow({ anomaly, labels }: { readonly anomaly: AnomalyView; readonly labels: Labels }) {
+function AnomalyRow({ anomaly, labels }: { readonly anomaly: AnomalyView; readonly labels: LabelIndex }) {
   const i18n = useI18n()
   const severity = severityChip(anomaly.severity, i18n)
   const status = statusChip(anomaly.status, i18n)
-  const where = [cellText(anomaly.compartmentId, labels, i18n), assetText(anomaly.assetId, labels, i18n)].filter((part): part is string => part !== null).join(' · ')
+  const where = (
+    <>
+      {cellPart(anomaly.compartmentId, labels, i18n)}
+      {anomaly.assetId !== null && (
+        <>
+          {' · '}
+          <AssetName assetId={anomaly.assetId} label={labels.asset(anomaly.assetId)} />
+        </>
+      )}
+    </>
+  )
   return (
     <Row
       // Opened by identifier, in every status: the dossier is read by id, whatever the list's filter.
@@ -132,7 +132,11 @@ function AnomalyRow({ anomaly, labels }: { readonly anomaly: AnomalyView; readon
       }
       main={anomalyTypeLabel(anomaly, i18n)}
       // The time never breaks across two lines, and stays in the laboratory zone like every other row of this page.
-      meta={`${where} · ${i18n.m.anomalies.detected({ time: transactionTimes(i18n).short(anomaly.detectedAt) })}`}
+      meta={
+        <>
+          {where} · {i18n.m.anomalies.detected({ time: transactionTimes(i18n).short(anomaly.detectedAt) })}
+        </>
+      }
     />
   )
 }
@@ -181,7 +185,7 @@ export function LoansBlock({ read, retrying, onRetry }: BlockProps & { readonly 
               main={assetName(loan.asset)}
               meta={
                 <>
-                  <strong>{m.reservations.lateSince({ time: times.short(loan.dueAt) })}</strong> · {holderText(loan.holder, loan.holderUserId, i18n)}
+                  <strong>{m.reservations.lateSince({ time: times.short(loan.dueAt) })}</strong> · {holderText(loan.holder, i18n)}
                 </>
               }
             />
@@ -194,7 +198,6 @@ export function LoansBlock({ read, retrying, onRetry }: BlockProps & { readonly 
         </PartialNotice>
       )}
       {truncated !== undefined && truncated.kind === 'truncated' && <PartialNotice title={t.partialTitle}>{t.loansTruncatedBody({ read: truncated.read, total: truncated.total })}</PartialNotice>}
-      <p className="ag-ov__note">{t.successiveReadsNote}</p>
     </OverviewModule>
   )
 }
@@ -221,7 +224,7 @@ function LateChip() {
 
 // ---------------------------------------------------------------- 4. operations
 
-export function OperationsBlock({ read, labels, retrying, onRetry }: BlockProps & { readonly read: BlockRead<OperationSummary>; readonly labels: Labels }) {
+export function OperationsBlock({ read, labels, retrying, onRetry }: BlockProps & { readonly read: BlockRead<OperationSummary>; readonly labels: LabelIndex }) {
   const i18n = useI18n()
   const { m } = i18n
   const t = m.overview
@@ -259,16 +262,15 @@ export function OperationsBlock({ read, labels, retrying, onRetry }: BlockProps 
       )}
       {summary?.truncated === true && <PartialNotice title={t.partialTitle}>{t.operationsTruncatedBody}</PartialNotice>}
       <p className="ag-ov__note">{t.operationsNote}</p>
-      <p className="ag-ov__note">{t.successiveReadsNote}</p>
     </OverviewModule>
   )
 }
 
-function OperationRow({ operation, labels, expiresAt }: { readonly operation: LockerOperationView; readonly labels: Labels; readonly expiresAt: string | null }) {
+function OperationRow({ operation, labels, expiresAt }: { readonly operation: LockerOperationView; readonly labels: LabelIndex; readonly expiresAt: string | null }) {
   const i18n = useI18n()
   const chip = operationChip(operation.status, i18n)
-  const asset = assetText(operation.assetId, labels, i18n)
-  const cell = cellText(operation.compartmentId, labels, i18n)
+  const asset = <AssetName assetId={operation.assetId} label={assetLabelOf(labels, operation.assetId, operation.asset)} withModel={false} />
+  const cell = cellPart(operation.compartmentId, labels, i18n)
   return (
     <Row
       to={transactionHref({ view: 'operations', selectedId: operation.id })}
@@ -277,8 +279,17 @@ function OperationRow({ operation, labels, expiresAt }: { readonly operation: Lo
           {chip.label}
         </StatusChip>
       }
-      main={`${operationTypeLabel(operation.type, i18n)} · ${asset ?? ''}`}
-      meta={expiresAt === null ? cell : `${cell} · ${i18n.m.overview.expiresAt({ time: expiresAt })}`}
+      main={
+        <>
+          {operationTypeLabel(operation.type, i18n)} · {asset}
+        </>
+      }
+      meta={
+        <>
+          {cell}
+          {expiresAt !== null && ` · ${i18n.m.overview.expiresAt({ time: expiresAt })}`}
+        </>
+      }
     />
   )
 }
@@ -318,7 +329,7 @@ export function ReservationsBlock({ read, retrying, onRetry }: BlockProps & { re
                 main={assetName(reservation.asset)}
                 meta={
                   <>
-                    {t.untilTime({ time: times.short(reservation.reservedUntil) })} · {holderText(reservation.user, reservation.userId, i18n)}
+                    {t.untilTime({ time: times.short(reservation.reservedUntil) })} · {holderText(reservation.user, i18n)}
                   </>
                 }
               />

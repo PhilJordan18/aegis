@@ -1,5 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { Link } from '../../app/Link'
+import type { PlacementLabel } from '../labels/labelIndex'
+import { useCellPlacements } from '../labels/useLabelIndex'
 import { useI18n } from '../../i18n/useI18n'
 import { ReadOnlyMark } from '../../ui/ReadOnlyMark'
 import { StatusChip } from '../../ui/StatusChip'
@@ -236,6 +238,7 @@ function WindowFacts({ view }: { readonly view: ReturnType<typeof windowView> })
 function CompartmentTable({ locker }: { readonly locker: LockerStatus }) {
   const { m } = useI18n()
   const t = m.lockers
+  const placement = useCellPlacements()
   const noteId = useId()
   // The server keeps the last heartbeat's values on the cells while the locker is not ONLINE. A cell with an observation
   // is then a memory, not a current fact; a cell never observed has nothing to remember and keeps its own state.
@@ -252,7 +255,7 @@ function CompartmentTable({ locker }: { readonly locker: LockerStatus }) {
         <caption className="ag-sr-only">{t.compartmentsCaption({ code: locker.code })}</caption>
         <thead role="rowgroup">
           <tr role="row">
-            {[t.colCompartment, t.colEnabled, t.colLink, t.colReader, t.colDoor, t.colLock, t.colLastObservation].map((label) => (
+            {[t.colCompartment, t.colEnabled, t.colLink, t.colReader, t.colDoor, t.colLock, m.overview.expectedAsset, t.colLastObservation].map((label) => (
               <th key={label} scope="col" role="columnheader">
                 {label}
               </th>
@@ -261,7 +264,7 @@ function CompartmentTable({ locker }: { readonly locker: LockerStatus }) {
         </thead>
         <tbody role="rowgroup">
           {locker.compartments.map((compartment) => (
-            <CompartmentRow key={compartment.id} compartment={compartment} lastKnown={lastKnown(compartment)} />
+            <CompartmentRow key={compartment.id} compartment={compartment} lastKnown={lastKnown(compartment)} placement={placement(compartment.id)} />
           ))}
         </tbody>
       </table>
@@ -269,7 +272,7 @@ function CompartmentTable({ locker }: { readonly locker: LockerStatus }) {
   )
 }
 
-function CompartmentRow({ compartment, lastKnown }: { readonly compartment: CompartmentStatus; readonly lastKnown: boolean }) {
+function CompartmentRow({ compartment, lastKnown, placement }: { readonly compartment: CompartmentStatus; readonly lastKnown: boolean; readonly placement: PlacementLabel }) {
   const i18n = useI18n()
   const t = i18n.m.lockers
   const observed = technicalInstantLabel(compartment.lastObservedAt, i18n)
@@ -284,6 +287,22 @@ function CompartmentRow({ compartment, lastKnown }: { readonly compartment: Comp
       <Cell label={t.colReader} state={state(readerState(compartment.rfidReaderStatus, i18n))} />
       <Cell label={t.colDoor} state={state(doorState(compartment.doorState, i18n))} />
       <Cell label={t.colLock} state={state(lockState(compartment.lockState, i18n))} />
+      <td role="cell">
+        <span className="ag-lk-table__label" aria-hidden="true">
+          {i18n.m.overview.expectedAsset}
+        </span>
+        {placement.kind === 'pending' ? (
+          <span className="ag-label ag-label--pending" aria-busy="true">
+            <span className="ag-id" />
+          </span>
+        ) : placement.kind === 'unknown' ? (
+          <span className="ag-lk-table__none">{i18n.m.overview.placementUnknown}</span>
+        ) : placement.assetCode === null ? (
+          <span className="ag-lk-table__none">{i18n.m.overview.noAsset}</span>
+        ) : (
+          <span className="ag-tnum">{placement.assetCode}</span>
+        )}
+      </td>
       <td role="cell">
         <span className="ag-lk-table__label" aria-hidden="true">
           {t.colLastObservation}

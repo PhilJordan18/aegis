@@ -6,8 +6,6 @@
 .ag-au-lead { margin-top: 4px; max-width: 80ch; font-size: 0.9375rem; line-height: 1.5; color: var(--ag-text-2); }
 .ag-au-immutable { margin-top: 6px; font-size: var(--ag-type-caption-size); line-height: 1.45; color: var(--ag-text-2); }
 .ag-au-titles { flex: 1 1 420px; }
-.ag-au-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: var(--ag-type-small-size); color: var(--ag-text-2); }
-.ag-au-meta__time { font-variant-numeric: tabular-nums; }
 
 /* The filters: a closed disclosure; the active ones stay visible as removable chips. */
 .ag-au-disclosure { margin-bottom: 12px; border: 1px solid var(--ag-border); border-radius: var(--ag-r-card); background: var(--ag-surface); padding: 4px 16px 6px; }

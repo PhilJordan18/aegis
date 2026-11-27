@@ -16,9 +16,13 @@ import { TransactionFilters } from '../features/transactions/TransactionFilters'
 import { TransactionList } from '../features/transactions/TransactionList'
 import { useTransactionDetail, useTransactionList, type TransactionRecord } from '../features/transactions/useTransactionQueries'
 import { queryKeys } from '../api/queryKeys'
+import { LabelIndexNotice } from '../features/labels/LabelIndexNotice'
+import { HelpButton, HelpPanel } from '../features/pageTools/PageHelp'
+import { RefreshControl } from '../features/pageTools/RefreshControl'
+import { usePageHelp } from '../features/pageTools/usePageHelp'
+import { LAB_TIME_ZONE } from '../features/catalog/assetPresentation'
+import { refreshLabelIndex, useLabelIndex } from '../features/labels/useLabelIndex'
 import { useI18n } from '../i18n/useI18n'
-import { Button } from '../ui/Button'
-import { Icon } from '../ui/Icon'
 import '../app/page.css'
 import '../features/catalog/equipment.css'
 import '../features/transactions/transactions.css'
@@ -53,6 +57,8 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
   const i18n = useI18n()
   const { m } = i18n
   const t = m.reservations
+  const labels = useLabelIndex()
+  const help = usePageHelp('reservations-loans')
   const router = useRouter()
   const client = useQueryClient()
   const { search } = useLocation()
@@ -145,26 +151,30 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
               ))}
             </nav>
           </div>
-          <div className="ag-page__meta">
-            {shownPage !== undefined && <span className="ag-page__time">{t.updatedAt({ time: transactionTimes(i18n).readAt(readAt) })}</span>}
-            <Button
-              variant="secondary"
-              size="sm"
-              busy={refreshing && !list.isPending}
-              onClick={() => {
-                if (refreshing) return
-                void list.refetch()
-                if (selectedId !== null) void detail.refetch()
+          <div className="ag-page__actions">
+            <HelpButton help={help} />
+            <RefreshControl
+              busy={refreshing}
+              readAt={shownPage === undefined || readAt === 0 ? null : readAt}
+              stale={list.isRefetchError}
+              announceSuccess={false}
+              onRefresh={async () => {
                 // The attempt shown inline is its own read: it is read again with the dossier, never followed.
                 const attempt = detail.data?.kind === 'operations' ? null : (detail.data?.item.currentOperationId ?? null)
                 if (attempt !== null) void client.invalidateQueries({ queryKey: queryKeys.transactions.operation(attempt) })
+                const [read, file] = await Promise.all([list.refetch(), selectedId === null ? undefined : detail.refetch(), refreshLabelIndex(client)])
+                return read.isSuccess && (file === undefined || file.isSuccess)
               }}
-            >
-              <Icon name="refresh" />
-              {t.refresh}
-            </Button>
+            />
           </div>
         </header>
+
+        <HelpPanel help={help}>
+          <p>{m.pageTools.labHours({ zone: LAB_TIME_ZONE })}</p>
+          {labels.health === 'partial' && <p>{m.labels.partial}</p>}
+        </HelpPanel>
+
+        <LabelIndexNotice health={labels.health} onRetry={labels.retry} />
 
         <div className="ag-sr-only" role="status">
           {announcement}

@@ -133,7 +133,8 @@ describe("Vue d'ensemble: the five blocks", () => {
     expect(loans).toContain('Retour en cours')
     expect(loans).toContain('En retard')
     expect(loans).toContain('En retard depuis')
-    expect(loans).toContain('Titulaire : Technicien Démo')
+    expect(loans).toContain('Technicien Démo')
+    expect(loans).not.toContain('Titulaire')
 
     await waitFor(() => expect(blockText('Casier')).toContain('AEGIS-DEMO-01'))
     const locker = blockText('Casier')
@@ -168,7 +169,7 @@ describe("Vue d'ensemble: the five blocks", () => {
 
     const main = document.querySelector('main') as HTMLElement
     const buttons = within(main).queryAllByRole('button').map((button) => plain(button.textContent))
-    expect(buttons).toEqual(['Actualiser'])
+    expect(buttons).toEqual(['Aide', 'Actualiser'])
     expect(plain(main.textContent)).not.toMatch(/terminer|confirmer le|forcer|ouvrir la|résoudre|reconnaître|annuler|supprimer|CANCEL_RESERVATION/i)
   })
 
@@ -207,8 +208,8 @@ describe("Vue d'ensemble: the five blocks", () => {
 
   it('says when it was updated in the laboratory zone, and which zone that is', async () => {
     renderWith()
-    await waitFor(() => expect(document.querySelector('.ag-page__time')?.textContent).toMatch(/^Mis à jour à /))
-    expect(plain(document.querySelector('.ag-page__time')?.textContent)).toMatch(/\b(HNE|HAE)\b/)
+    await waitFor(() => expect(document.querySelector('.ag-refresh__time')?.textContent).toMatch(/^Lu à /))
+    expect(plain(document.querySelector('.ag-refresh__time')?.textContent)).toMatch(/\b(HNE|HAE)\b/)
     expect(plain(document.querySelector('main')?.textContent)).toContain('Heures du laboratoire : America/Toronto')
   })
 })
@@ -238,7 +239,9 @@ describe("Vue d'ensemble: authoritative counts", () => {
     await waitFor(() => expect(blockText('Réservations actives')).toContain('14 actives'))
     await waitFor(() => expect(blockText('Opération en cours')).toContain('2 observées en cours'))
     expect(blockText('Opération en cours')).toContain('Porte ouverte')
-    expect(blockText('Opération en cours')).toContain("Chaque statut est lu par une requête distincte, pas au même instant : un élément qui change de statut entre deux lectures n'est compté qu'une fois, et peut manquer.")
+    // The caveat of successive reads is said once, in the page help, not in each module (contract §1.4).
+    expect(blockText('Opération en cours')).not.toContain('Chaque statut est lu par une requête distincte')
+    expect(plain(document.querySelector('.ag-help-panel')?.textContent)).toContain("Chaque statut est lu par une requête distincte, pas au même instant : un élément qui change de statut entre deux lectures n'est compté qu'une fois, et peut manquer.")
   })
 
   it('shows one operation, not an exact 2, when it changed status between the two reads that saw it', async () => {
@@ -559,5 +562,61 @@ describe("Vue d'ensemble: language and access", () => {
     const current = within(sidebar).getAllByRole('link').find((link) => link.getAttribute('aria-current') === 'page')
     expect(current?.textContent).toBe("Vue d'ensemble")
     expect(current?.getAttribute('href')).toBe('/vue-d-ensemble')
+  })
+})
+
+describe('Vue d’ensemble — page help and refresh (contract §1.4, §1.5)', () => {
+  afterEach(() => window.sessionStorage.clear())
+
+  it('opens the help with the keyboard, keeps it open for the tab, and keeps the last good instant after a failed refresh', async () => {
+    const user = userEvent.setup()
+    const fakes = gateways()
+    renderWith(fakes)
+    await waitFor(() => expect(blockText('Réservations actives')).toContain('1 active'))
+    const help = screen.getByRole('button', { name: 'Aide' })
+    expect(help.getAttribute('aria-expanded')).toBe('false')
+    help.focus()
+    await user.keyboard('{Enter}')
+    expect(help.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('region', { name: 'Aide de la page' })).toBeTruthy()
+    expect(window.sessionStorage.getItem('aegis.pageHelp.overview')).toBe('1')
+
+    const before = document.querySelector('.ag-refresh__time')?.textContent
+    fakes.transactionGateway.listReservations.mockRejectedValue(new Error('network'))
+    await user.click(screen.getByRole('button', { name: 'Actualiser' }))
+    await waitFor(() => expect(screen.getByText('Non actualisé')).toBeTruthy())
+    expect(document.querySelector('.ag-refresh__time')?.textContent).toBe(before)
+    expect(plain(screen.getAllByRole('status').map((node) => node.textContent).join(' '))).toMatch(/Actualisation échouée · données du .+ conservées/)
+  })
+})
+
+describe('Navigation badges (contract §1.6)', () => {
+  const sideLink = (name: RegExp) => within(screen.getAllByRole('navigation', { name: 'Sections' })[0] as HTMLElement).getByRole('link', { name })
+
+  it('names the open anomalies and the overdue loans in the entries, from the reads of the overview', async () => {
+    const fakes = gateways()
+    renderWith(fakes)
+    await waitFor(() => expect(sideLink(/^Anomalies/).textContent).toContain('1'))
+    expect(plain(sideLink(/^Anomalies/).textContent)).toBe('Anomalies1')
+    expect(sideLink(/^Anomalies, 1 ouverte$/)).toBeTruthy()
+    await waitFor(() => expect(sideLink(/^Réservations et prêts, 1 prêt en retard$/)).toBeTruthy())
+    // One read of each key for the badges and the blocks.
+    expect(fakes.anomalyGateway.listAnomalies).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows « N+ » when one loan read is missing, and a neutral dot, never zero, when the anomaly count is unavailable', async () => {
+    renderWith(gateways({ anomalies: offline, loans: { ACTIVE: offline, RETURN_PENDING: NOMINAL.loans.RETURN_PENDING } }))
+    await waitFor(() => expect(sideLink(/^Réservations et prêts, au moins 1 prêt en retard, lecture incomplète$/)).toBeTruthy())
+    expect(sideLink(/^Réservations et prêts/).querySelector('.ag-nav__badge')?.textContent).toBe('1+')
+    await waitFor(() => expect(sideLink(/^Anomalies, nombre d’anomalies indisponible$/)).toBeTruthy())
+    expect(sideLink(/^Anomalies/).querySelector('.ag-nav__badge--dot')).not.toBeNull()
+    expect(sideLink(/^Anomalies/).textContent).not.toMatch(/0/)
+  })
+
+  it('shows nothing when there is nothing open', async () => {
+    renderWith(gateways({ anomalies: ok(anomalyPageOf([])), loans: { ACTIVE: ok(pageOf([])), RETURN_PENDING: ok(pageOf([])) } }))
+    await waitFor(() => expect(blockText('Anomalies ouvertes')).toContain('Aucune'))
+    expect(sideLink(/^Anomalies$/).querySelector('.ag-nav__badge')).toBeNull()
+    expect(sideLink(/^Réservations et prêts$/).querySelector('.ag-nav__badge')).toBeNull()
   })
 })
