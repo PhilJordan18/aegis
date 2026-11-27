@@ -712,6 +712,7 @@ Ces deux points ne sont pas approuvés. En attendant, la section applique le tex
 | POST | /auth/session/refresh | Cookie de session navigateur et origine autorisée (ADR-016) | Nouveau jeton et profil |
 | POST | /auth/session/revoke | Cookie de session navigateur et origine autorisée (ADR-016) | Session navigateur révoquée |
 | GET | /auth/me | Authentifié | Profil courant |
+| POST | /auth/password | Authentifié | Changement personnel, reconnexion requise (§10.7) |
 
 ### 9.2 Technicien
 
@@ -724,10 +725,12 @@ Route supplémentaire : `POST /locker-operations/{operationId}/authorize-local` 
 | GET | /assets/{assetId} | Détail avec readiness personnelle |
 | POST | /reservations | Créer une réservation |
 | GET | /me/reservation | Réservation active du technicien |
+| GET | /me/reservations | Historique personnel paginé (§29) |
 | GET | /reservations/{reservationId} | Réservation appartenant au technicien |
 | POST | /reservations/{reservationId}/cancel | Annuler une réservation inutilisée |
 | POST | /reservations/{reservationId}/checkout | Commencer un retrait |
 | GET | /me/loan | Prêt ouvert du technicien |
+| GET | /me/loans | Historique personnel paginé (§29) |
 | GET | /loans/{loanId} | Prêt appartenant au technicien |
 | POST | /loans/{loanId}/return | Commencer un retour |
 | POST | /locker-operations/{operationId}/authorize-local | Consommer le QR et autoriser l’opération préparée |
@@ -881,6 +884,56 @@ Une ligne révoquée ne redevient jamais ouverte : un déclencheur de `V011` ref
 Le jeton remis par la connexion elle-même dure 60 minutes et son `exp` n’est pas borné par la fin de la session; seul le jeton restauré l’est. Depuis l’ADR-018, il porte `sid` et il est refusé dès que sa session est échue ou révoquée, même avant son `exp`.
 
 ---
+
+### 10.7 Changement personnel du mot de passe — extension approuvée (#229)
+
+Décision du 25 novembre 2026, [ADR-020](../adr/ADR-020-changement-mot-de-passe-personnel.md).
+`POST /api/v1/auth/password`, `Content-Type: application/json`, Bearer requis,
+ADMIN ou TECHNICIAN, **compte authentifié seulement**. Corps exact :
+
+```json
+{"currentPassword":"mot-de-passe-actuel","newPassword":"nouveau-mot-de-passe"}
+```
+
+Aucun identifiant cible, confirmation ni `Idempotency-Key`. Le client gère la
+confirmation locale; le serveur n'accepte pas les propriétés inconnues. Les
+mots de passe ne sont ni tronqués ni normalisés. Actuel : non vide, maximum
+72 octets UTF-8; nouveau : 12 à 72 octets UTF-8.
+
+| Résultat | Contrat |
+|---|---|
+| `204` | Corps vide, cookie navigateur effacé; aucune réponse de connexion ni nouveau jeton |
+| `400 VALIDATION_ERROR` | Corps ou tailles invalides; violations sûres sans valeur rejetée, dont `MIN_UTF8_BYTES` pour `newPassword` trop court |
+| `400 PASSWORD_CURRENT_INVALID` | Mot de passe actuel incorrect; session courante conservée |
+| `409 PASSWORD_REUSED` | Nouveau mot de passe égal à l'actuel; aucun changement |
+| `401 AUTH_TOKEN_INVALID` / `AUTH_TOKEN_EXPIRED` | Jeton non accepté, compte désactivé/archivé, ou version devenue périmée pendant l'attente du verrou; reconnexion |
+| `429 RATE_LIMITED` | Cinq tentatives atteintes dans les 60 dernières secondes, avec `Retry-After` en secondes |
+| `503 PASSWORD_CHANGE_UNAVAILABLE` | Rotation opérateur configurée, attendre sa clôture |
+
+La limite porte sur l'UUID authentifié, toutes adresses sources confondues et
+indépendamment du budget de connexion. Seules les requêtes structurellement
+valides atteignant la vérification sont comptées, succès et refus compris.
+La mémoire contient au plus 10 000 fenêtres actives; saturation = refus de
+nouvelles fenêtres, jamais effacement d'une limite active. Instance unique;
+un redémarrage vide ce budget. Une erreur de validation ne vérifie aucun secret.
+
+Le compte, son statut et sa version sont relus sous verrou avant la vérification
+du mot de passe. L'écriture incrémente `credential_version`, révoque toutes les
+sessions navigateur et écrit `PASSWORD_CHANGED` avec cet utilisateur comme
+acteur dans la même transaction. Tous les anciens JWT, y compris celui de
+l'appelant, sont refusés après engagement. Le client efface token/Keychain,
+état de session et champs secrets, puis demande une nouvelle connexion.
+
+Exception explicite à l'idempotence des POST métier (§20) : aucune clé ni mise
+en cache d'un corps contenant les secrets. Après perte de réponse, ne pas
+réessayer automatiquement; utiliser une connexion avec le nouveau mot de passe
+pour constater un succès éventuellement engagé. Aucun mécanisme de récupération
+par email, aucun reset administratif, aucune mutation de possession.
+
+Provisionnement : `AEGIS_DEMO_ROTATE_PASSWORDS=false` par défaut préserve le mot
+de passe existant. `true` avec `AEGIS_DEMO_ACCOUNTS_ENABLED=true` effectue la
+rotation intentionnelle au démarrage et ferme cette route (`503`) jusqu'à
+retrait du mode. Déploiement et retour arrière : ADR-020 et guide local API.
 
 ## 11. Catalogue technicien et readiness
 
@@ -1881,3 +1934,45 @@ Le contrat est respecté si :
 10. le contrat est couvert par des tests d’intégration ou des tests OpenAPI;
 11. les clients Web et iOS consomment les mêmes états et codes;
 12. les décisions physiques restent corrélées à MQTT sans exposer MQTT aux clients.
+
+
+## 29. Historique personnel — extension P1 approuvée le 25 novembre 2026 (#228)
+
+Philippe a approuvé cette lecture après la recette intégrée. Elle n'ajoute
+aucune condition au P0 et ne fournit ni export ni statistiques.
+
+`GET /api/v1/me/reservations` et `GET /api/v1/me/loans` sont réservés à
+`TECHNICIAN`. Le titulaire vient exclusivement du compte authentifié, y compris
+pour le décompte SQL. Aucun paramètre propriétaire n'est accepté comme filtre.
+Les routes de détail existantes conservent leur contrôle de propriétaire.
+
+Paramètres : `page` entier ≥ 0 (défaut 0), `size` de 1 à 100 (défaut 20),
+`status` facultatif, une valeur canonique exacte : `ACTIVE`, `FULFILLED`,
+`CANCELLED`, `EXPIRED` pour les réservations; `ACTIVE`, `RETURN_PENDING`,
+`COMPLETED` pour les prêts. Absent, `status` sélectionne tous les états.
+Une valeur inconnue ou pagination invalide donne `400 VALIDATION_ERROR`.
+Aucun filtre de dates ni tri personnalisable n'est proposé.
+
+Réponse `200` : `{items, page, size, totalItems, totalPages}`, mêmes enveloppe
+et types que §11.1. `items` contient les `ReservationView` (§8.3) ou `LoanView`
+(§8.4), avec leurs identifiants, dates et `AssetSummary`. Pour ces **listes
+historiques**, `availableActions` est toujours `[]` et `currentOperationId`
+est toujours `null`; le client relit le détail avant de proposer une action ou
+suivre une tentative. Les identifiants persistés `checkoutOperationId` et
+`returnOperationId` du prêt restent présents. Le placement de l'actif est son
+placement **courant**, éventuellement nul, pas un instantané historique.
+Aucune identité RFID brute, preuve QR, information d'un autre titulaire ou
+information d'audit interne n'est exposée.
+
+Ordre déterministe : `createdAt DESC, id DESC` pour les réservations;
+`checkedOutAt DESC, id DESC` pour les prêts. Dates : instants UTC ISO-8601,
+affichage local à la charge du client. Décompte et page partagent un instantané
+PostgreSQL en lecture seule. Entre deux requêtes, une nouvelle activité peut
+décaler les pages par offset : rafraîchir depuis la page 0; aucune promesse de
+curseur immuable. Une page vide ou au-delà de la fin répond `200`, `items: []`;
+un historique vide a `totalItems: 0`, `totalPages: 0`. Les erreurs utilisent
+ProblemResponse; `401` exige une reconnexion, `403` indique un rôle refusé.
+Le chargement et la reprise d'erreur restent des états locaux du client.
+
+Ces lectures ne déclenchent ni expiration, ni audit, ni mutation de réservation,
+prêt, disponibilité ou readiness. Aucun changement SQL, MQTT ou firmware.

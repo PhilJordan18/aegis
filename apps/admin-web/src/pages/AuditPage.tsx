@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { PageHeading } from '../app/PageHeading'
 import { useLocation, useRouter } from '../app/router'
@@ -16,16 +17,21 @@ import { eventLabel } from '../features/audit/auditPresentation'
 import type { AuditEventView } from '../features/audit/contract'
 import { useAuditTimeline } from '../features/audit/useAuditTimeline'
 import { LAB_TIME_ZONE } from '../features/catalog/assetPresentation'
+import { refreshLabelIndex, useLabelIndex } from '../features/labels/useLabelIndex'
+import { LabelIndexNotice } from '../features/labels/LabelIndexNotice'
+import { HelpButton, HelpPanel } from '../features/pageTools/PageHelp'
+import { RefreshControl } from '../features/pageTools/RefreshControl'
+import { usePageHelp } from '../features/pageTools/usePageHelp'
 import { useI18n } from '../i18n/useI18n'
-import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import '../app/page.css'
 import '../features/catalog/equipment.css'
+import { useRecordsLayout } from '../features/pageTools/useRecordsLayout'
 import '../features/audit/audit.css'
 
 const LIST_TITLE_ID = 'audit-liste'
 
-/** The dossier sits under the list below 1024 px, out of sight after a selection (handoff §5). */
+/** The dossier sits under the card rows below 1024 px, out of sight after a selection (Design §8.3). */
 function isStackedLayout(): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches
 }
@@ -38,7 +44,9 @@ function isStackedLayout(): boolean {
  */
 export function AuditPage({ sessionProfile }: { readonly sessionProfile: UserProfile }) {
   const i18n = useI18n()
-  const { m, format } = i18n
+  // Design §8.3: card rows beside the dossier from 1024 px, the table beside a 480 px dossier from 1280 px.
+  const layout = useRecordsLayout()
+  const { m } = i18n
   const t = m.audit
   const router = useRouter()
   const { search } = useLocation()
@@ -49,6 +57,9 @@ export function AuditPage({ sessionProfile }: { readonly sessionProfile: UserPro
   const filterKey = JSON.stringify(filters)
   const filtered = activeFilterFields(filters).length > 0
   const { query, restart } = useAuditTimeline(filters)
+  const client = useQueryClient()
+  const help = usePageHelp('audit')
+  const labels = useLabelIndex()
 
   const pages = query.data?.pages
   const failure = query.isError ? classifyAuditFailure(query.error) : null
@@ -136,12 +147,13 @@ export function AuditPage({ sessionProfile }: { readonly sessionProfile: UserPro
     focusAfterSelection.current = true
   }
 
-  async function restartWalk() {
+  async function restartWalk(): Promise<boolean> {
     const noticeHadFocus = noticeRef.current?.contains(document.activeElement) ?? false
-    const result = await restart()
-    if (result.isError) return
+    const [result] = await Promise.all([restart(), refreshLabelIndex(client)])
+    if (result.isError) return false
     pendingTitle.current = noticeHadFocus
     setNote(t.refreshed({ count: result.data?.pages[0]?.items.length ?? 0 }))
+    return true
   }
 
   function select(event: AuditEventView, click: MouseEvent<HTMLAnchorElement>) {
@@ -163,7 +175,6 @@ export function AuditPage({ sessionProfile }: { readonly sessionProfile: UserPro
   const signOut = useSignOut()
 
   const readAt = firstPage?.readAt ?? null
-  const clock = readAt === null ? null : format.time(new Date(readAt), LAB_TIME_ZONE)
 
   return (
     <ManagerShell currentPath={pathOf('audit')} profile={profile} onSignOut={signOut}>
@@ -179,20 +190,21 @@ export function AuditPage({ sessionProfile }: { readonly sessionProfile: UserPro
               </span>
             </p>
           </div>
-          {!loading && (
-            <div className="ag-au-meta">
-              {clock !== null && <span className="ag-au-meta__time">{t.updatedAt({ time: clock })}</span>}
-              <Button variant="secondary" size="sm" busy={restarting} onClick={() => !restarting && void restartWalk()}>
-                <Icon name="refresh" />
-                {t.refresh}
-              </Button>
-            </div>
-          )}
+          <div className="ag-page__actions">
+            <HelpButton help={help} />
+            {!loading && <RefreshControl onRefresh={restartWalk} readAt={readAt} busy={restarting} announceSuccess={false} />}
+          </div>
         </header>
 
         <div className="ag-sr-only" role="status">
           {announcement}
         </div>
+
+        <HelpPanel help={help}>
+          <p>{m.pageTools.labHours({ zone: LAB_TIME_ZONE })}</p>
+        </HelpPanel>
+
+        <LabelIndexNotice health={labels.health} onRetry={labels.retry} />
 
         <AuditFilters
           filters={filters}
@@ -203,7 +215,7 @@ export function AuditPage({ sessionProfile }: { readonly sessionProfile: UserPro
           onClear={() => apply(NO_FILTERS)}
         />
 
-        <div className={showDossier ? 'ag-eq' : 'ag-eq ag-eq--single'}>
+        <div className={`ag-eq${layout === 'cards' ? '' : ' ag-eq--table'}${showDossier ? '' : ' ag-eq--single'}`}>
           <div className="ag-au-listwrap" ref={listRef}>
             <AuditList
               titleId={LIST_TITLE_ID}

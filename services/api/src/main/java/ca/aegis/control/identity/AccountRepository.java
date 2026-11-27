@@ -33,6 +33,11 @@ class AccountRepository {
                 .optional();
     }
 
+    Optional<Account> lockById(UUID id) {
+        return jdbc.sql(SELECT_ACCOUNT + "WHERE id = :id FOR UPDATE").param("id", id)
+                .query(AccountRepository::map).optional();
+    }
+
     Optional<Account> findById(UUID id) {
         return jdbc.sql(SELECT_ACCOUNT + "WHERE id = :id")
                 .param("id", id)

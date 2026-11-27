@@ -12,6 +12,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import ca.aegis.control.shared.web.PageQuery;
+import ca.aegis.control.shared.web.PageResponse;
+import ca.aegis.control.shared.web.QueryFilters;
 
 import tools.jackson.databind.JsonNode;
 
@@ -77,6 +82,16 @@ class ReservationController {
             LockerOperationView prepared = checkouts.prepare(idempotentRequest.actorUserId(), reservationId);
             return IdempotentResult.accepted(IdempotentResource.LOCKER_OPERATION, prepared.id(), prepared);
         });
+    }
+
+    @GetMapping("/api/v1/me/reservations")
+    PageResponse<ReservationView> history(@AuthenticationPrincipal CurrentAccount technician,
+            @RequestParam(required = false) String status, @RequestParam(required = false) String page,
+            @RequestParam(required = false) String size) {
+        QueryFilters filters = new QueryFilters();
+        ReservationStatus selectedStatus = filters.enumeration("status", status, ReservationStatus.class);
+        filters.validate();
+        return reservations.historyOf(technician.id(), selectedStatus, PageQuery.parse(page, size));
     }
 
     @GetMapping("/api/v1/me/reservation")

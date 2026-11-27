@@ -1,98 +1,88 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useRef } from 'react'
 import { Link } from '../../app/Link'
+import { FORMAT_LOCALE } from '../../i18n/locale'
 import { useI18n } from '../../i18n/useI18n'
-import { Button } from '../../ui/Button'
-import { SelectField, TextField } from '../../ui/FormField'
+import { SelectField } from '../../ui/FormField'
+import { AssetPicker } from '../labels/AssetPicker'
+import { IdText } from '../labels/IdText'
+import type { LockerLabel } from '../labels/labelIndex'
+import { useLabelIndex } from '../labels/useLabelIndex'
+import { abbreviate } from '../labels/labelIndex'
 import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
-import { isCalendarDay, isUuidText, NO_FILTERS, STATUSES_OF_VIEW, transactionHref, type TransactionFilterValues, type TransactionView } from './transactionHref'
+import { DateRange } from '../pageTools/DateRange'
+import { FilterChips, type ActiveFilter } from '../pageTools/FilterChips'
+import { useSettledSelect } from '../pageTools/useSettledSelect'
+import { shortDay } from '../pageTools/labDays'
+import { isCalendarDay, NO_FILTERS, STATUSES_OF_VIEW, transactionHref, type TransactionFilterValues, type TransactionView } from './transactionHref'
 
 interface TransactionFiltersProps {
   readonly view: TransactionView
-  /** The filters of the address. Mount one per address (a `key`), so the fields follow it. */
+  /** The filters of the address, the only source of truth (§3.4): every change navigates, Précédent undoes it. */
   readonly values: TransactionFilterValues
   readonly onApply: (filters: TransactionFilterValues) => void
 }
 
-type FieldErrors = { readonly assetId: string | null; readonly period: string | null }
-
 /**
- * Status, equipment id and period (09 §17). The rules checked here only spare a round trip; the server stays the
- * authority. The period is read as laboratory calendar days, never the browser's zone. No sort is offered: the
- * contract defines none.
+ * Status, equipment (searched by code or name, §1.3) and period (09 §17), applied as soon as they change
+ * (contrat-web-manager §3.4). The rules checked here only spare a round trip; the server stays the authority. The
+ * period is read as laboratory calendar days, never the browser's zone. No sort is offered: the contract defines none.
  */
 export function TransactionFilters({ view, values, onApply }: TransactionFiltersProps) {
-  const { m } = useI18n()
+  const { m, locale } = useI18n()
   const t = m.reservations
-  const formRef = useRef<HTMLFormElement>(null)
-  const [status, setStatus] = useState(values.status ?? '')
-  const [assetId, setAssetId] = useState(values.assetId ?? '')
-  const [from, setFrom] = useState(values.from ?? '')
-  const [to, setTo] = useState(values.to ?? '')
-  const [errors, setErrors] = useState<FieldErrors>({ assetId: null, period: null })
+  const labels = useLabelIndex()
+  const statusRef = useRef<HTMLSelectElement>(null)
+  const statusText = (value: string) => (t.status[view === 'reservations' ? 'reservation' : view === 'loans' ? 'loan' : 'operation'] as Record<string, string>)[value] ?? value
+  const set = (patch: Partial<TransactionFilterValues>) => onApply({ ...values, ...patch })
 
-  function submit(event: FormEvent) {
-    event.preventDefault()
-    const asset = assetId.trim()
-    const next: FieldErrors = {
-      assetId: asset !== '' && !isUuidText(asset) ? t.filterAssetInvalid : null,
-      period: (from !== '' && !isCalendarDay(from)) || (to !== '' && !isCalendarDay(to)) || (from !== '' && to !== '' && to < from) ? t.filterPeriodInvalid : null,
-    }
-    setErrors(next)
-    if (next.assetId !== null || next.period !== null) {
-      const field = next.assetId !== null ? 'equipement' : 'au'
-      ;(formRef.current?.elements.namedItem(field) as HTMLElement | null)?.focus()
-      return
-    }
-    onApply({ status: status === '' ? null : status, assetId: asset === '' ? null : asset.toLowerCase(), lockerId: values.lockerId, from: from === '' ? null : from, to: to === '' ? null : to })
+  const assetText = (assetId: string) => {
+    const label = labels.asset(assetId)
+    return label.kind === 'known' ? label.code : abbreviate(assetId)
   }
+  const day = (value: string) => shortDay(value, FORMAT_LOCALE[locale])
+  const chips: ActiveFilter[] = [
+    ...(values.status === null ? [] : [{ key: 'status', label: t.filterStatus, value: statusText(values.status), onRemove: () => set({ status: null }) }]),
+    ...(values.assetId === null ? [] : [{ key: 'asset', label: t.filterAsset, value: assetText(values.assetId), onRemove: () => set({ assetId: null }) }]),
+    ...(values.from === null ? [] : [{ key: 'from', label: m.pageTools.fromInclusive, value: day(values.from), text: m.pageTools.fromDay({ day: day(values.from) }), onRemove: () => set({ from: null }) }]),
+    ...(values.to === null ? [] : [{ key: 'to', label: m.pageTools.toInclusive, value: day(values.to), text: m.pageTools.toDay({ day: day(values.to) }), onRemove: () => set({ to: null }) }]),
+  ]
 
-  function clear() {
-    onApply(NO_FILTERS)
-  }
+  const status = useSettledSelect(values.status ?? '', (next) => set({ status: next === '' ? null : next }))
 
   return (
-    <form ref={formRef} className="ag-filters" aria-label={t.filtersLabel} noValidate onSubmit={submit}>
+    <div className="ag-filters" role="group" aria-label={t.filtersLabel}>
       <div className="ag-filters__grid">
-        <SelectField name="statut" label={t.filterStatus} value={status} onChange={(event) => setStatus(event.target.value)}>
+        <SelectField ref={statusRef} name="statut" label={t.filterStatus} {...status}>
           <option value="">{t.filterAll}</option>
           {STATUSES_OF_VIEW[view].map((value) => (
             <option key={value} value={value}>
-              {(t.status[view === 'reservations' ? 'reservation' : view === 'loans' ? 'loan' : 'operation'] as Record<string, string>)[value]}
+              {statusText(value)}
             </option>
           ))}
         </SelectField>
-        <TextField
-          name="equipement"
-          label={t.filterAsset}
-          error={errors.assetId}
-          value={assetId}
-          onChange={(event) => setAssetId(event.target.value)}
-          autoComplete="off"
-          spellCheck={false}
-          inputMode="text"
+        <AssetPicker label={t.filterAsset} value={values.assetId} onChange={(assetId) => set({ assetId })} labels={labels} />
+        <DateRange
+          value={{ from: values.from, to: values.to }}
+          onApply={(range) => set(range)}
+          isDay={isCalendarDay}
+          invalidText={t.filterPeriodInvalid}
+          help={t.filterPeriodHelp({ zone: LAB_TIME_ZONE })}
         />
-        <TextField name="du" type="date" label={t.filterFrom} value={from} onChange={(event) => setFrom(event.target.value)} />
-        <TextField name="au" type="date" label={t.filterTo} error={errors.period} value={to} onChange={(event) => setTo(event.target.value)} />
       </div>
-      <div className="ag-filters__actions">
-        <Button type="submit" variant="primary" size="sm">
-          {t.filterSubmit}
-        </Button>
-        <Button variant="secondary" size="sm" onClick={clear}>
-          {t.filterClear}
-        </Button>
-      </div>
+      <FilterChips filters={chips} onClear={() => onApply(NO_FILTERS)} returnFocus={() => statusRef.current?.focus()} />
       {view === 'operations' && values.lockerId !== null && (
         <p className="ag-filters__help" data-testid="locker-filter">
-          {t.filterLocker} <code className="ag-id">{values.lockerId}</code>{' '}
+          {t.filterLocker} <LockerFilterName lockerId={values.lockerId} label={labels.locker(values.lockerId)} />{' '}
           <Link className="ag-link" to={transactionHref({ view, filters: { ...values, lockerId: null } })}>
             {t.filterLockerRemove}
           </Link>
         </p>
       )}
-      <p className="ag-filters__help">
-        {t.filterAssetHelp} {t.filterPeriodHelp({ zone: LAB_TIME_ZONE })}
-      </p>
-    </form>
+    </div>
   )
+}
+
+/** §1.8 criterion 1: the filtered locker reads by its code, or by its abbreviated identifier until the index knows it. */
+function LockerFilterName({ lockerId, label }: { readonly lockerId: string; readonly label: LockerLabel }) {
+  return label.kind === 'known' ? <span className="ag-label__code">{label.code}</span> : <IdText id={lockerId} />
 }

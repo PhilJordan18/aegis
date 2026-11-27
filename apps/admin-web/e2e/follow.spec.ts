@@ -21,7 +21,10 @@ const operation = (status: string) => ({
   type: 'CHECKOUT',
   status,
   userId: USER_ID,
+  // R7: an operation carries its user and equipment summaries; the parser refuses one without them.
+  user: { id: USER_ID, displayName: 'Technicien Démo' },
   assetId: ASSET_ID,
+  asset: { id: ASSET_ID, assetCode: 'MM-001', model: { id: '8f1f3c52-5f2a-4c43-9b6b-0d2f6c1f3a01', name: 'Multimètre 1', manufacturer: 'Fluke', modelNumber: '117' }, placement: { lockerId: LOCKER_ID, lockerCode: 'AEGIS-DEMO-01', compartmentId: COMPARTMENT_ID, compartmentCode: 'A1' } },
   lockerId: LOCKER_ID,
   compartmentId: COMPARTMENT_ID,
   reservationId: RESERVATION_ID,
@@ -84,6 +87,8 @@ async function routeOperations(page: Page): Promise<FakeServer> {
     if (url.pathname === '/api/v1/admin/locker-operations') return json(route, { items: [operation(server.status)], page: 0, size: 20, totalItems: 1, totalPages: 1 })
     if (url.pathname === `/api/v1/admin/locker-operations/${OPERATION_ID}`) return json(route, operation(server.status))
     if (url.pathname === `/api/v1/admin/assets/${ASSET_ID}`) return json(route, ASSET)
+    // The navigation badges (§1.6) read the open anomalies and loans when the shell mounts: empty pages, not errors to retry.
+    if (url.pathname === '/api/v1/admin/anomalies' || url.pathname === '/api/v1/admin/loans') return json(route, { items: [], page: 0, size: 100, totalItems: 0, totalPages: 0 })
     return route.fulfill({ status: 404, contentType: 'application/problem+json', body: JSON.stringify({ type: 'https://aegis.local/problems/resource_not_found', title: 'Fictif', status: 404, code: 'RESOURCE_NOT_FOUND', detail: 'Fictif', instance: url.pathname, traceId: TRACE_ID, timestamp: '2026-11-10T14:00:00Z' }) })
   })
   return server
@@ -129,6 +134,8 @@ test.describe('follow: the open operation dossier (ADR-006)', () => {
 
   test('moves from the acknowledged command to a terminal status with no click, and stops reading', async ({ page }) => {
     const server = await openDossier(page)
+    const reservationReads = () => server.requests.filter((request) => request.path.includes('/reservations')).length
+    const loanReads = () => server.requests.filter((request) => request.path.includes('/loans')).length
     const status = page.getByRole('status').filter({ hasText: /Opération mise à jour/ })
 
     server.status = 'DOOR_OPENED'
@@ -143,10 +150,13 @@ test.describe('follow: the open operation dossier (ADR-006)', () => {
 
     await page.waitForTimeout(500)
     const reads = server.detailReads()
+    // The terminal status refreshes the custody facts once, the open loans of the « en retard » badge (§1.6) among them.
+    const loans = loanReads()
     await page.waitForTimeout(4_000)
     expect(server.detailReads(), 'no read of the operation once it is terminal').toBe(reads)
     expect(server.listReads(), 'the list is read once more at the transition and never polled').toBe(server.listBase + 1)
-    expect(server.requests.filter((request) => request.path.includes('/reservations') || request.path.includes('/loans')).length).toBe(0)
+    expect(reservationReads(), 'following the operation reads no reservation').toBe(0)
+    expect(loanReads(), 'no loan read once the operation is terminal').toBe(loans)
   })
 
   test('keeps the request count bounded over a fixed window and never polls the list', async ({ page }) => {

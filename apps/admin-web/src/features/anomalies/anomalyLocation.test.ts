@@ -15,25 +15,25 @@ describe('anomaly address', () => {
   })
 
   it('ignores unusable values', () => {
-    expect(readAnomalyLocation('?statut=x&gravite=y&type=z&page=0&anomalie=nope')).toEqual({ filters: { status: 'OPEN', severity: null, type: null }, page: 0, anomalyId: null })
+    expect(readAnomalyLocation('?statut=x&gravite=y&type=z&page=0&anomalie=nope')).toEqual({ filters: { status: 'OPEN', severity: null, type: null, assetId: null }, page: 0, anomalyId: null })
     expect(readAnomalyLocation('?page=99999999999').page).toBe(0)
   })
 
   it('round-trips through the address', () => {
     for (const location of [
-      { filters: { status: 'OPEN', severity: null, type: null }, page: 0, anomalyId: null },
-      { filters: { status: null, severity: 'HIGH', type: 'COMMAND_REJECTED' }, page: 2, anomalyId: null },
-      { filters: { status: 'OPEN', severity: null, type: null }, page: 0, anomalyId: ID },
-      { filters: { status: 'ACKNOWLEDGED', severity: 'LOW', type: null }, page: 1, anomalyId: ID },
+      { filters: { status: 'OPEN', severity: null, type: null, assetId: null }, page: 0, anomalyId: null },
+      { filters: { status: null, severity: 'HIGH', type: 'COMMAND_REJECTED', assetId: '8a9b0c1d-2e3f-4a5b-9c6d-7e8f9a0b1c2e' }, page: 2, anomalyId: null },
+      { filters: { status: 'OPEN', severity: null, type: null, assetId: null }, page: 0, anomalyId: ID },
+      { filters: { status: 'ACKNOWLEDGED', severity: 'LOW', type: null, assetId: null }, page: 1, anomalyId: ID },
       { filters: NO_FILTERS, page: 0, anomalyId: ID },
     ] as const) {
       expect(readAnomalyLocation(anomaliesHref(location).split('?')[1] ?? '')).toEqual(location)
     }
-    expect(anomaliesHref({ filters: { status: 'OPEN', severity: null, type: null }, page: 0, anomalyId: null })).toBe('/anomalies')
+    expect(anomaliesHref({ filters: { status: 'OPEN', severity: null, type: null, assetId: null }, page: 0, anomalyId: null })).toBe('/anomalies')
   })
 
   it('treats « Ouvertes » as a filter, so an empty list under it never says there is no record', () => {
-    expect(hasActiveFilter({ status: 'OPEN', severity: null, type: null })).toBe(true)
+    expect(hasActiveFilter({ status: 'OPEN', severity: null, type: null, assetId: null })).toBe(true)
     expect(hasActiveFilter(NO_FILTERS)).toBe(false)
   })
 })
