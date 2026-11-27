@@ -242,18 +242,20 @@ final class ReservationUITests: XCTestCase {
     /// « Mon activité » at the largest text size (#222): the reservation,
     /// the overdue loan and the empty state, in light and dark. Each state is
     /// audited at the top, then again with its last control scrolled into
-    /// view. Each listed control, down to the last one of the state
-    /// (« Actualiser », or the loan notice's retry below « Voir les
-    /// équipements »), is scrolled into view and measured on its own pixels.
+    /// view. Each listed control, from the refresh icon at the top of the
+    /// card (#231) down to the last one of the state (« Annuler », « Rendre »,
+    /// or the loan notice's retry below « Voir les équipements »), is scrolled
+    /// into view and measured on its own pixels.
     @MainActor
     func testActivityAtTheLargestTextSize() throws {
         let largest = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
-        // Drawn with a border: « Voir les équipements » (SecondaryButtonStyle),
-        // « Actualiser » and the notice's retry (CompactButtonStyle).
-        let bordered: Set = ["activity.browse", "activity.refresh", "activity.loan.refresh", "activity.loan.retry"]
+        // Drawn with a border: « Voir les équipements » (SecondaryButtonStyle)
+        // and the notice's retry (CompactButtonStyle). The refresh control is
+        // a borderless icon in the card header, measured as an ink.
+        let bordered: Set = ["activity.browse", "activity.loan.retry"]
         // Top to bottom; the last one ends each state's content.
-        let states = [("activity-reserved", "reserved", ["activity.cancel", "activity.refresh"]),
-                      ("activity-loan", "loan", ["activity.return", "activity.loan.refresh"]),
+        let states = [("activity-reserved", "reserved", ["activity.refresh", "activity.cancel"]),
+                      ("activity-loan", "loan", ["activity.loan.refresh", "activity.return"]),
                       ("reservation", "empty", ["activity.browse", "activity.loan.retry"])]
         for appearance in [XCUIDevice.Appearance.light, .dark] {
             XCUIDevice.shared.appearance = appearance
