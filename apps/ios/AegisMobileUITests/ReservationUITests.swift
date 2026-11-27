@@ -237,7 +237,149 @@ final class ReservationUITests: XCTestCase {
         }
     }
 
+    /// « Mon activité » at the largest text size (#222): the reservation,
+    /// the overdue loan and the empty state, in light and dark. Each state is
+    /// audited at the top, then again with its last control scrolled into
+    /// view. Each listed control, down to the last one of the state
+    /// (« Actualiser », or the loan notice's retry below « Voir les
+    /// équipements »), is scrolled into view and measured on its own pixels.
+    @MainActor
+    func testActivityAtTheLargestTextSize() throws {
+        let largest = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        // Drawn with a border: « Voir les équipements » (SecondaryButtonStyle),
+        // « Actualiser » and the notice's retry (CompactButtonStyle).
+        let bordered: Set = ["activity.browse", "activity.refresh", "activity.loan.refresh", "activity.loan.retry"]
+        // Top to bottom; the last one ends each state's content.
+        let states = [("activity-reserved", "reserved", ["activity.cancel", "activity.refresh"]),
+                      ("activity-loan", "loan", ["activity.return", "activity.loan.refresh"]),
+                      ("reservation", "empty", ["activity.browse", "activity.loan.retry"])]
+        for appearance in [XCUIDevice.Appearance.light, .dark] {
+            XCUIDevice.shared.appearance = appearance
+            let theme = appearance == .dark ? "dark" : "light"
+            for (scenario, name, controls) in states {
+                let app = launch(.french, scenario: scenario, tab: "activity", arguments: largest)
+                XCTAssertTrue(element(app, controls[0]).waitForExistence(timeout: 30), "\(name): \(controls[0]) missing")
+                attach(app, "fr-activity-\(name)-ax5-\(theme)")
+                try audit(app, atLargestSize: true)
+
+                // Each control is measured on its own pixels, before the
+                // audit scrolls the screen: at the end of the content it may
+                // sit under the audit's fade allowance, where the audit
+                // cannot judge it.
+                for control in controls {
+                    let target = element(app, control)
+                    XCTAssertTrue(target.exists, "\(name): \(control) missing")
+                    XCTAssertTrue(scrollIntoView(target, in: app), "\(name): \(control) never became reachable")
+                    assertRenderedContrast(of: target, in: app, bordered: bordered.contains(control))
+                }
+                // Captured before the audit, so a failing audit keeps its screen.
+                attach(app, "fr-activity-\(name)-ax5-\(theme)-end")
+                try audit(app, atLargestSize: true)
+                app.terminate()
+            }
+        }
+    }
+
     // MARK: Helpers
+
+    /// Swipes up until `target` is hittable and clear of the floating tab
+    /// bar's fade, so the audit and the pixels see all of it. At the end of
+    /// the content nothing scrolls under the bar and no fade is drawn: there
+    /// a control that a swipe no longer moves is reached once it sits wholly
+    /// above the bar (iOS 26.5, CI of #222 and #231).
+    @MainActor
+    private func scrollIntoView(_ target: XCUIElement, in app: XCUIApplication) -> Bool {
+        var before = CGRect.null
+        for _ in 0..<12 {
+            if target.isHittable, visibleArea(app).contains(target.frame) { return app.waitForStillScreen() }
+            if target.isHittable, target.frame == before, aboveTabBar(app).contains(target.frame) {
+                return app.waitForStillScreen()
+            }
+            before = target.frame
+            app.swipeUp(velocity: .slow)
+            _ = app.waitForStillScreen()
+        }
+        return target.isHittable && visibleArea(app).contains(target.frame) && app.waitForStillScreen()
+    }
+
+    /// The window above the floating tab bar itself.
+    @MainActor
+    private func aboveTabBar(_ app: XCUIApplication) -> CGRect {
+        var area = app.windows.firstMatch.frame
+        let tabBar = app.tabBars.firstMatch
+        if tabBar.exists, tabBar.isHittable { area.size.height = max(0, tabBar.frame.minY - area.minY) }
+        return area
+    }
+
+    /// The window above the floating tab bar and its scroll-edge fade.
+    @MainActor
+    private func visibleArea(_ app: XCUIApplication) -> CGRect {
+        var visible = app.windows.firstMatch.frame
+        let tabBar = app.tabBars.firstMatch
+        if tabBar.exists, tabBar.isHittable {
+            visible.size.height = max(0, tabBar.frame.minY - fadeHeight - visible.minY)
+        }
+        return visible
+    }
+
+    /// The control's weakest ink against its own fill, read from the screen
+    /// (#222): kept as evidence, and failed below 4.5:1. A bordered control
+    /// is measured twice (2026-11-27): its text on a crop inside the border,
+    /// at 4.5:1, and its border on a strip across its bottom edge, against
+    /// the fill inside and the background outside, at 3:1, the WCAG 1.4.11
+    /// minimum for a component's boundary (`BoundaryContrast`).
+    @MainActor
+    private func assertRenderedContrast(of target: XCUIElement, in app: XCUIApplication, bordered: Bool = false,
+                                        file: StaticString = #filePath, line: UInt = #line) {
+        let window = app.windows.firstMatch.frame
+        let shot = app.screenshot()
+        let frame = target.frame
+        let conditions = measureConditions(in: app, window: window, shot: shot)
+        func keep(_ image: UIImage, _ name: String, _ text: String) {
+            let evidence = XCTAttachment(image: image)
+            evidence.name = name
+            evidence.lifetime = .keepAlways
+            add(evidence)
+            let measure = XCTAttachment(string: text)
+            measure.name = "\(name)-ratio"
+            measure.lifetime = .keepAlways
+            add(measure)
+        }
+        // A capsule's ends curve within its radius: on the middle 40 % of its
+        // height the 1 pt border stays within 6 pt of each side.
+        let area = bordered
+            ? CGRect(x: frame.minX + 6, y: frame.minY + frame.height * 0.3,
+                     width: max(0, frame.width - 12), height: frame.height * 0.4)
+            : frame
+        let name = "rendered-contrast-\(target.identifier)" + (bordered ? "-text" : "")
+        let image = Self.crop(shot, to: area, window: window)
+        if let ratio = RenderedContrast.ratio(of: image) {
+            keep(image, name, "\(target.identifier)" + (bordered ? " text" : "") + " at \(area), " + conditions
+                 + String(format: ": rendered %.2f:1, threshold 4.5:1", ratio))
+            XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(name) contrast", file: file, line: line)
+        } else {
+            keep(image, name, "\(target.identifier) at \(area): no ink")
+            XCTFail("No ink measured in \(name) at \(area)", file: file, line: line)
+        }
+        guard bordered else { return }
+
+        let strip = CGRect(x: frame.midX - 4, y: frame.maxY - 4, width: 8, height: 8)
+        let edge = Self.crop(shot, to: strip, window: window)
+        let boundary = "rendered-contrast-\(target.identifier)-boundary"
+        guard let border = BoundaryContrast.measure(edge) else {
+            keep(edge, boundary, "\(target.identifier) boundary at \(strip): no border found")
+            return XCTFail("No border found across \(strip) for \(target.identifier)", file: file, line: line)
+        }
+        keep(edge, boundary, "\(target.identifier) boundary at \(strip), " + conditions
+             + String(format: ": border #%06X, %.2f:1 inside, %.2f:1 outside, threshold 3.0:1",
+                      Self.rgb(border.border), border.inside, border.outside))
+        XCTAssertGreaterThanOrEqual(border.weakest, 3.0, "\(boundary) contrast", file: file, line: line)
+    }
+
+    /// A colour read little-endian, red in the low byte, as written #RRGGBB.
+    private static func rgb(_ pixel: UInt32) -> UInt32 {
+        ((pixel & 0xFF) << 16) | (pixel & 0xFF00) | ((pixel >> 16) & 0xFF)
+    }
 
     /// The loan read failure, found by its words so the order is checked
     /// wherever the notice sits.
@@ -318,8 +460,8 @@ final class ReservationUITests: XCTestCase {
     ///   on the pixels and fails below 4.5:1 (#211).
     /// - the non-wrapping system large title at accessibility sizes;
     /// - Dynamic Type of navigation bar items, which the system caps;
-    /// - before iOS 26, "nearly passed" contrast sampled in the status chips,
-    ///   whose ratios `StatusContrastTests` computes from the asset catalogue.
+    /// - the contrast of an entirely visible element, the status chips
+    ///   included, when its render measures 4.5:1 or more on the still screen.
     /// `atLargestSize` skips the Dynamic Type check: the text cannot grow.
     @MainActor
     private func audit(_ app: XCUIApplication, atLargestSize: Bool = false) throws {
@@ -341,9 +483,6 @@ final class ReservationUITests: XCTestCase {
         if !confirmBar.isNull {
             content.size.height = max(0, min(visible.maxY, confirmBar.minY) - visible.minY)
         }
-        let chipFrames = app.descendants(matching: .any).matching(identifier: "asset.status")
-            .allElementsBoundByIndex.map(\.frame)
-        let sampledChips = ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26
         let bar = app.navigationBars.firstMatch
         let largeTitle = bar.exists ? bar.frame : .null
         let bars = app.navigationBars.allElementsBoundByIndex.map(\.frame)
@@ -356,9 +495,6 @@ final class ReservationUITests: XCTestCase {
             if let target = issue.element {
                 let center = CGPoint(x: target.frame.midX, y: target.frame.midY)
                 let area = confirmBar.contains(target.frame) ? visible : content
-                let summary = issue.compactDescription
-                let nearlyInChip = sampledChips && summary.contains("nearly")
-                    && chipFrames.contains { $0.contains(center) }
                 switch issue.auditType {
                 case .textClipped:
                     tolerated = largeTitle.contains(center)
@@ -367,11 +503,16 @@ final class ReservationUITests: XCTestCase {
                     // shows them in the Large Content Viewer instead.
                     tolerated = !area.contains(target.frame) || bars.contains { $0.contains(center) }
                 case .contrast:
-                    if nearlyInChip {
-                        tolerated = true
+                    let partly = self.visiblePartContrast(of: target, visible: area, window: window, in: app)
+                    // The audit scrolls the screen while it runs (#222): an
+                    // entirely visible element, the status chips included
+                    // (2026-11-26), is measured on the still screen, never
+                    // trusted nor excluded.
+                    if let judged = findings.tolerates(partly, note: &note) {
+                        tolerated = judged
                     } else {
-                        let partly = self.visiblePartContrast(of: target, visible: area, window: window, in: app)
-                        tolerated = findings.tolerates(partly, note: &note) ?? false
+                        let entire = self.entireContrast(of: target, window: window, in: app)
+                        tolerated = findings.tolerates(entire, note: &note) ?? false
                     }
                 default:
                     tolerated = false

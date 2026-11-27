@@ -28,6 +28,7 @@ struct CatalogScreen: View {
             .navigationTitle("Équipements")
             .searchable(text: $model.searchText, placement: .navigationBarDrawer(displayMode: .always),
                         prompt: Text("Code ou modèle"))
+            .background(SearchPromptColour(prompt: String(localized: "Code ou modèle")))
             .onSubmit(of: .search) { model.submitSearch() }
             .onChange(of: model.searchText) { model.searchTextChanged() }
             .refreshable {
