@@ -1,8 +1,8 @@
 /*
  * Vue d'ensemble (#159): five independent blocks, in the order of sections.md §5.1, as docs/design/manager-console/
  * approved on 11 November 2026 shows them. Identity v3: opaque surfaces and hairlines, no chart, no gradient.
- * The grid is the design's: 12 columns, anomalies 7 and loans 5 from 1380 px, the locker across, then operations and
- * reservations side by side from 1024 px; one column below.
+ * The grid follows contrat-web-manager §2.4: from 1280 px anomalies 7 and loans 5, the locker across, then operations
+ * and reservations side by side; one column below. The summary band sits above, in the same scrolling region.
  */
 .ag-ov__scroll { flex: 1; min-height: 0; overflow: auto; padding: 4px; }
 .ag-ov__scroll:focus-visible { outline-offset: -2px; }
@@ -27,6 +27,59 @@
 .ag-ov__foot .ag-link { font-size: 0.875rem; }
 .ag-ov__shown { font-variant-numeric: tabular-nums; }
 
+/* Summary band (§2.1): five linked tiles. Not sticky: it scrolls with the modules. */
+.ag-band-wrap { display: grid; gap: 12px; margin-bottom: 20px; }
+.ag-band { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ag-band__item { min-width: 0; }
+.ag-band__item:last-child { grid-column: 1 / -1; }
+.ag-tile {
+  --role-fg: var(--ag-text-2); --role-ic: var(--ag-neutral-icon);
+  display: flex; flex-direction: column; gap: 6px; height: 100%; min-height: 120px; padding: 14px 16px;
+  overflow: visible; color: var(--ag-text); text-decoration: none;
+}
+a.ag-tile:hover { background: var(--ag-field); }
+.ag-tile--anomaly { --role-fg: var(--ag-anomaly-fg); --role-ic: var(--ag-anomaly-icon); }
+.ag-tile--unknown { --role-fg: var(--ag-unknown-fg); --role-ic: var(--ag-unknown-icon); }
+.ag-tile--ready { --role-fg: var(--ag-ready-fg); --role-ic: var(--ag-ready-icon); }
+.ag-tile--blocked { --role-fg: var(--ag-blocked-fg); --role-ic: var(--ag-blocked-icon); }
+.ag-tile--progress { --role-fg: var(--ag-progress-fg); --role-ic: var(--ag-progress-icon); }
+.ag-tile--info { --role-fg: var(--ag-info-fg); --role-ic: var(--ag-info-icon); }
+.ag-tile__over { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-size: 0.75rem; line-height: 1.3; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--role-fg); }
+.ag-tile__dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--role-ic); }
+.ag-tile__value {
+  font-size: var(--ag-type-title-xl-size); line-height: var(--ag-type-title-xl-lh); font-weight: var(--ag-type-title-xl-weight);
+  letter-spacing: var(--ag-type-title-xl-track); font-variant-numeric: tabular-nums; color: var(--ag-text); overflow-wrap: break-word;
+}
+.ag-tile__detail { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; font-size: 0.875rem; line-height: 1.35; color: var(--ag-text-2); overflow-wrap: break-word; }
+.ag-tile__detail .ag-icon { width: 16px; height: 16px; }
+.ag-tile__detail--strong { font-weight: 600; color: var(--ag-text); }
+.ag-tile__read { margin-top: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 0.75rem; line-height: 1.3; color: var(--ag-text-2); }
+.ag-tile__skel { display: block; padding: 6px 0; }
+.ag-tile__code { overflow-wrap: normal; word-break: normal; white-space: nowrap; }
+.ag-band__read { display: none; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; font-size: var(--ag-type-small-size); color: var(--ag-text-2); }
+.ag-ov__stalechip { display: none; }
+.ag-band__line { display: flex; }
+.ag-band__line .ag-chip { white-space: normal; }
+
+@media (min-width: 1024px) {
+  .ag-band { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .ag-band__item { grid-column: span 2; }
+  .ag-band__item:nth-child(n + 4), .ag-band__item:last-child { grid-column: span 3; }
+}
+@media (min-width: 1280px) {
+  .ag-band { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .ag-band__item, .ag-band__item:nth-child(n + 4), .ag-band__item:last-child { grid-column: auto; }
+}
+@media (forced-colors: active) {
+  .ag-tile__dot { forced-color-adjust: none; border: 1px solid CanvasText; }
+}
+
+/* Rows with an action beside the link (§2.3): the link stays the row, the button sits at its end. */
+.ag-ov__item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.ag-ov__item .ag-ov__row { min-width: 0; }
+.ag-ov__item > .ag-btn { margin-right: 10px; }
+.ag-ov__open { font-size: 0.8125rem; font-weight: 600; color: var(--ag-accent-text); text-decoration: underline; text-underline-offset: 3px; }
+
 .ag-ov__row { display: grid; gap: 4px; padding: 12px 14px; border-radius: var(--ag-r-item); border: 1px solid transparent; color: inherit; text-decoration: none; }
 a.ag-ov__row:hover { background: var(--ag-field); }
 .ag-ov__chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -50,10 +103,9 @@ a.ag-ov__row:hover { background: var(--ag-field); }
 .ag-ov__cells tbody th { font-weight: 600; }
 .ag-ov__cells tbody tr:last-child th, .ag-ov__cells tbody tr:last-child td { border-bottom: 0; }
 
-@media (min-width: 1024px) {
+/* §2.4: the modules sit side by side only from 1280 px; below, each takes the full width. */
+@media (min-width: 1280px) {
   .ag-ov__mod--operations, .ag-ov__mod--reservations { grid-column: span 6; }
-}
-@media (min-width: 1380px) {
   .ag-ov__mod--anomalies { grid-column: span 7; }
   .ag-ov__mod--loans { grid-column: span 5; }
 }
@@ -67,19 +119,58 @@ a.ag-ov__row:hover { background: var(--ag-field); }
   .ag-ov__foot { padding: 8px 16px 14px; }
 }
 @media (max-width: 559px) {
-  /* Cells of the locker: one block per cell, a label before each value (as the table of Casiers does). */
-  .ag-ov__cells, .ag-ov__cells tbody, .ag-ov__cells tr, .ag-ov__cells td, .ag-ov__cells th { display: block; }
+  /* §8.1: one line per cell, « A1 · Ouverte · Déverrouillée · MM-001 », wrapping allowed; the column headers stay for
+     assistive technologies. */
+  .ag-ov__cells, .ag-ov__cells tbody, .ag-ov__cells tr { display: block; }
   .ag-ov__cells thead { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .ag-ov__cells tbody tr { padding: 10px 0; border-bottom: 1px solid var(--ag-separator); }
+  .ag-ov__cells tbody tr { padding: 8px 0; border-bottom: 1px solid var(--ag-separator); }
   .ag-ov__cells tbody tr:last-child { border-bottom: 0; }
-  .ag-ov__cells th, .ag-ov__cells td { border-bottom: 0; padding: 0; }
-  .ag-ov__cells tbody th { margin-bottom: 4px; }
-  .ag-ov__cells td { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; padding: 2px 0; }
-  .ag-ov__cells td::before { content: attr(data-label); color: var(--ag-text-2); font-size: var(--ag-type-caption-size); }
+  .ag-ov__cells th, .ag-ov__cells td { display: inline; border-bottom: 0; padding: 0; overflow-wrap: break-word; }
+  .ag-ov__cells td::before { content: ' · '; color: var(--ag-text-2); }
+
+  /* §8.1: the band is compact; one detail line, one read line for the whole band, one stale notice under it. */
+  .ag-band-wrap { gap: 8px; margin-bottom: 16px; }
+  .ag-band { gap: 8px; }
+  .ag-tile { min-height: 88px; gap: 2px; padding: 10px 12px; }
+  .ag-tile__value { font-size: 1.5rem; line-height: 1.25; }
+  .ag-tile__read { display: none; }
+  /* §8.6: the locker detail holds one line; a tile too narrow for « Ouvert · fermeture 17 h 00 » drops « Ouvert · ». */
+  .ag-tile { container-type: inline-size; }
+  .ag-tile__detail:has(.ag-tile__lead) { white-space: nowrap; }
+  .ag-ov__stale { display: none; }
+  .ag-ov__stalechip { display: inline-flex; }
+  .ag-band__read { display: flex; }
+
+  /* §8.6: the two chips on one line and « Reconnaître » under the text, so the title keeps the row's width. */
+  .ag-ov__item { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .ag-ov__item > .ag-btn { justify-self: start; margin: -8px 0 8px 14px; }
+  .ag-ov__item .ag-ov__chips { flex-wrap: nowrap; }
+  /* §8.6 (Design, third QA review): an anomaly's detection time sits right of the chips, so the place line holds one
+     line; when the chips leave no room (320 px) it wraps under them, whole. The DOM keeps it after the place. */
+  .ag-ov__row:has(.ag-ov__when) { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+  .ag-ov__row:has(.ag-ov__when) > .ag-ov__chips { order: 1; }
+  .ag-ov__row:has(.ag-ov__when) > .ag-ov__main { order: 3; flex-basis: 100%; }
+  .ag-ov__row:has(.ag-ov__when) > .ag-ov__meta { display: contents; }
+  .ag-ov__where { order: 4; flex-basis: 100%; }
+  .ag-ov__when { order: 2; margin-left: auto; }
+  .ag-ov__when-lead { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* §8.6: the « Non actualisé » chip of a stale module wraps under its title; the wrapped line adds no gap. */
+  .ag-ov__head, .ag-band__read { row-gap: 0; }
+  .ag-ov__lkline { row-gap: 2px; }
 }
 @media (max-width: 479px) {
   .ag-ov__row { padding: 12px 10px; }
+  .ag-ov__item > .ag-btn { margin-left: 10px; }
+}
+@media (max-width: 359px) {
+  /* §8.6: 320 px tiles keep « fermeture 17 h 00 » on one line. */
+  .ag-tile { padding-inline: 10px; }
 }
 @media (forced-colors: active) {
   .ag-ov__mod--primary { border-color: CanvasText; }
+}
+@container (max-width: 210px) {
+  .ag-tile__lead { display: none; }
+  /* A window closing on another day (« fermeture jeu. 17 h 00 ») may not fit even reduced: it wraps, never overflows. */
+  .ag-tile__detail:has(.ag-tile__lead) { white-space: normal; }
 }

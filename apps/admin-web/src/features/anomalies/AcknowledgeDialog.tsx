@@ -10,6 +10,7 @@ import { anomalyTypeLabel, statusText, whereLine } from './anomalyPresentation'
 import type { AnomalyDetail, AnomalyView } from './contract'
 import { countGraphemes, isBlank, NOTE_MAX } from './noteLength'
 import { useAcknowledgeAnomaly } from './useAnomalyMutations'
+import { useLabelIndex } from '../labels/useLabelIndex'
 
 export type RefusalReason = 'alreadyResolved' | 'notAcknowledgeable'
 
@@ -48,6 +49,7 @@ type Phase = 'idle' | 'saving' | 'rereading'
  */
 export function AcknowledgeDialog({ open, anomaly, onClose, onAcknowledged, onRefused }: AcknowledgeDialogProps) {
   const i18n = useI18n()
+  const labels = useLabelIndex()
   const t = i18n.m.anomalies
   const d = t.dialog
   const { acknowledge, rereadAfterRefusal } = useAcknowledgeAnomaly()
@@ -143,7 +145,7 @@ export function AcknowledgeDialog({ open, anomaly, onClose, onAcknowledged, onRe
       description={
         <>
           <p>
-            {anomalyTypeLabel(anomaly, i18n)} · {whereLine(anomaly, i18n)}
+            {anomalyTypeLabel(anomaly, i18n)} · {whereLine(anomaly, i18n, labels)}
           </p>
           <p>{d.description}</p>
           <p>{d.returnEffect}</p>

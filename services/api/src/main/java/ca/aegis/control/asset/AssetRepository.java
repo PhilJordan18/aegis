@@ -6,6 +6,7 @@ import static ca.aegis.control.asset.AssetModelRepository.utc;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +65,14 @@ class AssetRepository {
 
     Optional<AssetRecord> find(UUID id) {
         return jdbc.sql(SELECT_ASSET + "WHERE a.id = :id").param("id", id).query(AssetRepository::map).optional();
+    }
+
+    List<AssetRecord> findAll(Collection<UUID> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql(SELECT_ASSET + "WHERE a.id IN (:ids)").param("ids", ids.stream().distinct().toList())
+                .query(AssetRepository::map).list();
     }
 
     /** Serializes edits and archival of one asset; the model row is not locked here. */

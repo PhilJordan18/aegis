@@ -1,0 +1,9 @@
+**
+!infra/
+!infra/mqtt/
+!infra/mqtt/acl
+!infra/mqtt/railway/
+!infra/mqtt/railway/Dockerfile
+!infra/mqtt/railway/entrypoint.sh
+!infra/mqtt/railway/install-recipe-overlay.sh
+!infra/mqtt/railway/mosquitto.conf

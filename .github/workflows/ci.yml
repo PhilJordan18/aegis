@@ -229,11 +229,12 @@ jobs:
     # Xcode 26.3 (17C529) is pinned explicitly; this hosted configuration is
     # recorded as distinct from the development Mac (#67).
     runs-on: macos-26
-    # 45 min (#67): with about 312 standalone tests the recipe step alone took
-    # 26m35s on #198 f65f37b and the job 30m08s, so 30 min cancelled complete,
-    # green runs. Capacity only: tests, reruns and audit timeouts are unchanged. If 45
-    # min expires, split the recipe from measured phase timings, not raise it.
-    timeout-minutes: 45
+    # 75 min (#67, Philippe, 27 November): 45 min cancelled the first attempt of
+    # #253, #255, #256 and #257 (about 46-49 min, simulator load about 200, no test
+    # failure in their partial bundles) while #254 passed in 43m48s. Capacity only:
+    # tests, the single bounded retry and audit timeouts are unchanged. If 75 min
+    # expires, split the recipe from measured phase timings, not raise it again.
+    timeout-minutes: 75
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     defaults:

@@ -7,3 +7,4 @@
   font-size: var(--ag-type-title-xl-size); line-height: var(--ag-type-title-xl-lh);
   font-weight: var(--ag-type-title-xl-weight); letter-spacing: var(--ag-type-title-xl-track);
 }
+.ag-page__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; }

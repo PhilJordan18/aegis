@@ -11,6 +11,8 @@ export interface AnomalyFilters {
   readonly status: AnomalyStatus | null
   readonly severity: AnomalySeverity | null
   readonly type: AnomalyType | null
+  /** `?equipement=<uuid>` (contract §1.3), the parameter Réservations et prêts already uses. */
+  readonly assetId: string | null
 }
 
 export interface AnomalyLocation {
@@ -40,12 +42,14 @@ export function readAnomalyLocation(search: string): AnomalyLocation {
   const statusParam = params.get('statut')
   const status = statusParam === ALL ? null : (invert(STATUS_PARAM, statusParam) ?? (anomalyId === null ? 'OPEN' : null))
   const type = params.get('type')
+  const asset = params.get('equipement')
   const page = Number.parseInt(params.get('page') ?? '', 10)
   return {
     filters: {
       status,
       severity: invert(SEVERITY_PARAM, params.get('gravite')),
       type: (ANOMALY_TYPES as readonly string[]).includes(type ?? '') ? (type as AnomalyType) : null,
+      assetId: asset !== null && UUID.test(asset) ? asset.toLowerCase() : null,
     },
     page: Number.isInteger(page) && page >= 1 && page - 1 <= MAX_PAGE_INDEX ? page - 1 : 0,
     anomalyId,
@@ -59,6 +63,7 @@ export function anomaliesHref({ filters, page, anomalyId }: AnomalyLocation): st
   if (filters.status !== defaultStatus) params.set('statut', filters.status === null ? ALL : STATUS_PARAM[filters.status])
   if (filters.severity !== null) params.set('gravite', SEVERITY_PARAM[filters.severity])
   if (filters.type !== null) params.set('type', filters.type)
+  if (filters.assetId !== null) params.set('equipement', filters.assetId)
   if (page > 0) params.set('page', String(page + 1))
   if (anomalyId !== null) params.set('anomalie', anomalyId)
   const query = params.toString()
@@ -67,7 +72,7 @@ export function anomaliesHref({ filters, page, anomalyId }: AnomalyLocation): st
 
 /** « Ouvertes » is a filter: an empty list under it never says that there is no record. */
 export function hasActiveFilter(filters: AnomalyFilters): boolean {
-  return filters.status !== null || filters.severity !== null || filters.type !== null
+  return filters.status !== null || filters.severity !== null || filters.type !== null || filters.assetId !== null
 }
 
-export const NO_FILTERS: AnomalyFilters = { status: null, severity: null, type: null }
+export const NO_FILTERS: AnomalyFilters = { status: null, severity: null, type: null, assetId: null }

@@ -104,6 +104,33 @@ class CredentialLoggingTests extends ApiIntegrationTest {
                 restored.substring(restored.lastIndexOf('.') + 1), rotated, oldHash, newHash);
     }
 
+    @Test
+    void selfServicePasswordBodiesAndRefusalsStayRedactedAtTrace(CapturedOutput output) throws Exception {
+        var owner = accounts.technician();
+        String token = accessToken(owner);
+        String replacement = "new-" + UUID.randomUUID();
+        String wrong = "wrong-" + UUID.randomUUID();
+        String oversized = "é".repeat(37);
+        String shortPassword = "12345678901";
+        for (String value : List.of(oversized, shortPassword)) {
+            mvc.perform(post("/api/v1/auth/password").header(AUTHORIZATION, bearer(token))
+                            .contentType(MediaType.APPLICATION_JSON).content(jsonMapper.writeValueAsString(
+                                    Map.of("currentPassword", owner.password(), "newPassword", value))))
+                    .andExpect(status().isBadRequest());
+        }
+        mvc.perform(post("/api/v1/auth/password").header(AUTHORIZATION, bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content(jsonMapper.writeValueAsString(
+                                Map.of("currentPassword", wrong, "newPassword", replacement))))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/auth/password").header(AUTHORIZATION, bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content(jsonMapper.writeValueAsString(
+                                Map.of("currentPassword", owner.password(), "newPassword", replacement))))
+                .andExpect(status().isNoContent());
+        assertThat(output.getAll()).contains("ChangePasswordRequest[<redacted>]")
+                .doesNotContain(owner.password(), replacement, wrong, oversized, shortPassword, token,
+                        passwordHash(owner.id()));
+    }
+
     private String passwordHash(UUID account) {
         return jdbc.sql("SELECT password_hash FROM aegis.users WHERE id = :id").param("id", account)
                 .query(String.class).single();

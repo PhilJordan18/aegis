@@ -1,4 +1,6 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useRef } from 'react'
+import { queryKeys } from '../api/queryKeys'
 import { Link } from '../app/Link'
 import { PageHeading } from '../app/PageHeading'
 import { useLocation } from '../app/router'
@@ -14,6 +16,12 @@ import { useAssetList } from '../features/catalog/useCatalogQueries'
 import { lockerIdFromSearch, lockerIdsFromPlacements } from '../features/lockers/knownLockers'
 import { LockerStatusPanel } from '../features/lockers/LockerStatusPanel'
 import { useScrollable } from '../features/lockers/useScrollable'
+import { LAB_TIME_ZONE } from '../features/catalog/assetPresentation'
+import { useLockerStatuses } from '../features/overview/useOverviewQueries'
+import { HelpButton, HelpPanel } from '../features/pageTools/PageHelp'
+import { RefreshControl } from '../features/pageTools/RefreshControl'
+import { refetchAll } from '../features/pageTools/refetchAll'
+import { usePageHelp } from '../features/pageTools/usePageHelp'
 import { useI18n } from '../i18n/useI18n'
 import '../app/page.css'
 import '../features/catalog/equipment.css'
@@ -47,6 +55,19 @@ export function LockersPage({ sessionProfile }: { readonly sessionProfile: UserP
     void catalog.refetch()
   }
 
+  const statuses = useLockerStatuses(lockerIds)
+  const client = useQueryClient()
+  const help = usePageHelp('lockers')
+  const read = statuses.filter((status) => status.data !== undefined)
+  // The oldest locker read shown: the page is as fresh as its least fresh panel.
+  const readAt = read.length === 0 || read.length < statuses.length ? null : Math.min(...read.map((status) => status.dataUpdatedAt))
+  const refresh = () =>
+    refetchAll(client, [
+      { queryKey: [...queryKeys.lockers.all, 'status'], type: 'active' },
+      { queryKey: queryKeys.custody.all, type: 'active' },
+      ...(named === null ? [{ queryKey: queryKeys.catalog.all, type: 'active' as const }] : []),
+    ])
+
   const signOut = useSignOut()
 
   return (
@@ -56,7 +77,15 @@ export function LockersPage({ sessionProfile }: { readonly sessionProfile: UserP
           <div className="ag-page__titles">
             <PageHeading className="ag-page__title">{m.lockers.heading}</PageHeading>
           </div>
+          <div className="ag-page__actions">
+            <HelpButton help={help} />
+            <RefreshControl onRefresh={refresh} readAt={readAt} stale={statuses.some((status) => status.isRefetchError)} />
+          </div>
         </header>
+
+        <HelpPanel help={help}>
+          <p>{m.pageTools.labHours({ zone: LAB_TIME_ZONE })}</p>
+        </HelpPanel>
 
         {searching && (
           <section className="ag-panel ag-lk" aria-label={m.lockers.statusLabel} aria-busy="true">

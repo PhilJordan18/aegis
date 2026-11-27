@@ -119,3 +119,7 @@ a.ag-nav__item:hover { background: var(--ag-surface-selected); }
 /* Sign-out not confirmed by the server (ADR-016): a persistent error above the page, with its retry inside. */
 .ag-shell__notice { padding: 0 4px 16px; }
 .ag-shell__notice .ag-alert__body .ag-btn { margin-top: 10px; }
+.ag-nav__badge { margin-inline-start: auto; display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; font-size: var(--ag-type-small-size); font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; }
+.ag-nav__badge--anomaly { background: var(--ag-anomaly-bg); color: var(--ag-anomaly-fg); }
+.ag-nav__badge--unknown { background: var(--ag-unknown-bg); color: var(--ag-unknown-fg); }
+.ag-nav__badge--dot { min-width: 8px; width: 8px; height: 8px; padding: 0; background: var(--ag-unknown-fg); }
