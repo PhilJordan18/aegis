@@ -186,15 +186,19 @@ final class CatalogUITests: XCTestCase {
             XCTAssertTrue(card(app, "MM-001").waitForExistence(timeout: 10))
             // While the search is active, iOS 26 draws the field as a glass
             // gradient whose shades `RenderedContrast` takes for inks
-            // (1.01:1): that state is kept as evidence, not measured here
+            // (1.01:1): there that state is kept as evidence, not measured
             // (measured by hand on its pixels, 2026-11-27; the measuring
-            // tool's rework is a separate task). The prompt is measured once
-            // the search is closed.
-            XCTAssertTrue(app.waitForStillScreen())
-            let active = XCTAttachment(image: Self.crop(app.screenshot(), to: search.frame, window: window))
-            active.name = "search-active-\(theme)-not-measured-glass-gradient"
-            active.lifetime = .keepAlways
-            add(active)
+            // tool's rework is a separate task). Before iOS 26 it is measured.
+            // The prompt is measured again once the search is closed.
+            if ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26 {
+                measureSearch("while the search is active")
+            } else {
+                XCTAssertTrue(app.waitForStillScreen())
+                let active = XCTAttachment(image: Self.crop(app.screenshot(), to: search.frame, window: window))
+                active.name = "search-active-\(theme)-not-measured-glass-gradient"
+                active.lifetime = .keepAlways
+                add(active)
+            }
             let close = app.buttons.matching(NSPredicate(format: "label IN %@", ["Annuler", "Fermer", "Cancel", "Close"])).firstMatch
             XCTAssertTrue(close.exists, "\(theme): no button closes the search")
             close.tap()
