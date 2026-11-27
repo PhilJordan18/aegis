@@ -4,7 +4,7 @@
  * The grid follows contrat-web-manager §2.4: from 1280 px anomalies 7 and loans 5, the locker across, then operations
  * and reservations side by side; one column below. The summary band sits above, in the same scrolling region.
  */
-.ag-ov__scroll { flex: 1; min-height: 0; overflow: auto; padding: 4px; }
+.ag-ov__scroll { position: relative; flex: 1; min-height: 0; overflow: auto; padding: 4px; }
 .ag-ov__scroll:focus-visible { outline-offset: -2px; }
 .ag-ov { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 20px; align-items: stretch; }
 .ag-ov__banners { display: grid; gap: 10px; margin: 0 4px 12px; }
