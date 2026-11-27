@@ -242,7 +242,8 @@ final class ReservationUITests: XCTestCase {
     /// « Mon activité » at the largest text size (#222): the reservation,
     /// the overdue loan and the empty state, in light and dark. Each state is
     /// audited at the top, then again with its last control scrolled into
-    /// view. « Voir les équipements » is also measured on its own pixels.
+    /// view. That last control, « Voir les équipements » included, is also
+    /// measured on its own pixels.
     @MainActor
     func testActivityAtTheLargestTextSize() throws {
         let largest = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
@@ -262,8 +263,12 @@ final class ReservationUITests: XCTestCase {
                 XCTAssertTrue(scrollIntoView(target, in: app), "\(name): \(last) never became reachable")
                 // Captured before the audit, so a failing audit keeps its screen.
                 attach(app, "fr-activity-\(name)-ax5-\(theme)-end")
+                // The last control is measured on its own pixels in every
+                // state, before the audit scrolls the screen: at the end of
+                // the content it may sit under the audit's fade allowance,
+                // where the audit cannot judge it.
+                assertRenderedContrast(of: target, in: app)
                 try audit(app, atLargestSize: true)
-                if name == "empty" { assertRenderedContrast(of: target, in: app) }
                 app.terminate()
             }
         }
@@ -321,14 +326,32 @@ final class ReservationUITests: XCTestCase {
     // MARK: Helpers
 
     /// Swipes up until `target` is hittable and clear of the floating tab
-    /// bar's fade, so the audit and the pixels see all of it.
+    /// bar's fade, so the audit and the pixels see all of it. At the end of
+    /// the content nothing scrolls under the bar and no fade is drawn: there
+    /// a control that a swipe no longer moves is reached once it sits wholly
+    /// above the bar (iOS 26.5, CI of #222 and #231).
     @MainActor
     private func scrollIntoView(_ target: XCUIElement, in app: XCUIApplication) -> Bool {
+        var before = CGRect.null
         for _ in 0..<12 {
             if target.isHittable, visibleArea(app).contains(target.frame) { return app.waitForStillScreen() }
+            if target.isHittable, target.frame == before, aboveTabBar(app).contains(target.frame) {
+                return app.waitForStillScreen()
+            }
+            before = target.frame
             app.swipeUp(velocity: .slow)
+            _ = app.waitForStillScreen()
         }
         return target.isHittable && visibleArea(app).contains(target.frame) && app.waitForStillScreen()
+    }
+
+    /// The window above the floating tab bar itself.
+    @MainActor
+    private func aboveTabBar(_ app: XCUIApplication) -> CGRect {
+        var area = app.windows.firstMatch.frame
+        let tabBar = app.tabBars.firstMatch
+        if tabBar.exists, tabBar.isHittable { area.size.height = max(0, tabBar.frame.minY - area.minY) }
+        return area
     }
 
     /// The window above the floating tab bar and its scroll-edge fade.
@@ -348,7 +371,8 @@ final class ReservationUITests: XCTestCase {
     private func assertRenderedContrast(of target: XCUIElement, in app: XCUIApplication,
                                         file: StaticString = #filePath, line: UInt = #line) {
         let window = app.windows.firstMatch.frame
-        let image = Self.crop(app.screenshot(), to: target.frame, window: window)
+        let shot = app.screenshot()
+        let image = Self.crop(shot, to: target.frame, window: window)
         let evidence = XCTAttachment(image: image)
         evidence.name = "rendered-contrast-\(target.identifier)"
         evidence.lifetime = .keepAlways
@@ -356,8 +380,9 @@ final class ReservationUITests: XCTestCase {
         guard let ratio = RenderedContrast.ratio(of: image) else {
             return XCTFail("No ink measured in \(target.identifier) at \(target.frame)", file: file, line: line)
         }
-        let measure = XCTAttachment(string: "\(target.identifier) rendered "
-            + String(format: "%.2f:1", ratio) + " at \(target.frame)")
+        let measure = XCTAttachment(string: "\(target.identifier) at \(target.frame), "
+            + measureConditions(in: app, window: window, shot: shot)
+            + String(format: ": rendered %.2f:1, threshold 4.5:1", ratio))
         measure.name = "rendered-contrast-\(target.identifier)-ratio"
         measure.lifetime = .keepAlways
         add(measure)
@@ -443,8 +468,8 @@ final class ReservationUITests: XCTestCase {
     ///   on the pixels and fails below 4.5:1 (#211).
     /// - the non-wrapping system large title at accessibility sizes;
     /// - Dynamic Type of navigation bar items, which the system caps;
-    /// - before iOS 26, "nearly passed" contrast sampled in the status chips,
-    ///   whose ratios `StatusContrastTests` computes from the asset catalogue.
+    /// - the contrast of an entirely visible element, the status chips
+    ///   included, when its render measures 4.5:1 or more on the still screen.
     /// `atLargestSize` skips the Dynamic Type check: the text cannot grow.
     @MainActor
     private func audit(_ app: XCUIApplication, atLargestSize: Bool = false) throws {
@@ -466,9 +491,6 @@ final class ReservationUITests: XCTestCase {
         if !confirmBar.isNull {
             content.size.height = max(0, min(visible.maxY, confirmBar.minY) - visible.minY)
         }
-        let chipFrames = app.descendants(matching: .any).matching(identifier: "asset.status")
-            .allElementsBoundByIndex.map(\.frame)
-        let sampledChips = ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26
         let bar = app.navigationBars.firstMatch
         let largeTitle = bar.exists ? bar.frame : .null
         let bars = app.navigationBars.allElementsBoundByIndex.map(\.frame)
@@ -481,9 +503,6 @@ final class ReservationUITests: XCTestCase {
             if let target = issue.element {
                 let center = CGPoint(x: target.frame.midX, y: target.frame.midY)
                 let area = confirmBar.contains(target.frame) ? visible : content
-                let summary = issue.compactDescription
-                let nearlyInChip = sampledChips && summary.contains("nearly")
-                    && chipFrames.contains { $0.contains(center) }
                 switch issue.auditType {
                 case .textClipped:
                     tolerated = largeTitle.contains(center)
@@ -492,19 +511,16 @@ final class ReservationUITests: XCTestCase {
                     // shows them in the Large Content Viewer instead.
                     tolerated = !area.contains(target.frame) || bars.contains { $0.contains(center) }
                 case .contrast:
-                    if nearlyInChip {
-                        tolerated = true
+                    let partly = self.visiblePartContrast(of: target, visible: area, window: window, in: app)
+                    // The audit scrolls the screen while it runs (#222): an
+                    // entirely visible element, the status chips included
+                    // (2026-11-26), is measured on the still screen, never
+                    // trusted nor excluded.
+                    if let judged = findings.tolerates(partly, note: &note) {
+                        tolerated = judged
                     } else {
-                        let partly = self.visiblePartContrast(of: target, visible: area, window: window, in: app)
-                        // The audit scrolls the screen while it runs (#222): an
-                        // entirely visible element is measured on the still
-                        // screen, never trusted.
-                        if let judged = findings.tolerates(partly, note: &note) {
-                            tolerated = judged
-                        } else {
-                            let entire = self.entireContrast(of: target, window: window, in: app)
-                            tolerated = findings.tolerates(entire, note: &note) ?? false
-                        }
+                        let entire = self.entireContrast(of: target, window: window, in: app)
+                        tolerated = findings.tolerates(entire, note: &note) ?? false
                     }
                 default:
                     tolerated = false

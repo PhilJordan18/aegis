@@ -99,6 +99,60 @@ final class CatalogUITests: XCTestCase {
 
     /// Twenty cards per page: the second page is read only once the last
     /// card of the first one is scrolled into view, not as soon as it exists.
+    /// The search field and the status chips on screen, measured on their
+    /// render in light and dark (2026-11-26): an automatic exclusion is no
+    /// proof. Each measure keeps its crop, its conditions and its result,
+    /// and fails below 4.5:1, a chip's symbol included. The chips are read
+    /// at the top of the list and again after one swipe, so every tone of
+    /// the scenario is measured.
+    @MainActor
+    func testSearchFieldAndStatusChipsReachContrastOnTheirRender() throws {
+        var below: [String] = []
+        for appearance in [XCUIDevice.Appearance.light, .dark] {
+            XCUIDevice.shared.appearance = appearance
+            let theme = appearance == .dark ? "dark" : "light"
+            let app = launch(.french, scenario: "catalog")
+            XCTAssertTrue(card(app, "MM-001").waitForExistence(timeout: 30))
+            XCTAssertTrue(app.waitForStillScreen(), "The screen kept changing; the measure needs a still screen.")
+            let window = app.windows.firstMatch.frame
+            let search = app.searchFields.firstMatch
+            XCTAssertTrue(search.exists, "\(theme): no search field to measure")
+            // Every measure is taken before any verdict, so that one failure
+            // does not hide the others.
+            var lines: [String] = []
+            func measure(_ target: XCUIElement) {
+                guard case let .measured(passed, line) = entireContrast(of: target, window: window, in: app) else {
+                    return below.append("\(theme): '\(target.label)' was not measured")
+                }
+                lines.append(line)
+                if !passed { below.append("\(theme): \(line)") }
+            }
+            measure(search)
+            var labels = Set<String>()
+            for pass in 0..<2 {
+                if pass == 1 {
+                    app.swipeUp()
+                    XCTAssertTrue(app.waitForStillScreen(), "The screen kept changing after the swipe.")
+                }
+                var visible = window
+                let tabBar = app.tabBars.firstMatch
+                if tabBar.exists { visible.size.height = max(0, tabBar.frame.minY - fadeHeight - window.minY) }
+                let chips = app.descendants(matching: .any).matching(identifier: "asset.status").allElementsBoundByIndex
+                for chip in chips where visible.contains(chip.frame) && !labels.contains(chip.label) {
+                    labels.insert(chip.label)
+                    measure(chip)
+                }
+            }
+            if labels.count < 3 { below.append("\(theme): too few chips measured: \(labels.sorted())") }
+            let record = XCTAttachment(string: lines.joined(separator: "\n"))
+            record.name = "rendered-contrast-search-and-chips-\(theme)"
+            record.lifetime = .keepAlways
+            add(record)
+            app.terminate()
+        }
+        XCTAssertTrue(below.isEmpty, below.joined(separator: "\n"))
+    }
+
     @MainActor
     func testNextPageIsReadWhenTheLastCardIsReached() {
         let app = launch(.french, scenario: "catalog-pages")
@@ -293,7 +347,9 @@ final class CatalogUITests: XCTestCase {
     /// - clipped text in the native single-line search field, and in the
     ///   native filter menu label at the largest size, which wraps in full
     ///   (see the `fr-catalog-ax5-light` capture);
-    /// - the contrast of the system search field placeholder;
+    /// - the contrast of the search field, or of a status chip the sampling
+    ///   reports as nearly passed, when its render measures 4.5:1 or more on
+    ///   the still screen; the measure is kept with its conditions;
     /// - the hit region of the search field's own clear button;
     /// - Dynamic Type of an element only partly visible: cut by the screen
     ///   edge (horizontal filter chips) or under the iOS 26 floating tab bar,
@@ -332,7 +388,8 @@ final class CatalogUITests: XCTestCase {
         // The pixel sampling of the status chips reports "nearly passed" for
         // pairs above 5:1 (Prêt, light: 5.75:1), before iOS 26 and, since the
         // cards are no longer lazy, on iOS 26 too. Their ratios are computed
-        // from the asset catalogue by `StatusContrastTests`.
+        // from the asset catalogue by `StatusContrastTests`; a reported chip
+        // is also measured on its render.
         let chipFrames = app.descendants(matching: .any).matching(identifier: "asset.status")
             .allElementsBoundByIndex.map(\.frame)
         let bar = app.navigationBars.firstMatch
@@ -363,13 +420,19 @@ final class CatalogUITests: XCTestCase {
                 case .dynamicType:
                     tolerated = !visible.contains(target.frame) || chips.contains(center)
                 case .contrast:
-                    // By type as well: after a pull the search field may have
-                    // moved since its frame was read.
-                    if searchFrame.contains(center) || target.elementType == .searchField || nearlyInChip {
-                        tolerated = true
+                    // The search field and the chips are measured on the still
+                    // screen, never excluded (2026-11-26): a passing measure
+                    // qualifies this issue alone. By type as well: after a
+                    // pull the search field may have moved since its frame
+                    // was read.
+                    let partly = self.visiblePartContrast(of: target, visible: visible, window: window, in: app)
+                    if let judged = findings.tolerates(partly, note: &note) {
+                        tolerated = judged
+                    } else if searchFrame.contains(center) || target.elementType == .searchField || nearlyInChip {
+                        let entire = self.entireContrast(of: target, window: window, in: app)
+                        tolerated = findings.tolerates(entire, note: &note) ?? false
                     } else {
-                        let partly = self.visiblePartContrast(of: target, visible: visible, window: window, in: app)
-                        tolerated = findings.tolerates(partly, note: &note) ?? false
+                        tolerated = false
                     }
                 default:
                     tolerated = false

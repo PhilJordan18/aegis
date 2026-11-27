@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 extension AssetStatus.Tone {
     var text: Color {
@@ -23,9 +24,12 @@ extension AssetStatus.Tone {
 
     var icon: Color {
         switch self {
-        case .ready: .readyIcon
+        // Measured on the render, ReadyIcon reached only 4.24:1 and
+        // UnknownIcon 4.15:1 on their fills in light (2026-11-26/27): these
+        // symbols take the text colour.
+        case .ready: .statusReadyText
         case .blocked: .blockedIcon
-        case .unknown: .unknownIcon
+        case .unknown: .statusUnknownText
         case .neutral: .neutralIcon
         // The symbol takes the text colour: 6.1:1 and 6.3:1 on its fill (handoff §9).
         case .mine: .statusMineText
@@ -252,5 +256,48 @@ struct StaleNote: View {
         .background(Color.brandField, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("asset.staleNote")
+    }
+}
+
+/// Draws the search field's prompt in the muted brand text. The system
+/// placeholder measured 3.1:1 on the field in light (2026-11-27), and iOS
+/// ignores a colour given to the SwiftUI prompt, so the prompt is set on the
+/// UIKit field `.searchable` installs on the navigation item. Set again on
+/// every update and once the view is in a window, since SwiftUI may redraw
+/// the prompt.
+struct SearchPromptColour: UIViewRepresentable {
+    let prompt: String
+
+    func makeUIView(context: Context) -> Probe {
+        let probe = Probe()
+        probe.prompt = prompt
+        return probe
+    }
+
+    func updateUIView(_ probe: Probe, context: Context) {
+        probe.prompt = prompt
+        probe.apply()
+    }
+
+    final class Probe: UIView {
+        var prompt = ""
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            DispatchQueue.main.async { [weak self] in self?.apply() }
+        }
+
+        func apply() {
+            let owner = sequence(first: self as UIResponder, next: \.next)
+                .compactMap { $0 as? UIViewController }
+                .first { $0.navigationItem.searchController != nil }
+            guard let field = owner?.navigationItem.searchController?.searchBar.searchTextField else { return }
+            let colour = UIColor(resource: .brandMuted)
+            if field.attributedPlaceholder?.string == prompt,
+               field.attributedPlaceholder?.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor == colour {
+                return
+            }
+            field.attributedPlaceholder = NSAttributedString(string: prompt, attributes: [.foregroundColor: colour])
+        }
     }
 }
