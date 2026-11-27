@@ -1195,3 +1195,11 @@ La présente version adopte une base plus précise :
 | Calibration en P2 | Règle minimale de calibration en P0 |
 | IA mise en avant | IA exclue du cœur du MVP |
 | RFID comme différenciateur possible | Détection physique remplaçable après POC |
+
+
+### Extension P1 autorisée le 25 novembre 2026 — historique personnel (#228)
+
+Après la recette de bout en bout, Philippe autorise les listes paginées de ses
+réservations et prêts pour le technicien. Cette extension reste P1; elle ne
+modifie pas les critères P0. Pas d'export, de statistiques ni de notification.
+Le contrat additif et ses limites sont consignés au document 09, §29.

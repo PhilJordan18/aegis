@@ -28,7 +28,7 @@
 .ag-lk__top { margin-top: 16px; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 20px 32px; align-items: start; }
 .ag-lk__top .ag-diag { margin-top: 0; }
 .ag-lk__signal { font-size: 0.875rem; font-weight: 500; color: var(--ag-text); }
-.ag-lk__window { padding: 16px 0 0; }
+.ag-lk__window.ag-edit-card { padding: 16px; }
 .ag-lk__window-state { margin-top: 12px; font-size: var(--ag-eq-fact-value-size); font-weight: 600; }
 .ag-lk__window .ag-facts { margin-top: 12px; }
 .ag-lk__window .ag-help { margin-top: 12px; }
@@ -63,7 +63,6 @@
 
 @media (max-width: 1279px) {
   .ag-lk__top { grid-template-columns: minmax(0, 1fr); }
-  .ag-lk__window { padding-top: 0; }
 }
 @media (max-width: 1023px) {
   .ag-lockers { overflow: visible; padding: 0; }
@@ -102,3 +101,6 @@
 @media (forced-colors: active) {
   .ag-lk-err { border-color: CanvasText; }
 }
+/* §3.6: zero device errors fold to one visible line. */
+.ag-lk-errs--none > summary { cursor: pointer; list-style-position: inside; }
+.ag-lk-errs--none > summary > .ag-sec-title { display: inline-flex; margin: 0; }

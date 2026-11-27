@@ -8,7 +8,11 @@ import { StaleNotice } from '../catalog/StaleNotice'
 import { AuditAlert } from './AuditAlert'
 import type { AuditFailure } from './auditFailure'
 import { auditHref, type AuditFilters } from './auditFilters'
-import { actorView, clockOf, eventLabel, groupByDay, resultChip, shortId, stateLabel, subjectLabel } from './auditPresentation'
+import { actorView, clockOf, eventLabel, groupByDay, resultChip, stateLabel } from './auditPresentation'
+import { SubjectName } from './SubjectName'
+import { useLabelIndex } from '../labels/useLabelIndex'
+import '../pageTools/data-table.css'
+import { useRecordsLayout } from '../pageTools/useRecordsLayout'
 import type { AuditEventView } from './contract'
 
 interface AuditListProps {
@@ -53,6 +57,8 @@ export function AuditList(props: AuditListProps) {
   const { titleId, events, filters, filtered, selectedId, loading, failure, nextFailure, stale, restarting, readAt, hasMore, loadingMore, noticeRef } = props
   const shown = events ?? []
   const readTime = readAt === null ? null : format.time(new Date(readAt), LAB_TIME_ZONE)
+  const layout = useRecordsLayout()
+  const wide = layout === 'wide'
 
   return (
     <section className="ag-panel ag-list" aria-labelledby={titleId} aria-busy={loading || restarting || undefined}>
@@ -107,24 +113,56 @@ export function AuditList(props: AuditListProps) {
           {filtered && (
             <p className="ag-au-empty-action">
               <Button variant="secondary" size="sm" onClick={props.onClearFilters}>
-                {t.clearAll}
+                {m.pageTools.clearFilters}
               </Button>
             </p>
           )}
         </div>
       )}
 
-      {shown.length > 0 && (
-        <div className="ag-list__items ag-au-timeline">
+      {shown.length > 0 && layout !== 'cards' && (
+        // Design §8.2: a fixed table grouped by laboratory day, newest first as the server sends it; no column sort.
+        <div className="ag-list__items ag-tbl-wrap">
+          <table className="ag-tbl ag-au-table">
+            <caption className="ag-sr-only">{m.shell.sections.audit}</caption>
+            <thead>
+              <tr>
+                <th scope="col" className="ag-tbl__col--time">
+                  {t.colTime}
+                </th>
+                <th scope="col">{t.colEvent}</th>
+                {wide && <th scope="col">{t.colActor}</th>}
+                <th scope="col">{t.colSubject}</th>
+                {wide && <th scope="col">{t.colTransition}</th>}
+              </tr>
+            </thead>
+            {groupByDay(shown, i18n).map((group) => (
+              <tbody key={group.day}>
+                <tr className="ag-au-dayrow">
+                  <th scope="colgroup" colSpan={wide ? 5 : 3} className="ag-au-day" id={`${titleId}-${group.day}`}>
+                    {group.heading}
+                  </th>
+                </tr>
+                {group.events.map((event) => (
+                  <EventRow key={event.id} event={event} wide={wide} filters={filters} selected={event.id === selectedId} onSelect={props.onSelect} />
+                ))}
+              </tbody>
+            ))}
+          </table>
+        </div>
+      )}
+      {shown.length > 0 && layout === 'cards' && (
+        // Design §8.3: below 1280 px, card rows under each laboratory day.
+        <div className="ag-list__items ag-au-cards">
           {groupByDay(shown, i18n).map((group) => (
             <section key={group.day} aria-labelledby={`${titleId}-${group.day}`}>
               <h3 className="ag-au-day" id={`${titleId}-${group.day}`}>
                 {group.heading}
               </h3>
-              <ul className="ag-au-events">
+              <ul className="ag-au-cards__list">
                 {group.events.map((event) => (
                   <li key={event.id}>
-                    <EventRow event={event} filters={filters} selected={event.id === selectedId} onSelect={props.onSelect} />
+                    <EventCard event={event} filters={filters} selected={event.id === selectedId} onSelect={props.onSelect} />
                   </li>
                 ))}
               </ul>
@@ -165,52 +203,94 @@ export function AuditList(props: AuditListProps) {
 
 function EventRow({
   event,
+  wide,
   filters,
   selected,
   onSelect,
 }: {
   readonly event: AuditEventView
+  readonly wide: boolean
   readonly filters: AuditFilters
   readonly selected: boolean
   readonly onSelect: AuditListProps['onSelect']
 }) {
   const i18n = useI18n()
+  const t = i18n.m.audit
   const actor = actorView(event.actor, i18n)
+  const labels = useLabelIndex()
   const chip = event.result === 'ACCEPTED' ? null : resultChip(event.result, i18n)
   return (
-    <Link
-      className="ag-item ag-au-ev"
-      to={auditHref(filters, event.id)}
+    <tr
+      className="ag-tbl__row ag-au-ev"
       aria-current={selected ? 'true' : undefined}
-      data-event-id={event.id}
-      onClick={(click) => onSelect(event, click)}
+      onClick={(click) => {
+        // The link answers its own clicks; elsewhere the row follows it, a modified click opening a new tab.
+        if ((click.target as HTMLElement).closest('a') !== null) return
+        const link = click.currentTarget.querySelector<HTMLAnchorElement>('a.ag-tbl__link')
+        if (link === null) return
+        if (click.metaKey || click.ctrlKey || click.shiftKey) window.open(link.href, '_blank', 'noopener')
+        else {
+          link.focus()
+          link.click()
+        }
+      }}
     >
-      <span className="ag-au-ev__time">{clockOf(event.occurredAt, i18n)}</span>
-      <span className="ag-au-ev__body">
-        <span className="ag-au-ev__name">
-          {eventLabel(event.eventType, i18n)}
-          {chip !== null && (
-            <>
-              {' '}
-              <StatusChip role={chip.role} icon={chip.icon}>
-                {chip.label}
-              </StatusChip>
-            </>
-          )}
-        </span>
-        <span className="ag-au-ev__line">
-          {actor.name} · {subjectLabel(event.subjectType, i18n)} {shortId(event.subjectId)}
-        </span>
-        {event.fromState !== null && event.toState !== null && (
-          <span className="ag-au-ev__line">
-            {stateLabel(event.fromState, i18n)}
-            <span className="ag-au-arrow" aria-hidden="true">
-              →
-            </span>
-            <span className="ag-sr-only"> {i18n.m.audit.toState} </span>
-            {stateLabel(event.toState, i18n)}
-          </span>
+      <td className="ag-au-ev__time">
+        {clockOf(event.occurredAt, i18n)}
+      </td>
+      <td>
+        <Link className="ag-tbl__link ag-au-ev__name" to={auditHref(filters, event.id)} aria-current={selected ? 'true' : undefined} data-event-id={event.id} onClick={(click) => onSelect(event, click)}>
+          <span>{eventLabel(event.eventType, i18n)}</span>
+        </Link>
+        {chip !== null && (
+          <StatusChip role={chip.role} icon={chip.icon}>
+            {chip.label}
+          </StatusChip>
         )}
+      </td>
+      {wide && <td>{actor.name}</td>}
+      <td>
+        <SubjectName subjectType={event.subjectType} subjectId={event.subjectId} labels={labels} />
+      </td>
+      {wide && (
+        <td>
+          {event.fromState !== null && event.toState !== null ? (
+            <>
+              {stateLabel(event.fromState, i18n)}
+              <span className="ag-au-arrow" aria-hidden="true">
+                {' → '}
+              </span>
+              <span className="ag-sr-only"> {t.toState} </span>
+              {stateLabel(event.toState, i18n)}
+            </>
+          ) : (
+            <span className="ag-tbl__sub">{t.noTransition}</span>
+          )}
+        </td>
+      )}
+    </tr>
+  )
+}
+
+/** One audit event as a card row (Design §8.3): result chip when not accepted, the event, then time · subject. */
+function EventCard({ event, filters, selected, onSelect }: { readonly event: AuditEventView; readonly filters: AuditFilters; readonly selected: boolean; readonly onSelect: AuditListProps['onSelect'] }) {
+  const i18n = useI18n()
+  const labels = useLabelIndex()
+  const chip = event.result === 'ACCEPTED' ? null : resultChip(event.result, i18n)
+  return (
+    <Link className="ag-item ag-au-card" to={auditHref(filters, event.id)} aria-current={selected ? 'true' : undefined} data-event-id={event.id} onClick={(click) => onSelect(event, click)}>
+      {chip !== null && (
+        <span className="ag-item__chips">
+          <StatusChip role={chip.role} icon={chip.icon}>
+            {chip.label}
+          </StatusChip>
+        </span>
+      )}
+      <span className="ag-item__name">{eventLabel(event.eventType, i18n)}</span>
+      <span className="ag-item__facts">
+        {clockOf(event.occurredAt, i18n)}
+        {' · '}
+        <SubjectName subjectType={event.subjectType} subjectId={event.subjectId} labels={labels} />
       </span>
     </Link>
   )
