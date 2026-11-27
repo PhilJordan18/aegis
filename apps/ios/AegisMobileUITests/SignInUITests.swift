@@ -24,6 +24,7 @@ final class SignInUITests: XCTestCase {
             "cancel": "Annuler", "signOutMessage": "La déconnexion n’annule pas les réservations ou les prêts en cours.",
             "wrongRole": "Accès réservé aux techniciens", "another": "Se connecter avec un autre compte",
             "offline": "Connexion au service impossible",
+            "resumeServiceError": "Le service ne répond pas correctement",
             "expired": "Votre session a expiré. Vos réservations et prêts sont conservés.",
             "invalid": "Votre session n’est plus valide. Reconnectez-vous.",
             "unreachable": "Connexion au service impossible. Vérifiez le réseau.",
@@ -40,6 +41,7 @@ final class SignInUITests: XCTestCase {
             "cancel": "Cancel", "signOutMessage": "Signing out does not cancel any current reservations or loans.",
             "wrongRole": "Technicians only", "another": "Sign in with another account",
             "offline": "Can't reach the service",
+            "resumeServiceError": "The service isn't responding correctly",
             "expired": "Your session has expired. Your reservations and loans are kept.",
             "invalid": "Your session is no longer valid. Sign in again.",
             "unreachable": "Can't reach the service. Check your network.",
@@ -194,6 +196,19 @@ final class SignInUITests: XCTestCase {
         }
     }
 
+    /// An answer in error is the service's, not the network's (#247).
+    @MainActor
+    func testServiceErrorAtLaunchDoesNotBlameTheNetwork() {
+        for language in [Language.french, .english] {
+            let app = launch(language, scenario: "resume-service-error")
+            XCTAssertTrue(app.staticTexts[language["resumeServiceError"]].waitForExistence(timeout: 30))
+            XCTAssertFalse(app.staticTexts[language["offline"]].exists)
+            XCTAssertTrue(app.buttons["resume.retry"].exists)
+            XCTAssertFalse(app.descendants(matching: .any)["account.name"].firstMatch.exists)
+            attach(app, "\(language.code)-resume-service-error")
+        }
+    }
+
     @MainActor
     func testTryAgainChecksTheSessionAgain() {
         let app = launch(.english, scenario: "resume-recovers")
@@ -264,7 +279,8 @@ final class SignInUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["account.name"].firstMatch.label.contains("Technicien Démo"))
         let role = app.descendants(matching: .any)["account.role"].firstMatch
         XCTAssertTrue(role.label.contains(language["role"]) || (role.value as? String) == language["role"])
-        try audit(app)
+        // A scrolling screen whose last rows sit under the tab bar's fade.
+        try auditAccountScreen(app)
         attach(app, "\(language.code)-account")
 
         app.buttons["account.signOut"].tap()

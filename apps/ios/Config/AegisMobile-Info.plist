@@ -4,6 +4,8 @@
 <dict>
 	<key>AegisAPIBaseURL</key>
 	<string>$(AEGIS_API_BASE_URL)</string>
+	<key>AegisEnvironment</key>
+	<string>$(AEGIS_ENVIRONMENT)</string>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>fr</string>

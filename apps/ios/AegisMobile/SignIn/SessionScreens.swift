@@ -26,12 +26,24 @@ struct OfflineResumeView: View {
 
     var body: some View {
         EntryScreen(compact: typeSize.isAccessibilitySize) {
-            Text("Connexion au service impossible")
+            Group {
+                if isUnreachable {
+                    Text("Connexion au service impossible")
+                } else {
+                    Text("Le service ne répond pas correctement")
+                }
+            }
                 .fixedSize(horizontal: false, vertical: true)
                 .font(.title2.weight(.semibold))
                 .foregroundStyle(Color.brandText)
                 .accessibilityAddTraits(.isHeader)
-            Text("Votre session est conservée, mais elle n’a pas pu être vérifiée. Aucune action n’est possible hors ligne.")
+            Group {
+                if isUnreachable {
+                    Text("Votre session est conservée, mais elle n’a pas pu être vérifiée. Aucune action n’est possible hors ligne.")
+                } else {
+                    Text("Votre session est conservée, mais elle n’a pas pu être vérifiée : le service a répondu par une erreur. Aucune action n’est possible pour le moment.")
+                }
+            }
                 .font(.subheadline)
                 .foregroundStyle(Color.brandMuted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -55,9 +67,14 @@ struct OfflineResumeView: View {
                 .padding(.top, 12)
         }
         .onAppear {
-            AccessibilityNotification.Announcement(String(localized: "Connexion au service impossible")).post()
+            AccessibilityNotification.Announcement(isUnreachable
+                ? String(localized: "Connexion au service impossible")
+                : String(localized: "Le service ne répond pas correctement")).post()
         }
     }
+
+    /// The network is named only when the service could not be reached (#247).
+    private var isUnreachable: Bool { session.resumeFailure == .unreachable }
 }
 
 /// U6: an administrator account belongs to Aegis Manager. Its token was not
@@ -106,8 +123,10 @@ struct AccountView: View {
     let session: SessionModel
     let profile: UserProfile
     let health: HealthViewModel
+    var identity = AppIdentity.read()
 
     @State private var confirmsSignOut = false
+    private let language = LanguagePreference.shared
 
     var body: some View {
         NavigationStack {
@@ -132,12 +151,54 @@ struct AccountView: View {
                 }
                 .listRowBackground(Color.brandPanel)
 
+                Self.heading("Réglages")
+
+                Section {
+                    LanguageRow(language: language)
+                }
+                .listRowBackground(Color.brandPanel)
+
                 Section {
                     NavigationLink {
                         HealthView(model: health)
                     } label: {
-                        Label("État du service", systemImage: "server.rack")
+                        // The token, not the accent tint: 3.40:1 on the dark panel.
+                        Label {
+                            Text("État du service")
+                        } icon: {
+                            Image(systemName: "server.rack").foregroundStyle(Color.brandAccent)
+                        }
                     }
+                }
+                .listRowBackground(Color.brandPanel)
+
+                Self.heading("Sécurité")
+
+                Section {
+                    NavigationLink {
+                        PasswordChangeView(session: session, email: profile.email)
+                    } label: {
+                        Label {
+                            Text("Changer le mot de passe")
+                        } icon: {
+                            Image(systemName: "key").foregroundStyle(Color.brandAccent)
+                        }
+                    }
+                    .accessibilityIdentifier("account.password")
+                }
+                .listRowBackground(Color.brandPanel)
+
+                Self.heading("À propos")
+
+                Section {
+                    LabeledContent("Version") {
+                        Text(verbatim: "\(identity.version) (\(identity.build))").foregroundStyle(Color.brandMuted)
+                    }
+                    .accessibilityIdentifier("account.version")
+                    LabeledContent("Environnement") {
+                        Text(identity.environmentName).foregroundStyle(Color.brandMuted)
+                    }
+                    .accessibilityIdentifier("account.environment")
                 }
                 .listRowBackground(Color.brandPanel)
 
@@ -158,6 +219,20 @@ struct AccountView: View {
                 Text("La déconnexion n’annule pas les réservations ou les prêts en cours.")
             }
         }
+    }
+
+    /// A heading row rather than a section header, whose font does not
+    /// follow every Dynamic Type size.
+    private static func heading(_ title: LocalizedStringKey) -> some View {
+        Section {
+            Text(title)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Color.brandText)
+                .accessibilityAddTraits(.isHeader)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+        }
+        .listSectionSpacing(.custom(4))
     }
 
     static func role(_ role: UserProfile.Role) -> LocalizedStringKey {

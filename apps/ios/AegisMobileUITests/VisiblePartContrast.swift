@@ -31,7 +31,7 @@ extension XCTestCase {
         if visible.contains(target.frame) { return .entirelyVisible }
         let shot = app.screenshot()
         let image = Self.crop(shot, to: part, window: window)
-        guard let ratio = RenderedContrast.ratio(of: image) else {
+        guard let ratio = RenderedContrast.ratio(of: image, shade: BarAwareAudit.panelShade) else {
             return .nothingToMeasure("no ink in its visible part \(part)")
         }
         let name = "audit-visible-part-contrast '\(target.label)'"
@@ -51,10 +51,11 @@ extension XCTestCase {
     /// 4.5:1 or more. A passing measure only qualifies the issue the audit
     /// reported on this element; it is no exception for any other (#222).
     /// The crop is attached under the name its line gives, and the line
-    /// keeps the conditions of the measure with its result.
+    /// keeps the conditions of the measure with its result. The capture's
+    /// dithering is folded, as for a visible part (#234).
     @MainActor
-    func entireContrast(of target: XCUIElement, window: CGRect,
-                        in app: XCUIApplication) -> VisiblePartContrast {
+    func entireContrast(of target: XCUIElement, window: CGRect, in app: XCUIApplication,
+                        shade: UInt8 = BarAwareAudit.panelShade) -> VisiblePartContrast {
         guard app.waitForStillScreen() else {
             return .measured(passed: false, line: "'\(target.label)': the screen never stopped moving")
         }
@@ -71,7 +72,7 @@ extension XCTestCase {
         add(evidence)
         let measure = "'\(target.label)' id=\(target.identifier) entirely visible on a still screen, frame=\(frame), "
             + measureConditions(in: app, window: window, shot: shot)
-        guard let ratio = RenderedContrast.ratio(of: image) else {
+        guard let ratio = RenderedContrast.ratio(of: image, shade: shade) else {
             return .measured(passed: false, line: measure + ": no ink to measure, evidence \(name)")
         }
         return .measured(passed: ratio >= 4.5,

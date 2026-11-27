@@ -88,9 +88,21 @@ extension UserProfile.AccessLevel: Codable {
     }
 }
 
+/// `POST /auth/password` body (doc 09 §10.7, ADR-020): exactly these two
+/// fields, sent as typed, never trimmed. Neither value is ever described.
+struct PasswordChangeRequest: Encodable, Sendable, CustomReflectable, CustomStringConvertible {
+    let currentPassword: String
+    let newPassword: String
+
+    var customMirror: Mirror { Mirror(self, children: [], displayStyle: .struct) }
+    var description: String { "PasswordChangeRequest(<redacted>)" }
+}
+
 protocol AuthenticationService: Sendable {
     func login(email: String, password: String) async throws(APIError) -> LoginResponse
     func currentProfile(bearer token: String) async throws(APIError) -> UserProfile
+    /// §10.7: 204 revokes every token, this one included; no token is returned.
+    func changePassword(current: String, new: String, bearer token: String) async throws(APIError)
 }
 
 extension APIClient: AuthenticationService {
@@ -101,5 +113,13 @@ extension APIClient: AuthenticationService {
 
     func currentProfile(bearer token: String) async throws(APIError) -> UserProfile {
         try await send(Endpoint<UserProfile>(method: "GET", path: "auth/me"), bearer: token)
+    }
+
+    /// No `Idempotency-Key` (§10.7): a lost answer is never replayed.
+    func changePassword(current: String, new: String, bearer token: String) async throws(APIError) {
+        let _: NoContent = try await send(
+            .json(method: "POST", path: "auth/password",
+                  body: PasswordChangeRequest(currentPassword: current, newPassword: new)),
+            bearer: token)
     }
 }

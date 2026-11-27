@@ -66,6 +66,17 @@ struct Endpoint<Response: Decodable & Sendable>: Sendable {
     }
 }
 
+/// The answer of a route whose success is `204 No Content`. Any other
+/// success status is not this answer and stays an unreadable response.
+struct NoContent: Decodable, Equatable, Sendable {
+    init() {}
+
+    init(from decoder: any Decoder) throws {
+        throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,
+                                                debugDescription: "Expected 204 No Content"))
+    }
+}
+
 /// A decoded success with the delay the server asked before the next request.
 struct Received<Value: Sendable>: Sendable {
     let value: Value
@@ -133,6 +144,9 @@ struct APIClient: Sendable {
         guard (200..<300).contains(http.statusCode) else {
             throw .http(status: http.statusCode, problem: Self.decodeProblem(data, from: http),
                         retryAfter: Self.retryAfter(from: http))
+        }
+        if http.statusCode == 204, let empty = NoContent() as? Response {
+            return Received(value: empty, retryAfter: Self.retryAfter(from: http))
         }
         guard http.mimeType == "application/json" else { throw .invalidResponse }
         do {

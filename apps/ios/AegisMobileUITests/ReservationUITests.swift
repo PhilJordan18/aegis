@@ -88,6 +88,109 @@ final class ReservationUITests: XCTestCase {
         }
     }
 
+    // MARK: History (#233)
+
+    /// « Historique », reached from Mon activité: both lists, a loan record
+    /// and its read-only detail, in French light and English dark, then the
+    /// list at the largest text size. No record offers an action.
+    @MainActor
+    func testHistoryFromMyActivity() throws {
+        let words = [
+            "fr": ["loans": "Prêts", "pickedUp": "Retirée", "cancelled": "Annulée", "returned": "Rendu",
+                   "readOnly": "Consultation seulement.", "reference": "Référence du prêt"],
+            "en": ["loans": "Loans", "pickedUp": "Picked up", "cancelled": "Cancelled", "returned": "Returned",
+                   "readOnly": "View only.", "reference": "Loan reference"],
+        ]
+        for (language, appearance) in [(Language.french, XCUIDevice.Appearance.light), (.english, .dark)] {
+            XCUIDevice.shared.appearance = appearance
+            let theme = appearance == .dark ? "dark" : "light"
+            let text = words[language.code]!
+            let app = launch(language, scenario: "history", tab: "activity")
+            openHistory(app)
+
+            let fulfilled = element(app, "history.row.MM-001")
+            XCTAssertTrue(fulfilled.waitForExistence(timeout: 15))
+            XCTAssertTrue(fulfilled.label.hasPrefix(text["pickedUp"]!), fulfilled.label)
+            XCTAssertTrue(element(app, "history.row.MM-002").label.hasPrefix(text["cancelled"]!))
+            XCTAssertTrue(element(app, "history.row.PA-004").exists)
+            try audit(app)
+            attach(app, "\(language.code)-history-reservations-\(theme)")
+
+            app.segmentedControls.buttons[text["loans"]!].tap()
+            let returned = element(app, "history.row.TI-002")
+            XCTAssertTrue(returned.waitForExistence(timeout: 15))
+            XCTAssertTrue(returned.label.hasPrefix(text["returned"]!), returned.label)
+            XCTAssertFalse(element(app, "history.row.PA-004").exists)
+            try audit(app)
+            attach(app, "\(language.code)-history-loans-\(theme)")
+
+            returned.tap()
+            let readOnly = element(app, "history.record.readOnly")
+            XCTAssertTrue(readOnly.waitForExistence(timeout: 10))
+            XCTAssertTrue(readOnly.label.hasPrefix(text["readOnly"]!))
+            // The id a manager looks up under §17, as the service wrote it.
+            let reference = element(app, "history.record.reference")
+            XCTAssertTrue(reference.exists)
+            XCTAssertTrue(reference.label.hasPrefix(text["reference"]!), reference.label)
+            XCTAssertTrue(reference.label.contains("9b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d02"), reference.label)
+            // A finished loan is never `overdue` (doc 03), even when returned late.
+            XCTAssertFalse(element(app, "history.record.overdue").exists)
+            for action in ["activity.return", "activity.cancel", "activity.checkout", "activity.resume"] {
+                XCTAssertFalse(element(app, action).exists, "\(action) offered on a history record")
+            }
+            try audit(app)
+            attach(app, "\(language.code)-history-loan-record-\(theme)")
+            app.terminate()
+        }
+
+        XCUIDevice.shared.appearance = .light
+        let app = launch(.french, scenario: "history", tab: "activity",
+                         arguments: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+        openHistory(app)
+        XCTAssertTrue(element(app, "history.row.MM-001").waitForExistence(timeout: 15))
+        try audit(app, atLargestSize: true)
+        attach(app, "fr-history-reservations-ax5-light")
+        app.terminate()
+    }
+
+    /// An empty history, then a first read offline whose Try again recovers.
+    @MainActor
+    func testHistoryEmptyAndOffline() throws {
+        let empty = launch(.french, scenario: "history-empty", tab: "activity")
+        openHistory(empty)
+        XCTAssertTrue(element(empty, "history.empty").waitForExistence(timeout: 15))
+        try audit(empty)
+        attach(empty, "fr-history-empty-light")
+        empty.terminate()
+
+        let offline = launch(.english, scenario: "history-offline", tab: "activity")
+        openHistory(offline)
+        let notice = element(offline, "history.notice")
+        XCTAssertTrue(notice.waitForExistence(timeout: 15))
+        // The shared failure notice of the catalogue, not the reservation sheet's wording.
+        XCTAssertTrue(notice.label.hasPrefix("Can't reach the service. Check your network."), notice.label)
+        XCTAssertFalse(element(offline, "history.empty").exists, "An unread history is not an empty one")
+        try audit(offline)
+        attach(offline, "en-history-offline-light")
+        element(offline, "history.retry").tap()
+        XCTAssertTrue(element(offline, "history.row.MM-001").waitForExistence(timeout: 15))
+        XCTAssertTrue(notice.waitForNonExistence(timeout: 5))
+        offline.terminate()
+    }
+
+    /// The link sits below the activity; at large sizes it is scrolled to.
+    @MainActor
+    private func openHistory(_ app: XCUIApplication) {
+        let link = element(app, "activity.history")
+        XCTAssertTrue(link.waitForExistence(timeout: 30))
+        var swipes = 0
+        while !link.isHittable, swipes < 8 {
+            app.swipeUp(velocity: .slow)
+            swipes += 1
+        }
+        link.tap()
+    }
+
     /// A loan read that fails while the reservation is read: the reservation
     /// comes first, the loan section carries the notice, its trace id and
     /// the retry, and the retry recovers without a false « no loan » before.

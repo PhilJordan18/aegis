@@ -7,6 +7,8 @@ import SwiftUI
 struct ActivityScreen: View {
     let model: ActivityViewModel
     let browseEquipment: () -> Void
+    /// Builds the history of a visit to « Historique »; nil hides the link.
+    var makeHistory: (@MainActor () -> HistoryViewModel)?
     /// The reservation the cancel alert asks about; nil when no alert is up.
     @State private var cancelTarget: ReservationView?
     private static let minimumRefresh = Duration.milliseconds(800)
@@ -19,6 +21,7 @@ struct ActivityScreen: View {
                     reservationNotice
                     content
                     loanNotice
+                    if makeHistory != nil { historyLink }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
@@ -33,6 +36,9 @@ struct ActivityScreen: View {
                 try? await Task.sleep(until: started + Self.minimumRefresh, clock: .continuous)
             }
             .task { await model.loadIfNeeded() }
+            .navigationDestination(for: HistoryRoute.self) { _ in
+                if let makeHistory { HistoryScreen(make: makeHistory) }
+            }
             // A native alert, centred whatever the card's place on screen: the
             // card's confirmation dialog appeared near the tab bar on iPhone.
             .alert(cancelTarget.map { String(localized: "Annuler la réservation de \($0.asset.model.name) ?") } ?? "",
@@ -56,6 +62,32 @@ struct ActivityScreen: View {
                 model.announcement = nil
             }
         }
+    }
+
+    /// Past records, read only: no fourth tab (#233).
+    private var historyLink: some View {
+        NavigationLink(value: HistoryRoute()) {
+            HStack(spacing: 12) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .foregroundStyle(Color.brandAccent)
+                    .accessibilityHidden(true)
+                Text("Historique")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Color.brandText)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(Color.brandMuted)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 18)
+            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+            .background(Color.brandPanel, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.brandBorder))
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 8)
+        .accessibilityIdentifier("activity.history")
     }
 
     @ViewBuilder
@@ -177,6 +209,7 @@ struct ActivityScreen: View {
         if resumable, let id = reservation.currentOperationId {
             Button("Reprendre") { model.resumeOperation(id) }
                 .buttonStyle(PrimaryButtonStyle())
+                .accessibilityLabel(Text("Reprendre le retrait"))
                 .accessibilityIdentifier("activity.resume")
         } else if listed {
             Button { Task { await model.prepareCheckout() } } label: {
@@ -316,6 +349,7 @@ private struct LoanCard: View {
         if resumable, let id = loan.currentOperationId {
             Button("Reprendre") { model.resumeOperation(id) }
                 .buttonStyle(PrimaryButtonStyle())
+                .accessibilityLabel(Text("Reprendre le retour"))
                 .accessibilityIdentifier("activity.loan.resume")
         } else if listed {
             Button { Task { await model.prepareReturn() } } label: {
