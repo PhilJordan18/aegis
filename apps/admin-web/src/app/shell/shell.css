@@ -5,7 +5,8 @@
  */
 /*
  * From 1024 px the frame holds the viewport: the sidebar is fixed to its full height and the main column is the scroll
- * container, so a long page never scrolls the document past the frame (issue #249). Every scroll or clip container is
+ * container, so a long page never scrolls the document past the frame (issue #249). The content keeps a minimum height,
+ * so in a short window the main column scrolls instead of crushing the page's own lists. Every scroll or clip container is
  * positioned, so a visually hidden element (`position: absolute`) stays inside it instead of lengthening the document.
  */
 #root:has(> .ag-shell), #root:has(> * + .ag-shell) { height: 100vh; height: 100dvh; }
@@ -14,7 +15,7 @@
   display: grid; grid-template-columns: var(--ag-sidebar-w) minmax(0, 1fr);
 }
 .ag-shell__main { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; }
-.ag-shell__content { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 28px clamp(20px, 3vw, 44px) 24px; }
+.ag-shell__content { flex: 1; min-width: 0; min-height: 800px; display: flex; flex-direction: column; padding: 28px clamp(20px, 3vw, 44px) 24px; }
 
 .ag-skip {
   position: absolute; left: 16px; top: 8px; z-index: 80;
@@ -106,6 +107,7 @@ a.ag-nav__item:hover { background: var(--ag-surface-selected); }
   #root:has(> .ag-shell), #root:has(> * + .ag-shell) { height: auto; }
   .ag-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; min-height: 100vh; }
   .ag-shell__main { overflow-y: visible; }
+  .ag-shell__content { min-height: 0; }
   .ag-side { display: none; }
   .ag-shell__content { padding: 20px clamp(16px, 3vw, 28px) 28px; }
   .ag-topbar {

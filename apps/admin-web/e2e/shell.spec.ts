@@ -1,5 +1,6 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
 import { openLockers, waitForLockerState } from './lockerFakes.ts'
+import { expectNoAxeViolations } from './support.ts'
 
 /**
  * Issue #249: a Manager page taller than the viewport never scrolls the document past the application frame. From
@@ -97,6 +98,7 @@ async function measure(page: Page) {
     const content = document.querySelector<HTMLElement>('.ag-shell__content')!
     // Every scroll or clip container inside the frame: its scroll height is its content, not an escaped hidden element.
     const blankTails: string[] = []
+    const crushed: string[] = []
     for (const el of document.querySelectorAll<HTMLElement>('.ag-shell *')) {
       const style = getComputedStyle(el)
       if (style.overflowY === 'visible' || el.clientHeight <= 2) continue
@@ -106,6 +108,8 @@ async function measure(page: Page) {
       })
       const tail = el.scrollHeight - Math.max(el.clientHeight, ...bottoms) - parseFloat(style.paddingBottom)
       if (tail > 1) blankTails.push(`${el.className}: ${Math.round(tail)} px`)
+      // A short window scrolls the main column; it never squeezes a page's own scrolling region to a sliver.
+      if (el.scrollHeight > el.clientHeight + 1 && el.clientHeight < 120) crushed.push(`${el.className}: ${el.clientHeight} px`)
     }
     return {
       innerHeight: window.innerHeight,
@@ -117,6 +121,7 @@ async function measure(page: Page) {
       mainClientHeight: main.clientHeight,
       contentHeight: content.getBoundingClientRect().height,
       blankTails,
+      crushed,
     }
   })
 }
@@ -129,11 +134,14 @@ async function expectFrameHolds(page: Page, label: string) {
   expect(state.account.bottom, `${label}: the account button is visible`).toBeLessThanOrEqual(state.innerHeight)
   expect(Math.abs(state.mainScrollHeight - Math.max(state.mainClientHeight, state.contentHeight)), `${label}: the main column scrolls its content only`).toBeLessThanOrEqual(1)
   expect(state.blankTails, `${label}: no blank tail in a scroll container`).toEqual([])
+  expect(state.crushed, `${label}: no scrolling region squeezed below 120 px`).toEqual([])
   return state
 }
 
 const WIDE = [
+  [1280, 500],
   [1024, 560],
+  [1024, 600],
   [1280, 640],
   [1440, 700],
   [1920, 1080],
@@ -161,6 +169,17 @@ test.describe('Manager shell scroll (#249)', () => {
         await page.locator(ready).first().waitFor()
         await expect(page.locator('.ag-skel__bar')).toHaveCount(0)
         const state = await expectFrameHolds(page, label)
+        // The first row of a list is shown whole, and every pager can be brought fully into view (0.99: sub-pixel rounding).
+        const firstRow = page.locator('.ag-list__items a').first()
+        if (await firstRow.count()) {
+          await firstRow.evaluate((row) => row.scrollIntoView({ block: 'nearest' }))
+          await expect(firstRow, `${label}: a whole row is visible`).toBeInViewport({ ratio: 0.99 })
+        }
+        for (const pager of await page.locator('.ag-pager').all()) {
+          await pager.evaluate((nav) => nav.scrollIntoView({ block: 'nearest' }))
+          await expect(pager, `${label}: the pager is reachable`).toBeInViewport({ ratio: 0.99 })
+        }
+        if (height <= 600) await expectNoAxeViolations(page)
         if (label === 'réservations' || label === 'audit') {
           // The end of a long list is reachable inside the frame, and reaching it never scrolls the document.
           const last = page.locator('.ag-list .ag-list__items a').last()
