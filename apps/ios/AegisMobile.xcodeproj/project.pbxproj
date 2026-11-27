@@ -117,10 +117,10 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = AE0000000000000000000071 /* Build configuration list for PBXNativeTarget "AegisMobile" */;
 			buildPhases = (
-				AE0000000000000000000059 /* Check Release Identity */,
 				AE0000000000000000000050 /* Sources */,
 				AE0000000000000000000051 /* Frameworks */,
 				AE0000000000000000000052 /* Resources */,
+				AE0000000000000000000059 /* Check Release Identity */,
 			);
 			buildRules = (
 			);
@@ -262,6 +262,7 @@
 			);
 			inputPaths = (
 				"$(SRCROOT)/scripts/check-release-identity.sh",
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
 			);
 			name = "Check Release Identity";
 			outputFileListPaths = (

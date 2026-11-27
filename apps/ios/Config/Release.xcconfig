@@ -4,6 +4,8 @@
 // rather than one inherited from a developer's Local.xcconfig. The "/$()/" is
 // required because "//" starts a comment in an xcconfig file. A production
 // build will need its own configuration; Bundle ID and Team stay local.
+// scripts/check-release-identity.sh compares the address and environment
+// the archive carries with this target and blocks any other.
 AEGIS_API_BASE_URL = https:/$()/aegis-api-staging-239f.up.railway.app/api/v1
 AEGIS_ENVIRONMENT = staging
 

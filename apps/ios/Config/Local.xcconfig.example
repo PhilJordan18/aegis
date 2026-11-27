@@ -12,18 +12,21 @@
 // - DEVELOPMENT_TEAM: the team that owns the App Store Connect record;
 // - AEGIS_APP_BUNDLE_ID: that record's exact Bundle ID, not a com.example or
 //   example value;
-// - AEGIS_API_BASE_URL: an https address reachable from the iPhone (the
-//   versioned Release value is the staging API);
-// - AEGIS_ENVIRONMENT: staging or production.
+// - the API address and environment the archive carries, read from its
+//   Info.plist: staging, with the staging API of Release.xcconfig. Any other
+//   address blocks the archive, and so does production until its address is
+//   approved.
 // A Debug signing with a personal team is unaffected. The check cannot see
 // App Store Connect: confirm the team and Bundle ID there before uploading.
 // Each upload also needs a higher CURRENT_PROJECT_VERSION.
 // AEGIS_APP_BUNDLE_ID = <Bundle ID of the App Store Connect record>
 
-// HTTPS address of Aegis Control reachable from the device. The "/$()/" is
-// required because "//" starts a comment in an xcconfig file.
-// AEGIS_API_BASE_URL = https:/$()/aegis-control.example.lan:8443/api/v1
+// HTTPS address of Aegis Control reachable from the device, for Debug only:
+// set without [config=Debug], it would also replace the Release address and
+// block the archive. The "/$()/" is required because "//" starts a comment
+// in an xcconfig file.
+// AEGIS_API_BASE_URL[config=Debug] = https:/$()/aegis-control.example.lan:8443/api/v1
 
-// Environment name shown in Account when the address above is not loopback:
-// staging or production.
-// AEGIS_ENVIRONMENT = staging
+// Environment name shown in Account when the address above is not loopback,
+// for Debug only as well: staging or production.
+// AEGIS_ENVIRONMENT[config=Debug] = staging
