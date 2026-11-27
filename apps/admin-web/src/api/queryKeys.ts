@@ -22,6 +22,9 @@ export const queryKeys = {
     assetList: (query: { readonly page: number; readonly size: number; readonly sort: string }) => ['catalog', 'assets', 'list', query] as const,
     asset: (assetId: string) => ['catalog', 'assets', 'detail', assetId] as const,
     modelList: (query: { readonly page: number; readonly size: number }) => ['catalog', 'models', 'list', query] as const,
+    /** The label index (contract §1.1): outside `assets`, so a custody change does not read 500 units again. */
+    labelIndexAll: ['catalog', 'labelIndex'] as const,
+    labelIndex: (page: number) => ['catalog', 'labelIndex', page] as const,
   },
   custody: {
     all: ['custody'] as const,

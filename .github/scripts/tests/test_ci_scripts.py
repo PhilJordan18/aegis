@@ -541,14 +541,16 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertIn("timeout-minutes: 8", step)
         self.assertIn("xcrun simctl bootstatus", step)
 
-    def test_ios_job_is_bounded_at_45_minutes_with_only_the_bounded_retry(self):
+    def test_ios_job_is_bounded_at_75_minutes_with_only_the_bounded_retry(self):
         ios = self.text[self.text.index("  ios:\n"):self.text.index("  scripts:\n")]
         job = ios[:ios.index("    steps:\n")]
-        # The job limit is a capacity bound (#67): 30 min cancelled complete
-        # green runs of about 312 tests. The only retry is ios-retry.py, once,
-        # for failed UI tests (Philippe, 25 November); no xcodebuild repetition.
-        self.assertIn("    timeout-minutes: 45\n", job)
-        self.assertNotIn("timeout-minutes: 30", ios)
+        # The job limit is a capacity bound (#67): 30 min, then 45 min, cancelled
+        # complete runs on loaded hosted runners (Philippe, 27 November: 75 min).
+        # The only retry is ios-retry.py, once, for failed UI tests (Philippe,
+        # 25 November); no xcodebuild repetition.
+        self.assertIn("    timeout-minutes: 75\n", job)
+        for stale in ("timeout-minutes: 30\n", "timeout-minutes: 45\n"):
+            self.assertNotIn(stale, job)
         self.assertNotIn("continue-on-error", self.text)
         recipe = (ROOT / "apps/ios/scripts/ios-test.sh").read_text()
         for forbidden in ("-retry-tests-on-failure", "-test-iterations", "-run-tests-until-failure",

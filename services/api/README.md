@@ -390,10 +390,32 @@ fait pas 12 à 72 octets. Les adresses par défaut sont `admin@aegis.demo` et
 `AEGIS_DEMO_TECHNICIAN_EMAIL` les remplacent.
 
 Le provisionnement est idempotent : un compte absent est créé avec un hachage
-BCrypt, un mot de passe modifié est haché à nouveau, mais le rôle, le niveau
+BCrypt. Depuis #229 / ADR-020, un compte existant conserve son mot de passe par
+défaut, même si les variables de démonstration diffèrent. Le rôle, le niveau
 d'accès et le statut d'un compte existant ne sont jamais modifiés. Un compte
 désactivé par un administrateur le reste donc après redémarrage. Aucun mot de
 passe en clair n'est versionné.
+
+### Changement personnel et rotation opérateur (#229)
+
+`POST /api/v1/auth/password` exige le mot de passe actuel et un nouveau de
+12 à 72 octets UTF-8. Voir document 09 §10.7. `204` invalide tous les anciens
+jetons/sessions du compte, exige une reconnexion et ne retourne aucun jeton.
+
+Pour une rotation opérateur intentionnelle, fixer temporairement
+`AEGIS_DEMO_ROTATE_PASSWORDS=true` avec le provisionneur activé, modifier les
+secrets désignés par une interface confidentielle puis redémarrer. Ce mode
+réapplique les deux mots de passe configurés, mais ne révoque un compte que
+si son mot de passe change effectivement; la route personnelle est alors
+fermée par `503 PASSWORD_CHANGE_UNAVAILABLE`. Remettre le flag à `false` et
+redémarrer avant de permettre les changements personnels. Modifier la seule
+variable de mot de passe ne suffit plus à déclencher une rotation.
+
+**Retour arrière vers une API antérieure à #229 :** désactiver d'abord
+`AEGIS_DEMO_ACCOUNTS_ENABLED`, sinon l'ancien provisionneur peut écraser un
+mot de passe choisi par un utilisateur. Conserver les versions de créances,
+sessions et audits; aucune migration ni correction SQL n'est nécessaire.
+Voir [ADR-020](../../docs/adr/ADR-020-changement-mot-de-passe-personnel.md).
 
 ## Casier de démonstration
 

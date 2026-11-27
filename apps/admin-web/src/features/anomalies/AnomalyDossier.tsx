@@ -1,16 +1,20 @@
 import { useId, useLayoutEffect, useRef, type ReactNode, type Ref } from 'react'
-import { Link } from '../../app/Link'
 import { useI18n } from '../../i18n/useI18n'
 import { operationAuditHref } from '../audit/operationAuditHref'
 import { transactionHref } from '../transactions/transactionHref'
 import { Alert } from '../../ui/Alert'
-import { Button } from '../../ui/Button'
+import { Button, ButtonLink } from '../../ui/Button'
+import { Callout, DossierActions } from '../../ui/Callout'
 import { StatusChip } from '../../ui/StatusChip'
 import { StaleNotice } from '../catalog/StaleNotice'
 import { UNRECOGNIZED } from '../catalog/contract'
 import { AnomalyAlert } from './AnomalyAlert'
 import type { AnomalyReadFailure } from './anomalyFailure'
-import { anomalyTypeLabel, hasUnrecognizedValue, instantLabel, severityChip, statusChip, whereLine } from './anomalyPresentation'
+import { anomalyTypeLabel, hasUnrecognizedValue, instantLabel, severityChip, statusChip } from './anomalyPresentation'
+import { AnomalyWhere } from './AnomalyWhere'
+import { useLabelIndex } from '../labels/useLabelIndex'
+import { AssetName, CellName } from '../labels/Labels'
+import { TechnicalDetails, type TechnicalRow } from '../labels/TechnicalDetails'
 import { EVIDENCE_LIMIT, type AnomalyDetail, type AnomalyEvidence, type AnomalyView } from './contract'
 
 /** What the page tells the dossier happened to this anomaly in this session; never inferred from the data. */
@@ -110,7 +114,7 @@ export function AnomalyDossier({ anomaly, detail, loading, failure, stale, retry
 function Section({ title, children, note }: { readonly title: string; readonly children: ReactNode; readonly note?: string }) {
   return (
     <section className="ag-an-sec">
-      <h3 className="ag-overline">{title}</h3>
+      <h3 className="ag-sec-title">{title}</h3>
       {children}
       {note !== undefined && <p className="ag-an-sec__note">{note}</p>}
     </section>
@@ -142,6 +146,14 @@ interface DossierBodyProps {
   readonly onAcknowledge: () => void
 }
 
+/** §3.2: « Reconnue le … par … » when the server says who and when; the generic sentence otherwise. */
+function acknowledgedLead(anomaly: AnomalyView, i18n: ReturnType<typeof useI18n>): string {
+  const t = i18n.m.anomalies
+  if (anomaly.acknowledgedAt === null) return t.leadAcknowledged
+  const time = instantLabel(anomaly.acknowledgedAt, i18n)
+  return anomaly.acknowledgedBy === null ? t.acknowledgedAtOnly({ time }) : t.acknowledgedBy({ name: anomaly.acknowledgedBy.displayName, time })
+}
+
 function DossierBody({ anomaly, detail, loading, failure, retrying, titleId, onRetry, onAcknowledge }: DossierBodyProps) {
   const i18n = useI18n()
   const { m } = i18n
@@ -152,12 +164,22 @@ function DossierBody({ anomaly, detail, loading, failure, retrying, titleId, onR
     anomaly.status === 'OPEN'
       ? t.leadOpen
       : anomaly.status === 'ACKNOWLEDGED'
-        ? t.leadAcknowledged
+        ? acknowledgedLead(anomaly, i18n)
         : anomaly.status === 'RESOLVED' && anomaly.resolvedAt !== null
           ? t.leadResolved({ time: instantLabel(anomaly.resolvedAt, i18n) })
           : null
   const tone = anomaly.status === 'OPEN' ? 'anomaly' : anomaly.status === 'ACKNOWLEDGED' ? 'info' : 'none'
   const acknowledgedAt = anomaly.acknowledgedAt === null ? null : instantLabel(anomaly.acknowledgedAt, i18n)
+  const labels = useLabelIndex()
+  const technical: TechnicalRow[] = [{ label: t.techAnomaly, value: anomaly.id }]
+  if (anomaly.compartmentId !== null) technical.push({ label: t.techCell, value: anomaly.compartmentId })
+  if (anomaly.assetId !== null) technical.push({ label: t.techAsset, value: anomaly.assetId })
+  if (anomaly.lockerOperationId !== null) technical.push({ label: t.fOperation, value: anomaly.lockerOperationId })
+  if (anomaly.resolutionEvidenceObservationId !== null) technical.push({ label: t.resolutionObservation, value: anomaly.resolutionEvidenceObservationId })
+  for (const [index, item] of (detail?.evidence?.items ?? []).entries()) {
+    technical.push({ label: t.techObservation({ index: index + 1 }), value: item.observationId })
+    if (item.operationId !== null && item.operationId !== anomaly.lockerOperationId) technical.push({ label: t.techObservationOperation({ index: index + 1 }), value: item.operationId })
+  }
 
   return (
     <>
@@ -165,41 +187,58 @@ function DossierBody({ anomaly, detail, loading, failure, retrying, titleId, onR
       <h2 className="ag-dossier__title" id={titleId}>
         {anomalyTypeLabel(anomaly, i18n)}
       </h2>
-      <p className="ag-dossier__sub">{whereLine(anomaly, i18n)}</p>
+      <p className="ag-dossier__sub">
+        <AnomalyWhere anomaly={anomaly} labels={labels} />
+      </p>
 
-      <div className={`ag-diag ag-an-diag--${tone}`}>
-        <div className="ag-diag__row">
-          <StatusChip role={severity.role} icon={severity.icon} size="lg">
-            {severity.label}
-          </StatusChip>
-          <StatusChip role={status.role} icon={status.icon} size="lg">
-            {status.label}
-          </StatusChip>
-        </div>
-        {lead !== null && <p className="ag-an-diag__lead">{lead}</p>}
-        {hasUnrecognizedValue(anomaly) && <p className="ag-diag__note ag-diag__note--unknown">{t.unrecognizedNote}</p>}
-      </div>
-
-      {anomaly.status === 'OPEN' && (
-        <div className="ag-dossier__actions ag-an-actions" role="group" aria-label={t.actionsLabel}>
-          <Button size="sm" aria-haspopup="dialog" onClick={onAcknowledge}>
-            {t.acknowledge}
-          </Button>
-          <span className="ag-help">{t.acknowledgeHelp}</span>
-        </div>
+      {/* §3.1: Reconnaître only while the server says OPEN, then the links to the operation it came from. */}
+      {(anomaly.status === 'OPEN' || anomaly.lockerOperationId !== null) && (
+        <DossierActions label={t.actionsLabel}>
+          {anomaly.status === 'OPEN' && (
+            <Button size="sm" aria-haspopup="dialog" onClick={onAcknowledge}>
+              {t.acknowledge}
+            </Button>
+          )}
+          {anomaly.lockerOperationId !== null && (
+            <>
+              <ButtonLink variant="secondary" size="sm" to={transactionHref({ view: 'operations', selectedId: anomaly.lockerOperationId })}>
+                {t.openOperation}
+              </ButtonLink>
+              <ButtonLink variant="secondary" size="sm" to={operationAuditHref(anomaly.lockerOperationId)}>
+                {t.auditOfOperation}
+              </ButtonLink>
+            </>
+          )}
+          {anomaly.status === 'OPEN' && <span className="ag-help">{t.acknowledgeHelp}</span>}
+        </DossierActions>
       )}
+
+      <Callout
+        role={tone === 'none' ? 'neutral' : tone}
+        chips={
+          <>
+            <StatusChip role={severity.role} icon={severity.icon} size="lg">
+              {severity.label}
+            </StatusChip>
+            <StatusChip role={status.role} icon={status.icon} size="lg">
+              {status.label}
+            </StatusChip>
+          </>
+        }
+      >
+        {lead !== null && <p className="ag-callout__lead">{lead}</p>}
+        {hasUnrecognizedValue(anomaly) && <p className="ag-diag__note ag-diag__note--unknown">{t.unrecognizedNote}</p>}
+      </Callout>
 
       <Section title={t.secWhere}>
         <dl className="ag-facts ag-an-grid">
           <div>
             <dt>{t.fCell}</dt>
-            <dd>{anomaly.compartmentId === null ? t.notProvided : <Id id={anomaly.compartmentId} />}</dd>
-            {anomaly.compartmentId !== null && <dd className="ag-help">{t.idOnly}</dd>}
+            <dd>{anomaly.compartmentId === null ? t.notProvided : <CellName compartmentId={anomaly.compartmentId} label={labels.compartment(anomaly.compartmentId)} />}</dd>
           </div>
           <div>
             <dt>{t.fAsset}</dt>
-            <dd>{anomaly.assetId === null ? t.notProvided : <Id id={anomaly.assetId} />}</dd>
-            {anomaly.assetId !== null && <dd className="ag-help">{t.idOnly}</dd>}
+            <dd>{anomaly.assetId === null ? t.notProvided : <AssetName assetId={anomaly.assetId} label={labels.asset(anomaly.assetId)} />}</dd>
           </div>
           <div>
             <dt>{t.fDetected}</dt>
@@ -225,34 +264,11 @@ function DossierBody({ anomaly, detail, loading, failure, retrying, titleId, onR
         <EvidenceBody detail={detail} loading={loading} failure={failure} retrying={retrying} onRetry={onRetry} />
       </Section>
 
-      <Section title={t.secOperation}>
-        {anomaly.lockerOperationId === null ? (
+      {anomaly.lockerOperationId === null && (
+        <Section title={t.secOperation}>
           <p>{t.noOperation}</p>
-        ) : (
-          <dl className="ag-facts">
-            <div>
-              <dt>{t.fOperation}</dt>
-              <dd>
-                <Id id={anomaly.lockerOperationId} />
-              </dd>
-            </div>
-          </dl>
-        )}
-        {anomaly.lockerOperationId !== null && (
-          <ul className="ag-an-links">
-            <li>
-              <Link className="ag-link" to={transactionHref({ view: 'operations', selectedId: anomaly.lockerOperationId })}>
-                {t.openOperation}
-              </Link>
-            </li>
-            <li>
-              <Link className="ag-link" to={operationAuditHref(anomaly.lockerOperationId)}>
-                {t.auditOfOperation}
-              </Link>
-            </li>
-          </ul>
-        )}
-      </Section>
+        </Section>
+      )}
 
       <Section title={t.secAck}>
         {acknowledgedAt === null ? (
@@ -274,17 +290,7 @@ function DossierBody({ anomaly, detail, loading, failure, retrying, titleId, onR
         {anomaly.status === 'RESOLVED' || anomaly.resolvedAt !== null ? (
           <>
             {anomaly.resolvedAt !== null && <p>{t.resolvedAt({ time: instantLabel(anomaly.resolvedAt, i18n) })}</p>}
-            {anomaly.resolutionEvidenceObservationId !== null && (
-              <dl className="ag-facts">
-                <div>
-                  <dt>{t.resolutionObservation}</dt>
-                  <dd>
-                    <Id id={anomaly.resolutionEvidenceObservationId} />
-                  </dd>
-                  <dd className="ag-help">{t.idOnly}</dd>
-                </div>
-              </dl>
-            )}
+            {anomaly.resolutionEvidenceObservationId !== null && <p>{t.resolutionByObservation}</p>}
             {anomaly.resolutionNote !== null && (
               <>
                 <p className="ag-an-sec__note">{t.resolutionNote}</p>
@@ -296,6 +302,8 @@ function DossierBody({ anomaly, detail, loading, failure, retrying, titleId, onR
           <p>{t.notResolved}</p>
         )}
       </Section>
+
+      <TechnicalDetails rows={technical} />
     </>
   )
 }
@@ -333,6 +341,7 @@ function EvidenceBody({ detail, loading, failure, retrying, onRetry }: EvidenceB
 
 function EvidenceList({ evidence }: { readonly evidence: AnomalyEvidence }) {
   const i18n = useI18n()
+  const labels = useLabelIndex()
   const t = i18n.m.anomalies
   return (
     <>
@@ -350,30 +359,16 @@ function EvidenceList({ evidence }: { readonly evidence: AnomalyEvidence }) {
                 {t.evidenceObserved({ time: instantLabel(item.observedAt, i18n) })}
                 {item.receivedAt !== null && ` · ${t.evidenceReceived({ time: instantLabel(item.receivedAt, i18n) })}`}
               </span>
-              <dl className="ag-an-evidence__ids">
-                <div>
-                  <dt>{t.evidenceObservation}</dt>
-                  <dd>
-                    <Id id={item.observationId} />
-                  </dd>
-                </div>
-                {item.compartmentId !== null && (
+              {item.compartmentId !== null && (
+                <dl className="ag-an-evidence__ids">
                   <div>
                     <dt>{t.evidenceCell}</dt>
                     <dd>
-                      <Id id={item.compartmentId} />
+                      <CellName compartmentId={item.compartmentId} label={labels.compartment(item.compartmentId)} />
                     </dd>
                   </div>
-                )}
-                {item.operationId !== null && (
-                  <div>
-                    <dt>{t.evidenceOperation}</dt>
-                    <dd>
-                      <Id id={item.operationId} />
-                    </dd>
-                  </div>
-                )}
-              </dl>
+                </dl>
+              )}
             </li>
           ))}
         </ul>

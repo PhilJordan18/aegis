@@ -3,7 +3,7 @@ import { formattersFor } from '../../i18n/format'
 import { MESSAGES } from '../../i18n/messages'
 import type { I18n } from '../../i18n/useI18n'
 import { parseAuditDetails } from './contractParsers'
-import { actorView, detailRows, eventLabel, groupByDay, resultChip, shortId, stateLabel, subjectLabel } from './auditPresentation'
+import { actorView, detailRows, eventLabel, groupByDay, resultChip, stateLabel, subjectLabel } from './auditPresentation'
 import { eventView, uuid } from './testFixtures'
 
 const i18n = (locale: 'fr' | 'en'): I18n => ({ locale, m: MESSAGES[locale], format: formattersFor(locale) })
@@ -92,10 +92,6 @@ describe('groupByDay', () => {
       ['2026-11-10', [earlier.id]],
     ])
     expect(groups[0]?.heading).toBe('mercredi 11 novembre 2026')
-  })
-
-  it('shortens an identifier for a row', () => {
-    expect(shortId(uuid(123))).toBe('00000000…')
   })
 })
 

@@ -136,6 +136,32 @@ class DemoAccountProvisioningTests extends ApiIntegrationTest {
         assertEquals(0, passwordChangedEvents(technicianId));
     }
 
+    @Test
+    void defaultCreationOnlyProvisioningPreservesSelfServicePasswordAcrossRestart() throws Exception {
+        String email = "self-service-" + UUID.randomUUID() + "@aegis.demo";
+        DemoAccountProperties properties = new DemoAccountProperties(true, false,
+                new DemoAccountProperties.DemoAccount("initial-admin-" + UUID.randomUUID() + "@aegis.demo",
+                        "Admin", "initial-admin-password", AccessLevel.STANDARD),
+                new DemoAccountProperties.DemoAccount(email, "Technician", "initial-technician-password",
+                        AccessLevel.STANDARD));
+        var creationOnly = new DemoAccountProvisioner(properties, accountRepository, passwordEncoder, passwordChanges,
+                transactions);
+        creationOnly.provision();
+        Account initial = accountRepository.findByEmail(email).orElseThrow();
+        passwordChanges.change(initial.id(), "self-selected-password", initial.id());
+        String cookie = browserSession(email, "self-selected-password");
+        Account changed = accountRepository.findByEmail(email).orElseThrow();
+
+        creationOnly.provision();
+        creationOnly.provision();
+
+        assertEquals(changed, accountRepository.findByEmail(email).orElseThrow());
+        assertEquals(1, passwordChangedEvents(initial.id()));
+        refresh(cookie).andExpect(status().isOk());
+        mvc.perform(login(email, "self-selected-password")).andExpect(status().isOk());
+        mvc.perform(login(email, "initial-technician-password")).andExpect(status().isUnauthorized());
+    }
+
     private String browserSession(String email, String password) throws Exception {
         Cookie cookie = mvc.perform(post(LOGIN).contentType(MediaType.APPLICATION_JSON).header(ORIGIN, MANAGER_ORIGIN)
                 .content(jsonMapper.writeValueAsString(
@@ -159,7 +185,7 @@ class DemoAccountProvisioningTests extends ApiIntegrationTest {
 
     private DemoAccountProvisioner provisioner(String adminEmail, String adminPassword, String technicianEmail,
             String technicianPassword) {
-        DemoAccountProperties properties = new DemoAccountProperties(true,
+        DemoAccountProperties properties = new DemoAccountProperties(true, true,
                 new DemoAccountProperties.DemoAccount(adminEmail, "Administrateur Rotation", adminPassword, null),
                 new DemoAccountProperties.DemoAccount(technicianEmail, "Technicien Rotation", technicianPassword,
                         AccessLevel.STANDARD));
