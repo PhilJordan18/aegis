@@ -259,12 +259,14 @@ struct StaleNote: View {
     }
 }
 
-/// Draws the search field's prompt in the muted brand text. The system
-/// placeholder measured 3.1:1 on the field in light (2026-11-27), and iOS
-/// ignores a colour given to the SwiftUI prompt, so the prompt is set on the
-/// UIKit field `.searchable` installs on the navigation item. Set again on
-/// every update and once the view is in a window, since SwiftUI may redraw
-/// the prompt.
+/// Draws the search field's prompt and magnifier in SearchPrompt. Measured in
+/// light (2026-11-27): the system placeholder reached 3.1:1, the iOS 18
+/// magnifier 3.11:1, and BrandMuted 4.50:1 on iOS 26 and 4.27:1 on iOS 18
+/// with Increase Contrast, whose field fill is darker; SearchPrompt is the
+/// darker muted tone that clears 4.5:1 on these fills. iOS ignores a colour
+/// given to the SwiftUI prompt, so both are set on the UIKit field
+/// `.searchable` installs on the navigation item, again on every update and
+/// once the view is in a window, since SwiftUI may redraw the prompt.
 struct SearchPromptColour: UIViewRepresentable {
     let prompt: String
 
@@ -292,7 +294,8 @@ struct SearchPromptColour: UIViewRepresentable {
                 .compactMap { $0 as? UIViewController }
                 .first { $0.navigationItem.searchController != nil }
             guard let field = owner?.navigationItem.searchController?.searchBar.searchTextField else { return }
-            let colour = UIColor(resource: .brandMuted)
+            let colour = UIColor(resource: .searchPrompt)
+            field.leftView?.tintColor = colour
             if field.attributedPlaceholder?.string == prompt,
                field.attributedPlaceholder?.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor == colour {
                 return
