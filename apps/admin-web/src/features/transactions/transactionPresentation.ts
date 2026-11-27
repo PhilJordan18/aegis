@@ -26,6 +26,8 @@ function formatter(locale: I18n['locale'], key: string, options: Intl.DateTimeFo
 export interface TransactionTimes {
   /** « 10 nov., 20 h 30 »: a list row. */
   readonly short: (instant: string) => string
+  /** « 25 nov. »: a day, as in « since 25 Nov ». */
+  readonly day: (instant: string) => string
   /** « 20 h 30 »: the end of a period that starts on the same day. */
   readonly clock: (instant: string) => string
   /** « 20 h 30 min 05 s »: a step of a physical sequence, where seconds matter. */
@@ -47,6 +49,7 @@ export function transactionTimes({ locale }: Pick<I18n, 'locale'>): TransactionT
   }
   return {
     short: unbroken('short', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
+    day: unbroken('day', { month: 'short', day: 'numeric' }),
     clock: unbroken('clock', { hour: 'numeric', minute: '2-digit' }),
     clockSeconds: unbroken('clockSeconds', { hour: 'numeric', minute: '2-digit', second: '2-digit' }),
     full: format('full', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', timeZoneName: 'short' }),

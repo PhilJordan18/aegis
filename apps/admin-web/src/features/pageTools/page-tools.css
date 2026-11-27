@@ -3,3 +3,10 @@
 .ag-help-panel { margin: 0 0 16px; padding: 12px 16px; border: 1px solid var(--ag-border); border-radius: 8px; background: var(--ag-surface-sunken); }
 .ag-help-panel > p { margin: 0 0 6px; }
 .ag-help-panel > p:last-child { margin-bottom: 0; }
+@media (max-width: 559px) {
+  /* §8.6: one line of actions, « Aide » then « Actualiser », and the read time with its chip on the line below. */
+  .ag-page__actions { justify-content: flex-start; }
+  .ag-page__actions > .ag-refresh { display: contents; }
+  .ag-page__actions::after { content: ''; order: 1; flex-basis: 100%; height: 0; }
+  .ag-page__actions > .ag-refresh > .ag-refresh__time, .ag-page__actions > .ag-refresh > .ag-chip { order: 2; }
+}

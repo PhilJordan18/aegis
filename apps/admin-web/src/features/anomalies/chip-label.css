@@ -1,0 +1,5 @@
+.ag-chiplabel__short { display: none; }
+@media (max-width: 559px) {
+  .ag-chiplabel__full { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .ag-chiplabel__short { display: inline; }
+}

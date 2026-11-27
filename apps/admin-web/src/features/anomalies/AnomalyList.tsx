@@ -9,6 +9,7 @@ import { AnomalyAlert } from './AnomalyAlert'
 import type { AnomalyReadFailure } from './anomalyFailure'
 import { anomalyTypeLabel, instantLabel, severityChip, statusChip } from './anomalyPresentation'
 import { AnomalyWhere } from './AnomalyWhere'
+import { ChipLabel } from './ChipLabel'
 import type { LabelIndex } from '../labels/labelIndex'
 import type { AnomalyPage, AnomalyView } from './contract'
 
@@ -113,7 +114,7 @@ function AnomalyRow({ anomaly, labels, selected, href, onSelect }: { readonly an
     <Link className="ag-item" to={href} aria-current={selected ? 'true' : undefined} onClick={(event) => onSelect(anomaly, event)}>
       <span className="ag-item__chips">
         <StatusChip role={severity.role} icon={severity.icon}>
-          {severity.label}
+          <ChipLabel chip={severity} />
         </StatusChip>
         <StatusChip role={status.role} icon={status.icon}>
           {status.label}

@@ -25,6 +25,7 @@
     "test:follow": "playwright test --project=follow",
     "test:links": "playwright test --project=links",
     "test:labels": "playwright test --project=labels",
+    "test:overview": "playwright test --project=overview",
     "capture:forms": "AEGIS_FORMS_CAPTURE=1 playwright test --project=forms",
     "test:e2e:api": "playwright test -c playwright.api.config.ts",
     "test:realapi": "AEGIS_E2E_REAL_API=1 playwright test --project=realapi",

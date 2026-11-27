@@ -1,9 +1,11 @@
-import type { ReactNode } from 'react'
+import type { ReactNode, RefObject } from 'react'
+import { Button } from '../../ui/Button'
 import { Link } from '../../app/Link'
 import { useI18n, type I18n } from '../../i18n/useI18n'
 import { StatusChip } from '../../ui/StatusChip'
 import { anomaliesHref, NO_FILTERS as NO_ANOMALY_FILTERS } from '../anomalies/anomalyLocation'
 import { anomalyTypeLabel, severityChip, statusChip } from '../anomalies/anomalyPresentation'
+import { ChipLabel } from '../anomalies/ChipLabel'
 import type { LabelIndex } from '../labels/labelIndex'
 import { AssetName, CellName } from '../labels/Labels'
 import { assetLabelOf } from '../labels/labelText'
@@ -12,7 +14,8 @@ import type { LoanView, LockerOperationView, ReservationView, TransactionPage } 
 import { NO_FILTERS, transactionHref } from '../transactions/transactionHref'
 import { lateChip, loanChip, operationChip, operationTypeLabel, reservationChip, transactionTimes } from '../transactions/transactionPresentation'
 import { OverviewModule, PartialNotice } from './OverviewModule'
-import { ROW_LIMIT, IN_PROGRESS_OPERATION_STATUSES, type AnomalySummary, type BlockRead, type LoanSummary, type OperationSummary } from './overviewModel'
+import { useMediaQuery } from '../landing/useMediaQuery'
+import { NARROW_QUERY, NARROW_ROW_LIMIT, ROW_LIMIT, IN_PROGRESS_OPERATION_STATUSES, type AnomalySummary, type BlockRead, type LoanSummary, type OperationSummary } from './overviewModel'
 
 interface BlockProps {
   readonly retrying: boolean
@@ -23,19 +26,25 @@ function Rows({ children }: { readonly children: ReactNode }) {
   return <ul className="ag-ov__body">{children}</ul>
 }
 
-function Row({ to, chips, main, meta }: { readonly to: string; readonly chips: ReactNode; readonly main: ReactNode; readonly meta: ReactNode }) {
+function Row({ to, chips, main, meta, action }: { readonly to: string; readonly chips: ReactNode; readonly main: ReactNode; readonly meta: ReactNode; readonly action?: ReactNode }) {
   return (
-    <li>
+    <li className={action === undefined ? undefined : 'ag-ov__item'}>
       <Link className="ag-ov__row" to={to}>
         <span className="ag-ov__chips">{chips}</span>
         <span className="ag-ov__main">{main}</span>
         <span className="ag-ov__meta">{meta}</span>
       </Link>
+      {action}
     </li>
   )
 }
 
 /** « Affichage de 5 sur 12. » when the page behind the link holds more than the block previews. */
+/** The rows a module previews at the current width (§8.1). */
+function useRowLimit(): number {
+  return useMediaQuery(NARROW_QUERY) ? NARROW_ROW_LIMIT : ROW_LIMIT
+}
+
 function ShownNote({ shown, total }: { readonly shown: number; readonly total: number }) {
   const { m } = useI18n()
   return total > shown ? <span className="ag-ov__shown">{m.overview.shownOf({ shown, total })}</span> : null
@@ -74,26 +83,37 @@ function cellPart(compartmentId: string | null, labels: LabelIndex, { m }: I18n)
 
 // ---------------------------------------------------------------- 1. anomalies
 
-export function AnomaliesBlock({ read, labels, retrying, onRetry }: BlockProps & { readonly read: BlockRead<AnomalySummary>; readonly labels: LabelIndex }) {
+interface AnomaliesBlockProps extends BlockProps {
+  readonly read: BlockRead<AnomalySummary>
+  readonly labels: LabelIndex
+  /** Opens the acknowledgement dialog in place (§2.3); the row stays a link to the dossier. */
+  readonly onAcknowledge: (anomaly: AnomalyView) => void
+  readonly headingRef: RefObject<HTMLHeadingElement | null>
+}
+
+export function AnomaliesBlock({ read, labels, retrying, onRetry, onAcknowledge, headingRef }: AnomaliesBlockProps) {
   const i18n = useI18n()
   const { m } = i18n
   const t = m.overview
   const summary = read.kind === 'ready' ? read.value : null
+  const limit = useRowLimit()
+  const rows = summary === null ? [] : summary.rows.slice(0, limit)
   return (
     <OverviewModule
       title={t.anomalies}
       className="ag-ov__mod--anomalies"
+      headingRef={headingRef}
       primary
       read={read}
       retrying={retrying}
       onRetry={onRetry}
       count={summary === null ? undefined : summary.total > 0 ? { text: t.anomaliesCount({ count: summary.total }) } : { text: t.noneAnomalies, none: true }}
-      foot={summary === null ? undefined : <Foot to={anomaliesHref({ filters: { ...NO_ANOMALY_FILTERS, status: 'OPEN' }, page: 0, anomalyId: null })} label={t.viewAnomalies} shown={summary.rows.length} total={summary.total} />}
+      foot={summary === null ? undefined : <Foot to={anomaliesHref({ filters: { ...NO_ANOMALY_FILTERS, status: 'OPEN' }, page: 0, anomalyId: null })} label={summary.total > 0 ? t.viewAnomaliesCount({ count: summary.total }) : t.viewAnomalies} shown={rows.length} total={summary.total} />}
     >
-      {summary !== null && summary.rows.length > 0 && (
+      {rows.length > 0 && (
         <Rows>
-          {summary.rows.map((anomaly) => (
-            <AnomalyRow key={anomaly.id} anomaly={anomaly} labels={labels} />
+          {rows.map((anomaly) => (
+            <AnomalyRow key={anomaly.id} anomaly={anomaly} labels={labels} onAcknowledge={onAcknowledge} />
           ))}
         </Rows>
       )}
@@ -101,7 +121,7 @@ export function AnomaliesBlock({ read, labels, retrying, onRetry }: BlockProps &
   )
 }
 
-function AnomalyRow({ anomaly, labels }: { readonly anomaly: AnomalyView; readonly labels: LabelIndex }) {
+function AnomalyRow({ anomaly, labels, onAcknowledge }: { readonly anomaly: AnomalyView; readonly labels: LabelIndex; readonly onAcknowledge: (anomaly: AnomalyView) => void }) {
   const i18n = useI18n()
   const severity = severityChip(anomaly.severity, i18n)
   const status = statusChip(anomaly.status, i18n)
@@ -123,7 +143,7 @@ function AnomalyRow({ anomaly, labels }: { readonly anomaly: AnomalyView; readon
       chips={
         <>
           <StatusChip role={severity.role} icon={severity.icon}>
-            {severity.label}
+            <ChipLabel chip={severity} />
           </StatusChip>
           <StatusChip role={status.role} icon={status.icon}>
             {status.label}
@@ -131,10 +151,26 @@ function AnomalyRow({ anomaly, labels }: { readonly anomaly: AnomalyView; readon
         </>
       }
       main={anomalyTypeLabel(anomaly, i18n)}
+      action={
+        // The server's status decides: only an open anomaly is acknowledged, and acknowledging never resolves it.
+        anomaly.status === 'OPEN' ? (
+          <Button variant="secondary" size="sm" aria-label={i18n.m.overview.acknowledgeRow({ what: anomalyTypeLabel(anomaly, i18n) })} onClick={() => onAcknowledge(anomaly)}>
+            {i18n.m.anomalies.acknowledge}
+          </Button>
+        ) : undefined
+      }
       // The time never breaks across two lines, and stays in the laboratory zone like every other row of this page.
+      // Below 560 px it is placed on the chips line (§8.6) but stays last in the DOM: the reading order is unchanged.
       meta={
         <>
-          {where} · {i18n.m.anomalies.detected({ time: transactionTimes(i18n).short(anomaly.detectedAt) })}
+          <span className="ag-ov__where">{where}</span>
+          <span className="ag-ov__when">
+            <span className="ag-ov__when-lead">
+              {' · '}
+              {i18n.m.anomalies.detectedLead}
+            </span>
+            <span className="ag-nowrap">{transactionTimes(i18n).short(anomaly.detectedAt)}</span>
+          </span>
         </>
       }
     />
@@ -149,6 +185,7 @@ export function LoansBlock({ read, retrying, onRetry }: BlockProps & { readonly 
   const t = m.overview
   const times = transactionTimes(i18n)
   const summary = read.kind === 'ready' ? read.value : null
+  const limit = useRowLimit()
   const unread = summary?.gaps.find((gap) => gap.kind === 'unread')
   const truncated = summary?.gaps.find((gap) => gap.kind === 'truncated')
 
@@ -168,11 +205,11 @@ export function LoansBlock({ read, retrying, onRetry }: BlockProps & { readonly 
       retrying={retrying}
       onRetry={onRetry}
       count={count}
-      foot={summary === null ? undefined : <Foot to={transactionHref({ view: 'loans' })} label={t.viewLoans} shown={Math.min(summary.overdue.length, ROW_LIMIT)} total={summary.overdue.length} />}
+      foot={summary === null ? undefined : <Foot to={transactionHref({ view: 'loans' })} label={t.viewLoans} shown={Math.min(summary.overdue.length, limit)} total={summary.overdue.length} />}
     >
       {summary !== null && summary.overdue.length > 0 && (
         <Rows>
-          {summary.overdue.slice(0, ROW_LIMIT).map((loan) => (
+          {summary.overdue.slice(0, limit).map((loan) => (
             <Row
               key={loan.id}
               to={transactionHref({ view: 'loans', selectedId: loan.id })}
@@ -185,7 +222,7 @@ export function LoansBlock({ read, retrying, onRetry }: BlockProps & { readonly 
               main={assetName(loan.asset)}
               meta={
                 <>
-                  <strong>{m.reservations.lateSince({ time: times.short(loan.dueAt) })}</strong> · {holderText(loan.holder, i18n)}
+                  <strong>{m.reservations.lateSince({ time: times.short(loan.dueAt) })}</strong> · {holderText(loan.holder, i18n)} · <span className="ag-ov__open">{t.openLoan}</span>
                 </>
               }
             />
@@ -230,6 +267,8 @@ export function OperationsBlock({ read, labels, retrying, onRetry }: BlockProps 
   const t = m.overview
   const times = transactionTimes(i18n)
   const summary = read.kind === 'ready' ? read.value : null
+  const limit = useRowLimit()
+  const operationRows = summary === null ? [] : summary.rows.slice(0, limit)
 
   let count: { text: string; none?: boolean } | undefined
   if (summary !== null) {
@@ -246,11 +285,11 @@ export function OperationsBlock({ read, labels, retrying, onRetry }: BlockProps 
       retrying={retrying}
       onRetry={onRetry}
       count={count}
-      foot={summary === null ? undefined : <Foot to={transactionHref({ view: 'operations' })} label={t.viewOperations} shown={summary.rows.length} total={summary.count.n} />}
+      foot={summary === null ? undefined : <Foot to={transactionHref({ view: 'operations' })} label={summary.count.complete && summary.count.n > 0 ? t.viewOperationsCount({ count: summary.count.n }) : t.viewOperations} shown={operationRows.length} total={summary.count.n} />}
     >
-      {summary !== null && summary.rows.length > 0 && (
+      {operationRows.length > 0 && (
         <Rows>
-          {summary.rows.map((operation) => (
+          {operationRows.map((operation) => (
             <OperationRow key={operation.id} operation={operation} labels={labels} expiresAt={operation.expiresAt === null ? null : times.clock(operation.expiresAt)} />
           ))}
         </Rows>
@@ -302,6 +341,8 @@ export function ReservationsBlock({ read, retrying, onRetry }: BlockProps & { re
   const t = m.overview
   const times = transactionTimes(i18n)
   const page = read.kind === 'ready' ? read.value : null
+  const limit = useRowLimit()
+  const items = page === null ? [] : page.items.slice(0, limit)
   const active = { ...NO_FILTERS, status: 'ACTIVE' }
   return (
     <OverviewModule
@@ -311,11 +352,11 @@ export function ReservationsBlock({ read, retrying, onRetry }: BlockProps & { re
       retrying={retrying}
       onRetry={onRetry}
       count={page === null ? undefined : page.totalItems > 0 ? { text: t.reservationsCount({ count: page.totalItems }) } : { text: t.noneReservations, none: true }}
-      foot={page === null ? undefined : <Foot to={transactionHref({ view: 'reservations', filters: active })} label={t.viewReservations} shown={page.items.length} total={page.totalItems} />}
+      foot={page === null ? undefined : <Foot to={transactionHref({ view: 'reservations', filters: active })} label={page.totalItems > 0 ? t.viewReservationsCount({ count: page.totalItems }) : t.viewReservations} shown={items.length} total={page.totalItems} />}
     >
-      {page !== null && page.items.length > 0 && (
+      {items.length > 0 && (
         <Rows>
-          {page.items.map((reservation) => {
+          {items.map((reservation) => {
             const chip = reservationChip(reservation.status, i18n)
             return (
               <Row

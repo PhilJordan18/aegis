@@ -653,7 +653,7 @@ export const en: Messages = {
 
   overview: {
     heading: 'Overview',
-    lead: 'What needs attention, most urgent first. Read only: no corrective action is possible here.',
+    lead: 'What needs attention, most urgent first.',
     zoneNote: ({ zone }: { zone: string }) => `Laboratory time: ${zone}`,
     updatedAt: ({ time }: { time: string }) => `Updated at ${time}`,
     refresh: 'Refresh',
@@ -687,6 +687,32 @@ export const en: Messages = {
     viewOperations: 'View operations',
     viewReservations: 'View reservations',
     viewLocker: 'View lockers',
+    viewAnomaliesCount: ({ count: value }: { count: number }) => (value === 1 ? 'View the anomaly' : `View the ${count.format(value)} anomalies`),
+    viewOperationsCount: ({ count: value }: { count: number }) => (value === 1 ? 'View the operation' : `View the ${count.format(value)} operations`),
+    viewReservationsCount: ({ count: value }: { count: number }) => (value === 1 ? 'View the reservation' : `View the ${count.format(value)} reservations`),
+
+    band: 'Summary',
+    bandReadAt: ({ time }: { time: string }) => `Read at ${time} · oldest read`,
+    bandLoading: 'Loading the summary',
+    tileNone: 'None',
+    tileNoLocker: 'No locker',
+    tileUnavailable: 'Unavailable',
+    tileLockerUnavailable: 'Status unavailable',
+    tilePartial: 'Incomplete read',
+    tileAtLeast: ({ count: value }: { count: number }) => `${count.format(value)}+`,
+    tileLocker: ({ code }: { code: string }) => `Locker ${code}`,
+    tileMoreLockers: ({ count: value }: { count: number }) => (value === 1 ? `+${count.format(value)} locker` : `+${count.format(value)} lockers`),
+    tileOfflineSince: ({ time }: { time: string }) => `Last signal ${time}`,
+    tileLateSince: ({ day }: { day: string }) => `since ${day}`,
+    tileSeverity: ({ high, medium, low }: { high: number; medium: number; low: number }) =>
+      [high > 0 ? `${count.format(high)} high` : null, medium > 0 ? `${count.format(medium)} medium` : null, low > 0 ? `${count.format(low)} low` : null]
+        .filter((part) => part !== null)
+        .join(' · '),
+    allClear: ({ time }: { time: string }) => `Nothing awaiting action · read at ${time}`,
+    notConfirmed: 'Incomplete read: the absence of anything to do is not confirmed.',
+    acknowledgeRow: ({ what }: { what: string }) => `Acknowledge: ${what}`,
+    acknowledgedAnnounce: 'Anomaly acknowledged; it stays open until a new observation.',
+    openLoan: 'Open the loan',
 
     untilTime: ({ time }: { time: string }) => `Until ${time}`,
     expiresAt: ({ time }: { time: string }) => `Expires at ${time}`,
@@ -711,6 +737,8 @@ export const en: Messages = {
     lockerUnknownBody: 'No valid signal has been received yet: neither presence nor absence is assumed.',
     lockerStatusTitle: ({ code }: { code: string }) => `Status of locker ${code} not loaded.`,
     windowOpen: ({ time }: { time: string }) => `Open · closes ${time}`,
+    windowOpenLead: 'Open · ',
+    windowCloses: ({ time }: { time: string }) => `closes ${time}`,
     windowClosed: ({ time }: { time: string }) => `Closed · next opening ${time}`,
     windowClosedNoNext: 'Closed · no next opening',
     cell: 'Cell',
@@ -949,6 +977,8 @@ export const en: Messages = {
     selectedOverline: 'Selected anomaly',
     selectedStatus: ({ name }: { name: string }) => `Selected anomaly: ${name}.`,
     detected: ({ time }: { time: string }) => `Detected ${time}`,
+    /** The word before a detection time shown on its own (overview anomaly rows below 560 px, §8.6). */
+    detectedLead: 'Detected ',
     cellUnlabelled: 'Unnamed cell',
     assetUnlabelled: 'Unnamed equipment',
     noCell: 'No cell given',
