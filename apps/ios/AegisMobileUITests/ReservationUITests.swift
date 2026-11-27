@@ -242,32 +242,39 @@ final class ReservationUITests: XCTestCase {
     /// « Mon activité » at the largest text size (#222): the reservation,
     /// the overdue loan and the empty state, in light and dark. Each state is
     /// audited at the top, then again with its last control scrolled into
-    /// view. That last control, « Voir les équipements » included, is also
-    /// measured on its own pixels.
+    /// view. Each listed control, down to the last one of the state
+    /// (« Actualiser », or the loan notice's retry below « Voir les
+    /// équipements »), is scrolled into view and measured on its own pixels.
     @MainActor
     func testActivityAtTheLargestTextSize() throws {
         let largest = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
-        let states = [("activity-reserved", "reserved", "activity.cancel"),
-                      ("activity-loan", "loan", "activity.return"),
-                      ("reservation", "empty", "activity.browse")]
+        // Top to bottom; the last one ends each state's content.
+        let states = [("activity-reserved", "reserved", ["activity.cancel", "activity.refresh"]),
+                      ("activity-loan", "loan", ["activity.return", "activity.loan.refresh"]),
+                      ("reservation", "empty", ["activity.browse", "activity.loan.retry"])]
         for appearance in [XCUIDevice.Appearance.light, .dark] {
             XCUIDevice.shared.appearance = appearance
             let theme = appearance == .dark ? "dark" : "light"
-            for (scenario, name, last) in states {
+            for (scenario, name, controls) in states {
                 let app = launch(.french, scenario: scenario, tab: "activity", arguments: largest)
-                let target = element(app, last)
-                XCTAssertTrue(target.waitForExistence(timeout: 30), "\(name): \(last) missing")
+                XCTAssertTrue(element(app, controls[0]).waitForExistence(timeout: 30), "\(name): \(controls[0]) missing")
                 attach(app, "fr-activity-\(name)-ax5-\(theme)")
                 try audit(app, atLargestSize: true)
 
-                XCTAssertTrue(scrollIntoView(target, in: app), "\(name): \(last) never became reachable")
+                // Each control is measured on its own pixels, before the
+                // audit scrolls the screen: at the end of the content it may
+                // sit under the audit's fade allowance, where the audit
+                // cannot judge it.
+                for control in controls {
+                    let target = element(app, control)
+                    XCTAssertTrue(target.exists, "\(name): \(control) missing")
+                    XCTAssertTrue(scrollIntoView(target, in: app), "\(name): \(control) never became reachable")
+                    // « Actualiser » and the notice's retry are compact,
+                    // bordered capsules.
+                    assertRenderedContrast(of: target, in: app, bordered: control != controls[0])
+                }
                 // Captured before the audit, so a failing audit keeps its screen.
                 attach(app, "fr-activity-\(name)-ax5-\(theme)-end")
-                // The last control is measured on its own pixels in every
-                // state, before the audit scrolls the screen: at the end of
-                // the content it may sit under the audit's fade allowance,
-                // where the audit cannot judge it.
-                assertRenderedContrast(of: target, in: app)
                 try audit(app, atLargestSize: true)
                 app.terminate()
             }
@@ -366,27 +373,43 @@ final class ReservationUITests: XCTestCase {
     }
 
     /// The control's weakest ink against its own fill, read from the screen
-    /// (#222): kept as evidence, and failed below 4.5:1.
+    /// (#222): kept as evidence, and failed below 4.5:1. A control drawn in a
+    /// bordered capsule (`CompactButtonStyle`) is measured twice
+    /// (2026-11-27): its text on a crop inside the border, at 4.5:1, and the
+    /// whole control, border included, at 3:1, the WCAG 1.4.11 minimum for a
+    /// component's boundary. Neither ink is left out.
     @MainActor
-    private func assertRenderedContrast(of target: XCUIElement, in app: XCUIApplication,
+    private func assertRenderedContrast(of target: XCUIElement, in app: XCUIApplication, bordered: Bool = false,
                                         file: StaticString = #filePath, line: UInt = #line) {
         let window = app.windows.firstMatch.frame
         let shot = app.screenshot()
-        let image = Self.crop(shot, to: target.frame, window: window)
-        let evidence = XCTAttachment(image: image)
-        evidence.name = "rendered-contrast-\(target.identifier)"
-        evidence.lifetime = .keepAlways
-        add(evidence)
-        guard let ratio = RenderedContrast.ratio(of: image) else {
-            return XCTFail("No ink measured in \(target.identifier) at \(target.frame)", file: file, line: line)
+        let frame = target.frame
+        // The capsule's ends curve within its radius: on the middle 40 % of
+        // its height the 1 pt border stays within 6 pt of each side.
+        let inner = CGRect(x: frame.minX + 6, y: frame.minY + frame.height * 0.3,
+                           width: max(0, frame.width - 12), height: frame.height * 0.4)
+        let measures = bordered
+            ? [("text", inner, 4.5), ("boundary", frame, 3.0)]
+            : [("", frame, 4.5)]
+        for (part, area, threshold) in measures {
+            let name = "rendered-contrast-\(target.identifier)" + (part.isEmpty ? "" : "-\(part)")
+            let image = Self.crop(shot, to: area, window: window)
+            let evidence = XCTAttachment(image: image)
+            evidence.name = name
+            evidence.lifetime = .keepAlways
+            add(evidence)
+            guard let ratio = RenderedContrast.ratio(of: image) else {
+                XCTFail("No ink measured in \(name) at \(area)", file: file, line: line)
+                continue
+            }
+            let measure = XCTAttachment(string: "\(target.identifier)" + (part.isEmpty ? "" : " \(part)")
+                + " at \(area), " + measureConditions(in: app, window: window, shot: shot)
+                + String(format: ": rendered %.2f:1, threshold %.1f:1", ratio, threshold))
+            measure.name = "\(name)-ratio"
+            measure.lifetime = .keepAlways
+            add(measure)
+            XCTAssertGreaterThanOrEqual(ratio, threshold, "\(name) contrast", file: file, line: line)
         }
-        let measure = XCTAttachment(string: "\(target.identifier) at \(target.frame), "
-            + measureConditions(in: app, window: window, shot: shot)
-            + String(format: ": rendered %.2f:1, threshold 4.5:1", ratio))
-        measure.name = "rendered-contrast-\(target.identifier)-ratio"
-        measure.lifetime = .keepAlways
-        add(measure)
-        XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(target.identifier) contrast", file: file, line: line)
     }
 
     /// The loan read failure, found by its words so the order is checked
