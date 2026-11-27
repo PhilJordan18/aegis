@@ -310,7 +310,7 @@ test.describe('flow: équipements (production page, routed fakes)', () => {
 
   test('flow: changes go through explicit actions only, and opening the page writes nothing', async ({ page }) => {
     const requests = await openEquipment(page, 'nominal')
-    await expect(page.locator('main').getByRole('button')).toHaveText(['Actualiser', 'Nouvel exemplaire', 'Rechercher', 'Modifier', 'Archiver', 'Modifier le placement', 'Attribuer un identifiant'])
+    await expect(page.locator('main').getByRole('button')).toHaveText(['Actualiser', 'Nouvel exemplaire', 'Modifier', 'Modifier le placement', 'Attribuer un identifiant', 'Archiver'])
     // The search box (#109) is the only field: it filters a read, it never writes.
     await expect(page.locator('main').locator('input, select, textarea')).toHaveCount(1)
     await expect(page.locator('main').getByRole('search').getByRole('searchbox')).toHaveCount(1)
@@ -378,7 +378,7 @@ test.describe('flow: casiers (production page, routed fakes)', () => {
     await expect(panel).toContainText("Le casier n'envoie plus de signal valide.")
     await expect(panel).not.toContainText('En ligne')
     // The status is a chip with a symbol, not a colour.
-    await expect(panel.locator('.ag-diag .ag-chip svg')).toHaveCount(1)
+    await expect(panel.locator('.ag-callout .ag-chip').first().locator('svg')).toHaveCount(1)
     // As the server sends it: the cells keep the last heartbeat values, shown as a memory and not as current health.
     await expect(panel).toContainText('Dernier état connu, à la dernière observation')
     await expect(panel.getByRole('table')).toContainText('Connectée')

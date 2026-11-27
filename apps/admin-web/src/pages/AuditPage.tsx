@@ -26,11 +26,12 @@ import { useI18n } from '../i18n/useI18n'
 import { Icon } from '../ui/Icon'
 import '../app/page.css'
 import '../features/catalog/equipment.css'
+import { useRecordsLayout } from '../features/pageTools/useRecordsLayout'
 import '../features/audit/audit.css'
 
 const LIST_TITLE_ID = 'audit-liste'
 
-/** The dossier sits under the list below 1024 px, out of sight after a selection (handoff §5). */
+/** The dossier sits under the card rows below 1024 px, out of sight after a selection (Design §8.3). */
 function isStackedLayout(): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches
 }
@@ -43,6 +44,8 @@ function isStackedLayout(): boolean {
  */
 export function AuditPage({ sessionProfile }: { readonly sessionProfile: UserProfile }) {
   const i18n = useI18n()
+  // Design §8.3: card rows beside the dossier from 1024 px, the table beside a 480 px dossier from 1280 px.
+  const layout = useRecordsLayout()
   const { m } = i18n
   const t = m.audit
   const router = useRouter()
@@ -212,7 +215,7 @@ export function AuditPage({ sessionProfile }: { readonly sessionProfile: UserPro
           onClear={() => apply(NO_FILTERS)}
         />
 
-        <div className={showDossier ? 'ag-eq' : 'ag-eq ag-eq--single'}>
+        <div className={`ag-eq${layout === 'cards' ? '' : ' ag-eq--table'}${showDossier ? '' : ' ag-eq--single'}`}>
           <div className="ag-au-listwrap" ref={listRef}>
             <AuditList
               titleId={LIST_TITLE_ID}

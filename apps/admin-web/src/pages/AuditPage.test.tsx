@@ -49,6 +49,13 @@ afterEach(() => {
   window.history.replaceState(null, '', '/')
 })
 
+/** The event dossier: the one named group outside the filter bar and its chips. */
+const dossierGroup = (): HTMLElement => {
+  const groups = screen.getAllByRole('group', { name: /./ }).filter((group) => group.closest('.ag-au-filters, .ag-chips') === null)
+  expect(groups).toHaveLength(1)
+  return groups[0] as HTMLElement
+}
+
 describe('Audit (#53, 09 §19.1) — nominal', () => {
   it('shows the read-only notice, the events with a label from their code, and the first one in the dossier', async () => {
     const { auditGateway } = renderAudit([pageOk(auditPage([COMMAND, REFUSED, UPDATED]))])
@@ -60,13 +67,13 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
     expect(list.getByRole('heading', { level: 2, name: '3 événements chargés' })).toBeTruthy()
     const rows = list.getAllByRole('link')
     expect(rows).toHaveLength(3)
-    expect(plain(rows[0]?.textContent)).toContain('Commande acquittée par la cellule')
-    expect(plain(rows[0]?.textContent)).toContain('Système')
-    expect(plain(rows[0]?.textContent)).toMatch(/Opération · 7c9e6679…/)
-    expect(plain(rows[0]?.textContent)).toMatch(/Commande transmise\s*→\s*vers Commande acquittée/)
-    expect(plain(rows[1]?.textContent)).toContain('Code du casier refusé')
-    expect(plain(rows[1]?.textContent)).toContain('Refusé')
-    expect(plain(rows[1]?.textContent)).toContain('Administrateur de démonstration')
+    expect(plain(rows[0]?.closest('tr')?.textContent)).toContain('Commande acquittée par la cellule')
+    expect(plain(rows[0]?.closest('tr')?.textContent)).toContain('Système')
+    expect(plain(rows[0]?.closest('tr')?.textContent)).toMatch(/Opération · 7c9e6679…/)
+    expect(plain(rows[0]?.closest('tr')?.textContent)).toMatch(/Commande transmise\s*→\s*vers Commande acquittée/)
+    expect(plain(rows[1]?.closest('tr')?.textContent)).toContain('Code du casier refusé')
+    expect(plain(rows[1]?.closest('tr')?.textContent)).toContain('Refusé')
+    expect(plain(rows[1]?.closest('tr')?.textContent)).toContain('Administrateur de démonstration')
     expect(rows[0]?.getAttribute('aria-current')).toBe('true')
 
     const dossier = screen.getByRole('group', { name: 'Commande acquittée par la cellule' })
@@ -81,6 +88,17 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
     expect(queryOf(auditGateway, 0)).toEqual({ limit: 50, cursor: undefined })
   })
 
+  it('reads as a table grouped by day, with fixed columns and no sort (§3.3)', async () => {
+    renderAudit([pageOk(auditPage([COMMAND, REFUSED]))])
+    await timeline()
+    const table = document.querySelector('table.ag-au-table') as HTMLElement
+    expect([...table.querySelectorAll('thead th')].map((cell) => cell.textContent)).toEqual(['Heure', 'Événement', 'Acteur', 'Sujet', 'Transition'])
+    expect(table.querySelector('caption')?.className).toBe('ag-sr-only')
+    expect(table.querySelectorAll('th[scope="colgroup"]').length).toBeGreaterThan(0)
+    expect(table.querySelector('[aria-sort], thead button')).toBeNull()
+    expect(screen.getByRole('heading', { level: 2, name: '2 événements chargés' })).toBeTruthy()
+  })
+
   it('offers no write action: only reading controls exist', async () => {
     renderAudit([pageOk(auditPage([COMMAND, REFUSED]))])
     await timeline()
@@ -88,7 +106,7 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
     // « Copier » in « Détails techniques » only reads an identifier to the clipboard.
     const names = within(main).getAllByRole('button').map((button) => button.textContent?.trim()).filter((name) => name !== 'Copier')
     // The label index has no gateway here: its « Réessayer » reads it again.
-    expect(names).toEqual(['Aide', 'Actualiser', 'Réessayer', 'Filtrer', 'Tout afficher'])
+    expect(names).toEqual(['Aide', 'Actualiser', 'Réessayer', 'Aujourd\'hui', '7 jours', '30 jours'])
   })
 
   it('selects another event in the dossier and announces it', async () => {
@@ -105,19 +123,19 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
     const known = eventView(6, { eventType: 'OPERATION_FAILED', result: 'ACCEPTED', reason: 'LOCAL_PROOF_GUARD_FAILED' })
     const view = renderAudit([pageOk(auditPage([known]))])
     await timeline()
-    const dossier = screen.getByRole('group', { name: /./ })
+    const dossier = dossierGroup()
     expect(plain(within(dossier).getByText('LOCAL_PROOF_GUARD_FAILED').parentElement?.textContent)).toBe('Contrôle refusé au scan : tentative terminée LOCAL_PROOF_GUARD_FAILED')
     view.unmount()
 
     renderAudit([pageOk(auditPage([known]))], { locale: 'en' })
     await timeline()
-    expect(plain(within(screen.getByRole('group', { name: /./ })).getByText('LOCAL_PROOF_GUARD_FAILED').parentElement?.textContent)).toBe('Check refused at the scan: attempt ended LOCAL_PROOF_GUARD_FAILED')
+    expect(plain(within(dossierGroup()).getByText('LOCAL_PROOF_GUARD_FAILED').parentElement?.textContent)).toBe('Check refused at the scan: attempt ended LOCAL_PROOF_GUARD_FAILED')
   })
 
   it('says what is missing instead of completing it: no result, no reason, no operation, no evidence', async () => {
     renderAudit([pageOk(auditPage([eventView(4, { result: null, reason: null, operationId: null })]))])
     await timeline()
-    const dossier = screen.getByRole('group', { name: /./ })
+    const dossier = dossierGroup()
     expect(within(dossier).getAllByText('Résultat non renseigné').length).toBeGreaterThan(0)
     expect(within(dossier).getByText('Aucun motif')).toBeTruthy()
     expect(within(dossier).getByText('Aucune opération associée')).toBeTruthy()
@@ -147,7 +165,7 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
     }
     renderAudit([pageOk(auditPage([eventView(4, { details }), eventView(5)]))])
     await timeline()
-    const dossier = screen.getByRole('group', { name: /./ })
+    const dossier = dossierGroup()
     const section = within(dossier).getByRole('heading', { level: 3, name: 'Détails filtrés' }).closest('section') as HTMLElement
     const rows = Object.fromEntries(within(section).getAllByRole('term').map((term) => [plain(term.textContent), plain(term.nextElementSibling?.textContent)]))
     expect(rows).toEqual({
@@ -178,7 +196,7 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
   it('shows what a catalog update changed, as « champ : avant → après », from the nested allowlisted paths', async () => {
     renderAudit([pageOk(auditPage([eventView(4, { details: ASSET_UPDATED_STATUS }), eventView(5)]))])
     await timeline()
-    const dossier = screen.getByRole('group', { name: /./ })
+    const dossier = dossierGroup()
     const section = within(dossier).getByRole('heading', { level: 3, name: 'Détails filtrés' }).closest('section') as HTMLElement
     const terms = within(section).getAllByRole('term')
     expect(terms.map((term) => plain(term.textContent))).toEqual(['État de service'])
@@ -190,7 +208,7 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
   it('shows a schedule update day by day and counts an unknown key next to it', async () => {
     renderAudit([pageOk(auditPage([eventView(4, { eventType: 'SCHEDULE_UPDATED', subjectType: 'OPERATING_SCHEDULE', details: { ...SCHEDULE_UPDATED_CHANGED, extra: { a: 1 } } }), eventView(5)]))], { locale: 'en' })
     await timeline()
-    const dossier = screen.getByRole('group', { name: /./ })
+    const dossier = dossierGroup()
     const section = within(dossier).getByRole('heading', { level: 3, name: 'Filtered details' }).closest('section') as HTMLElement
     const rows = Object.fromEntries(within(section).getAllByRole('term').map((term) => [plain(term.textContent), plain(term.nextElementSibling?.textContent)]))
     expect(rows.Monday).toBe('Before 07:00 – 18:00 → After 07:00 – 19:30')
@@ -211,8 +229,8 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
     const odd = eventView(5, { eventType: 'FUTURE_EVENT', actor: 'SYSTEM', summary: 'Texte du serveur' })
     renderAudit([pageOk(auditPage([odd]))])
     const list = await timeline()
-    expect(plain(list.getAllByRole('link')[0]?.textContent)).toContain('Événement non reconnu · FUTURE_EVENT')
-    expect(plain(list.getAllByRole('link')[0]?.textContent)).toContain('Acteur illisible')
+    expect(plain(list.getAllByRole('link')[0]?.closest('tr')?.textContent)).toContain('Événement non reconnu · FUTURE_EVENT')
+    expect(plain(list.getAllByRole('link')[0]?.closest('tr')?.textContent)).toContain('Acteur illisible')
     expect(screen.queryByText('Texte du serveur')).toBeNull()
     expect(screen.getByText('Le serveur a envoyé un acteur que cette version ne sait pas lire. Rien n\'est supposé.')).toBeTruthy()
   })
@@ -222,8 +240,8 @@ describe('Audit (#53, 09 §19.1) — nominal', () => {
     const list = await timeline()
     expect(list.getByRole('heading', { level: 2, name: '2 events loaded' })).toBeTruthy()
     expect(screen.getByText('Read-only history: no event can be modified or deleted.')).toBeTruthy()
-    expect(plain(list.getAllByRole('link')[0]?.textContent)).toContain('Command acknowledged by the cell')
-    expect(plain(list.getAllByRole('link')[0]?.textContent)).toContain('System')
+    expect(plain(list.getAllByRole('link')[0]?.closest('tr')?.textContent)).toContain('Command acknowledged by the cell')
+    expect(plain(list.getAllByRole('link')[0]?.closest('tr')?.textContent)).toContain('System')
     expect(plain(list.getAllByRole('link')[1]?.textContent)).toContain('Locker code refused')
     expect(list.getByRole('button', { name: 'Load more' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy()
@@ -330,19 +348,32 @@ describe('Audit — filters', () => {
     })
     expect(screen.getByText('(4 actifs)')).toBeTruthy()
     const chips = screen.getByRole('group', { name: 'Filtres actifs' })
-    expect(within(chips).getAllByRole('button')).toHaveLength(4)
+    expect(within(chips).getAllByRole('button', { name: /^Retirer le filtre/ })).toHaveLength(4)
   })
 
-  it('applies the form to the address and starts a new walk', async () => {
+  it('applies a typed code 300 ms after the last keystroke and starts a new walk (§3.4)', async () => {
     const { auditGateway } = renderAudit([pageOk(auditPage([COMMAND])), pageOk(auditPage([REFUSED]))])
     await timeline()
     const user = userEvent.setup()
     await user.click(screen.getByText('Filtres'))
+    expect(screen.queryByRole('button', { name: 'Filtrer' })).toBeNull()
     await user.type(screen.getByLabelText("Type d'événement (code)"), 'LOCAL_CHALLENGE_REJECTED')
-    await user.click(screen.getByRole('button', { name: 'Filtrer' }))
     await waitFor(() => expect(window.location.search).toBe('?type=LOCAL_CHALLENGE_REJECTED'))
     await waitFor(() => expect(auditGateway.listAuditEvents).toHaveBeenCalledTimes(2))
     expect(queryOf(auditGateway, 1)).toEqual({ eventType: 'LOCAL_CHALLENGE_REJECTED', limit: 50, cursor: undefined })
+  })
+
+  it('sends no request for an identifier that is not a UUID, and says what is expected', async () => {
+    const { auditGateway } = renderAudit([pageOk(auditPage([COMMAND])), pageOk(auditPage([REFUSED]))])
+    await timeline()
+    const user = userEvent.setup()
+    await user.click(screen.getByText('Filtres'))
+    const field = screen.getByLabelText("Identifiant d'opération")
+    await user.type(field, 'abc')
+    expect(within(field.closest('.ag-ff') as HTMLElement).getByText('Identifiant attendu au format UUID.')).toBeTruthy()
+    await new Promise((resolve) => setTimeout(resolve, 450))
+    expect(window.location.search).toBe('')
+    expect(auditGateway.listAuditEvents).toHaveBeenCalledTimes(1)
   })
 
   it('removes a filter from its chip and keeps focus on the disclosure', async () => {
@@ -356,10 +387,10 @@ describe('Audit — filters', () => {
 
   it('says that no event matches the filters, with a way back, and never claims an empty history', async () => {
     renderAudit([pageOk(auditPage([])), pageOk(auditPage([COMMAND]))], { search: '?type=ANOMALY_RESOLVED' })
-    expect(await screen.findByText('Aucun événement ne correspond à ces filtres.')).toBeTruthy()
+    expect(await screen.findByText('Aucun événement pour ces filtres.')).toBeTruthy()
     expect(screen.queryByText('Aucun événement reçu.')).toBeNull()
     expect(screen.queryByText('Événement sélectionné')).toBeNull()
-    await userEvent.setup().click(screen.getAllByRole('button', { name: 'Tout afficher' }).at(-1) as HTMLElement)
+    await userEvent.setup().click(within(document.querySelector('.ag-list__empty') as HTMLElement).getByRole('button', { name: 'Effacer les filtres' }))
     expect(window.location.search).toBe('')
   })
 
@@ -367,7 +398,7 @@ describe('Audit — filters', () => {
     renderAudit([pageOk(auditPage([]))])
     expect(await screen.findByText('Aucun événement reçu.')).toBeTruthy()
     expect(screen.getByText("Le service n'a renvoyé aucun événement.")).toBeTruthy()
-    expect(screen.queryByText('Aucun événement ne correspond à ces filtres.')).toBeNull()
+    expect(screen.queryByText('Aucun événement pour ces filtres.')).toBeNull()
   })
 
   it('shows a 400 on a filter as a filter error against its field, not as empty data', async () => {
@@ -387,7 +418,7 @@ describe('Audit — filters', () => {
   it('names an inverted period on the closing day', async () => {
     renderAudit([pageProblem(400, 'VALIDATION_ERROR', { violations: [{ field: 'to', code: 'INVALID_VALUE', message: 'x' }] })], { search: '?du=2026-11-12&au=2026-11-10' })
     await screen.findByRole('alert')
-    expect(screen.getByLabelText('Au').getAttribute('aria-invalid')).toBe('true')
+    expect(screen.getByLabelText('Au (inclus)').getAttribute('aria-invalid')).toBe('true')
     expect(screen.getByText("La période n'est pas valide : « Au » ne peut pas précéder « Du ».")).toBeTruthy()
   })
 
@@ -395,7 +426,7 @@ describe('Audit — filters', () => {
     const { auditGateway } = renderAudit([pageOk(auditPage([COMMAND]))], { search: '?du=hier' })
     await timeline()
     expect(queryOf(auditGateway, 0)).toEqual({ limit: 50, cursor: undefined })
-    expect(screen.getByLabelText('Du').getAttribute('aria-invalid')).toBe('true')
+    expect(screen.getByLabelText('Du (inclus)').getAttribute('aria-invalid')).toBe('true')
     expect(screen.getByText("Ce n'est pas une date : le filtre est ignoré.")).toBeTruthy()
   })
 })
@@ -484,7 +515,7 @@ describe('Audit — requested event (#191)', () => {
     await waitFor(() => expect(screen.queryByText("L'événement demandé ne fait pas partie des résultats chargés.")).toBeNull())
     const rows = list.getAllByRole('link')
     expect(rows.filter((row) => row.getAttribute('aria-current') === 'true')).toEqual([rows[3]])
-    expect(within(screen.getByRole('group', { name: /./ })).getByText(OLDER.id, { selector: '.ag-tech dd' })).toBeTruthy()
+    expect(within(dossierGroup()).getByText(OLDER.id, { selector: '.ag-tech dd' })).toBeTruthy()
     await waitFor(() => expect(document.activeElement).toBe(rows[3]))
   })
 

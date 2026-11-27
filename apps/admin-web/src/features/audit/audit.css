@@ -75,3 +75,16 @@
   .ag-au-disclosure { border-color: CanvasText; }
 }
 .ag-au-missing-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+
+/* §3.3: the day heads a group of rows of the audit table. */
+.ag-au-table .ag-au-dayrow th { margin: 0; padding-top: 16px; padding-bottom: 6px; background: transparent; font-size: 0.8125rem; font-weight: 600; color: var(--ag-text-2); letter-spacing: 0.02em; }
+.ag-au-table .ag-au-ev__time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ag-au-table .ag-au-ev__name { font-weight: 600; }
+.ag-au-table td .ag-chip { margin-top: 4px; }
+
+/* Design §8.3: below 1280 px, card rows under each laboratory day. */
+.ag-au-cards { gap: 0; }
+.ag-au-cards > section:first-child .ag-au-day { margin-top: 4px; }
+.ag-au-cards__list { display: grid; gap: 6px; }
+.ag-au-card .ag-item__name { margin-top: 0; }
+.ag-au-card .ag-item__chips + .ag-item__name { margin-top: 8px; }

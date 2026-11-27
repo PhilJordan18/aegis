@@ -1,10 +1,10 @@
 import { useId, useLayoutEffect, useRef, type ReactNode, type Ref } from 'react'
-import { Link } from '../../app/Link'
 import { useI18n } from '../../i18n/useI18n'
 import { operationAuditHref } from '../audit/operationAuditHref'
 import { transactionHref } from '../transactions/transactionHref'
 import { Alert } from '../../ui/Alert'
-import { Button } from '../../ui/Button'
+import { Button, ButtonLink } from '../../ui/Button'
+import { Callout, DossierActions } from '../../ui/Callout'
 import { StatusChip } from '../../ui/StatusChip'
 import { StaleNotice } from '../catalog/StaleNotice'
 import { UNRECOGNIZED } from '../catalog/contract'
@@ -114,7 +114,7 @@ export function AnomalyDossier({ anomaly, detail, loading, failure, stale, retry
 function Section({ title, children, note }: { readonly title: string; readonly children: ReactNode; readonly note?: string }) {
   return (
     <section className="ag-an-sec">
-      <h3 className="ag-overline">{title}</h3>
+      <h3 className="ag-sec-title">{title}</h3>
       {children}
       {note !== undefined && <p className="ag-an-sec__note">{note}</p>}
     </section>
@@ -146,6 +146,14 @@ interface DossierBodyProps {
   readonly onAcknowledge: () => void
 }
 
+/** §3.2: « Reconnue le … par … » when the server says who and when; the generic sentence otherwise. */
+function acknowledgedLead(anomaly: AnomalyView, i18n: ReturnType<typeof useI18n>): string {
+  const t = i18n.m.anomalies
+  if (anomaly.acknowledgedAt === null) return t.leadAcknowledged
+  const time = instantLabel(anomaly.acknowledgedAt, i18n)
+  return anomaly.acknowledgedBy === null ? t.acknowledgedAtOnly({ time }) : t.acknowledgedBy({ name: anomaly.acknowledgedBy.displayName, time })
+}
+
 function DossierBody({ anomaly, detail, loading, failure, retrying, titleId, onRetry, onAcknowledge }: DossierBodyProps) {
   const i18n = useI18n()
   const { m } = i18n
@@ -156,7 +164,7 @@ function DossierBody({ anomaly, detail, loading, failure, retrying, titleId, onR
     anomaly.status === 'OPEN'
       ? t.leadOpen
       : anomaly.status === 'ACKNOWLEDGED'
-        ? t.leadAcknowledged
+        ? acknowledgedLead(anomaly, i18n)
         : anomaly.status === 'RESOLVED' && anomaly.resolvedAt !== null
           ? t.leadResolved({ time: instantLabel(anomaly.resolvedAt, i18n) })
           : null
@@ -183,27 +191,44 @@ function DossierBody({ anomaly, detail, loading, failure, retrying, titleId, onR
         <AnomalyWhere anomaly={anomaly} labels={labels} />
       </p>
 
-      <div className={`ag-diag ag-an-diag--${tone}`}>
-        <div className="ag-diag__row">
-          <StatusChip role={severity.role} icon={severity.icon} size="lg">
-            {severity.label}
-          </StatusChip>
-          <StatusChip role={status.role} icon={status.icon} size="lg">
-            {status.label}
-          </StatusChip>
-        </div>
-        {lead !== null && <p className="ag-an-diag__lead">{lead}</p>}
-        {hasUnrecognizedValue(anomaly) && <p className="ag-diag__note ag-diag__note--unknown">{t.unrecognizedNote}</p>}
-      </div>
-
-      {anomaly.status === 'OPEN' && (
-        <div className="ag-dossier__actions ag-an-actions" role="group" aria-label={t.actionsLabel}>
-          <Button size="sm" aria-haspopup="dialog" onClick={onAcknowledge}>
-            {t.acknowledge}
-          </Button>
-          <span className="ag-help">{t.acknowledgeHelp}</span>
-        </div>
+      {/* §3.1: Reconnaître only while the server says OPEN, then the links to the operation it came from. */}
+      {(anomaly.status === 'OPEN' || anomaly.lockerOperationId !== null) && (
+        <DossierActions label={t.actionsLabel}>
+          {anomaly.status === 'OPEN' && (
+            <Button size="sm" aria-haspopup="dialog" onClick={onAcknowledge}>
+              {t.acknowledge}
+            </Button>
+          )}
+          {anomaly.lockerOperationId !== null && (
+            <>
+              <ButtonLink variant="secondary" size="sm" to={transactionHref({ view: 'operations', selectedId: anomaly.lockerOperationId })}>
+                {t.openOperation}
+              </ButtonLink>
+              <ButtonLink variant="secondary" size="sm" to={operationAuditHref(anomaly.lockerOperationId)}>
+                {t.auditOfOperation}
+              </ButtonLink>
+            </>
+          )}
+          {anomaly.status === 'OPEN' && <span className="ag-help">{t.acknowledgeHelp}</span>}
+        </DossierActions>
       )}
+
+      <Callout
+        role={tone === 'none' ? 'neutral' : tone}
+        chips={
+          <>
+            <StatusChip role={severity.role} icon={severity.icon} size="lg">
+              {severity.label}
+            </StatusChip>
+            <StatusChip role={status.role} icon={status.icon} size="lg">
+              {status.label}
+            </StatusChip>
+          </>
+        }
+      >
+        {lead !== null && <p className="ag-callout__lead">{lead}</p>}
+        {hasUnrecognizedValue(anomaly) && <p className="ag-diag__note ag-diag__note--unknown">{t.unrecognizedNote}</p>}
+      </Callout>
 
       <Section title={t.secWhere}>
         <dl className="ag-facts ag-an-grid">
@@ -239,23 +264,11 @@ function DossierBody({ anomaly, detail, loading, failure, retrying, titleId, onR
         <EvidenceBody detail={detail} loading={loading} failure={failure} retrying={retrying} onRetry={onRetry} />
       </Section>
 
-      <Section title={t.secOperation}>
-        {anomaly.lockerOperationId === null && <p>{t.noOperation}</p>}
-        {anomaly.lockerOperationId !== null && (
-          <ul className="ag-an-links">
-            <li>
-              <Link className="ag-link" to={transactionHref({ view: 'operations', selectedId: anomaly.lockerOperationId })}>
-                {t.openOperation}
-              </Link>
-            </li>
-            <li>
-              <Link className="ag-link" to={operationAuditHref(anomaly.lockerOperationId)}>
-                {t.auditOfOperation}
-              </Link>
-            </li>
-          </ul>
-        )}
-      </Section>
+      {anomaly.lockerOperationId === null && (
+        <Section title={t.secOperation}>
+          <p>{t.noOperation}</p>
+        </Section>
+      )}
 
       <Section title={t.secAck}>
         {acknowledgedAt === null ? (

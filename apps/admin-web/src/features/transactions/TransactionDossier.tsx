@@ -1,6 +1,8 @@
 import { useId, useLayoutEffect, useRef, type ReactNode, type Ref } from 'react'
 import { Link } from '../../app/Link'
 import { useI18n, type I18n } from '../../i18n/useI18n'
+import { ButtonLink } from '../../ui/Button'
+import { Callout, DossierActions, type CalloutRole } from '../../ui/Callout'
 import { StatusChip } from '../../ui/StatusChip'
 import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
 import { UNRECOGNIZED } from '../catalog/contract'
@@ -111,7 +113,7 @@ function Header({ overline, titleId, title, sub }: { readonly overline: string; 
 function Section({ title, children, note }: { readonly title: string; readonly children: ReactNode; readonly note?: ReactNode }) {
   return (
     <section className="ag-sec">
-      <h3 className="ag-overline">{title}</h3>
+      <h3 className="ag-sec-title">{title}</h3>
       {children}
       {note && <p className="ag-sec__note">{note}</p>}
     </section>
@@ -139,17 +141,36 @@ function LinkRow({ label, children }: { readonly label: string; readonly childre
   )
 }
 
+const CALLOUT_ROLE: Record<'none' | 'info' | 'warn' | 'anomaly', CalloutRole> = { none: 'neutral', info: 'info', warn: 'unknown', anomaly: 'anomaly' }
+
 function Diagnostic({ tone, chips, lead, notes }: { readonly tone: 'none' | 'info' | 'warn' | 'anomaly'; readonly chips: ReactNode; readonly lead?: string; readonly notes: readonly string[] }) {
   return (
-    <div className={`ag-diag ag-diag--${tone}`}>
-      <div className="ag-diag__row">{chips}</div>
+    <Callout role={CALLOUT_ROLE[tone]} chips={chips}>
       {lead && <p className="ag-diag__lead">{lead}</p>}
       {notes.map((note) => (
         <p className="ag-diag__note" key={note}>
           {note}
         </p>
       ))}
-    </div>
+    </Callout>
+  )
+}
+
+/**
+ * §3.1: these dossiers are read only; their action zone holds the cross links they already had, moved up, and nothing
+ * that writes. A fulfilled reservation links the loans of its equipment because its own loan is not named (09 §8.3).
+ */
+function AssetLinks({ view, asset, i18n }: { readonly view: TransactionView; readonly asset: AssetSummary; readonly i18n: I18n }) {
+  const t = i18n.m.reservations
+  return (
+    <DossierActions label={t.actionsLabel[view]}>
+      <ButtonLink variant="secondary" size="sm" to={transactionHref({ view: 'loans', filters: { ...NO_FILTERS, assetId: asset.id } })}>
+        {t.loansOfAsset}
+      </ButtonLink>
+      <ButtonLink variant="secondary" size="sm" to={transactionHref({ view: 'operations', filters: { ...NO_FILTERS, assetId: asset.id } })}>
+        {t.operationsOfAsset}
+      </ButtonLink>
+    </DossierActions>
   )
 }
 
@@ -212,6 +233,7 @@ function ReservationBody({ reservation: r, titleId, i18n, times }: BodyProps & {
   return (
     <>
       <Header overline={t.selectedOverline.reservations} titleId={titleId} title={assetTitle(r.asset)} sub={modelLine(r.asset)} />
+      {r.status === 'FULFILLED' && <AssetLinks view="reservations" asset={r.asset} i18n={i18n} />}
       <Diagnostic tone={r.status === 'ACTIVE' ? 'info' : 'none'} chips={<Chip chip={reservationChip(r.status, i18n)} />} notes={[t.callReservation]} />
       <Section title={t.secTimeline} note={t.zoneNote({ zone: LAB_TIME_ZONE })}>
         <Timeline entries={entries} ordered />
@@ -228,16 +250,7 @@ function ReservationBody({ reservation: r, titleId, i18n, times }: BodyProps & {
           <OperationLink label={t.factCurrentOperation} id={r.currentOperationId} empty={r.status === 'ACTIVE' ? t.noCurrentOperation : t.closedNoOperation} i18n={i18n} />
           <CurrentAttempt operationId={r.currentOperationId} activeReservedUntil={r.status === 'ACTIVE' ? r.reservedUntil : null} i18n={i18n} times={times} />
           {r.status === 'FULFILLED' && (
-            <LinkRow label={t.loanLink}>
-              {t.loanLinkMissing}{' '}
-              <Link className="ag-link" to={transactionHref({ view: 'loans', filters: { ...NO_FILTERS, assetId: r.asset.id } })}>
-                {t.loansOfAsset}
-              </Link>
-              {' · '}
-              <Link className="ag-link" to={transactionHref({ view: 'operations', filters: { ...NO_FILTERS, assetId: r.asset.id } })}>
-                {t.operationsOfAsset}
-              </Link>
-            </LinkRow>
+            <LinkRow label={t.loanLink}>{t.loanLinkMissing}</LinkRow>
           )}
         </div>
       </Section>
@@ -275,7 +288,7 @@ function LoanBody({ loan: l, titleId, i18n, times }: BodyProps & { readonly loan
             {late && <Chip chip={lateChip(i18n)} />}
           </>
         }
-        lead={late ? t.callLate : l.status === 'RETURN_PENDING' ? t.callReturnPending : undefined}
+        lead={late ? t.callLate : l.status === 'RETURN_PENDING' ? t.callReturnPending : l.status === 'ACTIVE' ? t.returnDue({ day: times.zoned(l.dueAt) }) : undefined}
         notes={late && l.status === 'RETURN_PENDING' ? [t.callReturnPending, t.callLoan] : [t.callLoan]}
       />
       <Section title={t.secTimeline} note={t.zoneNote({ zone: LAB_TIME_ZONE })}>
@@ -357,6 +370,11 @@ function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { rea
         }
         sub={times.full(o.createdAt)}
       />
+      <DossierActions label={t.actionsLabel.operations}>
+        <ButtonLink variant="secondary" size="sm" to={operationAuditHref(o.id)}>
+          {t.auditOfOperation}
+        </ButtonLink>
+      </DossierActions>
       <Diagnostic tone={tone} chips={<Chip chip={operationChip(o.status, i18n)} />} notes={[t.callOperation]} />
       <Section title={t.secSequence} note={`${t.sequenceNote} ${t.zoneNote({ zone: LAB_TIME_ZONE })}`}>
         <Timeline entries={sequence} />
@@ -399,11 +417,6 @@ function OperationBody({ operation: o, titleId, i18n, times }: BodyProps & { rea
             )}
           </LinkRow>
           <LinkRow label={t.linkedAnomaly}>{o.anomalyId !== null ? <LinkedAnomaly anomalyId={o.anomalyId} i18n={i18n} /> : t.noLinkedAnomaly}</LinkRow>
-          <LinkRow label={t.linkedAudit}>
-            <Link className="ag-link" to={operationAuditHref(o.id)}>
-              {t.auditOfOperation}
-            </Link>
-          </LinkRow>
         </div>
       </Section>
       <TechnicalDetails

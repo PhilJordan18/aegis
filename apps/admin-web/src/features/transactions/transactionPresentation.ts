@@ -5,6 +5,8 @@ import type { StatusRole } from '../../ui/StatusChip'
 import { LAB_TIME_ZONE } from '../catalog/assetPresentation'
 import { UNRECOGNIZED, type Unrecognized } from '../catalog/contract'
 import { TERMINAL_OPERATION_STATUSES, type LoanStatus, type LoanView, type LockerOperationStatus, type LockerOperationView, type ReservationStatus } from './contract'
+import type { TransactionView } from './transactionHref'
+import type { TransactionRecord } from './useTransactionQueries'
 
 type Chip = { readonly role: StatusRole; readonly icon: IconName; readonly label: string }
 
@@ -129,3 +131,9 @@ export function isTerminalOperation(operation: Pick<LockerOperationView, 'status
   return operation.terminalAt !== null || (operation.status !== UNRECOGNIZED && TERMINAL_OPERATION_STATUSES.includes(operation.status))
 }
 
+
+/** §3.3: overdue loans lead the page on screen, and the foot says so; the collection keeps the server's order. */
+export function shownOrder(view: TransactionView, items: readonly TransactionRecord[]): readonly TransactionRecord[] {
+  const late = (record: TransactionRecord) => record.kind === 'loans' && isShownOverdue(record.item)
+  return view === 'loans' ? [...items.filter(late), ...items.filter((record) => !late(record))] : items
+}

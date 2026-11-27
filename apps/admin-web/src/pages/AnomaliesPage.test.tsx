@@ -96,6 +96,19 @@ describe('Anomalies — list and dossier', () => {
     expect(within(dossier).getByText('Ne résout pas l’anomalie.')).toBeDefined()
   })
 
+  it('opens each dossier with its action zone, then its state block (§3.1, §3.8 criterion 1)', async () => {
+    renderAnomalies(fakeAnomalyGateway({ listAnomalies: async () => listOf(HIGH_OPEN), getAnomaly: detailsOf(HIGH_OPEN) }))
+    let actions = await screen.findByRole('group', { name: 'Actions sur l’anomalie' })
+    expect([...actions.querySelectorAll('a, button')].map((control) => control.textContent)).toEqual(['Reconnaître', "Ouvrir l'opération", 'Audit de cette opération'])
+    expect(actions.compareDocumentPosition(document.querySelector('.ag-callout') as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(document.querySelector('.ag-callout__lead')?.textContent).toBe('Cette anomalie n’a pas encore été reconnue.')
+    cleanup()
+
+    renderAnomalies(fakeAnomalyGateway({ listAnomalies: async () => listOf(MEDIUM_ACK), getAnomaly: detailsOf(MEDIUM_ACK) }), { url: '/anomalies?statut=reconnues' })
+    actions = await screen.findByRole('group', { name: 'Actions sur l’anomalie' })
+    expect([...actions.querySelectorAll('a, button')].map((control) => control.textContent)).toEqual(["Ouvrir l'opération", 'Audit de cette opération'])
+  })
+
   it('labels the offline type with the backend summary wording in both languages', async () => {
     const offline = parsedAnomaly({ type: 'DEVICE_OFFLINE_DURING_OPERATION', summary: 'Texte du serveur, jamais affiché pour un type connu.' })
     const gateway = fakeAnomalyGateway({ listAnomalies: async () => listOf(offline), getAnomaly: detailsOf(offline) })
@@ -148,10 +161,11 @@ describe('Anomalies — list and dossier', () => {
     renderAnomalies(gateway, { url: '/anomalies?statut=reconnues' })
     const dossier = await screen.findByRole('group', { name: 'Porte non refermée avant l’échéance' })
     expect(within(dossier).getAllByText('Reconnue').length).toBeGreaterThan(0)
-    expect(within(dossier).getByText(/Reconnue par Administrateur de démonstration à/)).toBeDefined()
+    // §3.2: the state block says who acknowledged and when; the acknowledgement section says it again with the note.
+    expect(within(dossier).getAllByText(/Reconnue le .+ par Administrateur de démonstration\./)).toHaveLength(2)
+    expect(dossier.querySelector('.ag-callout__lead')?.textContent).toMatch(/^Reconnue le .+ par Administrateur de démonstration\./)
     expect(within(dossier).getByText('Inspection planifiée.')).toBeDefined()
     expect(within(dossier).queryByRole('button', { name: 'Reconnaître' })).toBeNull()
-    expect(within(dossier).getByText(/Reconnue : la vérification est engagée/)).toBeDefined()
     expect(within(dossier).getByText(/Non résolue/)).toBeDefined()
   })
 
@@ -250,28 +264,33 @@ describe('Anomalies — address, filters and pagination', () => {
     expect(gateway.getAnomaly.mock.calls[0]?.[1]).toBe(THIRD_ID)
   })
 
-  it('applies the filters with « Filtrer », resets the page and writes the address', async () => {
+  it('applies each filter on selection, resets the page and writes the address (§3.4)', async () => {
     const user = userEvent.setup()
     const gateway = fakeAnomalyGateway({ listAnomalies: async () => listOf(HIGH_OPEN), getAnomaly: detailsOf(HIGH_OPEN) })
     renderAnomalies(gateway, { url: '/anomalies?page=3' })
     await screen.findByText('1 anomalie')
+    expect(screen.queryByRole('button', { name: 'Filtrer' })).toBeNull()
     await user.selectOptions(screen.getByRole('combobox', { name: 'Gravité' }), 'HIGH')
+    expect(window.location.search).toBe('?gravite=elevee')
     await user.selectOptions(screen.getByRole('combobox', { name: 'Statut' }), '')
-    await user.click(screen.getByRole('button', { name: 'Filtrer' }))
     expect(window.location.search).toBe('?statut=toutes&gravite=elevee')
     await waitFor(() => expect(gateway.listAnomalies.mock.calls.at(-1)?.[1]).toEqual({ severity: 'HIGH', page: 0, size: 20 }))
+    const chips = screen.getByRole('group', { name: 'Filtres actifs' })
+    await user.click(within(chips).getByRole('button', { name: 'Retirer le filtre Gravité' }))
+    expect(window.location.search).toBe('?statut=toutes')
+    expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Statut' }))
   })
 
-  it('shows the filtered empty state with « Tout afficher », never « no record » under a filter', async () => {
+  it('shows the filtered empty state with « Effacer les filtres », never « no record » under a filter', async () => {
     const user = userEvent.setup()
     const gateway = fakeAnomalyGateway({
       listAnomalies: async (_token, query) => ok(anomalyPageOf(query.severity === undefined && query.status === undefined ? [HIGH_OPEN] : [])),
       getAnomaly: detailsOf(HIGH_OPEN),
     })
     renderAnomalies(gateway, { url: '/anomalies?gravite=faible' })
-    expect(await screen.findByText('Aucune anomalie ne correspond à ces filtres.')).toBeDefined()
+    expect(await screen.findByText('Aucune anomalie pour ces filtres.')).toBeDefined()
     expect(screen.queryByText('Aucune anomalie n’est enregistrée.')).toBeNull()
-    await user.click(within(document.querySelector('.ag-list__empty') as HTMLElement).getByRole('button', { name: 'Tout afficher' }))
+    await user.click(within(document.querySelector('.ag-list__empty') as HTMLElement).getByRole('button', { name: 'Effacer les filtres' }))
     await screen.findByText('1 anomalie')
     expect(window.location.search).toBe('?statut=toutes')
   })
@@ -379,7 +398,7 @@ describe('Anomalies — failure states', () => {
     const alert = await screen.findByRole('alert')
     expect(within(alert).getByText('Votre compte n’a pas accès aux anomalies.')).toBeDefined()
     expect(within(alert).queryByRole('button')).toBeNull()
-    expect(screen.queryByRole('group', { name: /./ })).toBeNull()
+    expect(screen.queryAllByRole('group', { name: /./ }).filter((group) => group.closest('.ag-an-filters') === null)).toEqual([])
   })
 
   it('leaves the session to the store on a 401: no data, no alert', async () => {

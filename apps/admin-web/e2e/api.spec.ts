@@ -203,7 +203,7 @@ test('an administrator opens Équipements, sees the units from the API and opens
   await expect(page.locator('main').getByRole('button')).toHaveCount(pagerButtons + 6 + revokeButtons)
   await expect(page.getByRole('button', { name: 'Modifier le placement' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Attribuer un identifiant' })).toBeVisible()
-  await expect(page.getByRole('group', { name: 'Actions de l’exemplaire' }).getByRole('button')).toHaveText(['Modifier', 'Archiver'])
+  await expect(page.getByRole('group', { name: 'Actions sur l’exemplaire' }).getByRole('button')).toHaveText(['Modifier', 'Modifier le placement', 'Attribuer un identifiant', 'Archiver'])
 
   // Clicking a listed unit selects it through the address and reads it by id.
   const first = rows.first()
@@ -475,7 +475,7 @@ test('CAT-01 forms: an administrator creates, edits and archives a model and a u
   await expect(duplicate).toHaveCount(0)
 
   // Edit: PUT without an Idempotency-Key; the untouched calibration instant is sent back unchanged.
-  await page.getByRole('group', { name: 'Actions de l’exemplaire' }).getByRole('button', { name: 'Modifier' }).click()
+  await page.getByRole('group', { name: 'Actions sur l’exemplaire' }).getByRole('button', { name: 'Modifier' }).click()
   const edit = page.getByRole('dialog', { name: `Modifier l’exemplaire ${code}` })
   await edit.getByLabel(/^Numéro de série/).fill(`SN-${stamp}`)
   await edit.getByRole('radio', { name: 'En maintenance' }).check()
@@ -489,7 +489,7 @@ test('CAT-01 forms: an administrator creates, edits and archives a model and a u
   await expect(page.locator('.ag-dossier')).toContainText(`SN-${stamp}`)
 
   // Archive the unit: a confirmation, then the dossier offers no more commands.
-  await page.getByRole('group', { name: 'Actions de l’exemplaire' }).getByRole('button', { name: 'Archiver' }).click()
+  await page.getByRole('group', { name: 'Actions sur l’exemplaire' }).getByRole('button', { name: 'Archiver' }).click()
   const confirmUnit = page.getByRole('alertdialog')
   await expect(confirmUnit.getByRole('button', { name: 'Annuler' })).toBeFocused()
   await confirmUnit.getByRole('button', { name: 'Archiver' }).click()

@@ -467,15 +467,16 @@ describe('Équipements — commands', () => {
     renderEquipment(fakeCatalogGateway({ pages: [ok(pageOf([MM001]))], units: { [MM001.id]: ok(MM001) } }))
     await screen.findByRole('heading', { level: 2, name: /Multimètre 1 · MM-001/ })
     const main = screen.getByRole('main')
-    expect(within(main).getAllByRole('button').map((button) => plain(button.textContent)).slice(0, 7)).toEqual([
+    expect(within(main).getAllByRole('button').map((button) => plain(button.textContent)).slice(0, 6)).toEqual([
       'Actualiser',
       'Nouvel exemplaire',
-      'Rechercher',
       'Modifier',
-      'Archiver',
       'Modifier le placement',
       'Attribuer un identifiant',
+      'Archiver',
     ])
+    // §3.1: one action zone under the title, the destructive command last.
+    expect(within(screen.getByRole('group', { name: 'Actions sur l’exemplaire' })).getAllByRole('button').map((button) => plain(button.textContent))).toEqual(['Modifier', 'Modifier le placement', 'Attribuer un identifiant', 'Archiver'])
     // The only text input is the search, which filters the list and sets nothing.
     expect(within(main).queryAllByRole('textbox')).toEqual([])
     expect(within(main).getAllByRole('searchbox').map((input) => input.getAttribute('id') !== null)).toEqual([true])

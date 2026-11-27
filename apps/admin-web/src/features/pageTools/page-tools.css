@@ -3,10 +3,46 @@
 .ag-help-panel { margin: 0 0 16px; padding: 12px 16px; border: 1px solid var(--ag-border); border-radius: 8px; background: var(--ag-surface-sunken); }
 .ag-help-panel > p { margin: 0 0 6px; }
 .ag-help-panel > p:last-child { margin-bottom: 0; }
+
+/* Active filters (§3.4, Design §8.4): their own line under the filter bar, one chip per filter, a 32 px remove
+   button, « Effacer les filtres » at the end. */
+.ag-chips { grid-column: 1 / -1; width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 12px; }
+.ag-chips__chip {
+  display: inline-flex; align-items: center; gap: 2px; min-height: 32px; padding: 0 2px 0 12px; max-width: 100%;
+  border: 1px solid var(--ag-control-border); border-radius: var(--ag-r-pill); background: var(--ag-field);
+  font-size: 0.875rem; color: var(--ag-text); overflow-wrap: break-word;
+}
+.ag-chips__remove {
+  flex: none; display: inline-grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%;
+  background: transparent; color: var(--ag-text-2); cursor: pointer;
+}
+.ag-chips__remove:hover { background: var(--ag-separator); color: var(--ag-text); }
+.ag-chips__remove .ag-icon { width: 16px; height: 16px; }
+.ag-date-shortcuts { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.ag-date-help { display: none; }
+/* Below 560 px (QA #246 item 16, a list page no taller than before): the zone help reads once under both dates, the
+   shortcuts take one full line. */
+@media (max-width: 559px) {
+  .ag-ff:has(> input[type='date']) > .ag-ff__help { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .ag-date-help { display: block; grid-column: 1 / -1; margin: -8px 0 8px; font-size: var(--ag-type-small-size); line-height: 1.4; color: var(--ag-text-2); }
+  .ag-date-shortcuts { grid-column: 1 / -1; }
+}
+.ag-filters__busy { opacity: 0.6; transition: opacity 120ms; }
+@media (forced-colors: active) {
+  .ag-chips__chip { border-color: CanvasText; }
+}
 @media (max-width: 559px) {
   /* §8.6: one line of actions, « Aide » then « Actualiser », and the read time with its chip on the line below. */
   .ag-page__actions { justify-content: flex-start; }
   .ag-page__actions > .ag-refresh { display: contents; }
   .ag-page__actions::after { content: ''; order: 1; flex-basis: 100%; height: 0; }
   .ag-page__actions > .ag-refresh > .ag-refresh__time, .ag-page__actions > .ag-refresh > .ag-chip { order: 2; }
+}
+@media (min-width: 1024px) {
+  /* QA #246 B3 (§3.7), and from 1280 px its third review: the rows beside the dossier need the height. The zone help
+     reads once under both dates (each field keeps its own for assistive technology), and the shortcuts follow on the
+     same line. */
+  .ag-ff:has(> input[type='date']) > .ag-ff__help { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .ag-date-help { display: block; grid-column: 1 / -1; margin: 0; align-self: center; font-size: var(--ag-type-small-size); line-height: 1.4; color: var(--ag-text-2); }
+  .ag-page > .ag-page__head { flex-wrap: nowrap; }
 }

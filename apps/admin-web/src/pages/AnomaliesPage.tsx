@@ -220,7 +220,7 @@ export function AnomaliesPage({ sessionProfile }: { readonly sessionProfile: Use
 
         <LabelIndexNotice health={labels.health} onRetry={labels.retry} />
 
-        <AnomalyFilterBar key={anomaliesHref({ filters, page: 0, anomalyId: null })} filters={filters} labels={labels} onApply={applyFilters} onClear={clearFilters} />
+        <AnomalyFilterBar filters={filters} labels={labels} onApply={applyFilters} onClear={clearFilters} />
 
         <div className={showDossier ? 'ag-eq' : 'ag-eq ag-eq--single'}>
           <AnomalyList

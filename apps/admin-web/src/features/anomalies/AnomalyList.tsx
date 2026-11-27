@@ -9,6 +9,7 @@ import { AnomalyAlert } from './AnomalyAlert'
 import type { AnomalyReadFailure } from './anomalyFailure'
 import { anomalyTypeLabel, instantLabel, severityChip, statusChip } from './anomalyPresentation'
 import { AnomalyWhere } from './AnomalyWhere'
+import '../pageTools/data-table.css'
 import { ChipLabel } from './ChipLabel'
 import type { LabelIndex } from '../labels/labelIndex'
 import type { AnomalyPage, AnomalyView } from './contract'
@@ -78,7 +79,7 @@ export function AnomalyList({ page, selectedId, loading, refreshing, failure, st
           {filtered && (
             <div className="ag-an-empty-action">
               <Button variant="secondary" size="sm" onClick={onClearFilters}>
-                {t.filterClear}
+                {m.pageTools.clearFilters}
               </Button>
             </div>
           )}

@@ -8,7 +8,7 @@ import { ManagerShell } from '../app/shell/ManagerShell'
 import type { UserProfile } from '../features/auth/contract'
 import { useSignOut } from '../features/auth/useSignOut'
 import { useCurrentAdminProfile } from '../features/auth/useCurrentAdminProfile'
-import { operationChip, operationTypeLabel, transactionTimes } from '../features/transactions/transactionPresentation'
+import { operationChip, operationTypeLabel, shownOrder, transactionTimes } from '../features/transactions/transactionPresentation'
 import { classifyTransactionFailure } from '../features/transactions/transactionFailure'
 import { hasFilters, NO_FILTERS, readTransactionLocation, transactionHref, type TransactionFilterValues, type TransactionView } from '../features/transactions/transactionHref'
 import { TransactionDossier } from '../features/transactions/TransactionDossier'
@@ -25,9 +25,10 @@ import { refreshLabelIndex, useLabelIndex } from '../features/labels/useLabelInd
 import { useI18n } from '../i18n/useI18n'
 import '../app/page.css'
 import '../features/catalog/equipment.css'
+import { useRecordsLayout } from '../features/pageTools/useRecordsLayout'
 import '../features/transactions/transactions.css'
 
-/** The dossier sits under the list below 1024 px, out of sight after a selection (handoff §5). */
+/** The dossier sits under the card rows below 1024 px, out of sight after a selection (Design §8.3). */
 function isStackedLayout(): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches
 }
@@ -55,6 +56,8 @@ function recordName(record: TransactionRecord, i18n: ReturnType<typeof useI18n>)
  */
 export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProfile: UserProfile }) {
   const i18n = useI18n()
+  // Design §8.3: card rows beside the dossier from 1024 px, the table beside a 480 px dossier from 1280 px.
+  const layout = useRecordsLayout()
   const { m } = i18n
   const t = m.reservations
   const labels = useLabelIndex()
@@ -78,7 +81,8 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
   }, [lastPage, location.page, router, view, filters])
 
   const items = page?.items ?? []
-  const selectedId = location.selectedId ?? items[0]?.item.id ?? null
+  // With no dossier in the address, the first row on screen is the one opened (an overdue loan leads the page).
+  const selectedId = location.selectedId ?? shownOrder(view, items)[0]?.item.id ?? null
   const listed = items.find((record) => record.item.id === selectedId)
   const detail = useTransactionDetail(view, selectedId, listed)
 
@@ -187,13 +191,13 @@ export function ReservationsLoansPage({ sessionProfile }: { readonly sessionProf
         </div>
 
         <TransactionFilters
-          key={`${view}|${search}`}
+          key={view}
           view={view}
           values={filters}
           onApply={apply}
         />
 
-        <div className={showDossier ? 'ag-eq' : 'ag-eq ag-eq--single'}>
+        <div className={`ag-eq${layout === 'cards' ? '' : ' ag-eq--table'}${showDossier ? '' : ' ag-eq--single'}`}>
           <TransactionList
             view={view}
             page={shownPage}

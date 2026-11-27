@@ -98,7 +98,7 @@ export function AuditDossier({ event, filters, focusRef }: AuditDossierProps) {
         </div>
 
         <section className="ag-au-sec" aria-labelledby={`${titleId}-facts`}>
-          <h3 className="ag-overline" id={`${titleId}-facts`}>
+          <h3 className="ag-sec-title" id={`${titleId}-facts`}>
             {t.factsTitle}
           </h3>
           <dl className="ag-facts ag-au-facts">
@@ -170,7 +170,7 @@ export function AuditDossier({ event, filters, focusRef }: AuditDossierProps) {
         </section>
 
         <section className="ag-au-sec" aria-labelledby={`${titleId}-details`}>
-          <h3 className="ag-overline" id={`${titleId}-details`}>
+          <h3 className="ag-sec-title" id={`${titleId}-details`}>
             {t.detailsTitle}
           </h3>
           {rows.length === 0 ? (
@@ -213,7 +213,7 @@ export function AuditDossier({ event, filters, focusRef }: AuditDossierProps) {
         </section>
 
         <section className="ag-au-sec" aria-labelledby={`${titleId}-evidence`}>
-          <h3 className="ag-overline" id={`${titleId}-evidence`}>
+          <h3 className="ag-sec-title" id={`${titleId}-evidence`}>
             {t.evidenceTitle}
           </h3>
           <p className="ag-au-note">{t.evidenceNote}</p>

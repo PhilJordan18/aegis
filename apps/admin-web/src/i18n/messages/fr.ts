@@ -375,6 +375,8 @@ export const fr = {
     listFoot: ({ time }: { time: string }) => `Triés par code · diagnostic évalué à ${time}`,
     blockers: ({ count: value }: { count: number }) =>
       plural(value, { one: `${count.format(value)} empêchement`, other: `${count.format(value)} empêchements` }),
+    moreReasons: ({ count: value }: { count: number }) =>
+      plural(value, { one: `+ ${count.format(value)} autre`, other: `+ ${count.format(value)} autres` }),
     noBlockers: 'Aucun empêchement détecté',
     archived: 'Archivé',
     archivedOn: ({ date }: { date: string }) => `Archivé le ${date}`,
@@ -394,7 +396,6 @@ export const fr = {
 
     searchLabel: 'Rechercher un exemplaire',
     searchHelp: 'Code ou nom du modèle, sans tenir compte de la casse.',
-    searchSubmit: 'Rechercher',
     searchClear: 'Tout afficher',
     searchTooLong: ({ max }: { max: number }) => `La recherche compte au plus ${max} caractères.`,
     searchInvalid: 'La recherche contient un caractère non autorisé (tabulation, saut de ligne ou caractère de contrôle).',
@@ -510,6 +511,24 @@ export const fr = {
     titleReservations: ({ count: value }: { count: number }) => plural(value, { one: `${count.format(value)} réservation`, other: `${count.format(value)} réservations` }),
     titleLoans: ({ count: value }: { count: number }) => plural(value, { one: `${count.format(value)} prêt`, other: `${count.format(value)} prêts` }),
     titleOperations: ({ count: value }: { count: number }) => plural(value, { one: `${count.format(value)} opération`, other: `${count.format(value)} opérations` }),
+    titlePartial: {
+      reservations: ({ shown, total, page, pages }: { shown: number; total: number; page: number; pages: number }) => `${count.format(shown)} sur ${count.format(total)} réservations · page ${count.format(page)} de ${count.format(pages)}`,
+      loans: ({ shown, total, page, pages }: { shown: number; total: number; page: number; pages: number }) => `${count.format(shown)} sur ${count.format(total)} prêts · page ${count.format(page)} de ${count.format(pages)}`,
+      operations: ({ shown, total, page, pages }: { shown: number; total: number; page: number; pages: number }) => `${count.format(shown)} sur ${count.format(total)} opérations · page ${count.format(page)} de ${count.format(pages)}`,
+    },
+    colStatus: 'Statut',
+    colAsset: 'Équipement',
+    colHolder: 'Titulaire',
+    colPeriod: 'Période',
+    colCheckout: 'Retrait',
+    colDue: 'Retour prévu ou effectif',
+    colOperation: 'Opération',
+    colUser: 'Utilisateur',
+    colCell: 'Cellule',
+    colCreated: 'Créée',
+    attemptCurrent: 'Opération en cours',
+    returnedOn: ({ time }: { time: string }) => `Rendu le ${time}`,
+    overdueFirst: 'Retards en tête sur cette page.',
     listMeta: 'Statut, équipement, dates',
     /** D1 (#67, approved): newest first — reservations and operations by createdAt, loans by checkedOutAt. */
     listFoot: ({ time }: { time: string }) => `Les plus récents d'abord · lu à ${time}`,
@@ -542,11 +561,13 @@ export const fr = {
     filterLocker: `Casier filtré${NBSP}:`,
     filterLockerRemove: 'Retirer ce filtre',
 
+    actionsLabel: { reservations: 'Actions sur la réservation', loans: 'Actions sur le prêt', operations: 'Actions sur l’opération' },
+    returnDue: ({ day }: { day: string }) => `Retour prévu le ${day}.`,
     selectedOverline: { reservations: 'Réservation sélectionnée', loans: 'Prêt sélectionné', operations: 'Opération sélectionnée' },
-    emptyTitle: { reservations: 'Aucune réservation.', loans: 'Aucun prêt.', operations: 'Aucune opération physique.' },
+    emptyTitle: { reservations: 'Aucune réservation enregistrée.', loans: 'Aucun prêt enregistré.', operations: 'Aucune opération physique enregistrée.' },
     emptyBody: { reservations: 'Les réservations apparaissent ici dès leur création.', loans: 'Les prêts apparaissent ici dès un retrait confirmé par le casier.', operations: 'Les opérations apparaissent ici dès leur création.' },
-    filteredEmptyTitle: { reservations: 'Aucune réservation ne correspond à ces filtres.', loans: 'Aucun prêt ne correspond à ces filtres.', operations: 'Aucune opération ne correspond à ces filtres.' },
-    filteredEmptyBody: 'Modifiez les filtres ou affichez tout.',
+    filteredEmptyTitle: { reservations: 'Aucune réservation pour ces filtres.', loans: 'Aucun prêt pour ces filtres.', operations: 'Aucune opération pour ces filtres.' },
+    filteredEmptyBody: 'Modifiez ou effacez les filtres.',
 
     forbiddenTitle: "Votre compte n'a pas accès aux réservations et aux prêts.",
     notFoundTitle: 'Dossier introuvable.',
@@ -566,6 +587,8 @@ export const fr = {
     idOnlyHelp: "Le contrat ne fournit pas le nom de l'utilisateur sur cette vue.",
     cellIdOnly: 'Cellule : identifiant seulement',
     fromTo: ({ from, to }: { from: string; to: string }) => `${from} → ${to}`,
+    periodFrom: ({ time }: { time: string }) => `du ${time}`,
+    periodTo: ({ time }: { time: string }) => `au ${time}`,
     checkout: ({ time }: { time: string }) => `Retrait ${time}`,
     createdAt: ({ time }: { time: string }) => `Créée ${time}`,
     dueAt: ({ time }: { time: string }) => `Retour prévu ${time}`,
@@ -828,6 +851,7 @@ export const fr = {
   },
 
   lockers: {
+    actionsLabel: 'Actions sur le casier',
     heading: 'Casiers',
     loadingLockers: 'Recherche des casiers…',
     loadingStatus: 'Chargement du statut du casier…',
@@ -1050,8 +1074,8 @@ export const fr = {
     loading: 'Chargement des anomalies…',
     loaded: ({ count: value, page, pages }: { count: number; page: number; pages: number }) =>
       `Liste chargée${NBSP}: ${plural(value, { one: `${count.format(value)} anomalie`, other: `${count.format(value)} anomalies` })}, page ${count.format(page)} sur ${count.format(pages)}.`,
-    emptyFilteredTitle: 'Aucune anomalie ne correspond à ces filtres.',
-    emptyFilteredBody: 'Modifiez les filtres, ou affichez toutes les anomalies.',
+    emptyFilteredTitle: 'Aucune anomalie pour ces filtres.',
+    emptyFilteredBody: 'Modifiez ou effacez les filtres.',
     emptyTitle: 'Aucune anomalie n’est enregistrée.',
     emptyBody: 'Une anomalie apparaît ici dès que le serveur en enregistre une.',
 
@@ -1102,8 +1126,8 @@ export const fr = {
     auditOfOperation: 'Audit de cette opération',
     secAck: 'Reconnaissance',
     notAcknowledged: 'Cette anomalie n’a pas encore été reconnue.',
-    acknowledgedBy: ({ name, time }: { name: string; time: string }) => `Reconnue par ${name} à ${time}.`,
-    acknowledgedAtOnly: ({ time }: { time: string }) => `Reconnue à ${time}.`,
+    acknowledgedBy: ({ name, time }: { name: string; time: string }) => `Reconnue le ${time} par ${name}.`,
+    acknowledgedAtOnly: ({ time }: { time: string }) => `Reconnue le ${time}.`,
     ackNote: 'Note de reconnaissance',
     secResolution: 'Résolution',
     notResolved: 'Non résolue : aucune nouvelle observation du casier n’a confirmé l’état attendu.',
@@ -1316,7 +1340,7 @@ export const fr = {
     defaultCalibrationYes: 'Calibration exigée par défaut',
     defaultCalibrationNo: 'Sans calibration par défaut',
     modelActions: ({ name }: { name: string }) => `Actions du modèle ${name}`,
-    assetActions: 'Actions de l’exemplaire',
+    assetActions: 'Actions sur l’exemplaire',
   },
 
   /**
@@ -1336,9 +1360,15 @@ export const fr = {
     techSubject: 'Identifiant du sujet',
     techOperation: 'Identifiant de l’opération',
     updatedAt: ({ time }: { time: string }) => `Mis à jour à ${time}`,
+    colTime: 'Heure',
+    colEvent: 'Événement',
+    colActor: 'Acteur',
+    colSubject: 'Sujet',
+    colTransition: 'Transition',
+    noTransition: 'Aucune',
     listTitle: ({ count: value }: { count: number }) =>
       plural(value, { one: `${count.format(value)} événement chargé`, other: `${count.format(value)} événements chargés` }),
-    listMeta: 'Heure, événement, acteur',
+    listMeta: 'Heure, événement, sujet',
     /** D1: the contract orders the list newest first (ties broken by id). */
     listOrder: 'Les plus récents d’abord',
     listFoot: ({ time }: { time: string }) => `Première page lue à ${time}`,
@@ -1355,8 +1385,8 @@ export const fr = {
       plural(value, { one: `${count.format(value)} événement de plus chargé.`, other: `${count.format(value)} événements de plus chargés.` }),
     refreshed: ({ count: value }: { count: number }) =>
       plural(value, { one: `Historique actualisé : ${count.format(value)} événement chargé.`, other: `Historique actualisé : ${count.format(value)} événements chargés.` }),
-    emptyFilteredTitle: 'Aucun événement ne correspond à ces filtres.',
-    emptyFilteredBody: 'Modifiez les filtres, ou affichez tout l’historique.',
+    emptyFilteredTitle: 'Aucun événement pour ces filtres.',
+    emptyFilteredBody: 'Modifiez ou effacez les filtres.',
     /** [P] Without any filter an empty answer is stated as what it is: nothing came back. */
     emptyTitle: 'Aucun événement reçu.',
     emptyBody: "Le service n'a renvoyé aucun événement.",
@@ -1600,6 +1630,20 @@ export const fr = {
   },
 
   pageTools: {
+    activeFilters: 'Filtres actifs',
+    filterChip: ({ label, value }: { label: string; value: string }) => `${label}${NBSP}: ${value}`,
+    removeFilter: ({ label }: { label: string }) => `Retirer le filtre ${label}`,
+    clearFilters: 'Effacer les filtres',
+    today: "Aujourd'hui",
+    last7Days: '7 jours',
+    last30Days: '30 jours',
+    dateShortcuts: 'Périodes rapides',
+    uuidExpected: 'Identifiant attendu au format UUID.',
+    dayIncomplete: 'Saisissez une date complète, année sur quatre chiffres, par exemple 2026-11-10.',
+    fromInclusive: 'Du (inclus)',
+    toInclusive: 'Au (inclus)',
+    fromDay: ({ day }: { day: string }) => `Du ${day}`,
+    toDay: ({ day }: { day: string }) => `Au ${day}`,
     refresh: 'Actualiser',
     refreshing: 'Actualisation…',
     readAt: ({ time }: { time: string }) => `Lu à ${time}`,

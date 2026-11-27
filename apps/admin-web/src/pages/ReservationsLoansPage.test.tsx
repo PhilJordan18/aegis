@@ -105,7 +105,24 @@ function renderPage(transactionGateway: TransactionGateway, { url = '/reservatio
   return renderWithProviders(<App />, { gateway: authGateway, transactionGateway, catalogGateway: catalog, custodyGateway: lockersWithOperationCell(), session, queryClient, locale })
 }
 
-const rows = () => within(document.querySelector('.ag-list__items') as HTMLElement).getAllByRole('link')
+/** Table rows from 1280 px; card rows (their links) below, under a stubbed `matchMedia`. */
+const rows = (): HTMLElement[] => {
+  const body = document.querySelector<HTMLElement>('.ag-list__items tbody')
+  return body !== null ? [...body.querySelectorAll<HTMLElement>('tr')] : [...document.querySelectorAll<HTMLElement>('ul.ag-list__items > li > a')]
+}
+
+/** `matchMedia` answering each query by its max-width against a given viewport width. */
+function installViewport(width: number) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (query: string) => {
+      const max = /max-width:\s*(\d+)px/.exec(query)
+      return { matches: max !== null && width <= Number(max[1]), media: query, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, onchange: null, dispatchEvent: () => true }
+    },
+  })
+}
+const rowLink = (index: number) => (rows()[index] as HTMLElement).querySelector('a') as HTMLAnchorElement
 const dossier = () => document.querySelector('.ag-dossier__scroll') as HTMLElement
 
 beforeEach(() => {
@@ -165,7 +182,7 @@ describe('Réservations et prêts: reservations', () => {
     await waitFor(() => expect(gateway.getReservation.mock.calls.map((call) => call[1])).toContain(R2.id))
     expect(rows()[1]?.getAttribute('aria-current')).toBe('true')
     // Side by side, focus stays on the row and a live region says what changed.
-    expect(document.activeElement).toBe(rows()[1])
+    expect(document.activeElement).toBe(rowLink(1))
     expect([...document.querySelectorAll('[role="status"]')].map((region) => region.textContent).join('|')).toContain('Dossier sélectionné')
   })
 
@@ -192,7 +209,7 @@ describe('Réservations et prêts: reservations', () => {
   it('reads a direct address (view, filters, page, file) and sends exactly those filters', async () => {
     const gateway = fakeGateway({ reservations: ok(pageOf([R1, R2], { page: 1, totalItems: 22, totalPages: 2 })) })
     renderPage(gateway, { url: `/reservations-prets?statut=ACTIVE&equipement=${ASSET_ID.toUpperCase()}&du=2026-11-01&au=2026-11-10&page=2&dossier=${R2.id}` })
-    await screen.findByRole('heading', { level: 2, name: '22 réservations' })
+    await screen.findByRole('heading', { level: 2, name: '2 sur 22 réservations · page 2 de 2' })
     const sent = (gateway.listReservations.mock.calls[0] as unknown as [string, Record<string, unknown>])[1]
     // « Du » starts at midnight of the laboratory day (still EDT on 1 November); « Au » is inclusive, so the bound sent
     // is the start of the next laboratory day (EST on 11 November). `to` is exclusive in the API.
@@ -213,7 +230,7 @@ describe('Réservations et prêts: reservations', () => {
     const user = userEvent.setup()
     const gateway = fakeGateway({ reservations: ok(pageOf([R1, R2], { totalItems: 30, totalPages: 2 })) })
     renderPage(gateway, { url: '/reservations-prets?statut=ACTIVE' })
-    await screen.findByRole('heading', { level: 2, name: '30 réservations' })
+    await screen.findByRole('heading', { level: 2, name: '2 sur 30 réservations · page 1 de 2' })
     const pager = screen.getByRole('navigation', { name: 'Pagination' })
     expect(within(pager).getByRole('button', { name: 'Précédent' }).getAttribute('aria-disabled')).toBe('true')
     await user.click(within(pager).getByRole('button', { name: 'Suivant' }))
@@ -224,27 +241,37 @@ describe('Réservations et prêts: reservations', () => {
 })
 
 describe('Réservations et prêts: filters', () => {
-  it('applies the filters to the address and to the request, and clears them', async () => {
+  it('applies each filter as soon as it changes, shows one chip per filter, and clears them (§3.4)', async () => {
     const user = userEvent.setup()
     const gateway = fakeGateway()
     const unit = asset({ id: ASSET_ID, assetCode: 'MM-001' })
-    const catalog = fakeCatalogGateway({ overrides: { listAssets: async (_token, query) => catalogOk(assetPageOf(query.q === undefined ? [] : [unit])) } })
-    renderPage(gateway, { catalogGateway: catalog })
-    await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+    const catalog = fakeCatalogGateway({ overrides: { listAssets: async (_token, query) => catalogOk(assetPageOf(query.q === undefined ? [unit] : [unit])) } })
+    renderPage(gateway, { catalogGateway: catalog, url: '/reservations-prets?page=2' })
+    await screen.findByRole('heading', { level: 2, name: /réservation/ })
+    expect(screen.queryByRole('button', { name: 'Filtrer' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Effacer les filtres' })).toBeNull()
     await user.selectOptions(screen.getByLabelText('Statut'), 'FULFILLED')
+    // Applied on selection, back to page 1.
+    expect(window.location.search).toBe('?statut=FULFILLED')
     // Searched by code (§1.3): the address keeps the identifier.
     await user.type(screen.getByRole('combobox', { name: 'Équipement' }), 'MM')
     await user.click(await screen.findByRole('option', { name: /MM-001/ }))
     expect(catalog.listAssets).toHaveBeenCalledWith(expect.anything(), { page: 0, size: 20, sort: 'assetCode,asc', q: 'MM' }, expect.anything())
-    await user.click(screen.getByRole('button', { name: 'Filtrer' }))
     expect(window.location.search).toBe(`?statut=FULFILLED&equipement=${ASSET_ID}`)
-    await waitFor(() => expect(gateway.listReservations).toHaveBeenCalledTimes(2))
-    expect((gateway.listReservations.mock.calls[1] as unknown as [string, Record<string, unknown>])[1]).toMatchObject({ status: 'FULFILLED', assetId: ASSET_ID })
-    await user.click(screen.getByRole('button', { name: 'Tout afficher' }))
+    await waitFor(() => expect(gateway.listReservations.mock.calls.some((call) => (call as unknown as [string, Record<string, unknown>])[1].assetId === ASSET_ID)).toBe(true))
+    const chips = screen.getByRole('group', { name: 'Filtres actifs' })
+    await waitFor(() => expect(within(chips).getByText(/Équipement\s:\sMM-001/)).toBeDefined())
+    expect(within(chips).getByText(/^Statut\s:\s\S/)).toBeDefined()
+    // One chip removes its filter only; the focus stays in the group.
+    await user.click(within(chips).getByRole('button', { name: 'Retirer le filtre Statut' }))
+    expect(window.location.search).toBe(`?equipement=${ASSET_ID}`)
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Effacer les filtres' }))
+    await user.click(screen.getByRole('button', { name: 'Effacer les filtres' }))
     expect(window.location.search).toBe('')
+    expect(document.activeElement).toBe(screen.getByLabelText('Statut'))
   })
 
-  it('reads an old address by identifier, and « Retirer » returns focus to the field', async () => {
+  it('reads an old address by identifier, and « Retirer » clears the equipment at once', async () => {
     const user = userEvent.setup()
     const gateway = fakeGateway()
     renderPage(gateway, { url: `/reservations-prets?equipement=${ASSET_ID}` })
@@ -253,9 +280,8 @@ describe('Réservations et prêts: filters', () => {
     const chosen = document.querySelector('.ag-picker__chosen') as HTMLElement
     expect(within(chosen).getByText('Identifiant seulement')).toBeDefined()
     await user.click(within(chosen).getByRole('button', { name: 'Retirer l’équipement choisi' }))
-    expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Équipement' }))
-    await user.click(screen.getByRole('button', { name: 'Filtrer' }))
     expect(window.location.search).toBe('')
+    expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Équipement' }))
   })
 
   it('does not claim an expanded list without results, and keeps « Réessayer » out of the announcement', async () => {
@@ -344,16 +370,32 @@ describe('Réservations et prêts: filters', () => {
     expect(document.activeElement).toBe(field)
   })
 
-  it('refuses an end date before the start date', async () => {
+  it('refuses an end date before the start date and sends no request for it', async () => {
     const user = userEvent.setup()
     const gateway = fakeGateway()
     renderPage(gateway)
     await screen.findByRole('heading', { level: 2, name: '2 réservations' })
-    await user.type(screen.getByLabelText('Du'), '2026-11-10')
-    await user.type(screen.getByLabelText('Au'), '2026-11-01')
-    await user.click(screen.getByRole('button', { name: 'Filtrer' }))
+    await user.type(screen.getByLabelText('Du (inclus)'), '2026-11-10')
+    // A keyboard edit applies when the field is left (QA #246 N2).
+    expect(window.location.search).toBe('')
+    await user.tab()
+    expect(window.location.search).toBe('?du=2026-11-10')
+    await user.type(screen.getByLabelText('Au (inclus)'), '2026-11-01{Enter}')
     expect(screen.getByText('La date de fin précède la date de début.')).toBeDefined()
-    expect(gateway.listReservations).toHaveBeenCalledTimes(1)
+    expect(window.location.search).toBe('?du=2026-11-10')
+    expect(within(screen.getByRole('group', { name: 'Filtres actifs' })).getByText(/^Du\s/)).toBeDefined()
+  })
+
+  it('fills both dates from a shortcut, in the laboratory zone', async () => {
+    const user = userEvent.setup()
+    renderPage(fakeGateway())
+    await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+    await user.click(within(screen.getByRole('group', { name: 'Périodes rapides' })).getByRole('button', { name: '7 jours' }))
+    const params = new URLSearchParams(window.location.search)
+    const to = params.get('au') as string
+    expect(to).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    const span = (Date.parse(`${to}T12:00:00Z`) - Date.parse(`${params.get('du') as string}T12:00:00Z`)) / 86_400_000
+    expect(span).toBe(6)
   })
 
   it('offers the statuses of the active view only', async () => {
@@ -366,18 +408,118 @@ describe('Réservations et prêts: filters', () => {
   it('says so when a filter matches nothing, with a way back, and never claims there is no record', async () => {
     const user = userEvent.setup()
     renderPage(fakeGateway({ reservations: ok(pageOf([])) }), { url: '/reservations-prets?statut=CANCELLED' })
-    expect(await screen.findByText('Aucune réservation ne correspond à ces filtres.')).toBeDefined()
-    expect(screen.queryByText('Aucune réservation.')).toBeNull()
+    expect(await screen.findByText('Aucune réservation pour ces filtres.')).toBeDefined()
+    expect(screen.queryByText('Aucune réservation enregistrée.')).toBeNull()
     expect(document.querySelector('.ag-dossier')).toBeNull()
-    const clear = within(document.querySelector('.ag-list__empty') as HTMLElement).getByRole('button', { name: 'Tout afficher' })
+    const clear = within(document.querySelector('.ag-list__empty') as HTMLElement).getByRole('button', { name: 'Effacer les filtres' })
     await user.click(clear)
     expect(window.location.search).toBe('')
   })
 
   it('says there is nothing yet when the unfiltered list is empty', async () => {
     renderPage(fakeGateway({ reservations: ok(pageOf([])) }))
-    expect(await screen.findByText('Aucune réservation.')).toBeDefined()
+    expect(await screen.findByText('Aucune réservation enregistrée.')).toBeDefined()
     expect(screen.getByText('Les réservations apparaissent ici dès leur création.')).toBeDefined()
+  })
+})
+
+describe('Réservations et prêts: tables (contract §3.3)', () => {
+  const headers = () => [...document.querySelectorAll('.ag-list__items thead th')].map((cell) => cell.textContent)
+
+  it('gives each tab its full columns from 1440 px, a hidden caption, no sort control and no labelled cell', async () => {
+    renderPage(fakeGateway())
+    await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+    expect(headers()).toEqual(['Statut', 'Équipement', 'Titulaire', 'Période'])
+    expect(document.querySelector('.ag-list__items caption')?.className).toBe('ag-sr-only')
+    expect([...document.querySelectorAll('.ag-list__items th')].every((cell) => cell.getAttribute('scope') === 'col')).toBe(true)
+    expect(document.querySelector('.ag-list__items [aria-sort], .ag-list__items thead button')).toBeNull()
+    // Design §8.3: the labelled blocks are withdrawn; the table never carries the list grid class.
+    expect(document.querySelector('.ag-list__items [data-label]')).toBeNull()
+    expect(document.querySelector('table.ag-list__items')).toBeNull()
+    cleanup()
+    renderPage(fakeGateway(), { url: '/reservations-prets?vue=prets' })
+    await screen.findByRole('heading', { level: 2, name: '2 prêts' })
+    expect(headers()).toEqual(['Statut', 'Équipement', 'Titulaire', 'Retrait', 'Retour prévu ou effectif'])
+    cleanup()
+    renderPage(fakeGateway({ operations: ok(pageOf([operation()])) }), { url: '/reservations-prets?vue=operations' })
+    await screen.findByRole('heading', { level: 2, name: '1 opération' })
+    expect(headers()).toEqual(['Statut', 'Opération', 'Utilisateur', 'Cellule', 'Créée'])
+  })
+
+  it('keeps the reduced columns from 1280 to 1439 px, the period on two lines', async () => {
+    installViewport(1300)
+    try {
+      renderPage(fakeGateway())
+      await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+      expect(headers()).toEqual(['Statut', 'Équipement', 'Période'])
+      expect([...(rows()[0]!.querySelector('.ag-tbl__lines')?.children ?? [])].map((line) => plain(line.textContent))).toEqual([expect.stringMatching(/^du /), expect.stringMatching(/^au /)])
+      cleanup()
+      renderPage(fakeGateway(), { url: '/reservations-prets?vue=prets' })
+      await screen.findByRole('heading', { level: 2, name: '2 prêts' })
+      expect(headers()).toEqual(['Statut', 'Équipement', 'Retour prévu ou effectif'])
+      cleanup()
+      renderPage(fakeGateway({ operations: ok(pageOf([operation()])) }), { url: '/reservations-prets?vue=operations' })
+      await screen.findByRole('heading', { level: 2, name: '1 opération' })
+      expect(headers()).toEqual(['Statut', 'Opération', 'Créée'])
+    } finally {
+      Reflect.deleteProperty(window, 'matchMedia')
+    }
+  })
+
+  it('shows card rows below 1280 px, with no table', async () => {
+    installViewport(1100)
+    try {
+      renderPage(fakeGateway())
+      await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+      expect(document.querySelector('table')).toBeNull()
+      expect(rows()).toHaveLength(2)
+      expect(rows()[0]?.className).toBe('ag-item')
+      expect(plain(rows()[0]?.textContent)).toContain('MM-001')
+    } finally {
+      Reflect.deleteProperty(window, 'matchMedia')
+    }
+  })
+
+  it('puts « Opération en cours » as a second chip of the status cell when an operation is current', async () => {
+    renderPage(fakeGateway({ reservations: ok(pageOf([reservation({ currentOperationId: OPERATION_ID })])) }))
+    await screen.findByRole('heading', { level: 2, name: '1 réservation' })
+    expect([...rows()[0]!.querySelectorAll('td:first-child .ag-chip')].map((chip) => plain(chip.textContent))).toEqual([expect.any(String), 'Opération en cours'])
+  })
+
+  it('tells the page from the collection in the count (3 against 143)', async () => {
+    renderPage(fakeGateway({ reservations: ok(pageOf([R1, R2, reservation({ id: 'cccccccc-3333-4333-8333-333333333333' })])) }))
+    expect(await screen.findByRole('heading', { level: 2, name: '3 réservations' })).toBeDefined()
+    cleanup()
+    renderPage(fakeGateway({ reservations: ok(pageOf([R1, R2], { page: 1, size: 20, totalItems: 143, totalPages: 8 })) }), { url: '/reservations-prets?page=2' })
+    expect(await screen.findByRole('heading', { level: 2, name: '2 sur 143 réservations · page 2 de 8' })).toBeDefined()
+  })
+
+  it('puts the overdue loans first on the page shown, and says so', async () => {
+    const onTime = loan({ id: 'dddddddd-4444-4444-8444-444444444444', status: 'ACTIVE', overdue: false })
+    const late = loan({ id: 'eeeeeeee-5555-4555-8555-555555555555', status: 'ACTIVE', overdue: true })
+    renderPage(fakeGateway({ loans: ok(pageOf([onTime, late])) }), { url: '/reservations-prets?vue=prets' })
+    await screen.findByRole('heading', { level: 2, name: '2 prêts' })
+    expect(plain(rows()[0]?.textContent)).toContain('En retard')
+    expect(plain(rows()[1]?.textContent)).not.toContain('En retard')
+    expect(screen.getByText('Retards en tête sur cette page.')).toBeDefined()
+    // With no dossier in the address, the row opened is the first one on screen, not the server's first (QA #246 N5).
+    expect(rows()[0]?.getAttribute('aria-current')).toBe('true')
+    expect(rows()[1]?.getAttribute('aria-current')).toBeNull()
+  })
+
+  it('keeps the server order, with no note, when the overdue loans already lead', async () => {
+    renderPage(fakeGateway(), { url: '/reservations-prets?vue=prets' })
+    await screen.findByRole('heading', { level: 2, name: '2 prêts' })
+    expect(screen.queryByText('Retards en tête sur cette page.')).toBeNull()
+  })
+
+  it('follows the row link from any cell of the row', async () => {
+    const user = userEvent.setup()
+    renderPage(fakeGateway())
+    await screen.findByRole('heading', { level: 2, name: '2 réservations' })
+    await user.click(rows()[1]!.querySelector('td') as HTMLElement)
+    expect(window.location.search).toBe(`?dossier=${R2.id}`)
+    expect(document.activeElement).toBe(rowLink(1))
   })
 })
 
@@ -493,9 +635,8 @@ describe('Réservations et prêts: locker operations', () => {
     const gateway = fakeGateway()
     renderPage(gateway, { url: '/reservations-prets?vue=operations', catalogGateway: catalog })
     await screen.findByRole('heading', { level: 2, name: '1 opération' })
-    // The row: the equipment (name and code) and the user by name only.
-    expect(plain(rows()[0]?.textContent)).toContain('Multimètre numérique')
-    expect(plain(rows()[0]?.textContent)).toContain('MM-001')
+    // The row: the operation on one line (type and equipment code) and the user by name only.
+    expect(plain(rows()[0]?.textContent)).toContain('Retrait · MM-001')
     expect(plain(rows()[0]?.textContent)).toContain('Technicien Démo')
     expect(plain(rows()[0]?.textContent)).not.toContain('identifiant seulement')
     await waitFor(() => expect(plain(dossier().textContent)).toContain('Cellule de l’opérationCellule A1 · AEGIS-DEMO-01'))
@@ -551,7 +692,7 @@ describe('Réservations et prêts: failures', () => {
     const alert = await screen.findByRole('alert')
     expect(within(alert).getByText("Le service n'a pas pu fournir ces données.")).toBeDefined()
     expect(within(alert).getByText('trace-svc-1')).toBeDefined()
-    expect(screen.queryByText('Aucune réservation.')).toBeNull()
+    expect(screen.queryByText('Aucune réservation enregistrée.')).toBeNull()
     expect(document.querySelector('.ag-dossier')).toBeNull()
     await user.click(within(alert).getByRole('button', { name: 'Réessayer' }))
     await waitFor(() => expect(gateway.listReservations).toHaveBeenCalledTimes(2))
@@ -669,7 +810,7 @@ describe('Réservations et prêts: navigation, keyboard and language', () => {
     await waitFor(() => expect(dossier()).not.toBeNull())
     expect(dossier().getAttribute('role')).toBe('group')
     expect(dossier().getAttribute('aria-labelledby')).toBeTruthy()
-    for (const label of ['Statut', 'Équipement', 'Du', 'Au']) expect(screen.getByLabelText(label)).toBeDefined()
+    for (const label of ['Statut', 'Équipement', 'Du (inclus)', 'Au (inclus)']) expect(screen.getByLabelText(label)).toBeDefined()
   })
 
   it('is fully translated in English, with the same structure and no French left', async () => {
