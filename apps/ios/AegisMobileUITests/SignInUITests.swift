@@ -264,7 +264,8 @@ final class SignInUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["account.name"].firstMatch.label.contains("Technicien Démo"))
         let role = app.descendants(matching: .any)["account.role"].firstMatch
         XCTAssertTrue(role.label.contains(language["role"]) || (role.value as? String) == language["role"])
-        try audit(app)
+        // A scrolling screen whose last rows sit under the tab bar's fade.
+        try auditAccountScreen(app)
         attach(app, "\(language.code)-account")
 
         app.buttons["account.signOut"].tap()

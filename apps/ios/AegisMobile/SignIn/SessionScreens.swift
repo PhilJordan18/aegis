@@ -106,8 +106,10 @@ struct AccountView: View {
     let session: SessionModel
     let profile: UserProfile
     let health: HealthViewModel
+    var identity = AppIdentity.read()
 
     @State private var confirmsSignOut = false
+    private let language = LanguagePreference.shared
 
     var body: some View {
         NavigationStack {
@@ -132,12 +134,38 @@ struct AccountView: View {
                 }
                 .listRowBackground(Color.brandPanel)
 
+                Self.heading("Réglages")
+
+                Section {
+                    LanguageRow(language: language)
+                }
+                .listRowBackground(Color.brandPanel)
+
                 Section {
                     NavigationLink {
                         HealthView(model: health)
                     } label: {
-                        Label("État du service", systemImage: "server.rack")
+                        // The token, not the accent tint: 3.40:1 on the dark panel.
+                        Label {
+                            Text("État du service")
+                        } icon: {
+                            Image(systemName: "server.rack").foregroundStyle(Color.brandAccent)
+                        }
                     }
+                }
+                .listRowBackground(Color.brandPanel)
+
+                Self.heading("À propos")
+
+                Section {
+                    LabeledContent("Version") {
+                        Text(verbatim: "\(identity.version) (\(identity.build))").foregroundStyle(Color.brandMuted)
+                    }
+                    .accessibilityIdentifier("account.version")
+                    LabeledContent("Environnement") {
+                        Text(identity.environmentName).foregroundStyle(Color.brandMuted)
+                    }
+                    .accessibilityIdentifier("account.environment")
                 }
                 .listRowBackground(Color.brandPanel)
 
@@ -158,6 +186,20 @@ struct AccountView: View {
                 Text("La déconnexion n’annule pas les réservations ou les prêts en cours.")
             }
         }
+    }
+
+    /// A heading row rather than a section header, whose font does not
+    /// follow every Dynamic Type size.
+    private static func heading(_ title: LocalizedStringKey) -> some View {
+        Section {
+            Text(title)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Color.brandText)
+                .accessibilityAddTraits(.isHeader)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+        }
+        .listSectionSpacing(.custom(4))
     }
 
     static func role(_ role: UserProfile.Role) -> LocalizedStringKey {
