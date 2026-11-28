@@ -9,8 +9,9 @@ enum BarAwareAudit {
     /// capture of #234 its gradient reached the page colour 20 pt under the
     /// bar, where a strip of black text on white measured 1.00:1.
     static let navigationEdgeHeight: CGFloat = 24
-    /// The dark panel is captured dithered by one unit (#232): see
-    /// `RenderedContrast.ratio(of:shade:)`.
+    /// Panels are captured dithered by one unit, the dark one (#232) and the
+    /// white one too (#234: #FEFEFF, #FEFFFF and #FEFEFE beside black text,
+    /// read as an ink at 1.00:1): see `RenderedContrast.ratio(of:shade:)`.
     static let panelShade: UInt8 = 2
 }
 

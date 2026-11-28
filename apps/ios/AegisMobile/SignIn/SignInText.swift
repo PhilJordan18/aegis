@@ -28,12 +28,16 @@ enum SignInText {
             String(localized: "Votre session n’est plus valide. Reconnectez-vous.")
         case .signedOut:
             String(localized: "Vous êtes déconnecté.")
+        case .passwordChanged:
+            String(localized: "Mot de passe modifié. Connectez-vous avec le nouveau mot de passe.")
+        case .passwordChangeUncertain:
+            String(localized: "Le changement du mot de passe n’a pas pu être confirmé. Connectez-vous avec le nouveau mot de passe ; s’il est refusé, utilisez l’ancien.")
         }
     }
 
     static func isError(_ notice: SignInNotice) -> Bool {
         switch notice {
-        case .expired, .invalidSession, .signedOut: false
+        case .expired, .invalidSession, .signedOut, .passwordChanged, .passwordChangeUncertain: false
         default: true
         }
     }

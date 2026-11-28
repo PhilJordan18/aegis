@@ -155,6 +155,22 @@ struct AccountView: View {
                 }
                 .listRowBackground(Color.brandPanel)
 
+                Self.heading("Sécurité")
+
+                Section {
+                    NavigationLink {
+                        PasswordChangeView(session: session, email: profile.email)
+                    } label: {
+                        Label {
+                            Text("Changer le mot de passe")
+                        } icon: {
+                            Image(systemName: "key").foregroundStyle(Color.brandAccent)
+                        }
+                    }
+                    .accessibilityIdentifier("account.password")
+                }
+                .listRowBackground(Color.brandPanel)
+
                 Self.heading("À propos")
 
                 Section {

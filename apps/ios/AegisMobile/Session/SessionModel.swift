@@ -16,6 +16,35 @@ enum SignInNotice: Equatable, Sendable {
     case expired
     case invalidSession
     case signedOut
+    /// 204 of `POST /auth/password`: every token was revoked.
+    case passwordChanged
+    /// The change was sent and no answer came back: it may or may not have
+    /// been applied, so the session ends and nothing is replayed (§10.7).
+    case passwordChangeUncertain
+}
+
+/// What a password change request ended with, as the form needs it.
+enum PasswordChangeResult: Equatable, Sendable {
+    /// 204: the session has ended; sign in again with the new password.
+    case changed
+    /// 400 PASSWORD_CURRENT_INVALID: the session is kept.
+    case currentRejected
+    /// 409 PASSWORD_REUSED.
+    case reused
+    /// 400 VALIDATION_ERROR.
+    case invalid
+    /// 429 with the server's `Retry-After`, when it sent a usable one.
+    case rateLimited(retryAfter: Duration?)
+    /// 503 PASSWORD_CHANGE_UNAVAILABLE.
+    case unavailable
+    /// 403: this account may not change its password here.
+    case refused
+    /// No connection was made: nothing was sent, nothing changed.
+    case notSent
+    /// A refusal from the API itself (its problem body): nothing changed.
+    case serviceError(traceId: String?)
+    /// The session has ended: a 401, a missing token, or an unknown outcome.
+    case sessionEnded
 }
 
 enum FieldError: Equatable, Sendable {
@@ -249,6 +278,59 @@ final class SessionModel {
         email = ""
         password = ""
         showSignIn(notice: .signedOut)
+    }
+
+    /// `POST /auth/password` (doc 09 §10.7). Sent once; the session ends on
+    /// success and whenever the outcome cannot be known, since a committed
+    /// change has already revoked this token. The passwords are neither kept
+    /// nor stored here.
+    func changePassword(current: String, new: String) async -> PasswordChangeResult {
+        guard case let .signedIn(profile) = phase else { return .sessionEnded }
+        guard let token = accessToken() else {
+            handleMissingToken()
+            return .sessionEnded
+        }
+        let request = generation
+        do throws(APIError) {
+            try await auth.changePassword(current: current, new: new, bearer: token)
+            if request == generation { discardSession(prefill: profile.email, notice: .passwordChanged) }
+            return .changed
+        } catch let .http(status, problem, retryAfter) {
+            switch (status, problem?.code) {
+            case (400, "PASSWORD_CURRENT_INVALID"): return .currentRejected
+            case (400, "VALIDATION_ERROR"): return .invalid
+            case (409, "PASSWORD_REUSED"): return .reused
+            case (429, _): return .rateLimited(retryAfter: retryAfter)
+            case (503, "PASSWORD_CHANGE_UNAVAILABLE"): return .unavailable
+            case (403, _): return .refused
+            case (401, let code):
+                handleUnauthorized(code: code)
+                return .sessionEnded
+            case (_, .some):
+                // The API answered with its own problem: the change was
+                // refused or rolled back.
+                return .serviceError(traceId: problem?.traceId.flatMap(Self.displayableTraceId))
+            case (_, nil):
+                // A gateway may answer after the API committed the change.
+                return endUncertain(profile, request)
+            }
+        } catch let .unreachable(code) where Self.neverSent.contains(code) {
+            return .notSent
+        } catch {
+            // Timed out, connection lost, cancelled or an unreadable success.
+            return endUncertain(profile, request)
+        }
+    }
+
+    /// Failures that happen before any byte of the request leaves the device.
+    private static let neverSent: Set<URLError.Code> = [
+        .notConnectedToInternet, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed,
+        .internationalRoamingOff, .dataNotAllowed, .callIsActive,
+    ]
+
+    private func endUncertain(_ profile: UserProfile, _ request: Int) -> PasswordChangeResult {
+        if request == generation { discardSession(prefill: profile.email, notice: .passwordChangeUncertain) }
+        return .sessionEnded
     }
 
     func useAnotherAccount() {

@@ -51,11 +51,11 @@ extension XCTestCase {
     /// 4.5:1 or more. A passing measure only qualifies the issue the audit
     /// reported on this element; it is no exception for any other (#222).
     /// The crop is attached under the name its line gives, and the line
-    /// keeps the conditions of the measure with its result. `shade` is
-    /// passed to `RenderedContrast.ratio(of:shade:)`.
+    /// keeps the conditions of the measure with its result. The capture's
+    /// dithering is folded, as for a visible part (#234).
     @MainActor
     func entireContrast(of target: XCUIElement, window: CGRect, in app: XCUIApplication,
-                        shade: UInt8 = 0) -> VisiblePartContrast {
+                        shade: UInt8 = BarAwareAudit.panelShade) -> VisiblePartContrast {
         guard app.waitForStillScreen() else {
             return .measured(passed: false, line: "'\(target.label)': the screen never stopped moving")
         }
